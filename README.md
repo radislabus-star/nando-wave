@@ -447,6 +447,18 @@ thought_verdict
 Это первый шаг к внутреннему циклу: prompt должен порождать не только внешний
 matching, но и наблюдаемый аттрактор в `carrier/bus/memory` динамике.
 
+Отрицательный результат: сырые `ThoughtState` признаки нельзя сразу добавлять в
+dialog scorer. Проба `thought -> scorer features` ухудшила holdout:
+
+```text
+full with raw thought features: 0.181818
+no_thought:                    0.454545
+```
+
+Вывод: `ThoughtState` пока остается прибором. Перед участием в ответе ему нужен
+отдельный learning/ablation gate, иначе внутренний контур превращается в шумный
+ручной readout.
+
 Текущий smoke-result:
 
 ```text
