@@ -7,6 +7,19 @@ const PROMPT_WAVE_TOP_SLOTS: usize = 8;
 
 const TRAIN_CORPUS: &[u8] = include_bytes!("../../../data/corpus/organ128_train_v1.txt");
 
+const RESPONSE_GATE_REFUSAL_PROMPTS: &[&str] = &[
+    "что такое",
+    "расскажи про",
+    "зачем",
+    "what is",
+    "why",
+    "nando organ128 cell32 wave bus snapshot",
+    "carrier wave rust память ответ",
+    "what is what is what is",
+    "что такое что такое что такое",
+    "объясни это",
+];
+
 pub(crate) fn run_organ128_train_generate(
     mut args: impl Iterator<Item = String>,
 ) -> Result<(), String> {
@@ -209,6 +222,7 @@ pub(crate) fn run_organ128_settle_dialog(
     println!("settled_coherence: {:.6}", settled.coherence);
     println!("settled_entropy: {:.6}", settled.entropy);
     println!("settled_stability: {:.6}", settled.stability);
+    println!("settle_verdict: {}", settled.verdict().as_str());
     println!("memory_phase: {:.6}", settled.memory.phase);
     println!("memory_strength: {:.6}", settled.memory.strength);
     println!("memory_validation: {:.6}", settled.memory.validation);
@@ -221,31 +235,43 @@ pub(crate) fn run_organ128_settle_dialog(
     println!("score_stability_component: {:.6}", selected.stability_score);
     println!("wave_matched_prompt: {}", wave_selected.entry.prompt);
     println!("wave_score: {:.6}", wave_selected.wave_score);
+    let response_gate = response_gate(&prompt, &settled, &selected);
+    println!("response_gate: {}", response_gate.as_str());
     println!("answer: {}", selected.entry.answer);
+    if matches!(response_gate, ResponseGate::Refuse) {
+        println!(
+            "gated_answer: не отвечаю: внутреннее состояние не дало надежной когерентной опоры."
+        );
+    } else {
+        println!("gated_answer: {}", selected.entry.answer);
+    }
     println!("controls:");
     println!(
-        "no_carrier: matched_prompt=\"{}\" score={:.6} coherence={:.6} entropy={:.6} memory_validation={:.6}",
+        "no_carrier: matched_prompt=\"{}\" score={:.6} coherence={:.6} entropy={:.6} memory_validation={:.6} verdict={}",
         no_selected.entry.prompt,
         no_selected.total_score,
         no_carrier.coherence,
         no_carrier.entropy,
-        no_carrier.memory.validation
+        no_carrier.memory.validation,
+        no_carrier.verdict().as_str()
     );
     println!(
-        "wrong_carrier: matched_prompt=\"{}\" score={:.6} coherence={:.6} entropy={:.6} memory_validation={:.6}",
+        "wrong_carrier: matched_prompt=\"{}\" score={:.6} coherence={:.6} entropy={:.6} memory_validation={:.6} verdict={}",
         wrong_selected.entry.prompt,
         wrong_selected.total_score,
         wrong_carrier.coherence,
         wrong_carrier.entropy,
-        wrong_carrier.memory.validation
+        wrong_carrier.memory.validation,
+        wrong_carrier.verdict().as_str()
     );
     println!(
-        "corrupted_prompt_wave: matched_prompt=\"{}\" score={:.6} coherence={:.6} entropy={:.6} memory_validation={:.6}",
+        "corrupted_prompt_wave: matched_prompt=\"{}\" score={:.6} coherence={:.6} entropy={:.6} memory_validation={:.6} verdict={}",
         corrupt_selected.entry.prompt,
         corrupt_selected.total_score,
         corrupted.coherence,
         corrupted.entropy,
-        corrupted.memory.validation
+        corrupted.memory.validation,
+        corrupted.verdict().as_str()
     );
     let no_carrier_score_delta = selected.total_score - no_selected.total_score;
     let wrong_carrier_score_delta = selected.total_score - wrong_selected.total_score;
@@ -375,6 +401,63 @@ pub(crate) fn run_organ128_wave_scorer_eval(
         "organ128_wave_scorer_candidate"
     } else {
         "not_found_organ128_wave_scorer"
+    };
+    println!("mode_status: {mode_status}");
+    Ok(())
+}
+
+pub(crate) fn run_organ128_response_gate_eval(
+    mut args: impl Iterator<Item = String>,
+) -> Result<(), String> {
+    let seed = match args.next() {
+        Some(value) => parse_u64(&value, "seed")?,
+        None => 7,
+    };
+    let ticks = match args.next() {
+        Some(value) => parse_usize(&value, "ticks")?,
+        None => 12,
+    };
+    if args.next().is_some() {
+        return Err(String::from("too many arguments"));
+    }
+    if !(1..=16).contains(&ticks) {
+        return Err(String::from("ticks must be in 1..=16"));
+    }
+
+    let lut = BytePhaseLut::new();
+    let organ = Organ128Runtime::new(seed);
+    let known = eval_response_gate_known(&lut, &organ, seed, ticks);
+    let refusal = eval_response_gate_refusal(&lut, &organ, seed, ticks);
+
+    println!("Nando Wave Organ128 response-gate eval");
+    println!("seed: {seed}");
+    println!("ticks: {ticks}");
+    println!("known_cases: {}", known.cases);
+    println!("known_answered: {}", known.answered);
+    println!("known_refused: {}", known.refused);
+    println!("known_answer_rate: {:.6}", known.answer_rate());
+    println!("refusal_cases: {}", refusal.cases);
+    println!("refusal_answered: {}", refusal.answered);
+    println!("refusal_refused: {}", refusal.refused);
+    println!("refusal_refuse_rate: {:.6}", refusal.refuse_rate());
+    println!("trace:");
+    for row in known.rows.iter().chain(refusal.rows.iter()) {
+        println!(
+            "{} prompt=\"{}\" verdict={} gate={} score={:.6} lexical={:.6} wave={:.6}",
+            row.kind,
+            row.prompt,
+            row.verdict.as_str(),
+            row.gate.as_str(),
+            row.score,
+            row.lexical_score,
+            row.wave_score
+        );
+    }
+
+    let mode_status = if known.answer_rate() >= 0.70 && refusal.refuse_rate() >= 0.80 {
+        "organ128_response_gate_candidate"
+    } else {
+        "not_found_organ128_response_gate"
     };
     println!("mode_status: {mode_status}");
     Ok(())
@@ -839,6 +922,121 @@ struct Organ128SettleState {
     memory: MemorySummary,
 }
 
+impl Organ128SettleState {
+    fn verdict(&self) -> SettleVerdict {
+        if self.memory.validation < 0.35 {
+            return SettleVerdict::RejectedByMemory;
+        }
+        if self.coherence < 0.08 && self.entropy > 0.995 {
+            return SettleVerdict::Incoherent;
+        }
+        if self.mean_phase_velocity() > 1.20 && self.stability < 0.45 {
+            return SettleVerdict::Oscillating;
+        }
+        if self.coherence >= 0.24 && self.stability >= 0.25 && self.memory.validation >= 0.70 {
+            return SettleVerdict::Settled;
+        }
+        SettleVerdict::Weak
+    }
+
+    fn mean_phase_velocity(&self) -> f32 {
+        if self.ticks.len() <= 1 {
+            return 0.0;
+        }
+        self.ticks
+            .iter()
+            .skip(1)
+            .map(|tick| tick.phase_velocity)
+            .sum::<f32>()
+            / (self.ticks.len() - 1) as f32
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettleVerdict {
+    Settled,
+    Weak,
+    Oscillating,
+    Incoherent,
+    RejectedByMemory,
+}
+
+impl SettleVerdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Settled => "settled",
+            Self::Weak => "weak",
+            Self::Oscillating => "oscillating",
+            Self::Incoherent => "incoherent",
+            Self::RejectedByMemory => "rejected_by_memory",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResponseGate {
+    Answer,
+    Refuse,
+}
+
+impl ResponseGate {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Answer => "answer",
+            Self::Refuse => "refuse_unstable_or_low_confidence",
+        }
+    }
+}
+
+fn response_gate(
+    prompt: &str,
+    settled: &Organ128SettleState,
+    selected: &DialogScore,
+) -> ResponseGate {
+    match settled.verdict() {
+        SettleVerdict::RejectedByMemory | SettleVerdict::Incoherent => return ResponseGate::Refuse,
+        SettleVerdict::Settled | SettleVerdict::Weak | SettleVerdict::Oscillating => {}
+    }
+
+    let prompt_is_exact = normalized_prompt_eq(prompt, selected.entry.prompt);
+    let selected_prompt_coverage = selected_prompt_coverage(prompt, selected.entry.prompt);
+    let has_specific_prompt = prompt_is_exact || selected_prompt_coverage >= 0.72;
+    let has_direct_support =
+        has_specific_prompt && (selected.lexical_score >= 0.20 || selected.prompt_score >= 0.35);
+    let has_wave_support =
+        has_specific_prompt && selected.wave_score >= 0.03 && settled.coherence >= 0.20;
+    let strong_total = selected.total_score >= 0.50;
+    let oscillating = matches!(settled.verdict(), SettleVerdict::Oscillating);
+
+    if strong_total
+        && (has_direct_support || has_wave_support)
+        && (!oscillating || selected.total_score >= 0.70)
+    {
+        ResponseGate::Answer
+    } else {
+        ResponseGate::Refuse
+    }
+}
+
+fn normalized_prompt_eq(left: &str, right: &str) -> bool {
+    left.split_whitespace().eq(right.split_whitespace())
+}
+
+fn selected_prompt_coverage(prompt: &str, selected_prompt: &str) -> f32 {
+    let mut selected_tokens = 0usize;
+    let mut covered_tokens = 0usize;
+    for selected_token in selected_prompt.split_whitespace() {
+        selected_tokens += 1;
+        if prompt
+            .split_whitespace()
+            .any(|token| token == selected_token)
+        {
+            covered_tokens += 1;
+        }
+    }
+    covered_tokens as f32 / selected_tokens.max(1) as f32
+}
+
 #[derive(Debug, Clone)]
 struct Organ128ByteLearner {
     learning_rate: f32,
@@ -1232,6 +1430,35 @@ struct TrainedWaveDialogScorer {
     train_accuracy_before_update: f32,
 }
 
+#[derive(Debug, Clone)]
+struct ResponseGateEvalReport {
+    cases: usize,
+    answered: usize,
+    refused: usize,
+    rows: Vec<ResponseGateEvalRow>,
+}
+
+impl ResponseGateEvalReport {
+    fn answer_rate(&self) -> f32 {
+        self.answered as f32 / self.cases.max(1) as f32
+    }
+
+    fn refuse_rate(&self) -> f32 {
+        self.refused as f32 / self.cases.max(1) as f32
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ResponseGateEvalRow {
+    kind: &'static str,
+    prompt: &'static str,
+    verdict: SettleVerdict,
+    gate: ResponseGate,
+    score: f32,
+    lexical_score: f32,
+    wave_score: f32,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct FeatureMask {
     enabled: [bool; WAVE_SCORER_FEATURES],
@@ -1474,6 +1701,93 @@ fn eval_untrained_wave_dialog_scorer(
         accuracy: correct as f32 / cases as f32,
         wave_agree: 1.0,
         rows,
+    }
+}
+
+fn eval_response_gate_known(
+    lut: &BytePhaseLut,
+    organ: &Organ128Runtime,
+    seed: u64,
+    ticks: usize,
+) -> ResponseGateEvalReport {
+    let mut answered = 0usize;
+    let mut refused = 0usize;
+    let mut rows = Vec::new();
+    for (index, entry) in DIALOG_CORPUS.iter().copied().enumerate() {
+        let row = response_gate_eval_row(
+            lut,
+            organ,
+            seed.wrapping_add(index as u64),
+            ticks,
+            "known",
+            entry.prompt,
+        );
+        match row.gate {
+            ResponseGate::Answer => answered += 1,
+            ResponseGate::Refuse => refused += 1,
+        }
+        rows.push(row);
+    }
+    ResponseGateEvalReport {
+        cases: DIALOG_CORPUS.len(),
+        answered,
+        refused,
+        rows,
+    }
+}
+
+fn eval_response_gate_refusal(
+    lut: &BytePhaseLut,
+    organ: &Organ128Runtime,
+    seed: u64,
+    ticks: usize,
+) -> ResponseGateEvalReport {
+    let mut answered = 0usize;
+    let mut refused = 0usize;
+    let mut rows = Vec::new();
+    for (index, prompt) in RESPONSE_GATE_REFUSAL_PROMPTS.iter().copied().enumerate() {
+        let row = response_gate_eval_row(
+            lut,
+            organ,
+            seed.wrapping_add(10_000 + index as u64),
+            ticks,
+            "refusal",
+            prompt,
+        );
+        match row.gate {
+            ResponseGate::Answer => answered += 1,
+            ResponseGate::Refuse => refused += 1,
+        }
+        rows.push(row);
+    }
+    ResponseGateEvalReport {
+        cases: RESPONSE_GATE_REFUSAL_PROMPTS.len(),
+        answered,
+        refused,
+        rows,
+    }
+}
+
+fn response_gate_eval_row(
+    lut: &BytePhaseLut,
+    organ: &Organ128Runtime,
+    seed: u64,
+    ticks: usize,
+    kind: &'static str,
+    prompt: &'static str,
+) -> ResponseGateEvalRow {
+    let prompt_wave = PromptWave::from_prompt(lut, prompt);
+    let settled = organ.settle_dialog(lut, seed, prompt, prompt_wave, ticks, CarrierMode::Correct);
+    let selected = best_settled_dialog_entry(lut, prompt, prompt_wave, &settled);
+    let gate = response_gate(prompt, &settled, &selected);
+    ResponseGateEvalRow {
+        kind,
+        prompt,
+        verdict: settled.verdict(),
+        gate,
+        score: selected.total_score,
+        lexical_score: selected.lexical_score,
+        wave_score: selected.wave_score,
     }
 }
 

@@ -27,8 +27,8 @@ use live::{
     print_live_tissue_diagnose,
 };
 use organ128_cmd::{
-    run_organ128_dialog_generate, run_organ128_settle_dialog, run_organ128_train_generate,
-    run_organ128_wave_scorer_eval,
+    run_organ128_dialog_generate, run_organ128_response_gate_eval, run_organ128_settle_dialog,
+    run_organ128_train_generate, run_organ128_wave_scorer_eval,
 };
 use snapshot_io::{read_snapshot, save_snapshot};
 use status::{print_organ128_plan, print_status, print_wave_tick};
@@ -78,6 +78,14 @@ fn main() -> ExitCode {
             Err(message) => {
                 eprintln!("{message}");
                 eprintln!("try: nando-cli organ128-wave-scorer-eval [seed] [epochs] [ticks]");
+                ExitCode::FAILURE
+            }
+        },
+        Some("organ128-response-gate-eval") => match run_organ128_response_gate_eval(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("{message}");
+                eprintln!("try: nando-cli organ128-response-gate-eval [seed] [ticks]");
                 ExitCode::FAILURE
             }
         },

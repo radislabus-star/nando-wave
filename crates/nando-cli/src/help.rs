@@ -13,6 +13,8 @@ pub(crate) fn print_help() {
     println!("            Answer after Organ128 CarrierWave/WaveBus settle ticks with controls");
     println!("  organ128-wave-scorer-eval [seed] [epochs] [ticks]");
     println!("            Train/eval a tiny wave-state scorer over the dialog corpus");
+    println!("  organ128-response-gate-eval [seed] [ticks]");
+    println!("            Check answer/refuse gating on known prompts and noise prompts");
     println!("  wave-tick <input-byte> [seed]");
     println!("            Run one deterministic Stage 2 wave tick");
     println!("  snapshot-save <input-byte> [seed] [path]");

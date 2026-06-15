@@ -35,6 +35,7 @@ nando-cli organ128-plan
 nando-cli organ128-train-generate
 nando-cli organ128-dialog-generate
 nando-cli organ128-settle-dialog
+nando-cli organ128-response-gate-eval
 nando-cli wave-tick
 nando-cli snapshot-save
 nando-cli snapshot-read
@@ -415,6 +416,34 @@ no_validation: 0.454545
 Вывод: scorer-кандидат реально использует memory и center признаки, но пока
 сильно зависит от prompt-phase признаков. Global coherence/entropy/stability и
 validation на этом split не доказали вклад в holdout accuracy.
+
+Первый response-gate против ложной когерентности:
+
+```bash
+cd /home/ubu/projects/nando-wave
+cargo run -p nando-cli -- organ128-response-gate-eval 7 12
+```
+
+Идея: одно `settled` состояние еще не значит, что ответ надежный. Система может
+сойтись в ложный аттрактор. Поэтому gate проверяет две вещи:
+
+```text
+settle_verdict: settled / weak / oscillating / incoherent / rejected_by_memory
+response_gate: answer / refuse_unstable_or_low_confidence
+```
+
+Текущий smoke-result:
+
+```text
+known_answer_rate:   1.000000
+refusal_refuse_rate: 1.000000
+mode_status: organ128_response_gate_candidate
+```
+
+Refusal-набор здесь не является случайным шумом. Это обрывки запросов, слишком
+общие формулировки и keyword-cloud prompts, где у модели нет надежной
+когерентной опоры для ответа. Этот gate нужен, чтобы отличать настоящий
+settle от брожения или ложного аттрактора.
 
 Один детерминированный wave tick:
 
