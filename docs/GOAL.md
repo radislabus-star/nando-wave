@@ -707,22 +707,29 @@ cell32_phase_compose_accuracy
 cell32_structured_compose_accuracy
 cell32_fourier_census_accuracy
 cell32_component_bus_projection_accuracy
+cell32_component_link_projection_accuracy
 phase_compose_gain
 structured_compose_gain
 fourier_census_gain
 component_bus_projection_gain
 component_bus_shuffle_accuracy
+component_link_projection_gain
+component_link_shuffle_accuracy
 component_bus_a_drop
 component_bus_b_drop
 component_bus_phase_drop
 component_bus_amplitude_drop
 component_bus_wrong_pair_drop
+component_link_phase_drop
+component_link_amplitude_drop
+component_link_wrong_pair_drop
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
 census_over_fourier_gap
 component_bus_over_fourier_gap
 component_bus_no_shortcut_control
+component_link_no_shortcut_control
 mode_status
 ```
 
@@ -825,6 +832,7 @@ cell32_phase_compose_accuracy
 cell32_structured_compose_accuracy
 cell32_fourier_census_accuracy
 cell32_component_bus_projection_accuracy
+cell32_component_link_projection_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
@@ -833,12 +841,15 @@ structured_compose_gain
 fourier_census_gain
 component_bus_projection_gain
 component_bus_shuffle_accuracy
+component_link_projection_gain
+component_link_shuffle_accuracy
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
 census_over_fourier_gap
 component_bus_over_fourier_gap
 component_bus_no_shortcut_control
+component_link_no_shortcut_control
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -866,29 +877,36 @@ mode_status: organ128_modadd_key_mode_ablation_passed
 
 ```text
 cargo run -q -p nando-cli -- organ128-modadd-eval 7 31 256 256
-mode_status: not_found_organ128_modadd
+mode_status: organ128_modadd_component_link_candidate
 ensemble_gain: -0.003906
 phase_compose_gain: -0.007812
 structured_compose_gain: 0.000000
 fourier_census_gain: -0.015625
 component_bus_projection_gain: 0.019531
 component_bus_shuffle_accuracy: 0.019531
+component_link_projection_gain: 0.132812
+component_link_shuffle_accuracy: 0.046875
 component_bus_a_drop: 0.039062
 component_bus_b_drop: 0.042969
 component_bus_phase_drop: 0.023438
 component_bus_amplitude_drop: 0.007812
 component_bus_wrong_pair_drop: 0.062500
+component_link_phase_drop: 0.152344
+component_link_amplitude_drop: 0.035156
+component_link_wrong_pair_drop: 0.175781
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
 cell32_structured_compose_accuracy: 0.042969
 cell32_fourier_census_accuracy: 0.027344
 cell32_component_bus_projection_accuracy: 0.062500
+cell32_component_link_projection_accuracy: 0.175781
 wave_over_fourier_gap: -0.960938
 compose_over_fourier_gap: -0.964844
 structured_over_fourier_gap: -0.957031
 census_over_fourier_gap: -0.972656
 component_bus_over_fourier_gap: -0.937500
 component_bus_no_shortcut_control: true
+component_link_no_shortcut_control: true
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -903,41 +921,91 @@ cargo run -q -p nando-cli -- organ128-modadd-seed-sweep 31 256 256
 Первый seed-sweep:
 
 ```text
-mode_status: not_found_organ128_modadd_seed_sweep
+mode_status: organ128_modadd_component_link_seed_sweep_candidate
 passed_seed_pairs: 0
-candidate_seed_pairs: 1
+candidate_seed_pairs: 4
 min_ensemble_gain: -0.011719
 min_phase_compose_gain: -0.023438
 min_structured_compose_gain: -0.023438
 min_fourier_census_gain: -0.023438
 min_component_bus_projection_gain: 0.019531
+min_component_link_projection_gain: 0.132812
 max_component_bus_shuffle_accuracy: 0.039062
+max_component_link_shuffle_accuracy: 0.054688
 min_component_bus_a_drop: 0.039062
 min_component_bus_b_drop: 0.042969
 min_component_bus_phase_drop: 0.023438
 min_component_bus_amplitude_drop: 0.000000
 min_component_bus_wrong_pair_drop: 0.062500
+min_component_link_phase_drop: 0.132812
+min_component_link_amplitude_drop: 0.000000
+min_component_link_wrong_pair_drop: 0.175781
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
 min_structured_over_fourier_gap: -0.976562
 min_census_over_fourier_gap: -0.972656
 min_component_bus_over_fourier_gap: -0.937500
+min_component_link_over_fourier_gap: -0.824219
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
+```
+
+Проверенный вариант 5:
+
+```text
+cell32_component_link_projection:
+  a -> structured component WaveBus
+  b -> structured component WaveBus
+  link features = circular convolution of phase channels(a,b)
+                + circular convolution of amplitude channels(a,b)
+  train class centroids on train split
+  prediction chooses nearest link-centroid by dot product
+  no label formula in prediction path
+
+result:
+  cell32_component_link_projection_accuracy: 0.175781
+  component_link_projection_gain: 0.132812
+  component_link_shuffle_accuracy: 0.046875
+  component_link_no_shortcut_control: true
+  component_link_phase_drop: 0.152344
+  component_link_amplitude_drop: 0.035156
+  component_link_wrong_pair_drop: 0.175781
+  min_component_link_projection_gain over seeds: 0.132812
+  max_component_link_shuffle_accuracy over seeds: 0.054688
+  min_component_link_phase_drop over seeds: 0.132812
+  min_component_link_amplitude_drop over seeds: 0.000000
+  min_component_link_wrong_pair_drop over seeds: 0.175781
+  min_component_link_over_fourier_gap: -0.824219
+  seed status: 4/5 component_link_candidate
+
+decision:
+  strong candidate architectural direction v5, not passed.
+```
+
+Вывод по варианту 5:
+
+```text
+Межкомпонентная link-свертка впервые дала большой seed-robust gain и сильную
+wrong_pair/phase абляцию: признак действительно появляется только при связке
+a и b. Это ближе к исходной гипотезе "A+B+C дают признак, которого нет у A
+отдельно". Но статус все еще не passed: один seed не проходит
+component_link_no_shortcut_control, amplitude-link не является обязательным
+каналом, а точность далека от Fourier control. Следующий шаг - не усложнять
+Chat-0, а превратить link-свертку из readout-прибора в измеримую settle/link
+динамику OrganState с key-link ablation и более жестким no-shortcut control.
 ```
 
 Вывод:
 
 ```text
-прибор собран, leakage control прошел,
-но ансамблевая мода на полном v0 split не найдена.
-Seed-sweep подтверждает: это не одиночная неудача, текущий readout/dynamics
-не seed-robust. Fourier phase control дает accuracy 1.0, значит модульная
-задача действительно решается фазовой композицией; провал находится не в
-задаче, а в текущем способе, которым Organ128 превращает carrier/bus state в
-ответ. Следующий шаг - улучшать wave/readout dynamics и способ записи
-композиции в клетки, а не возвращаться к усилению Chat-0 или расширению
-корпуса.
+прибор собран, v5 нашел сильный component-link candidate, но не passed.
+Seed-sweep подтверждает: это уже не одиночная вспышка, потому что 4/5 seed
+дают component_link_candidate. Но один seed не проходит link no-shortcut, а
+scientific_pass остается false, потому что основной WaveBus/key-cell контур
+еще не имеет нужной абляции. Fourier phase control дает accuracy 1.0, значит
+задача действительно решается фазовой композицией; следующий провал находится
+не в задаче, а в том, что link-сигнал пока живет в readout-приборе, а не в
+самой settle/link динамике OrganState.
 ```
 
 Проверенный вариант 1:
