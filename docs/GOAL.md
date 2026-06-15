@@ -9,7 +9,7 @@ hardcoded-подсказок.
 Довести Nando Wave до состояния:
 
 ```text
-CPU-friendly wave cellular organism proof
+CPU-friendly wave cellular organism evidence package
 ```
 
 Это значит:
@@ -41,12 +41,12 @@ input
 -> snapshot
 ```
 
-Chat-0 - не финальная копия GPT. Chat-0 - демонстрация доказанного принципа.
+Chat-0 - не финальная копия GPT. Chat-0 - демонстрация проверенного принципа.
 
 ## Главный результат
 
 Финальным полезным результатом считается не один удачный текстовый ответ, а
-пакет доказательств:
+пакет проверок:
 
 ```text
 1. Есть задача, где cellular organism работает лучше controls.
@@ -67,7 +67,57 @@ partial
 passed
 ```
 
-Слово `proved` в проекте запрещено, пока нет ablation и controls.
+Слово `proved` в проекте запрещено, пока нет ablation, controls и seed
+robustness. Даже после этого в отчетах лучше писать `passed` или
+`evidence_package_passed`, а не объявлять философскую победу.
+
+## Уровни победы
+
+Чтобы не путать первый сигнал с финальным результатом, проект использует
+четыре уровня победы:
+
+```text
+Bronze   - toy task candidate: есть сигнал выше controls на маленькой задаче
+Silver   - key mode: найдены key modes/cells/links и ablation их ломает
+Gold     - memory: snapshot/no-shortcut controls подтверждают внутреннее состояние
+Platinum - Chat-0: короткий ответ работает поверх Gold-механизма
+```
+
+Запрещенная подмена:
+
+```text
+Bronze нельзя называть Chat-0
+Silver нельзя называть памятью
+Gold нельзя называть GPT-like
+Platinum нельзя считать универсальной LLM
+```
+
+## Формула найденной моды
+
+Ансамблевая мода считается найденной только если одновременно выполняется:
+
+```text
+mode_exists =
+  ensemble_gain >= threshold
+  AND key_ablation_drop >= threshold
+  AND key_ablation_drop >= 2 x non_key_ablation_drop
+  AND seed_robustness passed
+  AND no_shortcut_control passed
+  AND false_positive_increase <= limit
+```
+
+Минимальные v0-пороги для первых eval:
+
+```text
+ensemble_gain >= 0.03
+key_ablation_drop >= 0.05
+key_ablation_drop >= 2 x non_key_ablation_drop
+seed_robustness >= 4/5 seed pairs
+false_positive_increase <= 0.02
+```
+
+Эти пороги не священные. Их можно менять, но только вместе с объяснением в
+документе и повторным прогоном controls.
 
 ## Северная звезда в одной формуле
 
@@ -108,7 +158,7 @@ quick checks and push checks
 ```text
 волновые признаки уже участвуют,
 memory/snapshot уже имеют сигнал,
-но самостоятельная переносимая thought/mode readout еще не доказана.
+но самостоятельная переносимая thought/mode readout еще не подтверждена.
 ```
 
 Значит следующий ход - не наращивать чат, а построить более строгий прибор
@@ -193,7 +243,7 @@ non-key ablation ломает меньше key ablation
 
 ```text
 если cellular не лучше controls и ablation не показывает key modes,
-не переходить к Chat-0 как к доказательству.
+не переходить к Chat-0 как к подтвержденному механизму.
 ```
 
 ## Этап 3: Прогресс-меры до озарения
@@ -287,7 +337,7 @@ seed robustness passed
 
 ```text
 если voting равен WaveBus по качеству и trace,
-волновая шина не доказана.
+волновая шина не подтверждена.
 ```
 
 ## Этап 5: OrganState links
@@ -449,9 +499,9 @@ wrong carrier снижает качество
 это demo shell, а не организм.
 ```
 
-## Этап 9: CPU proof on T480
+## Этап 9: CPU evidence on T480
 
-Цель этапа: доказать, что архитектура реально CPU-friendly.
+Цель этапа: показать, что архитектура реально CPU-friendly.
 
 Измерять:
 
@@ -510,7 +560,7 @@ Nando Wave not found
 есть key mode ablation
 есть snapshot replay
 есть no-shortcut control
-есть CPU proof
+есть CPU evidence
 есть Chat-0 demo on top of those mechanisms
 ```
 
@@ -546,7 +596,7 @@ parking lot
 ```text
 добавлять hardcoded ответы как интеллект
 называть matching мышлением
-называть candidate доказательством
+называть candidate подтвержденным результатом
 увеличивать corpus вместо проверки механизма
 добавлять признаки без ablation
 гонять тяжелые проверки после каждой мелкой правки
@@ -561,6 +611,134 @@ ablation
 seed sweep перед выводом
 профилирование hot path
 документирование отрицательных результатов
+```
+
+## Experimental Protocol v0
+
+Этот раздел важнее любого красивого `mode_status`. Он защищает проект от
+утечки правильного ответа в код и от самообмана на маленьких выборках.
+
+### Train/holdout
+
+Правила:
+
+```text
+train используется для настройки cells/links/readout
+holdout используется только для финальной проверки
+key modes выбираются только на train
+после выбора key modes они freeze
+holdout не используется для выбора порогов
+seed sweep запускается перед любым claim выше candidate
+```
+
+Если threshold был подобран на holdout, этот прогон считается exploratory и не
+может давать `passed`.
+
+### Anti-leakage
+
+Для задач с известной формулой, например `(a + b) mod P`, действует жесткое
+правило:
+
+```text
+label formula разрешена только для генерации dataset и проверки accuracy
+runtime/readout не имеет права вызывать label formula
+key frequency selection не имеет права смотреть holdout labels
+task-specific shortcut не считается mode
+```
+
+Обязательные negative controls:
+
+```text
+label_shuffle ломает результат
+wrong_carrier ухудшает результат
+random_snapshot не помогает
+no_wavebus снижает или меняет trace
+voting_only не объясняет тот же эффект
+```
+
+Если label shuffle не ломает результат, значит eval протек или readout
+измеряет не задачу.
+
+### Scientific pass и engineering pass
+
+Два вида успеха не смешиваются.
+
+```text
+scientific_pass:
+  cellular_with_bus > Mono192 по качеству
+  AND ablation подтверждает key mode
+
+engineering_pass:
+  cellular_with_bus примерно равен Mono192 по качеству
+  AND быстрее, устойчивее или дешевле на T480
+  AND ablation подтверждает key mode
+```
+
+`engineering_pass` полезен, но он не показывает, что клетки умнее монолита.
+Он показывает, что организация может быть практичнее.
+
+### Report artifact
+
+Каждый серьезный eval должен уметь печатать отчет, а позже сохранять его в
+`target/reports`.
+
+Минимальный отчет:
+
+```text
+command
+git_commit
+seed
+task
+dataset_size
+train_size
+holdout_size
+elapsed_ms
+random_accuracy
+mono_accuracy
+voting_accuracy
+wavebus_accuracy
+ensemble_gain
+key_ablation_drop
+non_key_ablation_drop
+false_positive_increase
+mode_status
+```
+
+Позже добавить JSON, но первый человекочитаемый отчет важнее.
+
+### Failure branches
+
+Если `modadd` не проходит после 3 архитектурных вариантов:
+
+```text
+остановить Chat-0 усиление
+проверить phase math
+проверить readout leakage
+проверить CarrierWave не как bias, а как state
+сравнить с простым Fourier baseline
+```
+
+Если `modadd` проходит, а byte-context не проходит:
+
+```text
+строить bridge task между modular world и byte world
+не перепрыгивать сразу в свободный чат
+```
+
+Если Chat-0 держится на matching:
+
+```text
+оставить Chat-0 как shell
+не называть organism
+вернуться к memory imprint и no-direct-prompt control
+```
+
+Если CPU budget ломается:
+
+```text
+сначала profiler
+потом hot path refactor
+потом только архитектурное усложнение
 ```
 
 ## Ближайший следующий шаг
