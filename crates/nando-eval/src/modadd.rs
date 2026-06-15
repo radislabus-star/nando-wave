@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::{BaselineResult, best_baseline, format_baseline, score_prediction, splitmix64};
 use nando_core::{
-    CarrierWave, PHASE_SLOTS, STAGE2_ORGAN_CELLS, STAGE2_TOP_K, Stage2Organ, WaveBus,
+    CarrierWave, OrganState, PHASE_SLOTS, STAGE2_ORGAN_CELLS, STAGE2_TOP_K, Stage2Organ, WaveBus,
     run_stage2_bus_trace_with_organ_carrier, run_stage2_trace_with_organ_carrier,
 };
 
@@ -13,6 +13,7 @@ const MAX_FALSE_POSITIVE_INCREASE: f32 = 0.02;
 const MODADD_SWEEP_SEEDS: [u64; 5] = [7, 13, 29, 97, 131];
 const COMPONENT_BUS_FEATURES: usize = PHASE_SLOTS * 4;
 const COMPONENT_LINK_FEATURES: usize = PHASE_SLOTS * 2;
+const SETTLE_LINK_FEATURES: usize = PHASE_SLOTS + STAGE2_ORGAN_CELLS * 2 + 4;
 
 /// GOAL v0 modular-addition eval configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub struct Organ128ModAddReport {
     pub cell32_fourier_census: BaselineResult,
     pub cell32_component_bus_projection: BaselineResult,
     pub cell32_component_link_projection: BaselineResult,
+    pub cell32_settle_link_projection: BaselineResult,
     pub cell32_voting: BaselineResult,
     pub cell32_wavebus: BaselineResult,
     pub restricted_key: BaselineResult,
@@ -62,6 +64,10 @@ pub struct Organ128ModAddReport {
     pub component_link_no_phase: BaselineResult,
     pub component_link_no_amplitude: BaselineResult,
     pub component_link_wrong_pair: BaselineResult,
+    pub settle_link_label_shuffle: BaselineResult,
+    pub settle_link_no_coupling: BaselineResult,
+    pub settle_link_no_phase: BaselineResult,
+    pub settle_link_wrong_pair: BaselineResult,
     pub key_cell: u32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
@@ -69,12 +75,14 @@ pub struct Organ128ModAddReport {
     pub fourier_census_gain: f32,
     pub component_bus_projection_gain: f32,
     pub component_link_projection_gain: f32,
+    pub settle_link_projection_gain: f32,
     pub wave_over_fourier_gap: f32,
     pub compose_over_fourier_gap: f32,
     pub structured_over_fourier_gap: f32,
     pub census_over_fourier_gap: f32,
     pub component_bus_over_fourier_gap: f32,
     pub component_link_over_fourier_gap: f32,
+    pub settle_link_over_fourier_gap: f32,
     pub component_bus_a_drop: f32,
     pub component_bus_b_drop: f32,
     pub component_bus_phase_drop: f32,
@@ -83,11 +91,15 @@ pub struct Organ128ModAddReport {
     pub component_link_phase_drop: f32,
     pub component_link_amplitude_drop: f32,
     pub component_link_wrong_pair_drop: f32,
+    pub settle_link_coupling_drop: f32,
+    pub settle_link_phase_drop: f32,
+    pub settle_link_wrong_pair_drop: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub no_shortcut_control: bool,
     pub component_bus_no_shortcut_control: bool,
     pub component_link_no_shortcut_control: bool,
+    pub settle_link_no_shortcut_control: bool,
     pub scientific_pass: bool,
     pub engineering_pass: bool,
     pub mode_status: &'static str,
@@ -103,6 +115,7 @@ pub struct Organ128ModAddSeedSweepRow {
     pub cell32_fourier_census_accuracy: f32,
     pub cell32_component_bus_projection_accuracy: f32,
     pub cell32_component_link_projection_accuracy: f32,
+    pub cell32_settle_link_projection_accuracy: f32,
     pub fourier_phase_accuracy: f32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
@@ -110,17 +123,20 @@ pub struct Organ128ModAddSeedSweepRow {
     pub fourier_census_gain: f32,
     pub component_bus_projection_gain: f32,
     pub component_link_projection_gain: f32,
+    pub settle_link_projection_gain: f32,
     pub wave_over_fourier_gap: f32,
     pub compose_over_fourier_gap: f32,
     pub structured_over_fourier_gap: f32,
     pub census_over_fourier_gap: f32,
     pub component_bus_over_fourier_gap: f32,
     pub component_link_over_fourier_gap: f32,
+    pub settle_link_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub label_shuffle_accuracy: f32,
     pub component_bus_shuffle_accuracy: f32,
     pub component_link_shuffle_accuracy: f32,
+    pub settle_link_shuffle_accuracy: f32,
     pub component_bus_a_drop: f32,
     pub component_bus_b_drop: f32,
     pub component_bus_phase_drop: f32,
@@ -129,9 +145,13 @@ pub struct Organ128ModAddSeedSweepRow {
     pub component_link_phase_drop: f32,
     pub component_link_amplitude_drop: f32,
     pub component_link_wrong_pair_drop: f32,
+    pub settle_link_coupling_drop: f32,
+    pub settle_link_phase_drop: f32,
+    pub settle_link_wrong_pair_drop: f32,
     pub no_shortcut_control: bool,
     pub component_bus_no_shortcut_control: bool,
     pub component_link_no_shortcut_control: bool,
+    pub settle_link_no_shortcut_control: bool,
     pub scientific_pass: bool,
     pub engineering_pass: bool,
     pub mode_status: &'static str,
@@ -152,16 +172,19 @@ pub struct Organ128ModAddSeedSweepReport {
     pub min_fourier_census_gain: f32,
     pub min_component_bus_projection_gain: f32,
     pub min_component_link_projection_gain: f32,
+    pub min_settle_link_projection_gain: f32,
     pub min_wave_over_fourier_gap: f32,
     pub min_compose_over_fourier_gap: f32,
     pub min_structured_over_fourier_gap: f32,
     pub min_census_over_fourier_gap: f32,
     pub min_component_bus_over_fourier_gap: f32,
     pub min_component_link_over_fourier_gap: f32,
+    pub min_settle_link_over_fourier_gap: f32,
     pub min_key_ablation_drop: f32,
     pub max_label_shuffle_accuracy: f32,
     pub max_component_bus_shuffle_accuracy: f32,
     pub max_component_link_shuffle_accuracy: f32,
+    pub max_settle_link_shuffle_accuracy: f32,
     pub min_component_bus_a_drop: f32,
     pub min_component_bus_b_drop: f32,
     pub min_component_bus_phase_drop: f32,
@@ -170,6 +193,9 @@ pub struct Organ128ModAddSeedSweepReport {
     pub min_component_link_phase_drop: f32,
     pub min_component_link_amplitude_drop: f32,
     pub min_component_link_wrong_pair_drop: f32,
+    pub min_settle_link_coupling_drop: f32,
+    pub min_settle_link_phase_drop: f32,
+    pub min_settle_link_wrong_pair_drop: f32,
     pub mode_status: &'static str,
 }
 
@@ -193,6 +219,7 @@ impl Organ128ModAddReport {
         output.push_str(&format_baseline(self.cell32_fourier_census));
         output.push_str(&format_baseline(self.cell32_component_bus_projection));
         output.push_str(&format_baseline(self.cell32_component_link_projection));
+        output.push_str(&format_baseline(self.cell32_settle_link_projection));
         output.push_str(&format_baseline(self.cell32_voting));
         output.push_str(&format_baseline(self.cell32_wavebus));
         output.push_str(&format_baseline(self.restricted_key));
@@ -208,6 +235,10 @@ impl Organ128ModAddReport {
         output.push_str(&format_baseline(self.component_link_no_phase));
         output.push_str(&format_baseline(self.component_link_no_amplitude));
         output.push_str(&format_baseline(self.component_link_wrong_pair));
+        output.push_str(&format_baseline(self.settle_link_label_shuffle));
+        output.push_str(&format_baseline(self.settle_link_no_coupling));
+        output.push_str(&format_baseline(self.settle_link_no_phase));
+        output.push_str(&format_baseline(self.settle_link_wrong_pair));
         output.push_str(&format!("random_accuracy: {:.6}\n", self.random.accuracy));
         output.push_str(&format!("mono192_accuracy: {:.6}\n", self.mono192.accuracy));
         output.push_str(&format!(
@@ -233,6 +264,10 @@ impl Organ128ModAddReport {
         output.push_str(&format!(
             "cell32_component_link_projection_accuracy: {:.6}\n",
             self.cell32_component_link_projection.accuracy
+        ));
+        output.push_str(&format!(
+            "cell32_settle_link_projection_accuracy: {:.6}\n",
+            self.cell32_settle_link_projection.accuracy
         ));
         output.push_str(&format!(
             "cell32_voting_accuracy: {:.6}\n",
@@ -265,6 +300,10 @@ impl Organ128ModAddReport {
             self.component_link_projection_gain
         ));
         output.push_str(&format!(
+            "settle_link_projection_gain: {:.6}\n",
+            self.settle_link_projection_gain
+        ));
+        output.push_str(&format!(
             "wave_over_fourier_gap: {:.6}\n",
             self.wave_over_fourier_gap
         ));
@@ -287,6 +326,10 @@ impl Organ128ModAddReport {
         output.push_str(&format!(
             "component_link_over_fourier_gap: {:.6}\n",
             self.component_link_over_fourier_gap
+        ));
+        output.push_str(&format!(
+            "settle_link_over_fourier_gap: {:.6}\n",
+            self.settle_link_over_fourier_gap
         ));
         output.push_str(&format!(
             "component_bus_a_drop: {:.6}\n",
@@ -321,6 +364,18 @@ impl Organ128ModAddReport {
             self.component_link_wrong_pair_drop
         ));
         output.push_str(&format!(
+            "settle_link_coupling_drop: {:.6}\n",
+            self.settle_link_coupling_drop
+        ));
+        output.push_str(&format!(
+            "settle_link_phase_drop: {:.6}\n",
+            self.settle_link_phase_drop
+        ));
+        output.push_str(&format!(
+            "settle_link_wrong_pair_drop: {:.6}\n",
+            self.settle_link_wrong_pair_drop
+        ));
+        output.push_str(&format!(
             "restricted_key_accuracy: {:.6}\n",
             self.restricted_key.accuracy
         ));
@@ -349,6 +404,10 @@ impl Organ128ModAddReport {
             self.component_link_label_shuffle.accuracy
         ));
         output.push_str(&format!(
+            "settle_link_shuffle_accuracy: {:.6}\n",
+            self.settle_link_label_shuffle.accuracy
+        ));
+        output.push_str(&format!(
             "no_shortcut_control: {}\n",
             self.no_shortcut_control
         ));
@@ -359,6 +418,10 @@ impl Organ128ModAddReport {
         output.push_str(&format!(
             "component_link_no_shortcut_control: {}\n",
             self.component_link_no_shortcut_control
+        ));
+        output.push_str(&format!(
+            "settle_link_no_shortcut_control: {}\n",
+            self.settle_link_no_shortcut_control
         ));
         output.push_str(&format!("scientific_pass: {}\n", self.scientific_pass));
         output.push_str(&format!("engineering_pass: {}\n", self.engineering_pass));
@@ -377,26 +440,25 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!("modulus: {}\n", self.modulus));
         output.push_str(&format!("train_size: {}\n", self.train_cases));
         output.push_str(&format!("holdout_size: {}\n", self.holdout_cases));
-        output.push_str("seed wavebus_acc component_bus_acc component_bus_gain component_link_acc component_link_gain a_drop b_drop phase_drop link_phase_drop wrong_pair_drop link_wrong_pair_drop component_shuffle_acc link_shuffle_acc component_no_shortcut link_no_shortcut scientific engineering mode_status\n");
+        output.push_str("seed wavebus_acc component_link_acc component_link_gain settle_link_acc settle_link_gain link_phase_drop settle_coupling_drop settle_phase_drop link_wrong_pair_drop settle_wrong_pair_drop link_shuffle_acc settle_shuffle_acc link_no_shortcut settle_no_shortcut scientific engineering mode_status\n");
         for row in &self.rows {
             output.push_str(&format!(
-                "{} {:.6} {:.6} {:+.6} {:.6} {:+.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {} {} {} {} {}\n",
+                "{} {:.6} {:.6} {:+.6} {:.6} {:+.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {} {} {} {} {}\n",
                 row.seed,
                 row.cell32_wavebus_accuracy,
-                row.cell32_component_bus_projection_accuracy,
-                row.component_bus_projection_gain,
                 row.cell32_component_link_projection_accuracy,
                 row.component_link_projection_gain,
-                row.component_bus_a_drop,
-                row.component_bus_b_drop,
-                row.component_bus_phase_drop,
+                row.cell32_settle_link_projection_accuracy,
+                row.settle_link_projection_gain,
                 row.component_link_phase_drop,
-                row.component_bus_wrong_pair_drop,
+                row.settle_link_coupling_drop,
+                row.settle_link_phase_drop,
                 row.component_link_wrong_pair_drop,
-                row.component_bus_shuffle_accuracy,
+                row.settle_link_wrong_pair_drop,
                 row.component_link_shuffle_accuracy,
-                row.component_bus_no_shortcut_control,
+                row.settle_link_shuffle_accuracy,
                 row.component_link_no_shortcut_control,
+                row.settle_link_no_shortcut_control,
                 row.scientific_pass,
                 row.engineering_pass,
                 row.mode_status
@@ -432,6 +494,10 @@ impl Organ128ModAddSeedSweepReport {
             self.min_component_link_projection_gain
         ));
         output.push_str(&format!(
+            "min_settle_link_projection_gain: {:.6}\n",
+            self.min_settle_link_projection_gain
+        ));
+        output.push_str(&format!(
             "min_wave_over_fourier_gap: {:.6}\n",
             self.min_wave_over_fourier_gap
         ));
@@ -456,6 +522,10 @@ impl Organ128ModAddSeedSweepReport {
             self.min_component_link_over_fourier_gap
         ));
         output.push_str(&format!(
+            "min_settle_link_over_fourier_gap: {:.6}\n",
+            self.min_settle_link_over_fourier_gap
+        ));
+        output.push_str(&format!(
             "min_key_ablation_drop: {:.6}\n",
             self.min_key_ablation_drop
         ));
@@ -470,6 +540,10 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!(
             "max_component_link_shuffle_accuracy: {:.6}\n",
             self.max_component_link_shuffle_accuracy
+        ));
+        output.push_str(&format!(
+            "max_settle_link_shuffle_accuracy: {:.6}\n",
+            self.max_settle_link_shuffle_accuracy
         ));
         output.push_str(&format!(
             "min_component_bus_a_drop: {:.6}\n",
@@ -503,6 +577,18 @@ impl Organ128ModAddSeedSweepReport {
             "min_component_link_wrong_pair_drop: {:.6}\n",
             self.min_component_link_wrong_pair_drop
         ));
+        output.push_str(&format!(
+            "min_settle_link_coupling_drop: {:.6}\n",
+            self.min_settle_link_coupling_drop
+        ));
+        output.push_str(&format!(
+            "min_settle_link_phase_drop: {:.6}\n",
+            self.min_settle_link_phase_drop
+        ));
+        output.push_str(&format!(
+            "min_settle_link_wrong_pair_drop: {:.6}\n",
+            self.min_settle_link_wrong_pair_drop
+        ));
         output.push_str(&format!("mode_status: {}\n", self.mode_status));
         output
     }
@@ -533,6 +619,10 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         ComponentLinkProjectionReadout::train(&organ, config, &dataset.train, None);
     let shuffled_component_link_projection_readout =
         ComponentLinkProjectionReadout::train(&organ, config, &dataset.train, Some(config.seed));
+    let settle_link_projection_readout =
+        SettleLinkProjectionReadout::train(config, &dataset.train, None);
+    let shuffled_settle_link_projection_readout =
+        SettleLinkProjectionReadout::train(config, &dataset.train, Some(config.seed));
     let shuffled_readout = ModAddReadout::train(&organ, config, &dataset.train, Some(config.seed));
 
     let mut random = BaselineResult::new("random", dataset.holdout.len());
@@ -548,6 +638,8 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         BaselineResult::new("cell32_component_bus_projection", dataset.holdout.len());
     let mut cell32_component_link_projection =
         BaselineResult::new("cell32_component_link_projection", dataset.holdout.len());
+    let mut cell32_settle_link_projection =
+        BaselineResult::new("cell32_settle_link_projection", dataset.holdout.len());
     let mut cell32_voting = BaselineResult::new("cell32_voting", dataset.holdout.len());
     let mut cell32_wavebus = BaselineResult::new("cell32_wavebus", dataset.holdout.len());
     let mut label_shuffle = BaselineResult::new("label_shuffle", dataset.holdout.len());
@@ -571,6 +663,14 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         BaselineResult::new("component_link_no_amplitude", dataset.holdout.len());
     let mut component_link_wrong_pair =
         BaselineResult::new("component_link_wrong_pair", dataset.holdout.len());
+    let mut settle_link_label_shuffle =
+        BaselineResult::new("settle_link_label_shuffle", dataset.holdout.len());
+    let mut settle_link_no_coupling =
+        BaselineResult::new("settle_link_no_coupling", dataset.holdout.len());
+    let mut settle_link_no_phase =
+        BaselineResult::new("settle_link_no_phase", dataset.holdout.len());
+    let mut settle_link_wrong_pair =
+        BaselineResult::new("settle_link_wrong_pair", dataset.holdout.len());
     let mut ablations: [BaselineResult; STAGE2_ORGAN_CELLS] = std::array::from_fn(|cell_id| {
         BaselineResult::new(ablation_name(cell_id), dataset.holdout.len())
     });
@@ -639,6 +739,16 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
             trace.spectral_entropy,
         );
 
+        let settle_link_prediction =
+            settle_link_projection_readout.predict(config.seed, *sample, config.modulus);
+        score_prediction(
+            &mut cell32_settle_link_projection,
+            settle_link_prediction,
+            target,
+            trace.coherence,
+            trace.spectral_entropy,
+        );
+
         let component_bus_shuffled_prediction = shuffled_component_bus_projection_readout.predict(
             &organ,
             config.seed,
@@ -663,6 +773,16 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
             trace.spectral_entropy,
         );
 
+        let settle_link_shuffled_prediction =
+            shuffled_settle_link_projection_readout.predict(config.seed, *sample, config.modulus);
+        score_prediction(
+            &mut settle_link_label_shuffle,
+            settle_link_shuffled_prediction,
+            target,
+            trace.coherence,
+            trace.spectral_entropy,
+        );
+
         for (mode, result) in [
             (ComponentBusFeatureMode::AOnly, &mut component_bus_a_only),
             (ComponentBusFeatureMode::BOnly, &mut component_bus_b_only),
@@ -681,6 +801,32 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         ] {
             let prediction = component_bus_projection_readout.predict_with_mode(
                 &organ,
+                config.seed,
+                *sample,
+                config.modulus,
+                mode,
+            );
+            score_prediction(
+                result,
+                prediction,
+                target,
+                trace.coherence,
+                trace.spectral_entropy,
+            );
+        }
+
+        for (mode, result) in [
+            (
+                SettleLinkFeatureMode::NoCoupling,
+                &mut settle_link_no_coupling,
+            ),
+            (SettleLinkFeatureMode::NoPhase, &mut settle_link_no_phase),
+            (
+                SettleLinkFeatureMode::WrongPair,
+                &mut settle_link_wrong_pair,
+            ),
+        ] {
+            let prediction = settle_link_projection_readout.predict_with_mode(
                 config.seed,
                 *sample,
                 config.modulus,
@@ -773,6 +919,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         &mut cell32_fourier_census,
         &mut cell32_component_bus_projection,
         &mut cell32_component_link_projection,
+        &mut cell32_settle_link_projection,
         &mut cell32_voting,
         &mut cell32_wavebus,
         &mut label_shuffle,
@@ -786,6 +933,10 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         &mut component_link_no_phase,
         &mut component_link_no_amplitude,
         &mut component_link_wrong_pair,
+        &mut settle_link_label_shuffle,
+        &mut settle_link_no_coupling,
+        &mut settle_link_no_phase,
+        &mut settle_link_wrong_pair,
     ]);
     for ablation in &mut ablations {
         ablation.finish();
@@ -818,6 +969,8 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         cell32_component_bus_projection.accuracy - best_control.accuracy;
     let component_link_projection_gain =
         cell32_component_link_projection.accuracy - best_control.accuracy;
+    let settle_link_projection_gain =
+        cell32_settle_link_projection.accuracy - best_control.accuracy;
     let wave_over_fourier_gap = cell32_wavebus.accuracy - fourier_phase.accuracy;
     let compose_over_fourier_gap = cell32_phase_compose.accuracy - fourier_phase.accuracy;
     let structured_over_fourier_gap = cell32_structured_compose.accuracy - fourier_phase.accuracy;
@@ -826,6 +979,8 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         cell32_component_bus_projection.accuracy - fourier_phase.accuracy;
     let component_link_over_fourier_gap =
         cell32_component_link_projection.accuracy - fourier_phase.accuracy;
+    let settle_link_over_fourier_gap =
+        cell32_settle_link_projection.accuracy - fourier_phase.accuracy;
     let component_bus_a_drop = ablation_drop(
         cell32_component_bus_projection.accuracy,
         component_bus_a_only.accuracy,
@@ -858,6 +1013,18 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         cell32_component_link_projection.accuracy,
         component_link_wrong_pair.accuracy,
     );
+    let settle_link_coupling_drop = ablation_drop(
+        cell32_settle_link_projection.accuracy,
+        settle_link_no_coupling.accuracy,
+    );
+    let settle_link_phase_drop = ablation_drop(
+        cell32_settle_link_projection.accuracy,
+        settle_link_no_phase.accuracy,
+    );
+    let settle_link_wrong_pair_drop = ablation_drop(
+        cell32_settle_link_projection.accuracy,
+        settle_link_wrong_pair.accuracy,
+    );
     let no_shortcut_control = label_shuffle.accuracy
         <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE).min(cell32_wavebus.accuracy);
     let component_bus_no_shortcut_control = component_bus_label_shuffle.accuracy
@@ -866,6 +1033,9 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let component_link_no_shortcut_control = component_link_label_shuffle.accuracy
         <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE)
             .min(cell32_component_link_projection.accuracy);
+    let settle_link_no_shortcut_control = settle_link_label_shuffle.accuracy
+        <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE)
+            .min(cell32_settle_link_projection.accuracy);
     let scientific_pass = ensemble_gain >= MIN_ENSEMBLE_GAIN
         && cell32_wavebus.accuracy > mono192.accuracy
         && key_ablation_drop >= MIN_KEY_ABLATION_DROP
@@ -878,8 +1048,15 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         && component_link_phase_drop >= MIN_KEY_ABLATION_DROP
         && component_link_wrong_pair_drop >= MIN_KEY_ABLATION_DROP
         && component_link_no_shortcut_control;
+    let settle_link_candidate = settle_link_projection_gain >= MIN_ENSEMBLE_GAIN
+        && settle_link_coupling_drop >= MIN_KEY_ABLATION_DROP
+        && settle_link_phase_drop >= MIN_KEY_ABLATION_DROP
+        && settle_link_wrong_pair_drop >= MIN_KEY_ABLATION_DROP
+        && settle_link_no_shortcut_control;
     let mode_status = if scientific_pass {
         "organ128_modadd_key_mode_ablation_passed"
+    } else if settle_link_candidate {
+        "organ128_modadd_settle_link_candidate"
     } else if component_link_candidate {
         "organ128_modadd_component_link_candidate"
     } else if engineering_pass || (ensemble_gain > 0.0 && no_shortcut_control) {
@@ -899,6 +1076,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         cell32_fourier_census,
         cell32_component_bus_projection,
         cell32_component_link_projection,
+        cell32_settle_link_projection,
         cell32_voting,
         cell32_wavebus,
         restricted_key,
@@ -914,6 +1092,10 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         component_link_no_phase,
         component_link_no_amplitude,
         component_link_wrong_pair,
+        settle_link_label_shuffle,
+        settle_link_no_coupling,
+        settle_link_no_phase,
+        settle_link_wrong_pair,
         key_cell,
         ensemble_gain,
         phase_compose_gain,
@@ -921,12 +1103,14 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         fourier_census_gain,
         component_bus_projection_gain,
         component_link_projection_gain,
+        settle_link_projection_gain,
         wave_over_fourier_gap,
         compose_over_fourier_gap,
         structured_over_fourier_gap,
         census_over_fourier_gap,
         component_bus_over_fourier_gap,
         component_link_over_fourier_gap,
+        settle_link_over_fourier_gap,
         component_bus_a_drop,
         component_bus_b_drop,
         component_bus_phase_drop,
@@ -935,11 +1119,15 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         component_link_phase_drop,
         component_link_amplitude_drop,
         component_link_wrong_pair_drop,
+        settle_link_coupling_drop,
+        settle_link_phase_drop,
+        settle_link_wrong_pair_drop,
         key_ablation_drop,
         non_key_ablation_drop,
         no_shortcut_control,
         component_bus_no_shortcut_control,
         component_link_no_shortcut_control,
+        settle_link_no_shortcut_control,
         scientific_pass,
         engineering_pass,
         mode_status,
@@ -972,6 +1160,7 @@ pub fn organ128_modadd_seed_sweep_eval(
             cell32_component_link_projection_accuracy: report
                 .cell32_component_link_projection
                 .accuracy,
+            cell32_settle_link_projection_accuracy: report.cell32_settle_link_projection.accuracy,
             fourier_phase_accuracy: report.fourier_phase.accuracy,
             ensemble_gain: report.ensemble_gain,
             phase_compose_gain: report.phase_compose_gain,
@@ -979,17 +1168,20 @@ pub fn organ128_modadd_seed_sweep_eval(
             fourier_census_gain: report.fourier_census_gain,
             component_bus_projection_gain: report.component_bus_projection_gain,
             component_link_projection_gain: report.component_link_projection_gain,
+            settle_link_projection_gain: report.settle_link_projection_gain,
             wave_over_fourier_gap: report.wave_over_fourier_gap,
             compose_over_fourier_gap: report.compose_over_fourier_gap,
             structured_over_fourier_gap: report.structured_over_fourier_gap,
             census_over_fourier_gap: report.census_over_fourier_gap,
             component_bus_over_fourier_gap: report.component_bus_over_fourier_gap,
             component_link_over_fourier_gap: report.component_link_over_fourier_gap,
+            settle_link_over_fourier_gap: report.settle_link_over_fourier_gap,
             key_ablation_drop: report.key_ablation_drop,
             non_key_ablation_drop: report.non_key_ablation_drop,
             label_shuffle_accuracy: report.label_shuffle.accuracy,
             component_bus_shuffle_accuracy: report.component_bus_label_shuffle.accuracy,
             component_link_shuffle_accuracy: report.component_link_label_shuffle.accuracy,
+            settle_link_shuffle_accuracy: report.settle_link_label_shuffle.accuracy,
             component_bus_a_drop: report.component_bus_a_drop,
             component_bus_b_drop: report.component_bus_b_drop,
             component_bus_phase_drop: report.component_bus_phase_drop,
@@ -998,9 +1190,13 @@ pub fn organ128_modadd_seed_sweep_eval(
             component_link_phase_drop: report.component_link_phase_drop,
             component_link_amplitude_drop: report.component_link_amplitude_drop,
             component_link_wrong_pair_drop: report.component_link_wrong_pair_drop,
+            settle_link_coupling_drop: report.settle_link_coupling_drop,
+            settle_link_phase_drop: report.settle_link_phase_drop,
+            settle_link_wrong_pair_drop: report.settle_link_wrong_pair_drop,
             no_shortcut_control: report.no_shortcut_control,
             component_bus_no_shortcut_control: report.component_bus_no_shortcut_control,
             component_link_no_shortcut_control: report.component_link_no_shortcut_control,
+            settle_link_no_shortcut_control: report.settle_link_no_shortcut_control,
             scientific_pass: report.scientific_pass,
             engineering_pass: report.engineering_pass,
             mode_status: report.mode_status,
@@ -1015,6 +1211,7 @@ pub fn organ128_modadd_seed_sweep_eval(
                 || row.engineering_pass
                 || row.mode_status == "organ128_modadd_candidate"
                 || row.mode_status == "organ128_modadd_component_link_candidate"
+                || row.mode_status == "organ128_modadd_settle_link_candidate"
         })
         .count();
     let min_ensemble_gain = rows
@@ -1041,6 +1238,10 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.component_link_projection_gain)
         .fold(f32::INFINITY, f32::min);
+    let min_settle_link_projection_gain = rows
+        .iter()
+        .map(|row| row.settle_link_projection_gain)
+        .fold(f32::INFINITY, f32::min);
     let min_wave_over_fourier_gap = rows
         .iter()
         .map(|row| row.wave_over_fourier_gap)
@@ -1065,6 +1266,10 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.component_link_over_fourier_gap)
         .fold(f32::INFINITY, f32::min);
+    let min_settle_link_over_fourier_gap = rows
+        .iter()
+        .map(|row| row.settle_link_over_fourier_gap)
+        .fold(f32::INFINITY, f32::min);
     let min_key_ablation_drop = rows
         .iter()
         .map(|row| row.key_ablation_drop)
@@ -1080,6 +1285,10 @@ pub fn organ128_modadd_seed_sweep_eval(
     let max_component_link_shuffle_accuracy = rows
         .iter()
         .map(|row| row.component_link_shuffle_accuracy)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let max_settle_link_shuffle_accuracy = rows
+        .iter()
+        .map(|row| row.settle_link_shuffle_accuracy)
         .fold(f32::NEG_INFINITY, f32::max);
     let min_component_bus_a_drop = rows
         .iter()
@@ -1113,12 +1322,30 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.component_link_wrong_pair_drop)
         .fold(f32::INFINITY, f32::min);
+    let min_settle_link_coupling_drop = rows
+        .iter()
+        .map(|row| row.settle_link_coupling_drop)
+        .fold(f32::INFINITY, f32::min);
+    let min_settle_link_phase_drop = rows
+        .iter()
+        .map(|row| row.settle_link_phase_drop)
+        .fold(f32::INFINITY, f32::min);
+    let min_settle_link_wrong_pair_drop = rows
+        .iter()
+        .map(|row| row.settle_link_wrong_pair_drop)
+        .fold(f32::INFINITY, f32::min);
     let component_link_seed_pairs = rows
         .iter()
         .filter(|row| row.mode_status == "organ128_modadd_component_link_candidate")
         .count();
+    let settle_link_seed_pairs = rows
+        .iter()
+        .filter(|row| row.mode_status == "organ128_modadd_settle_link_candidate")
+        .count();
     let mode_status = if passed_seed_pairs >= 4 {
         "organ128_modadd_seed_robustness_passed"
+    } else if settle_link_seed_pairs >= 4 {
+        "organ128_modadd_settle_link_seed_sweep_candidate"
     } else if component_link_seed_pairs >= 4 {
         "organ128_modadd_component_link_seed_sweep_candidate"
     } else if candidate_seed_pairs >= 3 {
@@ -1140,16 +1367,19 @@ pub fn organ128_modadd_seed_sweep_eval(
         min_fourier_census_gain,
         min_component_bus_projection_gain,
         min_component_link_projection_gain,
+        min_settle_link_projection_gain,
         min_wave_over_fourier_gap,
         min_compose_over_fourier_gap,
         min_structured_over_fourier_gap,
         min_census_over_fourier_gap,
         min_component_bus_over_fourier_gap,
         min_component_link_over_fourier_gap,
+        min_settle_link_over_fourier_gap,
         min_key_ablation_drop,
         max_label_shuffle_accuracy,
         max_component_bus_shuffle_accuracy,
         max_component_link_shuffle_accuracy,
+        max_settle_link_shuffle_accuracy,
         min_component_bus_a_drop,
         min_component_bus_b_drop,
         min_component_bus_phase_drop,
@@ -1158,6 +1388,9 @@ pub fn organ128_modadd_seed_sweep_eval(
         min_component_link_phase_drop,
         min_component_link_amplitude_drop,
         min_component_link_wrong_pair_drop,
+        min_settle_link_coupling_drop,
+        min_settle_link_phase_drop,
+        min_settle_link_wrong_pair_drop,
         mode_status,
     }
 }
@@ -1428,6 +1661,11 @@ struct ComponentLinkProjectionReadout {
     centroids: Vec<[f32; COMPONENT_LINK_FEATURES]>,
 }
 
+#[derive(Clone)]
+struct SettleLinkProjectionReadout {
+    centroids: Vec<[f32; SETTLE_LINK_FEATURES]>,
+}
+
 #[derive(Clone, Copy)]
 enum ComponentBusFeatureMode {
     Full,
@@ -1443,6 +1681,14 @@ enum ComponentLinkFeatureMode {
     Full,
     NoPhase,
     NoAmplitude,
+    WrongPair,
+}
+
+#[derive(Clone, Copy)]
+enum SettleLinkFeatureMode {
+    Full,
+    NoCoupling,
+    NoPhase,
     WrongPair,
 }
 
@@ -1551,6 +1797,60 @@ impl ComponentLinkProjectionReadout {
         mode: ComponentLinkFeatureMode,
     ) -> u8 {
         let features = component_link_features(organ, seed, sample, modulus, mode);
+        self.centroids
+            .iter()
+            .enumerate()
+            .map(|(class, centroid)| (class, dot_features(&features, centroid)))
+            .max_by(|(_, left), (_, right)| left.total_cmp(right))
+            .map_or(0, |(class, _)| class as u8)
+    }
+}
+
+impl SettleLinkProjectionReadout {
+    fn train(
+        config: Organ128ModAddConfig,
+        samples: &[ModAddSample],
+        shuffle_seed: Option<u64>,
+    ) -> Self {
+        let classes = usize::from(config.modulus);
+        let mut centroids = vec![[0.0; SETTLE_LINK_FEATURES]; classes];
+        let mut counts = vec![0usize; classes];
+        for (index, sample) in samples.iter().enumerate() {
+            let label_sample = match shuffle_seed {
+                Some(seed) => samples[shuffle_index(seed, index, samples.len())],
+                None => *sample,
+            };
+            let target = usize::from(label_sample.target(config.modulus));
+            let features = settle_link_features(
+                config.seed,
+                *sample,
+                config.modulus,
+                SettleLinkFeatureMode::Full,
+            );
+            add_features(&mut centroids[target], &features);
+            counts[target] += 1;
+        }
+        for (centroid, count) in centroids.iter_mut().zip(counts) {
+            if count > 0 {
+                scale_features(centroid, 1.0 / count as f32);
+                normalize_features(centroid);
+            }
+        }
+        Self { centroids }
+    }
+
+    fn predict(&self, seed: u64, sample: ModAddSample, modulus: u8) -> u8 {
+        self.predict_with_mode(seed, sample, modulus, SettleLinkFeatureMode::Full)
+    }
+
+    fn predict_with_mode(
+        &self,
+        seed: u64,
+        sample: ModAddSample,
+        modulus: u8,
+        mode: SettleLinkFeatureMode,
+    ) -> u8 {
+        let features = settle_link_features(seed, sample, modulus, mode);
         self.centroids
             .iter()
             .enumerate()
@@ -1799,6 +2099,51 @@ fn component_link_features(
     features
 }
 
+fn settle_link_features(
+    seed: u64,
+    sample: ModAddSample,
+    modulus: u8,
+    mode: SettleLinkFeatureMode,
+) -> [f32; SETTLE_LINK_FEATURES] {
+    let b_value = if matches!(mode, SettleLinkFeatureMode::WrongPair) {
+        (sample.b + modulus / 2 + 1) % modulus
+    } else {
+        sample.b
+    };
+    let mut state = OrganState::new(seed ^ 0x51E7_11CE, 0x51);
+
+    let a_carrier = structured_component_carrier(sample.a, modulus, 0xA17A ^ seed);
+    let a_input = sample.a.wrapping_mul(3).wrapping_add(0xA1);
+    let _ = state.settle_tick_with_carrier(a_input, a_carrier, None);
+    let b_carrier = structured_component_carrier(b_value, modulus, 0xB17B ^ seed);
+    let b_input = b_value.wrapping_mul(5).wrapping_add(0xB1);
+    let tick = state.settle_tick_with_carrier(b_input, b_carrier, None);
+
+    let mut features = [0.0; SETTLE_LINK_FEATURES];
+    if !matches!(mode, SettleLinkFeatureMode::NoPhase) {
+        let center_slot = phase_to_slot(tick.trace.center_phase);
+        let carrier_slot = phase_to_slot(state.carrier.phase);
+        features[center_slot] += tick.trace.center_magnitude.max(0.05);
+        features[carrier_slot] += state.carrier.envelope().max(0.05) * 0.5;
+    }
+
+    if !matches!(mode, SettleLinkFeatureMode::NoCoupling) {
+        let coupling_offset = PHASE_SLOTS;
+        for (cell_id, coupling) in state.cell_coupling.iter().copied().enumerate() {
+            features[coupling_offset + cell_id] = coupling;
+            features[coupling_offset + STAGE2_ORGAN_CELLS + cell_id] = coupling.abs();
+        }
+    }
+
+    let scalar_offset = PHASE_SLOTS + STAGE2_ORGAN_CELLS * 2;
+    features[scalar_offset] = tick.trace.coherence;
+    features[scalar_offset + 1] = 1.0 - tick.trace.spectral_entropy;
+    features[scalar_offset + 2] = tick.trace.center_magnitude;
+    features[scalar_offset + 3] = state.coupling_mean();
+    normalize_features(&mut features);
+    features
+}
+
 fn component_bus(organ: &Stage2Organ, seed: u64, value: u8, modulus: u8, lane: u64) -> WaveBus {
     let carrier = structured_component_carrier(value, modulus, lane ^ seed);
     run_stage2_bus_trace_with_organ_carrier(organ, lane as u8, carrier, None).bus
@@ -1866,6 +2211,11 @@ fn structured_component_carrier(value: u8, modulus: u8, lane: u64) -> CarrierWav
         frequency: 1.0 + unit,
         boundary: 0.95,
     }
+}
+
+fn phase_to_slot(phase: f32) -> usize {
+    let unit = (phase / TAU).rem_euclid(1.0);
+    ((unit * PHASE_SLOTS as f32).round() as usize) % PHASE_SLOTS
 }
 
 fn fourier_phase_predict(sample: ModAddSample, modulus: u8) -> u8 {
@@ -1942,6 +2292,7 @@ mod tests {
         assert!(text.contains("component_bus_no_shortcut_control:"));
         assert!(
             report.mode_status == "organ128_modadd_key_mode_ablation_passed"
+                || report.mode_status == "organ128_modadd_settle_link_candidate"
                 || report.mode_status == "organ128_modadd_component_link_candidate"
                 || report.mode_status == "organ128_modadd_candidate"
                 || report.mode_status == "not_found_organ128_modadd"
@@ -1974,6 +2325,7 @@ mod tests {
         assert!(text.contains("min_component_bus_wrong_pair_drop:"));
         assert!(
             report.mode_status == "organ128_modadd_seed_robustness_passed"
+                || report.mode_status == "organ128_modadd_settle_link_seed_sweep_candidate"
                 || report.mode_status == "organ128_modadd_component_link_seed_sweep_candidate"
                 || report.mode_status == "organ128_modadd_seed_sweep_candidate"
                 || report.mode_status == "not_found_organ128_modadd_seed_sweep"

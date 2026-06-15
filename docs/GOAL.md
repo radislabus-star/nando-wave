@@ -708,6 +708,7 @@ cell32_structured_compose_accuracy
 cell32_fourier_census_accuracy
 cell32_component_bus_projection_accuracy
 cell32_component_link_projection_accuracy
+cell32_settle_link_projection_accuracy
 phase_compose_gain
 structured_compose_gain
 fourier_census_gain
@@ -715,6 +716,8 @@ component_bus_projection_gain
 component_bus_shuffle_accuracy
 component_link_projection_gain
 component_link_shuffle_accuracy
+settle_link_projection_gain
+settle_link_shuffle_accuracy
 component_bus_a_drop
 component_bus_b_drop
 component_bus_phase_drop
@@ -723,6 +726,9 @@ component_bus_wrong_pair_drop
 component_link_phase_drop
 component_link_amplitude_drop
 component_link_wrong_pair_drop
+settle_link_coupling_drop
+settle_link_phase_drop
+settle_link_wrong_pair_drop
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
@@ -730,6 +736,7 @@ census_over_fourier_gap
 component_bus_over_fourier_gap
 component_bus_no_shortcut_control
 component_link_no_shortcut_control
+settle_link_no_shortcut_control
 mode_status
 ```
 
@@ -833,6 +840,7 @@ cell32_structured_compose_accuracy
 cell32_fourier_census_accuracy
 cell32_component_bus_projection_accuracy
 cell32_component_link_projection_accuracy
+cell32_settle_link_projection_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
@@ -843,6 +851,8 @@ component_bus_projection_gain
 component_bus_shuffle_accuracy
 component_link_projection_gain
 component_link_shuffle_accuracy
+settle_link_projection_gain
+settle_link_shuffle_accuracy
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
@@ -850,6 +860,7 @@ census_over_fourier_gap
 component_bus_over_fourier_gap
 component_bus_no_shortcut_control
 component_link_no_shortcut_control
+settle_link_no_shortcut_control
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -886,6 +897,8 @@ component_bus_projection_gain: 0.019531
 component_bus_shuffle_accuracy: 0.019531
 component_link_projection_gain: 0.132812
 component_link_shuffle_accuracy: 0.046875
+settle_link_projection_gain: -0.042969
+settle_link_shuffle_accuracy: 0.046875
 component_bus_a_drop: 0.039062
 component_bus_b_drop: 0.042969
 component_bus_phase_drop: 0.023438
@@ -894,12 +907,16 @@ component_bus_wrong_pair_drop: 0.062500
 component_link_phase_drop: 0.152344
 component_link_amplitude_drop: 0.035156
 component_link_wrong_pair_drop: 0.175781
+settle_link_coupling_drop: 0.000000
+settle_link_phase_drop: 0.000000
+settle_link_wrong_pair_drop: 0.000000
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
 cell32_structured_compose_accuracy: 0.042969
 cell32_fourier_census_accuracy: 0.027344
 cell32_component_bus_projection_accuracy: 0.062500
 cell32_component_link_projection_accuracy: 0.175781
+cell32_settle_link_projection_accuracy: 0.000000
 wave_over_fourier_gap: -0.960938
 compose_over_fourier_gap: -0.964844
 structured_over_fourier_gap: -0.957031
@@ -907,6 +924,7 @@ census_over_fourier_gap: -0.972656
 component_bus_over_fourier_gap: -0.937500
 component_bus_no_shortcut_control: true
 component_link_no_shortcut_control: true
+settle_link_no_shortcut_control: false
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -930,8 +948,10 @@ min_structured_compose_gain: -0.023438
 min_fourier_census_gain: -0.023438
 min_component_bus_projection_gain: 0.019531
 min_component_link_projection_gain: 0.132812
+min_settle_link_projection_gain: -0.050781
 max_component_bus_shuffle_accuracy: 0.039062
 max_component_link_shuffle_accuracy: 0.054688
+max_settle_link_shuffle_accuracy: 0.046875
 min_component_bus_a_drop: 0.039062
 min_component_bus_b_drop: 0.042969
 min_component_bus_phase_drop: 0.023438
@@ -940,12 +960,16 @@ min_component_bus_wrong_pair_drop: 0.062500
 min_component_link_phase_drop: 0.132812
 min_component_link_amplitude_drop: 0.000000
 min_component_link_wrong_pair_drop: 0.175781
+min_settle_link_coupling_drop: 0.000000
+min_settle_link_phase_drop: 0.000000
+min_settle_link_wrong_pair_drop: 0.000000
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
 min_structured_over_fourier_gap: -0.976562
 min_census_over_fourier_gap: -0.972656
 min_component_bus_over_fourier_gap: -0.937500
 min_component_link_over_fourier_gap: -0.824219
+min_settle_link_over_fourier_gap: -1.000000
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -993,6 +1017,49 @@ component_link_no_shortcut_control, amplitude-link не является обя�
 каналом, а точность далека от Fourier control. Следующий шаг - не усложнять
 Chat-0, а превратить link-свертку из readout-прибора в измеримую settle/link
 динамику OrganState с key-link ablation и более жестким no-shortcut control.
+```
+
+Проверенный вариант 6:
+
+```text
+cell32_settle_link_projection:
+  a -> OrganState settle_tick with structured carrier and component input byte
+  b -> OrganState settle_tick with structured carrier and component input byte
+  features = final center/carrier phase slots
+           + OrganState.cell_coupling signed/absolute values
+           + coherence/entropy/center/coupling scalars
+  train class centroids on train split
+  controls: label_shuffle, no_coupling, no_phase, wrong_pair
+
+result:
+  cell32_settle_link_projection_accuracy: 0.000000
+  settle_link_projection_gain: -0.042969
+  settle_link_shuffle_accuracy: 0.046875
+  settle_link_no_shortcut_control: false
+  settle_link_coupling_drop: 0.000000
+  settle_link_phase_drop: 0.000000
+  settle_link_wrong_pair_drop: 0.000000
+  min_settle_link_projection_gain over seeds: -0.050781
+  max_settle_link_shuffle_accuracy over seeds: 0.046875
+  min_settle_link_coupling_drop over seeds: 0.000000
+  min_settle_link_phase_drop over seeds: 0.000000
+  min_settle_link_wrong_pair_drop over seeds: 0.000000
+  min_settle_link_over_fourier_gap: -1.000000
+
+decision:
+  rejected as architectural direction v6.
+```
+
+Вывод по варианту 6:
+
+```text
+Прямая попытка перенести v5 link-сигнал в текущий OrganState settle-state не
+сработала. Это не ломает v5: component_link_projection остается сильным
+candidate. Но v6 показывает границу: текущий runtime coupling обновляется как
+общая активность клеток, а не как направленная связь между компонентами a и b.
+Следующий архитектурный шаг должен менять OrganState/LinkTissue так, чтобы
+межкомпонентная связь записывалась как отдельное key-link состояние, а не
+ожидать, что она появится из общего cell_coupling сама.
 ```
 
 Вывод:
