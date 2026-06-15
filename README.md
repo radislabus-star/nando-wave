@@ -8,6 +8,7 @@
 
 ```text
 docs/NORTH_STAR.md   - северная звезда проекта
+docs/GOAL.md         - конечная цель, gates и порядок движения
 docs/INSPIRATION.md  - статья Nanda et al. как источник вдохновения
 docs/ARCHITECTURE.md - черновая архитектура
 docs/HYPOTHESES.md   - проверяемые гипотезы
