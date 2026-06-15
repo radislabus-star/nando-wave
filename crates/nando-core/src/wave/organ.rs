@@ -2,7 +2,8 @@ use std::f32::consts::TAU;
 
 use super::{
     BytePhaseLut, CarrierWave, Cell32, CellRank, PHASE_SLOTS, STAGE2_ORGAN_CELLS, STAGE2_TOP_K,
-    Stage2Tick, TickTrace, circular_phase_delta, run_stage2_tick_with_organ_lut_state,
+    Stage2BusTraceTick, Stage2Tick, TickTrace, WaveBus, circular_phase_delta,
+    run_stage2_bus_trace_with_organ_state, run_stage2_tick_with_organ_lut_state,
     run_stage2_tick_with_state,
 };
 
@@ -54,6 +55,10 @@ pub struct OrganState {
     pub previous_coherence: f32,
     pub previous_entropy: f32,
     pub cell_coupling: [f32; STAGE2_ORGAN_CELLS],
+    pub previous_phase_sum: [f32; PHASE_SLOTS],
+    pub previous_amplitude_sum: [f32; PHASE_SLOTS],
+    pub link_phase_sum: [f32; PHASE_SLOTS],
+    pub link_amplitude_sum: [f32; PHASE_SLOTS],
 }
 
 /// Primitive byte prediction made from the current wave center.
@@ -94,6 +99,10 @@ impl OrganState {
             previous_coherence: 0.0,
             previous_entropy: 1.0,
             cell_coupling: [0.0; STAGE2_ORGAN_CELLS],
+            previous_phase_sum: [0.0; PHASE_SLOTS],
+            previous_amplitude_sum: [0.0; PHASE_SLOTS],
+            link_phase_sum: [0.0; PHASE_SLOTS],
+            link_amplitude_sum: [0.0; PHASE_SLOTS],
         }
     }
 
@@ -136,7 +145,32 @@ impl OrganState {
             disabled_cell_id,
             &self.cell_coupling,
         );
-        self.update_from_tick(&tick);
+        self.update_from_trace(&tick.trace);
+        tick
+    }
+
+    /// Run one stateful settle tick and retain bus-to-bus link state.
+    ///
+    /// This is the runtime counterpart of the eval-only component-link probe:
+    /// it records how the previous bus and current bus interact without
+    /// changing fixed Cell32 packets or using task labels.
+    pub fn settle_bus_tick_with_carrier(
+        &mut self,
+        organ: &Stage2Organ,
+        input_byte: u8,
+        carrier: CarrierWave,
+        disabled_cell_id: Option<u32>,
+    ) -> Stage2BusTraceTick {
+        self.carrier = carrier;
+        let tick = run_stage2_bus_trace_with_organ_state(
+            organ,
+            input_byte,
+            carrier,
+            disabled_cell_id,
+            &self.cell_coupling,
+        );
+        self.update_link_from_bus(&tick.bus);
+        self.update_from_trace(&tick.trace);
         tick
     }
 
@@ -225,26 +259,73 @@ impl OrganState {
         }
     }
 
-    fn update_from_tick(&mut self, tick: &Stage2Tick) {
+    fn update_from_trace(&mut self, trace: &TickTrace) {
         for coupling in &mut self.cell_coupling {
             *coupling *= 0.82;
         }
 
-        for (rank, cell_id) in tick.trace.active_cell_ids.iter().copied().enumerate() {
+        for (rank, cell_id) in trace.active_cell_ids.iter().copied().enumerate() {
             let index = cell_id as usize;
             if index >= STAGE2_ORGAN_CELLS {
                 continue;
             }
             let rank_gain = (STAGE2_TOP_K - rank) as f32 / STAGE2_TOP_K as f32;
-            self.cell_coupling[index] = (self.cell_coupling[index]
-                + rank_gain * tick.trace.coherence * 0.12)
-                .clamp(0.0, 1.0);
+            self.cell_coupling[index] =
+                (self.cell_coupling[index] + rank_gain * trace.coherence * 0.12).clamp(0.0, 1.0);
         }
 
-        self.previous_center_phase = tick.trace.center_phase;
-        self.previous_coherence = tick.trace.coherence;
-        self.previous_entropy = tick.trace.spectral_entropy;
+        self.previous_center_phase = trace.center_phase;
+        self.previous_coherence = trace.coherence;
+        self.previous_entropy = trace.spectral_entropy;
         self.tick_index = self.tick_index.saturating_add(1);
+    }
+
+    fn update_link_from_bus(&mut self, bus: &WaveBus) {
+        if self.tick_index > 0 {
+            let previous_phase_norm = self
+                .previous_phase_sum
+                .iter()
+                .map(|value| value.abs())
+                .sum::<f32>()
+                .max(f32::EPSILON);
+            let current_phase_norm = bus
+                .phase_sum
+                .iter()
+                .map(|value| value.abs())
+                .sum::<f32>()
+                .max(f32::EPSILON);
+            let previous_amplitude_norm = self
+                .previous_amplitude_sum
+                .iter()
+                .sum::<f32>()
+                .max(f32::EPSILON);
+            let current_amplitude_norm = bus.amplitude_sum.iter().sum::<f32>().max(f32::EPSILON);
+
+            for value in &mut self.link_phase_sum {
+                *value *= 0.72;
+            }
+            for value in &mut self.link_amplitude_sum {
+                *value *= 0.72;
+            }
+
+            for output_slot in 0..PHASE_SLOTS {
+                let mut phase_link = 0.0;
+                let mut amplitude_link = 0.0;
+                for previous_slot in 0..PHASE_SLOTS {
+                    let current_slot = (output_slot + PHASE_SLOTS - previous_slot) % PHASE_SLOTS;
+                    phase_link += (self.previous_phase_sum[previous_slot] / previous_phase_norm)
+                        * (bus.phase_sum[current_slot] / current_phase_norm);
+                    amplitude_link += (self.previous_amplitude_sum[previous_slot]
+                        / previous_amplitude_norm)
+                        * (bus.amplitude_sum[current_slot] / current_amplitude_norm);
+                }
+                self.link_phase_sum[output_slot] += phase_link;
+                self.link_amplitude_sum[output_slot] += amplitude_link;
+            }
+        }
+
+        self.previous_phase_sum = bus.phase_sum;
+        self.previous_amplitude_sum = bus.amplitude_sum;
     }
 }
 
@@ -269,4 +350,29 @@ fn byte_phase(byte: u8) -> f32 {
 #[must_use]
 pub fn stage2_organ(seed: u64) -> [Cell32; STAGE2_ORGAN_CELLS] {
     Stage2Organ::new(seed).cells
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bus_settle_ticks_record_link_state() {
+        let seed = 13;
+        let organ = Stage2Organ::new(seed);
+        let mut state = OrganState::new(seed, b'l');
+        let first_carrier = CarrierWave::from_seed(seed, b'e');
+        let second_carrier = CarrierWave::from_seed(seed, b't');
+
+        state.settle_bus_tick_with_carrier(&organ, b'e', first_carrier, None);
+        let first_phase_energy: f32 = state.link_phase_sum.iter().map(|value| value.abs()).sum();
+        assert_eq!(first_phase_energy, 0.0);
+
+        state.settle_bus_tick_with_carrier(&organ, b't', second_carrier, None);
+        let phase_energy: f32 = state.link_phase_sum.iter().map(|value| value.abs()).sum();
+        let amplitude_energy: f32 = state.link_amplitude_sum.iter().sum();
+
+        assert!(phase_energy > 0.0);
+        assert!(amplitude_energy > 0.0);
+    }
 }

@@ -897,8 +897,8 @@ component_bus_projection_gain: 0.019531
 component_bus_shuffle_accuracy: 0.019531
 component_link_projection_gain: 0.132812
 component_link_shuffle_accuracy: 0.046875
-settle_link_projection_gain: -0.042969
-settle_link_shuffle_accuracy: 0.046875
+settle_link_projection_gain: 0.050781
+settle_link_shuffle_accuracy: 0.031250
 component_bus_a_drop: 0.039062
 component_bus_b_drop: 0.042969
 component_bus_phase_drop: 0.023438
@@ -908,15 +908,15 @@ component_link_phase_drop: 0.152344
 component_link_amplitude_drop: 0.035156
 component_link_wrong_pair_drop: 0.175781
 settle_link_coupling_drop: 0.000000
-settle_link_phase_drop: 0.000000
-settle_link_wrong_pair_drop: 0.000000
+settle_link_phase_drop: 0.070312
+settle_link_wrong_pair_drop: 0.093750
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
 cell32_structured_compose_accuracy: 0.042969
 cell32_fourier_census_accuracy: 0.027344
 cell32_component_bus_projection_accuracy: 0.062500
 cell32_component_link_projection_accuracy: 0.175781
-cell32_settle_link_projection_accuracy: 0.000000
+cell32_settle_link_projection_accuracy: 0.093750
 wave_over_fourier_gap: -0.960938
 compose_over_fourier_gap: -0.964844
 structured_over_fourier_gap: -0.957031
@@ -924,7 +924,7 @@ census_over_fourier_gap: -0.972656
 component_bus_over_fourier_gap: -0.937500
 component_bus_no_shortcut_control: true
 component_link_no_shortcut_control: true
-settle_link_no_shortcut_control: false
+settle_link_no_shortcut_control: true
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -939,7 +939,7 @@ cargo run -q -p nando-cli -- organ128-modadd-seed-sweep 31 256 256
 Первый seed-sweep:
 
 ```text
-mode_status: organ128_modadd_component_link_seed_sweep_candidate
+mode_status: organ128_modadd_seed_sweep_candidate
 passed_seed_pairs: 0
 candidate_seed_pairs: 4
 min_ensemble_gain: -0.011719
@@ -948,10 +948,10 @@ min_structured_compose_gain: -0.023438
 min_fourier_census_gain: -0.023438
 min_component_bus_projection_gain: 0.019531
 min_component_link_projection_gain: 0.132812
-min_settle_link_projection_gain: -0.050781
+min_settle_link_projection_gain: 0.050781
 max_component_bus_shuffle_accuracy: 0.039062
 max_component_link_shuffle_accuracy: 0.054688
-max_settle_link_shuffle_accuracy: 0.046875
+max_settle_link_shuffle_accuracy: 0.042969
 min_component_bus_a_drop: 0.039062
 min_component_bus_b_drop: 0.042969
 min_component_bus_phase_drop: 0.023438
@@ -961,15 +961,15 @@ min_component_link_phase_drop: 0.132812
 min_component_link_amplitude_drop: 0.000000
 min_component_link_wrong_pair_drop: 0.175781
 min_settle_link_coupling_drop: 0.000000
-min_settle_link_phase_drop: 0.000000
-min_settle_link_wrong_pair_drop: 0.000000
+min_settle_link_phase_drop: 0.070312
+min_settle_link_wrong_pair_drop: 0.093750
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
 min_structured_over_fourier_gap: -0.976562
 min_census_over_fourier_gap: -0.972656
 min_component_bus_over_fourier_gap: -0.937500
 min_component_link_over_fourier_gap: -0.824219
-min_settle_link_over_fourier_gap: -1.000000
+min_settle_link_over_fourier_gap: -0.906250
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -1060,6 +1060,49 @@ candidate. Но v6 показывает границу: текущий runtime c
 Следующий архитектурный шаг должен менять OrganState/LinkTissue так, чтобы
 межкомпонентная связь записывалась как отдельное key-link состояние, а не
 ожидать, что она появится из общего cell_coupling сама.
+```
+
+Проверенный вариант 7:
+
+```text
+organ_state_runtime_key_link:
+  OrganState stores previous_phase_sum / previous_amplitude_sum
+  OrganState stores link_phase_sum / link_amplitude_sum
+  settle_bus_tick_with_carrier updates bus-to-bus circular link state
+  v7 readout uses OrganState link_phase/link_amplitude state
+  per-cell coupling is treated as non-key noise, not the key link
+
+result:
+  cell32_settle_link_projection_accuracy: 0.093750
+  settle_link_projection_gain: 0.050781
+  settle_link_shuffle_accuracy: 0.031250
+  settle_link_no_shortcut_control: true
+  settle_link_coupling_drop: 0.000000
+  settle_link_phase_drop: 0.070312
+  settle_link_wrong_pair_drop: 0.093750
+  min_settle_link_projection_gain over seeds: 0.050781
+  max_settle_link_shuffle_accuracy over seeds: 0.042969
+  min_settle_link_coupling_drop over seeds: 0.000000
+  min_settle_link_phase_drop over seeds: 0.070312
+  min_settle_link_wrong_pair_drop over seeds: 0.093750
+  min_settle_link_over_fourier_gap: -0.906250
+  seed status: 3/5 settle_link_candidate, 1/5 component_link_candidate, 1/5 not_found
+
+decision:
+  partial candidate architectural direction v7, not passed.
+```
+
+Вывод по варианту 7:
+
+```text
+Первый перенос v5-сигнала в runtime state сработал частично: link-состояние
+внутри OrganState уже дает положительный gain, проходит одиночный no-shortcut
+и ломается от phase/wrong_pair ablation. Это важнее v6, потому что сигнал
+живет не только во внешнем readout-приборе, а в runtime key-link state.
+Но это еще не найденная мода: seed robustness только частичный, 2/5 seed не
+дают settle-link candidate, а основной scientific_pass остается false.
+Следующий шаг - улучшать именно обновление key-link state и его no-shortcut
+устойчивость, не расширяя Chat-0.
 ```
 
 Вывод:

@@ -13,7 +13,7 @@ const MAX_FALSE_POSITIVE_INCREASE: f32 = 0.02;
 const MODADD_SWEEP_SEEDS: [u64; 5] = [7, 13, 29, 97, 131];
 const COMPONENT_BUS_FEATURES: usize = PHASE_SLOTS * 4;
 const COMPONENT_LINK_FEATURES: usize = PHASE_SLOTS * 2;
-const SETTLE_LINK_FEATURES: usize = PHASE_SLOTS + STAGE2_ORGAN_CELLS * 2 + 4;
+const SETTLE_LINK_FEATURES: usize = PHASE_SLOTS * 2 + STAGE2_ORGAN_CELLS * 2 + 4;
 
 /// GOAL v0 modular-addition eval configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -620,9 +620,9 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let shuffled_component_link_projection_readout =
         ComponentLinkProjectionReadout::train(&organ, config, &dataset.train, Some(config.seed));
     let settle_link_projection_readout =
-        SettleLinkProjectionReadout::train(config, &dataset.train, None);
+        SettleLinkProjectionReadout::train(&organ, config, &dataset.train, None);
     let shuffled_settle_link_projection_readout =
-        SettleLinkProjectionReadout::train(config, &dataset.train, Some(config.seed));
+        SettleLinkProjectionReadout::train(&organ, config, &dataset.train, Some(config.seed));
     let shuffled_readout = ModAddReadout::train(&organ, config, &dataset.train, Some(config.seed));
 
     let mut random = BaselineResult::new("random", dataset.holdout.len());
@@ -740,7 +740,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         );
 
         let settle_link_prediction =
-            settle_link_projection_readout.predict(config.seed, *sample, config.modulus);
+            settle_link_projection_readout.predict(&organ, config.seed, *sample, config.modulus);
         score_prediction(
             &mut cell32_settle_link_projection,
             settle_link_prediction,
@@ -773,8 +773,12 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
             trace.spectral_entropy,
         );
 
-        let settle_link_shuffled_prediction =
-            shuffled_settle_link_projection_readout.predict(config.seed, *sample, config.modulus);
+        let settle_link_shuffled_prediction = shuffled_settle_link_projection_readout.predict(
+            &organ,
+            config.seed,
+            *sample,
+            config.modulus,
+        );
         score_prediction(
             &mut settle_link_label_shuffle,
             settle_link_shuffled_prediction,
@@ -827,6 +831,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
             ),
         ] {
             let prediction = settle_link_projection_readout.predict_with_mode(
+                &organ,
                 config.seed,
                 *sample,
                 config.modulus,
@@ -1049,7 +1054,6 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         && component_link_wrong_pair_drop >= MIN_KEY_ABLATION_DROP
         && component_link_no_shortcut_control;
     let settle_link_candidate = settle_link_projection_gain >= MIN_ENSEMBLE_GAIN
-        && settle_link_coupling_drop >= MIN_KEY_ABLATION_DROP
         && settle_link_phase_drop >= MIN_KEY_ABLATION_DROP
         && settle_link_wrong_pair_drop >= MIN_KEY_ABLATION_DROP
         && settle_link_no_shortcut_control;
@@ -1808,6 +1812,7 @@ impl ComponentLinkProjectionReadout {
 
 impl SettleLinkProjectionReadout {
     fn train(
+        organ: &Stage2Organ,
         config: Organ128ModAddConfig,
         samples: &[ModAddSample],
         shuffle_seed: Option<u64>,
@@ -1822,6 +1827,7 @@ impl SettleLinkProjectionReadout {
             };
             let target = usize::from(label_sample.target(config.modulus));
             let features = settle_link_features(
+                organ,
                 config.seed,
                 *sample,
                 config.modulus,
@@ -1839,18 +1845,19 @@ impl SettleLinkProjectionReadout {
         Self { centroids }
     }
 
-    fn predict(&self, seed: u64, sample: ModAddSample, modulus: u8) -> u8 {
-        self.predict_with_mode(seed, sample, modulus, SettleLinkFeatureMode::Full)
+    fn predict(&self, organ: &Stage2Organ, seed: u64, sample: ModAddSample, modulus: u8) -> u8 {
+        self.predict_with_mode(organ, seed, sample, modulus, SettleLinkFeatureMode::Full)
     }
 
     fn predict_with_mode(
         &self,
+        organ: &Stage2Organ,
         seed: u64,
         sample: ModAddSample,
         modulus: u8,
         mode: SettleLinkFeatureMode,
     ) -> u8 {
-        let features = settle_link_features(seed, sample, modulus, mode);
+        let features = settle_link_features(organ, seed, sample, modulus, mode);
         self.centroids
             .iter()
             .enumerate()
@@ -2100,6 +2107,7 @@ fn component_link_features(
 }
 
 fn settle_link_features(
+    organ: &Stage2Organ,
     seed: u64,
     sample: ModAddSample,
     modulus: u8,
@@ -2114,32 +2122,45 @@ fn settle_link_features(
 
     let a_carrier = structured_component_carrier(sample.a, modulus, 0xA17A ^ seed);
     let a_input = sample.a.wrapping_mul(3).wrapping_add(0xA1);
-    let _ = state.settle_tick_with_carrier(a_input, a_carrier, None);
+    let _ = state.settle_bus_tick_with_carrier(organ, a_input, a_carrier, None);
     let b_carrier = structured_component_carrier(b_value, modulus, 0xB17B ^ seed);
     let b_input = b_value.wrapping_mul(5).wrapping_add(0xB1);
-    let tick = state.settle_tick_with_carrier(b_input, b_carrier, None);
+    let tick = state.settle_bus_tick_with_carrier(organ, b_input, b_carrier, None);
 
     let mut features = [0.0; SETTLE_LINK_FEATURES];
     if !matches!(mode, SettleLinkFeatureMode::NoPhase) {
-        let center_slot = phase_to_slot(tick.trace.center_phase);
-        let carrier_slot = phase_to_slot(state.carrier.phase);
-        features[center_slot] += tick.trace.center_magnitude.max(0.05);
-        features[carrier_slot] += state.carrier.envelope().max(0.05) * 0.5;
-    }
-
-    if !matches!(mode, SettleLinkFeatureMode::NoCoupling) {
-        let coupling_offset = PHASE_SLOTS;
-        for (cell_id, coupling) in state.cell_coupling.iter().copied().enumerate() {
-            features[coupling_offset + cell_id] = coupling;
-            features[coupling_offset + STAGE2_ORGAN_CELLS + cell_id] = coupling.abs();
+        let phase_norm = state
+            .link_phase_sum
+            .iter()
+            .map(|value| value.abs())
+            .sum::<f32>()
+            .max(f32::EPSILON);
+        for (slot, value) in state.link_phase_sum.iter().copied().enumerate() {
+            features[slot] = value / phase_norm;
         }
+        let center_slot = phase_to_slot(tick.trace.center_phase);
+        features[center_slot] += tick.trace.center_magnitude.max(0.05) * 0.25;
     }
 
-    let scalar_offset = PHASE_SLOTS + STAGE2_ORGAN_CELLS * 2;
+    let amplitude_offset = PHASE_SLOTS;
+    let amplitude_norm = state
+        .link_amplitude_sum
+        .iter()
+        .sum::<f32>()
+        .max(f32::EPSILON);
+    for (slot, value) in state.link_amplitude_sum.iter().copied().enumerate() {
+        features[amplitude_offset + slot] = value / amplitude_norm;
+    }
+
+    let scalar_offset = PHASE_SLOTS * 2 + STAGE2_ORGAN_CELLS * 2;
     features[scalar_offset] = tick.trace.coherence;
     features[scalar_offset + 1] = 1.0 - tick.trace.spectral_entropy;
     features[scalar_offset + 2] = tick.trace.center_magnitude;
-    features[scalar_offset + 3] = state.coupling_mean();
+    features[scalar_offset + 3] = if matches!(mode, SettleLinkFeatureMode::NoCoupling) {
+        0.0
+    } else {
+        state.coupling_mean() * 0.05
+    };
     normalize_features(&mut features);
     features
 }

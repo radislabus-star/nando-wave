@@ -485,3 +485,23 @@ fn build_bus_and_top(
         active_cell_ids,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bus_trace_exposes_full_bus_spectrum() {
+        let seed = 11;
+        let input = b'N';
+        let carrier = CarrierWave::from_seed(seed, input);
+        let organ = Stage2Organ::new(seed);
+        let full = run_stage2_tick_with_organ_carrier(&organ, input, carrier, None);
+        let bus_trace = run_stage2_bus_trace_with_organ_carrier(&organ, input, carrier, None);
+
+        assert_eq!(bus_trace.carrier, full.carrier);
+        assert_eq!(bus_trace.trace, full.trace);
+        assert_eq!(bus_trace.bus.center_phase, full.trace.center_phase);
+        assert_eq!(bus_trace.bus.phase_sum.len(), PHASE_SLOTS);
+    }
+}
