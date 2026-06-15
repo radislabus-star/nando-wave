@@ -429,8 +429,23 @@ cargo run -p nando-cli -- organ128-response-gate-eval 7 12
 
 ```text
 settle_verdict: settled / weak / oscillating / incoherent / rejected_by_memory
+thought_verdict: coherent / unsettled / diffuse / detached
 response_gate: answer / refuse_unstable_or_low_confidence
 ```
+
+`ThoughtState` пока является диагностическим внутренним состоянием, а не
+ручным правилом ответа. Он агрегирует trajectory settle-прохода:
+
+```text
+thought_phase
+thought_strength
+thought_convergence
+thought_drift
+thought_verdict
+```
+
+Это первый шаг к внутреннему циклу: prompt должен порождать не только внешний
+matching, но и наблюдаемый аттрактор в `carrier/bus/memory` динамике.
 
 Текущий smoke-result:
 
@@ -444,6 +459,10 @@ Refusal-набор здесь не является случайным шумо�
 общие формулировки и keyword-cloud prompts, где у модели нет надежной
 когерентной опоры для ответа. Этот gate нужен, чтобы отличать настоящий
 settle от брожения или ложного аттрактора.
+
+Для этого response-gate печатает `candidate_margin`: разницу между лучшим и
+вторым dialog-кандидатом. Малый margin означает, что система видит несколько
+почти одинаковых аттракторов и не имеет достаточно конкретной опоры.
 
 Один детерминированный wave tick:
 

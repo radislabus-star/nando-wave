@@ -223,19 +223,26 @@ pub(crate) fn run_organ128_settle_dialog(
     println!("settled_entropy: {:.6}", settled.entropy);
     println!("settled_stability: {:.6}", settled.stability);
     println!("settle_verdict: {}", settled.verdict().as_str());
+    println!("thought_phase: {:.6}", settled.thought.phase);
+    println!("thought_strength: {:.6}", settled.thought.strength);
+    println!("thought_convergence: {:.6}", settled.thought.convergence);
+    println!("thought_drift: {:.6}", settled.thought.drift);
+    println!("thought_verdict: {}", settled.thought.verdict().as_str());
     println!("memory_phase: {:.6}", settled.memory.phase);
     println!("memory_strength: {:.6}", settled.memory.strength);
     println!("memory_validation: {:.6}", settled.memory.validation);
     println!("memory_top_slots: {:?}", settled.memory.top_slots);
     println!("matched_prompt: {}", selected.entry.prompt);
     println!("match_score: {:.6}", selected.total_score);
+    let candidate_margin = candidate_margin(&lut, &prompt, prompt_wave, &settled);
+    println!("candidate_margin: {:.6}", candidate_margin);
     println!("score_prompt_component: {:.6}", selected.prompt_score);
     println!("score_lexical_component: {:.6}", selected.lexical_score);
     println!("score_wave_component: {:.6}", selected.wave_score);
     println!("score_stability_component: {:.6}", selected.stability_score);
     println!("wave_matched_prompt: {}", wave_selected.entry.prompt);
     println!("wave_score: {:.6}", wave_selected.wave_score);
-    let response_gate = response_gate(&prompt, &settled, &selected);
+    let response_gate = response_gate(&prompt, &settled, &selected, candidate_margin);
     println!("response_gate: {}", response_gate.as_str());
     println!("answer: {}", selected.entry.answer);
     if matches!(response_gate, ResponseGate::Refuse) {
@@ -443,12 +450,13 @@ pub(crate) fn run_organ128_response_gate_eval(
     println!("trace:");
     for row in known.rows.iter().chain(refusal.rows.iter()) {
         println!(
-            "{} prompt=\"{}\" verdict={} gate={} score={:.6} lexical={:.6} wave={:.6}",
+            "{} prompt=\"{}\" verdict={} gate={} score={:.6} margin={:.6} lexical={:.6} wave={:.6}",
             row.kind,
             row.prompt,
             row.verdict.as_str(),
             row.gate.as_str(),
             row.score,
+            row.margin,
             row.lexical_score,
             row.wave_score
         );
@@ -660,12 +668,14 @@ impl Organ128Runtime {
         };
 
         let final_memory = memory.summary();
+        let thought = ThoughtState::from_trace(&trace, prompt_wave, &final_memory);
         Organ128SettleState {
             ticks: trace,
             center_phase: final_bus.center_phase,
             coherence: final_bus.coherence,
             entropy: final_bus.spectral_entropy,
             stability,
+            thought,
             memory: MemorySummary {
                 validation: memory.validation(wave),
                 ..final_memory
@@ -919,7 +929,95 @@ struct Organ128SettleState {
     coherence: f32,
     entropy: f32,
     stability: f32,
+    thought: ThoughtState,
     memory: MemorySummary,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ThoughtState {
+    phase: f32,
+    strength: f32,
+    convergence: f32,
+    drift: f32,
+    memory_alignment: f32,
+}
+
+impl ThoughtState {
+    fn from_trace(
+        trace: &[Organ128SettleTick],
+        prompt_wave: PromptWave,
+        memory: &MemorySummary,
+    ) -> Self {
+        if trace.is_empty() {
+            return Self {
+                phase: prompt_wave.phase,
+                strength: 0.0,
+                convergence: 0.0,
+                drift: 0.0,
+                memory_alignment: 0.0,
+            };
+        }
+
+        let mut x = 0.0f32;
+        let mut y = 0.0f32;
+        let mut total_weight = 0.0f32;
+        let mut velocity_sum = 0.0f32;
+        for tick in trace {
+            let confidence =
+                (tick.coherence * (1.0 - tick.entropy).clamp(0.0, 1.0)).max(tick.coherence * 0.20);
+            x += confidence * tick.center_phase.cos();
+            y += confidence * tick.center_phase.sin();
+            total_weight += confidence;
+            velocity_sum += tick.phase_velocity;
+        }
+
+        let phase = y.atan2(x).rem_euclid(std::f32::consts::TAU);
+        let strength = (x.mul_add(x, y * y)).sqrt() / total_weight.max(f32::EPSILON);
+        let mean_velocity = velocity_sum / trace.len().max(1) as f32;
+        let convergence = (1.0 - mean_velocity / std::f32::consts::PI).clamp(0.0, 1.0);
+        let drift = circular_delta_local(prompt_wave.phase, phase).abs() / std::f32::consts::PI;
+        let memory_alignment = ((memory.phase - phase).cos() + 1.0) * 0.5 * memory.validation;
+
+        Self {
+            phase,
+            strength: strength.clamp(0.0, 1.0),
+            convergence,
+            drift: drift.clamp(0.0, 1.0),
+            memory_alignment: memory_alignment.clamp(0.0, 1.0),
+        }
+    }
+
+    fn verdict(self) -> ThoughtVerdict {
+        if self.strength < 0.20 || self.convergence < 0.20 {
+            return ThoughtVerdict::Diffuse;
+        }
+        if self.drift > 0.75 && self.memory_alignment < 0.35 {
+            return ThoughtVerdict::Detached;
+        }
+        if self.convergence >= 0.50 && self.memory_alignment >= 0.45 {
+            return ThoughtVerdict::Coherent;
+        }
+        ThoughtVerdict::Unsettled
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThoughtVerdict {
+    Coherent,
+    Unsettled,
+    Diffuse,
+    Detached,
+}
+
+impl ThoughtVerdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Coherent => "coherent",
+            Self::Unsettled => "unsettled",
+            Self::Diffuse => "diffuse",
+            Self::Detached => "detached",
+        }
+    }
 }
 
 impl Organ128SettleState {
@@ -992,6 +1090,7 @@ fn response_gate(
     prompt: &str,
     settled: &Organ128SettleState,
     selected: &DialogScore,
+    candidate_margin: f32,
 ) -> ResponseGate {
     match settled.verdict() {
         SettleVerdict::RejectedByMemory | SettleVerdict::Incoherent => return ResponseGate::Refuse,
@@ -1001,6 +1100,7 @@ fn response_gate(
     let prompt_is_exact = normalized_prompt_eq(prompt, selected.entry.prompt);
     let selected_prompt_coverage = selected_prompt_coverage(prompt, selected.entry.prompt);
     let has_specific_prompt = prompt_is_exact || selected_prompt_coverage >= 0.72;
+    let has_clear_winner = prompt_is_exact || candidate_margin >= 0.08;
     let has_direct_support =
         has_specific_prompt && (selected.lexical_score >= 0.20 || selected.prompt_score >= 0.35);
     let has_wave_support =
@@ -1009,6 +1109,7 @@ fn response_gate(
     let oscillating = matches!(settled.verdict(), SettleVerdict::Oscillating);
 
     if strong_total
+        && has_clear_winner
         && (has_direct_support || has_wave_support)
         && (!oscillating || selected.total_score >= 0.70)
     {
@@ -1346,6 +1447,26 @@ fn best_settled_dialog_entry(
     best
 }
 
+fn candidate_margin(
+    lut: &BytePhaseLut,
+    prompt: &str,
+    prompt_wave: PromptWave,
+    settled: &Organ128SettleState,
+) -> f32 {
+    let mut best = f32::NEG_INFINITY;
+    let mut second = f32::NEG_INFINITY;
+    for entry in DIALOG_CORPUS {
+        let score = settled_dialog_score(lut, prompt, prompt_wave, settled, entry).total_score;
+        if score > best {
+            second = best;
+            best = score;
+        } else if score > second {
+            second = score;
+        }
+    }
+    (best - second).max(0.0)
+}
+
 fn best_wave_dialog_entry(lut: &BytePhaseLut, settled: &Organ128SettleState) -> DialogScore {
     let mut best = DialogScore {
         entry: DIALOG_CORPUS[0],
@@ -1455,6 +1576,7 @@ struct ResponseGateEvalRow {
     verdict: SettleVerdict,
     gate: ResponseGate,
     score: f32,
+    margin: f32,
     lexical_score: f32,
     wave_score: f32,
 }
@@ -1779,13 +1901,15 @@ fn response_gate_eval_row(
     let prompt_wave = PromptWave::from_prompt(lut, prompt);
     let settled = organ.settle_dialog(lut, seed, prompt, prompt_wave, ticks, CarrierMode::Correct);
     let selected = best_settled_dialog_entry(lut, prompt, prompt_wave, &settled);
-    let gate = response_gate(prompt, &settled, &selected);
+    let margin = candidate_margin(lut, prompt, prompt_wave, &settled);
+    let gate = response_gate(prompt, &settled, &selected, margin);
     ResponseGateEvalRow {
         kind,
         prompt,
         verdict: settled.verdict(),
         gate,
         score: selected.total_score,
+        margin,
         lexical_score: selected.lexical_score,
         wave_score: selected.wave_score,
     }
