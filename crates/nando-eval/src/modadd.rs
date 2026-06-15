@@ -40,6 +40,7 @@ pub struct Organ128ModAddReport {
     pub mono192: BaselineResult,
     pub fourier_phase: BaselineResult,
     pub cell32_phase_compose: BaselineResult,
+    pub cell32_structured_compose: BaselineResult,
     pub cell32_voting: BaselineResult,
     pub cell32_wavebus: BaselineResult,
     pub restricted_key: BaselineResult,
@@ -48,8 +49,10 @@ pub struct Organ128ModAddReport {
     pub key_cell: u32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
+    pub structured_compose_gain: f32,
     pub wave_over_fourier_gap: f32,
     pub compose_over_fourier_gap: f32,
+    pub structured_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub no_shortcut_control: bool,
@@ -64,11 +67,14 @@ pub struct Organ128ModAddSeedSweepRow {
     pub seed: u64,
     pub cell32_wavebus_accuracy: f32,
     pub cell32_phase_compose_accuracy: f32,
+    pub cell32_structured_compose_accuracy: f32,
     pub fourier_phase_accuracy: f32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
+    pub structured_compose_gain: f32,
     pub wave_over_fourier_gap: f32,
     pub compose_over_fourier_gap: f32,
+    pub structured_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub label_shuffle_accuracy: f32,
@@ -89,8 +95,10 @@ pub struct Organ128ModAddSeedSweepReport {
     pub candidate_seed_pairs: usize,
     pub min_ensemble_gain: f32,
     pub min_phase_compose_gain: f32,
+    pub min_structured_compose_gain: f32,
     pub min_wave_over_fourier_gap: f32,
     pub min_compose_over_fourier_gap: f32,
+    pub min_structured_over_fourier_gap: f32,
     pub min_key_ablation_drop: f32,
     pub max_label_shuffle_accuracy: f32,
     pub mode_status: &'static str,
@@ -112,6 +120,7 @@ impl Organ128ModAddReport {
         output.push_str(&format_baseline(self.mono192));
         output.push_str(&format_baseline(self.fourier_phase));
         output.push_str(&format_baseline(self.cell32_phase_compose));
+        output.push_str(&format_baseline(self.cell32_structured_compose));
         output.push_str(&format_baseline(self.cell32_voting));
         output.push_str(&format_baseline(self.cell32_wavebus));
         output.push_str(&format_baseline(self.restricted_key));
@@ -128,6 +137,10 @@ impl Organ128ModAddReport {
             self.cell32_phase_compose.accuracy
         ));
         output.push_str(&format!(
+            "cell32_structured_compose_accuracy: {:.6}\n",
+            self.cell32_structured_compose.accuracy
+        ));
+        output.push_str(&format!(
             "cell32_voting_accuracy: {:.6}\n",
             self.cell32_voting.accuracy
         ));
@@ -142,12 +155,20 @@ impl Organ128ModAddReport {
             self.phase_compose_gain
         ));
         output.push_str(&format!(
+            "structured_compose_gain: {:.6}\n",
+            self.structured_compose_gain
+        ));
+        output.push_str(&format!(
             "wave_over_fourier_gap: {:.6}\n",
             self.wave_over_fourier_gap
         ));
         output.push_str(&format!(
             "compose_over_fourier_gap: {:.6}\n",
             self.compose_over_fourier_gap
+        ));
+        output.push_str(&format!(
+            "structured_over_fourier_gap: {:.6}\n",
+            self.structured_over_fourier_gap
         ));
         output.push_str(&format!(
             "restricted_key_accuracy: {:.6}\n",
@@ -190,18 +211,21 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!("modulus: {}\n", self.modulus));
         output.push_str(&format!("train_size: {}\n", self.train_cases));
         output.push_str(&format!("holdout_size: {}\n", self.holdout_cases));
-        output.push_str("seed wavebus_acc compose_acc fourier_acc wave_fourier_gap compose_fourier_gap ensemble_gain compose_gain key_drop non_key_drop shuffle_acc no_shortcut scientific engineering mode_status\n");
+        output.push_str("seed wavebus_acc compose_acc structured_acc fourier_acc wave_fourier_gap compose_fourier_gap structured_fourier_gap ensemble_gain compose_gain structured_gain key_drop non_key_drop shuffle_acc no_shortcut scientific engineering mode_status\n");
         for row in &self.rows {
             output.push_str(&format!(
-                "{} {:.6} {:.6} {:.6} {:+.6} {:+.6} {:+.6} {:+.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
+                "{} {:.6} {:.6} {:.6} {:.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
                 row.seed,
                 row.cell32_wavebus_accuracy,
                 row.cell32_phase_compose_accuracy,
+                row.cell32_structured_compose_accuracy,
                 row.fourier_phase_accuracy,
                 row.wave_over_fourier_gap,
                 row.compose_over_fourier_gap,
+                row.structured_over_fourier_gap,
                 row.ensemble_gain,
                 row.phase_compose_gain,
+                row.structured_compose_gain,
                 row.key_ablation_drop,
                 row.non_key_ablation_drop,
                 row.label_shuffle_accuracy,
@@ -225,12 +249,20 @@ impl Organ128ModAddSeedSweepReport {
             self.min_phase_compose_gain
         ));
         output.push_str(&format!(
+            "min_structured_compose_gain: {:.6}\n",
+            self.min_structured_compose_gain
+        ));
+        output.push_str(&format!(
             "min_wave_over_fourier_gap: {:.6}\n",
             self.min_wave_over_fourier_gap
         ));
         output.push_str(&format!(
             "min_compose_over_fourier_gap: {:.6}\n",
             self.min_compose_over_fourier_gap
+        ));
+        output.push_str(&format!(
+            "min_structured_over_fourier_gap: {:.6}\n",
+            self.min_structured_over_fourier_gap
         ));
         output.push_str(&format!(
             "min_key_ablation_drop: {:.6}\n",
@@ -253,7 +285,14 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let organ = Stage2Organ::new(config.seed);
 
     let readout = ModAddReadout::train(&organ, config, &dataset.train, None);
-    let phase_compose_readout = PhaseComposeReadout::train(&organ, config, &dataset.train);
+    let phase_compose_readout =
+        PhaseComposeReadout::train(&organ, config, &dataset.train, ComponentEncoding::Random);
+    let structured_compose_readout = PhaseComposeReadout::train(
+        &organ,
+        config,
+        &dataset.train,
+        ComponentEncoding::Structured,
+    );
     let shuffled_readout = ModAddReadout::train(&organ, config, &dataset.train, Some(config.seed));
 
     let mut random = BaselineResult::new("random", dataset.holdout.len());
@@ -261,6 +300,8 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let mut fourier_phase = BaselineResult::new("fourier_phase_control", dataset.holdout.len());
     let mut cell32_phase_compose =
         BaselineResult::new("cell32_phase_compose", dataset.holdout.len());
+    let mut cell32_structured_compose =
+        BaselineResult::new("cell32_structured_compose", dataset.holdout.len());
     let mut cell32_voting = BaselineResult::new("cell32_voting", dataset.holdout.len());
     let mut cell32_wavebus = BaselineResult::new("cell32_wavebus", dataset.holdout.len());
     let mut label_shuffle = BaselineResult::new("label_shuffle", dataset.holdout.len());
@@ -287,6 +328,16 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         score_prediction(
             &mut cell32_phase_compose,
             phase_compose_prediction,
+            target,
+            trace.coherence,
+            trace.spectral_entropy,
+        );
+
+        let structured_compose_prediction =
+            structured_compose_readout.predict(&organ, config.seed, *sample, config.modulus);
+        score_prediction(
+            &mut cell32_structured_compose,
+            structured_compose_prediction,
             target,
             trace.coherence,
             trace.spectral_entropy,
@@ -336,6 +387,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         &mut mono192,
         &mut fourier_phase,
         &mut cell32_phase_compose,
+        &mut cell32_structured_compose,
         &mut cell32_voting,
         &mut cell32_wavebus,
         &mut label_shuffle,
@@ -365,8 +417,10 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let best_control = best_baseline([random, mono192, cell32_voting]);
     let ensemble_gain = cell32_wavebus.accuracy - best_control.accuracy;
     let phase_compose_gain = cell32_phase_compose.accuracy - best_control.accuracy;
+    let structured_compose_gain = cell32_structured_compose.accuracy - best_control.accuracy;
     let wave_over_fourier_gap = cell32_wavebus.accuracy - fourier_phase.accuracy;
     let compose_over_fourier_gap = cell32_phase_compose.accuracy - fourier_phase.accuracy;
+    let structured_over_fourier_gap = cell32_structured_compose.accuracy - fourier_phase.accuracy;
     let no_shortcut_control = label_shuffle.accuracy
         <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE).min(cell32_wavebus.accuracy);
     let scientific_pass = ensemble_gain >= MIN_ENSEMBLE_GAIN
@@ -392,6 +446,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         mono192,
         fourier_phase,
         cell32_phase_compose,
+        cell32_structured_compose,
         cell32_voting,
         cell32_wavebus,
         restricted_key,
@@ -400,8 +455,10 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         key_cell,
         ensemble_gain,
         phase_compose_gain,
+        structured_compose_gain,
         wave_over_fourier_gap,
         compose_over_fourier_gap,
+        structured_over_fourier_gap,
         key_ablation_drop,
         non_key_ablation_drop,
         no_shortcut_control,
@@ -429,11 +486,14 @@ pub fn organ128_modadd_seed_sweep_eval(
             seed,
             cell32_wavebus_accuracy: report.cell32_wavebus.accuracy,
             cell32_phase_compose_accuracy: report.cell32_phase_compose.accuracy,
+            cell32_structured_compose_accuracy: report.cell32_structured_compose.accuracy,
             fourier_phase_accuracy: report.fourier_phase.accuracy,
             ensemble_gain: report.ensemble_gain,
             phase_compose_gain: report.phase_compose_gain,
+            structured_compose_gain: report.structured_compose_gain,
             wave_over_fourier_gap: report.wave_over_fourier_gap,
             compose_over_fourier_gap: report.compose_over_fourier_gap,
+            structured_over_fourier_gap: report.structured_over_fourier_gap,
             key_ablation_drop: report.key_ablation_drop,
             non_key_ablation_drop: report.non_key_ablation_drop,
             label_shuffle_accuracy: report.label_shuffle.accuracy,
@@ -461,6 +521,10 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.phase_compose_gain)
         .fold(f32::INFINITY, f32::min);
+    let min_structured_compose_gain = rows
+        .iter()
+        .map(|row| row.structured_compose_gain)
+        .fold(f32::INFINITY, f32::min);
     let min_wave_over_fourier_gap = rows
         .iter()
         .map(|row| row.wave_over_fourier_gap)
@@ -468,6 +532,10 @@ pub fn organ128_modadd_seed_sweep_eval(
     let min_compose_over_fourier_gap = rows
         .iter()
         .map(|row| row.compose_over_fourier_gap)
+        .fold(f32::INFINITY, f32::min);
+    let min_structured_over_fourier_gap = rows
+        .iter()
+        .map(|row| row.structured_over_fourier_gap)
         .fold(f32::INFINITY, f32::min);
     let min_key_ablation_drop = rows
         .iter()
@@ -494,8 +562,10 @@ pub fn organ128_modadd_seed_sweep_eval(
         candidate_seed_pairs,
         min_ensemble_gain,
         min_phase_compose_gain,
+        min_structured_compose_gain,
         min_wave_over_fourier_gap,
         min_compose_over_fourier_gap,
+        min_structured_over_fourier_gap,
         min_key_ablation_drop,
         max_label_shuffle_accuracy,
         mode_status,
@@ -670,16 +740,29 @@ impl ModAddReadout {
 }
 
 #[derive(Clone, Copy)]
+enum ComponentEncoding {
+    Random,
+    Structured,
+}
+
+#[derive(Clone, Copy)]
 struct PhaseComposeReadout {
     offset: u8,
+    encoding: ComponentEncoding,
 }
 
 impl PhaseComposeReadout {
-    fn train(organ: &Stage2Organ, config: Organ128ModAddConfig, samples: &[ModAddSample]) -> Self {
+    fn train(
+        organ: &Stage2Organ,
+        config: Organ128ModAddConfig,
+        samples: &[ModAddSample],
+        encoding: ComponentEncoding,
+    ) -> Self {
         let mut offsets = OffsetAccumulator::new(config.modulus);
         for sample in samples {
             let base = phase_to_mod(
-                composed_cell_phase(organ, config.seed, *sample).rem_euclid(TAU),
+                composed_cell_phase(organ, config.seed, *sample, config.modulus, encoding)
+                    .rem_euclid(TAU),
                 config.modulus,
             );
             offsets.add(modular_offset(
@@ -690,11 +773,15 @@ impl PhaseComposeReadout {
         }
         Self {
             offset: offsets.finish(),
+            encoding,
         }
     }
 
     fn predict(self, organ: &Stage2Organ, seed: u64, sample: ModAddSample, modulus: u8) -> u8 {
-        let base = phase_to_mod(composed_cell_phase(organ, seed, sample), modulus);
+        let base = phase_to_mod(
+            composed_cell_phase(organ, seed, sample, modulus, self.encoding),
+            modulus,
+        );
         add_mod(base, self.offset, modulus)
     }
 }
@@ -794,16 +881,47 @@ fn mono_mod_predict(seed: u64, case_index: usize, sample: ModAddSample, modulus:
     (mixed % u64::from(modulus)) as u8
 }
 
-fn composed_cell_phase(organ: &Stage2Organ, seed: u64, sample: ModAddSample) -> f32 {
-    let a_trace = component_trace(organ, seed, sample.a, 0xA17A);
-    let b_trace = component_trace(organ, seed, sample.b, 0xB17B);
+fn composed_cell_phase(
+    organ: &Stage2Organ,
+    seed: u64,
+    sample: ModAddSample,
+    modulus: u8,
+    encoding: ComponentEncoding,
+) -> f32 {
+    let a_trace = component_trace(organ, seed, sample.a, modulus, 0xA17A, encoding);
+    let b_trace = component_trace(organ, seed, sample.b, modulus, 0xB17B, encoding);
     (a_trace.center_phase + b_trace.center_phase).rem_euclid(TAU)
 }
 
-fn component_trace(organ: &Stage2Organ, seed: u64, value: u8, lane: u64) -> ModAddTrace {
-    let carrier = CarrierWave::from_seed(seed ^ lane, value);
-    let input_byte = value.wrapping_mul(37).wrapping_add(lane as u8);
+fn component_trace(
+    organ: &Stage2Organ,
+    seed: u64,
+    value: u8,
+    modulus: u8,
+    lane: u64,
+    encoding: ComponentEncoding,
+) -> ModAddTrace {
+    let carrier = match encoding {
+        ComponentEncoding::Random => CarrierWave::from_seed(seed ^ lane, value),
+        ComponentEncoding::Structured => structured_component_carrier(value, modulus, lane),
+    };
+    let input_byte = match encoding {
+        ComponentEncoding::Random => value.wrapping_mul(37).wrapping_add(lane as u8),
+        ComponentEncoding::Structured => lane as u8,
+    };
     modadd_trace_with_carrier(organ, input_byte, carrier)
+}
+
+fn structured_component_carrier(value: u8, modulus: u8, lane: u64) -> CarrierWave {
+    let lane_shift = if lane & 1 == 0 { 0.0 } else { TAU * 0.25 };
+    let phase = (f32::from(value) / f32::from(modulus) * TAU + lane_shift).rem_euclid(TAU);
+    let unit = f32::from(value) / f32::from(modulus);
+    CarrierWave {
+        phase,
+        amplitude: 0.85,
+        frequency: 1.0 + unit,
+        boundary: 0.95,
+    }
 }
 
 fn fourier_phase_predict(sample: ModAddSample, modulus: u8) -> u8 {
@@ -854,12 +972,15 @@ mod tests {
         assert!(text.contains("mono192_accuracy:"));
         assert!(text.contains("fourier_phase_accuracy:"));
         assert!(text.contains("cell32_phase_compose_accuracy:"));
+        assert!(text.contains("cell32_structured_compose_accuracy:"));
         assert!(text.contains("cell32_voting_accuracy:"));
         assert!(text.contains("cell32_wavebus_accuracy:"));
         assert!(text.contains("ensemble_gain:"));
         assert!(text.contains("phase_compose_gain:"));
+        assert!(text.contains("structured_compose_gain:"));
         assert!(text.contains("wave_over_fourier_gap:"));
         assert!(text.contains("compose_over_fourier_gap:"));
+        assert!(text.contains("structured_over_fourier_gap:"));
         assert!(text.contains("label_shuffle_accuracy:"));
         assert!(text.contains("no_shortcut_control:"));
         assert!(
@@ -878,8 +999,10 @@ mod tests {
         assert!(text.contains("passed_seed_pairs:"));
         assert!(text.contains("candidate_seed_pairs:"));
         assert!(text.contains("min_phase_compose_gain:"));
+        assert!(text.contains("min_structured_compose_gain:"));
         assert!(text.contains("min_wave_over_fourier_gap:"));
         assert!(text.contains("min_compose_over_fourier_gap:"));
+        assert!(text.contains("min_structured_over_fourier_gap:"));
         assert!(text.contains("max_label_shuffle_accuracy:"));
         assert!(
             report.mode_status == "organ128_modadd_seed_robustness_passed"

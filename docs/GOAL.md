@@ -704,9 +704,12 @@ non_key_ablation_drop
 false_positive_increase
 fourier_phase_accuracy
 cell32_phase_compose_accuracy
+cell32_structured_compose_accuracy
 phase_compose_gain
+structured_compose_gain
 wave_over_fourier_gap
 compose_over_fourier_gap
+structured_over_fourier_gap
 mode_status
 ```
 
@@ -806,12 +809,15 @@ random_accuracy
 mono192_accuracy
 fourier_phase_accuracy
 cell32_phase_compose_accuracy
+cell32_structured_compose_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
 phase_compose_gain
+structured_compose_gain
 wave_over_fourier_gap
 compose_over_fourier_gap
+structured_over_fourier_gap
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -842,10 +848,13 @@ cargo run -q -p nando-cli -- organ128-modadd-eval 7 31 256 256
 mode_status: not_found_organ128_modadd
 ensemble_gain: -0.003906
 phase_compose_gain: -0.007812
+structured_compose_gain: 0.000000
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
+cell32_structured_compose_accuracy: 0.042969
 wave_over_fourier_gap: -0.960938
 compose_over_fourier_gap: -0.964844
+structured_over_fourier_gap: -0.957031
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -865,8 +874,10 @@ passed_seed_pairs: 0
 candidate_seed_pairs: 1
 min_ensemble_gain: -0.011719
 min_phase_compose_gain: -0.023438
+min_structured_compose_gain: -0.023438
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
+min_structured_over_fourier_gap: -0.976562
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -912,4 +923,36 @@ decision:
 не складывать готовые center_phase, а менять способ кодирования входных
 компонент в CarrierWave/WaveBus так, чтобы фаза a и фаза b сохранялись как
 компонуемые подпространства.
+```
+
+Проверенный вариант 2:
+
+```text
+cell32_structured_compose:
+  a -> Cell32 trace with CarrierWave.phase = phase(a)
+  b -> Cell32 trace with CarrierWave.phase = phase(b) + lane shift
+  input byte only marks lane, not full value
+  compose center_phase(a) + center_phase(b)
+  train only global phase offset on train split
+
+result:
+  cell32_structured_compose_accuracy: 0.042969
+  structured_compose_gain: 0.000000
+  min_structured_compose_gain over seeds: -0.023438
+  min_structured_over_fourier_gap: -0.976562
+
+decision:
+  rejected as architectural direction v2.
+```
+
+Вывод по варианту 2:
+
+```text
+Структурированная component carrier-фаза немного улучшила одиночный seed
+относительно random-compose, но не дала преимущества над voting и не стала
+seed-robust. Значит проблема глубже: текущий WaveBus center_phase считает
+центр распределения активных slot weights, а не сохраняет carrier/input phase
+как линейное компонуемое состояние. Следующая попытка должна менять сам
+phase-census/readout: читать не один center_phase, а обучаемый Fourier census
+по slots или отдельные sin/cos компоненты bus.
 ```
