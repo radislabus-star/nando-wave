@@ -398,7 +398,7 @@ pub(crate) fn run_organ128_wave_scorer_eval(
         );
     }
     println!("holdout_trace:");
-    for row in holdout.rows {
+    for row in &holdout.rows {
         println!(
             "{} -> predicted=\"{}\" target=\"{}\" score={:.6}",
             row.prompt, row.predicted_prompt, row.target_prompt, row.score
@@ -467,6 +467,104 @@ pub(crate) fn run_organ128_response_gate_eval(
     } else {
         "not_found_organ128_response_gate"
     };
+    println!("mode_status: {mode_status}");
+    Ok(())
+}
+
+pub(crate) fn run_organ128_thought_probe_eval(
+    mut args: impl Iterator<Item = String>,
+) -> Result<(), String> {
+    let seed = match args.next() {
+        Some(value) => parse_u64(&value, "seed")?,
+        None => 7,
+    };
+    let ticks = match args.next() {
+        Some(value) => parse_usize(&value, "ticks")?,
+        None => 12,
+    };
+    let epochs = match args.next() {
+        Some(value) => parse_usize(&value, "epochs")?,
+        None => 24,
+    };
+    if args.next().is_some() {
+        return Err(String::from("too many arguments"));
+    }
+    if !(1..=16).contains(&ticks) {
+        return Err(String::from("ticks must be in 1..=16"));
+    }
+    if epochs == 0 {
+        return Err(String::from("epochs must be greater than zero"));
+    }
+
+    let lut = BytePhaseLut::new();
+    let organ = Organ128Runtime::new(seed);
+    let mut probe = ThoughtProbe::new(0.10);
+    let mut train_cases = 0usize;
+    let mut train_correct_before = 0usize;
+    for _ in 0..epochs {
+        for sample in thought_probe_train_samples() {
+            let settled = settle_thought_probe_sample(&lut, &organ, seed, ticks, sample);
+            let predicted = probe.predict(&settled);
+            if predicted == sample.should_answer {
+                train_correct_before += 1;
+            }
+            probe.update(&settled, sample.should_answer);
+            train_cases += 1;
+        }
+    }
+
+    let holdout = eval_thought_probe(
+        &lut,
+        &organ,
+        &probe,
+        seed,
+        ticks,
+        thought_probe_holdout_samples(),
+    );
+    println!("Nando Wave Organ128 thought-probe eval");
+    println!("seed: {seed}");
+    println!("ticks: {ticks}");
+    println!("epochs: {epochs}");
+    println!("train_cases: {train_cases}");
+    println!(
+        "train_accuracy_before_update: {:.6}",
+        train_correct_before as f32 / train_cases.max(1) as f32
+    );
+    println!("holdout_cases: {}", holdout.cases);
+    println!("holdout_accuracy: {:.6}", holdout.accuracy());
+    println!("known_answer_rate: {:.6}", holdout.known_answer_rate());
+    println!("refusal_refuse_rate: {:.6}", holdout.refusal_refuse_rate());
+    println!("weight_abs_mean: {:.6}", probe.weight_abs_mean());
+    println!("trace:");
+    for row in &holdout.rows {
+        println!(
+            "{} prompt=\"{}\" target={} predicted={} score={:.6} thought={} strength={:.6} convergence={:.6} drift={:.6} memory_alignment={:.6}",
+            row.kind,
+            row.prompt,
+            if row.should_answer {
+                "answer"
+            } else {
+                "refuse"
+            },
+            if row.predicted_answer {
+                "answer"
+            } else {
+                "refuse"
+            },
+            row.score,
+            row.thought_verdict.as_str(),
+            row.strength,
+            row.convergence,
+            row.drift,
+            row.memory_alignment
+        );
+    }
+    let mode_status =
+        if holdout.known_answer_rate() >= 0.70 && holdout.refusal_refuse_rate() >= 0.70 {
+            "organ128_thought_probe_candidate"
+        } else {
+            "not_found_organ128_thought_probe"
+        };
     println!("mode_status: {mode_status}");
     Ok(())
 }
@@ -1582,11 +1680,64 @@ struct ResponseGateEvalRow {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct ThoughtProbeSample {
+    kind: &'static str,
+    prompt: &'static str,
+    should_answer: bool,
+}
+
+#[derive(Debug, Clone)]
+struct ThoughtProbe {
+    weights: [f32; THOUGHT_PROBE_FEATURES],
+    learning_rate: f32,
+}
+
+#[derive(Debug, Clone)]
+struct ThoughtProbeEvalReport {
+    cases: usize,
+    correct: usize,
+    known_cases: usize,
+    known_answered: usize,
+    refusal_cases: usize,
+    refusal_refused: usize,
+    rows: Vec<ThoughtProbeEvalRow>,
+}
+
+impl ThoughtProbeEvalReport {
+    fn accuracy(&self) -> f32 {
+        self.correct as f32 / self.cases.max(1) as f32
+    }
+
+    fn known_answer_rate(&self) -> f32 {
+        self.known_answered as f32 / self.known_cases.max(1) as f32
+    }
+
+    fn refusal_refuse_rate(&self) -> f32 {
+        self.refusal_refused as f32 / self.refusal_cases.max(1) as f32
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ThoughtProbeEvalRow {
+    kind: &'static str,
+    prompt: &'static str,
+    should_answer: bool,
+    predicted_answer: bool,
+    score: f32,
+    thought_verdict: ThoughtVerdict,
+    strength: f32,
+    convergence: f32,
+    drift: f32,
+    memory_alignment: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct FeatureMask {
     enabled: [bool; WAVE_SCORER_FEATURES],
 }
 
 const WAVE_SCORER_FEATURES: usize = 12;
+const THOUGHT_PROBE_FEATURES: usize = 8;
 
 impl WaveDialogScorer {
     fn new(learning_rate: f32, mask: FeatureMask) -> Self {
@@ -1650,6 +1801,44 @@ impl WaveDialogScorer {
                 continue;
             }
             *weight += self.learning_rate * (target_value - predicted_value);
+        }
+    }
+
+    fn weight_abs_mean(&self) -> f32 {
+        self.weights.iter().map(|value| value.abs()).sum::<f32>() / self.weights.len() as f32
+    }
+}
+
+impl ThoughtProbe {
+    fn new(learning_rate: f32) -> Self {
+        Self {
+            weights: [0.0; THOUGHT_PROBE_FEATURES],
+            learning_rate,
+        }
+    }
+
+    fn score(&self, settled: &Organ128SettleState) -> f32 {
+        let features = thought_probe_features(settled);
+        self.weights
+            .iter()
+            .zip(features.iter())
+            .map(|(weight, feature)| weight * feature)
+            .sum()
+    }
+
+    fn predict(&self, settled: &Organ128SettleState) -> bool {
+        self.score(settled) >= 0.0
+    }
+
+    fn update(&mut self, settled: &Organ128SettleState, should_answer: bool) {
+        let predicted = self.predict(settled);
+        if predicted == should_answer {
+            return;
+        }
+        let target = if should_answer { 1.0 } else { -1.0 };
+        let features = thought_probe_features(settled);
+        for (weight, feature) in self.weights.iter_mut().zip(features.iter()) {
+            *weight += self.learning_rate * target * feature;
         }
     }
 
@@ -1915,6 +2104,117 @@ fn response_gate_eval_row(
     }
 }
 
+fn thought_probe_train_samples() -> Vec<ThoughtProbeSample> {
+    thought_probe_samples(false)
+}
+
+fn thought_probe_holdout_samples() -> Vec<ThoughtProbeSample> {
+    thought_probe_samples(true)
+}
+
+fn thought_probe_samples(holdout: bool) -> Vec<ThoughtProbeSample> {
+    let mut samples = Vec::new();
+    for (index, entry) in DIALOG_CORPUS.iter().copied().enumerate() {
+        if (index % 3 == 1) == holdout {
+            samples.push(ThoughtProbeSample {
+                kind: "known",
+                prompt: entry.prompt,
+                should_answer: true,
+            });
+        }
+    }
+    for (index, prompt) in RESPONSE_GATE_REFUSAL_PROMPTS.iter().copied().enumerate() {
+        if (index % 3 == 1) == holdout {
+            samples.push(ThoughtProbeSample {
+                kind: "refusal",
+                prompt,
+                should_answer: false,
+            });
+        }
+    }
+    samples
+}
+
+fn settle_thought_probe_sample(
+    lut: &BytePhaseLut,
+    organ: &Organ128Runtime,
+    seed: u64,
+    ticks: usize,
+    sample: ThoughtProbeSample,
+) -> Organ128SettleState {
+    let prompt_wave = PromptWave::from_prompt(lut, sample.prompt);
+    organ.settle_dialog(
+        lut,
+        seed,
+        sample.prompt,
+        prompt_wave,
+        ticks,
+        CarrierMode::Correct,
+    )
+}
+
+fn eval_thought_probe(
+    lut: &BytePhaseLut,
+    organ: &Organ128Runtime,
+    probe: &ThoughtProbe,
+    seed: u64,
+    ticks: usize,
+    samples: Vec<ThoughtProbeSample>,
+) -> ThoughtProbeEvalReport {
+    let mut correct = 0usize;
+    let mut known_cases = 0usize;
+    let mut known_answered = 0usize;
+    let mut refusal_cases = 0usize;
+    let mut refusal_refused = 0usize;
+    let mut rows = Vec::new();
+    for (index, sample) in samples.iter().copied().enumerate() {
+        let settled = settle_thought_probe_sample(
+            lut,
+            organ,
+            seed.wrapping_add(20_000 + index as u64),
+            ticks,
+            sample,
+        );
+        let score = probe.score(&settled);
+        let predicted_answer = score >= 0.0;
+        if predicted_answer == sample.should_answer {
+            correct += 1;
+        }
+        if sample.should_answer {
+            known_cases += 1;
+            if predicted_answer {
+                known_answered += 1;
+            }
+        } else {
+            refusal_cases += 1;
+            if !predicted_answer {
+                refusal_refused += 1;
+            }
+        }
+        rows.push(ThoughtProbeEvalRow {
+            kind: sample.kind,
+            prompt: sample.prompt,
+            should_answer: sample.should_answer,
+            predicted_answer,
+            score,
+            thought_verdict: settled.thought.verdict(),
+            strength: settled.thought.strength,
+            convergence: settled.thought.convergence,
+            drift: settled.thought.drift,
+            memory_alignment: settled.thought.memory_alignment,
+        });
+    }
+    ThoughtProbeEvalReport {
+        cases: rows.len(),
+        correct,
+        known_cases,
+        known_answered,
+        refusal_cases,
+        refusal_refused,
+        rows,
+    }
+}
+
 fn dialog_train_indices() -> Vec<usize> {
     (0..DIALOG_CORPUS.len())
         .filter(|index| index % 3 != 1)
@@ -1950,6 +2250,19 @@ fn wave_scorer_features(
         prompt_entry.cos() * prompt_wave.amplitude,
         settled.coherence,
         1.0 - settled.entropy,
+        settled.stability,
+        settled.memory.validation,
+    ]
+}
+
+fn thought_probe_features(settled: &Organ128SettleState) -> [f32; THOUGHT_PROBE_FEATURES] {
+    [
+        1.0,
+        settled.thought.strength,
+        settled.thought.convergence,
+        1.0 - settled.thought.drift,
+        settled.thought.memory_alignment,
+        settled.coherence,
         settled.stability,
         settled.memory.validation,
     ]

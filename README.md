@@ -36,6 +36,7 @@ nando-cli organ128-train-generate
 nando-cli organ128-dialog-generate
 nando-cli organ128-settle-dialog
 nando-cli organ128-response-gate-eval
+nando-cli organ128-thought-probe-eval
 nando-cli wave-tick
 nando-cli snapshot-save
 nando-cli snapshot-read
@@ -458,6 +459,28 @@ no_thought:                    0.454545
 Вывод: `ThoughtState` пока остается прибором. Перед участием в ответе ему нужен
 отдельный learning/ablation gate, иначе внутренний контур превращается в шумный
 ручной readout.
+
+Первый такой отдельный gate добавлен как эксперимент:
+
+```bash
+cd /home/ubu/projects/nando-wave
+cargo run -p nando-cli -- organ128-thought-probe-eval 7 12 24
+```
+
+Он учит tiny perceptron только на динамических признаках `ThoughtState` и
+settle-метриках, без lexical overlap и без candidate matching. Текущий результат
+отрицательный:
+
+```text
+holdout_accuracy:    0.142857
+known_answer_rate:   0.000000
+refusal_refuse_rate: 0.666667
+mode_status: not_found_organ128_thought_probe
+```
+
+Вывод: текущий `ThoughtState` не переносится на holdout как самостоятельный
+answer/refuse орган. Его нельзя промоутить в readout. Следующий путь - менять
+динамику формирования thought, а не добавлять новые ручные признаки.
 
 Текущий smoke-result:
 

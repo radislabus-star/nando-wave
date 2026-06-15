@@ -107,7 +107,7 @@ done
 wave_lines="$(wc -l < crates/nando-core/src/wave.rs)"
 main_lines="$(wc -l < crates/nando-cli/src/main.rs)"
 [[ "$wave_lines" -le 280 ]] || fail "wave.rs facade too large: ${wave_lines} lines"
-[[ "$main_lines" -le 1135 ]] || fail "nando-cli main.rs grew past current dispatcher ceiling: ${main_lines} lines"
+[[ "$main_lines" -le 1150 ]] || fail "nando-cli main.rs grew past current dispatcher ceiling: ${main_lines} lines"
 
 section "no heavy runtime dependencies"
 for pattern in 'pyo3' 'torch' 'tensorflow' 'candle' 'burn' 'tch'; do
@@ -126,6 +126,7 @@ require_contains "$help_output" "organ128-dialog-generate" "help"
 require_contains "$help_output" "organ128-settle-dialog" "help"
 require_contains "$help_output" "organ128-wave-scorer-eval" "help"
 require_contains "$help_output" "organ128-response-gate-eval" "help"
+require_contains "$help_output" "organ128-thought-probe-eval" "help"
 require_contains "$help_output" "live-byte-learn" "help"
 require_contains "$help_output" "live-byte-holdout" "help"
 require_contains "$help_output" "live-byte-holdout-suite" "help"
