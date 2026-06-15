@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 STEP=0
 
 run() {
@@ -14,6 +14,7 @@ run() {
 }
 
 run "fmt" cargo fmt --all --check
+run "goal contracts" scripts/check-goal.sh
 run "core tests" cargo test -p nando-core
 run "cli check" cargo check -p nando-cli
 run "architecture contracts" scripts/check-architecture.sh --contracts-only

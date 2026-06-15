@@ -59,6 +59,7 @@ require_file crates/nando-cli/src/live.rs
 require_file data/corpus/organ128_train_v1.txt
 require_file data/corpus/organ128_dialog_ru_en_v1.tsv
 require_file README.md
+require_executable scripts/check-goal.sh
 require_executable scripts/check.sh
 require_executable scripts/check-push.sh
 
@@ -223,6 +224,7 @@ require_contains "$readme" "live-architecture-compare" "README"
 require_contains "$readme" "live-tissue-diagnose" "README"
 require_contains "$readme" "LinkTissue" "README"
 require_contains "$readme" "check-push.sh" "README"
+require_contains "$readme" "check-goal.sh" "README"
 require_contains "$readme" "OOS" "README"
 require_contains "$readme" "Cell32 fixed 32 KB packet" "README"
 require_contains "$readme" "data/corpus/organ128_train_v1.txt" "README"

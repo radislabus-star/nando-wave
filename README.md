@@ -103,6 +103,7 @@ nando-cli live-tissue-diagnose
 nando-cli live-grok-trace
 nando-cli live-grok-sweep
 nando-cli bench-link-tissue
+scripts/check-goal.sh
 scripts/check.sh
 scripts/check-push.sh
 scripts/check-architecture.sh
@@ -198,6 +199,17 @@ scripts/check.sh
 
 Короткая проверка для обычной разработки. Она не гоняет тяжелые seed-sweep и
 Chat-0 regression.
+
+Goal-контракт:
+
+```bash
+cd /home/ubu/projects/nando-wave
+scripts/check-goal.sh
+```
+
+Это быстрый документный gate: он проверяет, что `docs/GOAL.md`, `README.md` и
+`docs/ROADMAP.md` не разъехались по северной звезде, anti-leakage правилам и
+следующему `organ128-modadd-eval` шагу.
 
 Полный pre-push regression:
 
