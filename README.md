@@ -478,6 +478,17 @@ refusal_refuse_rate: 0.666667
 mode_status: not_found_organ128_thought_probe
 ```
 
+Повторная проба с seed-augmentation и дополнительными динамическими признаками
+`prompt_specificity`, `specificity`, `role_balance` не решила перенос:
+
+```text
+train_accuracy_before_update: 0.905172
+holdout_accuracy:             0.214286
+known_answer_rate:            0.000000
+refusal_refuse_rate:          1.000000
+mode_status: not_found_organ128_thought_probe
+```
+
 Вывод: текущий `ThoughtState` не переносится на holdout как самостоятельный
 answer/refuse орган. Его нельзя промоутить в readout. Следующий путь - менять
 динамику формирования thought, а не добавлять новые ручные признаки.

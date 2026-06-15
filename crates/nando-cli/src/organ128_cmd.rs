@@ -227,6 +227,12 @@ pub(crate) fn run_organ128_settle_dialog(
     println!("thought_strength: {:.6}", settled.thought.strength);
     println!("thought_convergence: {:.6}", settled.thought.convergence);
     println!("thought_drift: {:.6}", settled.thought.drift);
+    println!(
+        "thought_prompt_specificity: {:.6}",
+        settled.thought.prompt_specificity
+    );
+    println!("thought_specificity: {:.6}", settled.thought.specificity);
+    println!("thought_role_balance: {:.6}", settled.thought.role_balance);
     println!("thought_verdict: {}", settled.thought.verdict().as_str());
     println!("memory_phase: {:.6}", settled.memory.phase);
     println!("memory_strength: {:.6}", settled.memory.strength);
@@ -501,9 +507,12 @@ pub(crate) fn run_organ128_thought_probe_eval(
     let mut probe = ThoughtProbe::new(0.10);
     let mut train_cases = 0usize;
     let mut train_correct_before = 0usize;
-    for _ in 0..epochs {
-        for sample in thought_probe_train_samples() {
-            let settled = settle_thought_probe_sample(&lut, &organ, seed, ticks, sample);
+    for epoch in 0..epochs {
+        for (sample_index, sample) in thought_probe_train_samples().into_iter().enumerate() {
+            let train_seed = seed
+                .wrapping_add((epoch as u64) << 12)
+                .wrapping_add(sample_index as u64);
+            let settled = settle_thought_probe_sample(&lut, &organ, train_seed, ticks, sample);
             let predicted = probe.predict(&settled);
             if predicted == sample.should_answer {
                 train_correct_before += 1;
@@ -538,7 +547,7 @@ pub(crate) fn run_organ128_thought_probe_eval(
     println!("trace:");
     for row in &holdout.rows {
         println!(
-            "{} prompt=\"{}\" target={} predicted={} score={:.6} thought={} strength={:.6} convergence={:.6} drift={:.6} memory_alignment={:.6}",
+            "{} prompt=\"{}\" target={} predicted={} score={:.6} thought={} strength={:.6} convergence={:.6} drift={:.6} prompt_specificity={:.6} specificity={:.6} role_balance={:.6} memory_alignment={:.6}",
             row.kind,
             row.prompt,
             if row.should_answer {
@@ -556,6 +565,9 @@ pub(crate) fn run_organ128_thought_probe_eval(
             row.strength,
             row.convergence,
             row.drift,
+            row.prompt_specificity,
+            row.specificity,
+            row.role_balance,
             row.memory_alignment
         );
     }
@@ -1037,6 +1049,9 @@ struct ThoughtState {
     strength: f32,
     convergence: f32,
     drift: f32,
+    prompt_specificity: f32,
+    specificity: f32,
+    role_balance: f32,
     memory_alignment: f32,
 }
 
@@ -1052,6 +1067,9 @@ impl ThoughtState {
                 strength: 0.0,
                 convergence: 0.0,
                 drift: 0.0,
+                prompt_specificity: 0.0,
+                specificity: 0.0,
+                role_balance: 0.0,
                 memory_alignment: 0.0,
             };
         }
@@ -1075,12 +1093,18 @@ impl ThoughtState {
         let convergence = (1.0 - mean_velocity / std::f32::consts::PI).clamp(0.0, 1.0);
         let drift = circular_delta_local(prompt_wave.phase, phase).abs() / std::f32::consts::PI;
         let memory_alignment = ((memory.phase - phase).cos() + 1.0) * 0.5 * memory.validation;
+        let prompt_specificity = prompt_wave.spectral_specificity();
+        let specificity = thought_cell_specificity(trace);
+        let role_balance = thought_role_balance(trace);
 
         Self {
             phase,
             strength: strength.clamp(0.0, 1.0),
             convergence,
             drift: drift.clamp(0.0, 1.0),
+            prompt_specificity,
+            specificity,
+            role_balance,
             memory_alignment: memory_alignment.clamp(0.0, 1.0),
         }
     }
@@ -1116,6 +1140,56 @@ impl ThoughtVerdict {
             Self::Detached => "detached",
         }
     }
+}
+
+fn thought_cell_specificity(trace: &[Organ128SettleTick]) -> f32 {
+    let mut counts = [0u16; 128];
+    let mut total = 0u16;
+    for tick in trace {
+        for cell_id in tick.active_cell_ids {
+            if cell_id < counts.len() {
+                counts[cell_id] = counts[cell_id].saturating_add(1);
+                total = total.saturating_add(1);
+            }
+        }
+    }
+    if total == 0 {
+        return 0.0;
+    }
+
+    let mut energy = 0.0f32;
+    for count in counts {
+        if count == 0 {
+            continue;
+        }
+        let probability = count as f32 / total as f32;
+        energy += probability * probability;
+    }
+
+    let concentration = ((energy * total as f32) - 1.0) / (total as f32 - 1.0).max(1.0);
+    (1.0 - (concentration - 0.35).abs() / 0.35).clamp(0.0, 1.0)
+}
+
+fn thought_role_balance(trace: &[Organ128SettleTick]) -> f32 {
+    let mut fast = 0usize;
+    let mut mid_guard = 0usize;
+    let mut carrier_memory = 0usize;
+    for tick in trace {
+        fast += tick.l1_roles.fast;
+        mid_guard += tick.l1_roles.mid + tick.l1_roles.guard;
+        carrier_memory += tick.l1_roles.carrier + tick.l1_roles.memory;
+    }
+    let total = (fast + mid_guard + carrier_memory).max(1) as f32;
+    let fast_p = fast as f32 / total;
+    let mid_p = mid_guard as f32 / total;
+    let slow_p = carrier_memory as f32 / total;
+    let expected_fast = 0.50f32;
+    let expected_mid = 0.25f32;
+    let expected_slow = 0.25f32;
+    let distance = (fast_p - expected_fast).abs()
+        + (mid_p - expected_mid).abs()
+        + (slow_p - expected_slow).abs();
+    (1.0 - distance / 1.5).clamp(0.0, 1.0)
 }
 
 impl Organ128SettleState {
@@ -1473,6 +1547,18 @@ impl PromptWave {
         self.slot_energy.iter().sum::<f32>() / PHASE_SLOTS as f32
     }
 
+    fn spectral_specificity(&self) -> f32 {
+        let total = self.slot_energy.iter().sum::<f32>().max(f32::EPSILON);
+        let top_total = self
+            .top_slots
+            .iter()
+            .map(|slot| self.slot_energy[*slot])
+            .sum::<f32>();
+        let top_share = top_total / total;
+        let uniform_share = PROMPT_WAVE_TOP_SLOTS as f32 / PHASE_SLOTS as f32;
+        ((top_share - uniform_share) / (1.0 - uniform_share)).clamp(0.0, 1.0)
+    }
+
     fn similarity(self, other: Self) -> f32 {
         let phase_delta = (self.phase - other.phase).cos();
         let amplitude_match = 1.0 - (self.amplitude - other.amplitude).abs();
@@ -1728,6 +1814,9 @@ struct ThoughtProbeEvalRow {
     strength: f32,
     convergence: f32,
     drift: f32,
+    prompt_specificity: f32,
+    specificity: f32,
+    role_balance: f32,
     memory_alignment: f32,
 }
 
@@ -1737,7 +1826,7 @@ struct FeatureMask {
 }
 
 const WAVE_SCORER_FEATURES: usize = 12;
-const THOUGHT_PROBE_FEATURES: usize = 8;
+const THOUGHT_PROBE_FEATURES: usize = 11;
 
 impl WaveDialogScorer {
     fn new(learning_rate: f32, mask: FeatureMask) -> Self {
@@ -2201,6 +2290,9 @@ fn eval_thought_probe(
             strength: settled.thought.strength,
             convergence: settled.thought.convergence,
             drift: settled.thought.drift,
+            prompt_specificity: settled.thought.prompt_specificity,
+            specificity: settled.thought.specificity,
+            role_balance: settled.thought.role_balance,
             memory_alignment: settled.thought.memory_alignment,
         });
     }
@@ -2261,6 +2353,9 @@ fn thought_probe_features(settled: &Organ128SettleState) -> [f32; THOUGHT_PROBE_
         settled.thought.strength,
         settled.thought.convergence,
         1.0 - settled.thought.drift,
+        settled.thought.prompt_specificity,
+        settled.thought.specificity,
+        settled.thought.role_balance,
         settled.thought.memory_alignment,
         settled.coherence,
         settled.stability,
