@@ -2652,7 +2652,7 @@ impl DecoderState {
         if self.word_len >= 6 && byte == b'.' {
             prior += 0.08;
         }
-        if self.word_len == 0 && matches!(byte, b'a'..=b'z') {
+        if self.word_len == 0 && byte.is_ascii_lowercase() {
             prior += 0.04;
             prior += self.next_word_start_prior(byte);
         }
@@ -2843,15 +2843,15 @@ fn quota_active_from_hot(hot: &[(usize, f32); 32]) -> [(usize, f32); 4] {
         matches!(role, Organ128CellRole::Carrier | Organ128CellRole::Memory)
     });
 
-    for slot in 0..active.len() {
-        if active[slot].0 != usize::MAX {
+    for active_slot in &mut active {
+        if active_slot.0 != usize::MAX {
             continue;
         }
         for (hot_index, cell) in hot.iter().copied().enumerate() {
             if used[hot_index] {
                 continue;
             }
-            active[slot] = cell;
+            *active_slot = cell;
             used[hot_index] = true;
             break;
         }

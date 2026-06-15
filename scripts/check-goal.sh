@@ -50,6 +50,7 @@ require_contains docs/GOAL.md "engineering_pass:"
 require_contains docs/GOAL.md "organ128-modadd-eval"
 require_contains docs/GOAL.md "label_shuffle_accuracy"
 require_contains docs/GOAL.md "no_shortcut_control"
+require_contains README.md "organ128-modadd-eval"
 
 require_absent_regex docs/GOAL.md "CPU-friendly wave cellular organism proof"
 require_absent_regex docs/GOAL.md "финальн(ый|ое) proof"

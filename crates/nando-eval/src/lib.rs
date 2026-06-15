@@ -8,6 +8,7 @@ use nando_core::{STAGE2_TOP_K, project_status, run_stage2_tick};
 mod byte_context;
 mod chat0;
 mod math;
+mod modadd;
 mod phase;
 mod result;
 mod settle_word;
@@ -42,6 +43,7 @@ pub(crate) use chat0::{
     chat0_response_for_target, chat0_target_for_response, chat0_task_for_target,
 };
 pub(crate) use math::{byte_to_phase, circular_delta, splitmix64};
+pub use modadd::{Organ128ModAddConfig, Organ128ModAddReport, organ128_modadd_eval};
 pub use phase::{
     BusTransferReport, CarrierControlReport, HorizonSweepRow, PeriodicEvalReport,
     PeriodicTaskConfig, PhaseCompositionConfig, PhaseCompositionReport, PhaseHoldoutReport,

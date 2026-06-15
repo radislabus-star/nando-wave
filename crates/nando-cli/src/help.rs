@@ -17,6 +17,8 @@ pub(crate) fn print_help() {
     println!("            Check answer/refuse gating on known prompts and noise prompts");
     println!("  organ128-thought-probe-eval [seed] [ticks] [epochs]");
     println!("            Train/eval a tiny dynamic-state probe over ThoughtState only");
+    println!("  organ128-modadd-eval [seed] [modulus] [train-cases] [holdout-cases]");
+    println!("            Run the GOAL v0 modular-addition evidence-package probe");
     println!("  wave-tick <input-byte> [seed]");
     println!("            Run one deterministic Stage 2 wave tick");
     println!("  snapshot-save <input-byte> [seed] [path]");

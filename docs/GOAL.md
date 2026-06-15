@@ -743,7 +743,7 @@ mode_status
 
 ## Ближайший следующий шаг
 
-Следующий кодовый шаг:
+Текущий кодовый шаг:
 
 ```text
 organ128-modadd-eval
@@ -817,4 +817,22 @@ mode_status: organ128_modadd_candidate
 mode_status: organ128_modadd_key_mode_ablation_passed
 ```
 
-Только после этого имеет смысл возвращаться к усилению Chat-0.
+Первый v0-прогон:
+
+```text
+cargo run -q -p nando-cli -- organ128-modadd-eval 7 31 256 256
+mode_status: not_found_organ128_modadd
+ensemble_gain: -0.003906
+key_ablation_drop: 0.011719
+label_shuffle_accuracy: 0.031250
+no_shortcut_control: true
+```
+
+Вывод:
+
+```text
+прибор собран, leakage control прошел,
+но ансамблевая мода на полном v0 split не найдена.
+Следующий шаг - улучшать wave/readout dynamics или phase math,
+а не возвращаться к усилению Chat-0.
+```

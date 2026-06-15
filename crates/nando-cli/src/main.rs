@@ -11,8 +11,9 @@ mod status;
 use args::{
     parse_bench_stage2_tick_args, parse_cases_only_args, parse_live_byte_train_args,
     parse_live_grok_sweep_args, parse_live_grok_trace_args, parse_optional_seed_arg,
-    parse_periodic_args, parse_phase_composition_args, parse_phase_holdout_args,
-    parse_seed_pair_cases_args, parse_snapshot_save_args, parse_wave_tick_args,
+    parse_organ128_modadd_args, parse_periodic_args, parse_phase_composition_args,
+    parse_phase_holdout_args, parse_seed_pair_cases_args, parse_snapshot_save_args,
+    parse_wave_tick_args,
 };
 use bench::{print_link_tissue_bench, print_stage2_tick_bench};
 use chat0_cmd::{
@@ -94,6 +95,19 @@ fn main() -> ExitCode {
             Err(message) => {
                 eprintln!("{message}");
                 eprintln!("try: nando-cli organ128-thought-probe-eval [seed] [ticks] [epochs]");
+                ExitCode::FAILURE
+            }
+        },
+        Some("organ128-modadd-eval") => match parse_organ128_modadd_args(args) {
+            Ok(config) => {
+                print!("{}", nando_eval::organ128_modadd_eval(config).to_text());
+                ExitCode::SUCCESS
+            }
+            Err(message) => {
+                eprintln!("{message}");
+                eprintln!(
+                    "try: nando-cli organ128-modadd-eval [seed] [modulus] [train-cases] [holdout-cases]"
+                );
                 ExitCode::FAILURE
             }
         },
