@@ -51,6 +51,11 @@ pub struct Organ128ModAddReport {
     pub excluded_key: BaselineResult,
     pub label_shuffle: BaselineResult,
     pub component_bus_label_shuffle: BaselineResult,
+    pub component_bus_a_only: BaselineResult,
+    pub component_bus_b_only: BaselineResult,
+    pub component_bus_no_phase: BaselineResult,
+    pub component_bus_no_amplitude: BaselineResult,
+    pub component_bus_wrong_pair: BaselineResult,
     pub key_cell: u32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
@@ -62,6 +67,11 @@ pub struct Organ128ModAddReport {
     pub structured_over_fourier_gap: f32,
     pub census_over_fourier_gap: f32,
     pub component_bus_over_fourier_gap: f32,
+    pub component_bus_a_drop: f32,
+    pub component_bus_b_drop: f32,
+    pub component_bus_phase_drop: f32,
+    pub component_bus_amplitude_drop: f32,
+    pub component_bus_wrong_pair_drop: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub no_shortcut_control: bool,
@@ -95,6 +105,11 @@ pub struct Organ128ModAddSeedSweepRow {
     pub non_key_ablation_drop: f32,
     pub label_shuffle_accuracy: f32,
     pub component_bus_shuffle_accuracy: f32,
+    pub component_bus_a_drop: f32,
+    pub component_bus_b_drop: f32,
+    pub component_bus_phase_drop: f32,
+    pub component_bus_amplitude_drop: f32,
+    pub component_bus_wrong_pair_drop: f32,
     pub no_shortcut_control: bool,
     pub component_bus_no_shortcut_control: bool,
     pub scientific_pass: bool,
@@ -124,6 +139,11 @@ pub struct Organ128ModAddSeedSweepReport {
     pub min_key_ablation_drop: f32,
     pub max_label_shuffle_accuracy: f32,
     pub max_component_bus_shuffle_accuracy: f32,
+    pub min_component_bus_a_drop: f32,
+    pub min_component_bus_b_drop: f32,
+    pub min_component_bus_phase_drop: f32,
+    pub min_component_bus_amplitude_drop: f32,
+    pub min_component_bus_wrong_pair_drop: f32,
     pub mode_status: &'static str,
 }
 
@@ -152,6 +172,11 @@ impl Organ128ModAddReport {
         output.push_str(&format_baseline(self.excluded_key));
         output.push_str(&format_baseline(self.label_shuffle));
         output.push_str(&format_baseline(self.component_bus_label_shuffle));
+        output.push_str(&format_baseline(self.component_bus_a_only));
+        output.push_str(&format_baseline(self.component_bus_b_only));
+        output.push_str(&format_baseline(self.component_bus_no_phase));
+        output.push_str(&format_baseline(self.component_bus_no_amplitude));
+        output.push_str(&format_baseline(self.component_bus_wrong_pair));
         output.push_str(&format!("random_accuracy: {:.6}\n", self.random.accuracy));
         output.push_str(&format!("mono192_accuracy: {:.6}\n", self.mono192.accuracy));
         output.push_str(&format!(
@@ -221,6 +246,26 @@ impl Organ128ModAddReport {
             self.component_bus_over_fourier_gap
         ));
         output.push_str(&format!(
+            "component_bus_a_drop: {:.6}\n",
+            self.component_bus_a_drop
+        ));
+        output.push_str(&format!(
+            "component_bus_b_drop: {:.6}\n",
+            self.component_bus_b_drop
+        ));
+        output.push_str(&format!(
+            "component_bus_phase_drop: {:.6}\n",
+            self.component_bus_phase_drop
+        ));
+        output.push_str(&format!(
+            "component_bus_amplitude_drop: {:.6}\n",
+            self.component_bus_amplitude_drop
+        ));
+        output.push_str(&format!(
+            "component_bus_wrong_pair_drop: {:.6}\n",
+            self.component_bus_wrong_pair_drop
+        ));
+        output.push_str(&format!(
             "restricted_key_accuracy: {:.6}\n",
             self.restricted_key.accuracy
         ));
@@ -269,32 +314,20 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!("modulus: {}\n", self.modulus));
         output.push_str(&format!("train_size: {}\n", self.train_cases));
         output.push_str(&format!("holdout_size: {}\n", self.holdout_cases));
-        output.push_str("seed wavebus_acc compose_acc structured_acc census_acc component_bus_acc fourier_acc wave_fourier_gap compose_fourier_gap structured_fourier_gap census_fourier_gap component_bus_fourier_gap ensemble_gain compose_gain structured_gain census_gain component_bus_gain key_drop non_key_drop shuffle_acc component_shuffle_acc no_shortcut component_no_shortcut scientific engineering mode_status\n");
+        output.push_str("seed wavebus_acc component_bus_acc component_bus_gain a_drop b_drop phase_drop amplitude_drop wrong_pair_drop component_shuffle_acc component_no_shortcut scientific engineering mode_status\n");
         for row in &self.rows {
             output.push_str(&format!(
-                "{} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:.6} {:.6} {:.6} {:.6} {} {} {} {} {}\n",
+                "{} {:.6} {:.6} {:+.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
                 row.seed,
                 row.cell32_wavebus_accuracy,
-                row.cell32_phase_compose_accuracy,
-                row.cell32_structured_compose_accuracy,
-                row.cell32_fourier_census_accuracy,
                 row.cell32_component_bus_projection_accuracy,
-                row.fourier_phase_accuracy,
-                row.wave_over_fourier_gap,
-                row.compose_over_fourier_gap,
-                row.structured_over_fourier_gap,
-                row.census_over_fourier_gap,
-                row.component_bus_over_fourier_gap,
-                row.ensemble_gain,
-                row.phase_compose_gain,
-                row.structured_compose_gain,
-                row.fourier_census_gain,
                 row.component_bus_projection_gain,
-                row.key_ablation_drop,
-                row.non_key_ablation_drop,
-                row.label_shuffle_accuracy,
+                row.component_bus_a_drop,
+                row.component_bus_b_drop,
+                row.component_bus_phase_drop,
+                row.component_bus_amplitude_drop,
+                row.component_bus_wrong_pair_drop,
                 row.component_bus_shuffle_accuracy,
-                row.no_shortcut_control,
                 row.component_bus_no_shortcut_control,
                 row.scientific_pass,
                 row.engineering_pass,
@@ -358,6 +391,26 @@ impl Organ128ModAddSeedSweepReport {
             "max_component_bus_shuffle_accuracy: {:.6}\n",
             self.max_component_bus_shuffle_accuracy
         ));
+        output.push_str(&format!(
+            "min_component_bus_a_drop: {:.6}\n",
+            self.min_component_bus_a_drop
+        ));
+        output.push_str(&format!(
+            "min_component_bus_b_drop: {:.6}\n",
+            self.min_component_bus_b_drop
+        ));
+        output.push_str(&format!(
+            "min_component_bus_phase_drop: {:.6}\n",
+            self.min_component_bus_phase_drop
+        ));
+        output.push_str(&format!(
+            "min_component_bus_amplitude_drop: {:.6}\n",
+            self.min_component_bus_amplitude_drop
+        ));
+        output.push_str(&format!(
+            "min_component_bus_wrong_pair_drop: {:.6}\n",
+            self.min_component_bus_wrong_pair_drop
+        ));
         output.push_str(&format!("mode_status: {}\n", self.mode_status));
         output
     }
@@ -402,6 +455,16 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let mut label_shuffle = BaselineResult::new("label_shuffle", dataset.holdout.len());
     let mut component_bus_label_shuffle =
         BaselineResult::new("component_bus_label_shuffle", dataset.holdout.len());
+    let mut component_bus_a_only =
+        BaselineResult::new("component_bus_a_only", dataset.holdout.len());
+    let mut component_bus_b_only =
+        BaselineResult::new("component_bus_b_only", dataset.holdout.len());
+    let mut component_bus_no_phase =
+        BaselineResult::new("component_bus_no_phase", dataset.holdout.len());
+    let mut component_bus_no_amplitude =
+        BaselineResult::new("component_bus_no_amplitude", dataset.holdout.len());
+    let mut component_bus_wrong_pair =
+        BaselineResult::new("component_bus_wrong_pair", dataset.holdout.len());
     let mut ablations: [BaselineResult; STAGE2_ORGAN_CELLS] = std::array::from_fn(|cell_id| {
         BaselineResult::new(ablation_name(cell_id), dataset.holdout.len())
     });
@@ -474,6 +537,38 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
             trace.spectral_entropy,
         );
 
+        for (mode, result) in [
+            (ComponentBusFeatureMode::AOnly, &mut component_bus_a_only),
+            (ComponentBusFeatureMode::BOnly, &mut component_bus_b_only),
+            (
+                ComponentBusFeatureMode::NoPhase,
+                &mut component_bus_no_phase,
+            ),
+            (
+                ComponentBusFeatureMode::NoAmplitude,
+                &mut component_bus_no_amplitude,
+            ),
+            (
+                ComponentBusFeatureMode::WrongPair,
+                &mut component_bus_wrong_pair,
+            ),
+        ] {
+            let prediction = component_bus_projection_readout.predict_with_mode(
+                &organ,
+                config.seed,
+                *sample,
+                config.modulus,
+                mode,
+            );
+            score_prediction(
+                result,
+                prediction,
+                target,
+                trace.coherence,
+                trace.spectral_entropy,
+            );
+        }
+
         let voting_prediction = readout.predict_voting(&trace, config.modulus);
         score_prediction(
             &mut cell32_voting,
@@ -525,6 +620,11 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         &mut cell32_wavebus,
         &mut label_shuffle,
         &mut component_bus_label_shuffle,
+        &mut component_bus_a_only,
+        &mut component_bus_b_only,
+        &mut component_bus_no_phase,
+        &mut component_bus_no_amplitude,
+        &mut component_bus_wrong_pair,
     ]);
     for ablation in &mut ablations {
         ablation.finish();
@@ -561,6 +661,26 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let census_over_fourier_gap = cell32_fourier_census.accuracy - fourier_phase.accuracy;
     let component_bus_over_fourier_gap =
         cell32_component_bus_projection.accuracy - fourier_phase.accuracy;
+    let component_bus_a_drop = ablation_drop(
+        cell32_component_bus_projection.accuracy,
+        component_bus_a_only.accuracy,
+    );
+    let component_bus_b_drop = ablation_drop(
+        cell32_component_bus_projection.accuracy,
+        component_bus_b_only.accuracy,
+    );
+    let component_bus_phase_drop = ablation_drop(
+        cell32_component_bus_projection.accuracy,
+        component_bus_no_phase.accuracy,
+    );
+    let component_bus_amplitude_drop = ablation_drop(
+        cell32_component_bus_projection.accuracy,
+        component_bus_no_amplitude.accuracy,
+    );
+    let component_bus_wrong_pair_drop = ablation_drop(
+        cell32_component_bus_projection.accuracy,
+        component_bus_wrong_pair.accuracy,
+    );
     let no_shortcut_control = label_shuffle.accuracy
         <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE).min(cell32_wavebus.accuracy);
     let component_bus_no_shortcut_control = component_bus_label_shuffle.accuracy
@@ -598,6 +718,11 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         excluded_key,
         label_shuffle,
         component_bus_label_shuffle,
+        component_bus_a_only,
+        component_bus_b_only,
+        component_bus_no_phase,
+        component_bus_no_amplitude,
+        component_bus_wrong_pair,
         key_cell,
         ensemble_gain,
         phase_compose_gain,
@@ -609,6 +734,11 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         structured_over_fourier_gap,
         census_over_fourier_gap,
         component_bus_over_fourier_gap,
+        component_bus_a_drop,
+        component_bus_b_drop,
+        component_bus_phase_drop,
+        component_bus_amplitude_drop,
+        component_bus_wrong_pair_drop,
         key_ablation_drop,
         non_key_ablation_drop,
         no_shortcut_control,
@@ -657,6 +787,11 @@ pub fn organ128_modadd_seed_sweep_eval(
             non_key_ablation_drop: report.non_key_ablation_drop,
             label_shuffle_accuracy: report.label_shuffle.accuracy,
             component_bus_shuffle_accuracy: report.component_bus_label_shuffle.accuracy,
+            component_bus_a_drop: report.component_bus_a_drop,
+            component_bus_b_drop: report.component_bus_b_drop,
+            component_bus_phase_drop: report.component_bus_phase_drop,
+            component_bus_amplitude_drop: report.component_bus_amplitude_drop,
+            component_bus_wrong_pair_drop: report.component_bus_wrong_pair_drop,
             no_shortcut_control: report.no_shortcut_control,
             component_bus_no_shortcut_control: report.component_bus_no_shortcut_control,
             scientific_pass: report.scientific_pass,
@@ -726,6 +861,26 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.component_bus_shuffle_accuracy)
         .fold(f32::NEG_INFINITY, f32::max);
+    let min_component_bus_a_drop = rows
+        .iter()
+        .map(|row| row.component_bus_a_drop)
+        .fold(f32::INFINITY, f32::min);
+    let min_component_bus_b_drop = rows
+        .iter()
+        .map(|row| row.component_bus_b_drop)
+        .fold(f32::INFINITY, f32::min);
+    let min_component_bus_phase_drop = rows
+        .iter()
+        .map(|row| row.component_bus_phase_drop)
+        .fold(f32::INFINITY, f32::min);
+    let min_component_bus_amplitude_drop = rows
+        .iter()
+        .map(|row| row.component_bus_amplitude_drop)
+        .fold(f32::INFINITY, f32::min);
+    let min_component_bus_wrong_pair_drop = rows
+        .iter()
+        .map(|row| row.component_bus_wrong_pair_drop)
+        .fold(f32::INFINITY, f32::min);
     let mode_status = if passed_seed_pairs >= 4 {
         "organ128_modadd_seed_robustness_passed"
     } else if candidate_seed_pairs >= 3 {
@@ -754,6 +909,11 @@ pub fn organ128_modadd_seed_sweep_eval(
         min_key_ablation_drop,
         max_label_shuffle_accuracy,
         max_component_bus_shuffle_accuracy,
+        min_component_bus_a_drop,
+        min_component_bus_b_drop,
+        min_component_bus_phase_drop,
+        min_component_bus_amplitude_drop,
+        min_component_bus_wrong_pair_drop,
         mode_status,
     }
 }
@@ -1019,6 +1179,16 @@ struct ComponentBusProjectionReadout {
     centroids: Vec<[f32; COMPONENT_BUS_FEATURES]>,
 }
 
+#[derive(Clone, Copy)]
+enum ComponentBusFeatureMode {
+    Full,
+    AOnly,
+    BOnly,
+    NoPhase,
+    NoAmplitude,
+    WrongPair,
+}
+
 impl ComponentBusProjectionReadout {
     fn train(
         organ: &Stage2Organ,
@@ -1035,7 +1205,13 @@ impl ComponentBusProjectionReadout {
                 None => *sample,
             };
             let target = usize::from(label_sample.target(config.modulus));
-            let features = component_bus_features(organ, config.seed, *sample, config.modulus);
+            let features = component_bus_features(
+                organ,
+                config.seed,
+                *sample,
+                config.modulus,
+                ComponentBusFeatureMode::Full,
+            );
             add_features(&mut centroids[target], &features);
             counts[target] += 1;
         }
@@ -1049,7 +1225,18 @@ impl ComponentBusProjectionReadout {
     }
 
     fn predict(&self, organ: &Stage2Organ, seed: u64, sample: ModAddSample, modulus: u8) -> u8 {
-        let features = component_bus_features(organ, seed, sample, modulus);
+        self.predict_with_mode(organ, seed, sample, modulus, ComponentBusFeatureMode::Full)
+    }
+
+    fn predict_with_mode(
+        &self,
+        organ: &Stage2Organ,
+        seed: u64,
+        sample: ModAddSample,
+        modulus: u8,
+        mode: ComponentBusFeatureMode,
+    ) -> u8 {
+        let features = component_bus_features(organ, seed, sample, modulus, mode);
         self.centroids
             .iter()
             .enumerate()
@@ -1139,6 +1326,10 @@ fn add_mod(value: u8, offset: u8, modulus: u8) -> u8 {
     (value + offset) % modulus
 }
 
+fn ablation_drop(full: f32, ablated: f32) -> f32 {
+    (full - ablated).max(0.0)
+}
+
 fn bus_slot_to_mod(slot: usize, weight: f32, modulus: u8) -> u8 {
     let slot_phase = TAU * slot as f32 / PHASE_SLOTS as f32;
     let signed_phase = if weight.is_sign_negative() {
@@ -1221,12 +1412,22 @@ fn component_bus_features(
     seed: u64,
     sample: ModAddSample,
     modulus: u8,
+    mode: ComponentBusFeatureMode,
 ) -> [f32; COMPONENT_BUS_FEATURES] {
     let a_bus = component_bus(organ, seed, sample.a, modulus, 0xA17A);
-    let b_bus = component_bus(organ, seed, sample.b, modulus, 0xB17B);
+    let b_value = if matches!(mode, ComponentBusFeatureMode::WrongPair) {
+        (sample.b + modulus / 2 + 1) % modulus
+    } else {
+        sample.b
+    };
+    let b_bus = component_bus(organ, seed, b_value, modulus, 0xB17B);
     let mut features = [0.0; COMPONENT_BUS_FEATURES];
-    write_bus_features(&a_bus, &mut features, 0);
-    write_bus_features(&b_bus, &mut features, PHASE_SLOTS * 2);
+    if !matches!(mode, ComponentBusFeatureMode::BOnly) {
+        write_bus_features(&a_bus, &mut features, 0, mode);
+    }
+    if !matches!(mode, ComponentBusFeatureMode::AOnly) {
+        write_bus_features(&b_bus, &mut features, PHASE_SLOTS * 2, mode);
+    }
     normalize_features(&mut features);
     features
 }
@@ -1236,7 +1437,12 @@ fn component_bus(organ: &Stage2Organ, seed: u64, value: u8, modulus: u8, lane: u
     run_stage2_bus_trace_with_organ_carrier(organ, lane as u8, carrier, None).bus
 }
 
-fn write_bus_features(bus: &WaveBus, features: &mut [f32; COMPONENT_BUS_FEATURES], offset: usize) {
+fn write_bus_features(
+    bus: &WaveBus,
+    features: &mut [f32; COMPONENT_BUS_FEATURES],
+    offset: usize,
+    mode: ComponentBusFeatureMode,
+) {
     let phase_norm = bus
         .phase_sum
         .iter()
@@ -1245,8 +1451,12 @@ fn write_bus_features(bus: &WaveBus, features: &mut [f32; COMPONENT_BUS_FEATURES
         .max(f32::EPSILON);
     let amplitude_norm = bus.amplitude_sum.iter().sum::<f32>().max(f32::EPSILON);
     for slot in 0..PHASE_SLOTS {
-        features[offset + slot] = bus.phase_sum[slot] / phase_norm;
-        features[offset + PHASE_SLOTS + slot] = bus.amplitude_sum[slot] / amplitude_norm;
+        if !matches!(mode, ComponentBusFeatureMode::NoPhase) {
+            features[offset + slot] = bus.phase_sum[slot] / phase_norm;
+        }
+        if !matches!(mode, ComponentBusFeatureMode::NoAmplitude) {
+            features[offset + PHASE_SLOTS + slot] = bus.amplitude_sum[slot] / amplitude_norm;
+        }
     }
 }
 
@@ -1355,6 +1565,11 @@ mod tests {
         assert!(text.contains("structured_compose_gain:"));
         assert!(text.contains("fourier_census_gain:"));
         assert!(text.contains("component_bus_projection_gain:"));
+        assert!(text.contains("component_bus_a_drop:"));
+        assert!(text.contains("component_bus_b_drop:"));
+        assert!(text.contains("component_bus_phase_drop:"));
+        assert!(text.contains("component_bus_amplitude_drop:"));
+        assert!(text.contains("component_bus_wrong_pair_drop:"));
         assert!(text.contains("wave_over_fourier_gap:"));
         assert!(text.contains("compose_over_fourier_gap:"));
         assert!(text.contains("structured_over_fourier_gap:"));
@@ -1390,6 +1605,11 @@ mod tests {
         assert!(text.contains("min_component_bus_over_fourier_gap:"));
         assert!(text.contains("max_label_shuffle_accuracy:"));
         assert!(text.contains("max_component_bus_shuffle_accuracy:"));
+        assert!(text.contains("min_component_bus_a_drop:"));
+        assert!(text.contains("min_component_bus_b_drop:"));
+        assert!(text.contains("min_component_bus_phase_drop:"));
+        assert!(text.contains("min_component_bus_amplitude_drop:"));
+        assert!(text.contains("min_component_bus_wrong_pair_drop:"));
         assert!(
             report.mode_status == "organ128_modadd_seed_robustness_passed"
                 || report.mode_status == "organ128_modadd_seed_sweep_candidate"

@@ -712,6 +712,11 @@ structured_compose_gain
 fourier_census_gain
 component_bus_projection_gain
 component_bus_shuffle_accuracy
+component_bus_a_drop
+component_bus_b_drop
+component_bus_phase_drop
+component_bus_amplitude_drop
+component_bus_wrong_pair_drop
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
@@ -868,6 +873,11 @@ structured_compose_gain: 0.000000
 fourier_census_gain: -0.015625
 component_bus_projection_gain: 0.019531
 component_bus_shuffle_accuracy: 0.019531
+component_bus_a_drop: 0.039062
+component_bus_b_drop: 0.042969
+component_bus_phase_drop: 0.023438
+component_bus_amplitude_drop: 0.007812
+component_bus_wrong_pair_drop: 0.062500
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
 cell32_structured_compose_accuracy: 0.042969
@@ -902,6 +912,11 @@ min_structured_compose_gain: -0.023438
 min_fourier_census_gain: -0.023438
 min_component_bus_projection_gain: 0.019531
 max_component_bus_shuffle_accuracy: 0.039062
+min_component_bus_a_drop: 0.039062
+min_component_bus_b_drop: 0.042969
+min_component_bus_phase_drop: 0.023438
+min_component_bus_amplitude_drop: 0.000000
+min_component_bus_wrong_pair_drop: 0.062500
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
 min_structured_over_fourier_gap: -0.976562
@@ -1030,9 +1045,19 @@ result:
   cell32_component_bus_projection_accuracy: 0.062500
   component_bus_projection_gain: 0.019531
   component_bus_shuffle_accuracy: 0.019531
+  component_bus_a_drop: 0.039062
+  component_bus_b_drop: 0.042969
+  component_bus_phase_drop: 0.023438
+  component_bus_amplitude_drop: 0.007812
+  component_bus_wrong_pair_drop: 0.062500
   component_bus_no_shortcut_control: true
   min_component_bus_projection_gain over seeds: 0.019531
   max_component_bus_shuffle_accuracy over seeds: 0.039062
+  min_component_bus_a_drop over seeds: 0.039062
+  min_component_bus_b_drop over seeds: 0.042969
+  min_component_bus_phase_drop over seeds: 0.023438
+  min_component_bus_amplitude_drop over seeds: 0.000000
+  min_component_bus_wrong_pair_drop over seeds: 0.062500
   min_component_bus_over_fourier_gap: -0.937500
 
 decision:
@@ -1047,8 +1072,11 @@ voting/best_control, но ниже v0 threshold 0.03 и далеко от Fourie
 Label-shuffle для этого readout ниже основного сигнала и проходит
 `component_bus_no_shortcut_control`, значит это не выглядит как простой leak
 разметки. Это значит, что полезная информация о компонентах в Cell32/WaveBus
-уже есть, но текущий projection слишком слабый и не имеет ablation/key-link
-проверки. Следующий шаг - усилить этот путь не хардкодом, а честно:
-component_bus_projection + ablation by channel
-a_only/b_only/no_phase/no_amplitude/wrong_component_pair.
+уже есть. Channel-ablation уточнила картину: a_only и b_only режут сигнал на
+всех seed, no_phase тоже режет сигнал, wrong_component_pair полностью ломает
+канал, а no_amplitude слабый и не является ключевым звеном. Это уже похоже на
+реальный candidate circuit seed, но не на найденную моду: качество и gain ниже
+порога, а до Fourier control еще огромный разрыв. Следующий шаг - усиливать
+именно межкомпонентную связь/settle динамику, а не поднимать score shortcut
+readout-ом.
 ```
