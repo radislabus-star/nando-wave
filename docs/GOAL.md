@@ -749,6 +749,37 @@ mode_status
 organ128-modadd-eval
 ```
 
+Срез реализации v0:
+
+```text
+1. Сгенерировать deterministic dataset для `(a + b) mod P`.
+2. Разделить train/holdout без пересечения пар.
+3. Запустить random, Mono192, voting, WaveBus controls.
+4. Найти key modes только на train.
+5. Заморозить key modes.
+6. Проверить restricted/excluded/key-ablation на holdout.
+7. Запустить label_shuffle negative control.
+8. Напечатать report artifact в stdout.
+```
+
+Что v0 не обязан делать:
+
+```text
+не обязан сохранять JSON
+не обязан обучать полноценный Chat-0
+не обязан менять Cell32 weights во время ответа
+не обязан подтверждать русский текст
+```
+
+Что v0 обязан не делать:
+
+```text
+не вызывать `(a + b) mod P` внутри prediction path
+не подбирать thresholds на holdout
+не объявлять candidate как passed
+не скрывать провал controls
+```
+
 Минимальная версия команды должна вывести:
 
 ```text
@@ -757,14 +788,20 @@ seed
 modulus
 train_size
 holdout_size
+elapsed_ms
 random_accuracy
 mono192_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
+ensemble_gain
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
 non_key_ablation_drop
+label_shuffle_accuracy
+no_shortcut_control
+scientific_pass
+engineering_pass
 mode_status
 ```
 

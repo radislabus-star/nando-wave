@@ -136,7 +136,7 @@ snapshot сохраняется и читается
 
 Статус: начат. Реализован первый synthetic periodic baseline report:
 `random`, `Mono192`, `6 x Cell32 без wave bus`, `6 x Cell32 с wave bus`.
-Mode detection пока не доказан, ablation еще не реализована.
+Mode detection пока не подтвержден, ablation еще не реализована.
 
 Цель: не текст, а управляемая математическая задача.
 
@@ -225,7 +225,7 @@ Cellular CarrierWave centroid seed sweep прошел, cellular lock ablation т
 прошел на 128 cases. Trained CarrierWave centroid seed sweep прошел, trained
 lock ablation тоже прошел на 128 cases. Ограничение: trained gate пока
 использует структурную подсказку middle-token, поэтому это еще не финальный
-proof самоорганизованной моды. Prompt-cloud CarrierWave centroid seed sweep
+evidence package самоорганизованной моды. Prompt-cloud CarrierWave centroid seed sweep
 прошел без middle-token подсказки, а bank-wide ablation показал чувствительность
 к обученному bank. При этом per-cell `min_accuracy_drop` отрицательный, то есть
 отдельные клетки частично избыточны. Diverse prompt-cloud gate тоже прошел:
@@ -259,7 +259,7 @@ mode_status: found
 mode_status: not_found
 ```
 
-Оба результата полезны. `not_found` означает, что гипотеза пока не доказана.
+Оба результата полезны. `not_found` означает, что гипотеза пока не подтверждена.
 
 ## Этап 4.5: Несущая волна
 
@@ -299,8 +299,8 @@ mode_status: carrier_control_passed_candidate_mode
 ```
 
 Ограничение результата: target в phase-composition probe явно использует
-CarrierWave phase, поэтому этот gate доказывает зависимость кандидата от
-несущей, но еще не доказывает общую архитектуру Nando Wave.
+CarrierWave phase, поэтому этот gate подтверждает зависимость кандидата от
+несущей, но еще не подтверждает общую архитектуру Nando Wave.
 
 Delayed bus-transfer result:
 
@@ -353,7 +353,7 @@ mode_status: snapshot_memory_passed_state_replay
 ```
 
 Ограничение: replay текущего состояния пройден, но переходная память еще не
-доказана. Следующий gate должен проверять warm start на следующем шаге.
+подтверждена. Следующий gate должен проверять warm start на следующем шаге.
 
 Текущий transition-result:
 
@@ -646,7 +646,7 @@ mode_status: byte_context_lexical_carrier_centroid_seed_sweep_passed
 
 Вывод: когда `CarrierWave` явно locked на устойчивый lexical key из prompt,
 snapshot переносит byte-context состояние между разными surface-формами
-запроса. Это не финальный proof ансамблевой моды: lock пока лабораторный и
+запроса. Это не финальный evidence package ансамблевой моды: lock пока лабораторный и
 feature-reader читает carrier-state напрямую. Но это положительный gate для
 Chat-0: если следующий слой научится получать такой lock через клетки/wave bus,
 короткая генерация ответа становится инженерно достижимой.
@@ -811,7 +811,7 @@ feedback не меняет веса без подтвержденного обу
 `hybrid_chat0_route.exact_accuracy: 0.851562`, `lock_bank_route_count: 128`,
 `mode_status: chat0_route_usable_snapshot_tied_or_better`. Важно:
 `lock_bank_over_snapshot: 0.000000`, значит ручной route пригоден, но
-превосходство над snapshot не доказано. `chat0-shell` добавляет stdin loop:
+превосходство над snapshot не подтверждено. `chat0-shell` добавляет stdin loop:
 каждая строка дает короткий ответ, отдельный trace-файл и feedback log при
 формате `<prompt> || <expected>`. `eval-chat0-promote` добавляет первый
 controlled promote gate: feedback replay кандидат сравнивается с текущим
