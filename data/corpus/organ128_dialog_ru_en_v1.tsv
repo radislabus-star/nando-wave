@@ -1,0 +1,40 @@
+prompt	answer
+что такое nando	nando это маленький волновой организм из клеток cell32.
+что такое organ128	organ128 это 128 клеток cell32 в кэшированном теле.
+что такое cell32	cell32 это горячая клетка на 32 килобайта с фазами, амплитудами и резонансом.
+что такое expert64	expert64 это пара cell32: быстрый детектор и стабилизатор.
+что такое mono192	mono192 это монолитный контроль того же размера, с которым надо сравнивать организм.
+что такое волна промпта	волна промпта это фазовое состояние всего запроса.
+что такое несущая волна	несущая волна это медленная мода контекста, которая ограничивает дрейф клеток.
+что такое wave bus	wave bus это место интерференции, где клетки дают общий центр фазы.
+что такое snapshot	snapshot это частотный аккорд состояния, а не полный дамп модели.
+что такое settle loop	settle loop это несколько тиков релаксации перед чтением ответа.
+что ты знаешь	я знаю про nando, organ128, cell32, prompt wave, carrier wave, wave bus, snapshot, rust и локальное обучение.
+расскажи про что ты знаешь	я знаю про клетки, несущие волны, фазовые состояния, снимки памяти и проверку через ablation.
+как клетки пишут	клетки не пишут по одной; ответ читается из согласованного состояния после settle loop.
+как обучать волнами	нужно переводить вход и ответ в моды, усиливать полезные связи и проверять перенос на holdout.
+зачем carrier wave	несущая волна удерживает контекст и должна ломаться в контролях no carrier и wrong carrier.
+зачем ablation	ablation показывает, была ли найденная мода настоящей или это просто совпадение.
+зачем mono192	mono192 нужен, чтобы доказать, что клеточная организация лучше простой памяти того же размера.
+зачем rust	rust нужен для предсказуемого горячего цикла, контроля памяти и честной работы на cpu.
+почему t480	t480 полезен как честный стенд: если архитектура дешевая, она должна жить на слабом ноутбуке.
+что дальше	дальше нужно усиливать локальную память клеток, settle trace и feedback gates.
+what is nando	nando is a small wave organism made from cell32 resonators.
+what is organ128	organ128 is one hundred twenty eight cell32 packets in a cache aware body.
+what is cell32	cell32 is a hot 32 kilobyte resonator with phases, amplitudes, decay, and resonance.
+what is expert64	expert64 is two cell32 packets working as detector and stabilizer.
+what is mono192	mono192 is the same memory budget as six cell32 cells but without cellular topology.
+what is prompt wave	a prompt wave is a compact phase state made from the whole prompt.
+what is carrier wave	the carrier wave is the slow context mode that bounds lower cells.
+what is wave bus	the wave bus is where cell phases interfere and form a center of mass.
+what is snapshot	a snapshot is a small frequency chord of the current state.
+what is settle loop	settle loop is a short relaxation before the answer is read.
+what do you know	i know about nando, organ128, cell32, prompt waves, carrier waves, wave bus, snapshots, rust, and local learning.
+how do cells write	cells do not write alone; the answer is read from a settled ensemble state.
+how should nando learn	nando should learn through local feedback, holdout gates, ablation, and snapshots.
+why carrier wave	the carrier wave keeps context and should matter in no carrier and wrong carrier controls.
+why ablation	ablation proves whether a mode is real or just a lucky match.
+why mono192	mono192 is the fair control for the same memory budget.
+why rust	rust keeps the hot loop predictable and the runtime small.
+why t480	t480 is an honest cpu stand for cache aware cells.
+what next	next we strengthen cell memory, settle traces, and feedback gates.

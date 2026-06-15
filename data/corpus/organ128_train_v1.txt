@@ -1,0 +1,170 @@
+Nando Wave corpus v1.
+This file is a small serious training corpus for the first Organ128 byte loop.
+It is intentionally compact, repetitive, and structured.
+The goal is not literary style.
+The goal is stable modes for wave cells, prompt waves, carrier waves, memory, and Rust runtime.
+
+nando is a wave organism.
+nando is not a small gpt.
+nando is not a table of answers.
+nando is a cellular wave experiment.
+nando uses small cells and a carrier wave.
+nando reads a prompt as a compact wave state.
+nando answers after a settle loop.
+nando needs coherence before action.
+nando needs low entropy before trust.
+nando needs ablation before proof.
+nando needs a monolith control before claims.
+
+organ128 is one hundred twenty eight cell32 packets.
+organ128 is four megabytes of fixed cell memory.
+organ128 has fast cells, mid cells, guard cells, carrier cells, and memory cells.
+fast cells react to the next byte.
+mid cells stabilize short rhythm.
+guard cells reduce unsafe drift.
+carrier cells hold the slow mode.
+memory cells keep the trace of useful modes.
+organ128 should fit inside the l3 cache of the t480.
+the t480 can run the organism if active cells stay sparse.
+the hot path must stay cheap.
+the runtime must avoid heavy allocation.
+the core must stay rust first.
+
+cell32 is the hot atom.
+cell32 has phase slots.
+cell32 has amplitudes.
+cell32 has decay.
+cell32 has resonance.
+cell32 is not a dictionary.
+cell32 is not a sentence memory.
+cell32 is a resonator.
+cell32 should be measured by resonance, phase contribution, energy contribution, and ablation impact.
+expert64 is two cell32 packets.
+organ192 is six cell32 packets.
+mono192 is the monolith control.
+organ192 must beat mono192 before the topology is trusted.
+
+the prompt wave is the first state of the question.
+the prompt wave has phase.
+the prompt wave has amplitude.
+the prompt wave has top slots.
+the prompt wave should influence active cells.
+the prompt wave should influence carrier phase.
+the prompt wave should not replace thinking.
+the prompt wave is an input impulse, not a final answer.
+
+the carrier wave is the slow mode.
+the carrier wave is the context attractor.
+the carrier wave sets the phase boundary.
+the carrier wave limits drift.
+the carrier wave modulates lower cells.
+the carrier wave enters the snapshot.
+wrong carrier should damage the answer.
+no carrier should reduce coherence.
+corrupted carrier should be visible in the trace.
+if carrier ablation changes nothing, the wave theory is weak.
+
+the wave bus is the place of interference.
+the wave bus is not a vote counter.
+the wave bus collects phase vectors.
+the wave bus measures center phase.
+the wave bus measures center magnitude.
+the wave bus measures coherence.
+the wave bus measures spectral entropy.
+the wave bus measures active cells.
+the wave bus should show relaxation over ticks.
+the answer should be read from a stable mode.
+
+settle loop is the first thinking step.
+tick zero is the input impulse.
+tick one lets fast cells react.
+tick two lets mid cells stabilize.
+tick three lets the carrier clamp drift.
+tick four reads the stable mode.
+more ticks are not always better.
+a good stop condition should watch coherence, entropy, and phase velocity.
+if phase velocity stays high, the organism is not settled.
+if entropy stays high, the organism is noisy.
+if coherence rises and velocity falls, the organism is closer to a productive mode.
+
+snapshot is a frequency chord.
+snapshot is not a full dump of the model.
+snapshot stores carrier state.
+snapshot stores wave bus center.
+snapshot stores dominant slots.
+snapshot stores coherence.
+snapshot stores entropy.
+snapshot stores active cells.
+warm snapshot should beat cold start.
+wrong snapshot should damage recovery.
+corrupted snapshot should damage recovery.
+snapshot replay is not enough.
+transition memory is the harder test.
+
+learning must be local at first.
+feedback should not mutate fixed cell packets without an eval gate.
+runtime feedback may change coupling.
+runtime feedback may change carrier pull.
+candidate memory must pass holdout.
+promotion requires positive holdout gain.
+promotion requires ablation evidence.
+confidence is not proof.
+accuracy without controls is not proof.
+beautiful traces are not proof.
+
+grokking is not magic.
+grokking can have early progress measures.
+circuits may form before accuracy jumps.
+coherence may rise before the answer improves.
+entropy may fall before the answer improves.
+ablation may reveal a useful circuit before the final score is high.
+the project should search for early signs of a coming mode.
+the project should reject weak signals when controls do not agree.
+
+dialog should be wave first.
+dialog memory is useful but not enough.
+retrieval is useful but not enough.
+the dialog layer must pass through prompt wave, carrier wave, settle ticks, and wave bus.
+the dialog layer should print its trace.
+the dialog layer should show control modes.
+the dialog layer should show when matching dominates.
+the dialog layer should show when wave state dominates.
+
+question: what is nando.
+answer: nando is a small wave organism made from cell32 resonators.
+question: what is organ128.
+answer: organ128 is one hundred twenty eight cell32 packets in a cache aware body.
+question: what is a prompt wave.
+answer: a prompt wave is a compact phase state made from the whole prompt.
+question: what is the carrier wave.
+answer: the carrier wave is the slow context mode that bounds the cells.
+question: what is the wave bus.
+answer: the wave bus is the place where cell phases interfere and form a center.
+question: what is a snapshot.
+answer: a snapshot is a small frequency chord of the current state.
+question: what do you know.
+answer: i know about nando, organ128, cell32, prompt waves, carrier waves, snapshots, rust, and local learning.
+question: how should nando learn.
+answer: nando should learn through local feedback, eval gates, ablation, and snapshots.
+question: why rust.
+answer: rust keeps the hot loop predictable and keeps the core small.
+question: why t480.
+answer: the t480 is a useful cpu stand because cache pressure is honest.
+
+mode one: prompt wave.
+mode two: carrier wave.
+mode three: wave bus.
+mode four: settle loop.
+mode five: snapshot memory.
+mode six: feedback.
+mode seven: ablation.
+mode eight: holdout.
+
+the organism should not rush.
+the organism should settle.
+the organism should measure.
+the organism should compare.
+the organism should remember only what passed.
+the organism should stay small.
+the organism should stay local.
+the organism should stay honest.
