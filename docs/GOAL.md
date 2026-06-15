@@ -1105,6 +1105,48 @@ decision:
 устойчивость, не расширяя Chat-0.
 ```
 
+Проверенный вариант 7.1:
+
+```text
+organ_state_pair_link_state:
+  OrganState additionally stores pair_link_state[previous_cell][current_cell]
+  settle_bus_tick_with_carrier records active-cell transitions across ticks
+  raw normalized pair-link vector was tested as a full readout channel
+  raw pair-link vector was rejected because it raised shortcut/shuffle risk
+  pair-link energy is kept only as a weak scalar until it affects dynamics
+
+result:
+  cell32_settle_link_projection_accuracy: 0.093750
+  settle_link_projection_gain: 0.050781
+  settle_link_shuffle_accuracy: 0.031250
+  settle_link_no_shortcut_control: true
+  settle_link_coupling_drop: 0.000000
+  settle_link_phase_drop: 0.070312
+  settle_link_wrong_pair_drop: 0.093750
+  min_settle_link_projection_gain over seeds: 0.050781
+  max_settle_link_shuffle_accuracy over seeds: 0.042969
+  min_settle_link_coupling_drop over seeds: 0.000000
+  min_settle_link_phase_drop over seeds: 0.070312
+  min_settle_link_wrong_pair_drop over seeds: 0.093750
+  min_settle_link_over_fourier_gap: -0.906250
+  seed status: 3/5 settle_link_candidate, 1/5 component_link_candidate, 1/5 not_found
+
+decision:
+  infrastructure improvement v7.1, not passed.
+```
+
+Вывод по варианту 7.1:
+
+```text
+Переходы "клетка предыдущего tick -> клетка текущего tick" теперь живут в
+runtime OrganState как отдельный pair-link слой. Это ближе к клеточному
+организму, чем один общий спектральный вектор. Но сам по себе pair-link еще не
+является key-link: его ablation не ломает результат, а если дать readout полный
+нормализованный pair-vector, растет shortcut/shuffle риск. Значит следующий
+шаг - не расширять feature vector, а дать pair-link state влиять на следующую
+settle-динамику и только потом проверять key-link ablation.
+```
+
 Вывод:
 
 ```text

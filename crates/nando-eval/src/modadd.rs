@@ -2153,13 +2153,19 @@ fn settle_link_features(
     }
 
     let scalar_offset = PHASE_SLOTS * 2 + STAGE2_ORGAN_CELLS * 2;
+    let pair_link_energy = state
+        .pair_link_state
+        .iter()
+        .map(|value| value.abs())
+        .sum::<f32>()
+        / (STAGE2_ORGAN_CELLS * STAGE2_ORGAN_CELLS) as f32;
     features[scalar_offset] = tick.trace.coherence;
     features[scalar_offset + 1] = 1.0 - tick.trace.spectral_entropy;
     features[scalar_offset + 2] = tick.trace.center_magnitude;
     features[scalar_offset + 3] = if matches!(mode, SettleLinkFeatureMode::NoCoupling) {
         0.0
     } else {
-        state.coupling_mean() * 0.05
+        (state.coupling_mean() + pair_link_energy) * 0.05
     };
     normalize_features(&mut features);
     features

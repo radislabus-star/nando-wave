@@ -59,6 +59,9 @@ pub struct OrganState {
     pub previous_amplitude_sum: [f32; PHASE_SLOTS],
     pub link_phase_sum: [f32; PHASE_SLOTS],
     pub link_amplitude_sum: [f32; PHASE_SLOTS],
+    pub previous_active_cell_ids: [u32; STAGE2_TOP_K],
+    pub previous_active_count: usize,
+    pub pair_link_state: [f32; STAGE2_ORGAN_CELLS * STAGE2_ORGAN_CELLS],
 }
 
 /// Primitive byte prediction made from the current wave center.
@@ -103,6 +106,9 @@ impl OrganState {
             previous_amplitude_sum: [0.0; PHASE_SLOTS],
             link_phase_sum: [0.0; PHASE_SLOTS],
             link_amplitude_sum: [0.0; PHASE_SLOTS],
+            previous_active_cell_ids: [0; STAGE2_TOP_K],
+            previous_active_count: 0,
+            pair_link_state: [0.0; STAGE2_ORGAN_CELLS * STAGE2_ORGAN_CELLS],
         }
     }
 
@@ -169,7 +175,7 @@ impl OrganState {
             disabled_cell_id,
             &self.cell_coupling,
         );
-        self.update_link_from_bus(&tick.bus);
+        self.update_link_from_tick(&tick.bus, &tick.trace);
         self.update_from_trace(&tick.trace);
         tick
     }
@@ -280,7 +286,7 @@ impl OrganState {
         self.tick_index = self.tick_index.saturating_add(1);
     }
 
-    fn update_link_from_bus(&mut self, bus: &WaveBus) {
+    fn update_link_from_tick(&mut self, bus: &WaveBus, trace: &TickTrace) {
         if self.tick_index > 0 {
             let previous_phase_norm = self
                 .previous_phase_sum
@@ -307,6 +313,9 @@ impl OrganState {
             for value in &mut self.link_amplitude_sum {
                 *value *= 0.72;
             }
+            for value in &mut self.pair_link_state {
+                *value *= 0.72;
+            }
 
             for output_slot in 0..PHASE_SLOTS {
                 let mut phase_link = 0.0;
@@ -322,10 +331,34 @@ impl OrganState {
                 self.link_phase_sum[output_slot] += phase_link;
                 self.link_amplitude_sum[output_slot] += amplitude_link;
             }
+
+            let phase_alignment =
+                circular_phase_delta(self.previous_center_phase, bus.center_phase).cos();
+            let transition_energy =
+                ((self.previous_coherence + bus.coherence) * 0.5).clamp(0.0, 1.0);
+            for previous_rank in 0..self.previous_active_count.min(STAGE2_TOP_K) {
+                let previous_cell_id = self.previous_active_cell_ids[previous_rank] as usize;
+                if previous_cell_id >= STAGE2_ORGAN_CELLS {
+                    continue;
+                }
+                let previous_gain = (STAGE2_TOP_K - previous_rank) as f32 / STAGE2_TOP_K as f32;
+                for current_rank in 0..trace.active_count.min(STAGE2_TOP_K) {
+                    let current_cell_id = trace.active_cell_ids[current_rank] as usize;
+                    if current_cell_id >= STAGE2_ORGAN_CELLS {
+                        continue;
+                    }
+                    let current_gain = (STAGE2_TOP_K - current_rank) as f32 / STAGE2_TOP_K as f32;
+                    let pair_index = previous_cell_id * STAGE2_ORGAN_CELLS + current_cell_id;
+                    self.pair_link_state[pair_index] +=
+                        phase_alignment * transition_energy * previous_gain * current_gain;
+                }
+            }
         }
 
         self.previous_phase_sum = bus.phase_sum;
         self.previous_amplitude_sum = bus.amplitude_sum;
+        self.previous_active_cell_ids = trace.active_cell_ids;
+        self.previous_active_count = trace.active_count;
     }
 }
 
@@ -371,8 +404,10 @@ mod tests {
         state.settle_bus_tick_with_carrier(&organ, b't', second_carrier, None);
         let phase_energy: f32 = state.link_phase_sum.iter().map(|value| value.abs()).sum();
         let amplitude_energy: f32 = state.link_amplitude_sum.iter().sum();
+        let pair_energy: f32 = state.pair_link_state.iter().map(|value| value.abs()).sum();
 
         assert!(phase_energy > 0.0);
         assert!(amplitude_energy > 0.0);
+        assert!(pair_energy > 0.0);
     }
 }
