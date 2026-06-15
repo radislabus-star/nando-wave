@@ -43,7 +43,10 @@ pub(crate) use chat0::{
     chat0_response_for_target, chat0_target_for_response, chat0_task_for_target,
 };
 pub(crate) use math::{byte_to_phase, circular_delta, splitmix64};
-pub use modadd::{Organ128ModAddConfig, Organ128ModAddReport, organ128_modadd_eval};
+pub use modadd::{
+    Organ128ModAddConfig, Organ128ModAddReport, Organ128ModAddSeedSweepReport,
+    Organ128ModAddSeedSweepRow, organ128_modadd_eval, organ128_modadd_seed_sweep_eval,
+};
 pub use phase::{
     BusTransferReport, CarrierControlReport, HorizonSweepRow, PeriodicEvalReport,
     PeriodicTaskConfig, PhaseCompositionConfig, PhaseCompositionReport, PhaseHoldoutReport,

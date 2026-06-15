@@ -19,6 +19,8 @@ pub(crate) fn print_help() {
     println!("            Train/eval a tiny dynamic-state probe over ThoughtState only");
     println!("  organ128-modadd-eval [seed] [modulus] [train-cases] [holdout-cases]");
     println!("            Run the GOAL v0 modular-addition evidence-package probe");
+    println!("  organ128-modadd-seed-sweep [modulus] [train-cases] [holdout-cases]");
+    println!("            Sweep the GOAL v0 modular-addition probe over fixed seeds");
     println!("  wave-tick <input-byte> [seed]");
     println!("            Run one deterministic Stage 2 wave tick");
     println!("  snapshot-save <input-byte> [seed] [path]");

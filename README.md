@@ -39,6 +39,7 @@ nando-cli organ128-settle-dialog
 nando-cli organ128-response-gate-eval
 nando-cli organ128-thought-probe-eval
 nando-cli organ128-modadd-eval
+nando-cli organ128-modadd-seed-sweep
 nando-cli wave-tick
 nando-cli snapshot-save
 nando-cli snapshot-read

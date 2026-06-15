@@ -333,6 +333,44 @@ pub(crate) fn parse_organ128_modadd_args(
     Ok(config)
 }
 
+pub(crate) fn parse_organ128_modadd_seed_sweep_args(
+    mut args: impl Iterator<Item = String>,
+) -> Result<(u8, usize, usize), String> {
+    let default = nando_eval::Organ128ModAddConfig::default();
+    let modulus = match args.next() {
+        Some(value) => parse_u8(&value, "modulus")?,
+        None => default.modulus,
+    };
+    let train_cases = match args.next() {
+        Some(value) => parse_usize(&value, "train cases")?,
+        None => default.train_cases,
+    };
+    let holdout_cases = match args.next() {
+        Some(value) => parse_usize(&value, "holdout cases")?,
+        None => default.holdout_cases,
+    };
+    if args.next().is_some() {
+        return Err(String::from("too many arguments"));
+    }
+    if modulus < 3 {
+        return Err(String::from("modulus must be at least 3"));
+    }
+    let max_cases = usize::from(modulus) * usize::from(modulus);
+    if train_cases == 0 {
+        return Err(String::from("train cases must be greater than zero"));
+    }
+    if holdout_cases == 0 {
+        return Err(String::from("holdout cases must be greater than zero"));
+    }
+    if train_cases + holdout_cases > max_cases {
+        return Err(format!(
+            "train+holdout cases must fit modulus^2 ({max_cases})"
+        ));
+    }
+
+    Ok((modulus, train_cases, holdout_cases))
+}
+
 pub(crate) fn parse_usize(value: &str, label: &str) -> Result<usize, String> {
     value
         .parse::<usize>()

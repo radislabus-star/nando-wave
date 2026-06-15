@@ -9,6 +9,7 @@ const TAU: f32 = std::f32::consts::TAU;
 const MIN_ENSEMBLE_GAIN: f32 = 0.03;
 const MIN_KEY_ABLATION_DROP: f32 = 0.05;
 const MAX_FALSE_POSITIVE_INCREASE: f32 = 0.02;
+const MODADD_SWEEP_SEEDS: [u64; 5] = [7, 13, 29, 97, 131];
 
 /// GOAL v0 modular-addition eval configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +50,36 @@ pub struct Organ128ModAddReport {
     pub no_shortcut_control: bool,
     pub scientific_pass: bool,
     pub engineering_pass: bool,
+    pub mode_status: &'static str,
+}
+
+/// One row in the modular-addition seed sweep.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Organ128ModAddSeedSweepRow {
+    pub seed: u64,
+    pub cell32_wavebus_accuracy: f32,
+    pub ensemble_gain: f32,
+    pub key_ablation_drop: f32,
+    pub non_key_ablation_drop: f32,
+    pub label_shuffle_accuracy: f32,
+    pub no_shortcut_control: bool,
+    pub scientific_pass: bool,
+    pub engineering_pass: bool,
+    pub mode_status: &'static str,
+}
+
+/// Seed-robustness report for the GOAL modular-addition probe.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Organ128ModAddSeedSweepReport {
+    pub modulus: u8,
+    pub train_cases: usize,
+    pub holdout_cases: usize,
+    pub rows: [Organ128ModAddSeedSweepRow; 5],
+    pub passed_seed_pairs: usize,
+    pub candidate_seed_pairs: usize,
+    pub min_ensemble_gain: f32,
+    pub min_key_ablation_drop: f32,
+    pub max_label_shuffle_accuracy: f32,
     pub mode_status: &'static str,
 }
 
@@ -109,6 +140,54 @@ impl Organ128ModAddReport {
         ));
         output.push_str(&format!("scientific_pass: {}\n", self.scientific_pass));
         output.push_str(&format!("engineering_pass: {}\n", self.engineering_pass));
+        output.push_str(&format!("mode_status: {}\n", self.mode_status));
+        output
+    }
+}
+
+impl Organ128ModAddSeedSweepReport {
+    /// Render a stable line-oriented seed-robustness report.
+    #[must_use]
+    pub fn to_text(&self) -> String {
+        let mut output = String::new();
+        output.push_str("Nando Wave Organ128 modadd seed-sweep eval\n");
+        output.push_str("task: modular_addition\n");
+        output.push_str(&format!("modulus: {}\n", self.modulus));
+        output.push_str(&format!("train_size: {}\n", self.train_cases));
+        output.push_str(&format!("holdout_size: {}\n", self.holdout_cases));
+        output.push_str("seed wavebus_acc ensemble_gain key_drop non_key_drop shuffle_acc no_shortcut scientific engineering mode_status\n");
+        for row in &self.rows {
+            output.push_str(&format!(
+                "{} {:.6} {:+.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
+                row.seed,
+                row.cell32_wavebus_accuracy,
+                row.ensemble_gain,
+                row.key_ablation_drop,
+                row.non_key_ablation_drop,
+                row.label_shuffle_accuracy,
+                row.no_shortcut_control,
+                row.scientific_pass,
+                row.engineering_pass,
+                row.mode_status
+            ));
+        }
+        output.push_str(&format!("passed_seed_pairs: {}\n", self.passed_seed_pairs));
+        output.push_str(&format!(
+            "candidate_seed_pairs: {}\n",
+            self.candidate_seed_pairs
+        ));
+        output.push_str(&format!(
+            "min_ensemble_gain: {:.6}\n",
+            self.min_ensemble_gain
+        ));
+        output.push_str(&format!(
+            "min_key_ablation_drop: {:.6}\n",
+            self.min_key_ablation_drop
+        ));
+        output.push_str(&format!(
+            "max_label_shuffle_accuracy: {:.6}\n",
+            self.max_label_shuffle_accuracy
+        ));
         output.push_str(&format!("mode_status: {}\n", self.mode_status));
         output
     }
@@ -249,6 +328,77 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         no_shortcut_control,
         scientific_pass,
         engineering_pass,
+        mode_status,
+    }
+}
+
+/// Sweep the GOAL modular-addition probe across fixed seed pairs.
+#[must_use]
+pub fn organ128_modadd_seed_sweep_eval(
+    modulus: u8,
+    train_cases: usize,
+    holdout_cases: usize,
+) -> Organ128ModAddSeedSweepReport {
+    let rows = MODADD_SWEEP_SEEDS.map(|seed| {
+        let report = organ128_modadd_eval(Organ128ModAddConfig {
+            seed,
+            modulus,
+            train_cases,
+            holdout_cases,
+        });
+        Organ128ModAddSeedSweepRow {
+            seed,
+            cell32_wavebus_accuracy: report.cell32_wavebus.accuracy,
+            ensemble_gain: report.ensemble_gain,
+            key_ablation_drop: report.key_ablation_drop,
+            non_key_ablation_drop: report.non_key_ablation_drop,
+            label_shuffle_accuracy: report.label_shuffle.accuracy,
+            no_shortcut_control: report.no_shortcut_control,
+            scientific_pass: report.scientific_pass,
+            engineering_pass: report.engineering_pass,
+            mode_status: report.mode_status,
+        }
+    });
+
+    let passed_seed_pairs = rows.iter().filter(|row| row.scientific_pass).count();
+    let candidate_seed_pairs = rows
+        .iter()
+        .filter(|row| {
+            row.scientific_pass
+                || row.engineering_pass
+                || row.mode_status == "organ128_modadd_candidate"
+        })
+        .count();
+    let min_ensemble_gain = rows
+        .iter()
+        .map(|row| row.ensemble_gain)
+        .fold(f32::INFINITY, f32::min);
+    let min_key_ablation_drop = rows
+        .iter()
+        .map(|row| row.key_ablation_drop)
+        .fold(f32::INFINITY, f32::min);
+    let max_label_shuffle_accuracy = rows
+        .iter()
+        .map(|row| row.label_shuffle_accuracy)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let mode_status = if passed_seed_pairs >= 4 {
+        "organ128_modadd_seed_robustness_passed"
+    } else if candidate_seed_pairs >= 3 {
+        "organ128_modadd_seed_sweep_candidate"
+    } else {
+        "not_found_organ128_modadd_seed_sweep"
+    };
+
+    Organ128ModAddSeedSweepReport {
+        modulus,
+        train_cases,
+        holdout_cases,
+        rows,
+        passed_seed_pairs,
+        candidate_seed_pairs,
+        min_ensemble_gain,
+        min_key_ablation_drop,
+        max_label_shuffle_accuracy,
         mode_status,
     }
 }
@@ -560,6 +710,22 @@ mod tests {
             report.mode_status == "organ128_modadd_key_mode_ablation_passed"
                 || report.mode_status == "organ128_modadd_candidate"
                 || report.mode_status == "not_found_organ128_modadd"
+        );
+    }
+
+    #[test]
+    fn modadd_seed_sweep_report_has_robustness_fields() {
+        let report = organ128_modadd_seed_sweep_eval(31, 32, 32);
+        let text = report.to_text();
+        assert_eq!(report.rows.len(), 5);
+        assert!(text.contains("modadd seed-sweep eval"));
+        assert!(text.contains("passed_seed_pairs:"));
+        assert!(text.contains("candidate_seed_pairs:"));
+        assert!(text.contains("max_label_shuffle_accuracy:"));
+        assert!(
+            report.mode_status == "organ128_modadd_seed_robustness_passed"
+                || report.mode_status == "organ128_modadd_seed_sweep_candidate"
+                || report.mode_status == "not_found_organ128_modadd_seed_sweep"
         );
     }
 }

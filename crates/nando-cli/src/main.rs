@@ -5,15 +5,15 @@ mod bench;
 mod chat0_cmd;
 mod help;
 mod live;
+mod modadd_cmd;
 mod organ128_cmd;
 mod snapshot_io;
 mod status;
 use args::{
     parse_bench_stage2_tick_args, parse_cases_only_args, parse_live_byte_train_args,
     parse_live_grok_sweep_args, parse_live_grok_trace_args, parse_optional_seed_arg,
-    parse_organ128_modadd_args, parse_periodic_args, parse_phase_composition_args,
-    parse_phase_holdout_args, parse_seed_pair_cases_args, parse_snapshot_save_args,
-    parse_wave_tick_args,
+    parse_periodic_args, parse_phase_composition_args, parse_phase_holdout_args,
+    parse_seed_pair_cases_args, parse_snapshot_save_args, parse_wave_tick_args,
 };
 use bench::{print_link_tissue_bench, print_stage2_tick_bench};
 use chat0_cmd::{
@@ -27,6 +27,7 @@ use live::{
     print_live_cell_promote, print_live_grok_sweep, print_live_grok_trace,
     print_live_tissue_diagnose,
 };
+use modadd_cmd::{run_organ128_modadd_eval, run_organ128_modadd_seed_sweep};
 use organ128_cmd::{
     run_organ128_dialog_generate, run_organ128_response_gate_eval, run_organ128_settle_dialog,
     run_organ128_thought_probe_eval, run_organ128_train_generate, run_organ128_wave_scorer_eval,
@@ -98,19 +99,14 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Some("organ128-modadd-eval") => match parse_organ128_modadd_args(args) {
-            Ok(config) => {
-                print!("{}", nando_eval::organ128_modadd_eval(config).to_text());
-                ExitCode::SUCCESS
-            }
-            Err(message) => {
-                eprintln!("{message}");
-                eprintln!(
-                    "try: nando-cli organ128-modadd-eval [seed] [modulus] [train-cases] [holdout-cases]"
-                );
-                ExitCode::FAILURE
-            }
-        },
+        Some("organ128-modadd-eval") => exit_for_result(
+            run_organ128_modadd_eval(args),
+            "try: nando-cli organ128-modadd-eval [seed] [modulus] [train-cases] [holdout-cases]",
+        ),
+        Some("organ128-modadd-seed-sweep") => exit_for_result(
+            run_organ128_modadd_seed_sweep(args),
+            "try: nando-cli organ128-modadd-seed-sweep [modulus] [train-cases] [holdout-cases]",
+        ),
         Some("wave-tick") => match parse_wave_tick_args(args) {
             Ok((seed, input_byte)) => {
                 print_wave_tick(seed, input_byte);
@@ -1133,6 +1129,17 @@ fn main() -> ExitCode {
         Some(other) => {
             eprintln!("unknown command: {other}");
             eprintln!("try: nando-cli --help");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn exit_for_result(result: Result<(), String>, usage: &str) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("{message}");
+            eprintln!("{usage}");
             ExitCode::FAILURE
         }
     }

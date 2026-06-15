@@ -55,6 +55,7 @@ require_file Cargo.toml
 require_file crates/nando-core/src/wave.rs
 require_file crates/nando-core/src/wave/learn.rs
 require_file crates/nando-core/src/wave/tick.rs
+require_file crates/nando-cli/src/modadd_cmd.rs
 require_file crates/nando-cli/src/live.rs
 require_file data/corpus/organ128_train_v1.txt
 require_file data/corpus/organ128_dialog_ru_en_v1.tsv
@@ -129,6 +130,7 @@ require_contains "$help_output" "organ128-wave-scorer-eval" "help"
 require_contains "$help_output" "organ128-response-gate-eval" "help"
 require_contains "$help_output" "organ128-thought-probe-eval" "help"
 require_contains "$help_output" "organ128-modadd-eval" "help"
+require_contains "$help_output" "organ128-modadd-seed-sweep" "help"
 require_contains "$help_output" "live-byte-learn" "help"
 require_contains "$help_output" "live-byte-holdout" "help"
 require_contains "$help_output" "live-byte-holdout-suite" "help"
@@ -227,6 +229,7 @@ require_contains "$readme" "LinkTissue" "README"
 require_contains "$readme" "check-push.sh" "README"
 require_contains "$readme" "check-goal.sh" "README"
 require_contains "$readme" "organ128-modadd-eval" "README"
+require_contains "$readme" "organ128-modadd-seed-sweep" "README"
 require_contains "$readme" "OOS" "README"
 require_contains "$readme" "Cell32 fixed 32 KB packet" "README"
 require_contains "$readme" "data/corpus/organ128_train_v1.txt" "README"

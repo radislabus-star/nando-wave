@@ -747,6 +747,7 @@ mode_status
 
 ```text
 organ128-modadd-eval
+organ128-modadd-seed-sweep
 ```
 
 Срез реализации v0:
@@ -828,11 +829,29 @@ label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
 ```
 
+Seed robustness command:
+
+```text
+cargo run -q -p nando-cli -- organ128-modadd-seed-sweep 31 256 256
+```
+
+Первый seed-sweep:
+
+```text
+mode_status: not_found_organ128_modadd_seed_sweep
+passed_seed_pairs: 0
+candidate_seed_pairs: 1
+min_ensemble_gain: -0.011719
+min_key_ablation_drop: 0.007812
+max_label_shuffle_accuracy: 0.050781
+```
+
 Вывод:
 
 ```text
 прибор собран, leakage control прошел,
 но ансамблевая мода на полном v0 split не найдена.
-Следующий шаг - улучшать wave/readout dynamics или phase math,
-а не возвращаться к усилению Chat-0.
+Seed-sweep подтверждает: это не одиночная неудача, текущий readout/dynamics
+не seed-robust. Следующий шаг - улучшать wave/readout dynamics или phase math,
+а не возвращаться к усилению Chat-0 или расширению корпуса.
 ```
