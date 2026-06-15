@@ -703,7 +703,10 @@ key_ablation_drop
 non_key_ablation_drop
 false_positive_increase
 fourier_phase_accuracy
+cell32_phase_compose_accuracy
+phase_compose_gain
 wave_over_fourier_gap
+compose_over_fourier_gap
 mode_status
 ```
 
@@ -802,10 +805,13 @@ elapsed_ms
 random_accuracy
 mono192_accuracy
 fourier_phase_accuracy
+cell32_phase_compose_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
+phase_compose_gain
 wave_over_fourier_gap
+compose_over_fourier_gap
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -835,8 +841,11 @@ mode_status: organ128_modadd_key_mode_ablation_passed
 cargo run -q -p nando-cli -- organ128-modadd-eval 7 31 256 256
 mode_status: not_found_organ128_modadd
 ensemble_gain: -0.003906
+phase_compose_gain: -0.007812
 fourier_phase_accuracy: 1.000000
+cell32_phase_compose_accuracy: 0.035156
 wave_over_fourier_gap: -0.960938
+compose_over_fourier_gap: -0.964844
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -855,7 +864,9 @@ mode_status: not_found_organ128_modadd_seed_sweep
 passed_seed_pairs: 0
 candidate_seed_pairs: 1
 min_ensemble_gain: -0.011719
+min_phase_compose_gain: -0.023438
 min_wave_over_fourier_gap: -0.968750
+min_compose_over_fourier_gap: -0.984375
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -872,4 +883,33 @@ Seed-sweep подтверждает: это не одиночная неудач
 ответ. Следующий шаг - улучшать wave/readout dynamics и способ записи
 композиции в клетки, а не возвращаться к усилению Chat-0 или расширению
 корпуса.
+```
+
+Проверенный вариант 1:
+
+```text
+cell32_phase_compose:
+  a -> separate Cell32 trace
+  b -> separate Cell32 trace
+  compose center_phase(a) + center_phase(b)
+  train only global phase offset on train split
+
+result:
+  cell32_phase_compose_accuracy: 0.035156
+  phase_compose_gain: -0.007812
+  min_phase_compose_gain over seeds: -0.023438
+  min_compose_over_fourier_gap: -0.984375
+
+decision:
+  rejected as architectural direction v1.
+```
+
+Вывод по варианту 1:
+
+```text
+Раздельные trace для a и b сами по себе не несут линейную фазу, которую можно
+просто сложить как Fourier phase. Значит следующая архитектурная попытка должна
+не складывать готовые center_phase, а менять способ кодирования входных
+компонент в CarrierWave/WaveBus так, чтобы фаза a и фаза b сохранялись как
+компонуемые подпространства.
 ```
