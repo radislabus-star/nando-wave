@@ -706,13 +706,18 @@ fourier_phase_accuracy
 cell32_phase_compose_accuracy
 cell32_structured_compose_accuracy
 cell32_fourier_census_accuracy
+cell32_component_bus_projection_accuracy
 phase_compose_gain
 structured_compose_gain
 fourier_census_gain
+component_bus_projection_gain
+component_bus_shuffle_accuracy
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
 census_over_fourier_gap
+component_bus_over_fourier_gap
+component_bus_no_shortcut_control
 mode_status
 ```
 
@@ -814,16 +819,21 @@ fourier_phase_accuracy
 cell32_phase_compose_accuracy
 cell32_structured_compose_accuracy
 cell32_fourier_census_accuracy
+cell32_component_bus_projection_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
 phase_compose_gain
 structured_compose_gain
 fourier_census_gain
+component_bus_projection_gain
+component_bus_shuffle_accuracy
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
 census_over_fourier_gap
+component_bus_over_fourier_gap
+component_bus_no_shortcut_control
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -856,14 +866,19 @@ ensemble_gain: -0.003906
 phase_compose_gain: -0.007812
 structured_compose_gain: 0.000000
 fourier_census_gain: -0.015625
+component_bus_projection_gain: 0.019531
+component_bus_shuffle_accuracy: 0.019531
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
 cell32_structured_compose_accuracy: 0.042969
 cell32_fourier_census_accuracy: 0.027344
+cell32_component_bus_projection_accuracy: 0.062500
 wave_over_fourier_gap: -0.960938
 compose_over_fourier_gap: -0.964844
 structured_over_fourier_gap: -0.957031
 census_over_fourier_gap: -0.972656
+component_bus_over_fourier_gap: -0.937500
+component_bus_no_shortcut_control: true
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -885,10 +900,13 @@ min_ensemble_gain: -0.011719
 min_phase_compose_gain: -0.023438
 min_structured_compose_gain: -0.023438
 min_fourier_census_gain: -0.023438
+min_component_bus_projection_gain: 0.019531
+max_component_bus_shuffle_accuracy: 0.039062
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
 min_structured_over_fourier_gap: -0.976562
 min_census_over_fourier_gap: -0.972656
+min_component_bus_over_fourier_gap: -0.937500
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -996,4 +1014,41 @@ decision:
 компонент. Следующая архитектурная попытка должна сохранять в bus отдельные
 компонентные sin/cos каналы или обучать projection/readout по raw harmonic
 features, а не использовать slot offset по готовому phase_sum.
+```
+
+Проверенный вариант 4:
+
+```text
+cell32_component_bus_projection:
+  a -> separate structured component WaveBus
+  b -> separate structured component WaveBus
+  features = phase_sum(a), amplitude_sum(a), phase_sum(b), amplitude_sum(b)
+  train class centroids on train split
+  prediction chooses nearest centroid by dot product
+
+result:
+  cell32_component_bus_projection_accuracy: 0.062500
+  component_bus_projection_gain: 0.019531
+  component_bus_shuffle_accuracy: 0.019531
+  component_bus_no_shortcut_control: true
+  min_component_bus_projection_gain over seeds: 0.019531
+  max_component_bus_shuffle_accuracy over seeds: 0.039062
+  min_component_bus_over_fourier_gap: -0.937500
+
+decision:
+  candidate architectural direction v4, not passed.
+```
+
+Вывод по варианту 4:
+
+```text
+Раздельные component bus-каналы дали первый seed-robust positive gain выше
+voting/best_control, но ниже v0 threshold 0.03 и далеко от Fourier control.
+Label-shuffle для этого readout ниже основного сигнала и проходит
+`component_bus_no_shortcut_control`, значит это не выглядит как простой leak
+разметки. Это значит, что полезная информация о компонентах в Cell32/WaveBus
+уже есть, но текущий projection слишком слабый и не имеет ablation/key-link
+проверки. Следующий шаг - усилить этот путь не хардкодом, а честно:
+component_bus_projection + ablation by channel
+a_only/b_only/no_phase/no_amplitude/wrong_component_pair.
 ```

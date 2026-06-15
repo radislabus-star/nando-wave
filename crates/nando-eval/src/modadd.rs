@@ -11,6 +11,7 @@ const MIN_ENSEMBLE_GAIN: f32 = 0.03;
 const MIN_KEY_ABLATION_DROP: f32 = 0.05;
 const MAX_FALSE_POSITIVE_INCREASE: f32 = 0.02;
 const MODADD_SWEEP_SEEDS: [u64; 5] = [7, 13, 29, 97, 131];
+const COMPONENT_BUS_FEATURES: usize = PHASE_SLOTS * 4;
 
 /// GOAL v0 modular-addition eval configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,23 +44,28 @@ pub struct Organ128ModAddReport {
     pub cell32_phase_compose: BaselineResult,
     pub cell32_structured_compose: BaselineResult,
     pub cell32_fourier_census: BaselineResult,
+    pub cell32_component_bus_projection: BaselineResult,
     pub cell32_voting: BaselineResult,
     pub cell32_wavebus: BaselineResult,
     pub restricted_key: BaselineResult,
     pub excluded_key: BaselineResult,
     pub label_shuffle: BaselineResult,
+    pub component_bus_label_shuffle: BaselineResult,
     pub key_cell: u32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
     pub structured_compose_gain: f32,
     pub fourier_census_gain: f32,
+    pub component_bus_projection_gain: f32,
     pub wave_over_fourier_gap: f32,
     pub compose_over_fourier_gap: f32,
     pub structured_over_fourier_gap: f32,
     pub census_over_fourier_gap: f32,
+    pub component_bus_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub no_shortcut_control: bool,
+    pub component_bus_no_shortcut_control: bool,
     pub scientific_pass: bool,
     pub engineering_pass: bool,
     pub mode_status: &'static str,
@@ -73,19 +79,24 @@ pub struct Organ128ModAddSeedSweepRow {
     pub cell32_phase_compose_accuracy: f32,
     pub cell32_structured_compose_accuracy: f32,
     pub cell32_fourier_census_accuracy: f32,
+    pub cell32_component_bus_projection_accuracy: f32,
     pub fourier_phase_accuracy: f32,
     pub ensemble_gain: f32,
     pub phase_compose_gain: f32,
     pub structured_compose_gain: f32,
     pub fourier_census_gain: f32,
+    pub component_bus_projection_gain: f32,
     pub wave_over_fourier_gap: f32,
     pub compose_over_fourier_gap: f32,
     pub structured_over_fourier_gap: f32,
     pub census_over_fourier_gap: f32,
+    pub component_bus_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub label_shuffle_accuracy: f32,
+    pub component_bus_shuffle_accuracy: f32,
     pub no_shortcut_control: bool,
+    pub component_bus_no_shortcut_control: bool,
     pub scientific_pass: bool,
     pub engineering_pass: bool,
     pub mode_status: &'static str,
@@ -104,12 +115,15 @@ pub struct Organ128ModAddSeedSweepReport {
     pub min_phase_compose_gain: f32,
     pub min_structured_compose_gain: f32,
     pub min_fourier_census_gain: f32,
+    pub min_component_bus_projection_gain: f32,
     pub min_wave_over_fourier_gap: f32,
     pub min_compose_over_fourier_gap: f32,
     pub min_structured_over_fourier_gap: f32,
     pub min_census_over_fourier_gap: f32,
+    pub min_component_bus_over_fourier_gap: f32,
     pub min_key_ablation_drop: f32,
     pub max_label_shuffle_accuracy: f32,
+    pub max_component_bus_shuffle_accuracy: f32,
     pub mode_status: &'static str,
 }
 
@@ -131,11 +145,13 @@ impl Organ128ModAddReport {
         output.push_str(&format_baseline(self.cell32_phase_compose));
         output.push_str(&format_baseline(self.cell32_structured_compose));
         output.push_str(&format_baseline(self.cell32_fourier_census));
+        output.push_str(&format_baseline(self.cell32_component_bus_projection));
         output.push_str(&format_baseline(self.cell32_voting));
         output.push_str(&format_baseline(self.cell32_wavebus));
         output.push_str(&format_baseline(self.restricted_key));
         output.push_str(&format_baseline(self.excluded_key));
         output.push_str(&format_baseline(self.label_shuffle));
+        output.push_str(&format_baseline(self.component_bus_label_shuffle));
         output.push_str(&format!("random_accuracy: {:.6}\n", self.random.accuracy));
         output.push_str(&format!("mono192_accuracy: {:.6}\n", self.mono192.accuracy));
         output.push_str(&format!(
@@ -153,6 +169,10 @@ impl Organ128ModAddReport {
         output.push_str(&format!(
             "cell32_fourier_census_accuracy: {:.6}\n",
             self.cell32_fourier_census.accuracy
+        ));
+        output.push_str(&format!(
+            "cell32_component_bus_projection_accuracy: {:.6}\n",
+            self.cell32_component_bus_projection.accuracy
         ));
         output.push_str(&format!(
             "cell32_voting_accuracy: {:.6}\n",
@@ -177,6 +197,10 @@ impl Organ128ModAddReport {
             self.fourier_census_gain
         ));
         output.push_str(&format!(
+            "component_bus_projection_gain: {:.6}\n",
+            self.component_bus_projection_gain
+        ));
+        output.push_str(&format!(
             "wave_over_fourier_gap: {:.6}\n",
             self.wave_over_fourier_gap
         ));
@@ -191,6 +215,10 @@ impl Organ128ModAddReport {
         output.push_str(&format!(
             "census_over_fourier_gap: {:.6}\n",
             self.census_over_fourier_gap
+        ));
+        output.push_str(&format!(
+            "component_bus_over_fourier_gap: {:.6}\n",
+            self.component_bus_over_fourier_gap
         ));
         output.push_str(&format!(
             "restricted_key_accuracy: {:.6}\n",
@@ -213,8 +241,16 @@ impl Organ128ModAddReport {
             self.label_shuffle.accuracy
         ));
         output.push_str(&format!(
+            "component_bus_shuffle_accuracy: {:.6}\n",
+            self.component_bus_label_shuffle.accuracy
+        ));
+        output.push_str(&format!(
             "no_shortcut_control: {}\n",
             self.no_shortcut_control
+        ));
+        output.push_str(&format!(
+            "component_bus_no_shortcut_control: {}\n",
+            self.component_bus_no_shortcut_control
         ));
         output.push_str(&format!("scientific_pass: {}\n", self.scientific_pass));
         output.push_str(&format!("engineering_pass: {}\n", self.engineering_pass));
@@ -233,28 +269,33 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!("modulus: {}\n", self.modulus));
         output.push_str(&format!("train_size: {}\n", self.train_cases));
         output.push_str(&format!("holdout_size: {}\n", self.holdout_cases));
-        output.push_str("seed wavebus_acc compose_acc structured_acc census_acc fourier_acc wave_fourier_gap compose_fourier_gap structured_fourier_gap census_fourier_gap ensemble_gain compose_gain structured_gain census_gain key_drop non_key_drop shuffle_acc no_shortcut scientific engineering mode_status\n");
+        output.push_str("seed wavebus_acc compose_acc structured_acc census_acc component_bus_acc fourier_acc wave_fourier_gap compose_fourier_gap structured_fourier_gap census_fourier_gap component_bus_fourier_gap ensemble_gain compose_gain structured_gain census_gain component_bus_gain key_drop non_key_drop shuffle_acc component_shuffle_acc no_shortcut component_no_shortcut scientific engineering mode_status\n");
         for row in &self.rows {
             output.push_str(&format!(
-                "{} {:.6} {:.6} {:.6} {:.6} {:.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
+                "{} {:.6} {:.6} {:.6} {:.6} {:.6} {:.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:+.6} {:.6} {:.6} {:.6} {:.6} {} {} {} {} {}\n",
                 row.seed,
                 row.cell32_wavebus_accuracy,
                 row.cell32_phase_compose_accuracy,
                 row.cell32_structured_compose_accuracy,
                 row.cell32_fourier_census_accuracy,
+                row.cell32_component_bus_projection_accuracy,
                 row.fourier_phase_accuracy,
                 row.wave_over_fourier_gap,
                 row.compose_over_fourier_gap,
                 row.structured_over_fourier_gap,
                 row.census_over_fourier_gap,
+                row.component_bus_over_fourier_gap,
                 row.ensemble_gain,
                 row.phase_compose_gain,
                 row.structured_compose_gain,
                 row.fourier_census_gain,
+                row.component_bus_projection_gain,
                 row.key_ablation_drop,
                 row.non_key_ablation_drop,
                 row.label_shuffle_accuracy,
+                row.component_bus_shuffle_accuracy,
                 row.no_shortcut_control,
+                row.component_bus_no_shortcut_control,
                 row.scientific_pass,
                 row.engineering_pass,
                 row.mode_status
@@ -282,6 +323,10 @@ impl Organ128ModAddSeedSweepReport {
             self.min_fourier_census_gain
         ));
         output.push_str(&format!(
+            "min_component_bus_projection_gain: {:.6}\n",
+            self.min_component_bus_projection_gain
+        ));
+        output.push_str(&format!(
             "min_wave_over_fourier_gap: {:.6}\n",
             self.min_wave_over_fourier_gap
         ));
@@ -298,12 +343,20 @@ impl Organ128ModAddSeedSweepReport {
             self.min_census_over_fourier_gap
         ));
         output.push_str(&format!(
+            "min_component_bus_over_fourier_gap: {:.6}\n",
+            self.min_component_bus_over_fourier_gap
+        ));
+        output.push_str(&format!(
             "min_key_ablation_drop: {:.6}\n",
             self.min_key_ablation_drop
         ));
         output.push_str(&format!(
             "max_label_shuffle_accuracy: {:.6}\n",
             self.max_label_shuffle_accuracy
+        ));
+        output.push_str(&format!(
+            "max_component_bus_shuffle_accuracy: {:.6}\n",
+            self.max_component_bus_shuffle_accuracy
         ));
         output.push_str(&format!("mode_status: {}\n", self.mode_status));
         output
@@ -327,6 +380,10 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         ComponentEncoding::Structured,
     );
     let fourier_census_readout = FourierCensusReadout::train(&organ, config, &dataset.train);
+    let component_bus_projection_readout =
+        ComponentBusProjectionReadout::train(&organ, config, &dataset.train, None);
+    let shuffled_component_bus_projection_readout =
+        ComponentBusProjectionReadout::train(&organ, config, &dataset.train, Some(config.seed));
     let shuffled_readout = ModAddReadout::train(&organ, config, &dataset.train, Some(config.seed));
 
     let mut random = BaselineResult::new("random", dataset.holdout.len());
@@ -338,9 +395,13 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         BaselineResult::new("cell32_structured_compose", dataset.holdout.len());
     let mut cell32_fourier_census =
         BaselineResult::new("cell32_fourier_census", dataset.holdout.len());
+    let mut cell32_component_bus_projection =
+        BaselineResult::new("cell32_component_bus_projection", dataset.holdout.len());
     let mut cell32_voting = BaselineResult::new("cell32_voting", dataset.holdout.len());
     let mut cell32_wavebus = BaselineResult::new("cell32_wavebus", dataset.holdout.len());
     let mut label_shuffle = BaselineResult::new("label_shuffle", dataset.holdout.len());
+    let mut component_bus_label_shuffle =
+        BaselineResult::new("component_bus_label_shuffle", dataset.holdout.len());
     let mut ablations: [BaselineResult; STAGE2_ORGAN_CELLS] = std::array::from_fn(|cell_id| {
         BaselineResult::new(ablation_name(cell_id), dataset.holdout.len())
     });
@@ -384,6 +445,30 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         score_prediction(
             &mut cell32_fourier_census,
             fourier_census_prediction,
+            target,
+            trace.coherence,
+            trace.spectral_entropy,
+        );
+
+        let component_bus_prediction =
+            component_bus_projection_readout.predict(&organ, config.seed, *sample, config.modulus);
+        score_prediction(
+            &mut cell32_component_bus_projection,
+            component_bus_prediction,
+            target,
+            trace.coherence,
+            trace.spectral_entropy,
+        );
+
+        let component_bus_shuffled_prediction = shuffled_component_bus_projection_readout.predict(
+            &organ,
+            config.seed,
+            *sample,
+            config.modulus,
+        );
+        score_prediction(
+            &mut component_bus_label_shuffle,
+            component_bus_shuffled_prediction,
             target,
             trace.coherence,
             trace.spectral_entropy,
@@ -435,9 +520,11 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         &mut cell32_phase_compose,
         &mut cell32_structured_compose,
         &mut cell32_fourier_census,
+        &mut cell32_component_bus_projection,
         &mut cell32_voting,
         &mut cell32_wavebus,
         &mut label_shuffle,
+        &mut component_bus_label_shuffle,
     ]);
     for ablation in &mut ablations {
         ablation.finish();
@@ -466,12 +553,19 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     let phase_compose_gain = cell32_phase_compose.accuracy - best_control.accuracy;
     let structured_compose_gain = cell32_structured_compose.accuracy - best_control.accuracy;
     let fourier_census_gain = cell32_fourier_census.accuracy - best_control.accuracy;
+    let component_bus_projection_gain =
+        cell32_component_bus_projection.accuracy - best_control.accuracy;
     let wave_over_fourier_gap = cell32_wavebus.accuracy - fourier_phase.accuracy;
     let compose_over_fourier_gap = cell32_phase_compose.accuracy - fourier_phase.accuracy;
     let structured_over_fourier_gap = cell32_structured_compose.accuracy - fourier_phase.accuracy;
     let census_over_fourier_gap = cell32_fourier_census.accuracy - fourier_phase.accuracy;
+    let component_bus_over_fourier_gap =
+        cell32_component_bus_projection.accuracy - fourier_phase.accuracy;
     let no_shortcut_control = label_shuffle.accuracy
         <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE).min(cell32_wavebus.accuracy);
+    let component_bus_no_shortcut_control = component_bus_label_shuffle.accuracy
+        <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE)
+            .min(cell32_component_bus_projection.accuracy);
     let scientific_pass = ensemble_gain >= MIN_ENSEMBLE_GAIN
         && cell32_wavebus.accuracy > mono192.accuracy
         && key_ablation_drop >= MIN_KEY_ABLATION_DROP
@@ -497,23 +591,28 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         cell32_phase_compose,
         cell32_structured_compose,
         cell32_fourier_census,
+        cell32_component_bus_projection,
         cell32_voting,
         cell32_wavebus,
         restricted_key,
         excluded_key,
         label_shuffle,
+        component_bus_label_shuffle,
         key_cell,
         ensemble_gain,
         phase_compose_gain,
         structured_compose_gain,
         fourier_census_gain,
+        component_bus_projection_gain,
         wave_over_fourier_gap,
         compose_over_fourier_gap,
         structured_over_fourier_gap,
         census_over_fourier_gap,
+        component_bus_over_fourier_gap,
         key_ablation_drop,
         non_key_ablation_drop,
         no_shortcut_control,
+        component_bus_no_shortcut_control,
         scientific_pass,
         engineering_pass,
         mode_status,
@@ -540,19 +639,26 @@ pub fn organ128_modadd_seed_sweep_eval(
             cell32_phase_compose_accuracy: report.cell32_phase_compose.accuracy,
             cell32_structured_compose_accuracy: report.cell32_structured_compose.accuracy,
             cell32_fourier_census_accuracy: report.cell32_fourier_census.accuracy,
+            cell32_component_bus_projection_accuracy: report
+                .cell32_component_bus_projection
+                .accuracy,
             fourier_phase_accuracy: report.fourier_phase.accuracy,
             ensemble_gain: report.ensemble_gain,
             phase_compose_gain: report.phase_compose_gain,
             structured_compose_gain: report.structured_compose_gain,
             fourier_census_gain: report.fourier_census_gain,
+            component_bus_projection_gain: report.component_bus_projection_gain,
             wave_over_fourier_gap: report.wave_over_fourier_gap,
             compose_over_fourier_gap: report.compose_over_fourier_gap,
             structured_over_fourier_gap: report.structured_over_fourier_gap,
             census_over_fourier_gap: report.census_over_fourier_gap,
+            component_bus_over_fourier_gap: report.component_bus_over_fourier_gap,
             key_ablation_drop: report.key_ablation_drop,
             non_key_ablation_drop: report.non_key_ablation_drop,
             label_shuffle_accuracy: report.label_shuffle.accuracy,
+            component_bus_shuffle_accuracy: report.component_bus_label_shuffle.accuracy,
             no_shortcut_control: report.no_shortcut_control,
+            component_bus_no_shortcut_control: report.component_bus_no_shortcut_control,
             scientific_pass: report.scientific_pass,
             engineering_pass: report.engineering_pass,
             mode_status: report.mode_status,
@@ -584,6 +690,10 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.fourier_census_gain)
         .fold(f32::INFINITY, f32::min);
+    let min_component_bus_projection_gain = rows
+        .iter()
+        .map(|row| row.component_bus_projection_gain)
+        .fold(f32::INFINITY, f32::min);
     let min_wave_over_fourier_gap = rows
         .iter()
         .map(|row| row.wave_over_fourier_gap)
@@ -600,6 +710,10 @@ pub fn organ128_modadd_seed_sweep_eval(
         .iter()
         .map(|row| row.census_over_fourier_gap)
         .fold(f32::INFINITY, f32::min);
+    let min_component_bus_over_fourier_gap = rows
+        .iter()
+        .map(|row| row.component_bus_over_fourier_gap)
+        .fold(f32::INFINITY, f32::min);
     let min_key_ablation_drop = rows
         .iter()
         .map(|row| row.key_ablation_drop)
@@ -607,6 +721,10 @@ pub fn organ128_modadd_seed_sweep_eval(
     let max_label_shuffle_accuracy = rows
         .iter()
         .map(|row| row.label_shuffle_accuracy)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let max_component_bus_shuffle_accuracy = rows
+        .iter()
+        .map(|row| row.component_bus_shuffle_accuracy)
         .fold(f32::NEG_INFINITY, f32::max);
     let mode_status = if passed_seed_pairs >= 4 {
         "organ128_modadd_seed_robustness_passed"
@@ -627,12 +745,15 @@ pub fn organ128_modadd_seed_sweep_eval(
         min_phase_compose_gain,
         min_structured_compose_gain,
         min_fourier_census_gain,
+        min_component_bus_projection_gain,
         min_wave_over_fourier_gap,
         min_compose_over_fourier_gap,
         min_structured_over_fourier_gap,
         min_census_over_fourier_gap,
+        min_component_bus_over_fourier_gap,
         min_key_ablation_drop,
         max_label_shuffle_accuracy,
+        max_component_bus_shuffle_accuracy,
         mode_status,
     }
 }
@@ -893,6 +1014,51 @@ impl FourierCensusReadout {
     }
 }
 
+#[derive(Clone)]
+struct ComponentBusProjectionReadout {
+    centroids: Vec<[f32; COMPONENT_BUS_FEATURES]>,
+}
+
+impl ComponentBusProjectionReadout {
+    fn train(
+        organ: &Stage2Organ,
+        config: Organ128ModAddConfig,
+        samples: &[ModAddSample],
+        shuffle_seed: Option<u64>,
+    ) -> Self {
+        let classes = usize::from(config.modulus);
+        let mut centroids = vec![[0.0; COMPONENT_BUS_FEATURES]; classes];
+        let mut counts = vec![0usize; classes];
+        for (index, sample) in samples.iter().enumerate() {
+            let label_sample = match shuffle_seed {
+                Some(seed) => samples[shuffle_index(seed, index, samples.len())],
+                None => *sample,
+            };
+            let target = usize::from(label_sample.target(config.modulus));
+            let features = component_bus_features(organ, config.seed, *sample, config.modulus);
+            add_features(&mut centroids[target], &features);
+            counts[target] += 1;
+        }
+        for (centroid, count) in centroids.iter_mut().zip(counts) {
+            if count > 0 {
+                scale_features(centroid, 1.0 / count as f32);
+                normalize_features(centroid);
+            }
+        }
+        Self { centroids }
+    }
+
+    fn predict(&self, organ: &Stage2Organ, seed: u64, sample: ModAddSample, modulus: u8) -> u8 {
+        let features = component_bus_features(organ, seed, sample, modulus);
+        self.centroids
+            .iter()
+            .enumerate()
+            .map(|(class, centroid)| (class, dot_features(&features, centroid)))
+            .max_by(|(_, left), (_, right)| left.total_cmp(right))
+            .map_or(0, |(class, _)| class as u8)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct OffsetAccumulator {
     modulus: u8,
@@ -1050,6 +1216,75 @@ fn component_trace(
     modadd_trace_with_carrier(organ, input_byte, carrier)
 }
 
+fn component_bus_features(
+    organ: &Stage2Organ,
+    seed: u64,
+    sample: ModAddSample,
+    modulus: u8,
+) -> [f32; COMPONENT_BUS_FEATURES] {
+    let a_bus = component_bus(organ, seed, sample.a, modulus, 0xA17A);
+    let b_bus = component_bus(organ, seed, sample.b, modulus, 0xB17B);
+    let mut features = [0.0; COMPONENT_BUS_FEATURES];
+    write_bus_features(&a_bus, &mut features, 0);
+    write_bus_features(&b_bus, &mut features, PHASE_SLOTS * 2);
+    normalize_features(&mut features);
+    features
+}
+
+fn component_bus(organ: &Stage2Organ, seed: u64, value: u8, modulus: u8, lane: u64) -> WaveBus {
+    let carrier = structured_component_carrier(value, modulus, lane ^ seed);
+    run_stage2_bus_trace_with_organ_carrier(organ, lane as u8, carrier, None).bus
+}
+
+fn write_bus_features(bus: &WaveBus, features: &mut [f32; COMPONENT_BUS_FEATURES], offset: usize) {
+    let phase_norm = bus
+        .phase_sum
+        .iter()
+        .map(|value| value.abs())
+        .sum::<f32>()
+        .max(f32::EPSILON);
+    let amplitude_norm = bus.amplitude_sum.iter().sum::<f32>().max(f32::EPSILON);
+    for slot in 0..PHASE_SLOTS {
+        features[offset + slot] = bus.phase_sum[slot] / phase_norm;
+        features[offset + PHASE_SLOTS + slot] = bus.amplitude_sum[slot] / amplitude_norm;
+    }
+}
+
+fn add_features(
+    target: &mut [f32; COMPONENT_BUS_FEATURES],
+    source: &[f32; COMPONENT_BUS_FEATURES],
+) {
+    for (target_value, source_value) in target.iter_mut().zip(source) {
+        *target_value += source_value;
+    }
+}
+
+fn scale_features(features: &mut [f32; COMPONENT_BUS_FEATURES], scale: f32) {
+    for value in features {
+        *value *= scale;
+    }
+}
+
+fn normalize_features(features: &mut [f32; COMPONENT_BUS_FEATURES]) {
+    let norm = features
+        .iter()
+        .map(|value| value * value)
+        .sum::<f32>()
+        .sqrt()
+        .max(f32::EPSILON);
+    scale_features(features, 1.0 / norm);
+}
+
+fn dot_features(
+    left: &[f32; COMPONENT_BUS_FEATURES],
+    right: &[f32; COMPONENT_BUS_FEATURES],
+) -> f32 {
+    left.iter()
+        .zip(right)
+        .map(|(left_value, right_value)| left_value * right_value)
+        .sum()
+}
+
 fn structured_component_carrier(value: u8, modulus: u8, lane: u64) -> CarrierWave {
     let lane_shift = if lane & 1 == 0 { 0.0 } else { TAU * 0.25 };
     let phase = (f32::from(value) / f32::from(modulus) * TAU + lane_shift).rem_euclid(TAU);
@@ -1112,18 +1347,23 @@ mod tests {
         assert!(text.contains("cell32_phase_compose_accuracy:"));
         assert!(text.contains("cell32_structured_compose_accuracy:"));
         assert!(text.contains("cell32_fourier_census_accuracy:"));
+        assert!(text.contains("cell32_component_bus_projection_accuracy:"));
         assert!(text.contains("cell32_voting_accuracy:"));
         assert!(text.contains("cell32_wavebus_accuracy:"));
         assert!(text.contains("ensemble_gain:"));
         assert!(text.contains("phase_compose_gain:"));
         assert!(text.contains("structured_compose_gain:"));
         assert!(text.contains("fourier_census_gain:"));
+        assert!(text.contains("component_bus_projection_gain:"));
         assert!(text.contains("wave_over_fourier_gap:"));
         assert!(text.contains("compose_over_fourier_gap:"));
         assert!(text.contains("structured_over_fourier_gap:"));
         assert!(text.contains("census_over_fourier_gap:"));
+        assert!(text.contains("component_bus_over_fourier_gap:"));
         assert!(text.contains("label_shuffle_accuracy:"));
+        assert!(text.contains("component_bus_shuffle_accuracy:"));
         assert!(text.contains("no_shortcut_control:"));
+        assert!(text.contains("component_bus_no_shortcut_control:"));
         assert!(
             report.mode_status == "organ128_modadd_key_mode_ablation_passed"
                 || report.mode_status == "organ128_modadd_candidate"
@@ -1142,11 +1382,14 @@ mod tests {
         assert!(text.contains("min_phase_compose_gain:"));
         assert!(text.contains("min_structured_compose_gain:"));
         assert!(text.contains("min_fourier_census_gain:"));
+        assert!(text.contains("min_component_bus_projection_gain:"));
         assert!(text.contains("min_wave_over_fourier_gap:"));
         assert!(text.contains("min_compose_over_fourier_gap:"));
         assert!(text.contains("min_structured_over_fourier_gap:"));
         assert!(text.contains("min_census_over_fourier_gap:"));
+        assert!(text.contains("min_component_bus_over_fourier_gap:"));
         assert!(text.contains("max_label_shuffle_accuracy:"));
+        assert!(text.contains("max_component_bus_shuffle_accuracy:"));
         assert!(
             report.mode_status == "organ128_modadd_seed_robustness_passed"
                 || report.mode_status == "organ128_modadd_seed_sweep_candidate"
