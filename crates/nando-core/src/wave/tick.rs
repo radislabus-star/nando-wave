@@ -12,6 +12,14 @@ pub struct Stage2TraceTick {
     pub trace: TickTrace,
 }
 
+/// Trace result with the full bus spectrum for research readouts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Stage2BusTraceTick {
+    pub carrier: CarrierWave,
+    pub bus: WaveBus,
+    pub trace: TickTrace,
+}
+
 /// Precomputed byte-to-phase table for hot training loops.
 #[derive(Debug, Clone)]
 pub struct BytePhaseLut {
@@ -170,6 +178,23 @@ pub fn run_stage2_trace_with_organ_carrier(
     )
 }
 
+/// Run one tick through a precomputed organism and expose the full bus spectrum.
+#[must_use]
+pub fn run_stage2_bus_trace_with_organ_carrier(
+    organ: &Stage2Organ,
+    input_byte: u8,
+    carrier: CarrierWave,
+    disabled_cell_id: Option<u32>,
+) -> Stage2BusTraceTick {
+    run_stage2_bus_trace_with_organ_state(
+        organ,
+        input_byte,
+        carrier,
+        disabled_cell_id,
+        &[0.0; STAGE2_ORGAN_CELLS],
+    )
+}
+
 /// Run one trace-only tick through a precomputed organism and byte phase LUT.
 #[must_use]
 pub fn run_stage2_trace_with_organ_lut_carrier(
@@ -255,6 +280,23 @@ pub(crate) fn run_stage2_trace_with_organ_state(
         build_bus_and_trace(organ, input_byte, carrier, disabled_cell_id, cell_coupling);
 
     Stage2TraceTick { carrier, trace }
+}
+
+pub(crate) fn run_stage2_bus_trace_with_organ_state(
+    organ: &Stage2Organ,
+    input_byte: u8,
+    carrier: CarrierWave,
+    disabled_cell_id: Option<u32>,
+    cell_coupling: &[f32; STAGE2_ORGAN_CELLS],
+) -> Stage2BusTraceTick {
+    let (bus, trace) =
+        build_bus_and_trace(organ, input_byte, carrier, disabled_cell_id, cell_coupling);
+
+    Stage2BusTraceTick {
+        carrier,
+        bus,
+        trace,
+    }
 }
 
 pub(crate) fn run_stage2_trace_with_organ_lut_state(

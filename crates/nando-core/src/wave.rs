@@ -57,11 +57,11 @@ pub use organ::{
 };
 pub use snapshot::{SnapshotParseError, SpectrumSnapshot, Stage2Tick, TickTrace};
 pub use tick::{
-    BytePhaseLut, Stage2TraceTick, encode_byte_phases, run_stage2_tick,
-    run_stage2_tick_with_carrier, run_stage2_tick_with_disabled,
-    run_stage2_tick_with_organ_carrier, run_stage2_tick_with_organ_lut_carrier,
-    run_stage2_trace_tick, run_stage2_trace_with_organ_carrier,
-    run_stage2_trace_with_organ_lut_carrier,
+    BytePhaseLut, Stage2BusTraceTick, Stage2TraceTick, encode_byte_phases,
+    run_stage2_bus_trace_with_organ_carrier, run_stage2_tick, run_stage2_tick_with_carrier,
+    run_stage2_tick_with_disabled, run_stage2_tick_with_organ_carrier,
+    run_stage2_tick_with_organ_lut_carrier, run_stage2_trace_tick,
+    run_stage2_trace_with_organ_carrier, run_stage2_trace_with_organ_lut_carrier,
 };
 
 pub(crate) use math::{
@@ -119,6 +119,19 @@ mod tests {
         assert_eq!(trace_only.trace, full.trace);
     }
 
+    #[test]
+    fn bus_trace_exposes_full_bus_spectrum() {
+        let seed = 11;
+        let input = b'N';
+        let carrier = CarrierWave::from_seed(seed, input);
+        let organ = Stage2Organ::new(seed);
+        let full = run_stage2_tick_with_organ_carrier(&organ, input, carrier, None);
+        let bus_trace = run_stage2_bus_trace_with_organ_carrier(&organ, input, carrier, None);
+        assert_eq!(bus_trace.carrier, full.carrier);
+        assert_eq!(bus_trace.trace, full.trace);
+        assert_eq!(bus_trace.bus.center_phase, full.trace.center_phase);
+        assert_eq!(bus_trace.bus.phase_sum.len(), PHASE_SLOTS);
+    }
     #[test]
     fn byte_phase_lut_matches_direct_encoding() {
         let lut = BytePhaseLut::new();

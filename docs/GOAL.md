@@ -705,11 +705,14 @@ false_positive_increase
 fourier_phase_accuracy
 cell32_phase_compose_accuracy
 cell32_structured_compose_accuracy
+cell32_fourier_census_accuracy
 phase_compose_gain
 structured_compose_gain
+fourier_census_gain
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
+census_over_fourier_gap
 mode_status
 ```
 
@@ -810,14 +813,17 @@ mono192_accuracy
 fourier_phase_accuracy
 cell32_phase_compose_accuracy
 cell32_structured_compose_accuracy
+cell32_fourier_census_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
 phase_compose_gain
 structured_compose_gain
+fourier_census_gain
 wave_over_fourier_gap
 compose_over_fourier_gap
 structured_over_fourier_gap
+census_over_fourier_gap
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -849,12 +855,15 @@ mode_status: not_found_organ128_modadd
 ensemble_gain: -0.003906
 phase_compose_gain: -0.007812
 structured_compose_gain: 0.000000
+fourier_census_gain: -0.015625
 fourier_phase_accuracy: 1.000000
 cell32_phase_compose_accuracy: 0.035156
 cell32_structured_compose_accuracy: 0.042969
+cell32_fourier_census_accuracy: 0.027344
 wave_over_fourier_gap: -0.960938
 compose_over_fourier_gap: -0.964844
 structured_over_fourier_gap: -0.957031
+census_over_fourier_gap: -0.972656
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -875,9 +884,11 @@ candidate_seed_pairs: 1
 min_ensemble_gain: -0.011719
 min_phase_compose_gain: -0.023438
 min_structured_compose_gain: -0.023438
+min_fourier_census_gain: -0.023438
 min_wave_over_fourier_gap: -0.968750
 min_compose_over_fourier_gap: -0.984375
 min_structured_over_fourier_gap: -0.976562
+min_census_over_fourier_gap: -0.972656
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -955,4 +966,34 @@ seed-robust. Значит проблема глубже: текущий WaveBus 
 как линейное компонуемое состояние. Следующая попытка должна менять сам
 phase-census/readout: читать не один center_phase, а обучаемый Fourier census
 по slots или отдельные sin/cos компоненты bus.
+```
+
+Проверенный вариант 3:
+
+```text
+cell32_fourier_census:
+  expose full WaveBus.phase_sum from core
+  each slot votes by slot phase and sign
+  train per-slot modular offset on train split
+  prediction is weighted circular vote by abs(phase_sum)
+
+result:
+  cell32_fourier_census_accuracy: 0.027344
+  fourier_census_gain: -0.015625
+  min_fourier_census_gain over seeds: -0.023438
+  min_census_over_fourier_gap: -0.972656
+
+decision:
+  rejected as architectural direction v3.
+```
+
+Вывод по варианту 3:
+
+```text
+Наивный Fourier census по готовому bus spectrum не достает модульную
+композицию. Это подтверждает, что текущий bus.phase_sum является спектром
+активированных cell templates, а не устойчивым sin/cos-представлением входных
+компонент. Следующая архитектурная попытка должна сохранять в bus отдельные
+компонентные sin/cos каналы или обучать projection/readout по raw harmonic
+features, а не использовать slot offset по готовому phase_sum.
 ```
