@@ -227,6 +227,7 @@ non-key frequency ablation
 Mono control
 Voting control
 Random control
+Fourier phase control
 ```
 
 Gate:
@@ -701,6 +702,8 @@ ensemble_gain
 key_ablation_drop
 non_key_ablation_drop
 false_positive_increase
+fourier_phase_accuracy
+wave_over_fourier_gap
 mode_status
 ```
 
@@ -717,6 +720,12 @@ mode_status
 проверить CarrierWave не как bias, а как state
 сравнить с простым Fourier baseline
 ```
+
+Fourier baseline в этом этапе - диагностический контроль. Он имеет право
+использовать прямую фазовую геометрию задачи, но не считается Nando-readout и
+не входит в `scientific_pass`. Если Fourier baseline проходит, а WaveBus нет,
+значит задача фазово решаема, но текущая органная динамика или readout не
+нашли нужную композицию.
 
 Если `modadd` проходит, а byte-context не проходит:
 
@@ -792,9 +801,11 @@ holdout_size
 elapsed_ms
 random_accuracy
 mono192_accuracy
+fourier_phase_accuracy
 cell32_voting_accuracy
 cell32_wavebus_accuracy
 ensemble_gain
+wave_over_fourier_gap
 restricted_key_accuracy
 excluded_key_accuracy
 key_ablation_drop
@@ -824,6 +835,8 @@ mode_status: organ128_modadd_key_mode_ablation_passed
 cargo run -q -p nando-cli -- organ128-modadd-eval 7 31 256 256
 mode_status: not_found_organ128_modadd
 ensemble_gain: -0.003906
+fourier_phase_accuracy: 1.000000
+wave_over_fourier_gap: -0.960938
 key_ablation_drop: 0.011719
 label_shuffle_accuracy: 0.031250
 no_shortcut_control: true
@@ -842,6 +855,7 @@ mode_status: not_found_organ128_modadd_seed_sweep
 passed_seed_pairs: 0
 candidate_seed_pairs: 1
 min_ensemble_gain: -0.011719
+min_wave_over_fourier_gap: -0.968750
 min_key_ablation_drop: 0.007812
 max_label_shuffle_accuracy: 0.050781
 ```
@@ -852,6 +866,10 @@ max_label_shuffle_accuracy: 0.050781
 прибор собран, leakage control прошел,
 но ансамблевая мода на полном v0 split не найдена.
 Seed-sweep подтверждает: это не одиночная неудача, текущий readout/dynamics
-не seed-robust. Следующий шаг - улучшать wave/readout dynamics или phase math,
-а не возвращаться к усилению Chat-0 или расширению корпуса.
+не seed-robust. Fourier phase control дает accuracy 1.0, значит модульная
+задача действительно решается фазовой композицией; провал находится не в
+задаче, а в текущем способе, которым Organ128 превращает carrier/bus state в
+ответ. Следующий шаг - улучшать wave/readout dynamics и способ записи
+композиции в клетки, а не возвращаться к усилению Chat-0 или расширению
+корпуса.
 ```

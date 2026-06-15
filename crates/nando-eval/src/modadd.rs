@@ -38,6 +38,7 @@ pub struct Organ128ModAddReport {
     pub elapsed_ms: u128,
     pub random: BaselineResult,
     pub mono192: BaselineResult,
+    pub fourier_phase: BaselineResult,
     pub cell32_voting: BaselineResult,
     pub cell32_wavebus: BaselineResult,
     pub restricted_key: BaselineResult,
@@ -45,6 +46,7 @@ pub struct Organ128ModAddReport {
     pub label_shuffle: BaselineResult,
     pub key_cell: u32,
     pub ensemble_gain: f32,
+    pub wave_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub no_shortcut_control: bool,
@@ -58,7 +60,9 @@ pub struct Organ128ModAddReport {
 pub struct Organ128ModAddSeedSweepRow {
     pub seed: u64,
     pub cell32_wavebus_accuracy: f32,
+    pub fourier_phase_accuracy: f32,
     pub ensemble_gain: f32,
+    pub wave_over_fourier_gap: f32,
     pub key_ablation_drop: f32,
     pub non_key_ablation_drop: f32,
     pub label_shuffle_accuracy: f32,
@@ -78,6 +82,7 @@ pub struct Organ128ModAddSeedSweepReport {
     pub passed_seed_pairs: usize,
     pub candidate_seed_pairs: usize,
     pub min_ensemble_gain: f32,
+    pub min_wave_over_fourier_gap: f32,
     pub min_key_ablation_drop: f32,
     pub max_label_shuffle_accuracy: f32,
     pub mode_status: &'static str,
@@ -97,6 +102,7 @@ impl Organ128ModAddReport {
         output.push_str(&format!("elapsed_ms: {}\n", self.elapsed_ms));
         output.push_str(&format_baseline(self.random));
         output.push_str(&format_baseline(self.mono192));
+        output.push_str(&format_baseline(self.fourier_phase));
         output.push_str(&format_baseline(self.cell32_voting));
         output.push_str(&format_baseline(self.cell32_wavebus));
         output.push_str(&format_baseline(self.restricted_key));
@@ -104,6 +110,10 @@ impl Organ128ModAddReport {
         output.push_str(&format_baseline(self.label_shuffle));
         output.push_str(&format!("random_accuracy: {:.6}\n", self.random.accuracy));
         output.push_str(&format!("mono192_accuracy: {:.6}\n", self.mono192.accuracy));
+        output.push_str(&format!(
+            "fourier_phase_accuracy: {:.6}\n",
+            self.fourier_phase.accuracy
+        ));
         output.push_str(&format!(
             "cell32_voting_accuracy: {:.6}\n",
             self.cell32_voting.accuracy
@@ -114,6 +124,10 @@ impl Organ128ModAddReport {
         ));
         output.push_str(&format!("key_cell: {}\n", self.key_cell));
         output.push_str(&format!("ensemble_gain: {:.6}\n", self.ensemble_gain));
+        output.push_str(&format!(
+            "wave_over_fourier_gap: {:.6}\n",
+            self.wave_over_fourier_gap
+        ));
         output.push_str(&format!(
             "restricted_key_accuracy: {:.6}\n",
             self.restricted_key.accuracy
@@ -155,12 +169,14 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!("modulus: {}\n", self.modulus));
         output.push_str(&format!("train_size: {}\n", self.train_cases));
         output.push_str(&format!("holdout_size: {}\n", self.holdout_cases));
-        output.push_str("seed wavebus_acc ensemble_gain key_drop non_key_drop shuffle_acc no_shortcut scientific engineering mode_status\n");
+        output.push_str("seed wavebus_acc fourier_acc wave_fourier_gap ensemble_gain key_drop non_key_drop shuffle_acc no_shortcut scientific engineering mode_status\n");
         for row in &self.rows {
             output.push_str(&format!(
-                "{} {:.6} {:+.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
+                "{} {:.6} {:.6} {:+.6} {:+.6} {:.6} {:.6} {:.6} {} {} {} {}\n",
                 row.seed,
                 row.cell32_wavebus_accuracy,
+                row.fourier_phase_accuracy,
+                row.wave_over_fourier_gap,
                 row.ensemble_gain,
                 row.key_ablation_drop,
                 row.non_key_ablation_drop,
@@ -179,6 +195,10 @@ impl Organ128ModAddSeedSweepReport {
         output.push_str(&format!(
             "min_ensemble_gain: {:.6}\n",
             self.min_ensemble_gain
+        ));
+        output.push_str(&format!(
+            "min_wave_over_fourier_gap: {:.6}\n",
+            self.min_wave_over_fourier_gap
         ));
         output.push_str(&format!(
             "min_key_ablation_drop: {:.6}\n",
@@ -205,6 +225,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
 
     let mut random = BaselineResult::new("random", dataset.holdout.len());
     let mut mono192 = BaselineResult::new("mono192", dataset.holdout.len());
+    let mut fourier_phase = BaselineResult::new("fourier_phase_control", dataset.holdout.len());
     let mut cell32_voting = BaselineResult::new("cell32_voting", dataset.holdout.len());
     let mut cell32_wavebus = BaselineResult::new("cell32_wavebus", dataset.holdout.len());
     let mut label_shuffle = BaselineResult::new("label_shuffle", dataset.holdout.len());
@@ -222,6 +243,9 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
 
         let mono_prediction = mono_mod_predict(config.seed, case_index, *sample, config.modulus);
         score_prediction(&mut mono192, mono_prediction, target, 0.0, 1.0);
+
+        let fourier_prediction = fourier_phase_predict(*sample, config.modulus);
+        score_prediction(&mut fourier_phase, fourier_prediction, target, 1.0, 0.0);
 
         let voting_prediction = readout.predict_voting(&trace, config.modulus);
         score_prediction(
@@ -265,6 +289,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
     finish_all([
         &mut random,
         &mut mono192,
+        &mut fourier_phase,
         &mut cell32_voting,
         &mut cell32_wavebus,
         &mut label_shuffle,
@@ -293,6 +318,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
 
     let best_control = best_baseline([random, mono192, cell32_voting]);
     let ensemble_gain = cell32_wavebus.accuracy - best_control.accuracy;
+    let wave_over_fourier_gap = cell32_wavebus.accuracy - fourier_phase.accuracy;
     let no_shortcut_control = label_shuffle.accuracy
         <= (random.accuracy + MAX_FALSE_POSITIVE_INCREASE).min(cell32_wavebus.accuracy);
     let scientific_pass = ensemble_gain >= MIN_ENSEMBLE_GAIN
@@ -316,6 +342,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         elapsed_ms: started.elapsed().as_millis(),
         random,
         mono192,
+        fourier_phase,
         cell32_voting,
         cell32_wavebus,
         restricted_key,
@@ -323,6 +350,7 @@ pub fn organ128_modadd_eval(config: Organ128ModAddConfig) -> Organ128ModAddRepor
         label_shuffle,
         key_cell,
         ensemble_gain,
+        wave_over_fourier_gap,
         key_ablation_drop,
         non_key_ablation_drop,
         no_shortcut_control,
@@ -349,7 +377,9 @@ pub fn organ128_modadd_seed_sweep_eval(
         Organ128ModAddSeedSweepRow {
             seed,
             cell32_wavebus_accuracy: report.cell32_wavebus.accuracy,
+            fourier_phase_accuracy: report.fourier_phase.accuracy,
             ensemble_gain: report.ensemble_gain,
+            wave_over_fourier_gap: report.wave_over_fourier_gap,
             key_ablation_drop: report.key_ablation_drop,
             non_key_ablation_drop: report.non_key_ablation_drop,
             label_shuffle_accuracy: report.label_shuffle.accuracy,
@@ -372,6 +402,10 @@ pub fn organ128_modadd_seed_sweep_eval(
     let min_ensemble_gain = rows
         .iter()
         .map(|row| row.ensemble_gain)
+        .fold(f32::INFINITY, f32::min);
+    let min_wave_over_fourier_gap = rows
+        .iter()
+        .map(|row| row.wave_over_fourier_gap)
         .fold(f32::INFINITY, f32::min);
     let min_key_ablation_drop = rows
         .iter()
@@ -397,6 +431,7 @@ pub fn organ128_modadd_seed_sweep_eval(
         passed_seed_pairs,
         candidate_seed_pairs,
         min_ensemble_gain,
+        min_wave_over_fourier_gap,
         min_key_ablation_drop,
         max_label_shuffle_accuracy,
         mode_status,
@@ -662,6 +697,12 @@ fn mono_mod_predict(seed: u64, case_index: usize, sample: ModAddSample, modulus:
     (mixed % u64::from(modulus)) as u8
 }
 
+fn fourier_phase_predict(sample: ModAddSample, modulus: u8) -> u8 {
+    let phase_a = f32::from(sample.a) / f32::from(modulus) * TAU;
+    let phase_b = f32::from(sample.b) / f32::from(modulus) * TAU;
+    phase_to_mod((phase_a + phase_b).rem_euclid(TAU), modulus)
+}
+
 fn shuffle_index(seed: u64, index: usize, len: usize) -> usize {
     if len == 0 {
         0
@@ -697,13 +738,16 @@ mod tests {
         let text = report.to_text();
         assert_eq!(report.config.modulus, 31);
         assert_eq!(report.random.cases, 64);
+        assert_eq!(report.fourier_phase.cases, 64);
         assert_eq!(report.cell32_wavebus.cases, 64);
         assert!(text.contains("task: modular_addition"));
         assert!(text.contains("random_accuracy:"));
         assert!(text.contains("mono192_accuracy:"));
+        assert!(text.contains("fourier_phase_accuracy:"));
         assert!(text.contains("cell32_voting_accuracy:"));
         assert!(text.contains("cell32_wavebus_accuracy:"));
         assert!(text.contains("ensemble_gain:"));
+        assert!(text.contains("wave_over_fourier_gap:"));
         assert!(text.contains("label_shuffle_accuracy:"));
         assert!(text.contains("no_shortcut_control:"));
         assert!(
@@ -721,6 +765,7 @@ mod tests {
         assert!(text.contains("modadd seed-sweep eval"));
         assert!(text.contains("passed_seed_pairs:"));
         assert!(text.contains("candidate_seed_pairs:"));
+        assert!(text.contains("min_wave_over_fourier_gap:"));
         assert!(text.contains("max_label_shuffle_accuracy:"));
         assert!(
             report.mode_status == "organ128_modadd_seed_robustness_passed"
