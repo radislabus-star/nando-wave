@@ -1049,6 +1049,7 @@ impl L3LearnedCueField {
         examples: &[L3SemanticExample],
     ) -> Self {
         let mut weights: HashMap<L3LearnedCueKey, f32> = HashMap::new();
+        let mut trap_cache: HashMap<String, (Vec<u32>, L3SemanticFieldCues)> = HashMap::new();
         let cue_universe = cue_universe_from_frames(frames);
         let global_positive_tokens = examples
             .iter()
@@ -1073,18 +1074,24 @@ impl L3LearnedCueField {
             }
 
             for trap in semantic_traps_for_example(example) {
-                let trap_tokens = cue_tokens(l2, &trap.text)
-                    .into_iter()
-                    .filter(|token| !global_positive_tokens.contains(token))
-                    .collect::<Vec<_>>();
-                let trap_labels = L3SemanticFieldCues::bootstrap_from_text(&trap.text, frames);
+                let (trap_tokens, trap_labels) = trap_cache
+                    .entry(normalized_surface_key(&trap.text))
+                    .or_insert_with(|| {
+                        let trap_tokens = cue_tokens(l2, &trap.text)
+                            .into_iter()
+                            .filter(|token| !global_positive_tokens.contains(token))
+                            .collect::<Vec<_>>();
+                        let trap_labels =
+                            L3SemanticFieldCues::bootstrap_from_text(&trap.text, frames);
+                        (trap_tokens, trap_labels)
+                    });
                 for (cue_kind, cue_value) in trap_labels.as_pairs() {
-                    for token in &trap_tokens {
+                    for token in trap_tokens.iter() {
                         add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 0.75);
                     }
                 }
                 for (cue_kind, cue_value) in trap_labels.anti_pairs() {
-                    for token in &trap_tokens {
+                    for token in trap_tokens.iter() {
                         add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 1.0);
                     }
                 }
@@ -1144,12 +1151,12 @@ impl L3LearnedCueField {
         }
 
         let active_tokens = cue_tokens(l2, text).into_iter().collect::<HashSet<_>>();
-        let mut scores: HashMap<(String, String), f32> = HashMap::new();
+        let mut scores: HashMap<(&str, &str), f32> = HashMap::new();
         for token in active_tokens {
             for edge_index in self.edges_by_token.get(&token).into_iter().flatten() {
                 let edge = &self.edges[*edge_index];
                 *scores
-                    .entry((edge.cue_kind.clone(), edge.cue_value.clone()))
+                    .entry((edge.cue_kind.as_str(), edge.cue_value.as_str()))
                     .or_default() += edge.weight;
             }
         }
@@ -1188,14 +1195,13 @@ impl L3SemanticInterferenceField {
         cue_field: &L3LearnedCueField,
     ) -> Self {
         let mut weights: HashMap<L3SemanticInterferenceKey, f32> = HashMap::new();
+        let mut trap_cue_cache: HashMap<String, L3SemanticFieldCues> = HashMap::new();
 
         for example in examples {
             let Some(correct_frame) = frame_index_for_schema(frames, &example.fact.schema) else {
                 continue;
             };
-            let cues = cue_field
-                .infer(&example.query_surface, l2, frames, false)
-                .cues;
+            let cues = L3SemanticFieldCues::from_schema(&example.fact.schema);
             if cues.complete_for(&frames[correct_frame]) {
                 for (source_kind, source_value) in cues.as_pairs() {
                     add_field_weight(
@@ -1225,7 +1231,10 @@ impl L3SemanticInterferenceField {
             }
 
             for trap in semantic_traps_for_example(example) {
-                let trap_cues = cue_field.infer(&trap.text, l2, frames, false).cues;
+                let trap_cues = trap_cue_cache
+                    .entry(normalized_surface_key(&trap.text))
+                    .or_insert_with(|| cue_field.infer(&trap.text, l2, frames, false).cues)
+                    .clone();
                 let Some(suppressed_frame) = exact_frame_index_for_cues(frames, &trap_cues) else {
                     continue;
                 };
@@ -1519,11 +1528,11 @@ fn max_cue_weight_by_kind(weights: &HashMap<L3LearnedCueKey, f32>) -> HashMap<St
     max_by_kind
 }
 
-fn best_cue_value(scores: &HashMap<(String, String), f32>, cue_kind: &str) -> Option<CueChoice> {
+fn best_cue_value(scores: &HashMap<(&str, &str), f32>, cue_kind: &str) -> Option<CueChoice> {
     let mut ranked = scores
         .iter()
-        .filter(|((kind, _), _)| kind == cue_kind)
-        .map(|((_, value), score)| (value.clone(), *score))
+        .filter(|((kind, _), _)| *kind == cue_kind)
+        .map(|((_, value), score)| ((*value).to_string(), *score))
         .collect::<Vec<_>>();
     ranked.sort_by(|left, right| {
         right
@@ -1543,14 +1552,14 @@ fn best_cue_value(scores: &HashMap<(String, String), f32>, cue_kind: &str) -> Op
 }
 
 fn best_positive_cue_values(
-    scores: &HashMap<(String, String), f32>,
+    scores: &HashMap<(&str, &str), f32>,
     cue_kind: &str,
     threshold: f32,
 ) -> Vec<String> {
     let mut values = scores
         .iter()
-        .filter(|((kind, _), score)| kind == cue_kind && **score >= threshold)
-        .map(|((_, value), _)| value.clone())
+        .filter(|((kind, _), score)| *kind == cue_kind && **score >= threshold)
+        .map(|((_, value), _)| (*value).to_string())
         .collect::<Vec<_>>();
     values.sort();
     values
@@ -1663,6 +1672,14 @@ fn normalize_digits(token: &str) -> String {
         .chars()
         .map(|ch| if ch.is_ascii_digit() { '0' } else { ch })
         .collect()
+}
+
+fn normalized_surface_key(text: &str) -> String {
+    normalized_tokens(text)
+        .into_iter()
+        .map(|token| normalize_digits(&token))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn compact_features(weights: HashMap<u32, i32>) -> Vec<(u32, i16)> {
