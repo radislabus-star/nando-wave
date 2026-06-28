@@ -49,13 +49,18 @@ L3 learns:
 
 ```text
 L2 motif field               -> weak frame activation
-role/relation/anchor/binding -> semi-manual cues
+L2 motif + generic surface cues -> learned role/relation/anchor/binding cues
 learned attraction lane      -> compatible semantic centers
 learned repulsion lane       -> nearest wrong centers
 learned anti-trap lane       -> forbidden overclaim centers
 settled center               -> EquationForm
 semantic facts               -> relation operator
 ```
+
+Bootstrap role/relation labels are used only to create the training target.
+Runtime inference does not call the manual cue rules. It reads the learned
+CueField edges produced from L2 motifs plus generic normalized word/bigram cue
+tokens.
 
 The object label is copied from the bounded surface slot after the learned
 object anchor. That copy span is not itself semantic authority. Authority comes
@@ -92,16 +97,25 @@ average_raw_field_gap: 0.1378287
 average_settled_field_gap: 3.56609
 interference_gap_lift: 3.4282615
 average_interference_energy: 3.6666133
-interference_edge_count: 42
+cue_edge_count: 124,189
+manual_cue_rules_used: false
+cue_field_learned: true
+cue_contrastive_training_used: true
+cue_extractor_learned: true
+cue_accuracy: 1.0
+cue_margin_min: 3.59375
+cue_ablation_drop: 3.4282615
+wrong_cue_suppressed: true
+semantic_compiler_ready: true
+interference_edge_count: 53
 manual_weight_table_used: false
 field_weights_learned: true
 contrastive_training_used: true
-cue_extractor_learned: false
 heldout_margin_min: 2.4270833
 nearest_wrong_center_suppressed: true
 attraction_ablation_drop: 3.2829638
 repulsion_ablation_drop: 0.17827344
-anti_field_ablation_drop: 0.1875
+anti_field_ablation_drop: 0.3125
 frame_ablation_drop: 3.4282615
 object_anchor_pass: true
 evidence_requirement_pass: true
@@ -111,9 +125,9 @@ route_splice_rejected: true
 negative_route_rejected: true
 false_promotion_rate: 0.0
 exact_lookup_heldout_hits: 0
-model_hot_bytes: 1,092,888
+model_hot_bytes: 2,583,332
 naive_semantic_fact_bytes: 163,840,000
-model_to_naive_ratio: 0.006670459
+model_to_naive_ratio: 0.015767407
 semantic_field_ready: true
 semantic_grokking_ready: true
 hard_profile_ready: true
@@ -133,8 +147,10 @@ This proves:
 
 ```text
 L2 motif fields plus learned contrastive interference can settle onto a bounded semantic center.
+Learned CueField can induce role/relation/anchor/binding cues from L2 motifs and generic surface residual cues.
 Heldout role bindings solve without exact fact lookup.
 Semantic field convergence is causal under interference ablation.
+Cue induction is causal under cue ablation.
 Nearest wrong centers are actively suppressed by learned repulsion.
 Complete-but-forbidden shortcuts are blocked by learned anti-trap lanes.
 Role-swap and route-splice traps stay rejected.
@@ -156,8 +172,7 @@ free-form semantic extraction
 
 The next step is not L4/L5/L6 yet.
 
-The next step is learned cue induction over L2 motifs, while scaling the hard
-L3 corpus:
+The next step is not cue induction anymore. It is scaling the hard L3 corpus:
 
 ```text
 more relation families

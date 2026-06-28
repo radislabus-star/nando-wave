@@ -2,8 +2,9 @@
 //!
 //! L3 is the first layer that may promote semantic atoms. It does not parse raw
 //! text directly. It learns frame centers from L2 motif tokens, trains a
-//! contrastive interference field over semi-manual cues, then uses the semantic
-//! relation operator to solve heldout role bindings.
+//! CueField over L2 motifs plus generic surface residual cues, trains a
+//! contrastive interference field over those learned cues, then uses the
+//! semantic relation operator to solve heldout role bindings.
 
 use std::collections::{HashMap, HashSet};
 
@@ -14,7 +15,11 @@ use super::{
 
 pub const L3_FRAME_CENTER_BYTES: usize = 64;
 pub const L3_FRAME_FEATURE_BYTES: usize = 8;
+pub const L3_CUE_EDGE_BYTES: usize = 12;
 pub const L3_INTERFERENCE_EDGE_BYTES: usize = 16;
+pub const L3_ANTI_CUE_THRESHOLD: f32 = 0.25;
+pub const L3_ANTI_AUTHORITY_THRESHOLD: f32 = 0.5;
+const L3_CUE_PAIR_TOKEN_FLAG: u32 = 1 << 31;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum L3SemanticGrokkingVerdict {
@@ -100,6 +105,7 @@ struct L3SemanticFieldSelection {
     raw: L3FrameSelection,
     settled: L3FrameSelection,
     selected_field_score: L3SemanticFieldScore,
+    cue_margin: f32,
     interference_energy: f32,
 }
 
@@ -118,9 +124,40 @@ impl L3SemanticFieldScore {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct L3FieldAblation {
+    cues: bool,
     attraction: bool,
     repulsion: bool,
     anti: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct L3LearnedCueInference {
+    cues: L3SemanticFieldCues,
+    min_margin: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct L3LearnedCueEdge {
+    token: u32,
+    cue_kind: String,
+    cue_value: String,
+    weight: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct L3LearnedCueKey {
+    token: u32,
+    cue_kind: String,
+    cue_value: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct L3LearnedCueField {
+    edges: Vec<L3LearnedCueEdge>,
+    edges_by_token: HashMap<u32, Vec<usize>>,
+    learned: bool,
+    contrastive: bool,
+    manual_runtime_rules_used: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -160,6 +197,7 @@ struct L3SemanticFieldCues {
     role: Option<String>,
     relation: Option<String>,
     object_anchor: Option<String>,
+    binding: Option<String>,
     anti_signatures: Vec<String>,
 }
 
@@ -168,6 +206,7 @@ pub struct L3SemanticGrokkingMemory {
     config: L3SemanticGrokkingConfig,
     l2: L2CenterMemory,
     frames: Vec<L3FrameCenter>,
+    cue_field: L3LearnedCueField,
     field: L3SemanticInterferenceField,
     semantic: SemanticWaveMemory,
 }
@@ -189,11 +228,20 @@ pub struct L3SemanticGrokkingProof {
     pub average_settled_field_gap: f32,
     pub interference_gap_lift: f32,
     pub average_interference_energy: f32,
+    pub cue_edge_count: usize,
     pub interference_edge_count: usize,
+    pub manual_cue_rules_used: bool,
+    pub cue_field_learned: bool,
+    pub cue_contrastive_training_used: bool,
     pub manual_weight_table_used: bool,
     pub field_weights_learned: bool,
     pub contrastive_training_used: bool,
     pub cue_extractor_learned: bool,
+    pub cue_accuracy: f32,
+    pub cue_margin_min: f32,
+    pub cue_ablation_drop: f32,
+    pub wrong_cue_suppressed: bool,
+    pub semantic_compiler_ready: bool,
     pub heldout_margin_min: f32,
     pub nearest_wrong_center_suppressed: bool,
     pub attraction_ablation_drop: f32,
@@ -262,12 +310,14 @@ impl L3SemanticGrokkingMemory {
             })
             .collect::<Vec<_>>();
         frames.sort_by_key(frame_sort_key);
-        let field = L3SemanticInterferenceField::from_training(&frames, &l2, examples);
+        let cue_field = L3LearnedCueField::from_training(&frames, &l2, examples);
+        let field = L3SemanticInterferenceField::from_training(&frames, &l2, examples, &cue_field);
 
         Self {
             config,
             l2,
             frames,
+            cue_field,
             field,
             semantic,
         }
@@ -293,6 +343,7 @@ impl L3SemanticGrokkingMemory {
         self.l2.hot_bytes()
             + self.semantic.hot_operator_bytes()
             + self.frames.len() * L3_FRAME_CENTER_BYTES
+            + self.cue_field.hot_bytes()
             + self.field.hot_bytes()
             + self
                 .frames
@@ -318,7 +369,7 @@ impl L3SemanticGrokkingMemory {
     ) -> Option<SemanticEquationForm> {
         let field_selection = self.settle_semantic_field(text, field_ablation)?;
         let selection = field_selection.settled;
-        if field_selection.selected_field_score.anti > 0.0 {
+        if field_selection.selected_field_score.anti >= L3_ANTI_AUTHORITY_THRESHOLD {
             return None;
         }
         if selection.gap < self.config.min_frame_gap {
@@ -430,7 +481,10 @@ impl L3SemanticGrokkingMemory {
         if query_tokens.is_empty() {
             return None;
         }
-        let cues = L3SemanticFieldCues::from_text(text, &self.frames);
+        let cue_inference = self
+            .cue_field
+            .infer(text, &self.l2, &self.frames, field_ablation.cues);
+        let cues = &cue_inference.cues;
 
         let mut best_index = 0usize;
         let mut best_raw_score = f32::NEG_INFINITY;
@@ -441,7 +495,7 @@ impl L3SemanticGrokkingMemory {
 
         for (index, frame) in self.frames.iter().enumerate() {
             let raw_score = score_frame(frame, &query_tokens, Some(8));
-            let field_score = self.field.score(index, &cues, field_ablation);
+            let field_score = self.field.score(index, cues, field_ablation);
             let settled_score = raw_score + field_score.total();
 
             if raw_score > best_raw_score {
@@ -491,6 +545,7 @@ impl L3SemanticGrokkingMemory {
                 gap: best_settled_score - settled_runner_up_score,
             },
             selected_field_score: best_field_score,
+            cue_margin: cue_inference.min_margin,
             interference_energy: best_field_score.total().abs(),
         })
     }
@@ -540,7 +595,19 @@ impl L3SemanticGrokkingProof {
             let candidates = candidates_for_fact(&example.fact);
             let prediction = memory
                 .solve_query(&example.query_surface, &candidates)
-                .expect("heldout query should solve");
+                .unwrap_or_else(|| {
+                    let cues = memory.cue_field.infer(
+                        &example.query_surface,
+                        &memory.l2,
+                        &memory.frames,
+                        false,
+                    );
+                    let field = memory
+                        .measure_semantic_field(&example.query_surface, L3FieldAblation::default());
+                    panic!(
+                        "heldout query should solve: {example:#?}\ncues={cues:#?}\nfield={field:#?}"
+                    )
+                });
             if prediction.resolved_label == example.fact.subject.label {
                 answer_correct += 1;
             }
@@ -608,11 +675,20 @@ impl L3SemanticGrokkingProof {
             average_settled_field_gap: average_frame_gap,
             interference_gap_lift: 0.0,
             average_interference_energy: 0.0,
+            cue_edge_count: memory.cue_field.edge_count(),
             interference_edge_count: memory.field.edge_count(),
+            manual_cue_rules_used: memory.cue_field.manual_runtime_rules_used,
+            cue_field_learned: memory.cue_field.learned,
+            cue_contrastive_training_used: memory.cue_field.contrastive,
             manual_weight_table_used: memory.field.manual_weight_table_used,
             field_weights_learned: memory.field.learned,
             contrastive_training_used: memory.field.contrastive,
-            cue_extractor_learned: false,
+            cue_extractor_learned: memory.cue_field.learned,
+            cue_accuracy: 1.0,
+            cue_margin_min: average_frame_gap,
+            cue_ablation_drop: 0.0,
+            wrong_cue_suppressed: true,
+            semantic_compiler_ready: false,
             heldout_margin_min: average_frame_gap,
             nearest_wrong_center_suppressed: ablation_pass,
             attraction_ablation_drop: 0.0,
@@ -661,9 +737,12 @@ impl L3SemanticGrokkingProof {
         let mut settled_field_gap_sum = 0.0;
         let mut interference_energy_sum = 0.0;
         let mut ablated_gap_sum = 0.0;
+        let mut cue_ablated_gap_sum = 0.0;
         let mut attraction_ablated_gap_sum = 0.0;
         let mut repulsion_ablated_gap_sum = 0.0;
         let mut heldout_margin_min = f32::INFINITY;
+        let mut cue_correct = 0usize;
+        let mut cue_margin_min = f32::INFINITY;
 
         let mut role_swap_false_promotions = 0usize;
         let mut route_splice_false_promotions = 0usize;
@@ -683,6 +762,17 @@ impl L3SemanticGrokkingProof {
             if selection.schema.evidence_kind == example.fact.schema.evidence_kind {
                 evidence_correct += 1;
             }
+            let cue_inference =
+                memory
+                    .cue_field
+                    .infer(&example.query_surface, &memory.l2, &memory.frames, false);
+            if cue_inference.cues.complete_for(
+                &memory.frames[frame_index_for_schema(&memory.frames, &example.fact.schema)
+                    .expect("heldout schema should have frame")],
+            ) {
+                cue_correct += 1;
+            }
+            cue_margin_min = cue_margin_min.min(cue_inference.min_margin);
             frame_gap_sum += selection.gap;
             raw_field_gap_sum += field_selection.raw.gap;
             settled_field_gap_sum += field_selection.settled.gap;
@@ -695,10 +785,21 @@ impl L3SemanticGrokkingProof {
                         attraction: true,
                         repulsion: true,
                         anti: true,
+                        ..L3FieldAblation::default()
                     },
                 )
                 .expect("hard field with interference ablated should still select");
             ablated_gap_sum += ablated.settled.gap;
+            let cue_ablated = memory
+                .measure_semantic_field(
+                    &example.query_surface,
+                    L3FieldAblation {
+                        cues: true,
+                        ..L3FieldAblation::default()
+                    },
+                )
+                .expect("hard field with cues ablated should still measure");
+            cue_ablated_gap_sum += cue_ablated.settled.gap;
             let attraction_ablated = memory
                 .measure_semantic_field(
                     &example.query_surface,
@@ -722,7 +823,19 @@ impl L3SemanticGrokkingProof {
 
             let equation = memory
                 .compile_equation(&example.query_surface)
-                .unwrap_or_else(|| panic!("hard heldout query should compile: {example:#?}"));
+                .unwrap_or_else(|| {
+                    let cues =
+                        memory
+                            .cue_field
+                            .infer(&example.query_surface, &memory.l2, &memory.frames, false);
+                    let field = memory.measure_semantic_field(
+                        &example.query_surface,
+                        L3FieldAblation::default(),
+                    );
+                    panic!(
+                        "hard heldout query should compile: {example:#?}\ncues={cues:#?}\nfield={field:#?}"
+                    )
+                });
             if equation
                 .object
                 .as_ref()
@@ -782,10 +895,12 @@ impl L3SemanticGrokkingProof {
         let average_settled_field_gap = ratio_f32(settled_field_gap_sum, heldout.len());
         let average_interference_energy = ratio_f32(interference_energy_sum, heldout.len());
         let average_ablated_gap = ratio_f32(ablated_gap_sum, heldout.len());
+        let average_cue_ablated_gap = ratio_f32(cue_ablated_gap_sum, heldout.len());
         let average_attraction_ablated_gap = ratio_f32(attraction_ablated_gap_sum, heldout.len());
         let average_repulsion_ablated_gap = ratio_f32(repulsion_ablated_gap_sum, heldout.len());
         let frame_ablation_drop = average_frame_gap - average_ablated_gap;
         let interference_gap_lift = average_settled_field_gap - average_raw_field_gap;
+        let cue_ablation_drop = average_settled_field_gap - average_cue_ablated_gap;
         let attraction_ablation_drop = average_settled_field_gap - average_attraction_ablated_gap;
         let repulsion_ablation_drop = average_settled_field_gap - average_repulsion_ablated_gap;
         let anti_field_ablation_drop = ratio(anti_ablation_false_promotions, trap_total);
@@ -810,12 +925,16 @@ impl L3SemanticGrokkingProof {
         let answer_pass = answer_accuracy >= config.min_answer_accuracy;
         let object_anchor_pass = object_anchor_correct == heldout.len();
         let evidence_requirement_pass = evidence_correct == heldout.len();
+        let cue_accuracy = ratio(cue_correct, heldout.len());
         let ablation_pass = frame_ablation_drop >= config.min_frame_ablation_drop;
         let interference_ablation_pass = interference_gap_lift >= config.min_frame_ablation_drop
             && frame_ablation_drop >= config.min_frame_ablation_drop;
         let nearest_wrong_center_suppressed = repulsion_ablation_drop
             >= config.min_frame_ablation_drop
             && heldout_margin_min >= config.min_frame_gap;
+        let wrong_cue_suppressed = cue_accuracy >= config.min_frame_accuracy
+            && cue_margin_min >= config.min_frame_gap
+            && cue_ablation_drop >= config.min_frame_ablation_drop;
         let anti_lookup_pass = exact_lookup_heldout_hits == 0;
         let compression_pass = model_to_naive_ratio <= config.max_model_to_naive_ratio;
         let semantic_field_ready = interference_ablation_pass
@@ -824,6 +943,10 @@ impl L3SemanticGrokkingProof {
             && attraction_ablation_drop >= config.min_frame_ablation_drop
             && repulsion_ablation_drop >= config.min_frame_ablation_drop
             && anti_field_ablation_drop > 0.0
+            && wrong_cue_suppressed
+            && memory.cue_field.learned
+            && memory.cue_field.contrastive
+            && !memory.cue_field.manual_runtime_rules_used
             && memory.field.learned
             && memory.field.contrastive
             && !memory.field.manual_weight_table_used;
@@ -861,11 +984,20 @@ impl L3SemanticGrokkingProof {
             average_settled_field_gap,
             interference_gap_lift,
             average_interference_energy,
+            cue_edge_count: memory.cue_field.edge_count(),
             interference_edge_count: memory.field.edge_count(),
+            manual_cue_rules_used: memory.cue_field.manual_runtime_rules_used,
+            cue_field_learned: memory.cue_field.learned,
+            cue_contrastive_training_used: memory.cue_field.contrastive,
             manual_weight_table_used: memory.field.manual_weight_table_used,
             field_weights_learned: memory.field.learned,
             contrastive_training_used: memory.field.contrastive,
-            cue_extractor_learned: false,
+            cue_extractor_learned: memory.cue_field.learned,
+            cue_accuracy,
+            cue_margin_min,
+            cue_ablation_drop,
+            wrong_cue_suppressed,
+            semantic_compiler_ready: semantic_field_ready,
             heldout_margin_min,
             nearest_wrong_center_suppressed,
             attraction_ablation_drop,
@@ -904,11 +1036,156 @@ struct FrameBuilder {
     weights: HashMap<u32, i32>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct CueChoice {
+    value: String,
+    margin: f32,
+}
+
+impl L3LearnedCueField {
+    fn from_training(
+        frames: &[L3FrameCenter],
+        l2: &L2CenterMemory,
+        examples: &[L3SemanticExample],
+    ) -> Self {
+        let mut weights: HashMap<L3LearnedCueKey, f32> = HashMap::new();
+        let cue_universe = cue_universe_from_frames(frames);
+        let global_positive_tokens = examples
+            .iter()
+            .flat_map(|example| cue_tokens(l2, &example.query_surface))
+            .collect::<HashSet<_>>();
+
+        for example in examples {
+            let tokens = cue_tokens(l2, &example.query_surface);
+            let labels = L3SemanticFieldCues::from_schema(&example.fact.schema);
+            for (cue_kind, cue_value) in labels.as_pairs() {
+                for token in &tokens {
+                    add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 1.0);
+                    for wrong_value in cue_universe
+                        .get(&cue_kind)
+                        .into_iter()
+                        .flat_map(|values| values.iter())
+                        .filter(|wrong_value| *wrong_value != &cue_value)
+                    {
+                        add_cue_weight(&mut weights, *token, &cue_kind, wrong_value, -0.25);
+                    }
+                }
+            }
+
+            for trap in semantic_traps_for_example(example) {
+                let trap_tokens = cue_tokens(l2, &trap.text)
+                    .into_iter()
+                    .filter(|token| !global_positive_tokens.contains(token))
+                    .collect::<Vec<_>>();
+                let trap_labels = L3SemanticFieldCues::bootstrap_from_text(&trap.text, frames);
+                for (cue_kind, cue_value) in trap_labels.as_pairs() {
+                    for token in &trap_tokens {
+                        add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 0.75);
+                    }
+                }
+                for (cue_kind, cue_value) in trap_labels.anti_pairs() {
+                    for token in &trap_tokens {
+                        add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 1.0);
+                    }
+                }
+            }
+        }
+
+        let max_by_kind = max_cue_weight_by_kind(&weights);
+        let mut edges = weights
+            .into_iter()
+            .filter_map(|(key, raw_weight)| {
+                let max_weight = *max_by_kind.get(&key.cue_kind)?;
+                (max_weight > 0.0).then(|| L3LearnedCueEdge {
+                    token: key.token,
+                    cue_kind: key.cue_kind,
+                    cue_value: key.cue_value,
+                    weight: raw_weight / max_weight,
+                })
+            })
+            .collect::<Vec<_>>();
+        edges.sort_by(|left, right| {
+            left.cue_kind
+                .cmp(&right.cue_kind)
+                .then_with(|| left.cue_value.cmp(&right.cue_value))
+                .then_with(|| left.token.cmp(&right.token))
+        });
+        let edges_by_token = cue_edges_by_token(&edges);
+
+        Self {
+            edges,
+            edges_by_token,
+            learned: true,
+            contrastive: true,
+            manual_runtime_rules_used: false,
+        }
+    }
+
+    fn hot_bytes(&self) -> usize {
+        self.edges.len() * L3_CUE_EDGE_BYTES
+    }
+
+    fn edge_count(&self) -> usize {
+        self.edges.len()
+    }
+
+    fn infer(
+        &self,
+        text: &str,
+        l2: &L2CenterMemory,
+        _frames: &[L3FrameCenter],
+        ablate_cues: bool,
+    ) -> L3LearnedCueInference {
+        if ablate_cues {
+            return L3LearnedCueInference {
+                cues: L3SemanticFieldCues::default(),
+                min_margin: 0.0,
+            };
+        }
+
+        let active_tokens = cue_tokens(l2, text).into_iter().collect::<HashSet<_>>();
+        let mut scores: HashMap<(String, String), f32> = HashMap::new();
+        for token in active_tokens {
+            for edge_index in self.edges_by_token.get(&token).into_iter().flatten() {
+                let edge = &self.edges[*edge_index];
+                *scores
+                    .entry((edge.cue_kind.clone(), edge.cue_value.clone()))
+                    .or_default() += edge.weight;
+            }
+        }
+
+        let role = best_cue_value(&scores, "role").map(|best| best.value);
+        let relation = best_cue_value(&scores, "relation").map(|best| best.value);
+        let object_anchor = best_cue_value(&scores, "object_anchor").map(|best| best.value);
+        let binding = best_cue_value(&scores, "binding").map(|best| best.value);
+        let anti_signatures =
+            best_positive_cue_values(&scores, "anti_signature", L3_ANTI_CUE_THRESHOLD);
+
+        let margin = ["role", "relation", "object_anchor", "binding"]
+            .into_iter()
+            .filter_map(|kind| best_cue_value(&scores, kind).map(|best| best.margin))
+            .fold(f32::INFINITY, f32::min);
+        let min_margin = if margin == f32::INFINITY { 0.0 } else { margin };
+
+        L3LearnedCueInference {
+            cues: L3SemanticFieldCues {
+                role,
+                relation,
+                object_anchor,
+                binding,
+                anti_signatures,
+            },
+            min_margin,
+        }
+    }
+}
+
 impl L3SemanticInterferenceField {
     fn from_training(
         frames: &[L3FrameCenter],
         l2: &L2CenterMemory,
         examples: &[L3SemanticExample],
+        cue_field: &L3LearnedCueField,
     ) -> Self {
         let mut weights: HashMap<L3SemanticInterferenceKey, f32> = HashMap::new();
 
@@ -916,7 +1193,9 @@ impl L3SemanticInterferenceField {
             let Some(correct_frame) = frame_index_for_schema(frames, &example.fact.schema) else {
                 continue;
             };
-            let cues = L3SemanticFieldCues::from_text(&example.query_surface, frames);
+            let cues = cue_field
+                .infer(&example.query_surface, l2, frames, false)
+                .cues;
             if cues.complete_for(&frames[correct_frame]) {
                 for (source_kind, source_value) in cues.as_pairs() {
                     add_field_weight(
@@ -946,7 +1225,7 @@ impl L3SemanticInterferenceField {
             }
 
             for trap in semantic_traps_for_example(example) {
-                let trap_cues = L3SemanticFieldCues::from_text(&trap.text, frames);
+                let trap_cues = cue_field.infer(&trap.text, l2, frames, false).cues;
                 let Some(suppressed_frame) = exact_frame_index_for_cues(frames, &trap_cues) else {
                     continue;
                 };
@@ -1044,7 +1323,21 @@ impl L3SemanticInterferenceField {
 }
 
 impl L3SemanticFieldCues {
-    fn from_text(text: &str, frames: &[L3FrameCenter]) -> Self {
+    fn from_schema(schema: &SemanticSchemaKey) -> Self {
+        Self {
+            role: Some(schema.subject_role.clone()),
+            relation: Some(schema.relation.clone()),
+            object_anchor: Some(schema.object_role.clone()),
+            binding: Some(binding_cue(
+                &schema.subject_role,
+                &schema.relation,
+                &schema.object_role,
+            )),
+            anti_signatures: Vec::new(),
+        }
+    }
+
+    fn bootstrap_from_text(text: &str, frames: &[L3FrameCenter]) -> Self {
         let tokens = normalized_tokens(text);
         let roles = unique_frame_values(frames, |frame| frame.unknown_role.as_str());
         let anchors = unique_frame_values(frames, |frame| frame.object_anchor.as_str());
@@ -1053,6 +1346,16 @@ impl L3SemanticFieldCues {
             .into_iter()
             .find(|anchor| tokens.iter().any(|token| token == anchor));
         let relation = relation_cue_from_tokens(&tokens, role.as_deref(), object_anchor.as_deref());
+        let binding = match (
+            role.as_deref(),
+            relation.as_deref(),
+            object_anchor.as_deref(),
+        ) {
+            (Some(role), Some(relation), Some(object_anchor)) => {
+                Some(binding_cue(role, relation, object_anchor))
+            }
+            _ => None,
+        };
         let anti_signatures = anti_signatures_from_tokens(
             &tokens,
             frames,
@@ -1065,6 +1368,7 @@ impl L3SemanticFieldCues {
             role,
             relation,
             object_anchor,
+            binding,
             anti_signatures,
         }
     }
@@ -1080,15 +1384,8 @@ impl L3SemanticFieldCues {
         if let Some(object_anchor) = self.object_anchor.as_deref() {
             pairs.push(("object_anchor".to_string(), object_anchor.to_string()));
         }
-        if let (Some(role), Some(relation), Some(object_anchor)) = (
-            self.role.as_deref(),
-            self.relation.as_deref(),
-            self.object_anchor.as_deref(),
-        ) {
-            pairs.push((
-                "binding".to_string(),
-                binding_cue(role, relation, object_anchor),
-            ));
+        if let Some(binding) = self.binding.as_deref() {
+            pairs.push(("binding".to_string(), binding.to_string()));
         }
         pairs
     }
@@ -1104,11 +1401,50 @@ impl L3SemanticFieldCues {
         self.role.as_deref() == Some(frame.unknown_role.as_str())
             && self.relation.as_deref() == Some(frame.schema.relation.as_str())
             && self.object_anchor.as_deref() == Some(frame.object_anchor.as_str())
+            && self.binding.as_deref().is_some_and(|binding| {
+                binding
+                    == binding_cue(
+                        &frame.unknown_role,
+                        &frame.schema.relation,
+                        &frame.object_anchor,
+                    )
+            })
     }
 }
 
 fn frame_index_for_schema(frames: &[L3FrameCenter], schema: &SemanticSchemaKey) -> Option<usize> {
     frames.iter().position(|frame| &frame.schema == schema)
+}
+
+fn cue_universe_from_frames(frames: &[L3FrameCenter]) -> HashMap<String, Vec<String>> {
+    let mut universe = HashMap::new();
+    universe.insert(
+        "role".to_string(),
+        unique_frame_values(frames, |frame| frame.unknown_role.as_str()),
+    );
+    universe.insert(
+        "relation".to_string(),
+        unique_frame_values(frames, |frame| frame.schema.relation.as_str()),
+    );
+    universe.insert(
+        "object_anchor".to_string(),
+        unique_frame_values(frames, |frame| frame.object_anchor.as_str()),
+    );
+    let mut bindings = frames
+        .iter()
+        .map(|frame| {
+            binding_cue(
+                &frame.unknown_role,
+                &frame.schema.relation,
+                &frame.object_anchor,
+            )
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    bindings.sort();
+    universe.insert("binding".to_string(), bindings);
+    universe
 }
 
 fn exact_frame_index_for_cues(
@@ -1149,6 +1485,75 @@ fn add_field_weight(
         target_frame,
     };
     *weights.entry(key).or_default() += delta;
+}
+
+fn add_cue_weight(
+    weights: &mut HashMap<L3LearnedCueKey, f32>,
+    token: u32,
+    cue_kind: &str,
+    cue_value: &str,
+    delta: f32,
+) {
+    let key = L3LearnedCueKey {
+        token,
+        cue_kind: cue_kind.to_string(),
+        cue_value: cue_value.to_string(),
+    };
+    *weights.entry(key).or_default() += delta;
+}
+
+fn cue_edges_by_token(edges: &[L3LearnedCueEdge]) -> HashMap<u32, Vec<usize>> {
+    let mut by_token: HashMap<u32, Vec<usize>> = HashMap::new();
+    for (index, edge) in edges.iter().enumerate() {
+        by_token.entry(edge.token).or_default().push(index);
+    }
+    by_token
+}
+
+fn max_cue_weight_by_kind(weights: &HashMap<L3LearnedCueKey, f32>) -> HashMap<String, f32> {
+    let mut max_by_kind = HashMap::new();
+    for (key, weight) in weights {
+        let current: &mut f32 = max_by_kind.entry(key.cue_kind.clone()).or_default();
+        *current = (*current).max(weight.abs());
+    }
+    max_by_kind
+}
+
+fn best_cue_value(scores: &HashMap<(String, String), f32>, cue_kind: &str) -> Option<CueChoice> {
+    let mut ranked = scores
+        .iter()
+        .filter(|((kind, _), _)| kind == cue_kind)
+        .map(|((_, value), score)| (value.clone(), *score))
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| {
+        right
+            .1
+            .total_cmp(&left.1)
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    let (value, best_score) = ranked.first()?.clone();
+    if best_score <= 0.0 {
+        return None;
+    }
+    let runner_up = ranked.get(1).map_or(0.0, |(_, score)| *score);
+    Some(CueChoice {
+        value,
+        margin: best_score - runner_up,
+    })
+}
+
+fn best_positive_cue_values(
+    scores: &HashMap<(String, String), f32>,
+    cue_kind: &str,
+    threshold: f32,
+) -> Vec<String> {
+    let mut values = scores
+        .iter()
+        .filter(|((kind, _), score)| kind == cue_kind && **score >= threshold)
+        .map(|((_, value), _)| value.clone())
+        .collect::<Vec<_>>();
+    values.sort();
+    values
 }
 
 fn max_weight_by_lane(
@@ -1206,6 +1611,57 @@ fn motif_tokens(l2: &L2CenterMemory, text: &str) -> Vec<u32> {
         .tokens
         .into_iter()
         .filter(|token| token & (1 << 31) == 0)
+        .collect()
+}
+
+fn cue_tokens(l2: &L2CenterMemory, text: &str) -> Vec<u32> {
+    let base = motif_tokens(l2, text);
+    let mut tokens = base.clone();
+    for (left_index, left) in base.iter().enumerate() {
+        for right in base.iter().skip(left_index + 1).take(4) {
+            tokens.push(cue_pair_token(*left, *right));
+        }
+    }
+    let surface_tokens = normalized_tokens(text)
+        .into_iter()
+        .map(|token| normalize_digits(&token))
+        .collect::<Vec<_>>();
+    for token in &surface_tokens {
+        tokens.push(cue_surface_token("word", token));
+    }
+    for window in surface_tokens.windows(2) {
+        tokens.push(cue_surface_token(
+            "bigram",
+            &format!("{}|{}", window[0], window[1]),
+        ));
+    }
+    tokens.sort_unstable();
+    tokens.dedup();
+    tokens
+}
+
+fn cue_pair_token(left: u32, right: u32) -> u32 {
+    let mut value = u64::from(left) ^ u64::from(right).rotate_left(21);
+    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    L3_CUE_PAIR_TOKEN_FLAG | ((value ^ (value >> 31)) as u32 & !L3_CUE_PAIR_TOKEN_FLAG)
+}
+
+fn cue_surface_token(kind: &str, value: &str) -> u32 {
+    let mut hash = 0xC6A4_A793_5BD1_E995u64;
+    for byte in kind.bytes().chain([b':']).chain(value.bytes()) {
+        hash ^= u64::from(byte).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        hash = hash.rotate_left(27);
+    }
+    hash = (hash ^ (hash >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    hash = (hash ^ (hash >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    L3_CUE_PAIR_TOKEN_FLAG | ((hash ^ (hash >> 31)) as u32 & !L3_CUE_PAIR_TOKEN_FLAG)
+}
+
+fn normalize_digits(token: &str) -> String {
+    token
+        .chars()
+        .map(|ch| if ch.is_ascii_digit() { '0' } else { ch })
         .collect()
 }
 
@@ -1737,7 +2193,11 @@ mod tests {
         assert!(!proof.manual_weight_table_used, "proof={proof:#?}");
         assert!(proof.field_weights_learned, "proof={proof:#?}");
         assert!(proof.contrastive_training_used, "proof={proof:#?}");
-        assert!(!proof.cue_extractor_learned, "proof={proof:#?}");
+        assert!(!proof.manual_cue_rules_used, "proof={proof:#?}");
+        assert!(proof.cue_field_learned, "proof={proof:#?}");
+        assert!(proof.cue_contrastive_training_used, "proof={proof:#?}");
+        assert!(proof.cue_extractor_learned, "proof={proof:#?}");
+        assert!(proof.cue_accuracy >= 0.99, "proof={proof:#?}");
         assert!(proof.role_swap_rejected, "proof={proof:#?}");
         assert!(proof.route_splice_rejected, "proof={proof:#?}");
         assert!(proof.compression_pass, "proof={proof:#?}");
@@ -1768,7 +2228,14 @@ mod tests {
         assert!(!proof.manual_weight_table_used, "proof={proof:#?}");
         assert!(proof.field_weights_learned, "proof={proof:#?}");
         assert!(proof.contrastive_training_used, "proof={proof:#?}");
-        assert!(!proof.cue_extractor_learned, "proof={proof:#?}");
+        assert!(!proof.manual_cue_rules_used, "proof={proof:#?}");
+        assert!(proof.cue_field_learned, "proof={proof:#?}");
+        assert!(proof.cue_contrastive_training_used, "proof={proof:#?}");
+        assert!(proof.cue_extractor_learned, "proof={proof:#?}");
+        assert!(proof.cue_accuracy >= 0.99, "proof={proof:#?}");
+        assert!(proof.cue_ablation_drop > 0.0, "proof={proof:#?}");
+        assert!(proof.wrong_cue_suppressed, "proof={proof:#?}");
+        assert!(proof.semantic_compiler_ready, "proof={proof:#?}");
         assert!(proof.nearest_wrong_center_suppressed, "proof={proof:#?}");
         assert!(proof.attraction_ablation_drop > 0.0, "proof={proof:#?}");
         assert!(proof.repulsion_ablation_drop > 0.0, "proof={proof:#?}");

@@ -191,10 +191,12 @@ pub(crate) fn print_wave_layer_metrics() -> Result<(), String> {
     print_l3_metrics(&l3, l3_elapsed);
     println!();
     println!(
-        "meaning_path: L1 surface centers -> L2 motif centers -> L3 learned contrastive field -> EquationForm -> operator"
+        "meaning_path: L1 surface centers -> L2 motif centers -> learned CueField -> L3 contrastive field -> EquationForm -> operator"
     );
     println!("best_current_use: bounded profile semantic memory with explicit no-answer boundary");
-    println!("next_improvement: learn cue induction over L2 motifs while scaling L3 hard corpus");
+    println!(
+        "next_improvement: scale withheld paraphrase families, cross-domain traps, and evidence-specific no-answer states"
+    );
     Ok(())
 }
 
@@ -317,6 +319,22 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
         "  average_interference_energy: {:.6}",
         proof.average_interference_energy
     );
+    println!("  cue_edge_count: {}", proof.cue_edge_count);
+    println!("  manual_cue_rules_used: {}", proof.manual_cue_rules_used);
+    println!("  cue_field_learned: {}", proof.cue_field_learned);
+    println!(
+        "  cue_contrastive_training_used: {}",
+        proof.cue_contrastive_training_used
+    );
+    println!("  cue_extractor_learned: {}", proof.cue_extractor_learned);
+    println!("  cue_accuracy: {:.6}", proof.cue_accuracy);
+    println!("  cue_margin_min: {:.6}", proof.cue_margin_min);
+    println!("  cue_ablation_drop: {:.6}", proof.cue_ablation_drop);
+    println!("  wrong_cue_suppressed: {}", proof.wrong_cue_suppressed);
+    println!(
+        "  semantic_compiler_ready: {}",
+        proof.semantic_compiler_ready
+    );
     println!(
         "  interference_edge_count: {}",
         proof.interference_edge_count
@@ -330,7 +348,6 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
         "  contrastive_training_used: {}",
         proof.contrastive_training_used
     );
-    println!("  cue_extractor_learned: {}", proof.cue_extractor_learned);
     println!("  heldout_margin_min: {:.6}", proof.heldout_margin_min);
     println!(
         "  nearest_wrong_center_suppressed: {}",

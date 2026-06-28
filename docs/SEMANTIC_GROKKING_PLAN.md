@@ -37,18 +37,25 @@ Current L3 status:
 
 ```text
 hard bounded Linux semantic profile
-L2 motif field -> learned contrastive semantic field -> L3 center convergence -> EquationForm
+L2 motif field -> learned CueField -> learned contrastive semantic field -> L3 center convergence -> EquationForm
 heldout semantic role binding
 4 relation families
 16 paraphrase surfaces
+manual_cue_rules_used = false
+cue_field_learned = true
+cue_contrastive_training_used = true
+cue_extractor_learned = true
+cue_edge_count = 124189
+cue_accuracy = 1.0
+cue_ablation_drop = 3.4282615
+semantic_compiler_ready = true
 manual_weight_table_used = false
 field_weights_learned = true
 contrastive_training_used = true
-cue_extractor_learned = false
-interference_edge_count = 42
+interference_edge_count = 53
 interference_gap_lift = 3.4282615
 nearest_wrong_center_suppressed = true
-anti_field_ablation_drop = 0.1875
+anti_field_ablation_drop = 0.3125
 role-swap / route-splice / missing-evidence / negative-route traps
 false_promotion_rate = 0.0
 semantic_field_ready = true
@@ -85,23 +92,25 @@ semantic atom grokking for bounded profiles
    cross-domain ambiguous anchors, evidence-specific no-answer states, and
    larger false-promotion stress.
 
-2. Build learned L2 -> L3 promotion.
+2. Scale learned L2 -> L3 promotion beyond the current bounded profile.
 
-   The promotion layer must learn:
+   The current promotion layer already learns:
 
    ```text
    L2 motif field -> frame candidate
    L2 motif field -> role slot
    L2 motif field -> relation operator
-   L2 motif field -> route
-   L2 motif field -> evidence need
+   L2 motif field -> object anchor
+   generic surface residual cues -> anti-wave shortcut signals
    ```
 
-   Handwritten templates are allowed only as controls, not as the proof path.
-   Current L3 still has `cue_extractor_learned = false`; this is the next real
-   semantic compiler gap.
+   Handwritten cue rules are no longer used at runtime. Bootstrap labels are
+   still used to create the training target, so the next gap is not "does the
+   CueField exist"; it is whether learned cue induction survives larger
+   domains, withheld paraphrase families, stronger collisions, and
+   evidence-specific no-answer states.
 
-3. Build a semantic grokking proof.
+3. Strengthen the semantic grokking proof under scale.
 
    Pass criteria:
 
