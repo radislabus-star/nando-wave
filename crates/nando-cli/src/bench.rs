@@ -1,11 +1,13 @@
 use std::hint::black_box;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use nando_core::{
-    BytePhaseLut, CarrierWave, Cell32Learner, LinkProfile, LinkTissue, Stage2Organ, SymbolCell8,
-    SymbolL3Organism, SymbolWaveCluster, TickTrace, run_stage2_tick_with_carrier,
-    run_stage2_tick_with_organ_carrier, run_stage2_trace_with_organ_carrier,
-    run_stage2_trace_with_organ_lut_carrier,
+    BytePhaseLut, CarrierWave, Cell32Learner, L1CenterMemoryConfig, L1CenterMemoryProof,
+    L2CenterMemoryConfig, L2CenterMemoryProof, L3SemanticGrokkingProof, LinkProfile, LinkTissue,
+    Stage2Organ, SymbolCell8, SymbolL3Organism, SymbolWaveCluster, TickTrace,
+    run_stage2_tick_with_carrier, run_stage2_tick_with_organ_carrier,
+    run_stage2_trace_with_organ_carrier, run_stage2_trace_with_organ_lut_carrier,
 };
 
 pub(crate) fn print_stage2_tick_bench(seed: u64, ticks: usize) {
@@ -123,12 +125,227 @@ pub(crate) fn print_symbol_l3_bench(seed: u64, ticks: usize) {
     );
 }
 
+pub(crate) fn print_wave_layer_metrics() -> Result<(), String> {
+    let words = corpus_words("russian_words_300k.txt")?;
+
+    let start = Instant::now();
+    let l1 = L1CenterMemoryProof::prove(
+        words[..8_000].iter().map(String::as_str),
+        words[8_000..10_000].iter().map(String::as_str),
+        L1CenterMemoryConfig {
+            min_center_support: 2,
+            min_heldout_ngram_coverage: 0.70,
+            min_average_reconstruction_similarity: 0.68,
+            min_average_fourier_similarity: 0.64,
+            min_fourier_ablation_drop: 0.03,
+            min_real_vs_corrupt_coverage_gap: 0.12,
+            max_model_to_naive_ratio: 0.12,
+            max_corrupt_eval_words: 1_024,
+            max_fourier_eval_words: 512,
+            ..L1CenterMemoryConfig::default()
+        },
+    );
+    let l1_elapsed = start.elapsed();
+
+    let start = Instant::now();
+    let l2 = L2CenterMemoryProof::prove(
+        words[..20_000].iter().map(String::as_str),
+        words[20_000..25_000].iter().map(String::as_str),
+        L2CenterMemoryConfig {
+            l1_config: L1CenterMemoryConfig {
+                min_center_support: 2,
+                min_heldout_ngram_coverage: 0.70,
+                min_average_reconstruction_similarity: 0.68,
+                min_average_fourier_similarity: 0.64,
+                min_fourier_ablation_drop: 0.03,
+                min_real_vs_corrupt_coverage_gap: 0.12,
+                max_model_to_naive_ratio: 0.12,
+                max_corrupt_eval_words: 1_024,
+                max_fourier_eval_words: 512,
+                ..L1CenterMemoryConfig::default()
+            },
+            motif_len: 4,
+            min_motif_support: 4,
+            min_heldout_ref_coverage: 0.60,
+            min_heldout_word_coverage: 0.50,
+            min_average_sequence_similarity: 0.65,
+            min_average_fourier_similarity: 0.65,
+            min_fourier_ablation_drop: 0.20,
+            min_real_vs_corrupt_coverage_gap: 0.30,
+            max_model_to_naive_ratio: 0.90,
+            max_corrupt_eval_words: 1_024,
+            max_fourier_eval_words: 512,
+            ..L2CenterMemoryConfig::default()
+        },
+    );
+    let l2_elapsed = start.elapsed();
+
+    let start = Instant::now();
+    let l3 = L3SemanticGrokkingProof::prove_hard_semantic_profile();
+    let l3_elapsed = start.elapsed();
+
+    println!("Nando Wave layered architecture metrics");
+    println!();
+    print_l1_metrics(&l1, l1_elapsed);
+    print_l2_metrics(&l2, l2_elapsed);
+    print_l3_metrics(&l3, l3_elapsed);
+    println!();
+    println!(
+        "meaning_path: L1 surface centers -> L2 motif centers -> L3 semantic frame + operator"
+    );
+    println!("best_current_use: bounded profile semantic memory with explicit no-answer boundary");
+    println!("next_improvement: scale L3 hard corpus before any L4/L5/L6 promotion");
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 struct SymbolL3BenchRow {
     duration: Duration,
     clusters: usize,
     cells: usize,
     active_bytes: usize,
+}
+
+fn print_l1_metrics(proof: &L1CenterMemoryProof, elapsed: Duration) {
+    println!("L1 surface center memory");
+    println!("  elapsed_ms: {:.3}", elapsed.as_secs_f64() * 1_000.0);
+    println!("  train_words: {}", proof.train_words);
+    println!("  heldout_words: {}", proof.heldout_words);
+    println!("  centers: {}", proof.center_count);
+    println!("  model_hot_bytes: {}", proof.model_hot_bytes);
+    println!("  naive_wave_bytes: {}", proof.naive_total_wave_bytes);
+    println!(
+        "  model_to_naive_ratio: {:.6}",
+        proof.model_to_naive_total_ratio
+    );
+    println!(
+        "  heldout_ngram_coverage: {:.6}",
+        proof.heldout_ngram_coverage
+    );
+    println!(
+        "  fourier_similarity: {:.6}",
+        proof.average_fourier_similarity
+    );
+    println!(
+        "  fourier_ablation_drop: {:.6}",
+        proof.fourier_ablation_drop
+    );
+    println!(
+        "  exact_lookup_heldout_hits: {}",
+        proof.exact_lookup_heldout_hits
+    );
+    println!("  ready_for_l2: {}", proof.promotion_ready_for_l2);
+    println!();
+}
+
+fn print_l2_metrics(proof: &L2CenterMemoryProof, elapsed: Duration) {
+    println!("L2 motif center memory");
+    println!("  elapsed_ms: {:.3}", elapsed.as_secs_f64() * 1_000.0);
+    println!("  train_words: {}", proof.train_words);
+    println!("  heldout_words: {}", proof.heldout_words);
+    println!("  l1_centers: {}", proof.l1_center_count);
+    println!("  l2_centers: {}", proof.l2_center_count);
+    println!("  model_hot_bytes: {}", proof.model_hot_bytes);
+    println!(
+        "  naive_l1_sequence_bytes: {}",
+        proof.naive_total_l1_sequence_bytes
+    );
+    println!(
+        "  model_to_naive_ratio: {:.6}",
+        proof.model_to_naive_total_ratio
+    );
+    println!("  heldout_ref_coverage: {:.6}", proof.heldout_ref_coverage);
+    println!(
+        "  sequence_similarity: {:.6}",
+        proof.average_sequence_similarity
+    );
+    println!(
+        "  fourier_similarity: {:.6}",
+        proof.average_fourier_similarity
+    );
+    println!(
+        "  fourier_ablation_drop: {:.6}",
+        proof.fourier_ablation_drop
+    );
+    println!(
+        "  real_vs_corrupt_coverage_gap: {:.6}",
+        proof.real_vs_corrupt_coverage_gap
+    );
+    println!(
+        "  exact_lookup_heldout_hits: {}",
+        proof.exact_lookup_heldout_hits
+    );
+    println!("  ready_for_l3: {}", proof.promotion_ready_for_l3);
+    println!();
+}
+
+fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
+    println!("L3 semantic grokking");
+    println!("  elapsed_ms: {:.3}", elapsed.as_secs_f64() * 1_000.0);
+    println!("  train_examples: {}", proof.train_examples);
+    println!("  heldout_examples: {}", proof.heldout_examples);
+    println!("  relation_family_count: {}", proof.relation_family_count);
+    println!(
+        "  paraphrase_template_count: {}",
+        proof.paraphrase_template_count
+    );
+    println!("  frame_count: {}", proof.frame_count);
+    println!("  l2_center_count: {}", proof.l2_center_count);
+    println!("  operator_count: {}", proof.operator_count);
+    println!("  model_hot_bytes: {}", proof.model_hot_bytes);
+    println!(
+        "  naive_semantic_fact_bytes: {}",
+        proof.naive_semantic_fact_bytes
+    );
+    println!("  model_to_naive_ratio: {:.6}", proof.model_to_naive_ratio);
+    println!("  frame_accuracy: {:.6}", proof.frame_accuracy);
+    println!("  answer_accuracy: {:.6}", proof.answer_accuracy);
+    println!("  average_frame_gap: {:.6}", proof.average_frame_gap);
+    println!("  frame_ablation_drop: {:.6}", proof.frame_ablation_drop);
+    println!("  object_anchor_pass: {}", proof.object_anchor_pass);
+    println!(
+        "  evidence_requirement_pass: {}",
+        proof.evidence_requirement_pass
+    );
+    println!(
+        "  missing_evidence_blocked: {}",
+        proof.missing_evidence_blocked
+    );
+    println!("  role_swap_rejected: {}", proof.role_swap_rejected);
+    println!("  route_splice_rejected: {}", proof.route_splice_rejected);
+    println!(
+        "  negative_route_rejected: {}",
+        proof.negative_route_rejected
+    );
+    println!("  false_promotion_rate: {:.6}", proof.false_promotion_rate);
+    println!(
+        "  exact_lookup_heldout_hits: {}",
+        proof.exact_lookup_heldout_hits
+    );
+    println!(
+        "  semantic_grokking_ready: {}",
+        proof.semantic_grokking_ready
+    );
+    println!("  hard_profile_ready: {}", proof.hard_profile_ready);
+}
+
+fn corpus_words(name: &str) -> Result<Vec<String>, String> {
+    let path = corpus_path(name);
+    std::fs::read_to_string(&path)
+        .map_err(|error| format!("failed to read {}: {error}", path.display()))
+        .map(|text| {
+            text.lines()
+                .map(str::trim)
+                .filter(|word| !word.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+}
+
+fn corpus_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/corpus")
+        .join(name)
 }
 
 fn bench_seed_tick(seed: u64, ticks: usize) -> Duration {

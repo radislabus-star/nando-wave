@@ -36,9 +36,13 @@ L2 is still surface/motif grokking, not semantic grokking.
 Current L3 status:
 
 ```text
-bounded Linux command-provider profile
+hard bounded Linux semantic profile
 L2 motif field -> frame center -> semantic operator
 heldout semantic role binding
+4 relation families
+16 paraphrase surfaces
+role-swap / route-splice / missing-evidence / negative-route traps
+false_promotion_rate = 0.0
 semantic_grokking_ready = true
 ```
 
@@ -56,7 +60,7 @@ semantic atom grokking for bounded profiles
 
 ## Required Moves
 
-1. Build a harder L3 semantic-grokking dataset.
+1. Scale the hard L3 semantic-grokking dataset.
 
    The dataset must hide a reusable rule behind role-complete facts:
 
@@ -64,9 +68,11 @@ semantic atom grokking for bounded profiles
    subject_role + relation + route -> object_role/object
    ```
 
-   Train and heldout must have no exact fact overlap. The next corpus must add
-   multiple relation families, paraphrases, ambiguous anchors, negative
-   evidence routes, and grounding/evidence requirements.
+   Current hard L3 already has multiple relation families, paraphrases,
+   role-swap traps, route-splice traps, missing-evidence blocks, negative-route
+   blocks, heldout fillers, and ablation. The next corpus must add withheld
+   paraphrase families, cross-domain ambiguous anchors, evidence-specific
+   no-answer states, and larger false-promotion stress.
 
 2. Build learned L2 -> L3 promotion.
 

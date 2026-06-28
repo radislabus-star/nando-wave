@@ -33,6 +33,8 @@ pub(crate) fn print_help() {
     println!("            Measure Cell32 score vs pair/triple LinkTissue score loops");
     println!("  bench-symbol-l3 [seed] [ticks]");
     println!("            Measure SymbolL3 256/512/768/1024-cell tick speed");
+    println!("  bench-wave-layers");
+    println!("            Measure L1/L2/L3 layered Wave speed, size, heldout, and ablation");
     println!("  live-byte-train [seed] <text...>");
     println!("            Run primitive online byte prediction with local feedback");
     println!("  live-byte-learn [seed] <text...>");

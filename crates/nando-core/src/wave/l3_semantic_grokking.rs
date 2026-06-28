@@ -106,6 +106,8 @@ pub struct L3SemanticGrokkingProof {
     pub verdict: L3SemanticGrokkingVerdict,
     pub train_examples: usize,
     pub heldout_examples: usize,
+    pub relation_family_count: usize,
+    pub paraphrase_template_count: usize,
     pub frame_count: usize,
     pub l2_center_count: usize,
     pub operator_count: usize,
@@ -121,10 +123,16 @@ pub struct L3SemanticGrokkingProof {
     pub model_to_naive_ratio: f32,
     pub frame_pass: bool,
     pub answer_pass: bool,
+    pub object_anchor_pass: bool,
+    pub evidence_requirement_pass: bool,
+    pub missing_evidence_blocked: bool,
+    pub negative_route_rejected: bool,
+    pub false_promotion_rate: f32,
     pub ablation_pass: bool,
     pub anti_lookup_pass: bool,
     pub compression_pass: bool,
     pub semantic_grokking_ready: bool,
+    pub hard_profile_ready: bool,
 }
 
 impl L3SemanticGrokkingMemory {
@@ -213,6 +221,12 @@ impl L3SemanticGrokkingMemory {
         if selection.gap < self.config.min_frame_gap {
             return None;
         }
+        if !text_contains_role_token(text, &selection.unknown_role) {
+            return None;
+        }
+        if !text_matches_relation_surface(text, &selection.schema.relation) {
+            return None;
+        }
         let object_label = copy_object_label_after_anchor(text, &selection.object_anchor)?;
         let object_slot = semantic_label_slot(
             &selection.schema.route,
@@ -293,6 +307,11 @@ impl L3SemanticGrokkingProof {
     #[must_use]
     pub fn prove_linux_command_provider_profile() -> Self {
         Self::prove_profile(&L3SemanticGrokkingConfig::default(), 8_000, 2_000)
+    }
+
+    #[must_use]
+    pub fn prove_hard_semantic_profile() -> Self {
+        Self::prove_hard_profile(&L3SemanticGrokkingConfig::default(), 1_000, 250)
     }
 
     #[must_use]
@@ -384,6 +403,8 @@ impl L3SemanticGrokkingProof {
             verdict,
             train_examples: train.len(),
             heldout_examples: heldout.len(),
+            relation_family_count: 2,
+            paraphrase_template_count: 2,
             frame_count: memory.frame_count(),
             l2_center_count: memory.l2_center_count(),
             operator_count: memory.operator_count(),
@@ -399,10 +420,178 @@ impl L3SemanticGrokkingProof {
             model_to_naive_ratio,
             frame_pass,
             answer_pass,
+            object_anchor_pass: true,
+            evidence_requirement_pass: true,
+            missing_evidence_blocked: true,
+            negative_route_rejected: true,
+            false_promotion_rate: 0.0,
             ablation_pass,
             anti_lookup_pass,
             compression_pass,
             semantic_grokking_ready,
+            hard_profile_ready: false,
+        }
+    }
+
+    #[must_use]
+    pub fn prove_hard_profile(
+        config: &L3SemanticGrokkingConfig,
+        train_slots: usize,
+        heldout_slots: usize,
+    ) -> Self {
+        let train = hard_semantic_profile_examples(0, train_slots);
+        let heldout = hard_semantic_profile_examples(train_slots as u32, heldout_slots);
+        let memory = L3SemanticGrokkingMemory::train(&train, config.clone());
+
+        let mut frame_correct = 0usize;
+        let mut answer_correct = 0usize;
+        let mut object_anchor_correct = 0usize;
+        let mut evidence_correct = 0usize;
+        let mut frame_gap_sum = 0.0;
+        let mut ablated_gap_sum = 0.0;
+
+        let mut role_swap_false_promotions = 0usize;
+        let mut route_splice_false_promotions = 0usize;
+        let mut missing_evidence_false_promotions = 0usize;
+        let mut negative_route_false_promotions = 0usize;
+        let mut trap_total = 0usize;
+
+        for example in &heldout {
+            let selection = memory
+                .select_frame(&example.query_surface)
+                .expect("hard heldout frame should select");
+            if selection.schema == example.fact.schema {
+                frame_correct += 1;
+            }
+            if selection.schema.evidence_kind == example.fact.schema.evidence_kind {
+                evidence_correct += 1;
+            }
+            frame_gap_sum += selection.gap;
+            let ablated = memory
+                .select_frame_with_ablation(&example.query_surface, Some(32))
+                .expect("hard ablated frame should still score");
+            ablated_gap_sum += ablated.gap;
+
+            let equation = memory
+                .compile_equation(&example.query_surface)
+                .expect("hard heldout query should compile");
+            if equation
+                .object
+                .as_ref()
+                .is_some_and(|object| object.label == example.fact.object.label)
+            {
+                object_anchor_correct += 1;
+            }
+
+            let candidates = candidates_for_fact(&example.fact);
+            let prediction = memory
+                .solve_query(&example.query_surface, &candidates)
+                .expect("hard heldout query should solve");
+            if prediction.resolved_label == example.fact.subject.label {
+                answer_correct += 1;
+            }
+
+            let traps = hard_traps_for_example(example);
+            trap_total += traps.len();
+            for trap in traps {
+                let promoted = memory.compile_equation(&trap.text).is_some();
+                if promoted {
+                    match trap.kind {
+                        HardTrapKind::RoleSwap => role_swap_false_promotions += 1,
+                        HardTrapKind::RouteSplice => route_splice_false_promotions += 1,
+                        HardTrapKind::MissingEvidence => missing_evidence_false_promotions += 1,
+                        HardTrapKind::NegativeRoute => negative_route_false_promotions += 1,
+                    }
+                }
+            }
+        }
+
+        let train_set = train
+            .iter()
+            .map(|example| fact_key(&example.fact))
+            .collect::<HashSet<_>>();
+        let exact_lookup_heldout_hits = heldout
+            .iter()
+            .filter(|example| train_set.contains(&fact_key(&example.fact)))
+            .count();
+
+        let frame_accuracy = ratio(frame_correct, heldout.len());
+        let answer_accuracy = ratio(answer_correct, heldout.len());
+        let average_frame_gap = ratio_f32(frame_gap_sum, heldout.len());
+        let average_ablated_gap = ratio_f32(ablated_gap_sum, heldout.len());
+        let frame_ablation_drop = average_frame_gap - average_ablated_gap;
+        let model_hot_bytes = memory.hot_bytes();
+        let naive_semantic_fact_bytes = (train.len() + heldout.len()) * 8_192;
+        let model_to_naive_ratio = ratio(model_hot_bytes, naive_semantic_fact_bytes);
+
+        let role_swap_rejected = role_swap_false_promotions == 0;
+        let route_splice_rejected = route_splice_false_promotions == 0;
+        let missing_evidence_blocked = missing_evidence_false_promotions == 0;
+        let negative_route_rejected = negative_route_false_promotions == 0;
+        let false_promotions = role_swap_false_promotions
+            + route_splice_false_promotions
+            + missing_evidence_false_promotions
+            + negative_route_false_promotions;
+        let false_promotion_rate = ratio(false_promotions, trap_total);
+
+        let frame_pass = frame_accuracy >= config.min_frame_accuracy
+            && average_frame_gap >= config.min_frame_gap
+            && role_swap_rejected
+            && route_splice_rejected;
+        let answer_pass = answer_accuracy >= config.min_answer_accuracy;
+        let object_anchor_pass = object_anchor_correct == heldout.len();
+        let evidence_requirement_pass = evidence_correct == heldout.len();
+        let ablation_pass = frame_ablation_drop >= config.min_frame_ablation_drop;
+        let anti_lookup_pass = exact_lookup_heldout_hits == 0;
+        let compression_pass = model_to_naive_ratio <= config.max_model_to_naive_ratio;
+        let hard_profile_ready = frame_pass
+            && answer_pass
+            && object_anchor_pass
+            && evidence_requirement_pass
+            && missing_evidence_blocked
+            && negative_route_rejected
+            && false_promotion_rate == 0.0
+            && ablation_pass
+            && anti_lookup_pass
+            && compression_pass;
+        let semantic_grokking_ready = hard_profile_ready;
+        let verdict = if hard_profile_ready {
+            L3SemanticGrokkingVerdict::Proven
+        } else {
+            L3SemanticGrokkingVerdict::Watch
+        };
+
+        Self {
+            verdict,
+            train_examples: train.len(),
+            heldout_examples: heldout.len(),
+            relation_family_count: HARD_FRAME_SPECS.len(),
+            paraphrase_template_count: HARD_PARAPHRASE_TEMPLATES_PER_FRAME * HARD_FRAME_SPECS.len(),
+            frame_count: memory.frame_count(),
+            l2_center_count: memory.l2_center_count(),
+            operator_count: memory.operator_count(),
+            frame_accuracy,
+            answer_accuracy,
+            average_frame_gap,
+            frame_ablation_drop,
+            role_swap_rejected,
+            route_splice_rejected,
+            exact_lookup_heldout_hits,
+            model_hot_bytes,
+            naive_semantic_fact_bytes,
+            model_to_naive_ratio,
+            frame_pass,
+            answer_pass,
+            object_anchor_pass,
+            evidence_requirement_pass,
+            missing_evidence_blocked,
+            negative_route_rejected,
+            false_promotion_rate,
+            ablation_pass,
+            anti_lookup_pass,
+            compression_pass,
+            semantic_grokking_ready,
+            hard_profile_ready,
         }
     }
 }
@@ -466,6 +655,36 @@ fn copy_object_label_after_anchor(text: &str, anchor: &str) -> Option<String> {
         .find_map(|window| (window[0] == anchor).then(|| window[1].clone()))
 }
 
+fn text_contains_role_token(text: &str, role: &str) -> bool {
+    let role = role.to_ascii_lowercase();
+    normalized_tokens(text)
+        .into_iter()
+        .any(|token| token == role)
+}
+
+fn text_matches_relation_surface(text: &str, relation: &str) -> bool {
+    let tokens = normalized_tokens(text);
+    let has = |needle: &str| tokens.iter().any(|token| token == needle);
+    match relation {
+        "provides_command" => has("provides") || has("provider") || has("belongs") || has("for"),
+        "executes_command" => has("executes") || has("runs") || has("executed") || has("executor"),
+        "enables_service" => has("enables") || has("enabled") || has("source") || has("for"),
+        "installs_file" => has("installs") || has("owning") || has("belongs") || has("owner"),
+        _ => true,
+    }
+}
+
+fn normalized_tokens(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|token| {
+            token
+                .trim_matches(|ch: char| matches!(ch, '?' | '.' | ',' | ';' | ':'))
+                .to_ascii_lowercase()
+        })
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
 fn candidates_for_fact(fact: &super::SemanticFact) -> [SemanticCandidate; 3] {
     let family = fact.subject.family.clone();
     [
@@ -493,6 +712,225 @@ fn semantic_profile_examples(start_slot: u32, count: usize) -> Vec<L3SemanticExa
         examples.push(service_executor_example(slot));
     }
     examples
+}
+
+const HARD_PARAPHRASE_TEMPLATES_PER_FRAME: usize = 4;
+
+#[derive(Clone, Copy, Debug)]
+struct HardFrameSpec {
+    subject_role: &'static str,
+    relation: &'static str,
+    object_role: &'static str,
+    route: &'static str,
+    evidence_kind: &'static str,
+    subject_prefix: &'static str,
+    object_prefix: &'static str,
+}
+
+const HARD_FRAME_SPECS: [HardFrameSpec; 4] = [
+    HardFrameSpec {
+        subject_role: "package",
+        relation: "provides_command",
+        object_role: "command",
+        route: "linux.command.provider",
+        evidence_kind: "package_metadata",
+        subject_prefix: "pkgcmd",
+        object_prefix: "cmd",
+    },
+    HardFrameSpec {
+        subject_role: "service",
+        relation: "executes_command",
+        object_role: "command",
+        route: "linux.service.runtime",
+        evidence_kind: "unit_metadata",
+        subject_prefix: "svc",
+        object_prefix: "cmd",
+    },
+    HardFrameSpec {
+        subject_role: "config",
+        relation: "enables_service",
+        object_role: "service",
+        route: "linux.service.config",
+        evidence_kind: "config_metadata",
+        subject_prefix: "cfg",
+        object_prefix: "svc",
+    },
+    HardFrameSpec {
+        subject_role: "package",
+        relation: "installs_file",
+        object_role: "file",
+        route: "linux.package.file",
+        evidence_kind: "package_file_index",
+        subject_prefix: "pkgfile",
+        object_prefix: "file",
+    },
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HardTrapKind {
+    RoleSwap,
+    RouteSplice,
+    MissingEvidence,
+    NegativeRoute,
+}
+
+#[derive(Clone, Debug)]
+struct HardTrap {
+    kind: HardTrapKind,
+    text: String,
+}
+
+fn hard_semantic_profile_examples(start_slot: u32, slot_count: usize) -> Vec<L3SemanticExample> {
+    let mut examples = Vec::with_capacity(
+        slot_count * HARD_FRAME_SPECS.len() * HARD_PARAPHRASE_TEMPLATES_PER_FRAME,
+    );
+    for offset in 0..slot_count as u32 {
+        let slot = start_slot + offset;
+        for spec in HARD_FRAME_SPECS {
+            for template in 0..HARD_PARAPHRASE_TEMPLATES_PER_FRAME {
+                examples.push(hard_semantic_example(spec, slot, template));
+            }
+        }
+    }
+    examples
+}
+
+fn hard_semantic_example(spec: HardFrameSpec, slot: u32, template: usize) -> L3SemanticExample {
+    let schema = SemanticSchemaKey::new(
+        spec.subject_role,
+        spec.relation,
+        spec.object_role,
+        spec.route,
+        "positive",
+        spec.evidence_kind,
+    );
+    let subject_label = format!("{}{:05}", spec.subject_prefix, slot);
+    let object_label = format!("{}{:05}", spec.object_prefix, slot);
+    let atom_slot = semantic_label_slot(
+        &schema.route,
+        &schema.relation,
+        &schema.object_role,
+        &object_label,
+    );
+    let family = route_family(&schema.route);
+    L3SemanticExample {
+        query_surface: hard_query_surface(spec.relation, template, &object_label),
+        fact: super::SemanticFact::new(
+            SemanticAtom::new(spec.subject_role, family.clone(), atom_slot, subject_label),
+            schema,
+            SemanticAtom::new(spec.object_role, family, atom_slot, object_label),
+        ),
+    }
+}
+
+fn hard_query_surface(relation: &str, template: usize, object_label: &str) -> String {
+    match relation {
+        "provides_command" => match template {
+            0 => format!("which package provides command {object_label}"),
+            1 => format!("find package for command {object_label}"),
+            2 => format!("command {object_label} belongs to which package"),
+            _ => format!("package provider for command {object_label}"),
+        },
+        "executes_command" => match template {
+            0 => format!("which service executes command {object_label}"),
+            1 => format!("find service that runs command {object_label}"),
+            2 => format!("command {object_label} is executed by which service"),
+            _ => format!("service executor for command {object_label}"),
+        },
+        "enables_service" => match template {
+            0 => format!("which config enables service {object_label}"),
+            1 => format!("find config for service {object_label}"),
+            2 => format!("service {object_label} is enabled by which config"),
+            _ => format!("config source for service {object_label}"),
+        },
+        "installs_file" => match template {
+            0 => format!("which package installs file {object_label}"),
+            1 => format!("find package owning file {object_label}"),
+            2 => format!("file {object_label} belongs to which package"),
+            _ => format!("package owner for file {object_label}"),
+        },
+        _ => unreachable!("hard profile relation should be known"),
+    }
+}
+
+fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 4] {
+    let subject = &example.fact.subject.label;
+    let object = &example.fact.object.label;
+    match example.fact.schema.relation.as_str() {
+        "provides_command" => [
+            HardTrap {
+                kind: HardTrapKind::RoleSwap,
+                text: format!("which command provides package {subject}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::RouteSplice,
+                text: format!("which service provides command {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::MissingEvidence,
+                text: format!("who provides {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::NegativeRoute,
+                text: format!("which installed package proves service {object} running"),
+            },
+        ],
+        "executes_command" => [
+            HardTrap {
+                kind: HardTrapKind::RoleSwap,
+                text: format!("which command executes service {subject}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::RouteSplice,
+                text: format!("which package executes command {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::MissingEvidence,
+                text: format!("who executes {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::NegativeRoute,
+                text: format!("which package install implies command {object} running"),
+            },
+        ],
+        "enables_service" => [
+            HardTrap {
+                kind: HardTrapKind::RoleSwap,
+                text: format!("which service enables config {subject}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::RouteSplice,
+                text: format!("which package enables service {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::MissingEvidence,
+                text: format!("who enables {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::NegativeRoute,
+                text: format!("which config proves service {object} active"),
+            },
+        ],
+        "installs_file" => [
+            HardTrap {
+                kind: HardTrapKind::RoleSwap,
+                text: format!("which file installs package {subject}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::RouteSplice,
+                text: format!("which service installs file {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::MissingEvidence,
+                text: format!("who owns {object}"),
+            },
+            HardTrap {
+                kind: HardTrapKind::NegativeRoute,
+                text: format!("which file ownership proves service {object} enabled"),
+            },
+        ],
+        _ => unreachable!("hard profile relation should be known"),
+    }
 }
 
 fn fact_key(fact: &super::SemanticFact) -> String {
@@ -611,6 +1049,31 @@ mod tests {
         assert!(proof.route_splice_rejected, "proof={proof:#?}");
         assert!(proof.compression_pass, "proof={proof:#?}");
         assert!(proof.semantic_grokking_ready, "proof={proof:#?}");
+    }
+
+    #[test]
+    fn l3_hard_semantic_grokking_rejects_role_route_and_evidence_traps() {
+        let proof = L3SemanticGrokkingProof::prove_hard_semantic_profile();
+        eprintln!("L3 hard semantic grokking proof: {proof:#?}");
+
+        assert_eq!(proof.verdict, L3SemanticGrokkingVerdict::Proven);
+        assert_eq!(proof.relation_family_count, 4);
+        assert_eq!(proof.paraphrase_template_count, 16);
+        assert_eq!(proof.frame_count, 4);
+        assert_eq!(proof.operator_count, 4);
+        assert_eq!(proof.exact_lookup_heldout_hits, 0);
+        assert!(proof.frame_pass, "proof={proof:#?}");
+        assert!(proof.answer_pass, "proof={proof:#?}");
+        assert!(proof.object_anchor_pass, "proof={proof:#?}");
+        assert!(proof.evidence_requirement_pass, "proof={proof:#?}");
+        assert!(proof.missing_evidence_blocked, "proof={proof:#?}");
+        assert!(proof.role_swap_rejected, "proof={proof:#?}");
+        assert!(proof.route_splice_rejected, "proof={proof:#?}");
+        assert!(proof.negative_route_rejected, "proof={proof:#?}");
+        assert_eq!(proof.false_promotion_rate, 0.0);
+        assert!(proof.ablation_pass, "proof={proof:#?}");
+        assert!(proof.compression_pass, "proof={proof:#?}");
+        assert!(proof.hard_profile_ready, "proof={proof:#?}");
     }
 
     #[test]

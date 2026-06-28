@@ -15,21 +15,26 @@ raw surface
 -> L3 frame center + role binding + semantic operator
 ```
 
-## Current Bounded Profile
+## Current Hard Profile
 
-The current proof is a bounded Linux-style command-provider profile with two
-competing frames:
+The baseline proof is a bounded Linux-style command-provider profile. The
+current hard proof keeps the same L1 -> L2 -> L3 mechanism and adds more
+semantic pressure:
 
 ```text
 package provides_command command   route=linux.command.provider
 service executes_command command   route=linux.service.runtime
+config  enables_service  service   route=linux.service.config
+package installs_file    file      route=linux.package.file
 ```
 
-Training examples teach both:
+Training examples use multiple paraphrases per frame:
 
 ```text
 which package provides command cmd00042
-which service executes command cmd00042
+find package for command cmd00042
+command cmd00042 belongs to which package
+package provider for command cmd00042
 ```
 
 Heldout slots are disjoint from training slots.
@@ -53,39 +58,47 @@ from:
 frame selected from L2 motif center
 semantic operator solves the role binding
 heldout slot was not an exact training fact
-role-swap and route-splice traps are rejected
+role-swap, route-splice, missing-evidence, and negative shortcut traps are rejected
 frame ablation damages the result
 ```
 
 ## Proof Result
 
-Current unit proof:
+Current hard unit proof:
 
 ```text
 verdict: L3SemanticGrokkingVerdict::Proven
 train_examples: 16,000
 heldout_examples: 4,000
-frame_count: 2
-l2_center_count: 937
-operator_count: 2
+relation_family_count: 4
+paraphrase_template_count: 16
+frame_count: 4
+l2_center_count: 2,032
+operator_count: 4
 frame_accuracy: 1.0
 answer_accuracy: 1.0
-average_frame_gap: 0.625
-frame_ablation_drop: 0.625
+average_frame_gap: 0.1699056
+frame_ablation_drop: 0.16986167
+object_anchor_pass: true
+evidence_requirement_pass: true
+missing_evidence_blocked: true
 role_swap_rejected: true
 route_splice_rejected: true
+negative_route_rejected: true
+false_promotion_rate: 0.0
 exact_lookup_heldout_hits: 0
-model_hot_bytes: 1,102,000
+model_hot_bytes: 1,092,216
 naive_semantic_fact_bytes: 163,840,000
-model_to_naive_ratio: 0.006726074
+model_to_naive_ratio: 0.0066663576
 semantic_grokking_ready: true
+hard_profile_ready: true
 ```
 
 Run:
 
 ```bash
 cargo test -p nando-core \
-  l3_semantic_grokking_learns_frame_from_l2_and_solves_heldout \
+  l3_hard_semantic_grokking_rejects_role_route_and_evidence_traps \
   -- --nocapture
 ```
 
@@ -98,6 +111,7 @@ L2 motif fields can promote a bounded semantic frame.
 Heldout role bindings solve without exact fact lookup.
 Frame selection is causal under ablation.
 Role-swap and route-splice traps stay rejected.
+Missing-evidence and negative-shortcut surfaces do not promote to EquationForm.
 The semantic layer is much smaller than naive per-fact wave storage.
 ```
 
@@ -113,17 +127,17 @@ free-form semantic extraction
 
 ## Next Honest Step
 
-The next step is not a bigger cache.
+The next step is not L4/L5/L6 yet.
 
-The next step is a harder L3 corpus:
+The next step is a larger hard L3 corpus:
 
 ```text
-multiple relation families
-surface paraphrases
-ambiguous anchors
-negative evidence routes
-grounding/evidence requirements
-heldout across route families
+more relation families
+withheld paraphrase families, not only heldout fillers
+ambiguous anchors across domains
+evidence-specific no-answer states
+negative evidence routes with anti-wave scoring
+measured false promotion under scale
 ```
 
 Semantic promotion remains forbidden unless all of these pass:

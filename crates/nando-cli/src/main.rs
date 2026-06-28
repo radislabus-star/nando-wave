@@ -15,7 +15,10 @@ use args::{
     parse_periodic_args, parse_phase_composition_args, parse_phase_holdout_args,
     parse_seed_pair_cases_args, parse_snapshot_save_args, parse_wave_tick_args,
 };
-use bench::{print_link_tissue_bench, print_stage2_tick_bench, print_symbol_l3_bench};
+use bench::{
+    print_link_tissue_bench, print_stage2_tick_bench, print_symbol_l3_bench,
+    print_wave_layer_metrics,
+};
 use chat0_cmd::{
     run_chat0_once, run_chat0_once_promoted, run_chat0_promote_save, run_chat0_shell,
     run_eval_chat0_promote, run_eval_chat0_promoted_holdout,
@@ -176,6 +179,13 @@ fn main() -> ExitCode {
             Err(message) => {
                 eprintln!("{message}");
                 eprintln!("try: nando-cli bench-symbol-l3 [seed] [ticks]");
+                ExitCode::FAILURE
+            }
+        },
+        Some("bench-wave-layers") => match print_wave_layer_metrics() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("{message}");
                 ExitCode::FAILURE
             }
         },
