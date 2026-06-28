@@ -3,9 +3,9 @@
 L3 is the first layer where Nando Wave may promote semantic atoms.
 
 It does not skip L1/L2.
-It consumes L2 motif fields, excites an L3 semantic field, settles onto a
-semantic center, then lets a semantic relation operator solve a heldout role
-binding.
+It consumes L2 motif fields, excites a learned contrastive L3 semantic field,
+settles onto a semantic center, then lets a semantic relation operator solve a
+heldout role binding.
 
 ## Layer Chain
 
@@ -48,11 +48,13 @@ Heldout slots are disjoint from training slots.
 L3 learns:
 
 ```text
-L2 motif field        -> weak frame activation
-role/relation/anchor  -> interference cues
-interference matrix   -> attraction/repulsion between semantic centers
-settled center        -> EquationForm
-semantic facts        -> relation operator
+L2 motif field               -> weak frame activation
+role/relation/anchor/binding -> semi-manual cues
+learned attraction lane      -> compatible semantic centers
+learned repulsion lane       -> nearest wrong centers
+learned anti-trap lane       -> forbidden overclaim centers
+settled center               -> EquationForm
+semantic facts               -> relation operator
 ```
 
 The object label is copied from the bounded surface slot after the learned
@@ -61,12 +63,14 @@ from:
 
 ```text
 surface motifs excite several centers
-interference matrix raises the compatible center gap
+learned contrastive field raises the compatible center gap
+learned repulsion suppresses the nearest wrong center
+learned anti-trap lane blocks complete-but-forbidden shortcuts
 semantic field settles to one center
 semantic operator solves the role binding
 heldout slot was not an exact training fact
 role-swap, route-splice, missing-evidence, and negative shortcut traps are rejected
-interference ablation damages the result
+attraction/repulsion/anti-field ablations damage the result
 ```
 
 ## Proof Result
@@ -85,11 +89,20 @@ operator_count: 4
 frame_accuracy: 1.0
 answer_accuracy: 1.0
 average_raw_field_gap: 0.1378287
-average_settled_field_gap: 1.6846416
-interference_gap_lift: 1.5468129
-average_interference_energy: 0.9799836
-interference_edge_count: 40
-frame_ablation_drop: 1.5468129
+average_settled_field_gap: 3.56609
+interference_gap_lift: 3.4282615
+average_interference_energy: 3.6666133
+interference_edge_count: 42
+manual_weight_table_used: false
+field_weights_learned: true
+contrastive_training_used: true
+cue_extractor_learned: false
+heldout_margin_min: 2.4270833
+nearest_wrong_center_suppressed: true
+attraction_ablation_drop: 3.2829638
+repulsion_ablation_drop: 0.17827344
+anti_field_ablation_drop: 0.1875
+frame_ablation_drop: 3.4282615
 object_anchor_pass: true
 evidence_requirement_pass: true
 missing_evidence_blocked: true
@@ -98,9 +111,9 @@ route_splice_rejected: true
 negative_route_rejected: true
 false_promotion_rate: 0.0
 exact_lookup_heldout_hits: 0
-model_hot_bytes: 1,092,856
+model_hot_bytes: 1,092,888
 naive_semantic_fact_bytes: 163,840,000
-model_to_naive_ratio: 0.0066702636
+model_to_naive_ratio: 0.006670459
 semantic_field_ready: true
 semantic_grokking_ready: true
 hard_profile_ready: true
@@ -119,9 +132,11 @@ cargo test -p nando-core \
 This proves:
 
 ```text
-L2 motif fields plus interference cues can settle onto a bounded semantic center.
+L2 motif fields plus learned contrastive interference can settle onto a bounded semantic center.
 Heldout role bindings solve without exact fact lookup.
 Semantic field convergence is causal under interference ablation.
+Nearest wrong centers are actively suppressed by learned repulsion.
+Complete-but-forbidden shortcuts are blocked by learned anti-trap lanes.
 Role-swap and route-splice traps stay rejected.
 Missing-evidence and negative-shortcut surfaces do not promote to EquationForm.
 The semantic layer is much smaller than naive per-fact wave storage.
@@ -141,7 +156,8 @@ free-form semantic extraction
 
 The next step is not L4/L5/L6 yet.
 
-The next step is a larger hard L3 corpus:
+The next step is learned cue induction over L2 motifs, while scaling the hard
+L3 corpus:
 
 ```text
 more relation families

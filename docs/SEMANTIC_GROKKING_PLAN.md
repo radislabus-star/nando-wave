@@ -37,12 +37,18 @@ Current L3 status:
 
 ```text
 hard bounded Linux semantic profile
-L2 motif field -> semantic field excitation -> L3 center convergence -> EquationForm
+L2 motif field -> learned contrastive semantic field -> L3 center convergence -> EquationForm
 heldout semantic role binding
 4 relation families
 16 paraphrase surfaces
-interference_edge_count = 40
-interference_gap_lift = 1.5468129
+manual_weight_table_used = false
+field_weights_learned = true
+contrastive_training_used = true
+cue_extractor_learned = false
+interference_edge_count = 42
+interference_gap_lift = 3.4282615
+nearest_wrong_center_suppressed = true
+anti_field_ablation_drop = 0.1875
 role-swap / route-splice / missing-evidence / negative-route traps
 false_promotion_rate = 0.0
 semantic_field_ready = true
@@ -72,11 +78,12 @@ semantic atom grokking for bounded profiles
    ```
 
    Current hard L3 already has multiple relation families, paraphrases,
-   semantic field interference, role-swap traps, route-splice traps,
-   missing-evidence blocks, negative-route blocks, heldout fillers, and
-   ablation. The next corpus must add a larger interference matrix, withheld
-   paraphrase families, cross-domain ambiguous anchors, evidence-specific
-   no-answer states, and larger false-promotion stress.
+   learned contrastive field interference, nearest-wrong suppression,
+   anti-trap lanes, role-swap traps, route-splice traps, missing-evidence
+   blocks, negative-route blocks, heldout fillers, and ablation. The next
+   corpus must add a larger interference matrix, withheld paraphrase families,
+   cross-domain ambiguous anchors, evidence-specific no-answer states, and
+   larger false-promotion stress.
 
 2. Build learned L2 -> L3 promotion.
 
@@ -91,6 +98,8 @@ semantic atom grokking for bounded profiles
    ```
 
    Handwritten templates are allowed only as controls, not as the proof path.
+   Current L3 still has `cue_extractor_learned = false`; this is the next real
+   semantic compiler gap.
 
 3. Build a semantic grokking proof.
 

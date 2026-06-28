@@ -191,10 +191,10 @@ pub(crate) fn print_wave_layer_metrics() -> Result<(), String> {
     print_l3_metrics(&l3, l3_elapsed);
     println!();
     println!(
-        "meaning_path: L1 surface centers -> L2 motif centers -> L3 semantic field -> EquationForm -> operator"
+        "meaning_path: L1 surface centers -> L2 motif centers -> L3 learned contrastive field -> EquationForm -> operator"
     );
     println!("best_current_use: bounded profile semantic memory with explicit no-answer boundary");
-    println!("next_improvement: scale L3 hard corpus before any L4/L5/L6 promotion");
+    println!("next_improvement: learn cue induction over L2 motifs while scaling L3 hard corpus");
     Ok(())
 }
 
@@ -320,6 +320,33 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     println!(
         "  interference_edge_count: {}",
         proof.interference_edge_count
+    );
+    println!(
+        "  manual_weight_table_used: {}",
+        proof.manual_weight_table_used
+    );
+    println!("  field_weights_learned: {}", proof.field_weights_learned);
+    println!(
+        "  contrastive_training_used: {}",
+        proof.contrastive_training_used
+    );
+    println!("  cue_extractor_learned: {}", proof.cue_extractor_learned);
+    println!("  heldout_margin_min: {:.6}", proof.heldout_margin_min);
+    println!(
+        "  nearest_wrong_center_suppressed: {}",
+        proof.nearest_wrong_center_suppressed
+    );
+    println!(
+        "  attraction_ablation_drop: {:.6}",
+        proof.attraction_ablation_drop
+    );
+    println!(
+        "  repulsion_ablation_drop: {:.6}",
+        proof.repulsion_ablation_drop
+    );
+    println!(
+        "  anti_field_ablation_drop: {:.6}",
+        proof.anti_field_ablation_drop
     );
     println!("  frame_ablation_drop: {:.6}", proof.frame_ablation_drop);
     println!("  object_anchor_pass: {}", proof.object_anchor_pass);

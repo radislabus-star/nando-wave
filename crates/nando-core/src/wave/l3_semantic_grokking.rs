@@ -1,8 +1,9 @@
 //! L3 semantic grokking over L2 motif fields.
 //!
 //! L3 is the first layer that may promote semantic atoms. It does not parse raw
-//! text directly. It learns frame centers from L2 motif tokens, then uses the
-//! semantic relation operator to solve heldout role bindings.
+//! text directly. It learns frame centers from L2 motif tokens, trains a
+//! contrastive interference field over semi-manual cues, then uses the semantic
+//! relation operator to solve heldout role bindings.
 
 use std::collections::{HashMap, HashSet};
 
@@ -98,20 +99,60 @@ pub struct L3FrameSelection {
 struct L3SemanticFieldSelection {
     raw: L3FrameSelection,
     settled: L3FrameSelection,
+    selected_field_score: L3SemanticFieldScore,
     interference_energy: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct L3SemanticFieldScore {
+    attraction: f32,
+    repulsion: f32,
+    anti: f32,
+}
+
+impl L3SemanticFieldScore {
+    fn total(self) -> f32 {
+        self.attraction - self.repulsion - self.anti
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct L3FieldAblation {
+    attraction: bool,
+    repulsion: bool,
+    anti: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum L3SemanticFieldLane {
+    Attraction,
+    Repulsion,
+    AntiTrap,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct L3SemanticInterferenceEdge {
+    lane: L3SemanticFieldLane,
     source_kind: String,
     source_value: String,
     target_frame: usize,
     weight: f32,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct L3SemanticInterferenceKey {
+    lane: L3SemanticFieldLane,
+    source_kind: String,
+    source_value: String,
+    target_frame: usize,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct L3SemanticInterferenceField {
     edges: Vec<L3SemanticInterferenceEdge>,
+    learned: bool,
+    contrastive: bool,
+    manual_weight_table_used: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -119,6 +160,7 @@ struct L3SemanticFieldCues {
     role: Option<String>,
     relation: Option<String>,
     object_anchor: Option<String>,
+    anti_signatures: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -148,6 +190,15 @@ pub struct L3SemanticGrokkingProof {
     pub interference_gap_lift: f32,
     pub average_interference_energy: f32,
     pub interference_edge_count: usize,
+    pub manual_weight_table_used: bool,
+    pub field_weights_learned: bool,
+    pub contrastive_training_used: bool,
+    pub cue_extractor_learned: bool,
+    pub heldout_margin_min: f32,
+    pub nearest_wrong_center_suppressed: bool,
+    pub attraction_ablation_drop: f32,
+    pub repulsion_ablation_drop: f32,
+    pub anti_field_ablation_drop: f32,
     pub frame_ablation_drop: f32,
     pub role_swap_rejected: bool,
     pub route_splice_rejected: bool,
@@ -200,7 +251,7 @@ impl L3SemanticGrokkingMemory {
             }
         }
 
-        let frames = builders
+        let mut frames = builders
             .into_iter()
             .map(|(schema, builder)| L3FrameCenter {
                 schema,
@@ -210,7 +261,8 @@ impl L3SemanticGrokkingMemory {
                 features: compact_features(builder.weights),
             })
             .collect::<Vec<_>>();
-        let field = L3SemanticInterferenceField::from_frames(&frames);
+        frames.sort_by_key(frame_sort_key);
+        let field = L3SemanticInterferenceField::from_training(&frames, &l2, examples);
 
         Self {
             config,
@@ -256,8 +308,19 @@ impl L3SemanticGrokkingMemory {
 
     #[must_use]
     pub fn compile_equation(&self, text: &str) -> Option<SemanticEquationForm> {
-        let field_selection = self.settle_semantic_field(text, false)?;
+        self.compile_equation_with_field_ablation(text, L3FieldAblation::default())
+    }
+
+    fn compile_equation_with_field_ablation(
+        &self,
+        text: &str,
+        field_ablation: L3FieldAblation,
+    ) -> Option<SemanticEquationForm> {
+        let field_selection = self.settle_semantic_field(text, field_ablation)?;
         let selection = field_selection.settled;
+        if field_selection.selected_field_score.anti > 0.0 {
+            return None;
+        }
         if selection.gap < self.config.min_frame_gap {
             return None;
         }
@@ -339,7 +402,24 @@ impl L3SemanticGrokkingMemory {
     fn settle_semantic_field(
         &self,
         text: &str,
-        ablate_interference: bool,
+        field_ablation: L3FieldAblation,
+    ) -> Option<L3SemanticFieldSelection> {
+        self.settle_semantic_field_inner(text, field_ablation, true)
+    }
+
+    fn measure_semantic_field(
+        &self,
+        text: &str,
+        field_ablation: L3FieldAblation,
+    ) -> Option<L3SemanticFieldSelection> {
+        self.settle_semantic_field_inner(text, field_ablation, false)
+    }
+
+    fn settle_semantic_field_inner(
+        &self,
+        text: &str,
+        field_ablation: L3FieldAblation,
+        require_complete: bool,
     ) -> Option<L3SemanticFieldSelection> {
         if self.frames.is_empty() {
             return None;
@@ -357,16 +437,12 @@ impl L3SemanticGrokkingMemory {
         let mut raw_runner_up_score = f32::NEG_INFINITY;
         let mut best_settled_score = f32::NEG_INFINITY;
         let mut settled_runner_up_score = f32::NEG_INFINITY;
-        let mut best_interference_energy = 0.0;
+        let mut best_field_score = L3SemanticFieldScore::default();
 
         for (index, frame) in self.frames.iter().enumerate() {
             let raw_score = score_frame(frame, &query_tokens, Some(8));
-            let interference = if ablate_interference {
-                0.0
-            } else {
-                self.field.score(index, &cues)
-            };
-            let settled_score = raw_score + interference;
+            let field_score = self.field.score(index, &cues, field_ablation);
+            let settled_score = raw_score + field_score.total();
 
             if raw_score > best_raw_score {
                 raw_runner_up_score = best_raw_score;
@@ -379,7 +455,7 @@ impl L3SemanticGrokkingMemory {
                 settled_runner_up_score = best_settled_score;
                 best_settled_score = settled_score;
                 best_index = index;
-                best_interference_energy = interference.abs();
+                best_field_score = field_score;
             } else if settled_score > settled_runner_up_score {
                 settled_runner_up_score = settled_score;
             }
@@ -393,7 +469,7 @@ impl L3SemanticGrokkingMemory {
         }
 
         let frame = &self.frames[best_index];
-        if !cues.complete_for(frame) {
+        if require_complete && !cues.complete_for(frame) {
             return None;
         }
 
@@ -414,7 +490,8 @@ impl L3SemanticGrokkingMemory {
                 runner_up_score: settled_runner_up_score,
                 gap: best_settled_score - settled_runner_up_score,
             },
-            interference_energy: best_interference_energy,
+            selected_field_score: best_field_score,
+            interference_energy: best_field_score.total().abs(),
         })
     }
 }
@@ -532,6 +609,15 @@ impl L3SemanticGrokkingProof {
             interference_gap_lift: 0.0,
             average_interference_energy: 0.0,
             interference_edge_count: memory.field.edge_count(),
+            manual_weight_table_used: memory.field.manual_weight_table_used,
+            field_weights_learned: memory.field.learned,
+            contrastive_training_used: memory.field.contrastive,
+            cue_extractor_learned: false,
+            heldout_margin_min: average_frame_gap,
+            nearest_wrong_center_suppressed: ablation_pass,
+            attraction_ablation_drop: 0.0,
+            repulsion_ablation_drop: 0.0,
+            anti_field_ablation_drop: 0.0,
             frame_ablation_drop,
             role_swap_rejected,
             route_splice_rejected,
@@ -550,7 +636,7 @@ impl L3SemanticGrokkingProof {
             interference_ablation_pass: ablation_pass,
             anti_lookup_pass,
             compression_pass,
-            semantic_field_ready: semantic_grokking_ready,
+            semantic_field_ready: false,
             semantic_grokking_ready,
             hard_profile_ready: false,
         }
@@ -575,16 +661,20 @@ impl L3SemanticGrokkingProof {
         let mut settled_field_gap_sum = 0.0;
         let mut interference_energy_sum = 0.0;
         let mut ablated_gap_sum = 0.0;
+        let mut attraction_ablated_gap_sum = 0.0;
+        let mut repulsion_ablated_gap_sum = 0.0;
+        let mut heldout_margin_min = f32::INFINITY;
 
         let mut role_swap_false_promotions = 0usize;
         let mut route_splice_false_promotions = 0usize;
         let mut missing_evidence_false_promotions = 0usize;
         let mut negative_route_false_promotions = 0usize;
+        let mut anti_ablation_false_promotions = 0usize;
         let mut trap_total = 0usize;
 
         for example in &heldout {
             let field_selection = memory
-                .settle_semantic_field(&example.query_surface, false)
+                .settle_semantic_field(&example.query_surface, L3FieldAblation::default())
                 .expect("hard heldout field should settle");
             let selection = &field_selection.settled;
             if selection.schema == example.fact.schema {
@@ -597,14 +687,42 @@ impl L3SemanticGrokkingProof {
             raw_field_gap_sum += field_selection.raw.gap;
             settled_field_gap_sum += field_selection.settled.gap;
             interference_energy_sum += field_selection.interference_energy;
+            heldout_margin_min = heldout_margin_min.min(field_selection.settled.gap);
             let ablated = memory
-                .settle_semantic_field(&example.query_surface, true)
+                .measure_semantic_field(
+                    &example.query_surface,
+                    L3FieldAblation {
+                        attraction: true,
+                        repulsion: true,
+                        anti: true,
+                    },
+                )
                 .expect("hard field with interference ablated should still select");
             ablated_gap_sum += ablated.settled.gap;
+            let attraction_ablated = memory
+                .measure_semantic_field(
+                    &example.query_surface,
+                    L3FieldAblation {
+                        attraction: true,
+                        ..L3FieldAblation::default()
+                    },
+                )
+                .expect("hard field with attraction ablated should still select");
+            attraction_ablated_gap_sum += attraction_ablated.settled.gap;
+            let repulsion_ablated = memory
+                .measure_semantic_field(
+                    &example.query_surface,
+                    L3FieldAblation {
+                        repulsion: true,
+                        ..L3FieldAblation::default()
+                    },
+                )
+                .expect("hard field with repulsion ablated should still select");
+            repulsion_ablated_gap_sum += repulsion_ablated.settled.gap;
 
             let equation = memory
                 .compile_equation(&example.query_surface)
-                .expect("hard heldout query should compile");
+                .unwrap_or_else(|| panic!("hard heldout query should compile: {example:#?}"));
             if equation
                 .object
                 .as_ref()
@@ -625,6 +743,18 @@ impl L3SemanticGrokkingProof {
             trap_total += traps.len();
             for trap in traps {
                 let promoted = memory.compile_equation(&trap.text).is_some();
+                let promoted_without_anti = memory
+                    .compile_equation_with_field_ablation(
+                        &trap.text,
+                        L3FieldAblation {
+                            anti: true,
+                            ..L3FieldAblation::default()
+                        },
+                    )
+                    .is_some();
+                if !promoted && promoted_without_anti {
+                    anti_ablation_false_promotions += 1;
+                }
                 if promoted {
                     match trap.kind {
                         HardTrapKind::RoleSwap => role_swap_false_promotions += 1,
@@ -652,8 +782,13 @@ impl L3SemanticGrokkingProof {
         let average_settled_field_gap = ratio_f32(settled_field_gap_sum, heldout.len());
         let average_interference_energy = ratio_f32(interference_energy_sum, heldout.len());
         let average_ablated_gap = ratio_f32(ablated_gap_sum, heldout.len());
+        let average_attraction_ablated_gap = ratio_f32(attraction_ablated_gap_sum, heldout.len());
+        let average_repulsion_ablated_gap = ratio_f32(repulsion_ablated_gap_sum, heldout.len());
         let frame_ablation_drop = average_frame_gap - average_ablated_gap;
         let interference_gap_lift = average_settled_field_gap - average_raw_field_gap;
+        let attraction_ablation_drop = average_settled_field_gap - average_attraction_ablated_gap;
+        let repulsion_ablation_drop = average_settled_field_gap - average_repulsion_ablated_gap;
+        let anti_field_ablation_drop = ratio(anti_ablation_false_promotions, trap_total);
         let model_hot_bytes = memory.hot_bytes();
         let naive_semantic_fact_bytes = (train.len() + heldout.len()) * 8_192;
         let model_to_naive_ratio = ratio(model_hot_bytes, naive_semantic_fact_bytes);
@@ -678,9 +813,20 @@ impl L3SemanticGrokkingProof {
         let ablation_pass = frame_ablation_drop >= config.min_frame_ablation_drop;
         let interference_ablation_pass = interference_gap_lift >= config.min_frame_ablation_drop
             && frame_ablation_drop >= config.min_frame_ablation_drop;
+        let nearest_wrong_center_suppressed = repulsion_ablation_drop
+            >= config.min_frame_ablation_drop
+            && heldout_margin_min >= config.min_frame_gap;
         let anti_lookup_pass = exact_lookup_heldout_hits == 0;
         let compression_pass = model_to_naive_ratio <= config.max_model_to_naive_ratio;
-        let semantic_field_ready = interference_ablation_pass && interference_gap_lift > 0.0;
+        let semantic_field_ready = interference_ablation_pass
+            && interference_gap_lift > 0.0
+            && nearest_wrong_center_suppressed
+            && attraction_ablation_drop >= config.min_frame_ablation_drop
+            && repulsion_ablation_drop >= config.min_frame_ablation_drop
+            && anti_field_ablation_drop > 0.0
+            && memory.field.learned
+            && memory.field.contrastive
+            && !memory.field.manual_weight_table_used;
         let hard_profile_ready = frame_pass
             && answer_pass
             && object_anchor_pass
@@ -716,6 +862,15 @@ impl L3SemanticGrokkingProof {
             interference_gap_lift,
             average_interference_energy,
             interference_edge_count: memory.field.edge_count(),
+            manual_weight_table_used: memory.field.manual_weight_table_used,
+            field_weights_learned: memory.field.learned,
+            contrastive_training_used: memory.field.contrastive,
+            cue_extractor_learned: false,
+            heldout_margin_min,
+            nearest_wrong_center_suppressed,
+            attraction_ablation_drop,
+            repulsion_ablation_drop,
+            anti_field_ablation_drop,
             frame_ablation_drop,
             role_swap_rejected,
             route_splice_rejected,
@@ -750,43 +905,92 @@ struct FrameBuilder {
 }
 
 impl L3SemanticInterferenceField {
-    fn from_frames(frames: &[L3FrameCenter]) -> Self {
-        let roles = unique_frame_values(frames, |frame| frame.unknown_role.as_str());
-        let relations = unique_frame_values(frames, |frame| frame.schema.relation.as_str());
-        let anchors = unique_frame_values(frames, |frame| frame.object_anchor.as_str());
-        let mut edges = Vec::new();
+    fn from_training(
+        frames: &[L3FrameCenter],
+        l2: &L2CenterMemory,
+        examples: &[L3SemanticExample],
+    ) -> Self {
+        let mut weights: HashMap<L3SemanticInterferenceKey, f32> = HashMap::new();
 
-        for (target_frame, frame) in frames.iter().enumerate() {
-            push_matrix_edges(
-                &mut edges,
-                "role",
-                &roles,
-                &frame.unknown_role,
-                target_frame,
-                0.26,
-                -0.34,
-            );
-            push_matrix_edges(
-                &mut edges,
-                "relation",
-                &relations,
-                &frame.schema.relation,
-                target_frame,
-                0.48,
-                -0.42,
-            );
-            push_matrix_edges(
-                &mut edges,
-                "object_anchor",
-                &anchors,
-                &frame.object_anchor,
-                target_frame,
-                0.24,
-                -0.22,
-            );
+        for example in examples {
+            let Some(correct_frame) = frame_index_for_schema(frames, &example.fact.schema) else {
+                continue;
+            };
+            let cues = L3SemanticFieldCues::from_text(&example.query_surface, frames);
+            if cues.complete_for(&frames[correct_frame]) {
+                for (source_kind, source_value) in cues.as_pairs() {
+                    add_field_weight(
+                        &mut weights,
+                        L3SemanticFieldLane::Attraction,
+                        &source_kind,
+                        &source_value,
+                        correct_frame,
+                        1.0,
+                    );
+                }
+
+                if let Some(wrong_frame) =
+                    nearest_wrong_frame_index(frames, l2, &example.query_surface, correct_frame)
+                {
+                    for (source_kind, source_value) in cues.as_pairs() {
+                        add_field_weight(
+                            &mut weights,
+                            L3SemanticFieldLane::Repulsion,
+                            &source_kind,
+                            &source_value,
+                            wrong_frame,
+                            1.0,
+                        );
+                    }
+                }
+            }
+
+            for trap in semantic_traps_for_example(example) {
+                let trap_cues = L3SemanticFieldCues::from_text(&trap.text, frames);
+                let Some(suppressed_frame) = exact_frame_index_for_cues(frames, &trap_cues) else {
+                    continue;
+                };
+                for (source_kind, source_value) in trap_cues.anti_pairs() {
+                    add_field_weight(
+                        &mut weights,
+                        L3SemanticFieldLane::AntiTrap,
+                        &source_kind,
+                        &source_value,
+                        suppressed_frame,
+                        1.0,
+                    );
+                }
+            }
         }
 
-        Self { edges }
+        let max_by_lane = max_weight_by_lane(&weights);
+        let mut edges = weights
+            .into_iter()
+            .filter_map(|(key, raw_weight)| {
+                let max_weight = *max_by_lane.get(&key.lane)?;
+                (max_weight > 0.0).then(|| L3SemanticInterferenceEdge {
+                    lane: key.lane,
+                    source_kind: key.source_kind,
+                    source_value: key.source_value,
+                    target_frame: key.target_frame,
+                    weight: raw_weight / max_weight,
+                })
+            })
+            .collect::<Vec<_>>();
+        edges.sort_by(|left, right| {
+            lane_order(left.lane)
+                .cmp(&lane_order(right.lane))
+                .then_with(|| left.source_kind.cmp(&right.source_kind))
+                .then_with(|| left.source_value.cmp(&right.source_value))
+                .then_with(|| left.target_frame.cmp(&right.target_frame))
+        });
+
+        Self {
+            edges,
+            learned: true,
+            contrastive: true,
+            manual_weight_table_used: false,
+        }
     }
 
     fn hot_bytes(&self) -> usize {
@@ -797,18 +1001,45 @@ impl L3SemanticInterferenceField {
         self.edges.len()
     }
 
-    fn score(&self, target_frame: usize, cues: &L3SemanticFieldCues) -> f32 {
+    fn score(
+        &self,
+        target_frame: usize,
+        cues: &L3SemanticFieldCues,
+        ablation: L3FieldAblation,
+    ) -> L3SemanticFieldScore {
         let cue_pairs = cues.as_pairs();
-        self.edges
+        let anti_pairs = cues.anti_pairs();
+        let mut score = L3SemanticFieldScore::default();
+        for edge in self
+            .edges
             .iter()
             .filter(|edge| edge.target_frame == target_frame)
-            .filter(|edge| {
-                cue_pairs.iter().any(|(kind, value)| {
-                    kind == &edge.source_kind.as_str() && value == &edge.source_value.as_str()
-                })
-            })
-            .map(|edge| edge.weight)
-            .sum()
+        {
+            let active = match edge.lane {
+                L3SemanticFieldLane::Attraction | L3SemanticFieldLane::Repulsion => cue_pairs
+                    .iter()
+                    .any(|(kind, value)| kind == &edge.source_kind && value == &edge.source_value),
+                L3SemanticFieldLane::AntiTrap => anti_pairs
+                    .iter()
+                    .any(|(kind, value)| kind == &edge.source_kind && value == &edge.source_value),
+            };
+            if !active {
+                continue;
+            }
+            match edge.lane {
+                L3SemanticFieldLane::Attraction if !ablation.attraction => {
+                    score.attraction += edge.weight;
+                }
+                L3SemanticFieldLane::Repulsion if !ablation.repulsion => {
+                    score.repulsion += edge.weight;
+                }
+                L3SemanticFieldLane::AntiTrap if !ablation.anti => {
+                    score.anti += edge.weight;
+                }
+                _ => {}
+            }
+        }
+        score
     }
 }
 
@@ -822,26 +1053,51 @@ impl L3SemanticFieldCues {
             .into_iter()
             .find(|anchor| tokens.iter().any(|token| token == anchor));
         let relation = relation_cue_from_tokens(&tokens, role.as_deref(), object_anchor.as_deref());
+        let anti_signatures = anti_signatures_from_tokens(
+            &tokens,
+            frames,
+            role.as_deref(),
+            relation.as_deref(),
+            object_anchor.as_deref(),
+        );
 
         Self {
             role,
             relation,
             object_anchor,
+            anti_signatures,
         }
     }
 
-    fn as_pairs(&self) -> Vec<(&'static str, &str)> {
-        let mut pairs = Vec::with_capacity(3);
+    fn as_pairs(&self) -> Vec<(String, String)> {
+        let mut pairs = Vec::with_capacity(4);
         if let Some(role) = self.role.as_deref() {
-            pairs.push(("role", role));
+            pairs.push(("role".to_string(), role.to_string()));
         }
         if let Some(relation) = self.relation.as_deref() {
-            pairs.push(("relation", relation));
+            pairs.push(("relation".to_string(), relation.to_string()));
         }
         if let Some(object_anchor) = self.object_anchor.as_deref() {
-            pairs.push(("object_anchor", object_anchor));
+            pairs.push(("object_anchor".to_string(), object_anchor.to_string()));
+        }
+        if let (Some(role), Some(relation), Some(object_anchor)) = (
+            self.role.as_deref(),
+            self.relation.as_deref(),
+            self.object_anchor.as_deref(),
+        ) {
+            pairs.push((
+                "binding".to_string(),
+                binding_cue(role, relation, object_anchor),
+            ));
         }
         pairs
+    }
+
+    fn anti_pairs(&self) -> Vec<(String, String)> {
+        self.anti_signatures
+            .iter()
+            .map(|signature| ("anti_signature".to_string(), signature.to_string()))
+            .collect()
     }
 
     fn complete_for(&self, frame: &L3FrameCenter) -> bool {
@@ -849,6 +1105,86 @@ impl L3SemanticFieldCues {
             && self.relation.as_deref() == Some(frame.schema.relation.as_str())
             && self.object_anchor.as_deref() == Some(frame.object_anchor.as_str())
     }
+}
+
+fn frame_index_for_schema(frames: &[L3FrameCenter], schema: &SemanticSchemaKey) -> Option<usize> {
+    frames.iter().position(|frame| &frame.schema == schema)
+}
+
+fn exact_frame_index_for_cues(
+    frames: &[L3FrameCenter],
+    cues: &L3SemanticFieldCues,
+) -> Option<usize> {
+    frames.iter().position(|frame| cues.complete_for(frame))
+}
+
+fn nearest_wrong_frame_index(
+    frames: &[L3FrameCenter],
+    l2: &L2CenterMemory,
+    text: &str,
+    correct_frame: usize,
+) -> Option<usize> {
+    let query_tokens = motif_tokens(l2, text).into_iter().collect::<HashSet<_>>();
+    frames
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != correct_frame)
+        .map(|(index, frame)| (index, score_frame(frame, &query_tokens, Some(8))))
+        .max_by(|left, right| left.1.total_cmp(&right.1))
+        .map(|(index, _)| index)
+}
+
+fn add_field_weight(
+    weights: &mut HashMap<L3SemanticInterferenceKey, f32>,
+    lane: L3SemanticFieldLane,
+    source_kind: &str,
+    source_value: &str,
+    target_frame: usize,
+    delta: f32,
+) {
+    let key = L3SemanticInterferenceKey {
+        lane,
+        source_kind: source_kind.to_string(),
+        source_value: source_value.to_string(),
+        target_frame,
+    };
+    *weights.entry(key).or_default() += delta;
+}
+
+fn max_weight_by_lane(
+    weights: &HashMap<L3SemanticInterferenceKey, f32>,
+) -> HashMap<L3SemanticFieldLane, f32> {
+    let mut max_by_lane = HashMap::new();
+    for (key, weight) in weights {
+        let current: &mut f32 = max_by_lane.entry(key.lane).or_default();
+        *current = (*current).max(*weight);
+    }
+    max_by_lane
+}
+
+fn lane_order(lane: L3SemanticFieldLane) -> u8 {
+    match lane {
+        L3SemanticFieldLane::Attraction => 0,
+        L3SemanticFieldLane::Repulsion => 1,
+        L3SemanticFieldLane::AntiTrap => 2,
+    }
+}
+
+fn frame_sort_key(frame: &L3FrameCenter) -> String {
+    format!(
+        "{}|{}|{}|{}|{}|{}|{}",
+        frame.schema.route,
+        frame.schema.relation,
+        frame.schema.subject_role,
+        frame.schema.object_role,
+        frame.schema.polarity,
+        frame.schema.evidence_kind,
+        frame.unknown_role
+    )
+}
+
+fn binding_cue(role: &str, relation: &str, object_anchor: &str) -> String {
+    format!("{role}|{relation}|{object_anchor}")
 }
 
 fn unique_frame_values(
@@ -863,29 +1199,6 @@ fn unique_frame_values(
         .collect::<Vec<_>>();
     values.sort();
     values
-}
-
-fn push_matrix_edges(
-    edges: &mut Vec<L3SemanticInterferenceEdge>,
-    source_kind: &str,
-    source_values: &[String],
-    positive_value: &str,
-    target_frame: usize,
-    positive_weight: f32,
-    negative_weight: f32,
-) {
-    for source_value in source_values {
-        edges.push(L3SemanticInterferenceEdge {
-            source_kind: source_kind.to_string(),
-            source_value: source_value.clone(),
-            target_frame,
-            weight: if source_value == positive_value {
-                positive_weight
-            } else {
-                negative_weight
-            },
-        });
-    }
 }
 
 fn motif_tokens(l2: &L2CenterMemory, text: &str) -> Vec<u32> {
@@ -986,6 +1299,59 @@ fn relation_cue_from_tokens(
         (Some("config"), Some("service")) if has("for") => Some("enables_service".to_string()),
         _ => None,
     }
+}
+
+fn anti_signatures_from_tokens(
+    tokens: &[String],
+    frames: &[L3FrameCenter],
+    role: Option<&str>,
+    relation: Option<&str>,
+    object_anchor: Option<&str>,
+) -> Vec<String> {
+    let roles = unique_frame_values(frames, |frame| frame.unknown_role.as_str());
+    let anchors = unique_frame_values(frames, |frame| frame.object_anchor.as_str());
+    let has = |needle: &str| tokens.iter().any(|token| token == needle);
+    let exact_frame = frames.iter().any(|frame| {
+        role == Some(frame.unknown_role.as_str())
+            && relation == Some(frame.schema.relation.as_str())
+            && object_anchor == Some(frame.object_anchor.as_str())
+    });
+    let mut signatures = Vec::new();
+
+    if tokens.len() >= 2
+        && anchors.iter().any(|anchor| anchor == &tokens[1])
+        && !roles.iter().any(|role| role == &tokens[1])
+    {
+        signatures.push("role_swap_surface".to_string());
+    }
+
+    if relation.is_some() && (role.is_none() || object_anchor.is_none()) {
+        signatures.push("missing_evidence_shape".to_string());
+    }
+
+    if role.is_some() && relation.is_some() && object_anchor.is_some() && !exact_frame {
+        signatures.push("route_splice_shape".to_string());
+    }
+
+    if has("proves")
+        || has("implies")
+        || has("running")
+        || has("active")
+        || (has("enabled") && role != Some("config"))
+    {
+        signatures.push("claim_overreach_shortcut".to_string());
+    }
+
+    if tokens
+        .windows(2)
+        .any(|window| roles.contains(&window[1]) && anchors.contains(&window[0]))
+    {
+        signatures.push("role_anchor_inversion".to_string());
+    }
+
+    signatures.sort();
+    signatures.dedup();
+    signatures
 }
 
 fn normalized_tokens(text: &str) -> Vec<String> {
@@ -1186,7 +1552,7 @@ fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 4] {
             },
             HardTrap {
                 kind: HardTrapKind::NegativeRoute,
-                text: format!("which installed package proves service {object} running"),
+                text: format!("which package provides command {object} proves service running"),
             },
         ],
         "executes_command" => [
@@ -1204,7 +1570,7 @@ fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 4] {
             },
             HardTrap {
                 kind: HardTrapKind::NegativeRoute,
-                text: format!("which package install implies command {object} running"),
+                text: format!("which service executes command {object} proves package installed"),
             },
         ],
         "enables_service" => [
@@ -1222,7 +1588,7 @@ fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 4] {
             },
             HardTrap {
                 kind: HardTrapKind::NegativeRoute,
-                text: format!("which config proves service {object} active"),
+                text: format!("which config enables service {object} proves service active"),
             },
         ],
         "installs_file" => [
@@ -1240,10 +1606,19 @@ fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 4] {
             },
             HardTrap {
                 kind: HardTrapKind::NegativeRoute,
-                text: format!("which file ownership proves service {object} enabled"),
+                text: format!("which package installs file {object} proves service enabled"),
             },
         ],
         _ => unreachable!("hard profile relation should be known"),
+    }
+}
+
+fn semantic_traps_for_example(example: &L3SemanticExample) -> Vec<HardTrap> {
+    match example.fact.schema.relation.as_str() {
+        "provides_command" | "executes_command" | "enables_service" | "installs_file" => {
+            hard_traps_for_example(example).into_iter().collect()
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -1359,6 +1734,10 @@ mod tests {
         assert!(proof.frame_pass, "proof={proof:#?}");
         assert!(proof.answer_pass, "proof={proof:#?}");
         assert!(proof.ablation_pass, "proof={proof:#?}");
+        assert!(!proof.manual_weight_table_used, "proof={proof:#?}");
+        assert!(proof.field_weights_learned, "proof={proof:#?}");
+        assert!(proof.contrastive_training_used, "proof={proof:#?}");
+        assert!(!proof.cue_extractor_learned, "proof={proof:#?}");
         assert!(proof.role_swap_rejected, "proof={proof:#?}");
         assert!(proof.route_splice_rejected, "proof={proof:#?}");
         assert!(proof.compression_pass, "proof={proof:#?}");
@@ -1386,6 +1765,15 @@ mod tests {
         assert!(proof.negative_route_rejected, "proof={proof:#?}");
         assert_eq!(proof.false_promotion_rate, 0.0);
         assert!(proof.ablation_pass, "proof={proof:#?}");
+        assert!(!proof.manual_weight_table_used, "proof={proof:#?}");
+        assert!(proof.field_weights_learned, "proof={proof:#?}");
+        assert!(proof.contrastive_training_used, "proof={proof:#?}");
+        assert!(!proof.cue_extractor_learned, "proof={proof:#?}");
+        assert!(proof.nearest_wrong_center_suppressed, "proof={proof:#?}");
+        assert!(proof.attraction_ablation_drop > 0.0, "proof={proof:#?}");
+        assert!(proof.repulsion_ablation_drop > 0.0, "proof={proof:#?}");
+        assert!(proof.anti_field_ablation_drop > 0.0, "proof={proof:#?}");
+        assert!(proof.semantic_field_ready, "proof={proof:#?}");
         assert!(proof.compression_pass, "proof={proof:#?}");
         assert!(proof.hard_profile_ready, "proof={proof:#?}");
     }
