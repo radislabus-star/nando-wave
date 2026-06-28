@@ -1,6 +1,50 @@
 /// The first hot-cell atom. It is sized to fit the T480 L1 data-cache target.
 pub const CELL32_BYTES: usize = 32 * 1024;
 
+pub const SYMBOL_CELL32_HEADER_BYTES: usize = 256;
+pub const SYMBOL_CELL32_PROJECTION_BYTES: usize = 4_096;
+pub const SYMBOL_CELL32_MODE_BANK_BYTES: usize = 16_384;
+pub const SYMBOL_CELL32_TRANSITION_BANK_BYTES: usize = 4_096;
+pub const SYMBOL_CELL32_INTERFERENCE_BYTES: usize = 4_096;
+pub const SYMBOL_CELL32_CALIBRATION_STATS_BYTES: usize = 2_048;
+pub const SYMBOL_CELL32_SCRATCH_BYTES: usize = 1_792;
+pub const SYMBOL_CELL32_MODES: usize = SYMBOL_CELL32_MODE_BANK_BYTES / 8;
+pub const SYMBOL_CELL32_TRANSITIONS: usize = SYMBOL_CELL32_TRANSITION_BANK_BYTES / 8;
+pub const SYMBOL_CELL32_INTERFERENCE_SLOTS: usize = SYMBOL_CELL32_INTERFERENCE_BYTES / 8;
+
+pub const SYMBOL_CELL8_BYTES: usize = 8 * 1024;
+pub const SYMBOL_CELL8_HEADER_BYTES: usize = 128;
+pub const SYMBOL_CELL8_PROJECTION_BYTES: usize = 1_024;
+pub const SYMBOL_CELL8_MODE_BANK_BYTES: usize = 4_096;
+pub const SYMBOL_CELL8_TRANSITION_BANK_BYTES: usize = 1_024;
+pub const SYMBOL_CELL8_INTERFERENCE_BYTES: usize = 1_024;
+pub const SYMBOL_CELL8_CALIBRATION_STATS_BYTES: usize = 512;
+pub const SYMBOL_CELL8_SCRATCH_BYTES: usize = 384;
+pub const SYMBOL_CELL8_MODES: usize = SYMBOL_CELL8_MODE_BANK_BYTES / 8;
+pub const SYMBOL_CELL8_TRANSITIONS: usize = SYMBOL_CELL8_TRANSITION_BANK_BYTES / 8;
+pub const SYMBOL_CELL8_INTERFERENCE_SLOTS: usize = SYMBOL_CELL8_INTERFERENCE_BYTES / 8;
+pub const SYMBOL_CELL8_PROJECTION_LANES: usize = SYMBOL_CELL8_PROJECTION_BYTES / 16;
+pub const SYMBOL_CLIQUE_CLASS_BYTES: usize = 4 * 1024;
+pub const SYMBOL_CELL_DENSE2K_BYTES: usize = 2 * 1024;
+pub const SYMBOL_CELL_DENSE2K_MODES: usize = 256;
+pub const SYMBOL_CELL_DENSE2K_TRANSITIONS: usize = 128;
+pub const SYMBOL_CELL_DENSE2K_INTERFERENCE_SLOTS: usize = 96;
+pub const SYMBOL_DENSE2K_CELLS_PER_2MB: usize = (2 * 1024 * 1024) / SYMBOL_CELL_DENSE2K_BYTES;
+pub const SYMBOL_WAVE_CLUSTER_CELLS: usize = 16;
+pub const SYMBOL_L3_TURBO_CELL8_CELLS: usize = 256;
+pub const SYMBOL_L3_TURBO_WAVE_CLUSTERS: usize =
+    SYMBOL_L3_TURBO_CELL8_CELLS / SYMBOL_WAVE_CLUSTER_CELLS;
+pub const SYMBOL_L3_TURBO_ACTIVE_BYTES: usize = SYMBOL_L3_TURBO_CELL8_CELLS * SYMBOL_CELL8_BYTES;
+pub const SYMBOL_L3_DEFAULT_CELL8_CELLS: usize = 512;
+pub const SYMBOL_L3_DEFAULT_WAVE_CLUSTERS: usize =
+    SYMBOL_L3_DEFAULT_CELL8_CELLS / SYMBOL_WAVE_CLUSTER_CELLS;
+pub const SYMBOL_L3_DEFAULT_ACTIVE_BYTES: usize =
+    SYMBOL_L3_DEFAULT_CELL8_CELLS * SYMBOL_CELL8_BYTES;
+pub const L3_8MB_SYMBOL_CELL8_CELLS: usize = (8 * 1024 * 1024) / SYMBOL_CELL8_BYTES;
+pub const L3_8MB_SYMBOL_WAVE_CLUSTERS: usize =
+    L3_8MB_SYMBOL_CELL8_CELLS / SYMBOL_WAVE_CLUSTER_CELLS;
+pub const L3_8MB_SYMBOL_ACTIVE_BYTES: usize = L3_8MB_SYMBOL_CELL8_CELLS * SYMBOL_CELL8_BYTES;
+
 /// Number of harmonic slots used by Stage 2 for one deterministic tick.
 pub const PHASE_SLOTS: usize = 256;
 
@@ -38,30 +82,109 @@ mod bus;
 mod cache_plan;
 mod carrier;
 mod cell;
+mod l1_center_memory;
+mod l2_center_memory;
+mod l3_semantic_grokking;
 mod learn;
 mod math;
+mod morphology_wave;
 mod organ;
+mod semantic_extract;
+mod semantic_wave;
 mod snapshot;
+mod surface_lm;
+mod surface_motif;
+mod surface_pattern;
+mod surface_wave;
+mod surface_word;
+mod symbol_cell;
+mod symbol_cluster;
+mod symbol_l3;
 mod tick;
+mod wave_pattern_compiler;
 
 pub use bus::WaveBus;
 pub use cache_plan::{CacheAwareOrganPlan, CacheProfile, HotWindowPlan, Organ128Plan};
 pub use carrier::CarrierWave;
 pub use cell::{Cell32, CellRank, Mono192};
+pub use l1_center_memory::{
+    L1_CENTER_RECORD_BYTES, L1_FOURIER_BINS, L1_RESIDUAL_NGRAM_BYTES, L1_SEQUENCE_REF_BYTES,
+    L1_WORD_RECORD_BYTES, L1CenterMemory, L1CenterMemoryConfig, L1CenterMemoryProof,
+    L1CenterMemoryVerdict, L1CenterSequence, L1SurfaceCenter, L1WordAssignment, L1WordCenterRecord,
+};
+pub use l2_center_memory::{
+    L2_CENTER_RECORD_BYTES, L2_FOURIER_BINS, L2_RESIDUAL_REF_BYTES, L2_TOKEN_REF_BYTES,
+    L2_WORD_RECORD_BYTES, L2CenterMemory, L2CenterMemoryConfig, L2CenterMemoryProof,
+    L2CenterMemoryVerdict, L2SequenceCenter, L2TokenSequence, L2WordAssignment, L2WordRecord,
+};
+pub use l3_semantic_grokking::{
+    L3_FRAME_CENTER_BYTES, L3_FRAME_FEATURE_BYTES, L3FrameCenter, L3FrameSelection,
+    L3SemanticExample, L3SemanticGrokkingConfig, L3SemanticGrokkingMemory, L3SemanticGrokkingProof,
+    L3SemanticGrokkingVerdict,
+};
 pub use learn::{
     Cell32Learner, Cell32PromotionReport, LinkProfile, LinkTissue, LiveByteLearner,
     LiveBytePrediction, LiveByteTrainReport, LiveByteTrainStep,
 };
+pub use morphology_wave::{
+    MORPHOLOGY_ATOM_BYTES, MorphologyAtom, MorphologyExtraction, MorphologyGrokkingProof,
+    MorphologyGrokkingVerdict, MorphologyScalingReport, MorphologyScalingRow, MorphologyWaveBank,
+    MorphologyWaveConfig,
+};
 pub use organ::{
     LiveCycle, LivePrediction, LocalUpdateReport, OrganState, Stage2Organ, stage2_organ,
 };
+pub use semantic_extract::{
+    SemanticAtomExtractor, SemanticEquationForm, SemanticExtractedForm, SemanticExtraction,
+    SemanticExtractionStatus, semantic_label_slot,
+};
+pub use semantic_wave::{
+    SEMANTIC_OPERATOR_BYTES, SEMANTIC_WAVE_BYTES, SEMANTIC_WAVE_DIM, SemanticAtom,
+    SemanticCandidate, SemanticEquationPrediction, SemanticFact, SemanticPrediction, SemanticQuery,
+    SemanticRelationOperator, SemanticSchemaKey, SemanticWave4096, SemanticWaveEvalReport,
+    SemanticWaveGrokkingProof, SemanticWaveGrokkingVerdict, SemanticWaveMemory,
+};
 pub use snapshot::{SnapshotParseError, SpectrumSnapshot, Stage2Tick, TickTrace};
+pub use surface_lm::{
+    SURFACE_WAVE_LM_BIAS_BYTES, SURFACE_WAVE_LM_OUTPUTS, SURFACE_WAVE_LM_POSITION_BUCKETS,
+    SURFACE_WAVE_LM_POSITION_BYTES, SURFACE_WAVE_LM_POSITION_SCORE_WEIGHT,
+    SURFACE_WAVE_LM_STATE_MAX, SURFACE_WAVE_LM_STATE_MIN, SURFACE_WAVE_LM_WEIGHT_BYTES,
+    SurfaceWaveContext4096, SurfaceWaveGeneration, SurfaceWaveLm, SurfaceWaveLmConfig,
+    SurfaceWaveLmEvalReport, SurfaceWaveLmTrainReport, SurfaceWaveTextScore,
+};
+pub use surface_motif::{
+    SURFACE_MOTIF_RECORD_BYTES, SURFACE_MOTIF_REF_BYTES, SurfaceMotif, SurfaceMotifBank,
+    SurfaceMotifRef, SurfaceMotifSpec, SurfaceResidualRecord,
+};
+pub use surface_pattern::{
+    SurfaceWaveGenerationCase, SurfaceWaveGenerationProof, SurfaceWavePatternProof,
+    SurfaceWavePatternProofConfig, SurfaceWavePatternVerdict,
+};
+pub use surface_wave::{
+    SURFACE_WAVE_BYTES, SURFACE_WAVE_DIM, SURFACE_WAVE_NGRAM, SURFACE_WAVE_TRITS, SurfaceWave4096,
+    SurfaceWaveLane, SurfaceWaveTrit, surface_ngram_count, surface_ngram_projection,
+};
+pub use surface_word::{
+    SurfaceWordGrokkingConfig, SurfaceWordGrokkingProof, SurfaceWordGrokkingVerdict,
+};
+pub use symbol_cell::{
+    CalibrationStats, Interference8, Mode8, PackedInterference32, PackedMode32, PackedTransition32,
+    PeakOutcome, ProjectionEntry16, StablePeakScore, SymbolCell8, SymbolCell8Advice,
+    SymbolCell8Calibration, SymbolCell8Header, SymbolCell8Tick, SymbolCell32, SymbolCellDense2K,
+    SymbolCliqueClass, SymbolExcitation, SymbolHeader, SymbolProjection, Transition8,
+};
+pub use symbol_cluster::{SymbolClusterCenter, SymbolClusterTick, SymbolWaveCluster};
+pub use symbol_l3::{SymbolL3Center, SymbolL3Organism, SymbolL3Tick};
 pub use tick::{
     BytePhaseLut, Stage2BusTraceTick, Stage2TraceTick, encode_byte_phases,
     run_stage2_bus_trace_with_organ_carrier, run_stage2_tick, run_stage2_tick_with_carrier,
     run_stage2_tick_with_disabled, run_stage2_tick_with_organ_carrier,
     run_stage2_tick_with_organ_lut_carrier, run_stage2_trace_tick,
     run_stage2_trace_with_organ_carrier, run_stage2_trace_with_organ_lut_carrier,
+};
+pub use wave_pattern_compiler::{
+    SURFACE_FOURIER_BINS, SurfaceFourierSignature, SurfaceWaveCenter, WavePatternCompileReport,
+    WavePatternCompiler, WavePatternSelection, WavePatternTemplate,
 };
 
 pub(crate) use math::{
@@ -80,6 +203,23 @@ mod tests {
     #[test]
     fn fixed_packets_have_expected_sizes() {
         assert_eq!(size_of::<Cell32>(), CELL32_BYTES);
+        assert_eq!(size_of::<SymbolCell32>(), CELL32_BYTES);
+        assert_eq!(size_of::<SymbolCell8>(), SYMBOL_CELL8_BYTES);
+        assert_eq!(size_of::<SymbolCliqueClass>(), SYMBOL_CLIQUE_CLASS_BYTES);
+        assert_eq!(size_of::<SymbolCellDense2K>(), SYMBOL_CELL_DENSE2K_BYTES);
+        assert_eq!(SYMBOL_DENSE2K_CELLS_PER_2MB, 1_024);
+        assert_eq!(SYMBOL_CELL32_MODES, 2_048);
+        assert_eq!(SYMBOL_CELL8_MODES, 512);
+        assert_eq!(SYMBOL_L3_TURBO_CELL8_CELLS, 256);
+        assert_eq!(SYMBOL_L3_TURBO_WAVE_CLUSTERS, 16);
+        assert_eq!(SYMBOL_L3_TURBO_ACTIVE_BYTES, 2 * 1024 * 1024);
+        assert_eq!(SYMBOL_L3_DEFAULT_CELL8_CELLS, 512);
+        assert_eq!(SYMBOL_L3_DEFAULT_WAVE_CLUSTERS, 32);
+        assert_eq!(SYMBOL_L3_DEFAULT_ACTIVE_BYTES, 4 * 1024 * 1024);
+        assert_eq!(L3_8MB_SYMBOL_CELL8_CELLS, 1_024);
+        assert_eq!(SYMBOL_WAVE_CLUSTER_CELLS, 16);
+        assert_eq!(L3_8MB_SYMBOL_WAVE_CLUSTERS, 64);
+        assert_eq!(L3_8MB_SYMBOL_ACTIVE_BYTES, 8 * 1024 * 1024);
         assert_eq!(PLANNED_ORGAN128_BYTES, 4 * 1024 * 1024);
         assert_eq!(
             size_of::<[Cell32; STAGE2_ORGAN_CELLS]>(),
@@ -206,7 +346,7 @@ mod tests {
         }
 
         let report = LiveByteTrainReport::from_steps(&steps, &learner);
-        assert_eq!(report.cases, "a файл a файл".as_bytes().len() - 1);
+        assert_eq!(report.cases, "a файл a файл".len() - 1);
         assert!(report.bias_abs_mean > 0.0);
         assert!(report.class_weight_abs_mean > 0.0);
         assert!(report.mode_weight_abs_mean > 0.0);

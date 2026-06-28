@@ -15,7 +15,7 @@ use args::{
     parse_periodic_args, parse_phase_composition_args, parse_phase_holdout_args,
     parse_seed_pair_cases_args, parse_snapshot_save_args, parse_wave_tick_args,
 };
-use bench::{print_link_tissue_bench, print_stage2_tick_bench};
+use bench::{print_link_tissue_bench, print_stage2_tick_bench, print_symbol_l3_bench};
 use chat0_cmd::{
     run_chat0_once, run_chat0_once_promoted, run_chat0_promote_save, run_chat0_shell,
     run_eval_chat0_promote, run_eval_chat0_promoted_holdout,
@@ -168,6 +168,17 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("bench-symbol-l3") => match parse_bench_stage2_tick_args(args) {
+            Ok((seed, ticks)) => {
+                print_symbol_l3_bench(seed, ticks);
+                ExitCode::SUCCESS
+            }
+            Err(message) => {
+                eprintln!("{message}");
+                eprintln!("try: nando-cli bench-symbol-l3 [seed] [ticks]");
+                ExitCode::FAILURE
+            }
+        },
         Some("live-byte-train") => match parse_live_byte_train_args(args) {
             Ok((seed, text)) => {
                 print_live_byte_train(seed, &text);
@@ -271,6 +282,36 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("eval-symbol-l3") => {
+            print!("{}", nando_eval::symbol_l3_eval().to_text());
+            ExitCode::SUCCESS
+        }
+        Some("eval-symbol-understanding") => {
+            print!("{}", nando_eval::symbol_understanding0_eval().to_text());
+            ExitCode::SUCCESS
+        }
+        Some("eval-symbol-retrieval") => {
+            print!("{}", nando_eval::symbol_retrieval0_eval().to_text());
+            ExitCode::SUCCESS
+        }
+        Some("eval-symbol-retrieval-sweep") => {
+            print!(
+                "{}",
+                nando_eval::symbol_retrieval_stability_sweep().to_text()
+            );
+            ExitCode::SUCCESS
+        }
+        Some("eval-symbol-retrieval-capacity") => {
+            print!("{}", nando_eval::symbol_retrieval_capacity_eval().to_text());
+            ExitCode::SUCCESS
+        }
+        Some("eval-symbol-retrieval-capacity-scale") => {
+            print!(
+                "{}",
+                nando_eval::symbol_retrieval_capacity_scale_eval().to_text()
+            );
+            ExitCode::SUCCESS
+        }
         Some("eval-one-tick") => match parse_wave_tick_args(args) {
             Ok((seed, input_byte)) => {
                 print!(

@@ -31,6 +31,8 @@ pub(crate) fn print_help() {
     println!("            Measure seed tick vs precomputed Stage2Organ tick speed");
     println!("  bench-link-tissue [seed] [ticks]");
     println!("            Measure Cell32 score vs pair/triple LinkTissue score loops");
+    println!("  bench-symbol-l3 [seed] [ticks]");
+    println!("            Measure SymbolL3 256/512/768/1024-cell tick speed");
     println!("  live-byte-train [seed] <text...>");
     println!("            Run primitive online byte prediction with local feedback");
     println!("  live-byte-learn [seed] <text...>");
@@ -53,6 +55,18 @@ pub(crate) fn print_help() {
     println!("            Trace early grokking progress measures for LinkTissue");
     println!("  live-grok-sweep [epochs] [interval]");
     println!("            Compare LinkTissue update rules over fixed grokking seeds");
+    println!("  eval-symbol-l3");
+    println!("            Check SymbolL3 turbo/default/stress profile gates");
+    println!("  eval-symbol-understanding");
+    println!("            Check the first context-sensitive wave-center gate");
+    println!("  eval-symbol-retrieval");
+    println!("            Check noisy associative retrieval after pattern storage");
+    println!("  eval-symbol-retrieval-sweep");
+    println!("            Sweep turbo-256 retrieval capacity over 4/8/16/32 patterns");
+    println!("  eval-symbol-retrieval-capacity");
+    println!("            Sweep turbo-256 capacity over 32/64/128/256 patterns and two seeds");
+    println!("  eval-symbol-retrieval-capacity-scale");
+    println!("            Sweep 256-pattern capacity over 256/512/1024 cells and two seeds");
     println!("  eval-one-tick <input-byte> [seed]");
     println!("            Print a minimal Stage 2 one-tick eval report");
     println!("  eval-periodic [seed] [cases] [start] [step]");

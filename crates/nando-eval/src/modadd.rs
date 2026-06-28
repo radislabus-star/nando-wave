@@ -2125,35 +2125,42 @@ fn settle_link_features(
     let _ = state.settle_bus_tick_with_carrier(organ, a_input, a_carrier, None);
     let b_carrier = structured_component_carrier(b_value, modulus, 0xB17B ^ seed);
     let b_input = b_value.wrapping_mul(5).wrapping_add(0xB1);
-    let tick = state.settle_bus_tick_with_carrier(organ, b_input, b_carrier, None);
+    let _ = state.settle_bus_tick_with_carrier(organ, b_input, b_carrier, None);
+    let link_state = state.clone();
+    let mut readout_state = state;
+    if matches!(mode, SettleLinkFeatureMode::NoCoupling) {
+        readout_state.clear_pair_link_state();
+    }
+    let readout_carrier = structured_component_carrier(0, modulus, 0xC311 ^ seed);
+    let tick = readout_state.settle_bus_tick_with_carrier(organ, 0xC3, readout_carrier, None);
 
     let mut features = [0.0; SETTLE_LINK_FEATURES];
     if !matches!(mode, SettleLinkFeatureMode::NoPhase) {
-        let phase_norm = state
+        let phase_norm = link_state
             .link_phase_sum
             .iter()
             .map(|value| value.abs())
             .sum::<f32>()
             .max(f32::EPSILON);
-        for (slot, value) in state.link_phase_sum.iter().copied().enumerate() {
+        for (slot, value) in link_state.link_phase_sum.iter().copied().enumerate() {
             features[slot] = value / phase_norm;
         }
         let center_slot = phase_to_slot(tick.trace.center_phase);
-        features[center_slot] += tick.trace.center_magnitude.max(0.05) * 0.25;
+        features[center_slot] += tick.trace.center_magnitude.max(0.05) * 0.10;
     }
 
     let amplitude_offset = PHASE_SLOTS;
-    let amplitude_norm = state
+    let amplitude_norm = link_state
         .link_amplitude_sum
         .iter()
         .sum::<f32>()
         .max(f32::EPSILON);
-    for (slot, value) in state.link_amplitude_sum.iter().copied().enumerate() {
+    for (slot, value) in link_state.link_amplitude_sum.iter().copied().enumerate() {
         features[amplitude_offset + slot] = value / amplitude_norm;
     }
 
     let scalar_offset = PHASE_SLOTS * 2 + STAGE2_ORGAN_CELLS * 2;
-    let pair_link_energy = state
+    let pair_link_energy = link_state
         .pair_link_state
         .iter()
         .map(|value| value.abs())
@@ -2165,7 +2172,7 @@ fn settle_link_features(
     features[scalar_offset + 3] = if matches!(mode, SettleLinkFeatureMode::NoCoupling) {
         0.0
     } else {
-        (state.coupling_mean() + pair_link_energy) * 0.05
+        (link_state.coupling_mean() + pair_link_energy) * 0.05
     };
     normalize_features(&mut features);
     features

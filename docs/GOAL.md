@@ -1147,6 +1147,47 @@ runtime OrganState как отдельный pair-link слой. Это ближ
 settle-динамику и только потом проверять key-link ablation.
 ```
 
+Проверенный вариант 7.2:
+
+```text
+organ_state_pair_link_readout_tick:
+  after a -> b creates pair_link_state
+  a third neutral readout tick runs on a cloned OrganState
+  pair_link_state adds transient coupling before that readout tick
+  NoCoupling ablation clears pair_link_state before readout
+  original a -> b link_phase/link_amplitude is preserved for features
+
+result:
+  cell32_settle_link_projection_accuracy: 0.097656
+  settle_link_projection_gain: 0.054688
+  settle_link_shuffle_accuracy: 0.042969
+  settle_link_no_shortcut_control: true
+  settle_link_coupling_drop: 0.000000
+  settle_link_phase_drop: 0.074219
+  settle_link_wrong_pair_drop: 0.097656
+  min_settle_link_projection_gain over seeds: 0.054688
+  max_settle_link_shuffle_accuracy over seeds: 0.054688
+  min_settle_link_coupling_drop over seeds: 0.000000
+  min_settle_link_phase_drop over seeds: 0.074219
+  min_settle_link_wrong_pair_drop over seeds: 0.097656
+  min_settle_link_over_fourier_gap: -0.902344
+  seed status: 3/5 settle_link_candidate, 1/5 component_link_candidate, 1/5 not_found
+
+decision:
+  partial dynamics probe v7.2, not passed.
+```
+
+Вывод по варианту 7.2:
+
+```text
+Третий нейтральный readout tick дал небольшой рост settle-link gain и сохранил
+no-shortcut на базовом seed. Но key-link ablation по pair/coupling все еще не
+появилась: min_settle_link_coupling_drop остается 0. Это означает, что текущий
+путь влияния pair_link_state через top-k/ranking активных клеток слишком слабый
+или обходится фазовым каналом. Следующая попытка должна вводить pair-link в
+фазовую динамику WaveBus/CarrierWave, а не только в score multiplier.
+```
+
 Вывод:
 
 ```text

@@ -12,6 +12,11 @@ mod modadd;
 mod phase;
 mod result;
 mod settle_word;
+mod symbol_cell8;
+mod symbol_cluster;
+mod symbol_l3;
+mod symbol_retrieval;
+mod symbol_understanding;
 pub use byte_context::{
     ByteContextCellularCarrierAblationReport, ByteContextCentroidAblationReport,
     ByteContextCentroidReport, ByteContextCentroidSeedRow, ByteContextCentroidSeedSweepReport,
@@ -72,6 +77,16 @@ pub use settle_word::{
     SettleWordEvalReport, SettleWordSeedSweepReport, SettleWordSeedSweepRow, settle_word_eval,
     settle_word_seed_sweep_eval,
 };
+pub use symbol_cell8::{SymbolCell8EvalReport, symbol_cell8_eval};
+pub use symbol_cluster::{SymbolClusterEvalReport, symbol_cluster_eval};
+pub use symbol_l3::{SymbolL3EvalReport, SymbolL3ProfileEvalRow, symbol_l3_eval};
+pub use symbol_retrieval::{
+    SymbolRetrieval0EvalReport, SymbolRetrievalCapacityReport, SymbolRetrievalCapacityRow,
+    SymbolRetrievalCapacityScaleReport, SymbolRetrievalScaleRow, SymbolRetrievalStabilityReport,
+    SymbolRetrievalStabilityRow, symbol_retrieval_capacity_eval,
+    symbol_retrieval_capacity_scale_eval, symbol_retrieval_stability_sweep, symbol_retrieval0_eval,
+};
+pub use symbol_understanding::{SymbolUnderstanding0EvalReport, symbol_understanding0_eval};
 
 /// Describe the current eval harness state.
 #[must_use]

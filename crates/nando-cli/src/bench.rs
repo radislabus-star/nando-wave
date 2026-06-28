@@ -2,9 +2,10 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use nando_core::{
-    BytePhaseLut, CarrierWave, Cell32Learner, LinkProfile, LinkTissue, Stage2Organ, TickTrace,
-    run_stage2_tick_with_carrier, run_stage2_tick_with_organ_carrier,
-    run_stage2_trace_with_organ_carrier, run_stage2_trace_with_organ_lut_carrier,
+    BytePhaseLut, CarrierWave, Cell32Learner, LinkProfile, LinkTissue, Stage2Organ, SymbolCell8,
+    SymbolL3Organism, SymbolWaveCluster, TickTrace, run_stage2_tick_with_carrier,
+    run_stage2_tick_with_organ_carrier, run_stage2_trace_with_organ_carrier,
+    run_stage2_trace_with_organ_lut_carrier,
 };
 
 pub(crate) fn print_stage2_tick_bench(seed: u64, ticks: usize) {
@@ -83,6 +84,51 @@ pub(crate) fn print_link_tissue_bench(seed: u64, ticks: usize) {
         "typed_triple_vs_triple: {:.3}x",
         triple_score.as_secs_f64() / typed_triple_score.as_secs_f64().max(f64::EPSILON)
     );
+}
+
+pub(crate) fn print_symbol_l3_bench(seed: u64, ticks: usize) {
+    let ticks = ticks.max(1);
+    let cell_tick = bench_symbol_cell8_tick(seed, ticks);
+    let cluster_tick = bench_symbol_cluster_tick(seed, ticks);
+    let rows = [
+        ("symbol_l3_256_cells", bench_symbol_l3_tick(seed, ticks, 16)),
+        (
+            "symbol_l3_512_cells_default",
+            bench_symbol_l3_tick(seed, ticks, 32),
+        ),
+        ("symbol_l3_768_cells", bench_symbol_l3_tick(seed, ticks, 48)),
+        (
+            "symbol_l3_1024_cells_stress",
+            bench_symbol_l3_tick(seed, ticks, 64),
+        ),
+    ];
+
+    println!("Nando Wave SymbolL3 bench");
+    println!("seed: {seed}");
+    println!("ticks: {ticks}");
+    print_row("symbol_cell8_tick", cell_tick, ticks);
+    print_row("symbol_cluster16_tick", cluster_tick, ticks);
+    for (name, row) in rows {
+        println!("{name}.clusters: {}", row.clusters);
+        println!("{name}.cells: {}", row.cells);
+        println!("{name}.active_bytes: {}", row.active_bytes);
+        print_row(name, row.duration, ticks);
+    }
+
+    let default_duration = rows[1].1.duration.as_secs_f64();
+    let stress_duration = rows[3].1.duration.as_secs_f64();
+    println!(
+        "default_512_vs_stress_1024_speedup: {:.3}x",
+        stress_duration / default_duration.max(f64::EPSILON)
+    );
+}
+
+#[derive(Clone, Copy)]
+struct SymbolL3BenchRow {
+    duration: Duration,
+    clusters: usize,
+    cells: usize,
+    active_bytes: usize,
 }
 
 fn bench_seed_tick(seed: u64, ticks: usize) -> Duration {
@@ -165,11 +211,82 @@ fn bench_tissue_score(tissue: &LinkTissue, traces: &[TickTrace], ticks: usize) -
     start.elapsed()
 }
 
+fn bench_symbol_l3_tick(seed: u64, ticks: usize, clusters: usize) -> SymbolL3BenchRow {
+    let mut organism = SymbolL3Organism::with_clusters(seed, clusters);
+    for index in 0..ticks.min(16) {
+        let _ = organism.tick_symbol(bench_symbol(index));
+    }
+
+    let start = Instant::now();
+    let mut checksum = 0u64;
+    for index in 0..ticks {
+        let tick = organism.tick_symbol(bench_symbol(index));
+        checksum = checksum
+            .wrapping_add(tick.center.energy)
+            .wrapping_add(u64::from(tick.center.coherence))
+            .wrapping_add(u64::from(tick.center.support_cells))
+            .wrapping_add(u64::from(tick.forward_messages));
+    }
+    let duration = start.elapsed();
+    black_box(checksum);
+
+    SymbolL3BenchRow {
+        duration,
+        clusters: organism.cluster_count(),
+        cells: organism.cell_count(),
+        active_bytes: organism.active_bytes(),
+    }
+}
+
+fn bench_symbol_cell8_tick(seed: u64, ticks: usize) -> Duration {
+    let mut cell = SymbolCell8::new(0, 1, seed);
+    for index in 0..ticks.min(16) {
+        let _ = cell.tick_symbol(bench_symbol(index));
+    }
+
+    let start = Instant::now();
+    let mut checksum = 0u64;
+    for index in 0..ticks {
+        let tick = cell.tick_symbol(bench_symbol(index));
+        checksum = checksum
+            .wrapping_add(u64::from(tick.score.energy))
+            .wrapping_add(u64::from(tick.score.coherence))
+            .wrapping_add(u64::from(tick.score.stable_score))
+            .wrapping_add(u64::from(cell.calibration.active_slot_count));
+    }
+    black_box(checksum);
+    start.elapsed()
+}
+
+fn bench_symbol_cluster_tick(seed: u64, ticks: usize) -> Duration {
+    let mut cluster = SymbolWaveCluster::new(0, seed);
+    for index in 0..ticks.min(16) {
+        let _ = cluster.tick_symbol(bench_symbol(index));
+    }
+
+    let start = Instant::now();
+    let mut checksum = 0u64;
+    for index in 0..ticks {
+        let tick = cluster.tick_symbol(bench_symbol(index));
+        checksum = checksum
+            .wrapping_add(u64::from(tick.center.energy))
+            .wrapping_add(u64::from(tick.center.coherence))
+            .wrapping_add(u64::from(tick.center.support_count));
+    }
+    black_box(checksum);
+    start.elapsed()
+}
+
 fn bench_input(index: usize) -> u8 {
     (index as u8)
         .wrapping_mul(37)
         .wrapping_add((index >> 8) as u8)
         .wrapping_add(11)
+}
+
+fn bench_symbol(index: usize) -> char {
+    const SYMBOLS: [char; 8] = ['N', 'A', 'D', 'W', '0', '1', 'x', ' '];
+    SYMBOLS[index & 7]
 }
 
 fn print_row(name: &str, duration: Duration, ticks: usize) {

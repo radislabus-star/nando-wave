@@ -7,6 +7,8 @@ use super::{
     run_stage2_tick_with_state,
 };
 
+const PAIR_LINK_TRANSIENT_COUPLING_GAIN: f32 = 6.0;
+
 /// Precomputed six-cell Stage 2 organism.
 ///
 /// Constructing all cells is intentionally deterministic but expensive enough
@@ -168,12 +170,13 @@ impl OrganState {
         disabled_cell_id: Option<u32>,
     ) -> Stage2BusTraceTick {
         self.carrier = carrier;
+        let effective_coupling = self.effective_pair_link_coupling();
         let tick = run_stage2_bus_trace_with_organ_state(
             organ,
             input_byte,
             carrier,
             disabled_cell_id,
-            &self.cell_coupling,
+            &effective_coupling,
         );
         self.update_link_from_tick(&tick.bus, &tick.trace);
         self.update_from_trace(&tick.trace);
@@ -215,6 +218,40 @@ impl OrganState {
     #[must_use]
     pub fn coupling_mean(&self) -> f32 {
         self.cell_coupling.iter().sum::<f32>() / STAGE2_ORGAN_CELLS as f32
+    }
+
+    /// Remove transient pair-link state for ablation controls.
+    pub fn clear_pair_link_state(&mut self) {
+        self.pair_link_state = [0.0; STAGE2_ORGAN_CELLS * STAGE2_ORGAN_CELLS];
+    }
+
+    fn effective_pair_link_coupling(&self) -> [f32; STAGE2_ORGAN_CELLS] {
+        let mut effective = self.cell_coupling;
+        let active_count = self.previous_active_count.min(STAGE2_TOP_K);
+        if active_count == 0 {
+            return effective;
+        }
+
+        let pair_norm = self
+            .pair_link_state
+            .iter()
+            .map(|value| value.abs())
+            .sum::<f32>()
+            .max(f32::EPSILON);
+        for previous_rank in 0..active_count {
+            let previous_cell_id = self.previous_active_cell_ids[previous_rank] as usize;
+            if previous_cell_id >= STAGE2_ORGAN_CELLS {
+                continue;
+            }
+            let previous_gain = (STAGE2_TOP_K - previous_rank) as f32 / STAGE2_TOP_K as f32;
+            for (current_cell_id, coupling) in effective.iter_mut().enumerate() {
+                let pair_index = previous_cell_id * STAGE2_ORGAN_CELLS + current_cell_id;
+                let link = self.pair_link_state[pair_index] / pair_norm;
+                *coupling = (*coupling + link * previous_gain * PAIR_LINK_TRANSIENT_COUPLING_GAIN)
+                    .clamp(-4.0, 4.0);
+            }
+        }
+        effective
     }
 
     fn apply_feedback(
