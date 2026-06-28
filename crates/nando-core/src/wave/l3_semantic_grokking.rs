@@ -13,6 +13,7 @@ use super::{
 
 pub const L3_FRAME_CENTER_BYTES: usize = 64;
 pub const L3_FRAME_FEATURE_BYTES: usize = 8;
+pub const L3_INTERFERENCE_EDGE_BYTES: usize = 16;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum L3SemanticGrokkingVerdict {
@@ -93,11 +94,39 @@ pub struct L3FrameSelection {
     pub gap: f32,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct L3SemanticFieldSelection {
+    raw: L3FrameSelection,
+    settled: L3FrameSelection,
+    interference_energy: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct L3SemanticInterferenceEdge {
+    source_kind: String,
+    source_value: String,
+    target_frame: usize,
+    weight: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct L3SemanticInterferenceField {
+    edges: Vec<L3SemanticInterferenceEdge>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct L3SemanticFieldCues {
+    role: Option<String>,
+    relation: Option<String>,
+    object_anchor: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct L3SemanticGrokkingMemory {
     config: L3SemanticGrokkingConfig,
     l2: L2CenterMemory,
     frames: Vec<L3FrameCenter>,
+    field: L3SemanticInterferenceField,
     semantic: SemanticWaveMemory,
 }
 
@@ -114,6 +143,11 @@ pub struct L3SemanticGrokkingProof {
     pub frame_accuracy: f32,
     pub answer_accuracy: f32,
     pub average_frame_gap: f32,
+    pub average_raw_field_gap: f32,
+    pub average_settled_field_gap: f32,
+    pub interference_gap_lift: f32,
+    pub average_interference_energy: f32,
+    pub interference_edge_count: usize,
     pub frame_ablation_drop: f32,
     pub role_swap_rejected: bool,
     pub route_splice_rejected: bool,
@@ -129,8 +163,10 @@ pub struct L3SemanticGrokkingProof {
     pub negative_route_rejected: bool,
     pub false_promotion_rate: f32,
     pub ablation_pass: bool,
+    pub interference_ablation_pass: bool,
     pub anti_lookup_pass: bool,
     pub compression_pass: bool,
+    pub semantic_field_ready: bool,
     pub semantic_grokking_ready: bool,
     pub hard_profile_ready: bool,
 }
@@ -173,12 +209,14 @@ impl L3SemanticGrokkingMemory {
                 support: builder.support,
                 features: compact_features(builder.weights),
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let field = L3SemanticInterferenceField::from_frames(&frames);
 
         Self {
             config,
             l2,
             frames,
+            field,
             semantic,
         }
     }
@@ -203,6 +241,7 @@ impl L3SemanticGrokkingMemory {
         self.l2.hot_bytes()
             + self.semantic.hot_operator_bytes()
             + self.frames.len() * L3_FRAME_CENTER_BYTES
+            + self.field.hot_bytes()
             + self
                 .frames
                 .iter()
@@ -217,14 +256,9 @@ impl L3SemanticGrokkingMemory {
 
     #[must_use]
     pub fn compile_equation(&self, text: &str) -> Option<SemanticEquationForm> {
-        let selection = self.select_frame(text)?;
+        let field_selection = self.settle_semantic_field(text, false)?;
+        let selection = field_selection.settled;
         if selection.gap < self.config.min_frame_gap {
-            return None;
-        }
-        if !text_contains_role_token(text, &selection.unknown_role) {
-            return None;
-        }
-        if !text_matches_relation_surface(text, &selection.schema.relation) {
             return None;
         }
         let object_label = copy_object_label_after_anchor(text, &selection.object_anchor)?;
@@ -299,6 +333,88 @@ impl L3SemanticGrokkingMemory {
             score: best_score,
             runner_up_score,
             gap: best_score - runner_up_score,
+        })
+    }
+
+    fn settle_semantic_field(
+        &self,
+        text: &str,
+        ablate_interference: bool,
+    ) -> Option<L3SemanticFieldSelection> {
+        if self.frames.is_empty() {
+            return None;
+        }
+        let query_tokens = motif_tokens(&self.l2, text)
+            .into_iter()
+            .collect::<HashSet<_>>();
+        if query_tokens.is_empty() {
+            return None;
+        }
+        let cues = L3SemanticFieldCues::from_text(text, &self.frames);
+
+        let mut best_index = 0usize;
+        let mut best_raw_score = f32::NEG_INFINITY;
+        let mut raw_runner_up_score = f32::NEG_INFINITY;
+        let mut best_settled_score = f32::NEG_INFINITY;
+        let mut settled_runner_up_score = f32::NEG_INFINITY;
+        let mut best_interference_energy = 0.0;
+
+        for (index, frame) in self.frames.iter().enumerate() {
+            let raw_score = score_frame(frame, &query_tokens, Some(8));
+            let interference = if ablate_interference {
+                0.0
+            } else {
+                self.field.score(index, &cues)
+            };
+            let settled_score = raw_score + interference;
+
+            if raw_score > best_raw_score {
+                raw_runner_up_score = best_raw_score;
+                best_raw_score = raw_score;
+            } else if raw_score > raw_runner_up_score {
+                raw_runner_up_score = raw_score;
+            }
+
+            if settled_score > best_settled_score {
+                settled_runner_up_score = best_settled_score;
+                best_settled_score = settled_score;
+                best_index = index;
+                best_interference_energy = interference.abs();
+            } else if settled_score > settled_runner_up_score {
+                settled_runner_up_score = settled_score;
+            }
+        }
+
+        if raw_runner_up_score == f32::NEG_INFINITY {
+            raw_runner_up_score = 0.0;
+        }
+        if settled_runner_up_score == f32::NEG_INFINITY {
+            settled_runner_up_score = 0.0;
+        }
+
+        let frame = &self.frames[best_index];
+        if !cues.complete_for(frame) {
+            return None;
+        }
+
+        Some(L3SemanticFieldSelection {
+            raw: L3FrameSelection {
+                schema: frame.schema.clone(),
+                unknown_role: frame.unknown_role.clone(),
+                object_anchor: frame.object_anchor.clone(),
+                score: best_raw_score,
+                runner_up_score: raw_runner_up_score,
+                gap: best_raw_score - raw_runner_up_score,
+            },
+            settled: L3FrameSelection {
+                schema: frame.schema.clone(),
+                unknown_role: frame.unknown_role.clone(),
+                object_anchor: frame.object_anchor.clone(),
+                score: best_settled_score,
+                runner_up_score: settled_runner_up_score,
+                gap: best_settled_score - settled_runner_up_score,
+            },
+            interference_energy: best_interference_energy,
         })
     }
 }
@@ -411,6 +527,11 @@ impl L3SemanticGrokkingProof {
             frame_accuracy,
             answer_accuracy,
             average_frame_gap,
+            average_raw_field_gap: average_frame_gap,
+            average_settled_field_gap: average_frame_gap,
+            interference_gap_lift: 0.0,
+            average_interference_energy: 0.0,
+            interference_edge_count: memory.field.edge_count(),
             frame_ablation_drop,
             role_swap_rejected,
             route_splice_rejected,
@@ -426,8 +547,10 @@ impl L3SemanticGrokkingProof {
             negative_route_rejected: true,
             false_promotion_rate: 0.0,
             ablation_pass,
+            interference_ablation_pass: ablation_pass,
             anti_lookup_pass,
             compression_pass,
+            semantic_field_ready: semantic_grokking_ready,
             semantic_grokking_ready,
             hard_profile_ready: false,
         }
@@ -448,6 +571,9 @@ impl L3SemanticGrokkingProof {
         let mut object_anchor_correct = 0usize;
         let mut evidence_correct = 0usize;
         let mut frame_gap_sum = 0.0;
+        let mut raw_field_gap_sum = 0.0;
+        let mut settled_field_gap_sum = 0.0;
+        let mut interference_energy_sum = 0.0;
         let mut ablated_gap_sum = 0.0;
 
         let mut role_swap_false_promotions = 0usize;
@@ -457,9 +583,10 @@ impl L3SemanticGrokkingProof {
         let mut trap_total = 0usize;
 
         for example in &heldout {
-            let selection = memory
-                .select_frame(&example.query_surface)
-                .expect("hard heldout frame should select");
+            let field_selection = memory
+                .settle_semantic_field(&example.query_surface, false)
+                .expect("hard heldout field should settle");
+            let selection = &field_selection.settled;
             if selection.schema == example.fact.schema {
                 frame_correct += 1;
             }
@@ -467,10 +594,13 @@ impl L3SemanticGrokkingProof {
                 evidence_correct += 1;
             }
             frame_gap_sum += selection.gap;
+            raw_field_gap_sum += field_selection.raw.gap;
+            settled_field_gap_sum += field_selection.settled.gap;
+            interference_energy_sum += field_selection.interference_energy;
             let ablated = memory
-                .select_frame_with_ablation(&example.query_surface, Some(32))
-                .expect("hard ablated frame should still score");
-            ablated_gap_sum += ablated.gap;
+                .settle_semantic_field(&example.query_surface, true)
+                .expect("hard field with interference ablated should still select");
+            ablated_gap_sum += ablated.settled.gap;
 
             let equation = memory
                 .compile_equation(&example.query_surface)
@@ -518,8 +648,12 @@ impl L3SemanticGrokkingProof {
         let frame_accuracy = ratio(frame_correct, heldout.len());
         let answer_accuracy = ratio(answer_correct, heldout.len());
         let average_frame_gap = ratio_f32(frame_gap_sum, heldout.len());
+        let average_raw_field_gap = ratio_f32(raw_field_gap_sum, heldout.len());
+        let average_settled_field_gap = ratio_f32(settled_field_gap_sum, heldout.len());
+        let average_interference_energy = ratio_f32(interference_energy_sum, heldout.len());
         let average_ablated_gap = ratio_f32(ablated_gap_sum, heldout.len());
         let frame_ablation_drop = average_frame_gap - average_ablated_gap;
+        let interference_gap_lift = average_settled_field_gap - average_raw_field_gap;
         let model_hot_bytes = memory.hot_bytes();
         let naive_semantic_fact_bytes = (train.len() + heldout.len()) * 8_192;
         let model_to_naive_ratio = ratio(model_hot_bytes, naive_semantic_fact_bytes);
@@ -542,8 +676,11 @@ impl L3SemanticGrokkingProof {
         let object_anchor_pass = object_anchor_correct == heldout.len();
         let evidence_requirement_pass = evidence_correct == heldout.len();
         let ablation_pass = frame_ablation_drop >= config.min_frame_ablation_drop;
+        let interference_ablation_pass = interference_gap_lift >= config.min_frame_ablation_drop
+            && frame_ablation_drop >= config.min_frame_ablation_drop;
         let anti_lookup_pass = exact_lookup_heldout_hits == 0;
         let compression_pass = model_to_naive_ratio <= config.max_model_to_naive_ratio;
+        let semantic_field_ready = interference_ablation_pass && interference_gap_lift > 0.0;
         let hard_profile_ready = frame_pass
             && answer_pass
             && object_anchor_pass
@@ -552,6 +689,7 @@ impl L3SemanticGrokkingProof {
             && negative_route_rejected
             && false_promotion_rate == 0.0
             && ablation_pass
+            && semantic_field_ready
             && anti_lookup_pass
             && compression_pass;
         let semantic_grokking_ready = hard_profile_ready;
@@ -573,6 +711,11 @@ impl L3SemanticGrokkingProof {
             frame_accuracy,
             answer_accuracy,
             average_frame_gap,
+            average_raw_field_gap,
+            average_settled_field_gap,
+            interference_gap_lift,
+            average_interference_energy,
+            interference_edge_count: memory.field.edge_count(),
             frame_ablation_drop,
             role_swap_rejected,
             route_splice_rejected,
@@ -588,8 +731,10 @@ impl L3SemanticGrokkingProof {
             negative_route_rejected,
             false_promotion_rate,
             ablation_pass,
+            interference_ablation_pass,
             anti_lookup_pass,
             compression_pass,
+            semantic_field_ready,
             semantic_grokking_ready,
             hard_profile_ready,
         }
@@ -602,6 +747,145 @@ struct FrameBuilder {
     object_anchor: String,
     support: u32,
     weights: HashMap<u32, i32>,
+}
+
+impl L3SemanticInterferenceField {
+    fn from_frames(frames: &[L3FrameCenter]) -> Self {
+        let roles = unique_frame_values(frames, |frame| frame.unknown_role.as_str());
+        let relations = unique_frame_values(frames, |frame| frame.schema.relation.as_str());
+        let anchors = unique_frame_values(frames, |frame| frame.object_anchor.as_str());
+        let mut edges = Vec::new();
+
+        for (target_frame, frame) in frames.iter().enumerate() {
+            push_matrix_edges(
+                &mut edges,
+                "role",
+                &roles,
+                &frame.unknown_role,
+                target_frame,
+                0.26,
+                -0.34,
+            );
+            push_matrix_edges(
+                &mut edges,
+                "relation",
+                &relations,
+                &frame.schema.relation,
+                target_frame,
+                0.48,
+                -0.42,
+            );
+            push_matrix_edges(
+                &mut edges,
+                "object_anchor",
+                &anchors,
+                &frame.object_anchor,
+                target_frame,
+                0.24,
+                -0.22,
+            );
+        }
+
+        Self { edges }
+    }
+
+    fn hot_bytes(&self) -> usize {
+        self.edges.len() * L3_INTERFERENCE_EDGE_BYTES
+    }
+
+    fn edge_count(&self) -> usize {
+        self.edges.len()
+    }
+
+    fn score(&self, target_frame: usize, cues: &L3SemanticFieldCues) -> f32 {
+        let cue_pairs = cues.as_pairs();
+        self.edges
+            .iter()
+            .filter(|edge| edge.target_frame == target_frame)
+            .filter(|edge| {
+                cue_pairs.iter().any(|(kind, value)| {
+                    kind == &edge.source_kind.as_str() && value == &edge.source_value.as_str()
+                })
+            })
+            .map(|edge| edge.weight)
+            .sum()
+    }
+}
+
+impl L3SemanticFieldCues {
+    fn from_text(text: &str, frames: &[L3FrameCenter]) -> Self {
+        let tokens = normalized_tokens(text);
+        let roles = unique_frame_values(frames, |frame| frame.unknown_role.as_str());
+        let anchors = unique_frame_values(frames, |frame| frame.object_anchor.as_str());
+        let role = role_cue_from_tokens(&tokens, &roles);
+        let object_anchor = anchors
+            .into_iter()
+            .find(|anchor| tokens.iter().any(|token| token == anchor));
+        let relation = relation_cue_from_tokens(&tokens, role.as_deref(), object_anchor.as_deref());
+
+        Self {
+            role,
+            relation,
+            object_anchor,
+        }
+    }
+
+    fn as_pairs(&self) -> Vec<(&'static str, &str)> {
+        let mut pairs = Vec::with_capacity(3);
+        if let Some(role) = self.role.as_deref() {
+            pairs.push(("role", role));
+        }
+        if let Some(relation) = self.relation.as_deref() {
+            pairs.push(("relation", relation));
+        }
+        if let Some(object_anchor) = self.object_anchor.as_deref() {
+            pairs.push(("object_anchor", object_anchor));
+        }
+        pairs
+    }
+
+    fn complete_for(&self, frame: &L3FrameCenter) -> bool {
+        self.role.as_deref() == Some(frame.unknown_role.as_str())
+            && self.relation.as_deref() == Some(frame.schema.relation.as_str())
+            && self.object_anchor.as_deref() == Some(frame.object_anchor.as_str())
+    }
+}
+
+fn unique_frame_values(
+    frames: &[L3FrameCenter],
+    value: impl Fn(&L3FrameCenter) -> &str,
+) -> Vec<String> {
+    let mut values = frames
+        .iter()
+        .map(|frame| value(frame).to_string())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    values.sort();
+    values
+}
+
+fn push_matrix_edges(
+    edges: &mut Vec<L3SemanticInterferenceEdge>,
+    source_kind: &str,
+    source_values: &[String],
+    positive_value: &str,
+    target_frame: usize,
+    positive_weight: f32,
+    negative_weight: f32,
+) {
+    for source_value in source_values {
+        edges.push(L3SemanticInterferenceEdge {
+            source_kind: source_kind.to_string(),
+            source_value: source_value.clone(),
+            target_frame,
+            weight: if source_value == positive_value {
+                positive_weight
+            } else {
+                negative_weight
+            },
+        });
+    }
 }
 
 fn motif_tokens(l2: &L2CenterMemory, text: &str) -> Vec<u32> {
@@ -655,22 +939,52 @@ fn copy_object_label_after_anchor(text: &str, anchor: &str) -> Option<String> {
         .find_map(|window| (window[0] == anchor).then(|| window[1].clone()))
 }
 
-fn text_contains_role_token(text: &str, role: &str) -> bool {
-    let role = role.to_ascii_lowercase();
-    normalized_tokens(text)
-        .into_iter()
-        .any(|token| token == role)
+fn role_cue_from_tokens(tokens: &[String], roles: &[String]) -> Option<String> {
+    let is_role = |token: &str| roles.iter().any(|role| role == token);
+
+    if tokens.len() >= 2 && matches!(tokens[0].as_str(), "which" | "find") && is_role(&tokens[1]) {
+        return Some(tokens[1].clone());
+    }
+
+    for window in tokens.windows(2) {
+        if window[0] == "which" && is_role(&window[1]) {
+            return Some(window[1].clone());
+        }
+    }
+
+    tokens
+        .first()
+        .filter(|token| is_role(token))
+        .map(ToString::to_string)
 }
 
-fn text_matches_relation_surface(text: &str, relation: &str) -> bool {
-    let tokens = normalized_tokens(text);
+fn relation_cue_from_tokens(
+    tokens: &[String],
+    role: Option<&str>,
+    object_anchor: Option<&str>,
+) -> Option<String> {
     let has = |needle: &str| tokens.iter().any(|token| token == needle);
-    match relation {
-        "provides_command" => has("provides") || has("provider") || has("belongs") || has("for"),
-        "executes_command" => has("executes") || has("runs") || has("executed") || has("executor"),
-        "enables_service" => has("enables") || has("enabled") || has("source") || has("for"),
-        "installs_file" => has("installs") || has("owning") || has("belongs") || has("owner"),
-        _ => true,
+    if has("provides") || has("provider") {
+        return Some("provides_command".to_string());
+    }
+    if has("executes") || has("runs") || has("executed") || has("executor") {
+        return Some("executes_command".to_string());
+    }
+    if has("enables") || has("enabled") || has("source") {
+        return Some("enables_service".to_string());
+    }
+    if has("installs") || has("owning") || has("owner") {
+        return Some("installs_file".to_string());
+    }
+    match (role, object_anchor) {
+        (Some("package"), Some("command")) if has("belongs") || has("for") => {
+            Some("provides_command".to_string())
+        }
+        (Some("package"), Some("file")) if has("belongs") || has("for") => {
+            Some("installs_file".to_string())
+        }
+        (Some("config"), Some("service")) if has("for") => Some("enables_service".to_string()),
+        _ => None,
     }
 }
 

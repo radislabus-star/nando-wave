@@ -37,12 +37,15 @@ Current L3 status:
 
 ```text
 hard bounded Linux semantic profile
-L2 motif field -> frame center -> semantic operator
+L2 motif field -> semantic field excitation -> L3 center convergence -> EquationForm
 heldout semantic role binding
 4 relation families
 16 paraphrase surfaces
+interference_edge_count = 40
+interference_gap_lift = 1.5468129
 role-swap / route-splice / missing-evidence / negative-route traps
 false_promotion_rate = 0.0
+semantic_field_ready = true
 semantic_grokking_ready = true
 ```
 
@@ -60,7 +63,7 @@ semantic atom grokking for bounded profiles
 
 ## Required Moves
 
-1. Scale the hard L3 semantic-grokking dataset.
+1. Scale the hard L3 semantic-field corpus.
 
    The dataset must hide a reusable rule behind role-complete facts:
 
@@ -69,8 +72,9 @@ semantic atom grokking for bounded profiles
    ```
 
    Current hard L3 already has multiple relation families, paraphrases,
-   role-swap traps, route-splice traps, missing-evidence blocks, negative-route
-   blocks, heldout fillers, and ablation. The next corpus must add withheld
+   semantic field interference, role-swap traps, route-splice traps,
+   missing-evidence blocks, negative-route blocks, heldout fillers, and
+   ablation. The next corpus must add a larger interference matrix, withheld
    paraphrase families, cross-domain ambiguous anchors, evidence-specific
    no-answer states, and larger false-promotion stress.
 

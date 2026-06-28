@@ -191,7 +191,7 @@ pub(crate) fn print_wave_layer_metrics() -> Result<(), String> {
     print_l3_metrics(&l3, l3_elapsed);
     println!();
     println!(
-        "meaning_path: L1 surface centers -> L2 motif centers -> L3 semantic frame + operator"
+        "meaning_path: L1 surface centers -> L2 motif centers -> L3 semantic field -> EquationForm -> operator"
     );
     println!("best_current_use: bounded profile semantic memory with explicit no-answer boundary");
     println!("next_improvement: scale L3 hard corpus before any L4/L5/L6 promotion");
@@ -301,6 +301,26 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     println!("  frame_accuracy: {:.6}", proof.frame_accuracy);
     println!("  answer_accuracy: {:.6}", proof.answer_accuracy);
     println!("  average_frame_gap: {:.6}", proof.average_frame_gap);
+    println!(
+        "  average_raw_field_gap: {:.6}",
+        proof.average_raw_field_gap
+    );
+    println!(
+        "  average_settled_field_gap: {:.6}",
+        proof.average_settled_field_gap
+    );
+    println!(
+        "  interference_gap_lift: {:.6}",
+        proof.interference_gap_lift
+    );
+    println!(
+        "  average_interference_energy: {:.6}",
+        proof.average_interference_energy
+    );
+    println!(
+        "  interference_edge_count: {}",
+        proof.interference_edge_count
+    );
     println!("  frame_ablation_drop: {:.6}", proof.frame_ablation_drop);
     println!("  object_anchor_pass: {}", proof.object_anchor_pass);
     println!(
@@ -319,9 +339,14 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     );
     println!("  false_promotion_rate: {:.6}", proof.false_promotion_rate);
     println!(
+        "  interference_ablation_pass: {}",
+        proof.interference_ablation_pass
+    );
+    println!(
         "  exact_lookup_heldout_hits: {}",
         proof.exact_lookup_heldout_hits
     );
+    println!("  semantic_field_ready: {}", proof.semantic_field_ready);
     println!(
         "  semantic_grokking_ready: {}",
         proof.semantic_grokking_ready
