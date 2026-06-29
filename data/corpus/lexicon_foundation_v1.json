@@ -1,0 +1,38 @@
+{
+  "version": "lexicon-foundation-v1",
+  "purpose": "Stable L1 lexical foundation for Russian and English Wave layers; not semantic authority.",
+  "claim_boundary": {
+    "l1_surface_foundation": true,
+    "semantic_understanding": false,
+    "general_llm_ready": false,
+    "english_corpus_final": false
+  },
+  "languages": [
+    {
+      "language": "ru",
+      "hot_file": "data/corpus/russian_words_300k.txt",
+      "cold_file": "data/corpus/russian_words_danakt_full.txt",
+      "hot_entries": 300000,
+      "cold_entries": 1528731,
+      "hot_sha256": "d14f64fcab529c02ba31e2ed62c352e20cd8d97b0f9ece83dba94b6c426b7995",
+      "cold_sha256": "692b840b001678b17c63c093879a8bff59c21e31147457175ce793aa262b174e",
+      "role": "primary Russian lexical base for L1/L2 surface and motif training"
+    },
+    {
+      "language": "en",
+      "hot_file": "data/corpus/english_words_system_full.txt",
+      "cold_file": null,
+      "hot_entries": 75119,
+      "cold_entries": 0,
+      "hot_sha256": "91b4533234355724b871abe62825fa4b010ed63ae5d90bcd66e7f8061d2f1e8b",
+      "cold_sha256": null,
+      "role": "starter English lexical base from local system dictionaries; must be expanded before broad bilingual claims"
+    }
+  ],
+  "l1_contract": {
+    "surface_wave_compiles_both_languages": true,
+    "hot_common_words_feed_fast_tests": true,
+    "cold_tail_feeds_heavy_capacity_tests": true,
+    "l3_must_not_treat_wordlist_entries_as_semantic_atoms": true
+  }
+}
