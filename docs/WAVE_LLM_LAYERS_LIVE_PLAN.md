@@ -2,9 +2,10 @@
 
 Статус: живой план, не закрыт.
 
-Цель: собрать L1/L2/L3 так, чтобы Wave-LLM не была плоским lookup и не
-хардкодила смыслы. Каждый слой должен давать проверяемый центр, перенос на
-heldout и отказ на ловушках.
+Цель: найти механизм, где Wave-LLM не хардкодит смысл и не вытаскивает строку
+lookup-ом, а вынуждена открыть компактный оператор через проверяемую задачу.
+Каждый слой должен давать проверяемый центр, перенос на heldout и отказ на
+ловушках.
 
 ## Главная форма
 
@@ -15,7 +16,164 @@ L3 = смысловые центры и операторы
 L4 = план ответа
 ```
 
-Сейчас фиксируем L1-L3. L4 пока не проектируем глубоко.
+Сейчас фиксируем L1-L3. L4 закрыт.
+
+Ключевой поворот после corpus-trained L3 proof:
+
+```text
+fast runtime is not the source of grokking
+runtime must be compiled after the grokking objective is proven
+```
+
+Текущий corpus-trained L3 field proof показал:
+
+```text
+trained edges can be fast and safe
+but coactivation + splice traps do not create semantic grokking
+```
+
+Главная ошибка предыдущего направления:
+
+```text
+we trained center coactivation and rejection
+not prediction of a hidden law
+```
+
+Новая базовая формула:
+
+```text
+grokking requires a task with:
+  input
+  verifiable target
+  hidden compact operator
+  heldout transfer
+  near-negative rejection
+```
+
+Nanda-style lesson:
+
+```text
+human semantic labels are not required
+but a checkable target law is required
+```
+
+## Task Quality Gate
+
+Хорошая задачка для Wave - это не просто фраза и не просто label.
+
+Хорошая задачка:
+
+```text
+input -> verifiable target
+```
+
+Но главное: между input и target должен быть скрытый компактный оператор,
+который выгоднее открыть, чем запомнить все строки.
+
+Good task contract:
+
+```text
+has input context
+has checkable target
+has hidden rule/operator
+has heldout split where exact surface is unseen
+has near-negative or corruption
+has ablation path
+does not leak target in input
+does not reward exact lookup
+```
+
+Хорошая задача отвечает на вопрос:
+
+```text
+какой закон нужно открыть, чтобы переноситься на новые случаи?
+```
+
+Примеры хороших задач:
+
+```text
+prefix -> next sentence/span
+context + question -> answer span
+dialogue history -> next reply
+procedure prefix -> next step
+normal sequence -> corrupted sequence rejected
+state_t -> state_t+1
+```
+
+Почему они хорошие:
+
+```text
+target уже существует в данных
+не нужна ручная semantic-разметка
+heldout может проверить перенос
+corrupt/near-negative проверяет, что модель не просто вспыхивает на похожем
+```
+
+Плохая задачка:
+
+```text
+input -> arbitrary label
+```
+
+или:
+
+```text
+input contains target
+surface token directly maps to answer
+train and heldout differ only строкой, но не оператором
+negative is too easy and just falls out of L2
+label invented by us without external check
+success possible by memorizing phrase/table
+```
+
+Плохая задача отвечает не на "какой закон открыть?", а на:
+
+```text
+какую строку/метку выучить?
+```
+
+Red flags:
+
+```text
+exact lookup can solve it
+target leakage
+no near-miss
+no heldout operator transfer
+no measurable ablation drop
+corruption too alien to activate the same field
+semantic axis names are provided as authority instead of discovered/validated
+```
+
+Acceptance:
+
+```text
+good_task = target_checkable
+          + hidden_operator_pressure
+          + heldout_transfer
+          + near_negative_rejection
+          + no_lookup_shortcut
+```
+
+If a task does not satisfy this gate, it may still be useful for L1/L2 surface
+training, but it must not be used as proof of semantic grokking.
+
+Поэтому следующий правильный узел:
+
+```text
+WavePredictor-1:
+  context wave -> future wave
+  prefix -> continuation
+  question/context -> answer span
+  state_t + learned_operator -> state_t+1
+```
+
+Не следующий узел:
+
+```text
+manual Action/Domain/Style labels
+runtime-only attraction tuning
+L4 decoder
+```
 
 ## L1 SurfaceWave
 
@@ -1122,6 +1280,173 @@ real L2-output active-fringe proof = passed
 corpus-trained L3 field active-fringe proof = still open
 ```
 
+## Q18 Early Veto Law
+
+Decision:
+
+```text
+Early Veto = weighted anti-energy threshold
+not global single-hit veto
+```
+
+Why:
+
+```text
+single anti-edge hit is too brittle for noisy L1/L2 activations
+normal noise must not make the model silent
+real traps must accumulate enough anti energy to beat positive support
+```
+
+Inference order:
+
+```text
+active_centers
+-> anti_wave_offsets / anti_wave_edges
+-> accumulate anti_energy over active pairs only
+-> compare against positive_energy and veto margin
+-> if veto wins: FIELD_UNSETTLED before settle
+-> else: run ordinary interaction settle
+```
+
+Rule:
+
+```text
+link_energy = anti_weight(A,B) * min(activation_A, activation_B)
+
+link contributes only if:
+  link_energy >= local_margin(A,B)
+
+early veto fires only if:
+  total_anti_energy >= veto_threshold
+  and total_anti_energy - positive_energy >= veto_margin
+```
+
+Segregation:
+
+```text
+raw_conflict weak      -> ordinary interaction conflict
+raw_conflict medium    -> negative interaction edge
+raw_conflict strong    -> anti_wave edge with weight
+trap confirmed strong  -> anti_wave edge with high weight
+certified hard marker  -> separate immediate safety veto, not semantic AntiWave
+```
+
+Binary reuse:
+
+```text
+interaction_edges use AlignedEdge as:
+  compatibility = attraction weight
+  conflict      = soft conflict weight
+
+anti_wave_edges use AlignedEdge as:
+  compatibility = anti_weight
+  conflict      = local_margin
+```
+
+Next proof:
+
+```text
+corpus-trained L3 field induction bench
+manual_edge_simulation = false
+interaction_edges learned from real L2 coactivation
+anti_wave_edges learned from contrastive trap coactivation
+early_veto_false_silence must stay low
+trap_false_accepts must stay zero
+```
+
+## Corpus-Trained L3 Field Induction Proof
+
+Implemented proof file:
+
+```text
+crates/nando-core/tests/wave_full_v1_corpus_l3_bench.rs
+```
+
+What it proves:
+
+```text
+manual_edge_simulation = false
+interaction_edges come from real Russian L2 center coactivation
+anti_wave_edges come from contrastive splice trap coactivation
+interaction and anti-wave tables are A-grouped independently
+Early Veto uses weighted anti-energy threshold
+late anti-check can reject trap tails after settle
+```
+
+Release run:
+
+```text
+date: 2026-06-29
+command:
+  cargo test -p nando-core --release --test wave_full_v1_corpus_l3_bench -- --ignored --nocapture
+
+induction:
+  train_examples: 18_603
+  trap_examples: 9_301
+  trained_interaction_edges: 130_946
+  trained_anti_wave_edges: 39_250
+  center_mass_nonzero: 512
+  manual_edge_simulation: false
+
+bench:
+  queries: 4_487
+  p50_latency: 50.410us
+  p99_latency: 101.016us
+  seed_center_p99: 10
+  active_center_p99: 32
+  interaction_edges_visited_p99: 34_816
+  anti_edges_visited_p99: 3_090
+  total_false_accepts: 0
+  trap_rejection_milli: 1000
+  trap_early_veto_milli: 430
+  normal_early_veto_milli: 284
+  normal_success_milli: 0
+
+verdict: CORPUS_TRAINED_L3_ACTIVE_FIELD_SAFETY_LATENCY_GATE_PASSED
+```
+
+Honest boundary:
+
+```text
+this closes trained-edge active-field safety/latency
+this does not grant answer authority
+normal_success_milli = 0 means positive semantic convergence did not emerge
+next debt is predictive grokking objective, not runtime attraction tuning
+do not claim semantic grokking from coactivation/trap field alone
+```
+
+Why semantic grokking did not happen:
+
+```text
+input was word/L2-center coactivation
+target was mostly rejection/trap behavior
+hidden predictive law was absent
+positive future/operator target was absent
+therefore the field learned to refuse, not to continue meaning
+```
+
+Corrected interpretation:
+
+```text
+corpus-trained L3 field = fast learned safety/settle substrate
+not answer-ready semantic Wave-LLM
+not proof of semantic grokking
+```
+
+Next route:
+
+```text
+build a task factory where targets already exist in data:
+  text prefix -> next sentence/span
+  context + question -> answer span
+  dialogue history -> next reply
+  procedure prefix -> next step
+  normal sample -> corrupted sample rejected
+
+then learn:
+  state_t + operator ~= state_t+1
+```
+
 ## Hot Rebuild / Snapshot Rule
 
 Q14 decision:
@@ -1505,45 +1830,63 @@ promotion economy loop:
 
 ## Что еще не закрыто
 
-1. Реальный L2 sparse resonance engine.
-2. Inverted index по `(lane, sign, local_t)`.
-3. Нормировка lane popularity / motif length.
-4. L2 proof: heldout, corrupt, reversed, no exact lookup.
-5. L3 axis-center representation.
-6. L3 compatibility/conflict matrix.
-7. L3 operator composition proof.
-8. Bounded L3 settle proof: damping, veto, FIELD_UNSETTLED.
-9. Sparse L3 interaction learning proof.
-10. L3 field regularization proof.
-11. Active adversarial trap generation proof.
-12. L3 settle kernel / active-edge traversal optimization proof.
-    Initial synthetic full_v1 release proof passed. Real L2-output
-    active-fringe release proof passed. Next proof must use corpus-trained L3
-    field active centers.
-13. Hot memory layout benchmark/proof.
-14. L2 inverted index saturation proof.
-15. Byte utility / pruning proof.
-16. Hot rebuild snapshot / epoch swap proof.
-17. Связь L3 operator -> L4 answer plan. Заблокировано до закрытия L1-L3
-    debt gate.
+1. Task Quality Gate corpus builder.
+2. WavePredictor-1 objective: `state_t + operator ~= state_t+1`.
+3. Predictive heldout split: unseen surface and unseen operator combinations.
+4. Near-negative generator that stays in-field, not alien noise.
+5. No-lookup proof for predictive tasks.
+6. L1/L2 reuse for predictive context windows.
+7. L3 learned transition operator proof.
+8. L3 positive convergence proof from predictive target, not manual attraction.
+9. L3 trap/corrupt rejection proof after predictive training.
+10. Ablation proof: remove learned operator/field and heldout drops.
+11. Byte utility / pruning proof under predictive objective.
+12. Hot memory layout benchmark/proof for compiled predictive profile.
+13. Hot rebuild snapshot / epoch swap proof.
+14. Связь L3 operator -> L4 answer plan. Заблокировано до закрытия predictive
+    L1-L3 debt gate.
+
+Already passed but not enough for semantic grokking:
+
+```text
+6 MiB full_v1 layout proof
+synthetic active-fringe proof
+real Russian L2-output active-fringe proof
+corpus-trained L3 safety/latency proof
+```
+
+Why not enough:
+
+```text
+they prove fast/safe field mechanics
+they do not prove predictive semantic operator discovery
+```
 
 ## Ближайший Приоритет
 
-Сначала не декодер.
+Сначала не декодер и не ручное докручивание attraction.
 
-Сначала нужен training protocol:
+Сначала нужен predictive task protocol:
 
 ```text
-corpus
--> L1 atoms
--> L2 sparse time-phased motif mining
--> L3 axis-center induction
--> compatibility/conflict/anti-wave learning
--> heldout/trap proof
+raw sources
+-> Task Quality Gate
+-> predictive tasks:
+     context -> future
+     question/context -> answer span
+     procedure prefix -> next step
+     dialogue history -> next reply
+     normal -> corrupt rejected
+-> L1/L2 wave encoding
+-> L3 transition operator learning
+-> heldout transfer proof
+-> near-negative rejection proof
+-> no-lookup proof
 ```
 
-Декодер имеет смысл только после того, как `O_final` стабильно рождается и
-умеет честно возвращать `FIELD_UNSETTLED`.
+Декодер имеет смысл только после того, как L3 оператор стабильно предсказывает
+будущую волну / ответный span на heldout и умеет честно возвращать
+`FIELD_UNSETTLED`.
 
 L4 lock:
 
@@ -1554,16 +1897,14 @@ NO L4 until L1/L2/L3 debts are closed.
 L4 unlock criteria:
 
 ```text
-L2 sparse resonance engine works
-L2 inverted index saturation is measured
-L2 heldout/corrupt/reversed proof passes
-L3 axis centers work
-L3 compatibility/conflict field works
-L3 bounded settle returns O_final or FIELD_UNSETTLED
-trap / anti-wave proof passes
-6 MiB full_v1 layout has benchmark/proof
-byte utility / pruning proof passes
-snapshot / epoch swap proof passes
+Task Quality Gate passes
+predictive target exists and is checkable
+heldout transfer beats lookup baseline
+near-negative rejection passes
+operator ablation drop is strong
+L3 transition operator converges on normal heldout
+FIELD_UNSETTLED remains available for unresolved/trap cases
+compiled hot profile keeps latency/byte gates
 ```
 
 ## Guard
@@ -1578,3 +1919,6 @@ snapshot / epoch swap proof passes
 Wave.
 
 Если кто-то пытается перейти к L4 до debt gate, это architectural drift.
+
+Если кто-то называет coactivation/trap safety field "semantic grokking", это
+claim drift.
