@@ -124,6 +124,54 @@ impl L3SelfInducedGrokkingProof {
             config.modulus,
         );
         let traps = trap_examples(&specs, config.heldout_slot_start, config.heldout_slot_count);
+        Self::prove_from_examples(config, train, heldout, traps, specs.len())
+    }
+
+    #[must_use]
+    pub fn prove_russian_chatter_100k() -> Self {
+        let config = L3SelfInducedGrokkingConfig {
+            modulus: 65_521,
+            train_slot_count: 625,
+            heldout_slot_start: 20_000,
+            heldout_slot_count: 250,
+            min_heldout_frame_accuracy: 0.95,
+            min_heldout_answer_accuracy: 0.95,
+            min_average_center_gap: 0.20,
+            min_frame_ablation_drop: 0.50,
+            min_binding_ablation_drop: 0.50,
+            max_false_accept_rate: 0.0,
+            max_model_to_naive_ratio: 0.01,
+        };
+        let train = russian_chatter_observed_examples(
+            0,
+            config.train_slot_count,
+            TemplateSplit::Train,
+            config.modulus,
+        );
+        let heldout = russian_chatter_observed_examples(
+            config.heldout_slot_start,
+            config.heldout_slot_count,
+            TemplateSplit::Heldout,
+            config.modulus,
+        );
+        let traps =
+            russian_chatter_trap_examples(config.heldout_slot_start, config.heldout_slot_count);
+        Self::prove_from_examples(
+            &config,
+            train,
+            heldout,
+            traps,
+            RUSSIAN_CHATTER_OPERATOR_COUNT,
+        )
+    }
+
+    fn prove_from_examples(
+        config: &L3SelfInducedGrokkingConfig,
+        train: Vec<ObservedExample>,
+        heldout: Vec<ObservedExample>,
+        traps: Vec<TrapExample>,
+        hidden_operator_count: usize,
+    ) -> Self {
         let train_query_set = train
             .iter()
             .map(|example| normalize_surface(&example.query_surface))
@@ -187,7 +235,7 @@ impl L3SelfInducedGrokkingProof {
             verdict,
             train_examples: train.len(),
             heldout_examples: heldout.len(),
-            hidden_operator_count: specs.len(),
+            hidden_operator_count,
             induced_operator_count: final_memory.operators.len(),
             modulus: config.modulus,
             train_surface_answer_only: true,
@@ -746,6 +794,191 @@ fn trap_examples(
     traps
 }
 
+const RUSSIAN_CHATTER_OPERATOR_COUNT: usize = 40;
+
+const RUSSIAN_CHATTER_INTENTS: [&str; RUSSIAN_CHATTER_OPERATOR_COUNT] = [
+    "объясни",
+    "подскажи",
+    "уточни",
+    "сравни",
+    "проверь",
+    "собери",
+    "успокой",
+    "предупреди",
+    "разверни",
+    "сократи",
+    "перескажи",
+    "согласуй",
+    "разбери",
+    "сформулируй",
+    "переведи",
+    "напомни",
+    "подтверди",
+    "отдели",
+    "исправь",
+    "свяжи",
+    "выбери",
+    "построй",
+    "покажи",
+    "оцени",
+    "найди",
+    "сохрани",
+    "раздели",
+    "сверь",
+    "обобщи",
+    "направь",
+    "сожми",
+    "раскрой",
+    "проведи",
+    "составь",
+    "перепиши",
+    "выведи",
+    "пометь",
+    "объясняй",
+    "сравнивай",
+    "проверяй",
+];
+
+const RUSSIAN_CHATTER_TONES: [&str; RUSSIAN_CHATTER_OPERATOR_COUNT] = [
+    "коротко",
+    "спокойно",
+    "строго",
+    "мягко",
+    "честно",
+    "быстро",
+    "подробно",
+    "ясно",
+    "сухо",
+    "живее",
+    "нейтрально",
+    "бережно",
+    "делово",
+    "простыми",
+    "точно",
+    "твердо",
+    "осторожно",
+    "уверенно",
+    "безопасно",
+    "ровно",
+    "лаконично",
+    "разговорно",
+    "понятно",
+    "аккуратно",
+    "жестко",
+    "медленно",
+    "пошагово",
+    "практично",
+    "сдержанно",
+    "конкретно",
+    "тепло",
+    "холодно",
+    "структурно",
+    "доказательно",
+    "критично",
+    "спорно",
+    "полезно",
+    "рабоче",
+    "человечно",
+    "прямо",
+];
+
+fn russian_chatter_observed_examples(
+    start_slot: u32,
+    slot_count: u32,
+    split: TemplateSplit,
+    modulus: u32,
+) -> Vec<ObservedExample> {
+    let templates_per_operator = match split {
+        TemplateSplit::Train => 4,
+        TemplateSplit::Heldout => 2,
+    };
+    let mut examples = Vec::with_capacity(
+        RUSSIAN_CHATTER_OPERATOR_COUNT * slot_count as usize * templates_per_operator,
+    );
+    for offset in 0..slot_count {
+        let slot = start_slot + offset;
+        for frame in 0..RUSSIAN_CHATTER_OPERATOR_COUNT {
+            let object = russian_chatter_object(frame, slot);
+            let answer_label = russian_chatter_answer(frame, slot, modulus);
+            for template_index in 0..templates_per_operator {
+                let query_surface = russian_chatter_query(frame, &object, split, template_index);
+                examples.push(ObservedExample {
+                    query_surface,
+                    answer_label: answer_label.clone(),
+                    hidden_frame: frame,
+                });
+            }
+        }
+    }
+    examples
+}
+
+fn russian_chatter_trap_examples(start_slot: u32, slot_count: u32) -> Vec<TrapExample> {
+    let mut traps = Vec::with_capacity(RUSSIAN_CHATTER_OPERATOR_COUNT * slot_count as usize * 3);
+    for offset in 0..slot_count {
+        let slot = start_slot + offset;
+        for frame in 0..RUSSIAN_CHATTER_OPERATOR_COUNT {
+            let object = russian_chatter_object(frame, slot);
+            let intent = RUSSIAN_CHATTER_INTENTS[frame];
+            let tone = RUSSIAN_CHATTER_TONES[frame];
+            let wrong_frame = (frame + 1) % RUSSIAN_CHATTER_OPERATOR_COUNT;
+            let wrong_intent = RUSSIAN_CHATTER_INTENTS[wrong_frame];
+            let wrong_tone = RUSSIAN_CHATTER_TONES[wrong_frame];
+            traps.push(TrapExample {
+                query_surface: format!("ответ для {intent} стал темой {object}"),
+                kind: TrapKind::RoleSwap,
+            });
+            traps.push(TrapExample {
+                query_surface: format!(
+                    "новый вопрос про {object} просит {wrong_intent} {wrong_tone}"
+                ),
+                kind: TrapKind::RouteSplice,
+            });
+            traps.push(TrapExample {
+                query_surface: format!("тема {object} слова рядом без нужного хода {tone}"),
+                kind: TrapKind::SurfaceShuffle,
+            });
+        }
+    }
+    traps
+}
+
+fn russian_chatter_query(
+    frame: usize,
+    object: &str,
+    split: TemplateSplit,
+    template_index: usize,
+) -> String {
+    let intent = RUSSIAN_CHATTER_INTENTS[frame];
+    let tone = RUSSIAN_CHATTER_TONES[frame];
+    match split {
+        TemplateSplit::Train => match template_index {
+            0 => format!("болтанка просит {intent} тему {object} {tone}"),
+            1 => format!("русский диалог хочет {intent} про {object} {tone}"),
+            2 => format!("человек пишет {object} нужно {intent} {tone}"),
+            _ => format!("короткий разговор про {object} требует {intent} {tone}"),
+        },
+        TemplateSplit::Heldout => match template_index {
+            0 => format!("новый вопрос про {object} просит {intent} {tone}"),
+            _ => format!("как ответить про {object} надо {intent} {tone}"),
+        },
+    }
+}
+
+fn russian_chatter_object(frame: usize, slot: u32) -> String {
+    format!("тема{frame:02}к{slot:05}")
+}
+
+fn russian_chatter_answer(frame: usize, slot: u32, modulus: u32) -> String {
+    let delta = russian_chatter_delta(frame) % modulus;
+    let answer_slot = (slot + delta) % modulus;
+    format!("ответ{frame:02}к{answer_slot:05}")
+}
+
+fn russian_chatter_delta(frame: usize) -> u32 {
+    17 + frame as u32 * 37
+}
+
 fn contrastive_corruptions(surface: &str) -> Vec<String> {
     let words = normalized_words(surface);
     let mut corruptions = Vec::new();
@@ -757,26 +990,33 @@ fn contrastive_corruptions(surface: &str) -> Vec<String> {
     reversed.reverse();
     corruptions.push(reversed.join(" "));
 
-    for index in 0..words.len().saturating_sub(1) {
-        let mut swapped = words.clone();
-        swapped.swap(index, index + 1);
-        corruptions.push(swapped.join(" "));
-    }
-
     let Some(slot_index) = words
         .iter()
         .position(|word| SlotToken::from_label(word).is_some())
     else {
         return corruptions;
     };
-    for index in 0..words.len() {
-        if index == slot_index {
-            continue;
-        }
+
+    if slot_index > 0 {
+        let mut swapped = words.clone();
+        swapped.swap(slot_index - 1, slot_index);
+        corruptions.push(swapped.join(" "));
+    }
+    if slot_index + 1 < words.len() {
+        let mut swapped = words.clone();
+        swapped.swap(slot_index, slot_index + 1);
+        corruptions.push(swapped.join(" "));
+    }
+    if slot_index != 0 {
         let mut moved = words.clone();
         let slot = moved.remove(slot_index);
-        let insert_at = index.min(moved.len());
-        moved.insert(insert_at, slot);
+        moved.insert(0, slot);
+        corruptions.push(moved.join(" "));
+    }
+    if slot_index + 1 != words.len() {
+        let mut moved = words.clone();
+        let slot = moved.remove(slot_index);
+        moved.push(slot);
         corruptions.push(moved.join(" "));
     }
 
@@ -839,9 +1079,6 @@ impl QueryObservation {
                 feature_word(&triple[2])
             ));
         }
-        for gram in char_ngrams(&words.join(" "), 4) {
-            features.insert(format!("c4:{gram}"));
-        }
         Some(Self {
             features,
             slot_tokens,
@@ -894,8 +1131,8 @@ fn normalized_words(surface: &str) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = String::new();
     for ch in surface.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            current.push(ch.to_ascii_lowercase());
+        if ch.is_alphanumeric() || ch == '_' {
+            current.extend(ch.to_lowercase());
         } else if !current.is_empty() {
             words.push(std::mem::take(&mut current));
         }
@@ -914,17 +1151,6 @@ fn feature_word(word: &str) -> String {
     SlotToken::from_label(word)
         .map(|slot| format!("<{}>", slot.prefix))
         .unwrap_or_else(|| word.to_string())
-}
-
-fn char_ngrams(text: &str, n: usize) -> Vec<String> {
-    let chars = text.chars().collect::<Vec<_>>();
-    if chars.len() < n {
-        return Vec::new();
-    }
-    chars
-        .windows(n)
-        .map(|window| window.iter().collect())
-        .collect()
 }
 
 fn feature_document_counts<'a>(
@@ -1005,6 +1231,13 @@ where
 }
 
 fn hidden_frame_guess_from_answer_prefix(prefix: &str) -> usize {
+    if let Some(frame) = prefix
+        .strip_prefix("ответ")
+        .and_then(|rest| rest.strip_suffix('к'))
+        .and_then(|digits| digits.parse::<usize>().ok())
+    {
+        return frame;
+    }
     match prefix {
         "pkgcmd" => 0,
         "svc" => 1,
@@ -1207,6 +1440,33 @@ mod tests {
         assert_eq!(proof.exact_answer_lookup_hits, 0);
         assert!(proof.frame_ablation_drop >= 0.75);
         assert!(proof.binding_ablation_drop >= 0.75);
+        assert!(proof.bounded_self_induced_grokking_ready);
+    }
+
+    #[test]
+    #[ignore = "heavy 100k Russian chatter proof"]
+    fn russian_chatter_100k_self_induced_grokking_heavy() {
+        let proof = L3SelfInducedGrokkingProof::prove_russian_chatter_100k();
+        eprintln!("{proof:#?}");
+        assert_eq!(proof.verdict, L3SelfInducedGrokkingVerdict::Proven);
+        assert_eq!(proof.train_examples, 100_000);
+        assert_eq!(proof.heldout_examples, 20_000);
+        assert_eq!(proof.hidden_operator_count, 40);
+        assert_eq!(proof.induced_operator_count, 40);
+        assert!(proof.train_surface_answer_only);
+        assert!(!proof.hidden_frame_labels_used_for_training);
+        assert!(!proof.schema_labels_used_for_training);
+        assert!(!proof.manual_role_labels_used_for_training);
+        assert!(!proof.hand_written_cue_rules_used);
+        assert!(proof.center_grokking_trace_observed);
+        assert_eq!(proof.exact_query_lookup_hits, 0);
+        assert_eq!(proof.exact_answer_lookup_hits, 0);
+        assert_eq!(proof.heldout_frame_accuracy, 1.0);
+        assert_eq!(proof.heldout_answer_accuracy, 1.0);
+        assert_eq!(proof.false_accept_rate, 0.0);
+        assert!(proof.role_swap_rejected);
+        assert!(proof.route_splice_rejected);
+        assert!(proof.surface_shuffle_rejected);
         assert!(proof.bounded_self_induced_grokking_ready);
     }
 }
