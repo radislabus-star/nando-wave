@@ -62,6 +62,11 @@ Runtime inference does not call the manual cue rules. It reads the learned
 CueField edges produced from L2 motifs plus generic normalized word/bigram cue
 tokens.
 
+The surface residual cues are not allowed to be the only authority path. The
+compiler now also requires an independent L2 structural support pass with the
+surface word/bigram residual cues removed. Surface residuals may help fill the
+bounded EquationForm, but they cannot by themselves grant answer authority.
+
 The object label is copied from the bounded surface slot after the learned
 object anchor. That copy span is not itself semantic authority. Authority comes
 from:
@@ -106,6 +111,16 @@ cue_accuracy: 1.0
 cue_margin_min: 3.59375
 cue_ablation_drop: 3.4282615
 wrong_cue_suppressed: true
+shortcut_stress_examples: 256
+shortcut_frame_accuracy: 1.0
+shortcut_answer_accuracy: 0.5
+structural_without_residual_rate: 0.75
+lexical_overlap_split: true
+surface_shortcut_rejected: true
+residual_cue_ablation_drop: 1.5911419
+motif_pair_ablation_drop: 0.0
+no_exact_bigram_lookup: true
+same_words_role_swap_rejected: true
 semantic_compiler_ready: true
 interference_edge_count: 53
 manual_weight_table_used: false
@@ -115,7 +130,7 @@ heldout_margin_min: 2.4270833
 nearest_wrong_center_suppressed: true
 attraction_ablation_drop: 3.2829638
 repulsion_ablation_drop: 0.17827344
-anti_field_ablation_drop: 0.3125
+anti_field_ablation_drop: 0.25
 frame_ablation_drop: 3.4282615
 object_anchor_pass: true
 evidence_requirement_pass: true
@@ -151,6 +166,8 @@ Learned CueField can induce role/relation/anchor/binding cues from L2 motifs and
 Heldout role bindings solve without exact fact lookup.
 Semantic field convergence is causal under interference ablation.
 Cue induction is causal under cue ablation.
+Shortcut stress uses heldout surfaces with no exact normalized bigram overlap.
+Surface residual cues are measured and cannot be the sole authority path.
 Nearest wrong centers are actively suppressed by learned repulsion.
 Complete-but-forbidden shortcuts are blocked by learned anti-trap lanes.
 Role-swap and route-splice traps stay rejected.
@@ -166,17 +183,21 @@ general chat
 arbitrary query parsing
 world knowledge
 free-form semantic extraction
+full answer solving for every shortcut-stress alpha label
 ```
 
 ## Next Honest Step
 
 The next step is not L4/L5/L6 yet.
 
-The next step is not cue induction anymore. It is scaling the hard L3 corpus:
+The next step is not cue induction anymore. It is making shortcut stress harsher
+without mixing it with a new semantic-operator claim:
 
 ```text
 more relation families
-withheld paraphrase families, not only heldout fillers
+more withheld paraphrase families with no exact normalized bigram overlap
+raise structural_without_residual_rate above 0.75
+separate EquationForm transfer from answer-solving transfer
 ambiguous anchors across domains
 evidence-specific no-answer states
 negative evidence routes with anti-wave scoring

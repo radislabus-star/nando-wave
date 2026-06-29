@@ -20,6 +20,8 @@ pub const L3_INTERFERENCE_EDGE_BYTES: usize = 16;
 pub const L3_ANTI_CUE_THRESHOLD: f32 = 0.25;
 pub const L3_ANTI_AUTHORITY_THRESHOLD: f32 = 0.5;
 const L3_CUE_PAIR_TOKEN_FLAG: u32 = 1 << 31;
+const L3_SURFACE_RESIDUAL_TOKEN_FLAG: u32 = 1 << 30;
+const L3_CUE_TOKEN_VALUE_MASK: u32 = !(L3_CUE_PAIR_TOKEN_FLAG | L3_SURFACE_RESIDUAL_TOKEN_FLAG);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum L3SemanticGrokkingVerdict {
@@ -128,6 +130,14 @@ struct L3FieldAblation {
     attraction: bool,
     repulsion: bool,
     anti: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum L3CueTokenMode {
+    All,
+    WithoutSurfaceResidual,
+    WithoutMotifPairs,
+    SurfaceResidualOnly,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -241,6 +251,16 @@ pub struct L3SemanticGrokkingProof {
     pub cue_margin_min: f32,
     pub cue_ablation_drop: f32,
     pub wrong_cue_suppressed: bool,
+    pub shortcut_stress_examples: usize,
+    pub shortcut_frame_accuracy: f32,
+    pub shortcut_answer_accuracy: f32,
+    pub structural_without_residual_rate: f32,
+    pub lexical_overlap_split: bool,
+    pub surface_shortcut_rejected: bool,
+    pub residual_cue_ablation_drop: f32,
+    pub motif_pair_ablation_drop: f32,
+    pub no_exact_bigram_lookup: bool,
+    pub same_words_role_swap_rejected: bool,
     pub semantic_compiler_ready: bool,
     pub heldout_margin_min: f32,
     pub nearest_wrong_center_suppressed: bool,
@@ -375,6 +395,9 @@ impl L3SemanticGrokkingMemory {
         if selection.gap < self.config.min_frame_gap {
             return None;
         }
+        if !self.structural_cue_supports_selection(text, &selection) {
+            return None;
+        }
         let object_label = copy_object_label_after_anchor(text, &selection.object_anchor)?;
         let object_slot = semantic_label_slot(
             &selection.schema.route,
@@ -395,6 +418,14 @@ impl L3SemanticGrokkingMemory {
             object: Some(object),
             unknown_role: Some(selection.unknown_role),
         })
+    }
+
+    fn structural_cue_supports_selection(&self, text: &str, selection: &L3FrameSelection) -> bool {
+        self.measure_semantic_field_with_cue_mode(text, L3CueTokenMode::WithoutSurfaceResidual)
+            .is_some_and(|structural| {
+                structural.settled.schema == selection.schema
+                    && structural.settled.gap >= self.config.min_frame_gap * 0.5
+            })
     }
 
     #[must_use]
@@ -455,7 +486,7 @@ impl L3SemanticGrokkingMemory {
         text: &str,
         field_ablation: L3FieldAblation,
     ) -> Option<L3SemanticFieldSelection> {
-        self.settle_semantic_field_inner(text, field_ablation, true)
+        self.settle_semantic_field_inner(text, field_ablation, L3CueTokenMode::All, true)
     }
 
     fn measure_semantic_field(
@@ -463,13 +494,22 @@ impl L3SemanticGrokkingMemory {
         text: &str,
         field_ablation: L3FieldAblation,
     ) -> Option<L3SemanticFieldSelection> {
-        self.settle_semantic_field_inner(text, field_ablation, false)
+        self.settle_semantic_field_inner(text, field_ablation, L3CueTokenMode::All, false)
+    }
+
+    fn measure_semantic_field_with_cue_mode(
+        &self,
+        text: &str,
+        cue_token_mode: L3CueTokenMode,
+    ) -> Option<L3SemanticFieldSelection> {
+        self.settle_semantic_field_inner(text, L3FieldAblation::default(), cue_token_mode, false)
     }
 
     fn settle_semantic_field_inner(
         &self,
         text: &str,
         field_ablation: L3FieldAblation,
+        cue_token_mode: L3CueTokenMode,
         require_complete: bool,
     ) -> Option<L3SemanticFieldSelection> {
         if self.frames.is_empty() {
@@ -481,9 +521,13 @@ impl L3SemanticGrokkingMemory {
         if query_tokens.is_empty() {
             return None;
         }
-        let cue_inference = self
-            .cue_field
-            .infer(text, &self.l2, &self.frames, field_ablation.cues);
+        let cue_inference = self.cue_field.infer_with_token_mode(
+            text,
+            &self.l2,
+            &self.frames,
+            field_ablation.cues,
+            cue_token_mode,
+        );
         let cues = &cue_inference.cues;
 
         let mut best_index = 0usize;
@@ -688,6 +732,16 @@ impl L3SemanticGrokkingProof {
             cue_margin_min: average_frame_gap,
             cue_ablation_drop: 0.0,
             wrong_cue_suppressed: true,
+            shortcut_stress_examples: 0,
+            shortcut_frame_accuracy: 0.0,
+            shortcut_answer_accuracy: 0.0,
+            structural_without_residual_rate: 0.0,
+            lexical_overlap_split: false,
+            surface_shortcut_rejected: false,
+            residual_cue_ablation_drop: 0.0,
+            motif_pair_ablation_drop: 0.0,
+            no_exact_bigram_lookup: false,
+            same_words_role_swap_rejected: role_swap_rejected,
             semantic_compiler_ready: false,
             heldout_margin_min: average_frame_gap,
             nearest_wrong_center_suppressed: ablation_pass,
@@ -888,6 +942,88 @@ impl L3SemanticGrokkingProof {
             .filter(|example| train_set.contains(&fact_key(&example.fact)))
             .count();
 
+        let shortcut_stress = hard_shortcut_stress_examples(
+            train_slots as u32 + heldout_slots as u32 + 10_000,
+            heldout_slots.clamp(1, 64),
+        );
+        let train_bigrams = normalized_bigram_index(&train);
+        let no_exact_bigram_lookup = shortcut_stress
+            .iter()
+            .all(|example| normalized_bigrams(&example.query_surface).is_disjoint(&train_bigrams));
+        let shortcut_fact_overlap = shortcut_stress
+            .iter()
+            .any(|example| train_set.contains(&fact_key(&example.fact)));
+        let lexical_overlap_split =
+            no_exact_bigram_lookup && exact_lookup_heldout_hits == 0 && !shortcut_fact_overlap;
+
+        let mut shortcut_frame_correct = 0usize;
+        let mut shortcut_answer_correct = 0usize;
+        let mut shortcut_full_gap_sum = 0.0;
+        let mut shortcut_no_residual_gap_sum = 0.0;
+        let mut shortcut_no_pair_gap_sum = 0.0;
+        let mut shortcut_surface_only_gap_sum = 0.0;
+        let mut structural_without_residual_authority = 0usize;
+        let mut same_words_role_swap_rejected = true;
+
+        for example in &shortcut_stress {
+            let Some(full) = memory
+                .measure_semantic_field_with_cue_mode(&example.query_surface, L3CueTokenMode::All)
+            else {
+                continue;
+            };
+            if full.settled.schema == example.fact.schema {
+                shortcut_frame_correct += 1;
+            }
+            shortcut_full_gap_sum += full.settled.gap;
+            if let Some(no_residual) = memory.measure_semantic_field_with_cue_mode(
+                &example.query_surface,
+                L3CueTokenMode::WithoutSurfaceResidual,
+            ) {
+                shortcut_no_residual_gap_sum += no_residual.settled.gap;
+            }
+            if let Some(no_pair) = memory.measure_semantic_field_with_cue_mode(
+                &example.query_surface,
+                L3CueTokenMode::WithoutMotifPairs,
+            ) {
+                shortcut_no_pair_gap_sum += no_pair.settled.gap;
+            }
+            if let Some(surface_only) = memory.measure_semantic_field_with_cue_mode(
+                &example.query_surface,
+                L3CueTokenMode::SurfaceResidualOnly,
+            ) {
+                shortcut_surface_only_gap_sum += surface_only.settled.gap;
+            }
+
+            let Some(structural_without_residual) = memory.measure_semantic_field_with_cue_mode(
+                &example.query_surface,
+                L3CueTokenMode::WithoutSurfaceResidual,
+            ) else {
+                continue;
+            };
+            if structural_without_residual.settled.schema == example.fact.schema
+                && structural_without_residual.settled.gap >= config.min_frame_gap * 0.5
+            {
+                structural_without_residual_authority += 1;
+            }
+
+            let candidates = candidates_for_fact(&example.fact);
+            if memory
+                .solve_query(&example.query_surface, &candidates)
+                .is_some_and(|prediction| prediction.resolved_label == example.fact.subject.label)
+            {
+                shortcut_answer_correct += 1;
+            }
+
+            for trap in hard_traps_for_example(example) {
+                if matches!(
+                    trap.kind,
+                    HardTrapKind::RoleSwap | HardTrapKind::RouteSplice
+                ) {
+                    same_words_role_swap_rejected &= memory.compile_equation(&trap.text).is_none();
+                }
+            }
+        }
+
         let frame_accuracy = ratio(frame_correct, heldout.len());
         let answer_accuracy = ratio(answer_correct, heldout.len());
         let average_frame_gap = ratio_f32(frame_gap_sum, heldout.len());
@@ -898,6 +1034,17 @@ impl L3SemanticGrokkingProof {
         let average_cue_ablated_gap = ratio_f32(cue_ablated_gap_sum, heldout.len());
         let average_attraction_ablated_gap = ratio_f32(attraction_ablated_gap_sum, heldout.len());
         let average_repulsion_ablated_gap = ratio_f32(repulsion_ablated_gap_sum, heldout.len());
+        let average_shortcut_full_gap = ratio_f32(shortcut_full_gap_sum, shortcut_stress.len());
+        let average_shortcut_no_pair_gap =
+            ratio_f32(shortcut_no_pair_gap_sum, shortcut_stress.len());
+        let average_shortcut_surface_only_gap =
+            ratio_f32(shortcut_surface_only_gap_sum, shortcut_stress.len());
+        let residual_cue_ablation_drop = average_shortcut_full_gap
+            - ratio_f32(shortcut_no_residual_gap_sum, shortcut_stress.len());
+        let pair_gap_drop = average_shortcut_full_gap - average_shortcut_no_pair_gap;
+        let l2_structural_gap_drop =
+            (average_shortcut_no_pair_gap - average_shortcut_surface_only_gap).max(0.0);
+        let motif_pair_ablation_drop = pair_gap_drop + l2_structural_gap_drop;
         let frame_ablation_drop = average_frame_gap - average_ablated_gap;
         let interference_gap_lift = average_settled_field_gap - average_raw_field_gap;
         let cue_ablation_drop = average_settled_field_gap - average_cue_ablated_gap;
@@ -937,6 +1084,17 @@ impl L3SemanticGrokkingProof {
             && cue_ablation_drop >= config.min_frame_ablation_drop;
         let anti_lookup_pass = exact_lookup_heldout_hits == 0;
         let compression_pass = model_to_naive_ratio <= config.max_model_to_naive_ratio;
+        let shortcut_frame_accuracy = ratio(shortcut_frame_correct, shortcut_stress.len());
+        let shortcut_answer_accuracy = ratio(shortcut_answer_correct, shortcut_stress.len());
+        let structural_without_residual_rate =
+            ratio(structural_without_residual_authority, shortcut_stress.len());
+        let shortcut_frame_pass = shortcut_frame_accuracy >= config.min_frame_accuracy;
+        let shortcut_structural_support_pass = structural_without_residual_rate >= 0.75;
+        let surface_shortcut_rejected = shortcut_structural_support_pass
+            && same_words_role_swap_rejected
+            && shortcut_frame_pass;
+        let shortcut_stress_pass =
+            lexical_overlap_split && no_exact_bigram_lookup && surface_shortcut_rejected;
         let semantic_field_ready = interference_ablation_pass
             && interference_gap_lift > 0.0
             && nearest_wrong_center_suppressed
@@ -949,7 +1107,8 @@ impl L3SemanticGrokkingProof {
             && !memory.cue_field.manual_runtime_rules_used
             && memory.field.learned
             && memory.field.contrastive
-            && !memory.field.manual_weight_table_used;
+            && !memory.field.manual_weight_table_used
+            && shortcut_stress_pass;
         let hard_profile_ready = frame_pass
             && answer_pass
             && object_anchor_pass
@@ -997,6 +1156,16 @@ impl L3SemanticGrokkingProof {
             cue_margin_min,
             cue_ablation_drop,
             wrong_cue_suppressed,
+            shortcut_stress_examples: shortcut_stress.len(),
+            shortcut_frame_accuracy,
+            shortcut_answer_accuracy,
+            structural_without_residual_rate,
+            lexical_overlap_split,
+            surface_shortcut_rejected,
+            residual_cue_ablation_drop,
+            motif_pair_ablation_drop,
+            no_exact_bigram_lookup,
+            same_words_role_swap_rejected,
             semantic_compiler_ready: semantic_field_ready,
             heldout_margin_min,
             nearest_wrong_center_suppressed,
@@ -1143,6 +1312,17 @@ impl L3LearnedCueField {
         _frames: &[L3FrameCenter],
         ablate_cues: bool,
     ) -> L3LearnedCueInference {
+        self.infer_with_token_mode(text, l2, _frames, ablate_cues, L3CueTokenMode::All)
+    }
+
+    fn infer_with_token_mode(
+        &self,
+        text: &str,
+        l2: &L2CenterMemory,
+        _frames: &[L3FrameCenter],
+        ablate_cues: bool,
+        token_mode: L3CueTokenMode,
+    ) -> L3LearnedCueInference {
         if ablate_cues {
             return L3LearnedCueInference {
                 cues: L3SemanticFieldCues::default(),
@@ -1150,7 +1330,9 @@ impl L3LearnedCueField {
             };
         }
 
-        let active_tokens = cue_tokens(l2, text).into_iter().collect::<HashSet<_>>();
+        let active_tokens = cue_tokens_with_mode(l2, text, token_mode)
+            .into_iter()
+            .collect::<HashSet<_>>();
         let mut scores: HashMap<(&str, &str), f32> = HashMap::new();
         for token in active_tokens {
             for edge_index in self.edges_by_token.get(&token).into_iter().flatten() {
@@ -1624,26 +1806,44 @@ fn motif_tokens(l2: &L2CenterMemory, text: &str) -> Vec<u32> {
 }
 
 fn cue_tokens(l2: &L2CenterMemory, text: &str) -> Vec<u32> {
+    cue_tokens_with_mode(l2, text, L3CueTokenMode::All)
+}
+
+fn cue_tokens_with_mode(l2: &L2CenterMemory, text: &str, mode: L3CueTokenMode) -> Vec<u32> {
     let base = motif_tokens(l2, text);
-    let mut tokens = base.clone();
-    for (left_index, left) in base.iter().enumerate() {
-        for right in base.iter().skip(left_index + 1).take(4) {
-            tokens.push(cue_pair_token(*left, *right));
+    let mut tokens = Vec::new();
+
+    if mode != L3CueTokenMode::SurfaceResidualOnly {
+        tokens.extend(base.iter().copied());
+    }
+
+    if !matches!(
+        mode,
+        L3CueTokenMode::WithoutMotifPairs | L3CueTokenMode::SurfaceResidualOnly
+    ) {
+        for (left_index, left) in base.iter().enumerate() {
+            for right in base.iter().skip(left_index + 1).take(4) {
+                tokens.push(cue_pair_token(*left, *right));
+            }
         }
     }
-    let surface_tokens = normalized_tokens(text)
-        .into_iter()
-        .map(|token| normalize_digits(&token))
-        .collect::<Vec<_>>();
-    for token in &surface_tokens {
-        tokens.push(cue_surface_token("word", token));
+
+    if mode != L3CueTokenMode::WithoutSurfaceResidual {
+        let surface_tokens = normalized_tokens(text)
+            .into_iter()
+            .map(|token| normalize_digits(&token))
+            .collect::<Vec<_>>();
+        for token in &surface_tokens {
+            tokens.push(cue_surface_token("word", token));
+        }
+        for window in surface_tokens.windows(2) {
+            tokens.push(cue_surface_token(
+                "bigram",
+                &format!("{}|{}", window[0], window[1]),
+            ));
+        }
     }
-    for window in surface_tokens.windows(2) {
-        tokens.push(cue_surface_token(
-            "bigram",
-            &format!("{}|{}", window[0], window[1]),
-        ));
-    }
+
     tokens.sort_unstable();
     tokens.dedup();
     tokens
@@ -1653,7 +1853,7 @@ fn cue_pair_token(left: u32, right: u32) -> u32 {
     let mut value = u64::from(left) ^ u64::from(right).rotate_left(21);
     value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    L3_CUE_PAIR_TOKEN_FLAG | ((value ^ (value >> 31)) as u32 & !L3_CUE_PAIR_TOKEN_FLAG)
+    L3_CUE_PAIR_TOKEN_FLAG | ((value ^ (value >> 31)) as u32 & L3_CUE_TOKEN_VALUE_MASK)
 }
 
 fn cue_surface_token(kind: &str, value: &str) -> u32 {
@@ -1664,7 +1864,9 @@ fn cue_surface_token(kind: &str, value: &str) -> u32 {
     }
     hash = (hash ^ (hash >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     hash = (hash ^ (hash >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    L3_CUE_PAIR_TOKEN_FLAG | ((hash ^ (hash >> 31)) as u32 & !L3_CUE_PAIR_TOKEN_FLAG)
+    L3_CUE_PAIR_TOKEN_FLAG
+        | L3_SURFACE_RESIDUAL_TOKEN_FLAG
+        | ((hash ^ (hash >> 31)) as u32 & L3_CUE_TOKEN_VALUE_MASK)
 }
 
 fn normalize_digits(token: &str) -> String {
@@ -1680,6 +1882,23 @@ fn normalized_surface_key(text: &str) -> String {
         .map(|token| normalize_digits(&token))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn normalized_bigrams(text: &str) -> HashSet<String> {
+    normalized_tokens(text)
+        .into_iter()
+        .map(|token| normalize_digits(&token))
+        .collect::<Vec<_>>()
+        .windows(2)
+        .map(|window| format!("{}|{}", window[0], window[1]))
+        .collect()
+}
+
+fn normalized_bigram_index(examples: &[L3SemanticExample]) -> HashSet<String> {
+    examples
+        .iter()
+        .flat_map(|example| normalized_bigrams(&example.query_surface))
+        .collect()
 }
 
 fn compact_features(weights: HashMap<u32, i32>) -> Vec<(u32, i16)> {
@@ -1976,6 +2195,56 @@ fn hard_semantic_example(spec: HardFrameSpec, slot: u32, template: usize) -> L3S
     }
 }
 
+fn hard_shortcut_stress_examples(start_slot: u32, slot_count: usize) -> Vec<L3SemanticExample> {
+    let mut examples = Vec::with_capacity(slot_count * HARD_FRAME_SPECS.len());
+    for offset in 0..slot_count as u32 {
+        let slot = start_slot + offset;
+        for spec in HARD_FRAME_SPECS {
+            examples.push(hard_shortcut_stress_example(spec, slot));
+        }
+    }
+    examples
+}
+
+fn hard_shortcut_stress_example(spec: HardFrameSpec, slot: u32) -> L3SemanticExample {
+    let schema = SemanticSchemaKey::new(
+        spec.subject_role,
+        spec.relation,
+        spec.object_role,
+        spec.route,
+        "positive",
+        spec.evidence_kind,
+    );
+    let suffix = alpha_suffix(slot);
+    let subject_label = format!("stress{}{}", spec.subject_prefix, suffix);
+    let object_label = format!("stress{}{}", spec.object_prefix, suffix);
+    let atom_slot = semantic_label_slot(
+        &schema.route,
+        &schema.relation,
+        &schema.object_role,
+        &object_label,
+    );
+    let family = route_family(&schema.route);
+    L3SemanticExample {
+        query_surface: hard_shortcut_stress_surface(spec.relation, &object_label),
+        fact: super::SemanticFact::new(
+            SemanticAtom::new(spec.subject_role, family.clone(), atom_slot, subject_label),
+            schema,
+            SemanticAtom::new(spec.object_role, family, atom_slot, object_label),
+        ),
+    }
+}
+
+fn hard_shortcut_stress_surface(relation: &str, object_label: &str) -> String {
+    match relation {
+        "provides_command" => format!("package which provider command {object_label}"),
+        "executes_command" => format!("command {object_label} runs service which"),
+        "enables_service" => format!("config which enables source service {object_label}"),
+        "installs_file" => format!("package which installs find file {object_label}"),
+        _ => unreachable!("hard profile relation should be known"),
+    }
+}
+
 fn hard_query_surface(relation: &str, template: usize, object_label: &str) -> String {
     match relation {
         "provides_command" => match template {
@@ -2004,6 +2273,18 @@ fn hard_query_surface(relation: &str, template: usize, object_label: &str) -> St
         },
         _ => unreachable!("hard profile relation should be known"),
     }
+}
+
+fn alpha_suffix(mut value: u32) -> String {
+    let mut chars = Vec::new();
+    loop {
+        chars.push((b'a' + (value % 26) as u8) as char);
+        value /= 26;
+        if value == 0 {
+            break;
+        }
+    }
+    chars.into_iter().rev().collect()
 }
 
 fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 4] {
@@ -2252,6 +2533,19 @@ mod tests {
         assert!(proof.cue_accuracy >= 0.99, "proof={proof:#?}");
         assert!(proof.cue_ablation_drop > 0.0, "proof={proof:#?}");
         assert!(proof.wrong_cue_suppressed, "proof={proof:#?}");
+        assert!(proof.shortcut_stress_examples > 0, "proof={proof:#?}");
+        assert!(proof.lexical_overlap_split, "proof={proof:#?}");
+        assert!(proof.no_exact_bigram_lookup, "proof={proof:#?}");
+        assert!(proof.surface_shortcut_rejected, "proof={proof:#?}");
+        assert!(proof.same_words_role_swap_rejected, "proof={proof:#?}");
+        assert!(
+            proof.residual_cue_ablation_drop.is_finite(),
+            "proof={proof:#?}"
+        );
+        assert!(
+            proof.motif_pair_ablation_drop.is_finite(),
+            "proof={proof:#?}"
+        );
         assert!(proof.semantic_compiler_ready, "proof={proof:#?}");
         assert!(proof.nearest_wrong_center_suppressed, "proof={proof:#?}");
         assert!(proof.attraction_ablation_drop > 0.0, "proof={proof:#?}");
