@@ -294,6 +294,10 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     println!("  frame_count: {}", proof.frame_count);
     println!("  l2_center_count: {}", proof.l2_center_count);
     println!("  operator_count: {}", proof.operator_count);
+    println!(
+        "  answer_binding_operator_count: {}",
+        proof.answer_binding_operator_count
+    );
     println!("  model_hot_bytes: {}", proof.model_hot_bytes);
     println!(
         "  naive_semantic_fact_bytes: {}",
@@ -331,6 +335,24 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     println!("  cue_margin_min: {:.6}", proof.cue_margin_min);
     println!("  cue_ablation_drop: {:.6}", proof.cue_ablation_drop);
     println!("  wrong_cue_suppressed: {}", proof.wrong_cue_suppressed);
+    println!(
+        "  shortcut_frame_accuracy: {:.6}",
+        proof.shortcut_frame_accuracy
+    );
+    println!(
+        "  shortcut_answer_accuracy: {:.6}",
+        proof.shortcut_answer_accuracy
+    );
+    println!(
+        "  shortcut_answer_binding_ablation_accuracy: {:.6}",
+        proof.shortcut_answer_binding_ablation_accuracy
+    );
+    println!("  answer_binding_learned: {}", proof.answer_binding_learned);
+    println!("  answer_lookup_only: {}", proof.answer_lookup_only);
+    println!(
+        "  role_binding_ablation_drop: {:.6}",
+        proof.role_binding_ablation_drop
+    );
     println!(
         "  semantic_compiler_ready: {}",
         proof.semantic_compiler_ready
@@ -389,6 +411,10 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     println!(
         "  exact_lookup_heldout_hits: {}",
         proof.exact_lookup_heldout_hits
+    );
+    println!(
+        "  heldout_answer_exact_lookup_hits: {}",
+        proof.heldout_answer_exact_lookup_hits
     );
     println!("  semantic_field_ready: {}", proof.semantic_field_ready);
     println!(

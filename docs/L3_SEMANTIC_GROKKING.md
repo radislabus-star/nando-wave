@@ -16,7 +16,8 @@ raw surface
 -> L3 semantic field excitation
 -> L3 center convergence
 -> EquationForm
--> semantic operator
+-> learned answer binding operator
+-> semantic operator fallback
 ```
 
 ## Current Hard Profile
@@ -54,7 +55,8 @@ learned attraction lane      -> compatible semantic centers
 learned repulsion lane       -> nearest wrong centers
 learned anti-trap lane       -> forbidden overclaim centers
 settled center               -> EquationForm
-semantic facts               -> relation operator
+semantic facts               -> answer binding operator
+semantic facts               -> relation operator fallback
 ```
 
 Bootstrap role/relation labels are used only to create the training target.
@@ -77,7 +79,7 @@ learned contrastive field raises the compatible center gap
 learned repulsion suppresses the nearest wrong center
 learned anti-trap lane blocks complete-but-forbidden shortcuts
 semantic field settles to one center
-semantic operator solves the role binding
+learned answer binding operator solves the heldout answer
 heldout slot was not an exact training fact
 role-swap, route-splice, missing-evidence, and negative shortcut traps are rejected
 attraction/repulsion/anti-field ablations damage the result
@@ -96,6 +98,7 @@ paraphrase_template_count: 16
 frame_count: 4
 l2_center_count: 2,032
 operator_count: 4
+answer_binding_operator_count: 4
 frame_accuracy: 1.0
 answer_accuracy: 1.0
 average_raw_field_gap: 0.1378287
@@ -113,7 +116,11 @@ cue_ablation_drop: 3.4282615
 wrong_cue_suppressed: true
 shortcut_stress_examples: 256
 shortcut_frame_accuracy: 1.0
-shortcut_answer_accuracy: 0.5
+shortcut_answer_accuracy: 1.0
+shortcut_answer_binding_ablation_accuracy: 0.0
+answer_binding_learned: true
+answer_lookup_only: false
+role_binding_ablation_drop: 1.0
 structural_without_residual_rate: 0.75
 lexical_overlap_split: true
 surface_shortcut_rejected: true
@@ -140,7 +147,8 @@ route_splice_rejected: true
 negative_route_rejected: true
 false_promotion_rate: 0.0
 exact_lookup_heldout_hits: 0
-model_hot_bytes: 2,583,332
+heldout_answer_exact_lookup_hits: 0
+model_hot_bytes: 2,583,460
 naive_semantic_fact_bytes: 163,840,000
 model_to_naive_ratio: 0.015767407
 semantic_field_ready: true
@@ -164,6 +172,8 @@ This proves:
 L2 motif fields plus learned contrastive interference can settle onto a bounded semantic center.
 Learned CueField can induce role/relation/anchor/binding cues from L2 motifs and generic surface residual cues.
 Heldout role bindings solve without exact fact lookup.
+Heldout shortcut answers solve through a learned answer binding operator.
+Removing role/slot binding drops shortcut answer accuracy from 1.0 to 0.0.
 Semantic field convergence is causal under interference ablation.
 Cue induction is causal under cue ablation.
 Shortcut stress uses heldout surfaces with no exact normalized bigram overlap.

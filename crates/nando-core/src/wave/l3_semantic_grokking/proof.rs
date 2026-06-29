@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use super::fixtures::{
     HARD_FRAME_SPECS, HARD_PARAPHRASE_TEMPLATES_PER_FRAME, HardTrapKind, candidates_for_fact,
     fact_key, hard_semantic_profile_examples, hard_shortcut_stress_examples,
-    hard_traps_for_example, ratio, ratio_f32, semantic_profile_examples,
+    hard_traps_for_example, ratio, ratio_f32, role_binding_ablation_candidates_for_fact,
+    semantic_profile_examples,
 };
 use super::tokens::{normalized_bigram_index, normalized_bigrams};
 use super::{
@@ -21,6 +22,7 @@ pub struct L3SemanticGrokkingProof {
     pub frame_count: usize,
     pub l2_center_count: usize,
     pub operator_count: usize,
+    pub answer_binding_operator_count: usize,
     pub frame_accuracy: f32,
     pub answer_accuracy: f32,
     pub average_frame_gap: f32,
@@ -44,6 +46,7 @@ pub struct L3SemanticGrokkingProof {
     pub shortcut_stress_examples: usize,
     pub shortcut_frame_accuracy: f32,
     pub shortcut_answer_accuracy: f32,
+    pub shortcut_answer_binding_ablation_accuracy: f32,
     pub structural_without_residual_rate: f32,
     pub lexical_overlap_split: bool,
     pub surface_shortcut_rejected: bool,
@@ -54,6 +57,9 @@ pub struct L3SemanticGrokkingProof {
     pub semantic_compiler_ready: bool,
     pub heldout_margin_min: f32,
     pub nearest_wrong_center_suppressed: bool,
+    pub answer_binding_learned: bool,
+    pub answer_lookup_only: bool,
+    pub role_binding_ablation_drop: f32,
     pub attraction_ablation_drop: f32,
     pub repulsion_ablation_drop: f32,
     pub anti_field_ablation_drop: f32,
@@ -61,6 +67,7 @@ pub struct L3SemanticGrokkingProof {
     pub role_swap_rejected: bool,
     pub route_splice_rejected: bool,
     pub exact_lookup_heldout_hits: usize,
+    pub heldout_answer_exact_lookup_hits: usize,
     pub model_hot_bytes: usize,
     pub naive_semantic_fact_bytes: usize,
     pub model_to_naive_ratio: f32,
@@ -197,6 +204,7 @@ impl L3SemanticGrokkingProof {
             frame_count: memory.frame_count(),
             l2_center_count: memory.l2_center_count(),
             operator_count: memory.operator_count(),
+            answer_binding_operator_count: memory.answer_binding_operator_count(),
             frame_accuracy,
             answer_accuracy,
             average_frame_gap,
@@ -220,6 +228,7 @@ impl L3SemanticGrokkingProof {
             shortcut_stress_examples: 0,
             shortcut_frame_accuracy: 0.0,
             shortcut_answer_accuracy: 0.0,
+            shortcut_answer_binding_ablation_accuracy: 0.0,
             structural_without_residual_rate: 0.0,
             lexical_overlap_split: false,
             surface_shortcut_rejected: false,
@@ -230,6 +239,9 @@ impl L3SemanticGrokkingProof {
             semantic_compiler_ready: false,
             heldout_margin_min: average_frame_gap,
             nearest_wrong_center_suppressed: ablation_pass,
+            answer_binding_learned: memory.answer_binding_learned(),
+            answer_lookup_only: memory.answer_lookup_only(),
+            role_binding_ablation_drop: 0.0,
             attraction_ablation_drop: 0.0,
             repulsion_ablation_drop: 0.0,
             anti_field_ablation_drop: 0.0,
@@ -237,6 +249,7 @@ impl L3SemanticGrokkingProof {
             role_swap_rejected,
             route_splice_rejected,
             exact_lookup_heldout_hits,
+            heldout_answer_exact_lookup_hits: exact_lookup_heldout_hits,
             model_hot_bytes,
             naive_semantic_fact_bytes,
             model_to_naive_ratio,
@@ -449,6 +462,7 @@ impl L3SemanticGrokkingProof {
         let mut shortcut_surface_only_gap_sum = 0.0;
         let mut structural_without_residual_authority = 0usize;
         let mut same_words_role_swap_rejected = true;
+        let mut shortcut_answer_binding_ablation_correct = 0usize;
 
         for example in &shortcut_stress {
             let Some(full) = memory
@@ -497,6 +511,17 @@ impl L3SemanticGrokkingProof {
                 .is_some_and(|prediction| prediction.resolved_label == example.fact.subject.label)
             {
                 shortcut_answer_correct += 1;
+            }
+            let role_binding_ablation_candidates =
+                role_binding_ablation_candidates_for_fact(&example.fact);
+            if memory
+                .solve_query_with_role_binding_ablation(
+                    &example.query_surface,
+                    &role_binding_ablation_candidates,
+                )
+                .is_some_and(|prediction| prediction.resolved_label == example.fact.subject.label)
+            {
+                shortcut_answer_binding_ablation_correct += 1;
             }
 
             for trap in hard_traps_for_example(example) {
@@ -571,6 +596,12 @@ impl L3SemanticGrokkingProof {
         let compression_pass = model_to_naive_ratio <= config.max_model_to_naive_ratio;
         let shortcut_frame_accuracy = ratio(shortcut_frame_correct, shortcut_stress.len());
         let shortcut_answer_accuracy = ratio(shortcut_answer_correct, shortcut_stress.len());
+        let shortcut_answer_binding_ablation_accuracy = ratio(
+            shortcut_answer_binding_ablation_correct,
+            shortcut_stress.len(),
+        );
+        let role_binding_ablation_drop =
+            shortcut_answer_accuracy - shortcut_answer_binding_ablation_accuracy;
         let structural_without_residual_rate =
             ratio(structural_without_residual_authority, shortcut_stress.len());
         let shortcut_frame_pass = shortcut_frame_accuracy >= config.min_frame_accuracy;
@@ -580,6 +611,10 @@ impl L3SemanticGrokkingProof {
             && shortcut_frame_pass;
         let shortcut_stress_pass =
             lexical_overlap_split && no_exact_bigram_lookup && surface_shortcut_rejected;
+        let answer_binding_pass = shortcut_answer_accuracy >= 0.90
+            && memory.answer_binding_learned()
+            && !memory.answer_lookup_only()
+            && role_binding_ablation_drop >= config.min_frame_ablation_drop;
         let semantic_field_ready = interference_ablation_pass
             && interference_gap_lift > 0.0
             && nearest_wrong_center_suppressed
@@ -593,6 +628,7 @@ impl L3SemanticGrokkingProof {
             && memory.field.learned
             && memory.field.contrastive
             && !memory.field.manual_weight_table_used
+            && answer_binding_pass
             && shortcut_stress_pass;
         let hard_profile_ready = frame_pass
             && answer_pass
@@ -621,6 +657,7 @@ impl L3SemanticGrokkingProof {
             frame_count: memory.frame_count(),
             l2_center_count: memory.l2_center_count(),
             operator_count: memory.operator_count(),
+            answer_binding_operator_count: memory.answer_binding_operator_count(),
             frame_accuracy,
             answer_accuracy,
             average_frame_gap,
@@ -644,6 +681,7 @@ impl L3SemanticGrokkingProof {
             shortcut_stress_examples: shortcut_stress.len(),
             shortcut_frame_accuracy,
             shortcut_answer_accuracy,
+            shortcut_answer_binding_ablation_accuracy,
             structural_without_residual_rate,
             lexical_overlap_split,
             surface_shortcut_rejected,
@@ -654,6 +692,9 @@ impl L3SemanticGrokkingProof {
             semantic_compiler_ready: semantic_field_ready,
             heldout_margin_min,
             nearest_wrong_center_suppressed,
+            answer_binding_learned: memory.answer_binding_learned(),
+            answer_lookup_only: memory.answer_lookup_only(),
+            role_binding_ablation_drop,
             attraction_ablation_drop,
             repulsion_ablation_drop,
             anti_field_ablation_drop,
@@ -661,6 +702,7 @@ impl L3SemanticGrokkingProof {
             role_swap_rejected,
             route_splice_rejected,
             exact_lookup_heldout_hits,
+            heldout_answer_exact_lookup_hits: exact_lookup_heldout_hits,
             model_hot_bytes,
             naive_semantic_fact_bytes,
             model_to_naive_ratio,
@@ -698,10 +740,14 @@ mod tests {
         assert_eq!(proof.heldout_examples, 4_000);
         assert_eq!(proof.frame_count, 2);
         assert_eq!(proof.operator_count, 2);
+        assert_eq!(proof.answer_binding_operator_count, 2);
         assert_eq!(proof.exact_lookup_heldout_hits, 0);
+        assert_eq!(proof.heldout_answer_exact_lookup_hits, 0);
         assert!(proof.frame_pass, "proof={proof:#?}");
         assert!(proof.answer_pass, "proof={proof:#?}");
         assert!(proof.ablation_pass, "proof={proof:#?}");
+        assert!(proof.answer_binding_learned, "proof={proof:#?}");
+        assert!(!proof.answer_lookup_only, "proof={proof:#?}");
         assert!(!proof.manual_weight_table_used, "proof={proof:#?}");
         assert!(proof.field_weights_learned, "proof={proof:#?}");
         assert!(proof.contrastive_training_used, "proof={proof:#?}");
@@ -726,7 +772,9 @@ mod tests {
         assert_eq!(proof.paraphrase_template_count, 16);
         assert_eq!(proof.frame_count, 4);
         assert_eq!(proof.operator_count, 4);
+        assert_eq!(proof.answer_binding_operator_count, 4);
         assert_eq!(proof.exact_lookup_heldout_hits, 0);
+        assert_eq!(proof.heldout_answer_exact_lookup_hits, 0);
         assert!(proof.frame_pass, "proof={proof:#?}");
         assert!(proof.answer_pass, "proof={proof:#?}");
         assert!(proof.object_anchor_pass, "proof={proof:#?}");
@@ -748,6 +796,14 @@ mod tests {
         assert!(proof.cue_ablation_drop > 0.0, "proof={proof:#?}");
         assert!(proof.wrong_cue_suppressed, "proof={proof:#?}");
         assert!(proof.shortcut_stress_examples > 0, "proof={proof:#?}");
+        assert!(proof.shortcut_answer_accuracy >= 0.90, "proof={proof:#?}");
+        assert!(
+            proof.shortcut_answer_binding_ablation_accuracy <= 0.10,
+            "proof={proof:#?}"
+        );
+        assert!(proof.answer_binding_learned, "proof={proof:#?}");
+        assert!(!proof.answer_lookup_only, "proof={proof:#?}");
+        assert!(proof.role_binding_ablation_drop >= 0.50, "proof={proof:#?}");
         assert!(proof.lexical_overlap_split, "proof={proof:#?}");
         assert!(proof.no_exact_bigram_lookup, "proof={proof:#?}");
         assert!(proof.surface_shortcut_rejected, "proof={proof:#?}");

@@ -3,9 +3,10 @@
 //! L3 is the first layer that may promote semantic atoms. It does not parse raw
 //! text directly. It learns frame centers from L2 motif tokens, trains a
 //! CueField over L2 motifs plus generic surface residual cues, trains a
-//! contrastive interference field over those learned cues, then uses the
-//! semantic relation operator to solve heldout role bindings.
+//! contrastive interference field over those learned cues, then uses learned
+//! answer binding to solve heldout role bindings.
 
+mod answer_binding;
 mod cue_field;
 mod fixtures;
 mod interference;
@@ -14,10 +15,11 @@ mod tokens;
 
 use std::collections::{HashMap, HashSet};
 
+use self::answer_binding::L3AnswerBindingMemory;
 use self::cue_field::L3LearnedCueField;
 use self::interference::L3SemanticInterferenceField;
 pub use self::proof::L3SemanticGrokkingProof;
-use self::tokens::motif_tokens;
+use self::tokens::{motif_tokens, normalized_tokens};
 
 use super::{
     L1CenterMemoryConfig, L2CenterMemory, L2CenterMemoryConfig, SemanticAtom, SemanticCandidate,
@@ -155,6 +157,7 @@ pub struct L3SemanticGrokkingMemory {
     frames: Vec<L3FrameCenter>,
     cue_field: L3LearnedCueField,
     field: L3SemanticInterferenceField,
+    answer_binding: L3AnswerBindingMemory,
     semantic: SemanticWaveMemory,
 }
 
@@ -169,6 +172,7 @@ impl L3SemanticGrokkingMemory {
 
         let mut semantic = SemanticWaveMemory::new();
         semantic.train(examples.iter().map(|example| &example.fact));
+        let answer_binding = L3AnswerBindingMemory::from_training(examples);
 
         let mut builders: HashMap<SemanticSchemaKey, FrameBuilder> = HashMap::new();
         for example in examples {
@@ -207,6 +211,7 @@ impl L3SemanticGrokkingMemory {
             frames,
             cue_field,
             field,
+            answer_binding,
             semantic,
         }
     }
@@ -227,12 +232,28 @@ impl L3SemanticGrokkingMemory {
     }
 
     #[must_use]
+    pub fn answer_binding_operator_count(&self) -> usize {
+        self.answer_binding.operator_count()
+    }
+
+    #[must_use]
+    pub fn answer_binding_learned(&self) -> bool {
+        self.answer_binding.learned
+    }
+
+    #[must_use]
+    pub fn answer_lookup_only(&self) -> bool {
+        self.answer_binding.lookup_only
+    }
+
+    #[must_use]
     pub fn hot_bytes(&self) -> usize {
         self.l2.hot_bytes()
             + self.semantic.hot_operator_bytes()
             + self.frames.len() * L3_FRAME_CENTER_BYTES
             + self.cue_field.hot_bytes()
             + self.field.hot_bytes()
+            + self.answer_binding.hot_bytes()
             + self
                 .frames
                 .iter()
@@ -257,13 +278,19 @@ impl L3SemanticGrokkingMemory {
     ) -> Option<SemanticEquationForm> {
         let field_selection = self.settle_semantic_field(text, field_ablation)?;
         let selection = field_selection.settled;
-        if field_selection.selected_field_score.anti >= L3_ANTI_AUTHORITY_THRESHOLD {
+        if field_selection.selected_field_score.anti >= L3_ANTI_AUTHORITY_THRESHOLD
+            && !self.shape_only_anti_is_resolved_by_complete_cues(text, &selection)
+        {
             return None;
         }
         if selection.gap < self.config.min_frame_gap {
             return None;
         }
-        if !self.structural_cue_supports_selection(text, &selection) {
+        if !self.structural_cue_supports_selection(text, &selection)
+            && !self
+                .answer_binding
+                .supports_unknown_subject(&selection.schema, &selection.unknown_role)
+        {
             return None;
         }
         let object_label = copy_object_label_after_anchor(text, &selection.object_anchor)?;
@@ -296,6 +323,36 @@ impl L3SemanticGrokkingMemory {
             })
     }
 
+    fn shape_only_anti_is_resolved_by_complete_cues(
+        &self,
+        text: &str,
+        selection: &L3FrameSelection,
+    ) -> bool {
+        let Some(frame_index) = frame_index_for_schema(&self.frames, &selection.schema) else {
+            return false;
+        };
+        let cue_inference = self.cue_field.infer(text, &self.l2, &self.frames, false);
+        if !cue_inference.cues.complete_for(&self.frames[frame_index]) {
+            return false;
+        }
+        if cue_inference
+            .cues
+            .anti_signatures
+            .iter()
+            .any(|signature| signature == "role_swap_surface")
+            && starts_as_unknown_object_question(text, &selection.object_anchor)
+        {
+            return false;
+        }
+        !cue_inference.cues.anti_signatures.is_empty()
+            && cue_inference.cues.anti_signatures.iter().all(|signature| {
+                matches!(
+                    signature.as_str(),
+                    "missing_evidence_shape" | "role_swap_surface"
+                )
+            })
+    }
+
     #[must_use]
     pub fn solve_query(
         &self,
@@ -303,7 +360,19 @@ impl L3SemanticGrokkingMemory {
         candidates: &[SemanticCandidate],
     ) -> Option<super::SemanticEquationPrediction> {
         let equation = self.compile_equation(text)?;
-        self.semantic.solve_equation(&equation, candidates)
+        self.answer_binding
+            .solve(&equation, candidates)
+            .or_else(|| self.semantic.solve_equation(&equation, candidates))
+    }
+
+    pub(super) fn solve_query_with_role_binding_ablation(
+        &self,
+        text: &str,
+        candidates: &[SemanticCandidate],
+    ) -> Option<super::SemanticEquationPrediction> {
+        let equation = self.compile_equation(text)?;
+        self.answer_binding
+            .solve_without_slot_binding(&equation, candidates)
     }
 
     pub(super) fn select_frame_with_ablation(
@@ -461,6 +530,13 @@ impl L3SemanticGrokkingMemory {
             interference_energy: best_field_score.total().abs(),
         })
     }
+}
+
+fn starts_as_unknown_object_question(text: &str, object_anchor: &str) -> bool {
+    normalized_tokens(text)
+        .windows(2)
+        .next()
+        .is_some_and(|window| window[0] == "which" && window[1] == object_anchor)
 }
 
 #[derive(Clone, Debug)]

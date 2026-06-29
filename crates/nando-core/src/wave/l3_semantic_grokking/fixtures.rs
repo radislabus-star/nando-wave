@@ -21,6 +21,27 @@ pub(super) fn candidates_for_fact(fact: &super::super::SemanticFact) -> [Semanti
     ]
 }
 
+pub(super) fn role_binding_ablation_candidates_for_fact(
+    fact: &super::super::SemanticFact,
+) -> [SemanticCandidate; 3] {
+    let family = fact.subject.family.clone();
+    [
+        SemanticCandidate::new(SemanticAtom::new(
+            fact.schema.subject_role.clone(),
+            family.clone(),
+            fact.subject.slot.wrapping_add(1),
+            next_label(&fact.subject.label),
+        )),
+        SemanticCandidate::new(fact.subject.clone()),
+        SemanticCandidate::new(SemanticAtom::new(
+            fact.schema.object_role.clone(),
+            family,
+            fact.subject.slot,
+            fact.object.label.clone(),
+        )),
+    ]
+}
+
 pub(super) fn semantic_profile_examples(start_slot: u32, count: usize) -> Vec<L3SemanticExample> {
     let mut examples = Vec::with_capacity(count * 2);
     for offset in 0..count as u32 {
