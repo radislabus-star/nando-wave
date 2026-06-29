@@ -16,6 +16,7 @@ pub use wave::{
     L2CenterMemoryVerdict, L2SequenceCenter, L2TokenSequence, L2WordAssignment, L2WordRecord,
     L3_8MB_SYMBOL_ACTIVE_BYTES, L3_8MB_SYMBOL_CELL8_CELLS, L3_8MB_SYMBOL_WAVE_CLUSTERS,
     L3_FRAME_CENTER_BYTES, L3_FRAME_FEATURE_BYTES, L3FrameCenter, L3FrameSelection,
+    L3SelfInducedGrokkingConfig, L3SelfInducedGrokkingProof, L3SelfInducedGrokkingVerdict,
     L3SemanticExample, L3SemanticGrokkingConfig, L3SemanticGrokkingMemory, L3SemanticGrokkingProof,
     L3SemanticGrokkingVerdict, LinkProfile, LinkTissue, LiveByteLearner, LiveBytePrediction,
     LiveByteTrainReport, LiveByteTrainStep, LiveCycle, LivePrediction, LocalUpdateReport,

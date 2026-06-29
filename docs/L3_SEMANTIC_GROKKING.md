@@ -212,8 +212,19 @@ full answer solving for every shortcut-stress alpha label
 
 The next step is not L4/L5/L6 yet.
 
-The next step is not cue induction anymore. It is making shortcut stress harsher
-without mixing it with a new semantic-operator claim:
+The supervised L3 path now has a sibling proof:
+
+```text
+docs/L3_SELF_INDUCED_GROKKING.md
+```
+
+That proof removes explicit semantic labels from the training surface and
+learns bounded latent operators from `surface query -> answer label` examples.
+The supervised proof here remains useful because it tests richer frame
+contracts, answer binding, and trap behavior over explicit semantic facts.
+
+The next step for this supervised path is not L4/L5/L6 yet. It is making
+shortcut stress harsher without mixing it with a new semantic-operator claim:
 
 ```text
 more relation families

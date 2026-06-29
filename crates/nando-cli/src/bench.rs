@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 
 use nando_core::{
     BytePhaseLut, CarrierWave, Cell32Learner, L1CenterMemoryConfig, L1CenterMemoryProof,
-    L2CenterMemoryConfig, L2CenterMemoryProof, L3SemanticGrokkingProof, LinkProfile, LinkTissue,
-    Stage2Organ, SymbolCell8, SymbolL3Organism, SymbolWaveCluster, TickTrace,
-    run_stage2_tick_with_carrier, run_stage2_tick_with_organ_carrier,
+    L2CenterMemoryConfig, L2CenterMemoryProof, L3SelfInducedGrokkingProof, L3SemanticGrokkingProof,
+    LinkProfile, LinkTissue, Stage2Organ, SymbolCell8, SymbolL3Organism, SymbolWaveCluster,
+    TickTrace, run_stage2_tick_with_carrier, run_stage2_tick_with_organ_carrier,
     run_stage2_trace_with_organ_carrier, run_stage2_trace_with_organ_lut_carrier,
 };
 
@@ -184,14 +184,23 @@ pub(crate) fn print_wave_layer_metrics() -> Result<(), String> {
     let l3 = L3SemanticGrokkingProof::prove_hard_semantic_profile();
     let l3_elapsed = start.elapsed();
 
+    let start = Instant::now();
+    let l3_self = L3SelfInducedGrokkingProof::prove_default();
+    let l3_self_elapsed = start.elapsed();
+
     println!("Nando Wave layered architecture metrics");
     println!();
     print_l1_metrics(&l1, l1_elapsed);
     print_l2_metrics(&l2, l2_elapsed);
     print_l3_metrics(&l3, l3_elapsed);
     println!();
+    print_l3_self_induced_metrics(&l3_self, l3_self_elapsed);
+    println!();
     println!(
         "meaning_path: L1 surface centers -> L2 motif centers -> learned CueField -> L3 contrastive field -> EquationForm -> operator"
+    );
+    println!(
+        "self_induced_path: surface query + answer signal -> induced latent operators -> phase delta binding -> heldout answer"
     );
     println!("best_current_use: bounded profile semantic memory with explicit no-answer boundary");
     println!(
@@ -438,6 +447,116 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
         proof.semantic_grokking_ready
     );
     println!("  hard_profile_ready: {}", proof.hard_profile_ready);
+}
+
+fn print_l3_self_induced_metrics(proof: &L3SelfInducedGrokkingProof, elapsed: Duration) {
+    println!("L3 self-induced semantic grokking");
+    println!("  elapsed_ms: {:.3}", elapsed.as_secs_f64() * 1_000.0);
+    println!("  train_examples: {}", proof.train_examples);
+    println!("  heldout_examples: {}", proof.heldout_examples);
+    println!("  hidden_operator_count: {}", proof.hidden_operator_count);
+    println!("  induced_operator_count: {}", proof.induced_operator_count);
+    println!("  modulus: {}", proof.modulus);
+    println!(
+        "  train_surface_answer_only: {}",
+        proof.train_surface_answer_only
+    );
+    println!(
+        "  hidden_frame_labels_used_for_training: {}",
+        proof.hidden_frame_labels_used_for_training
+    );
+    println!(
+        "  schema_labels_used_for_training: {}",
+        proof.schema_labels_used_for_training
+    );
+    println!(
+        "  manual_role_labels_used_for_training: {}",
+        proof.manual_role_labels_used_for_training
+    );
+    println!(
+        "  hand_written_cue_rules_used: {}",
+        proof.hand_written_cue_rules_used
+    );
+    println!(
+        "  answer_surface_family_signal_used: {}",
+        proof.answer_surface_family_signal_used
+    );
+    println!("  field_weights_learned: {}", proof.field_weights_learned);
+    println!("  operator_delta_learned: {}", proof.operator_delta_learned);
+    println!(
+        "  center_grokking_trace_observed: {}",
+        proof.center_grokking_trace_observed
+    );
+    println!("  train_accuracy_early: {:.6}", proof.train_accuracy_early);
+    println!(
+        "  heldout_accuracy_early: {:.6}",
+        proof.heldout_accuracy_early
+    );
+    println!("  train_accuracy_final: {:.6}", proof.train_accuracy_final);
+    println!(
+        "  heldout_frame_accuracy: {:.6}",
+        proof.heldout_frame_accuracy
+    );
+    println!(
+        "  heldout_answer_accuracy: {:.6}",
+        proof.heldout_answer_accuracy
+    );
+    println!(
+        "  average_center_correct: {:.6}",
+        proof.average_center_correct
+    );
+    println!(
+        "  average_best_wrong_center: {:.6}",
+        proof.average_best_wrong_center
+    );
+    println!("  average_center_gap: {:.6}", proof.average_center_gap);
+    println!("  min_center_gap: {:.6}", proof.min_center_gap);
+    println!(
+        "  nearest_wrong_operator_suppressed: {}",
+        proof.nearest_wrong_operator_suppressed
+    );
+    println!(
+        "  exact_query_lookup_hits: {}",
+        proof.exact_query_lookup_hits
+    );
+    println!(
+        "  exact_answer_lookup_hits: {}",
+        proof.exact_answer_lookup_hits
+    );
+    println!(
+        "  answer_binding_ablation_accuracy: {:.6}",
+        proof.answer_binding_ablation_accuracy
+    );
+    println!(
+        "  frame_field_ablation_accuracy: {:.6}",
+        proof.frame_field_ablation_accuracy
+    );
+    println!("  frame_ablation_drop: {:.6}", proof.frame_ablation_drop);
+    println!(
+        "  binding_ablation_drop: {:.6}",
+        proof.binding_ablation_drop
+    );
+    println!("  false_accept_rate: {:.6}", proof.false_accept_rate);
+    println!("  role_swap_rejected: {}", proof.role_swap_rejected);
+    println!("  route_splice_rejected: {}", proof.route_splice_rejected);
+    println!(
+        "  surface_shuffle_rejected: {}",
+        proof.surface_shuffle_rejected
+    );
+    println!(
+        "  learned_field_edge_count: {}",
+        proof.learned_field_edge_count
+    );
+    println!("  model_hot_bytes: {}", proof.model_hot_bytes);
+    println!(
+        "  naive_observation_bytes: {}",
+        proof.naive_observation_bytes
+    );
+    println!("  model_to_naive_ratio: {:.6}", proof.model_to_naive_ratio);
+    println!(
+        "  bounded_self_induced_grokking_ready: {}",
+        proof.bounded_self_induced_grokking_ready
+    );
 }
 
 fn corpus_words(name: &str) -> Result<Vec<String>, String> {

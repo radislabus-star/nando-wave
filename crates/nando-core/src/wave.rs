@@ -84,6 +84,7 @@ mod carrier;
 mod cell;
 mod l1_center_memory;
 mod l2_center_memory;
+mod l3_self_induced_grokking;
 mod l3_semantic_grokking;
 mod learn;
 mod math;
@@ -116,6 +117,9 @@ pub use l2_center_memory::{
     L2_CENTER_RECORD_BYTES, L2_FOURIER_BINS, L2_RESIDUAL_REF_BYTES, L2_TOKEN_REF_BYTES,
     L2_WORD_RECORD_BYTES, L2CenterMemory, L2CenterMemoryConfig, L2CenterMemoryProof,
     L2CenterMemoryVerdict, L2SequenceCenter, L2TokenSequence, L2WordAssignment, L2WordRecord,
+};
+pub use l3_self_induced_grokking::{
+    L3SelfInducedGrokkingConfig, L3SelfInducedGrokkingProof, L3SelfInducedGrokkingVerdict,
 };
 pub use l3_semantic_grokking::{
     L3_FRAME_CENTER_BYTES, L3_FRAME_FEATURE_BYTES, L3FrameCenter, L3FrameSelection,
