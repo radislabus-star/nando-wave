@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::super::L2CenterMemory;
+use super::contrastive::L3ContrastiveTrainingSet;
 use super::cue_field::{L3LearnedCueField, L3SemanticFieldCues};
-use super::fixtures::semantic_traps_for_example;
 use super::tokens::{motif_tokens, normalized_surface_key};
 use super::{
     L3_INTERFERENCE_EDGE_BYTES, L3FieldAblation, L3FrameCenter, L3SemanticExample,
@@ -47,6 +47,7 @@ impl L3SemanticInterferenceField {
         l2: &L2CenterMemory,
         examples: &[L3SemanticExample],
         cue_field: &L3LearnedCueField,
+        contrastive_set: &L3ContrastiveTrainingSet,
     ) -> Self {
         let mut weights: HashMap<L3SemanticInterferenceKey, f32> = HashMap::new();
         let mut trap_cue_cache: HashMap<String, L3SemanticFieldCues> = HashMap::new();
@@ -83,25 +84,25 @@ impl L3SemanticInterferenceField {
                     }
                 }
             }
+        }
 
-            for trap in semantic_traps_for_example(example) {
-                let trap_cues = trap_cue_cache
-                    .entry(normalized_surface_key(&trap.text))
-                    .or_insert_with(|| cue_field.infer(&trap.text, l2, frames, false).cues)
-                    .clone();
-                let Some(suppressed_frame) = exact_frame_index_for_cues(frames, &trap_cues) else {
-                    continue;
-                };
-                for (source_kind, source_value) in trap_cues.anti_pairs() {
-                    add_field_weight(
-                        &mut weights,
-                        L3SemanticFieldLane::AntiTrap,
-                        &source_kind,
-                        &source_value,
-                        suppressed_frame,
-                        1.0,
-                    );
-                }
+        for negative in &contrastive_set.negative_cases {
+            let trap_cues = trap_cue_cache
+                .entry(normalized_surface_key(&negative.text))
+                .or_insert_with(|| cue_field.infer(&negative.text, l2, frames, false).cues)
+                .clone();
+            let Some(suppressed_frame) = exact_frame_index_for_cues(frames, &trap_cues) else {
+                continue;
+            };
+            for (source_kind, source_value) in trap_cues.anti_pairs() {
+                add_field_weight(
+                    &mut weights,
+                    L3SemanticFieldLane::AntiTrap,
+                    &source_kind,
+                    &source_value,
+                    suppressed_frame,
+                    1.0,
+                );
             }
         }
 

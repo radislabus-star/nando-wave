@@ -7,6 +7,7 @@
 //! answer binding to solve heldout role bindings.
 
 mod answer_binding;
+mod contrastive;
 mod cue_field;
 mod fixtures;
 mod interference;
@@ -16,6 +17,7 @@ mod tokens;
 use std::collections::{HashMap, HashSet};
 
 use self::answer_binding::L3AnswerBindingMemory;
+use self::contrastive::L3ContrastiveTrainingSet;
 use self::cue_field::L3LearnedCueField;
 use self::interference::L3SemanticInterferenceField;
 pub use self::proof::L3SemanticGrokkingProof;
@@ -158,6 +160,7 @@ pub struct L3SemanticGrokkingMemory {
     cue_field: L3LearnedCueField,
     field: L3SemanticInterferenceField,
     answer_binding: L3AnswerBindingMemory,
+    contrastive_set: L3ContrastiveTrainingSet,
     semantic: SemanticWaveMemory,
 }
 
@@ -202,8 +205,15 @@ impl L3SemanticGrokkingMemory {
             })
             .collect::<Vec<_>>();
         frames.sort_by_key(frame_sort_key);
-        let cue_field = L3LearnedCueField::from_training(&frames, &l2, examples);
-        let field = L3SemanticInterferenceField::from_training(&frames, &l2, examples, &cue_field);
+        let contrastive_set = L3ContrastiveTrainingSet::from_examples(examples, &frames);
+        let cue_field = L3LearnedCueField::from_training(&frames, &l2, examples, &contrastive_set);
+        let field = L3SemanticInterferenceField::from_training(
+            &frames,
+            &l2,
+            examples,
+            &cue_field,
+            &contrastive_set,
+        );
 
         Self {
             config,
@@ -212,6 +222,7 @@ impl L3SemanticGrokkingMemory {
             cue_field,
             field,
             answer_binding,
+            contrastive_set,
             semantic,
         }
     }
@@ -244,6 +255,26 @@ impl L3SemanticGrokkingMemory {
     #[must_use]
     pub fn answer_lookup_only(&self) -> bool {
         self.answer_binding.lookup_only
+    }
+
+    #[must_use]
+    pub fn contrastive_dataset_used(&self) -> bool {
+        self.contrastive_set.contrastive_dataset_used
+    }
+
+    #[must_use]
+    pub fn contrastive_negative_count(&self) -> usize {
+        self.contrastive_set.negative_count()
+    }
+
+    #[must_use]
+    pub fn training_trap_generator_used(&self) -> bool {
+        self.contrastive_set.training_trap_generator_used
+    }
+
+    #[must_use]
+    pub fn proof_fixture_used_for_training(&self) -> bool {
+        self.contrastive_set.proof_fixture_used_for_training
     }
 
     #[must_use]

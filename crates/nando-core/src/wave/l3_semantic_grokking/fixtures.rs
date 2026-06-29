@@ -343,15 +343,6 @@ pub(super) fn hard_traps_for_example(example: &L3SemanticExample) -> [HardTrap; 
     }
 }
 
-pub(super) fn semantic_traps_for_example(example: &L3SemanticExample) -> Vec<HardTrap> {
-    match example.fact.schema.relation.as_str() {
-        "provides_command" | "executes_command" | "enables_service" | "installs_file" => {
-            hard_traps_for_example(example).into_iter().collect()
-        }
-        _ => Vec::new(),
-    }
-}
-
 pub(super) fn fact_key(fact: &super::super::SemanticFact) -> String {
     format!(
         "{}|{}|{}|{}|{}|{}|{}|{}",

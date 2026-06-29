@@ -54,6 +54,7 @@ L2 motif + generic surface cues -> learned role/relation/anchor/binding cues
 learned attraction lane      -> compatible semantic centers
 learned repulsion lane       -> nearest wrong centers
 learned anti-trap lane       -> forbidden overclaim centers
+contrastive dataset          -> role-swap/route-splice/missing-evidence/negative-route pressure
 settled center               -> EquationForm
 semantic facts               -> answer binding operator
 semantic facts               -> relation operator fallback
@@ -63,6 +64,11 @@ Bootstrap role/relation labels are used only to create the training target.
 Runtime inference does not call the manual cue rules. It reads the learned
 CueField edges produced from L2 motifs plus generic normalized word/bigram cue
 tokens.
+
+The contrastive pressure is now passed in through `L3ContrastiveTrainingSet`.
+The training path no longer calls the proof fixture trap generator directly.
+Proof fixtures remain an exam surface, not runtime answer authority and not the
+source of the learned field.
 
 The surface residual cues are not allowed to be the only authority path. The
 compiler now also requires an independent L2 structural support pass with the
@@ -82,6 +88,7 @@ semantic field settles to one center
 learned answer binding operator solves the heldout answer
 heldout slot was not an exact training fact
 role-swap, route-splice, missing-evidence, and negative shortcut traps are rejected
+training contrastive negatives are separate from heldout proof traps
 attraction/repulsion/anti-field ablations damage the result
 ```
 
@@ -105,7 +112,11 @@ average_raw_field_gap: 0.1378287
 average_settled_field_gap: 3.56609
 interference_gap_lift: 3.4282615
 average_interference_energy: 3.6666133
-cue_edge_count: 124,189
+cue_edge_count: 124,135
+contrastive_negative_count: 20,000
+contrastive_dataset_used: true
+training_trap_generator_used: false
+proof_fixture_used_for_training: false
 manual_cue_rules_used: false
 cue_field_learned: true
 cue_contrastive_training_used: true
@@ -129,7 +140,7 @@ motif_pair_ablation_drop: 0.0
 no_exact_bigram_lookup: true
 same_words_role_swap_rejected: true
 semantic_compiler_ready: true
-interference_edge_count: 53
+interference_edge_count: 52
 manual_weight_table_used: false
 field_weights_learned: true
 contrastive_training_used: true
@@ -137,7 +148,7 @@ heldout_margin_min: 2.4270833
 nearest_wrong_center_suppressed: true
 attraction_ablation_drop: 3.2829638
 repulsion_ablation_drop: 0.17827344
-anti_field_ablation_drop: 0.25
+anti_field_ablation_drop: 0.3125
 frame_ablation_drop: 3.4282615
 object_anchor_pass: true
 evidence_requirement_pass: true
@@ -148,7 +159,7 @@ negative_route_rejected: true
 false_promotion_rate: 0.0
 exact_lookup_heldout_hits: 0
 heldout_answer_exact_lookup_hits: 0
-model_hot_bytes: 2,583,460
+model_hot_bytes: 2,582,796
 naive_semantic_fact_bytes: 163,840,000
 model_to_naive_ratio: 0.015767407
 semantic_field_ready: true
@@ -171,6 +182,7 @@ This proves:
 ```text
 L2 motif fields plus learned contrastive interference can settle onto a bounded semantic center.
 Learned CueField can induce role/relation/anchor/binding cues from L2 motifs and generic surface residual cues.
+The learned field is trained from a contrastive dataset, not by calling the proof trap fixture generator.
 Heldout role bindings solve without exact fact lookup.
 Heldout shortcut answers solve through a learned answer binding operator.
 Removing role/slot binding drops shortcut answer accuracy from 1.0 to 0.0.

@@ -324,6 +324,22 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
         proof.average_interference_energy
     );
     println!("  cue_edge_count: {}", proof.cue_edge_count);
+    println!(
+        "  contrastive_negative_count: {}",
+        proof.contrastive_negative_count
+    );
+    println!(
+        "  contrastive_dataset_used: {}",
+        proof.contrastive_dataset_used
+    );
+    println!(
+        "  training_trap_generator_used: {}",
+        proof.training_trap_generator_used
+    );
+    println!(
+        "  proof_fixture_used_for_training: {}",
+        proof.proof_fixture_used_for_training
+    );
     println!("  manual_cue_rules_used: {}", proof.manual_cue_rules_used);
     println!("  cue_field_learned: {}", proof.cue_field_learned);
     println!(

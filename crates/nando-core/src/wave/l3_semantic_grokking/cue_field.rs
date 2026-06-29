@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::super::{L2CenterMemory, SemanticSchemaKey};
-use super::fixtures::semantic_traps_for_example;
+use super::contrastive::L3ContrastiveTrainingSet;
 use super::tokens::{cue_tokens, cue_tokens_with_mode, normalized_surface_key, normalized_tokens};
 use super::{
     L3_ANTI_CUE_THRESHOLD, L3_CUE_EDGE_BYTES, L3CueTokenMode, L3FrameCenter, L3SemanticExample,
@@ -57,6 +57,7 @@ impl L3LearnedCueField {
         frames: &[L3FrameCenter],
         l2: &L2CenterMemory,
         examples: &[L3SemanticExample],
+        contrastive_set: &L3ContrastiveTrainingSet,
     ) -> Self {
         let mut weights: HashMap<L3LearnedCueKey, f32> = HashMap::new();
         let mut trap_cache: HashMap<String, (Vec<u32>, L3SemanticFieldCues)> = HashMap::new();
@@ -82,28 +83,28 @@ impl L3LearnedCueField {
                     }
                 }
             }
+        }
 
-            for trap in semantic_traps_for_example(example) {
-                let (trap_tokens, trap_labels) = trap_cache
-                    .entry(normalized_surface_key(&trap.text))
-                    .or_insert_with(|| {
-                        let trap_tokens = cue_tokens(l2, &trap.text)
-                            .into_iter()
-                            .filter(|token| !global_positive_tokens.contains(token))
-                            .collect::<Vec<_>>();
-                        let trap_labels =
-                            L3SemanticFieldCues::bootstrap_from_text(&trap.text, frames);
-                        (trap_tokens, trap_labels)
-                    });
-                for (cue_kind, cue_value) in trap_labels.as_pairs() {
-                    for token in trap_tokens.iter() {
-                        add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 0.75);
-                    }
+        for negative in &contrastive_set.negative_cases {
+            let (trap_tokens, trap_labels) = trap_cache
+                .entry(normalized_surface_key(&negative.text))
+                .or_insert_with(|| {
+                    let trap_tokens = cue_tokens(l2, &negative.text)
+                        .into_iter()
+                        .filter(|token| !global_positive_tokens.contains(token))
+                        .collect::<Vec<_>>();
+                    let trap_labels =
+                        L3SemanticFieldCues::bootstrap_from_text(&negative.text, frames);
+                    (trap_tokens, trap_labels)
+                });
+            for (cue_kind, cue_value) in trap_labels.as_pairs() {
+                for token in trap_tokens.iter() {
+                    add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 0.75);
                 }
-                for (cue_kind, cue_value) in trap_labels.anti_pairs() {
-                    for token in trap_tokens.iter() {
-                        add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 1.0);
-                    }
+            }
+            for (cue_kind, cue_value) in trap_labels.anti_pairs() {
+                for token in trap_tokens.iter() {
+                    add_cue_weight(&mut weights, *token, &cue_kind, &cue_value, 1.0);
                 }
             }
         }

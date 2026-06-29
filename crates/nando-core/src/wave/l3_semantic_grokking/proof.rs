@@ -32,6 +32,10 @@ pub struct L3SemanticGrokkingProof {
     pub average_interference_energy: f32,
     pub cue_edge_count: usize,
     pub interference_edge_count: usize,
+    pub contrastive_negative_count: usize,
+    pub contrastive_dataset_used: bool,
+    pub training_trap_generator_used: bool,
+    pub proof_fixture_used_for_training: bool,
     pub manual_cue_rules_used: bool,
     pub cue_field_learned: bool,
     pub cue_contrastive_training_used: bool,
@@ -214,6 +218,10 @@ impl L3SemanticGrokkingProof {
             average_interference_energy: 0.0,
             cue_edge_count: memory.cue_field.edge_count(),
             interference_edge_count: memory.field.edge_count(),
+            contrastive_negative_count: memory.contrastive_negative_count(),
+            contrastive_dataset_used: memory.contrastive_dataset_used(),
+            training_trap_generator_used: memory.training_trap_generator_used(),
+            proof_fixture_used_for_training: memory.proof_fixture_used_for_training(),
             manual_cue_rules_used: memory.cue_field.manual_runtime_rules_used,
             cue_field_learned: memory.cue_field.learned,
             cue_contrastive_training_used: memory.cue_field.contrastive,
@@ -615,6 +623,10 @@ impl L3SemanticGrokkingProof {
             && memory.answer_binding_learned()
             && !memory.answer_lookup_only()
             && role_binding_ablation_drop >= config.min_frame_ablation_drop;
+        let contrastive_source_pass = memory.contrastive_dataset_used()
+            && memory.contrastive_negative_count() > 0
+            && !memory.training_trap_generator_used()
+            && !memory.proof_fixture_used_for_training();
         let semantic_field_ready = interference_ablation_pass
             && interference_gap_lift > 0.0
             && nearest_wrong_center_suppressed
@@ -629,6 +641,7 @@ impl L3SemanticGrokkingProof {
             && memory.field.contrastive
             && !memory.field.manual_weight_table_used
             && answer_binding_pass
+            && contrastive_source_pass
             && shortcut_stress_pass;
         let hard_profile_ready = frame_pass
             && answer_pass
@@ -667,6 +680,10 @@ impl L3SemanticGrokkingProof {
             average_interference_energy,
             cue_edge_count: memory.cue_field.edge_count(),
             interference_edge_count: memory.field.edge_count(),
+            contrastive_negative_count: memory.contrastive_negative_count(),
+            contrastive_dataset_used: memory.contrastive_dataset_used(),
+            training_trap_generator_used: memory.training_trap_generator_used(),
+            proof_fixture_used_for_training: memory.proof_fixture_used_for_training(),
             manual_cue_rules_used: memory.cue_field.manual_runtime_rules_used,
             cue_field_learned: memory.cue_field.learned,
             cue_contrastive_training_used: memory.cue_field.contrastive,
@@ -741,6 +758,10 @@ mod tests {
         assert_eq!(proof.frame_count, 2);
         assert_eq!(proof.operator_count, 2);
         assert_eq!(proof.answer_binding_operator_count, 2);
+        assert!(proof.contrastive_dataset_used, "proof={proof:#?}");
+        assert!(proof.contrastive_negative_count > 0, "proof={proof:#?}");
+        assert!(!proof.training_trap_generator_used, "proof={proof:#?}");
+        assert!(!proof.proof_fixture_used_for_training, "proof={proof:#?}");
         assert_eq!(proof.exact_lookup_heldout_hits, 0);
         assert_eq!(proof.heldout_answer_exact_lookup_hits, 0);
         assert!(proof.frame_pass, "proof={proof:#?}");
@@ -773,6 +794,10 @@ mod tests {
         assert_eq!(proof.frame_count, 4);
         assert_eq!(proof.operator_count, 4);
         assert_eq!(proof.answer_binding_operator_count, 4);
+        assert!(proof.contrastive_dataset_used, "proof={proof:#?}");
+        assert!(proof.contrastive_negative_count > 0, "proof={proof:#?}");
+        assert!(!proof.training_trap_generator_used, "proof={proof:#?}");
+        assert!(!proof.proof_fixture_used_for_training, "proof={proof:#?}");
         assert_eq!(proof.exact_lookup_heldout_hits, 0);
         assert_eq!(proof.heldout_answer_exact_lookup_hits, 0);
         assert!(proof.frame_pass, "proof={proof:#?}");
