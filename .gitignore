@@ -8,3 +8,7 @@
 *.log
 *.tmp
 *.bak
+
+# Python build/test noise
+__pycache__/
+*.py[cod]

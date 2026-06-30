@@ -1,0 +1,4 @@
+interface:
+  display_name: "NANDA Structural Gate"
+  short_description: "Wave gate for structural relation checks"
+  default_prompt: "Use $nanda-structural-gate to check structural relations before finalizing the answer."

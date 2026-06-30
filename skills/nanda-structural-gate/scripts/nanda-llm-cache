@@ -1,0 +1,554 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import os
+import re
+import shlex
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+from difflib import SequenceMatcher
+
+
+POLICY_VERSION = "nanda-llm-response-cache-v1"
+DEFAULT_CACHE_PATH = Path.home() / ".cache" / "nanda" / "llm-response-cache.sqlite3"
+SECRET_PATTERNS = [
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"\b(api[_-]?key|secret|password|passwd|token|bearer)\b\s*[:=]", re.I),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bghp_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
+]
+
+
+def now() -> int:
+    return int(time.time())
+
+
+def estimate_tokens(text: str) -> int:
+    if not text:
+        return 0
+    return (len(text.encode("utf-8")) + 3) // 4
+
+
+def normalize_text(text: str) -> str:
+    text = text.casefold()
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"https?://\S+", " URL ", text)
+    text = re.sub(r"[^0-9a-zа-яё_./:+-]+", " ", text, flags=re.I)
+    return " ".join(text.split())
+
+
+def token_set(text: str) -> set[str]:
+    return {part for part in normalize_text(text).split() if part}
+
+
+def hash_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def scoped_key(domain: str, profile: str, model: str, normalized: str) -> str:
+    payload = "\n".join([POLICY_VERSION, domain, profile, model, normalized])
+    return hash_text(payload)
+
+
+def has_secret(text: str) -> bool:
+    return any(pattern.search(text or "") for pattern in SECRET_PATTERNS)
+
+
+def open_db(path: Path) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS responses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          last_hit_at INTEGER,
+          domain TEXT NOT NULL,
+          profile TEXT NOT NULL,
+          model TEXT NOT NULL,
+          policy_version TEXT NOT NULL,
+          normalized_key TEXT NOT NULL UNIQUE,
+          prompt_hash TEXT NOT NULL,
+          normalized_prompt TEXT NOT NULL,
+          prompt_text TEXT NOT NULL,
+          answer_hash TEXT NOT NULL,
+          answer_text TEXT NOT NULL,
+          input_tokens INTEGER NOT NULL,
+          output_tokens INTEGER NOT NULL,
+          provider_cached_tokens INTEGER NOT NULL DEFAULT 0,
+          cost_usd REAL NOT NULL DEFAULT 0.0,
+          hits INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at INTEGER NOT NULL,
+          event_type TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          profile TEXT NOT NULL,
+          model TEXT NOT NULL,
+          normalized_key TEXT,
+          matched_key TEXT,
+          match_kind TEXT,
+          match_score REAL NOT NULL DEFAULT 0.0,
+          provider_called INTEGER NOT NULL DEFAULT 0,
+          saved_input_tokens INTEGER NOT NULL DEFAULT 0,
+          saved_output_tokens INTEGER NOT NULL DEFAULT 0,
+          saved_total_tokens INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+
+def claim_boundary() -> dict:
+    return {
+        "response_cache_is_source_of_truth": False,
+        "cache_hit_skips_provider_call": True,
+        "cache_miss_calls_provider_only_with_explicit_provider_cmd": True,
+        "raw_prompt_stored": True,
+        "secret_like_prompt_or_answer_refused": True,
+        "general_llm_ready": False,
+        "global_nonlinear_memory_proven": False,
+    }
+
+
+def output(report: dict, fmt: str) -> None:
+    if fmt == "json":
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+        return
+    verdict = report.get("verdict", "UNKNOWN")
+    print(verdict)
+    if report.get("answer"):
+        print(report["answer"])
+
+
+def query_candidates(conn: sqlite3.Connection, domain: str, profile: str, model: str):
+    return conn.execute(
+        """
+        SELECT * FROM responses
+        WHERE domain = ? AND profile = ? AND model = ? AND policy_version = ?
+        ORDER BY updated_at DESC
+        """,
+        (domain, profile, model, POLICY_VERSION),
+    ).fetchall()
+
+
+def find_hit(conn: sqlite3.Connection, domain: str, profile: str, model: str, text: str, threshold: float):
+    normalized = normalize_text(text)
+    key = scoped_key(domain, profile, model, normalized)
+    row = conn.execute(
+        "SELECT * FROM responses WHERE normalized_key = ?",
+        (key,),
+    ).fetchone()
+    if row:
+        return row, "exact", 1.0, key, normalized
+
+    best = None
+    best_score = 0.0
+    text_tokens = token_set(text)
+    for candidate in query_candidates(conn, domain, profile, model):
+        candidate_norm = candidate["normalized_prompt"]
+        seq_score = SequenceMatcher(None, normalized, candidate_norm).ratio()
+        cand_tokens = set(candidate_norm.split())
+        if text_tokens or cand_tokens:
+            jaccard = len(text_tokens & cand_tokens) / max(len(text_tokens | cand_tokens), 1)
+        else:
+            jaccard = 0.0
+        score = max(seq_score, jaccard)
+        if score > best_score:
+            best_score = score
+            best = candidate
+    if best is not None and best_score >= threshold:
+        return best, "similarity", float(best_score), key, normalized
+    return None, "miss", float(best_score), key, normalized
+
+
+def record_event(conn, event_type, domain, profile, model, normalized_key=None, matched_key=None,
+                 match_kind=None, match_score=0.0, provider_called=False,
+                 saved_input_tokens=0, saved_output_tokens=0):
+    conn.execute(
+        """
+        INSERT INTO events (
+          created_at, event_type, domain, profile, model, normalized_key,
+          matched_key, match_kind, match_score, provider_called,
+          saved_input_tokens, saved_output_tokens, saved_total_tokens
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            now(),
+            event_type,
+            domain,
+            profile,
+            model,
+            normalized_key,
+            matched_key,
+            match_kind,
+            float(match_score or 0.0),
+            1 if provider_called else 0,
+            int(saved_input_tokens or 0),
+            int(saved_output_tokens or 0),
+            int(saved_input_tokens or 0) + int(saved_output_tokens or 0),
+        ),
+    )
+    conn.commit()
+
+
+def report_hit(conn, row, key, match_kind, match_score, domain, profile, model, fmt, include_answer=True):
+    conn.execute(
+        "UPDATE responses SET hits = hits + 1, last_hit_at = ?, updated_at = ? WHERE id = ?",
+        (now(), now(), row["id"]),
+    )
+    record_event(
+        conn,
+        "hit",
+        domain,
+        profile,
+        model,
+        normalized_key=key,
+        matched_key=row["normalized_key"],
+        match_kind=match_kind,
+        match_score=match_score,
+        provider_called=False,
+        saved_input_tokens=row["input_tokens"],
+        saved_output_tokens=row["output_tokens"],
+    )
+    report = {
+        "verdict": "LLM_RESPONSE_CACHE_HIT",
+        "hit": True,
+        "provider_called": False,
+        "match_kind": match_kind,
+        "match_score": match_score,
+        "domain": domain,
+        "profile": profile,
+        "model": model,
+        "cache_key": row["normalized_key"],
+        "saved_input_tokens": row["input_tokens"],
+        "saved_output_tokens": row["output_tokens"],
+        "saved_total_tokens": row["input_tokens"] + row["output_tokens"],
+        "answer": row["answer_text"] if include_answer else None,
+        "claim_boundary": claim_boundary(),
+    }
+    output(report, fmt)
+
+
+def store_response(conn, args, answer_text: str, provider_called: bool = False):
+    if has_secret(args.text) or has_secret(answer_text):
+        record_event(conn, "store_refused_secret", args.domain, args.profile, args.model, provider_called=provider_called)
+        return {
+            "verdict": "LLM_RESPONSE_CACHE_STORE_REFUSED_SECRET",
+            "stored": False,
+            "provider_called": provider_called,
+            "reason": "secret_like_prompt_or_answer",
+            "claim_boundary": claim_boundary(),
+        }
+
+    normalized = normalize_text(args.text)
+    key = scoped_key(args.domain, args.profile, args.model, normalized)
+    input_tokens = args.input_tokens if args.input_tokens is not None else estimate_tokens(args.text)
+    output_tokens = args.output_tokens if args.output_tokens is not None else estimate_tokens(answer_text)
+    ts = now()
+    conn.execute(
+        """
+        INSERT INTO responses (
+          created_at, updated_at, domain, profile, model, policy_version,
+          normalized_key, prompt_hash, normalized_prompt, prompt_text,
+          answer_hash, answer_text, input_tokens, output_tokens,
+          provider_cached_tokens, cost_usd, hits
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        ON CONFLICT(normalized_key) DO UPDATE SET
+          updated_at = excluded.updated_at,
+          prompt_hash = excluded.prompt_hash,
+          normalized_prompt = excluded.normalized_prompt,
+          prompt_text = excluded.prompt_text,
+          answer_hash = excluded.answer_hash,
+          answer_text = excluded.answer_text,
+          input_tokens = excluded.input_tokens,
+          output_tokens = excluded.output_tokens,
+          provider_cached_tokens = excluded.provider_cached_tokens,
+          cost_usd = excluded.cost_usd
+        """,
+        (
+            ts,
+            ts,
+            args.domain,
+            args.profile,
+            args.model,
+            POLICY_VERSION,
+            key,
+            hash_text(args.text),
+            normalized,
+            args.text,
+            hash_text(answer_text),
+            answer_text,
+            int(input_tokens),
+            int(output_tokens),
+            int(args.provider_cached_tokens or 0),
+            float(args.cost_usd or 0.0),
+        ),
+    )
+    record_event(conn, "store", args.domain, args.profile, args.model, normalized_key=key, provider_called=provider_called)
+    return {
+        "verdict": "LLM_RESPONSE_CACHE_STORED",
+        "stored": True,
+        "provider_called": provider_called,
+        "domain": args.domain,
+        "profile": args.profile,
+        "model": args.model,
+        "cache_key": key,
+        "input_tokens": int(input_tokens),
+        "output_tokens": int(output_tokens),
+        "claim_boundary": claim_boundary(),
+    }
+
+
+def read_answer_arg(args) -> str:
+    if args.answer_file:
+        return Path(args.answer_file).read_text(encoding="utf-8")
+    if args.answer is not None:
+        return args.answer
+    raise SystemExit("store requires --answer or --answer-file")
+
+
+def cmd_lookup(args):
+    conn = open_db(Path(args.cache_path))
+    if has_secret(args.text):
+        record_event(conn, "lookup_refused_secret", args.domain, args.profile, args.model)
+        output(
+            {
+                "verdict": "LLM_RESPONSE_CACHE_LOOKUP_REFUSED_SECRET",
+                "hit": False,
+                "provider_called": False,
+                "reason": "secret_like_prompt",
+                "claim_boundary": claim_boundary(),
+            },
+            args.format,
+        )
+        return 2
+    row, match_kind, score, key, _ = find_hit(conn, args.domain, args.profile, args.model, args.text, args.similarity_threshold)
+    if row:
+        report_hit(conn, row, key, match_kind, score, args.domain, args.profile, args.model, args.format, include_answer=not args.no_answer)
+        return 0
+    record_event(conn, "miss", args.domain, args.profile, args.model, normalized_key=key, match_kind="miss", match_score=score)
+    output(
+        {
+            "verdict": "LLM_RESPONSE_CACHE_MISS",
+            "hit": False,
+            "provider_called": False,
+            "best_similarity": score,
+            "domain": args.domain,
+            "profile": args.profile,
+            "model": args.model,
+            "cache_key": key,
+            "claim_boundary": claim_boundary(),
+        },
+        args.format,
+    )
+    return 3
+
+
+def cmd_store(args):
+    conn = open_db(Path(args.cache_path))
+    report = store_response(conn, args, read_answer_arg(args), provider_called=False)
+    output(report, args.format)
+    return 0 if report.get("stored") else 2
+
+
+def cmd_ask(args):
+    conn = open_db(Path(args.cache_path))
+    if has_secret(args.text):
+        record_event(conn, "ask_refused_secret", args.domain, args.profile, args.model)
+        output(
+            {
+                "verdict": "LLM_RESPONSE_CACHE_ASK_REFUSED_SECRET",
+                "hit": False,
+                "provider_called": False,
+                "reason": "secret_like_prompt",
+                "claim_boundary": claim_boundary(),
+            },
+            args.format,
+        )
+        return 2
+
+    row, match_kind, score, key, _ = find_hit(conn, args.domain, args.profile, args.model, args.text, args.similarity_threshold)
+    if row:
+        report_hit(conn, row, key, match_kind, score, args.domain, args.profile, args.model, args.format, include_answer=True)
+        return 0
+
+    if not args.provider_cmd:
+        record_event(conn, "miss", args.domain, args.profile, args.model, normalized_key=key, match_kind="miss", match_score=score)
+        output(
+            {
+                "verdict": "LLM_RESPONSE_CACHE_MISS_PROVIDER_REQUIRED",
+                "hit": False,
+                "provider_called": False,
+                "best_similarity": score,
+                "domain": args.domain,
+                "profile": args.profile,
+                "model": args.model,
+                "cache_key": key,
+                "claim_boundary": claim_boundary(),
+            },
+            args.format,
+        )
+        return 3
+
+    env = os.environ.copy()
+    env["NANDA_LLM_CACHE_TEXT"] = args.text
+    env["NANDA_LLM_CACHE_DOMAIN"] = args.domain
+    env["NANDA_LLM_CACHE_PROFILE"] = args.profile
+    env["NANDA_LLM_CACHE_MODEL"] = args.model
+    completed = subprocess.run(
+        args.provider_cmd,
+        shell=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        check=False,
+    )
+    if completed.returncode != 0:
+        record_event(conn, "provider_error", args.domain, args.profile, args.model, normalized_key=key, provider_called=True)
+        output(
+            {
+                "verdict": "LLM_RESPONSE_CACHE_PROVIDER_ERROR",
+                "hit": False,
+                "provider_called": True,
+                "returncode": completed.returncode,
+                "stderr": completed.stderr.strip(),
+                "claim_boundary": claim_boundary(),
+            },
+            args.format,
+        )
+        return completed.returncode or 1
+
+    store_report = store_response(conn, args, completed.stdout, provider_called=True)
+    report = {
+        "verdict": "LLM_RESPONSE_CACHE_MISS_PROVIDER_CALLED_AND_STORED" if store_report.get("stored") else store_report["verdict"],
+        "hit": False,
+        "provider_called": True,
+        "stored": store_report.get("stored", False),
+        "domain": args.domain,
+        "profile": args.profile,
+        "model": args.model,
+        "cache_key": store_report.get("cache_key", key),
+        "answer": completed.stdout,
+        "stderr": completed.stderr.strip() or None,
+        "input_tokens": store_report.get("input_tokens"),
+        "output_tokens": store_report.get("output_tokens"),
+        "claim_boundary": claim_boundary(),
+    }
+    output(report, args.format)
+    return 0 if store_report.get("stored") else 2
+
+
+def cmd_metrics(args):
+    conn = open_db(Path(args.cache_path))
+    responses = conn.execute("SELECT COUNT(*) AS n, COALESCE(SUM(hits),0) AS hits FROM responses").fetchone()
+    events = conn.execute(
+        """
+        SELECT
+          COUNT(*) AS n,
+          COALESCE(SUM(CASE WHEN event_type = 'hit' THEN 1 ELSE 0 END),0) AS hit_events,
+          COALESCE(SUM(CASE WHEN event_type = 'miss' THEN 1 ELSE 0 END),0) AS miss_events,
+          COALESCE(SUM(CASE WHEN provider_called = 1 THEN 1 ELSE 0 END),0) AS provider_calls,
+          COALESCE(SUM(saved_input_tokens),0) AS saved_input,
+          COALESCE(SUM(saved_output_tokens),0) AS saved_output,
+          COALESCE(SUM(saved_total_tokens),0) AS saved_total
+        FROM events
+        """
+    ).fetchone()
+    by_domain = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT domain, profile, model, COUNT(*) AS entries, COALESCE(SUM(hits),0) AS hits
+            FROM responses GROUP BY domain, profile, model ORDER BY hits DESC, entries DESC
+            """
+        ).fetchall()
+    ]
+    report = {
+        "verdict": "LLM_RESPONSE_CACHE_METRICS_READY",
+        "cache_path": str(Path(args.cache_path)),
+        "entries_total": int(responses["n"]),
+        "hit_events": int(events["hit_events"]),
+        "miss_events": int(events["miss_events"]),
+        "provider_calls": int(events["provider_calls"]),
+        "skipped_provider_calls": int(events["hit_events"]),
+        "saved_input_tokens": int(events["saved_input"]),
+        "saved_output_tokens": int(events["saved_output"]),
+        "saved_total_tokens": int(events["saved_total"]),
+        "by_domain": by_domain,
+        "claim_boundary": claim_boundary(),
+    }
+    output(report, args.format)
+    return 0
+
+
+def add_common(parser):
+    parser.add_argument("--cache-path", default=str(DEFAULT_CACHE_PATH))
+    parser.add_argument("--domain", default="general")
+    parser.add_argument("--profile", default="default")
+    parser.add_argument("--model", default="unspecified")
+    parser.add_argument("--format", choices=["json", "text"], default="json")
+
+
+def add_text_common(parser):
+    add_common(parser)
+    parser.add_argument("--text", required=True)
+    parser.add_argument("--similarity-threshold", type=float, default=0.92)
+
+
+def main(argv=None):
+    root = argparse.ArgumentParser(description="Shared local response cache for LLM calls.")
+    sub = root.add_subparsers(dest="command", required=True)
+
+    lookup = sub.add_parser("lookup", help="Check the shared response cache.")
+    add_text_common(lookup)
+    lookup.add_argument("--no-answer", action="store_true")
+    lookup.set_defaults(func=cmd_lookup)
+
+    store = sub.add_parser("store", help="Store a provider answer in the shared cache.")
+    add_common(store)
+    store.add_argument("--text", required=True)
+    store.add_argument("--answer")
+    store.add_argument("--answer-file")
+    store.add_argument("--input-tokens", type=int)
+    store.add_argument("--output-tokens", type=int)
+    store.add_argument("--provider-cached-tokens", type=int, default=0)
+    store.add_argument("--cost-usd", type=float, default=0.0)
+    store.set_defaults(func=cmd_store)
+
+    ask = sub.add_parser("ask", help="Return cached answer or call an explicit provider command on miss.")
+    add_text_common(ask)
+    ask.add_argument("--provider-cmd", help="Shell command used only on cache miss. Prompt is in $NANDA_LLM_CACHE_TEXT.")
+    ask.add_argument("--input-tokens", type=int)
+    ask.add_argument("--output-tokens", type=int)
+    ask.add_argument("--provider-cached-tokens", type=int, default=0)
+    ask.add_argument("--cost-usd", type=float, default=0.0)
+    ask.set_defaults(func=cmd_ask)
+
+    metrics = sub.add_parser("metrics", help="Show real cache savings counters.")
+    metrics.add_argument("--cache-path", default=str(DEFAULT_CACHE_PATH))
+    metrics.add_argument("--format", choices=["json", "text"], default="json")
+    metrics.set_defaults(func=cmd_metrics)
+
+    args = root.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
