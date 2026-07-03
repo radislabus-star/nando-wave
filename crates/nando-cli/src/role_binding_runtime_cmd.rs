@@ -55,6 +55,11 @@ const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_AGENT_CONTROL_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/route-gap-catalog-agent-control-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT: &str = "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
 const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-seed0.nwrb";
 const DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG: &str =
@@ -3481,6 +3486,180 @@ where
     println!("  raw_text_written: false");
     println!("  local_accepts_enabled: false");
     Ok(())
+}
+
+pub(crate) fn run_role_binding_real_traffic_cpu_operator_catalog_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let feedback_report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        let extended = PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT);
+        if extended.exists() {
+            extended
+        } else {
+            PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT)
+        }
+    });
+    let route_gap_report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        let agent_control =
+            PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_AGENT_CONTROL_REPORT);
+        if agent_control.exists() {
+            agent_control
+        } else {
+            PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT)
+        }
+    });
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT));
+
+    let feedback = read_json_file::<RoleBindingFeedbackLoopReport>(&feedback_report_path)?;
+    let route_gap = read_json_file::<RoleBindingRouteGapCatalogReport>(&route_gap_report_path)?;
+    let target_verified_cpu_calls =
+        projected_accepts(feedback.total_llm_calls, feedback.target_routability_milli);
+    let mut rows = Vec::new();
+
+    for route in &feedback.routes {
+        let recommended_verifier = existing_route_verifier(route.route_key.as_str());
+        let priority_score = cpu_operator_priority_score(
+            route.candidate_events,
+            route.scoreable_payload_events,
+            route.verification_hook_ready_events,
+            route.verified_cpu_accept_eligible_events,
+            route.false_accepts,
+            "existing_profile",
+        );
+        rows.push(RoleBindingCpuOperatorCatalogRow {
+            priority_rank: 0,
+            source_kind: "existing_profile_route".to_owned(),
+            route_or_family_key: route.route_key.clone(),
+            profile_id: Some(route.profile_id.clone()),
+            candidate_events: route.candidate_events,
+            scoreable_payload_events: route.scoreable_payload_events,
+            verification_hook_ready_events: route.verification_hook_ready_events,
+            verified_cpu_accept_eligible_events: route.verified_cpu_accept_eligible_events,
+            false_accepts: route.false_accepts,
+            cpu_operator_readiness: "existing_profile".to_owned(),
+            recommended_profile_line: format!("existing_profile:{}", route.profile_id),
+            recommended_payload_builder: route.payload_builder.clone(),
+            recommended_verifier,
+            next_action: route.next_action.clone(),
+            priority_score,
+            market_claim_allowed: false,
+            claim_boundary: "Existing routed profile. Only hook-backed local accepts with false_accepts=0 count toward CPU Routability; candidate or scoreable rows alone are not market savings.".to_owned(),
+        });
+    }
+
+    for family in &route_gap.no_candidate_families {
+        let priority_score = cpu_operator_priority_score(
+            family.candidate_events,
+            0,
+            0,
+            0,
+            0,
+            family.cpu_operator_readiness.as_str(),
+        );
+        rows.push(RoleBindingCpuOperatorCatalogRow {
+            priority_rank: 0,
+            source_kind: "route_gap_family".to_owned(),
+            route_or_family_key: family.family_key.clone(),
+            profile_id: None,
+            candidate_events: family.candidate_events,
+            scoreable_payload_events: 0,
+            verification_hook_ready_events: 0,
+            verified_cpu_accept_eligible_events: 0,
+            false_accepts: 0,
+            cpu_operator_readiness: family.cpu_operator_readiness.clone(),
+            recommended_profile_line: family.recommended_profile_line.clone(),
+            recommended_payload_builder: family.recommended_payload_builder.clone(),
+            recommended_verifier: family.recommended_verifier.clone(),
+            next_action: format!(
+                "Build {} + {}; keep local accepts disabled until deterministic verification exists.",
+                family.recommended_payload_builder, family.recommended_verifier
+            ),
+            priority_score,
+            market_claim_allowed: false,
+            claim_boundary: family.claim_boundary.clone(),
+        });
+    }
+
+    rows.sort_by(|left, right| {
+        right
+            .priority_score
+            .cmp(&left.priority_score)
+            .then_with(|| right.candidate_events.cmp(&left.candidate_events))
+            .then_with(|| left.route_or_family_key.cmp(&right.route_or_family_key))
+    });
+    for (index, row) in rows.iter_mut().enumerate() {
+        row.priority_rank = index + 1;
+    }
+
+    let top_actionable_rows = rows
+        .iter()
+        .filter(|row| {
+            row.cpu_operator_readiness.starts_with("medium")
+                || row.cpu_operator_readiness.starts_with("high")
+                || row.cpu_operator_readiness == "existing_profile"
+        })
+        .take(8)
+        .cloned()
+        .collect::<Vec<_>>();
+    let top_gap_family = route_gap.top_gap_family.clone();
+    let report = RoleBindingCpuOperatorCatalogReport {
+        schema_version: "nando_role_binding_cpu_operator_catalog_v1".to_owned(),
+        verdict: "CPU_OPERATOR_CATALOG_V1_REVIEW".to_owned(),
+        feedback_report_path: feedback_report_path.display().to_string(),
+        route_gap_report_path: route_gap_report_path.display().to_string(),
+        total_llm_calls: feedback.total_llm_calls,
+        exact_cache_hits: feedback.exact_cache_hits,
+        existing_operator_candidate_calls: feedback.operator_candidate_calls,
+        no_candidate_calls: route_gap.no_candidate_events,
+        current_verified_cpu_accepts: feedback.verified_cpu_accept_eligible_events,
+        target_verified_cpu_accepts: target_verified_cpu_calls,
+        verified_gap_to_80_calls: target_verified_cpu_calls
+            .saturating_sub(feedback.verified_cpu_accept_eligible_events),
+        top_gap_family,
+        top_actionable_rows,
+        rows,
+        raw_text_written: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "CPU operator catalog only. It ranks existing profile routes and no-candidate route-gap families from non-synthetic Codex traffic reports, writes no raw prompt/response text, enables no local accepts, and cannot prove market savings. Rows become savings only after request-side payload, deterministic verifier evidence, shadow accept, provider-cost evidence, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Pick the highest-volume row whose verifier can be deterministic. Build its request-side payload builder and verifier as a separate route, then rerun shadow/audit/feedback-loop. Do not promote answer_or_explain or project_context_dialogue without grounded evidence.".to_owned(),
+    };
+
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-cpu-operator-catalog-v1: {}",
+        report.verdict
+    );
+    println!("  feedback_report: {}", feedback_report_path.display());
+    println!("  route_gap_report: {}", route_gap_report_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  total_llm_calls: {}", report.total_llm_calls);
+    println!(
+        "  existing_operator_candidate_calls: {}",
+        report.existing_operator_candidate_calls
+    );
+    println!("  no_candidate_calls: {}", report.no_candidate_calls);
+    println!(
+        "  current_verified_cpu_accepts: {}",
+        report.current_verified_cpu_accepts
+    );
+    println!(
+        "  verified_gap_to_80_calls: {}",
+        report.verified_gap_to_80_calls
+    );
+    if let Some(row) = report.rows.first() {
+        println!(
+            "  top_catalog_row: {} ({})",
+            row.route_or_family_key, row.source_kind
+        );
+    }
+    Err("CPU operator catalog is review-only; it is not verified savings".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_agent_control_profile_v1<I>(
@@ -9874,6 +10053,50 @@ struct RoleBindingRouteGapCatalogFamilyRow {
     claim_boundary: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingCpuOperatorCatalogReport {
+    schema_version: String,
+    verdict: String,
+    feedback_report_path: String,
+    route_gap_report_path: String,
+    total_llm_calls: usize,
+    exact_cache_hits: usize,
+    existing_operator_candidate_calls: usize,
+    no_candidate_calls: usize,
+    current_verified_cpu_accepts: usize,
+    target_verified_cpu_accepts: usize,
+    verified_gap_to_80_calls: usize,
+    top_gap_family: Option<String>,
+    top_actionable_rows: Vec<RoleBindingCpuOperatorCatalogRow>,
+    rows: Vec<RoleBindingCpuOperatorCatalogRow>,
+    raw_text_written: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingCpuOperatorCatalogRow {
+    priority_rank: usize,
+    source_kind: String,
+    route_or_family_key: String,
+    profile_id: Option<String>,
+    candidate_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    false_accepts: usize,
+    cpu_operator_readiness: String,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    next_action: String,
+    priority_score: i64,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct RouteGapFamilyMetadata {
     cpu_operator_readiness: &'static str,
@@ -14041,6 +14264,46 @@ fn feedback_route_next_action(stage: &str) -> String {
         }
         _ => "Build the request-side payload builder for this route family.".to_owned(),
     }
+}
+
+fn existing_route_verifier(route_key: &str) -> String {
+    if route_key.contains("agent_control") {
+        "deterministic_agent_control_output_verifier_v1".to_owned()
+    } else if route_key.contains("conditional_branch") {
+        "deterministic_conditional_output_verifier_v1".to_owned()
+    } else if route_key.contains("edit_marker_length") {
+        "deterministic_edit_output_verifier_v1".to_owned()
+    } else if route_key.contains("mixed_map") {
+        "deterministic_mixed_output_verifier_v1".to_owned()
+    } else {
+        "route_specific_deterministic_verifier_required".to_owned()
+    }
+}
+
+fn cpu_operator_priority_score(
+    candidate_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    false_accepts: usize,
+    readiness: &str,
+) -> i64 {
+    let readiness_weight = if readiness == "existing_profile" {
+        220
+    } else if readiness.starts_with("high") {
+        260
+    } else if readiness.starts_with("medium") {
+        150
+    } else if readiness.starts_with("low") {
+        40
+    } else {
+        15
+    };
+    (candidate_events as i64 * readiness_weight)
+        + (scoreable_payload_events as i64 * 250)
+        + (verification_hook_ready_events as i64 * 500)
+        + (verified_cpu_accept_eligible_events as i64 * 10_000)
+        - (false_accepts as i64 * 100_000)
 }
 
 fn analyze_edit_payload_readiness(text: &str) -> EditPayloadReadiness {

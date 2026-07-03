@@ -1,5 +1,145 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: CPU Operator Catalog V1
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-cpu-operator-catalog-v1
+
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The new command merges:
+  feedback-loop route stages
+  route-gap no-candidate families
+
+into one machine-readable CPU operator worklist. It ranks existing routed
+profiles and no-candidate route families by candidate volume, scoreable payload
+readiness, verification-hook readiness, verified CPU accepts, false accepts,
+and route readiness.
+```
+
+Catalog artifact:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+total_llm_calls: 1000
+exact_cache_hits: 53
+existing_operator_candidate_calls: 408
+no_candidate_calls: 592
+current_verified_cpu_accepts: 8
+target_verified_cpu_accepts: 800
+verified_gap_to_80_calls: 792
+market_claim_allowed: false
+```
+
+Top current routed profiles:
+
+```text
+role_binding_conditional_branch_seed0:
+  candidates: 150
+  scoreable: 55
+  hook_ready: 40
+  verified_cpu: 2
+
+role_binding_agent_control_seed0:
+  candidates: 143
+  scoreable: 3
+  hook_ready: 3
+  verified_cpu: 3
+
+role_binding_mixed_map_seed0:
+  candidates: 37
+  scoreable: 14
+  hook_ready: 13
+  verified_cpu: 2
+
+role_binding_edit_marker_length_seed0:
+  candidates: 78
+  scoreable: 10
+  hook_ready: 9
+  verified_cpu: 1
+```
+
+Top no-candidate families:
+
+```text
+answer_or_explain:
+  candidates: 215
+  readiness: low_needs_knowledge_evidence
+  builder: question_shape_payload_builder_v1
+  verifier: grounded_answer_evidence_verifier_v1
+
+project_context_dialogue:
+  candidates: 211
+  readiness: low_stateful_dialogue_candidate
+  builder: active_project_state_payload_builder_v1
+  verifier: workspace_artifact_or_goal_state_verifier_v1
+
+planning_next_step:
+  candidates: 54
+  readiness: medium_state_transition_candidate
+  builder: goal_state_transition_payload_builder_v1
+  verifier: plan_step_artifact_progress_verifier_v1
+
+read_inspect:
+  candidates: 27
+  readiness: medium_read_only_tool_candidate
+  builder: read_inspect_request_payload_builder_v1
+  verifier: read_only_path_and_excerpt_verifier_v1
+```
+
+Interpretation:
+
+```text
+The high-volume no-candidate zone is real, but answer_or_explain and
+project_context_dialogue cannot become CPU accepts without grounded evidence.
+The next honest route expansion should target a deterministic medium-readiness
+family, likely planning_next_step or read_inspect, or improve safe admission on
+existing conditional/agent-control profiles.
+```
+
+Claim boundary:
+
+```text
+The catalog writes no raw prompt/response text, enables no local accepts, and
+does not change verified CPU routability. It is an operator worklist, not a
+savings claim.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: cpu-operator-catalog-v1
+packet:
+  docs/structural_gates/cpu-operator-catalog-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.nanda.json
+
+Scope:
+  The packet checks that the CPU operator catalog merges existing routed
+  profiles with route-gap no-candidate families while keeping local accepts and
+  market claims disabled.
+
+  NANDA found no role conflicts after the source/report/output roles were
+  split, but still VETOs the packet because most exact catalog triads are weak
+  under composite-mode support. Treat this as proof-shape debt, not as a
+  runtime safety failure and not as a structural PASS.
+```
+
 ## 2026-07-03 - Executor Integration: Feedback Loop CLI Audit
 
 Verdict:

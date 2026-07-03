@@ -421,6 +421,12 @@ pub(crate) fn print_help() {
         "            Auto-loads conditional / agent-control / mixed route reports from default artifact paths when present"
     );
     println!(
+        "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json]"
+    );
+    println!(
+        "            Rank existing profile routes and no-candidate route-gap families for the next CPU operator build"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(
