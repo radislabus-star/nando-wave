@@ -57,6 +57,8 @@ const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_AGENT_CONTROL_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-agent-control-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT: &str = "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
@@ -3488,6 +3490,196 @@ where
     Ok(())
 }
 
+pub(crate) fn run_role_binding_real_traffic_route_gap_payload_readiness_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let sampled_llm_calls = history_rows.len().saturating_sub(skip);
+    let mut existing_route_candidate_events = 0usize;
+    let mut no_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut family_accumulators = BTreeMap::<String, RouteGapPayloadFamilyAccumulator>::new();
+    let mut rows = Vec::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        if route_catalog.classify_request_text(&row.text).is_some() {
+            existing_route_candidate_events += 1;
+            continue;
+        }
+
+        no_candidate_events += 1;
+        let family_key = route_gap_family_key(&row.text);
+        let meta = route_gap_family_metadata(family_key);
+        let readiness = analyze_route_gap_payload_readiness(family_key, &row.text);
+        payload_ready_events += usize::from(readiness.payload_ready);
+        let accumulator = family_accumulators
+            .entry(family_key.to_owned())
+            .or_default();
+        accumulator.candidate_events += 1;
+        accumulator.payload_ready_events += usize::from(readiness.payload_ready);
+        accumulator.request_signal_events += usize::from(readiness.has_request_signal);
+        accumulator.context_signal_events += usize::from(readiness.has_context_signal);
+        accumulator.evidence_signal_events += usize::from(readiness.has_evidence_signal);
+        accumulator.verifier_signal_events += usize::from(readiness.has_verifier_signal);
+        accumulator
+            .builder_kind_counts
+            .entry(readiness.recommended_builder_kind.clone())
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        rows.push(RoleBindingRouteGapPayloadReadinessEventRow {
+            event_id: format!(
+                "codex_history_route_gap_payload_readiness::{}::{}::{}",
+                row.session_id, row.ts, index
+            ),
+            request_fingerprint: format!("fnv1a64:{fingerprint:016x}"),
+            family_key: family_key.to_owned(),
+            cpu_operator_readiness: meta.cpu_operator_readiness.to_owned(),
+            has_request_signal: readiness.has_request_signal,
+            has_context_signal: readiness.has_context_signal,
+            has_evidence_signal: readiness.has_evidence_signal,
+            has_verifier_signal: readiness.has_verifier_signal,
+            payload_ready: readiness.payload_ready,
+            recommended_payload_builder: meta.recommended_payload_builder.to_owned(),
+            recommended_verifier: meta.recommended_verifier.to_owned(),
+            recommended_builder_kind: readiness.recommended_builder_kind,
+            missing_reasons: readiness.missing_reasons,
+        });
+    }
+
+    let mut families = family_accumulators
+        .into_iter()
+        .map(|(family_key, accumulator)| {
+            let meta = route_gap_family_metadata(&family_key);
+            let dominant_builder_kind = accumulator
+                .builder_kind_counts
+                .iter()
+                .max_by(|left, right| left.1.cmp(right.1).then_with(|| right.0.cmp(left.0)))
+                .map(|(name, _)| name.clone())
+                .unwrap_or_else(|| "no_rows".to_owned());
+            RoleBindingRouteGapPayloadReadinessFamilyRow {
+                priority_rank: 0,
+                family_key,
+                candidate_events: accumulator.candidate_events,
+                payload_ready_events: accumulator.payload_ready_events,
+                payload_ready_rate_milli: ratio_milli(
+                    accumulator.payload_ready_events,
+                    accumulator.candidate_events,
+                ),
+                request_signal_events: accumulator.request_signal_events,
+                context_signal_events: accumulator.context_signal_events,
+                evidence_signal_events: accumulator.evidence_signal_events,
+                verifier_signal_events: accumulator.verifier_signal_events,
+                cpu_operator_readiness: meta.cpu_operator_readiness.to_owned(),
+                recommended_profile_line: meta.recommended_profile_line.to_owned(),
+                recommended_payload_builder: meta.recommended_payload_builder.to_owned(),
+                recommended_verifier: meta.recommended_verifier.to_owned(),
+                dominant_builder_kind,
+                claim_boundary: meta.claim_boundary.to_owned(),
+            }
+        })
+        .collect::<Vec<_>>();
+    families.sort_by(|left, right| {
+        right
+            .payload_ready_events
+            .cmp(&left.payload_ready_events)
+            .then_with(|| right.candidate_events.cmp(&left.candidate_events))
+            .then_with(|| left.family_key.cmp(&right.family_key))
+    });
+    for (index, family) in families.iter_mut().enumerate() {
+        family.priority_rank = index + 1;
+    }
+
+    let top_payload_ready_family = families
+        .iter()
+        .find(|family| family.payload_ready_events > 0)
+        .map(|family| family.family_key.clone());
+    let report = RoleBindingRouteGapPayloadReadinessReport {
+        schema_version: "nando_role_binding_route_gap_payload_readiness_v1".to_owned(),
+        verdict: if payload_ready_events > 0 {
+            "ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND"
+        } else if no_candidate_events > 0 {
+            "ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_NO_READY_FAMILIES"
+        } else {
+            "ROUTE_GAP_PAYLOAD_READINESS_V1_NO_GAP"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        total_history_rows: history_rows.len(),
+        max_events,
+        sampled_llm_calls,
+        existing_route_candidate_events,
+        no_candidate_events,
+        payload_ready_events,
+        payload_ready_rate_milli: ratio_milli(payload_ready_events, no_candidate_events),
+        top_payload_ready_family,
+        families,
+        rows,
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Route-gap payload readiness only. It classifies privacy-safe no-candidate real Codex prompts into request-side builder readiness, writes fingerprints/features/counts but no raw prompt text, uses no response/target/proof labels, enables no local accepts, and cannot prove savings.".to_owned(),
+        next_engineering_debt: "Pick the top deterministic ready family, implement its request-side active_fringe/slot dry-run builder and deterministic verifier, then rerun shadow, hook audit, safe-policy calibration, feedback-loop, and CPU operator catalog. Do not promote answer_or_explain/project_context_dialogue without grounded evidence.".to_owned(),
+    };
+
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-route-gap-payload-readiness-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  sampled_llm_calls: {}", report.sampled_llm_calls);
+    println!(
+        "  existing_route_candidate_events: {}",
+        report.existing_route_candidate_events
+    );
+    println!("  no_candidate_events: {}", report.no_candidate_events);
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    if let Some(family) = &report.top_payload_ready_family {
+        println!("  top_payload_ready_family: {family}");
+    }
+    println!("  raw_text_written: false");
+    println!("  local_accepts_enabled: false");
+    Err("route-gap payload readiness is review-only; it is not verified savings".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_cpu_operator_catalog_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -3515,9 +3707,30 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT));
+    let route_gap_payload_readiness_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT));
 
     let feedback = read_json_file::<RoleBindingFeedbackLoopReport>(&feedback_report_path)?;
     let route_gap = read_json_file::<RoleBindingRouteGapCatalogReport>(&route_gap_report_path)?;
+    let route_gap_payload_readiness = if route_gap_payload_readiness_report_path.exists() {
+        Some(read_json_file::<RoleBindingRouteGapPayloadReadinessReport>(
+            &route_gap_payload_readiness_report_path,
+        )?)
+    } else {
+        None
+    };
+    let route_gap_readiness_by_family = route_gap_payload_readiness
+        .as_ref()
+        .map(|report| {
+            report
+                .families
+                .iter()
+                .map(|family| (family.family_key.as_str(), family))
+                .collect::<BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
     let target_verified_cpu_calls =
         projected_accepts(feedback.total_llm_calls, feedback.target_routability_milli);
     let mut rows = Vec::new();
@@ -3538,6 +3751,7 @@ where
             route_or_family_key: route.route_key.clone(),
             profile_id: Some(route.profile_id.clone()),
             candidate_events: route.candidate_events,
+            payload_ready_events: route.payload_ready_events,
             scoreable_payload_events: route.scoreable_payload_events,
             verification_hook_ready_events: route.verification_hook_ready_events,
             verified_cpu_accept_eligible_events: route.verified_cpu_accept_eligible_events,
@@ -3554,9 +3768,15 @@ where
     }
 
     for family in &route_gap.no_candidate_families {
+        let readiness = route_gap_readiness_by_family
+            .get(family.family_key.as_str())
+            .copied();
+        let payload_ready_events = readiness
+            .map(|family| family.payload_ready_events)
+            .unwrap_or_default();
         let priority_score = cpu_operator_priority_score(
             family.candidate_events,
-            0,
+            payload_ready_events,
             0,
             0,
             0,
@@ -3568,6 +3788,7 @@ where
             route_or_family_key: family.family_key.clone(),
             profile_id: None,
             candidate_events: family.candidate_events,
+            payload_ready_events,
             scoreable_payload_events: 0,
             verification_hook_ready_events: 0,
             verified_cpu_accept_eligible_events: 0,
@@ -3613,10 +3834,19 @@ where
         verdict: "CPU_OPERATOR_CATALOG_V1_REVIEW".to_owned(),
         feedback_report_path: feedback_report_path.display().to_string(),
         route_gap_report_path: route_gap_report_path.display().to_string(),
+        route_gap_payload_readiness_report_path: route_gap_payload_readiness.as_ref().map(|_| {
+            route_gap_payload_readiness_report_path
+                .display()
+                .to_string()
+        }),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
         no_candidate_calls: route_gap.no_candidate_events,
+        route_gap_payload_ready_events: route_gap_payload_readiness
+            .as_ref()
+            .map(|report| report.payload_ready_events)
+            .unwrap_or_default(),
         current_verified_cpu_accepts: feedback.verified_cpu_accept_eligible_events,
         target_verified_cpu_accepts: target_verified_cpu_calls,
         verified_gap_to_80_calls: target_verified_cpu_calls
@@ -3638,6 +3868,12 @@ where
     );
     println!("  feedback_report: {}", feedback_report_path.display());
     println!("  route_gap_report: {}", route_gap_report_path.display());
+    if route_gap_payload_readiness.is_some() {
+        println!(
+            "  route_gap_payload_readiness_report: {}",
+            route_gap_payload_readiness_report_path.display()
+        );
+    }
     println!("  report: {}", report_path.display());
     println!("  total_llm_calls: {}", report.total_llm_calls);
     println!(
@@ -3645,6 +3881,10 @@ where
         report.existing_operator_candidate_calls
     );
     println!("  no_candidate_calls: {}", report.no_candidate_calls);
+    println!(
+        "  route_gap_payload_ready_events: {}",
+        report.route_gap_payload_ready_events
+    );
     println!(
         "  current_verified_cpu_accepts: {}",
         report.current_verified_cpu_accepts
@@ -10054,15 +10294,101 @@ struct RoleBindingRouteGapCatalogFamilyRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingRouteGapPayloadReadinessReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    total_history_rows: usize,
+    max_events: usize,
+    sampled_llm_calls: usize,
+    existing_route_candidate_events: usize,
+    no_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    top_payload_ready_family: Option<String>,
+    families: Vec<RoleBindingRouteGapPayloadReadinessFamilyRow>,
+    rows: Vec<RoleBindingRouteGapPayloadReadinessEventRow>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingRouteGapPayloadReadinessFamilyRow {
+    priority_rank: usize,
+    family_key: String,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    cpu_operator_readiness: String,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    dominant_builder_kind: String,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingRouteGapPayloadReadinessEventRow {
+    event_id: String,
+    request_fingerprint: String,
+    family_key: String,
+    cpu_operator_readiness: String,
+    has_request_signal: bool,
+    has_context_signal: bool,
+    has_evidence_signal: bool,
+    has_verifier_signal: bool,
+    payload_ready: bool,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RouteGapPayloadFamilyAccumulator {
+    candidate_events: usize,
+    payload_ready_events: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    builder_kind_counts: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug)]
+struct RouteGapPayloadReadiness {
+    has_request_signal: bool,
+    has_context_signal: bool,
+    has_evidence_signal: bool,
+    has_verifier_signal: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingCpuOperatorCatalogReport {
     schema_version: String,
     verdict: String,
     feedback_report_path: String,
     route_gap_report_path: String,
+    route_gap_payload_readiness_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
     no_candidate_calls: usize,
+    route_gap_payload_ready_events: usize,
     current_verified_cpu_accepts: usize,
     target_verified_cpu_accepts: usize,
     verified_gap_to_80_calls: usize,
@@ -10083,6 +10409,7 @@ struct RoleBindingCpuOperatorCatalogRow {
     route_or_family_key: String,
     profile_id: Option<String>,
     candidate_events: usize,
+    payload_ready_events: usize,
     scoreable_payload_events: usize,
     verification_hook_ready_events: usize,
     verified_cpu_accept_eligible_events: usize,
@@ -14304,6 +14631,277 @@ fn cpu_operator_priority_score(
         + (verification_hook_ready_events as i64 * 500)
         + (verified_cpu_accept_eligible_events as i64 * 10_000)
         - (false_accepts as i64 * 100_000)
+}
+
+fn analyze_route_gap_payload_readiness(family_key: &str, text: &str) -> RouteGapPayloadReadiness {
+    let lower = text.to_lowercase();
+    let artifact_signal = has_route_gap_artifact_signal(text, &lower);
+    let goal_signal = contains_any(
+        &lower,
+        &[
+            "goal",
+            "цель",
+            "план",
+            "следующий",
+            "дальше",
+            "roadmap",
+            "executor",
+            "route",
+            "routability",
+            "nando",
+            "wave",
+            "llmwave",
+        ],
+    );
+    let metric_signal = contains_any(
+        &lower,
+        &[
+            "p99",
+            "latency",
+            "метрик",
+            "accuracy",
+            "false_accept",
+            "coverage",
+            "milli",
+            "bytes",
+            "rss",
+            "qps",
+        ],
+    );
+    let verification_signal = contains_any(
+        &lower,
+        &[
+            "провер",
+            "verify",
+            "вериф",
+            "gate",
+            "audit",
+            "отчет",
+            "отчёт",
+            "report",
+            "evidence",
+            "результат",
+            "result",
+            "статус",
+            "status",
+            "коммит",
+            "commit",
+        ],
+    ) || artifact_signal
+        || metric_signal;
+
+    let (has_request_signal, has_context_signal, has_evidence_signal, has_verifier_signal) =
+        match family_key {
+            "planning_next_step" => {
+                let request = contains_any(
+                    &lower,
+                    &[
+                        "дальше",
+                        "план",
+                        "следующий",
+                        "что делать",
+                        "goal",
+                        "roadmap",
+                    ],
+                );
+                let context = goal_signal || artifact_signal;
+                let evidence =
+                    artifact_signal || contains_any(&lower, &["сделал", "готово", "чек", "check"]);
+                (request, context, evidence, verification_signal)
+            }
+            "read_inspect" => {
+                let request = contains_any(
+                    &lower,
+                    &[
+                        "читай",
+                        "прочитай",
+                        "посмотри",
+                        "ознакомь",
+                        "inspect",
+                        "read",
+                    ],
+                );
+                (
+                    request,
+                    artifact_signal,
+                    artifact_signal,
+                    verification_signal,
+                )
+            }
+            "retrieval_lookup" => {
+                let request = contains_any(
+                    &lower,
+                    &[
+                        "найди",
+                        "поищи",
+                        "где лежит",
+                        "где найти",
+                        "lookup",
+                        "search",
+                    ],
+                );
+                let source_signal = artifact_signal
+                    || contains_any(
+                        &lower,
+                        &["ссылк", "url", "pdf", "документ", "источник", "source"],
+                    );
+                (request, source_signal, source_signal, verification_signal)
+            }
+            "metrics_report_readout" => {
+                let request =
+                    metric_signal || contains_any(&lower, &["отчет", "отчёт", "report", "readout"]);
+                (
+                    request,
+                    artifact_signal || metric_signal,
+                    metric_signal,
+                    verification_signal,
+                )
+            }
+            "serving_ops" => {
+                let request = contains_any(
+                    &lower,
+                    &[
+                        "сервер",
+                        "daemon",
+                        "демон",
+                        "worker",
+                        "lb",
+                        "http",
+                        "hostworld",
+                        "vps",
+                        "nginx",
+                        "systemd",
+                    ],
+                );
+                let context =
+                    artifact_signal || metric_signal || contains_any(&lower, &["health", "status"]);
+                (request, context, context, verification_signal)
+            }
+            "git_control" => {
+                let request = contains_any(
+                    &lower,
+                    &["git", "коммит", "commit", "пуш", "push", "status", "diff"],
+                );
+                (
+                    request,
+                    artifact_signal || request,
+                    request,
+                    verification_signal,
+                )
+            }
+            "dataset_corpus" => {
+                let request = contains_any(
+                    &lower,
+                    &["датасет", "корпус", "задач", "jsonl", "batch", "negative"],
+                );
+                let evidence = artifact_signal
+                    || contains_any(&lower, &["schema", "валид", "balance", "строк"]);
+                (request, evidence, evidence, verification_signal)
+            }
+            "style_brevity" => {
+                let request = contains_any(
+                    &lower,
+                    &["коротко", "простын", "без воды", "не пиши", "кратко"],
+                );
+                (request, true, true, request)
+            }
+            "answer_or_explain" => {
+                let request = contains_any(
+                    &lower,
+                    &[
+                        "что",
+                        "почему",
+                        "зачем",
+                        "как",
+                        "сколько",
+                        "можешь",
+                        "объясни",
+                        "оцени",
+                    ],
+                );
+                (request, artifact_signal, false, false)
+            }
+            "project_context_dialogue" => {
+                let request = goal_signal
+                    || contains_any(&lower, &["проект", "модель", "архитект", "l1", "l2", "l3"]);
+                (
+                    request,
+                    artifact_signal || goal_signal,
+                    artifact_signal,
+                    verification_signal,
+                )
+            }
+            _ => {
+                let request = normalized_token_count(&lower) > 0;
+                (
+                    request,
+                    artifact_signal,
+                    artifact_signal,
+                    verification_signal,
+                )
+            }
+        };
+    let payload_ready =
+        has_request_signal && has_context_signal && has_evidence_signal && has_verifier_signal;
+    let mut missing_reasons = Vec::new();
+    if !has_request_signal {
+        missing_reasons.push("missing_request_signal".to_owned());
+    }
+    if !has_context_signal {
+        missing_reasons.push("missing_context_signal".to_owned());
+    }
+    if !has_evidence_signal {
+        missing_reasons.push("missing_evidence_signal".to_owned());
+    }
+    if !has_verifier_signal {
+        missing_reasons.push("missing_verifier_signal".to_owned());
+    }
+    let recommended_builder_kind = if payload_ready {
+        format!("{family_key}_payload_builder_v1_candidate")
+    } else if has_request_signal && has_context_signal {
+        format!("{family_key}_needs_evidence_or_verifier_signal")
+    } else if has_request_signal {
+        format!("{family_key}_router_needs_context_evidence_verifier")
+    } else {
+        format!("not_{family_key}_payload_ready")
+    };
+    RouteGapPayloadReadiness {
+        has_request_signal,
+        has_context_signal,
+        has_evidence_signal,
+        has_verifier_signal,
+        payload_ready,
+        recommended_builder_kind,
+        missing_reasons,
+    }
+}
+
+fn has_route_gap_artifact_signal(text: &str, lower: &str) -> bool {
+    contains_file_like_token(text)
+        || contains_marker_like_signal(text)
+        || contains_any(
+            lower,
+            &[
+                ".md",
+                ".rs",
+                ".json",
+                ".jsonl",
+                "docs/",
+                "target/",
+                "crates/",
+                "src/",
+                "файл",
+                "док",
+                "артефакт",
+                "artifact",
+                "report",
+                "отчет",
+                "отчёт",
+                "trace",
+                "лог",
+                "log",
+            ],
+        )
 }
 
 fn analyze_edit_payload_readiness(text: &str) -> EditPayloadReadiness {

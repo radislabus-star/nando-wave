@@ -26,6 +26,7 @@ interpretation: proof-shape debt, not a runtime safety failure
 | CPU operator catalog command | cli_command | role-binding-real-traffic-cpu-operator-catalog-v1 | main.rs |
 | CPU operator catalog command | feedback_source_report | cpu-route-feedback-loop-conditional-agent-control-v1.report.json | role_binding_runtime_cmd.rs:feedback_report_input |
 | CPU operator catalog command | route_gap_source_report | route-gap-catalog-agent-control-v1.report.json | role_binding_runtime_cmd.rs:route_gap_input |
+| CPU operator catalog command | route_gap_payload_readiness_report | route-gap-payload-readiness-v1.report.json | role_binding_runtime_cmd.rs:readiness_input |
 | CPU operator catalog command | catalog_output_report | cpu-operator-catalog-v1.report.json | role_binding_runtime_cmd.rs:catalog_output |
 | CPU operator catalog command | raw_text_written | false | cpu-operator-catalog-v1.report.json |
 | CPU operator catalog command | local_accepts_enabled | false | cpu-operator-catalog-v1.report.json |
@@ -34,6 +35,7 @@ interpretation: proof-shape debt, not a runtime safety failure
 | current traffic sample | exact_cache_hits | 53 | cpu-operator-catalog-v1.report.json |
 | current routed zone | existing_operator_candidate_calls | 408 | cpu-operator-catalog-v1.report.json |
 | current unrouted zone | no_candidate_calls | 592 | cpu-operator-catalog-v1.report.json |
+| current route-gap readiness | route_gap_payload_ready_events | 54 | cpu-operator-catalog-v1.report.json |
 | current CPU accepts | verified_cpu_accepts | 8 | cpu-operator-catalog-v1.report.json |
 | CPU Routability 80 | target_verified_cpu_accepts | 800 | cpu-operator-catalog-v1.report.json |
 | CPU Routability 80 | verified_gap_to_80_calls | 792 | cpu-operator-catalog-v1.report.json |
@@ -41,6 +43,7 @@ interpretation: proof-shape debt, not a runtime safety failure
 | answer_or_explain | readiness | low_needs_knowledge_evidence | cpu-operator-catalog-v1.report.json |
 | first medium backlog family | family_key | planning_next_step | cpu-operator-catalog-v1.report.json |
 | planning_next_step | readiness | medium_state_transition_candidate | cpu-operator-catalog-v1.report.json |
+| planning_next_step | payload_ready_events | 19 | cpu-operator-catalog-v1.report.json |
 | CPU operator catalog | claim_status | worklist_not_savings | cpu-operator-catalog-v1.report.json |
 
 ## candidate_triads
@@ -50,6 +53,7 @@ interpretation: proof-shape debt, not a runtime safety failure
 | CPU operator catalog command | cli_command | role-binding-real-traffic-cpu-operator-catalog-v1 | candidate claim |
 | CPU operator catalog command | feedback_source_report | cpu-route-feedback-loop-conditional-agent-control-v1.report.json | candidate claim |
 | CPU operator catalog command | route_gap_source_report | route-gap-catalog-agent-control-v1.report.json | candidate claim |
+| CPU operator catalog command | route_gap_payload_readiness_report | route-gap-payload-readiness-v1.report.json | candidate claim |
 | CPU operator catalog command | catalog_output_report | cpu-operator-catalog-v1.report.json | candidate claim |
 | CPU operator catalog command | raw_text_written | false | candidate claim |
 | CPU operator catalog command | local_accepts_enabled | false | candidate claim |
@@ -58,6 +62,7 @@ interpretation: proof-shape debt, not a runtime safety failure
 | current traffic sample | exact_cache_hits | 53 | candidate claim |
 | current routed zone | existing_operator_candidate_calls | 408 | candidate claim |
 | current unrouted zone | no_candidate_calls | 592 | candidate claim |
+| current route-gap readiness | route_gap_payload_ready_events | 54 | candidate claim |
 | current CPU accepts | verified_cpu_accepts | 8 | candidate claim |
 | CPU Routability 80 | target_verified_cpu_accepts | 800 | candidate claim |
 | CPU Routability 80 | verified_gap_to_80_calls | 792 | candidate claim |
@@ -65,4 +70,5 @@ interpretation: proof-shape debt, not a runtime safety failure
 | answer_or_explain | readiness | low_needs_knowledge_evidence | candidate claim |
 | first medium backlog family | family_key | planning_next_step | candidate claim |
 | planning_next_step | readiness | medium_state_transition_candidate | candidate claim |
+| planning_next_step | payload_ready_events | 19 | candidate claim |
 | CPU operator catalog | claim_status | worklist_not_savings | candidate claim |

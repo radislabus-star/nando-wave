@@ -1,5 +1,124 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Route-Gap Payload Readiness V1
+
+Verdict:
+
+```text
+ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-route-gap-payload-readiness-v1
+
+Updated:
+  role-binding-real-traffic-cpu-operator-catalog-v1
+
+The new readiness command inspects no-candidate real Codex prompts and counts
+which route-gap families have enough request-side signals to attempt a future
+payload builder. It writes fingerprints/features/counts only; no raw prompt
+text, response text, target labels, proof labels, or local accepts are used.
+
+The CPU operator catalog now consumes this readiness report when present, so
+no-candidate families are ranked by real payload-builder readiness, not only by
+traffic volume.
+```
+
+Artifacts:
+
+```text
+readiness_report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
+
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+sampled_llm_calls: 1000
+existing_route_candidate_events: 408
+no_candidate_events: 592
+route_gap_payload_ready_events: 54
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Top route-gap readiness:
+
+```text
+planning_next_step:
+  candidates: 54
+  payload_ready: 19
+  readiness: medium_state_transition_candidate
+  next builder: goal_state_transition_payload_builder_v1
+  next verifier: plan_step_artifact_progress_verifier_v1
+
+read_inspect:
+  candidates: 27
+  payload_ready: 12
+  readiness: medium_read_only_tool_candidate
+  next builder: read_inspect_request_payload_builder_v1
+  next verifier: read_only_path_and_excerpt_verifier_v1
+
+metrics_report_readout:
+  candidates: 10
+  payload_ready: 6
+  readiness: medium_structured_readout_candidate
+  next builder: metrics_report_payload_builder_v1
+  next verifier: numeric_report_field_verifier_v1
+
+answer_or_explain:
+  candidates: 215
+  payload_ready: 0
+  blocker: missing_evidence_signal + missing_verifier_signal
+```
+
+Interpretation:
+
+```text
+This is the first measured bridge from no-candidate traffic into request-side
+payload-builder work. It does not change verified CPU accepts: current verified
+CPU remains 8/1000 and the gap to CPU Routability 80 remains 792 calls.
+
+The next honest build target is planning_next_step because it has the largest
+payload-ready no-candidate set. read_inspect is smaller but cleaner for a
+strict deterministic verifier.
+```
+
+Claim boundary:
+
+```text
+Readiness is not savings. A route-gap family contributes to CPU Routability
+only after a real payload builder emits active_fringe/slots, deterministic
+verification attaches output/tool/artifact evidence, shadow accepts are
+verified, and false_accepts remain zero.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: route-gap-payload-readiness-v1
+packet:
+  docs/structural_gates/route-gap-payload-readiness-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.nanda.json
+
+Scope:
+  The packet checks that route-gap payload readiness is measured from
+  request-side signals while local accepts and market claims stay disabled.
+
+  NANDA found no role conflicts, but VETOs the packet because the exact
+  candidate triads are weak under composite-mode support. Treat this as
+  proof-shape debt, not as runtime failure and not as structural PASS.
+```
+
 ## 2026-07-03 - Executor Integration: CPU Operator Catalog V1
 
 Verdict:
@@ -39,6 +158,7 @@ total_llm_calls: 1000
 exact_cache_hits: 53
 existing_operator_candidate_calls: 408
 no_candidate_calls: 592
+route_gap_payload_ready_events: 54
 current_verified_cpu_accepts: 8
 target_verified_cpu_accepts: 800
 verified_gap_to_80_calls: 792
@@ -90,12 +210,14 @@ project_context_dialogue:
 
 planning_next_step:
   candidates: 54
+  payload_ready: 19
   readiness: medium_state_transition_candidate
   builder: goal_state_transition_payload_builder_v1
   verifier: plan_step_artifact_progress_verifier_v1
 
 read_inspect:
   candidates: 27
+  payload_ready: 12
   readiness: medium_read_only_tool_candidate
   builder: read_inspect_request_payload_builder_v1
   verifier: read_only_path_and_excerpt_verifier_v1

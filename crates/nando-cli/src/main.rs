@@ -115,6 +115,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_mixed_safe_policy_promote_v1,
     run_role_binding_real_traffic_record_serve_v1, run_role_binding_real_traffic_record_v1,
     run_role_binding_real_traffic_route_gap_catalog_v1,
+    run_role_binding_real_traffic_route_gap_payload_readiness_v1,
     run_role_binding_real_traffic_shadow_smoke_v1, run_role_binding_real_traffic_shadow_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
 };
@@ -624,6 +625,10 @@ fn main() -> ExitCode {
             run_role_binding_real_traffic_route_gap_catalog_v1(args),
             "try: nando-cli role-binding-real-traffic-route-gap-catalog-v1 [history-jsonl] [registry-config-json] [route-gap-report-json] [max-events]",
         ),
+        Some("role-binding-real-traffic-route-gap-payload-readiness-v1") => exit_for_result(
+            run_role_binding_real_traffic_route_gap_payload_readiness_v1(args),
+            "try: nando-cli role-binding-real-traffic-route-gap-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]",
+        ),
         Some("role-binding-real-traffic-agent-control-profile-v1") => exit_for_result(
             run_role_binding_real_traffic_agent_control_profile_v1(args),
             "try: nando-cli role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]",
@@ -722,7 +727,7 @@ fn main() -> ExitCode {
         ),
         Some("role-binding-real-traffic-cpu-operator-catalog-v1") => exit_for_result(
             run_role_binding_real_traffic_cpu_operator_catalog_v1(args),
-            "try: nando-cli role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json]",
+            "try: nando-cli role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]",
         ),
         Some("role-binding-real-traffic-shadow-smoke-v1") => exit_for_result(
             run_role_binding_real_traffic_shadow_smoke_v1(args),

@@ -280,6 +280,12 @@ pub(crate) fn print_help() {
         "            Classify no-candidate real Codex prompts into privacy-safe operator-family backlog counts"
     );
     println!(
+        "  role-binding-real-traffic-route-gap-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
+    );
+    println!(
+        "            Measure request-side payload-builder readiness for no-candidate route-gap families without enabling local accepts"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
@@ -421,7 +427,7 @@ pub(crate) fn print_help() {
         "            Auto-loads conditional / agent-control / mixed route reports from default artifact paths when present"
     );
     println!(
-        "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json]"
+        "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"
     );
     println!(
         "            Rank existing profile routes and no-candidate route-gap families for the next CPU operator build"
