@@ -1,5 +1,147 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Planning Next-Step Trace Window V2
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_TRACE_WINDOW_V2_REVIEW_SUPPORT_STILL_INSUFFICIENT
+```
+
+What changed:
+
+```text
+No runtime or scoring code changed.
+
+The planning_next_step route was rerun over a wider real Codex history window:
+  max_events: 1000 -> 5000
+
+Artifacts were written under v2 names so the v1 baseline remains intact.
+```
+
+V1 -> V2 route evidence:
+
+```text
+planning candidates:           54 -> 170
+payload ready events:          19 -> 36
+payload built events:          14 -> 31
+scoreable payload events:      14 -> 31
+
+artifact evidence matches:      7 -> 22
+verified true events:           1 -> 2
+verified false events:          6 -> 20
+tool-call fingerprint events:   1 -> 3
+
+verification hook ready:        7 -> 22
+verified CPU eligible:          0 -> 0
+shadow accepts:                 0 -> 0
+shadow false accepts:           0 -> 0
+market claim allowed:           false -> false
+```
+
+Calibration result:
+
+```text
+safe_policy_found: true
+best_safe_true_accepts: 1
+minimum_true_support_for_promotion: 3
+request_side_margin_only_accepts_all_true_without_false: false
+
+The wider trace found a second verifier-true artifact-progress row, but the
+current request-side boundary-slot margin policy still safely accepts only one
+true row:
+  true_accepts: 1
+  false_accepts: 0
+  missed_true: 1
+```
+
+Margin collision diagnostics:
+
+```text
+energy_margin:
+  min_true_margin: 1213440
+  false_rows_at_or_above_min_true_margin: 2
+  safe_accepts_all_true_rows: false
+  best_safe_true_accepts: 0
+
+min_slot_margin:
+  min_true_margin: 328704
+  false_rows_at_or_above_min_true_margin: 18
+  safe_accepts_all_true_rows: false
+  best_safe_true_accepts: 0
+
+marker_slot_margin:
+  min_true_margin: 328704
+  false_rows_at_or_above_min_true_margin: 18
+  safe_accepts_all_true_rows: false
+  best_safe_true_accepts: 0
+
+end_slot_margin:
+  min_true_margin: 786432
+  false_rows_at_or_above_min_true_margin: 8
+  safe_accepts_all_true_rows: false
+  best_safe_true_accepts: 1
+```
+
+Interpretation:
+
+```text
+The route is real and growing: wider real traffic increased candidate,
+scoreable, hook-ready, and tool-backed evidence counts.
+
+The route is not promotion-ready: safe local accept support remains singleton,
+so planning_next_step must stay review-only.
+
+This is now proven not to be fixable by a single request-side margin threshold:
+accepting both verifier-true rows would admit false rows under every current
+margin family.
+```
+
+Claim boundary:
+
+```text
+This is not a CPU savings improvement.
+It proves better evidence density for planning_next_step, not verified local
+replacement of LLM calls.
+
+Current global CPU Routability remains 8/1000 until the feedback dashboard is
+fed with a support-qualified route row and verified accepts increase under
+false_accepts=0.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-trace-window-v2
+packet:
+  docs/structural_gates/planning-next-step-trace-window-v2.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-trace-window-v2.nanda.json
+
+Scope:
+  The packet checks that v2 increased real evidence while keeping local accept
+  promotion blocked by minimum support.
+
+  Treat VETO as a promotion guard and proof-shape debt. It is not a runtime
+  failure.
+```
+
+Next debt:
+
+```text
+planning_next_step_admission_split_v1:
+  compare the two verifier-true rows and twenty verifier-false rows to find a
+  request-side feature that separates both true rows without admitting false
+  rows. Candidate direction: distinguish tool-backed progress intent shape
+  before scoring, not by lowering score thresholds.
+
+planning_next_step_feedback_loop_artifact_args_v1:
+  avoid hard-wiring only v1 planning reports in the feedback loop; allow a
+  named planning artifact set or route-gap source bundle so v2 windows can feed
+  the dashboard without overwriting the baseline.
+```
+
 ## 2026-07-04 - Executor Integration: Feedback Loop Planning Route-Gap Row V1
 
 Verdict:

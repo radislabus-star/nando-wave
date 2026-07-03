@@ -4589,6 +4589,10 @@ where
         &scored_rows,
         |row| row.end_slot_margin,
     );
+    let margin_collision_diagnostics = planning_margin_collision_diagnostics(&scored_rows);
+    let request_side_margin_only_accepts_all_true_without_false = margin_collision_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.safe_accepts_all_true_rows);
     let policies = vec![
         current_policy,
         energy_positive_policy,
@@ -4629,6 +4633,8 @@ where
         best_safe_true_accepts,
         policies,
         rows: scored_rows,
+        margin_collision_diagnostics,
+        request_side_margin_only_accepts_all_true_without_false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
         claim_boundary: "Planning-next-step calibration only. It evaluates request-side score/readout policies against tool-backed artifact-progress labels, writes only fingerprints and margins, enables no local accepts, and cannot be used as a market savings claim. Tool-call fingerprints are verifier evidence, not runtime admission features.".to_owned(),
@@ -7394,6 +7400,8 @@ where
         best_safe_true_accepts,
         policies,
         rows: scored_rows,
+        margin_collision_diagnostics: Vec::new(),
+        request_side_margin_only_accepts_all_true_without_false: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
         claim_boundary: "Calibration only. It evaluates readout/admission policies against evidence-backed real Codex labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
@@ -7543,6 +7551,8 @@ where
         best_safe_true_accepts,
         policies,
         rows: scored_rows,
+        margin_collision_diagnostics: Vec::new(),
+        request_side_margin_only_accepts_all_true_without_false: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
         claim_boundary: "Conditional calibration only. It evaluates readout policies against evidence-backed real Codex conditional labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
@@ -8012,6 +8022,8 @@ where
         best_safe_true_accepts,
         policies,
         rows: scored_rows,
+        margin_collision_diagnostics: Vec::new(),
+        request_side_margin_only_accepts_all_true_without_false: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
         claim_boundary: "Mixed calibration only. It evaluates readout policies against evidence-backed real Codex mixed labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
@@ -12088,6 +12100,10 @@ struct RoleBindingEditLocalAcceptCalibrationReport {
     best_safe_true_accepts: usize,
     policies: Vec<RoleBindingEditLocalAcceptPolicyReport>,
     rows: Vec<RoleBindingEditLocalAcceptCalibrationRow>,
+    #[serde(default)]
+    margin_collision_diagnostics: Vec<RoleBindingLocalAcceptMarginCollisionReport>,
+    #[serde(default)]
+    request_side_margin_only_accepts_all_true_without_false: bool,
     local_accepts_enabled: bool,
     market_claim_allowed: bool,
     claim_boundary: String,
@@ -12103,6 +12119,15 @@ struct RoleBindingEditLocalAcceptPolicyReport {
     missed_true: usize,
     safe: bool,
     threshold: Option<i32>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingLocalAcceptMarginCollisionReport {
+    margin_name: String,
+    min_true_margin: Option<i32>,
+    false_rows_at_or_above_min_true_margin: usize,
+    safe_accepts_all_true_rows: bool,
+    best_safe_true_accepts: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -15341,6 +15366,8 @@ fn projected_accepts(non_exact_candidate_calls: usize, accept_rate_milli: usize)
         .unwrap_or(0)
 }
 
+type RoleBindingCalibrationMarginAccessor = fn(&RoleBindingEditLocalAcceptCalibrationRow) -> i32;
+
 fn evaluate_edit_calibration_policy<F>(
     policy_name: &str,
     rows: &[RoleBindingEditLocalAcceptCalibrationRow],
@@ -15369,6 +15396,63 @@ where
         safe: false_accepts == 0 && true_accepts > 0,
         threshold: None,
     }
+}
+
+fn planning_margin_collision_diagnostics(
+    rows: &[RoleBindingEditLocalAcceptCalibrationRow],
+) -> Vec<RoleBindingLocalAcceptMarginCollisionReport> {
+    let margin_accessors: [(&str, RoleBindingCalibrationMarginAccessor); 4] = [
+        (
+            "energy_margin",
+            |row: &RoleBindingEditLocalAcceptCalibrationRow| row.energy_margin,
+        ),
+        (
+            "min_slot_margin",
+            |row: &RoleBindingEditLocalAcceptCalibrationRow| row.min_slot_margin,
+        ),
+        (
+            "marker_slot_margin",
+            |row: &RoleBindingEditLocalAcceptCalibrationRow| row.marker_slot_margin,
+        ),
+        (
+            "end_slot_margin",
+            |row: &RoleBindingEditLocalAcceptCalibrationRow| row.end_slot_margin,
+        ),
+    ];
+    margin_accessors
+        .into_iter()
+        .map(|(margin_name, value)| {
+            let min_true_margin = rows
+                .iter()
+                .filter(|row| row.verifier_label)
+                .map(value)
+                .min();
+            let false_rows_at_or_above_min_true_margin = min_true_margin
+                .map(|threshold| {
+                    rows.iter()
+                        .filter(|row| !row.verifier_label && value(row) >= threshold)
+                        .count()
+                })
+                .unwrap_or(0);
+            let best_policy = best_single_threshold_policy(
+                &format!("best_{margin_name}_threshold_request_side_only"),
+                rows,
+                value,
+            );
+            RoleBindingLocalAcceptMarginCollisionReport {
+                margin_name: margin_name.to_owned(),
+                min_true_margin,
+                false_rows_at_or_above_min_true_margin,
+                safe_accepts_all_true_rows: min_true_margin.is_some()
+                    && false_rows_at_or_above_min_true_margin == 0,
+                best_safe_true_accepts: if best_policy.false_accepts == 0 {
+                    best_policy.true_accepts
+                } else {
+                    0
+                },
+            }
+        })
+        .collect()
 }
 
 fn best_single_threshold_policy<F>(
