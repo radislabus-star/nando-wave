@@ -1,4 +1,6 @@
 use nando_core::wave::{
+    WavePredictorActiveCenter, WavePredictorHebbianConfig, WavePredictorHebbianField,
+    WavePredictorRoleBindingEvalTask, WavePredictorRoleBindingOffloadAction,
     WavePredictorRoleBindingOffloadPolicy, WavePredictorRoleBindingOffloadRuntime,
     WavePredictorRoleBindingPackageInfo, WavePredictorRoleBindingPreparedFringe,
 };
@@ -53,6 +55,16 @@ const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
+const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-seed0.nwrb";
+const DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-agent-control-v1.json";
+const DEFAULT_AGENT_CONTROL_PROFILE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-profile-v1.report.json";
+const DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -153,6 +165,15 @@ const REAL_TRAFFIC_MIXED_INVARIANT_ROLE_SLOT: u8 = 3;
 const REAL_TRAFFIC_MIXED_OPERATOR_PAIR_SHIFT: u32 = 5;
 const REAL_TRAFFIC_MIXED_TOP_ROLE_L1_LANES: usize = 32;
 const REAL_TRAFFIC_MIXED_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_AGENT_CONTROL_ACTION_BASE: u32 = 0;
+const REAL_TRAFFIC_AGENT_CONTROL_ACTION_COUNT: u32 = 4096;
+const REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE: u32 = 4096;
+const REAL_TRAFFIC_AGENT_CONTROL_ROLE_STRIDE: u32 = 4096;
+const REAL_TRAFFIC_AGENT_CONTROL_ROLE_COUNT: u8 = 1;
+const REAL_TRAFFIC_AGENT_CONTROL_ACTION_CENTER: u32 = REAL_TRAFFIC_AGENT_CONTROL_ACTION_BASE + 17;
+const REAL_TRAFFIC_AGENT_CONTROL_INTENT_SLOT: u8 = 0;
+const REAL_TRAFFIC_AGENT_CONTROL_OUTPUT_SLOT: u8 = 0;
+const REAL_TRAFFIC_AGENT_CONTROL_THRESHOLD: i32 = 32_768;
 
 pub(crate) fn run_role_binding_profile_registry_from_release_v1<I>(
     mut args: I,
@@ -3441,6 +3462,300 @@ where
     println!("  raw_text_written: false");
     println!("  local_accepts_enabled: false");
     Ok(())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_control_profile_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let package_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PACKAGE_PATH));
+    let registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REPORT));
+
+    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
+    validate_registry_config(&registry)?;
+
+    let package_bytes = build_agent_control_role_binding_package()?;
+    fs::create_dir_all(package_path.parent().ok_or_else(|| {
+        format!(
+            "agent control package path has no parent: {}",
+            package_path.display()
+        )
+    })?)
+    .map_err(|error| {
+        format!(
+            "failed to create agent control package directory {}: {error}",
+            package_path.display()
+        )
+    })?;
+    fs::write(&package_path, &package_bytes).map_err(|error| {
+        format!(
+            "failed to write agent control package {}: {error}",
+            package_path.display()
+        )
+    })?;
+    let package_info =
+        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&package_bytes)
+            .map_err(|error| format!("failed to inspect agent control package: {error:?}"))?;
+    let policy = WavePredictorRoleBindingOffloadPolicy::new(REAL_TRAFFIC_AGENT_CONTROL_THRESHOLD)
+        .map_err(|error| format!("invalid agent control policy: {error:?}"))?;
+    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
+        &package_bytes,
+        policy,
+    )
+    .map_err(|error| format!("failed to load agent control package: {error:?}"))?;
+    let (sample_margin, sample_local_accept) = agent_control_sample_decision(&sdk)?;
+    if !sample_local_accept {
+        return Err(format!(
+            "agent control sample did not local-accept: margin={sample_margin}"
+        ));
+    }
+
+    let profile = RoleBindingProfileConfig {
+        profile_id: "role_binding_agent_control_seed0".to_owned(),
+        profile_kind: "role_binding_nwrb".to_owned(),
+        operator_classes: vec!["agent_control".to_owned(), "dialogue_state".to_owned()],
+        package_path: package_path.clone(),
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        edge_count: package_info.edge_count,
+        slot_count: 1,
+        threshold: REAL_TRAFFIC_AGENT_CONTROL_THRESHOLD,
+        acceptance_policy: default_profile_acceptance_policy(),
+        accepted_route_keys: vec![
+            "role_binding_agent_control_seed0".to_owned(),
+            "agent_control_stop".to_owned(),
+            "agent_control_continue".to_owned(),
+            "agent_control_ack".to_owned(),
+        ],
+    };
+    registry
+        .profiles
+        .retain(|existing| existing.profile_id != profile.profile_id);
+    registry.profiles.push(profile);
+    registry.claim_boundary = "serving registry overlay for agent-control .nwrb profile; generated from base registry plus one control-plane role-binding package; no corpus, compiler, eval pack, or local-accept claim is loaded by this command".to_owned();
+    write_json_file(&registry_path, &registry)?;
+
+    let report = RoleBindingAgentControlProfileReport {
+        schema_version: "nando_role_binding_agent_control_profile_v1".to_owned(),
+        verdict: "AGENT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY".to_owned(),
+        base_registry_path: base_registry_path.display().to_string(),
+        package_path: package_path.display().to_string(),
+        registry_path: registry_path.display().to_string(),
+        profile_id: "role_binding_agent_control_seed0".to_owned(),
+        package_fingerprint64: package_info.fingerprint64,
+        package_bytes: package_bytes.len(),
+        edge_count: package_info.edge_count,
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        threshold: REAL_TRAFFIC_AGENT_CONTROL_THRESHOLD,
+        sample_margin,
+        sample_local_accept,
+        raw_text_written: false,
+        local_accepts_enabled_on_real_traffic: false,
+        market_claim_allowed: false,
+        claim_boundary: "Profile generator only. It creates a real .nwrb control-plane profile and registry overlay, validates one SDK sample, writes no raw prompt text, and enables no real-traffic local accepts. Verified CPU savings require a separate request-side payload trace, deterministic verifier, shadow pass, audit pass, provider cost, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Run route-candidates and route-gap catalog with the overlay registry, then build agent-control payload dry-run and output/tool verification before any safe-policy promotion.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-control-profile-v1: {}",
+        report.verdict
+    );
+    println!("  base_registry: {}", base_registry_path.display());
+    println!("  package: {}", package_path.display());
+    println!("  registry: {}", registry_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  edge_count: {}", report.edge_count);
+    println!("  sample_margin: {}", report.sample_margin);
+    println!("  market_claim_allowed: false");
+    Ok(())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_control_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut agent_control_candidate_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut intent_counts = BTreeMap::<String, usize>::new();
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_agent_control_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "no agent_control route candidate".to_owned();
+
+        if let Some(candidate) = route_catalog.classify_request_text(&row.text)
+            && candidate.route_key.contains("agent_control")
+        {
+            agent_control_candidate_events += 1;
+            let intent = agent_control_intent_kind(&row.text);
+            *intent_counts.entry(intent.to_owned()).or_insert(0) += 1;
+            if let Some(request) =
+                build_agent_control_dry_run_request(&event_id, &fingerprint, &candidate)
+            {
+                payload_built_events += 1;
+                let active_fringe_centers = request.active_fringe.len();
+                let slots = request.slots.len();
+                let positive_impulses = request
+                    .slots
+                    .iter()
+                    .map(|slot| slot.positive_impulses.len())
+                    .sum::<usize>();
+                let negative_impulses = request
+                    .slots
+                    .iter()
+                    .map(|slot| slot.negative_impulses.len())
+                    .sum::<usize>();
+                let scoreable = active_fringe_centers > 0 && slots > 0;
+                scoreable_payload_events += usize::from(scoreable);
+                active_fringe_centers_total += active_fringe_centers;
+                slots_total += slots;
+                positive_impulses_total += positive_impulses;
+                negative_impulses_total += negative_impulses;
+                nando_shadow_request = Some(request);
+                notes = format!(
+                    "request-side agent-control payload built; intent={intent}; verified accepts disabled"
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_local_agent_control_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side agent-control payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written".to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let report = RoleBindingAgentControlPayloadDryRunReport {
+        schema_version: "nando_role_binding_agent_control_payload_dry_run_v1".to_owned(),
+        verdict: if scoreable_payload_events > 0 {
+            "AGENT_CONTROL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT"
+        } else {
+            "AGENT_CONTROL_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        agent_control_candidate_events,
+        payload_built_events,
+        scoreable_payload_events,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        intent_counts: intent_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for agent-control rows from prompt text only, sets verified_safe_accept=None, and therefore cannot prove savings. Shadow local accepts from this trace are unverified until a deterministic control verifier attaches output/tool evidence.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on this trace, then attach deterministic control-plane verification before any safe-policy promotion.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-control-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  agent_control_candidate_events: {}",
+        report.agent_control_candidate_events
+    );
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  raw_text_written: false");
+    Err("agent-control payload dry-run is review-only; run verifier before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_edit_payload_readiness_v1<I>(
@@ -8561,6 +8876,56 @@ struct RouteGapFamilyMetadata {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentControlProfileReport {
+    schema_version: String,
+    verdict: String,
+    base_registry_path: String,
+    package_path: String,
+    registry_path: String,
+    profile_id: String,
+    package_fingerprint64: u64,
+    package_bytes: usize,
+    edge_count: usize,
+    runtime_bytes_estimate: usize,
+    threshold: i32,
+    sample_margin: i32,
+    sample_local_accept: bool,
+    raw_text_written: bool,
+    local_accepts_enabled_on_real_traffic: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentControlPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    agent_control_candidate_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    intent_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditPayloadReadinessReport {
     schema_version: String,
     verdict: String,
@@ -9277,6 +9642,7 @@ struct MixedMapTokens {
 
 #[derive(Clone, Debug)]
 struct CodexHistoryRouteCatalog {
+    control: Option<CodexHistoryRouteCandidate>,
     edit: Option<CodexHistoryRouteCandidate>,
     conditional: Option<CodexHistoryRouteCandidate>,
     mixed: Option<CodexHistoryRouteCandidate>,
@@ -9285,6 +9651,7 @@ struct CodexHistoryRouteCatalog {
 impl CodexHistoryRouteCatalog {
     fn from_registry(config: &RoleBindingProfileRegistryConfig) -> Result<Self, String> {
         let mut catalog = Self {
+            control: None,
             edit: None,
             conditional: None,
             mixed: None,
@@ -9299,7 +9666,13 @@ impl CodexHistoryRouteCatalog {
                 route_key,
                 profile_id: profile.profile_id.clone(),
             };
-            if profile.operator_classes.iter().any(|class| class == "edit") {
+            if profile
+                .operator_classes
+                .iter()
+                .any(|class| class == "agent_control" || class == "dialogue_state")
+            {
+                catalog.control.get_or_insert(candidate);
+            } else if profile.operator_classes.iter().any(|class| class == "edit") {
                 catalog.edit.get_or_insert(candidate);
             } else if profile
                 .operator_classes
@@ -9320,6 +9693,13 @@ impl CodexHistoryRouteCatalog {
 
     fn classify_request_text(&self, text: &str) -> Option<CodexHistoryRouteCandidate> {
         let lower = text.to_lowercase();
+        if self.control.is_some()
+            && (has_agent_control_stop_intent(&lower)
+                || has_agent_control_continue_intent(&lower)
+                || has_short_decision_ack_intent(&lower))
+        {
+            return self.control.clone();
+        }
         let has_direct_edit_intent = contains_any(
             &lower,
             &[
@@ -9396,27 +9776,78 @@ struct CodexHistoryRouteCandidate {
     profile_id: String,
 }
 
+fn has_agent_control_stop_intent(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &["стоп", "стой", "останов", "не делай", "не трогай", "пауза"],
+    )
+}
+
+fn has_agent_control_continue_intent(lower: &str) -> bool {
+    normalized_token_count(lower) <= 6
+        && contains_any(
+            lower,
+            &[
+                "делай",
+                "выполни",
+                "выполняй",
+                "продолжай",
+                "поехали",
+                "идем дальше",
+                "идём дальше",
+                "go ahead",
+            ],
+        )
+        && !contains_any(
+            lower,
+            &[
+                "код",
+                "файл",
+                "commit",
+                "коммит",
+                "patch",
+                "diff",
+                ".rs",
+                ".py",
+                ".md",
+                ".json",
+            ],
+        )
+}
+
+fn has_short_decision_ack_intent(lower: &str) -> bool {
+    normalized_token_count(lower) <= 3
+        && contains_any(
+            lower,
+            &[
+                "да",
+                "нет",
+                "ок",
+                "ага",
+                "понял",
+                "хорошо",
+                "ладно",
+                "можно",
+            ],
+        )
+}
+
+fn normalized_token_count(text: &str) -> usize {
+    text.split_whitespace()
+        .filter(|token| {
+            !token
+                .trim_matches(|ch: char| !ch.is_alphanumeric())
+                .is_empty()
+        })
+        .count()
+}
+
 fn route_gap_family_key(text: &str) -> &'static str {
     let lower = text.to_lowercase();
-    if contains_any(
-        &lower,
-        &["стоп", "стой", "останов", "не делай", "не трогай", "пауза"],
-    ) {
+    if has_agent_control_stop_intent(&lower) {
         return "agent_control_stop";
     }
-    if contains_any(
-        &lower,
-        &[
-            "делай",
-            "выполни",
-            "выполняй",
-            "продолжай",
-            "поехали",
-            "идем дальше",
-            "идём дальше",
-            "go ahead",
-        ],
-    ) {
+    if has_agent_control_continue_intent(&lower) {
         return "agent_continue_execute";
     }
     if contains_any(
@@ -9569,29 +10000,8 @@ fn route_gap_family_key(text: &str) -> &'static str {
     ) {
         return "social_affect";
     }
-    let token_count = lower
-        .split_whitespace()
-        .filter(|token| {
-            !token
-                .trim_matches(|ch: char| !ch.is_alphanumeric())
-                .is_empty()
-        })
-        .count();
-    if token_count <= 3
-        && contains_any(
-            &lower,
-            &[
-                "да",
-                "нет",
-                "ок",
-                "ага",
-                "понял",
-                "хорошо",
-                "ладно",
-                "можно",
-            ],
-        )
-    {
+    let token_count = normalized_token_count(&lower);
+    if has_short_decision_ack_intent(&lower) {
         return "short_decision_ack";
     }
     if token_count <= 12
@@ -9734,6 +10144,152 @@ fn route_gap_family_metadata(family_key: &str) -> RouteGapFamilyMetadata {
             claim_boundary: "Uncatalogued prompts require manual route discovery before any CPU accept path exists.",
         },
     }
+}
+
+fn build_agent_control_role_binding_package() -> Result<Vec<u8>, String> {
+    let config = WavePredictorHebbianConfig {
+        state_delta_binding_action_base: Some(REAL_TRAFFIC_AGENT_CONTROL_ACTION_BASE),
+        state_delta_binding_action_count: REAL_TRAFFIC_AGENT_CONTROL_ACTION_COUNT,
+        state_delta_binding_role_base: Some(REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE),
+        state_delta_binding_role_stride: REAL_TRAFFIC_AGENT_CONTROL_ROLE_STRIDE,
+        state_delta_binding_role_count: REAL_TRAFFIC_AGENT_CONTROL_ROLE_COUNT,
+        weight_limit: 1_024,
+        ..WavePredictorHebbianConfig::default()
+    };
+    let center_count = (REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE
+        + REAL_TRAFFIC_AGENT_CONTROL_ROLE_STRIDE * u32::from(REAL_TRAFFIC_AGENT_CONTROL_ROLE_COUNT))
+        as usize;
+    let mut field = WavePredictorHebbianField::new(center_count, config);
+    let lane = agent_control_intent_lane();
+    let active_fringe = agent_control_active_fringe(lane);
+    let changed = field.adjust_state_delta_role_binding(
+        lane,
+        1,
+        &active_fringe,
+        Some(REAL_TRAFFIC_AGENT_CONTROL_OUTPUT_SLOT),
+        16,
+    );
+    if changed == 0 {
+        return Err("agent control package builder produced no role-binding edge".to_owned());
+    }
+    field
+        .compile_flat_role_binding_table()
+        .to_bytes()
+        .map_err(|error| format!("failed to serialize agent control .nwrb package: {error:?}"))
+}
+
+fn agent_control_sample_decision(
+    sdk: &WavePredictorRoleBindingOffloadRuntime,
+) -> Result<(i32, bool), String> {
+    let target_lane = agent_control_intent_lane();
+    let wrong_lane = first_active_surface_lane("__agent_control_wrong__");
+    let active_fringe = agent_control_active_fringe(target_lane);
+    let task = WavePredictorRoleBindingEvalTask {
+        target_lane_id: target_lane,
+        target_signed_strength: 1,
+        wrong_lane_id: wrong_lane,
+        wrong_signed_strength: 1,
+        active_fringe: &active_fringe,
+        binding_output_slot: Some(REAL_TRAFFIC_AGENT_CONTROL_OUTPUT_SLOT),
+        expect_local_operator: true,
+    };
+    let decision = sdk.decide_task(&task);
+    Ok((
+        decision.margin,
+        decision.action == WavePredictorRoleBindingOffloadAction::LocalOperator,
+    ))
+}
+
+fn build_agent_control_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    candidate: &CodexHistoryRouteCandidate,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let target_lane = agent_control_intent_lane();
+    let wrong_lane = first_active_surface_lane("__agent_control_wrong__");
+    let active_fringe = agent_control_active_fringe(target_lane)
+        .into_iter()
+        .map(|active| RoleBindingProfileActiveCenterRow {
+            center_id: active.center_id,
+            strength: active.strength,
+        })
+        .collect::<Vec<_>>();
+    let slot = RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(REAL_TRAFFIC_AGENT_CONTROL_OUTPUT_SLOT),
+        positive_impulses: vec![RoleBindingProfileImpulseRow {
+            lane_id: target_lane,
+            signed_strength: 1,
+        }],
+        negative_impulses: vec![RoleBindingProfileImpulseRow {
+            lane_id: wrong_lane,
+            signed_strength: 1,
+        }],
+    };
+    if active_fringe.is_empty()
+        || slot.positive_impulses.is_empty()
+        || slot.negative_impulses.is_empty()
+    {
+        return None;
+    }
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(candidate.route_key.clone()),
+        profile_id: Some(candidate.profile_id.clone()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots: vec![slot],
+        // Dry-run pressure: the CPU path is expected to accept, but the trace
+        // remains unverified until a deterministic control verifier attaches
+        // output/tool evidence.
+        expect_local_operator: Some(true),
+    })
+}
+
+fn agent_control_intent_kind(text: &str) -> &'static str {
+    let lower = text.to_lowercase();
+    if has_agent_control_stop_intent(&lower) {
+        "stop"
+    } else if has_agent_control_continue_intent(&lower) {
+        "continue"
+    } else if has_short_decision_ack_intent(&lower) {
+        "short_ack"
+    } else {
+        "unknown_control"
+    }
+}
+
+fn agent_control_intent_lane() -> u16 {
+    first_active_surface_lane("__agent_control_intent__")
+}
+
+fn first_active_surface_lane(input: &str) -> u16 {
+    let wave = SurfaceWave4096::compile(input);
+    wave.lanes()
+        .iter()
+        .enumerate()
+        .filter_map(|(lane, value)| {
+            let magnitude = value.abs();
+            (magnitude > 0).then_some((magnitude, lane as u16))
+        })
+        .max_by(|left, right| left.0.cmp(&right.0).then_with(|| right.1.cmp(&left.1)))
+        .map(|(_, lane)| lane)
+        .unwrap_or(0)
+}
+
+fn agent_control_active_fringe(lane: u16) -> Vec<WavePredictorActiveCenter> {
+    vec![
+        WavePredictorActiveCenter {
+            center_id: REAL_TRAFFIC_AGENT_CONTROL_ACTION_CENTER,
+            strength: 8,
+        },
+        WavePredictorActiveCenter {
+            center_id: REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE
+                + u32::from(REAL_TRAFFIC_AGENT_CONTROL_INTENT_SLOT)
+                    * REAL_TRAFFIC_AGENT_CONTROL_ROLE_STRIDE
+                + u32::from(lane),
+            strength: 8,
+        },
+    ]
 }
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {

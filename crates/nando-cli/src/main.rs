@@ -87,6 +87,8 @@ use role_binding_runtime_cmd::{
     run_role_binding_profile_registry_from_release_v1, run_role_binding_profile_replay_suite_v1,
     run_role_binding_profile_runtime_smoke_v1, run_role_binding_profile_serve_v1,
     run_role_binding_profile_worker_replay_v1, run_role_binding_profile_worker_scaling_v1,
+    run_role_binding_real_traffic_agent_control_payload_dry_run_v1,
+    run_role_binding_real_traffic_agent_control_profile_v1,
     run_role_binding_real_traffic_codex_history_ingest_v1,
     run_role_binding_real_traffic_codex_history_route_candidates_v1,
     run_role_binding_real_traffic_conditional_local_accept_calibration_v1,
@@ -616,6 +618,14 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-route-gap-catalog-v1") => exit_for_result(
             run_role_binding_real_traffic_route_gap_catalog_v1(args),
             "try: nando-cli role-binding-real-traffic-route-gap-catalog-v1 [history-jsonl] [registry-config-json] [route-gap-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-agent-control-profile-v1") => exit_for_result(
+            run_role_binding_real_traffic_agent_control_profile_v1(args),
+            "try: nando-cli role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]",
+        ),
+        Some("role-binding-real-traffic-agent-control-payload-dry-run-v1") => exit_for_result(
+            run_role_binding_real_traffic_agent_control_payload_dry_run_v1(args),
+            "try: nando-cli role-binding-real-traffic-agent-control-payload-dry-run-v1 [history-jsonl] [agent-control-registry-json] [trace-jsonl] [dry-run-report-json] [max-events]",
         ),
         Some("role-binding-real-traffic-edit-payload-readiness-v1") => exit_for_result(
             run_role_binding_real_traffic_edit_payload_readiness_v1(args),

@@ -1,5 +1,150 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Agent-Control Profile + Payload Dry-Run
+
+Verdicts:
+
+```text
+AGENT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY
+AGENT_CONTROL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-agent-control-profile-v1
+  role-binding-real-traffic-agent-control-payload-dry-run-v1
+
+The profile command builds a serving-only `.nwrb` control-plane overlay profile
+for short agent-control/dialogue-state intents. The dry-run command builds
+scoreable `active_fringe` + slot payloads from request text only. It writes no
+raw prompt text, uses no response text, no target labels, no proof labels, and
+does not enable verified local accepts.
+```
+
+Profile artifact:
+
+```text
+profile_id: role_binding_agent_control_seed0
+package: target/nando-wave/real-traffic-shadow/agent-control-seed0.nwrb
+registry: target/nando-wave/real-traffic-shadow/profile-registry-agent-control-v1.json
+edge_count: 1
+sample_margin: 65536
+market_claim_allowed: false
+```
+
+Fresh route funnel over the same 1000 non-synthetic Codex calls with the
+agent-control overlay:
+
+```text
+route_candidates: 408 / 1000
+no_candidate_events: 592 / 1000
+
+role_binding_agent_control_seed0: 143 candidates
+role_binding_conditional_branch_seed0: 150 candidates
+role_binding_edit_marker_length_seed0: 78 candidates
+role_binding_mixed_map_seed0: 37 candidates
+```
+
+Remaining no-candidate head after the overlay:
+
+```text
+answer_or_explain: 215
+project_context_dialogue: 211
+planning_next_step: 54
+read_inspect: 27
+retrieval_lookup: 25
+```
+
+Agent-control payload dry-run:
+
+```text
+agent_control_candidate_events: 143
+payload_built_events: 143
+scoreable_payload_events: 143
+
+intent_counts:
+  stop: 54
+  short_ack: 55
+  continue: 34
+
+active_fringe_centers_total: 286
+slots_total: 143
+positive_impulses_total: 143
+negative_impulses_total: 143
+raw_text_written: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow + audit:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 53
+nando_shadow_accepts: 143
+verified_safe_accepts: 0
+unverified_shadow_accepts: 143
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 10145
+
+scoreable_candidate_calls: 143
+verification_hook_ready_events: 0
+candidates_missing_output_evidence: 143
+candidates_missing_explicit_verification: 143
+provider_cost_events: 0
+verified_cpu_accept_eligible_events: 0
+```
+
+Claim boundary:
+
+```text
+This is route/payload pressure, not verified savings.
+The 143 local accepts are deliberately unverified shadow accepts.
+No market claim is allowed until a deterministic control verifier attaches
+actual agent decision/tool/output evidence and the shadow/audit path reports:
+  verified_safe_accepts > 0
+  unverified_shadow_accepts = 0 for accepted rows
+  false_accepts = 0
+  incremental_reduction_vs_exact_cache_milli > 0
+```
+
+Structural gate:
+
+```text
+NANDA agent-control claim-boundary gate: PASS
+checked:
+  profile ready is review-only
+  route candidate zone is 408/1000
+  agent-control route candidates are 143/1000
+  payload shadow accepts are unverified_shadow_accepts, not verified savings
+  verified_safe_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  market_claim_allowed: false
+
+Note:
+  the gate packet is intentionally narrow. It proves the claim boundary is
+  structurally coherent; it does not prove verified savings.
+```
+
+Diagnostic read:
+
+```text
+The route candidate zone moved from 288/1000 to 408/1000 real Codex calls.
+That is useful coverage growth, but verified CPU routability did not increase
+yet because the control route has no output/tool evidence verifier.
+
+The next real engineering debt is not another classifier tweak. It is a
+deterministic agent-control verifier that can prove stop/continue/ack outcomes
+from actual agent state, tool calls, or command execution traces without
+reading target/proof labels or inventing response evidence.
+```
+
 ## 2026-07-03 - Executor Integration: Real-Traffic Route-Gap Catalog
 
 Verdict:
