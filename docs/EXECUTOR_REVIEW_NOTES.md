@@ -1,5 +1,91 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Edit Local Accept Calibration
+
+Verdict:
+
+```text
+EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-edit-local-accept-calibration-v1.
+
+The command reads:
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json
+  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl
+
+and writes:
+  target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json
+```
+
+Calibration population:
+
+```text
+hook_ready_rows: 17
+label_true_rows: 3
+label_false_rows: 14
+safe_policy_found: false
+best_safe_true_accepts: 0
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Policy sweep:
+
+```text
+current_strict_all_slots:
+  accepts: 0
+  true_accepts: 0
+  false_accepts: 0
+  missed_true: 3
+
+energy_only_no_slot_order:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+marker_slot_only_ignore_end_slot:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+strict_slots_but_ignore_zero_end_slot:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+best_marker_slot_margin_threshold:
+  accepts: 0
+  true_accepts: 0
+  false_accepts: 0
+
+best_energy_margin_threshold:
+  accepts: 0
+  true_accepts: 0
+  false_accepts: 0
+```
+
+Diagnostic read:
+
+```text
+The end slot explains the current 0 accepts:
+  marker_slot_margin > 0 for all 17 hook-ready rows;
+  end_slot_margin = 0 for all 17 hook-ready rows.
+
+But dropping the end slot would be unsafe:
+  it would accept all 17 rows;
+  only 3 are deterministic-verifier true;
+  14 would become false accepts.
+
+Therefore the next step is not threshold/readout tuning. The current edit
+payload geometry lacks a request-side admission signal that separates
+verifier-true rows from verifier-false rows. Build a request-side admission
+gate or improve edit payload features before enabling local accepts.
+```
+
 ## 2026-07-03 - Executor Integration: Edit Output Evidence Join
 
 Verdict:
@@ -74,7 +160,7 @@ role_binding_edit_marker_length_seed0:
   scoreable_payload_events: 23
   verification_hook_ready_events: 17
   stage: verification_hook_ready_waiting_local_accept
-  next_action: tune score/readout threshold only after hook-backed rows prove safety
+  next_action: run local-accept calibration; if no safe policy exists, improve request-side admission or payload features
 
 verified_cpu_routability_milli: 0
 verified_gap_to_80_calls: 800

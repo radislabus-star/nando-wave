@@ -25,6 +25,7 @@ New commands:
   role-binding-real-traffic-edit-payload-readiness-v1
   role-binding-real-traffic-edit-payload-dry-run-v1
   role-binding-real-traffic-edit-output-evidence-v1
+  role-binding-real-traffic-edit-local-accept-calibration-v1
   role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-feedback-loop-v1
   role-binding-real-traffic-shadow-smoke-v1
@@ -397,6 +398,53 @@ Updated interpretation: the first edit route has moved past the blanket
 the current profile runtime accepts 0/17 hook-ready real edit rows and therefore
 still proves no real savings.
 
+Edit local-accept calibration:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-edit-local-accept-calibration-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json
+result:
+  verdict: EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+  hook_ready_rows: 17
+  label_true_rows: 3
+  label_false_rows: 14
+  safe_policy_found: false
+  best_safe_true_accepts: 0
+```
+
+Policy sweep:
+
+```text
+current_strict_all_slots:
+  accepts: 0
+  true_accepts: 0
+  false_accepts: 0
+
+energy_only_no_slot_order:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+marker_slot_only_ignore_end_slot:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+best_marker_slot_margin_threshold:
+  accepts: 0
+  true_accepts: 0
+  false_accepts: 0
+
+best_energy_margin_threshold:
+  accepts: 0
+  true_accepts: 0
+  false_accepts: 0
+```
+
+Updated interpretation: tuning readout cannot safely unlock this edit route.
+The end slot causes current fallback, but ignoring it would accept 14
+verifier-false rows. The next safe step is request-side admission / richer edit
+payload features, not threshold lowering.
+
 CPU route feedback-loop report:
 
 ```text
@@ -428,7 +476,7 @@ role_binding_edit_marker_length_seed0:
   scoreable_payload_events: 23
   verification_hook_ready_events: 17
   stage: verification_hook_ready_waiting_local_accept
-  next_action: Tune score/readout threshold only after hook-backed rows prove safety.
+  next_action: Run local-accept calibration; if no safe policy exists, improve request-side admission or payload features.
 
 role_binding_conditional_branch_seed0:
   candidate_events: 92

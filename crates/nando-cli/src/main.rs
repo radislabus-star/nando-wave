@@ -90,6 +90,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_codex_history_ingest_v1,
     run_role_binding_real_traffic_codex_history_route_candidates_v1,
     run_role_binding_real_traffic_cpu_route_forecast_v1,
+    run_role_binding_real_traffic_edit_local_accept_calibration_v1,
     run_role_binding_real_traffic_edit_output_evidence_v1,
     run_role_binding_real_traffic_edit_payload_dry_run_v1,
     run_role_binding_real_traffic_edit_payload_readiness_v1,
@@ -611,6 +612,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-edit-output-evidence-v1") => exit_for_result(
             run_role_binding_real_traffic_edit_output_evidence_v1(args),
             "try: nando-cli role-binding-real-traffic-edit-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]",
+        ),
+        Some("role-binding-real-traffic-edit-local-accept-calibration-v1") => exit_for_result(
+            run_role_binding_real_traffic_edit_local_accept_calibration_v1(args),
+            "try: nando-cli role-binding-real-traffic-edit-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]",
         ),
         Some("role-binding-real-traffic-verification-hook-audit-v1") => exit_for_result(
             run_role_binding_real_traffic_verification_hook_audit_v1(args),

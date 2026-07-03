@@ -63,6 +63,8 @@ const DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl";
 const DEFAULT_EDIT_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json";
+const DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
@@ -3744,6 +3746,154 @@ where
     Err("edit output evidence is review-only; run shadow/audit before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_edit_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let marker_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let end_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin,
+            end_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_strict_all_slots", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_only_policy =
+        evaluate_edit_calibration_policy("energy_only_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let marker_slot_policy =
+        evaluate_edit_calibration_policy("marker_slot_only_ignore_end_slot", &scored_rows, |row| {
+            row.marker_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let strict_without_zero_end_policy = evaluate_edit_calibration_policy(
+        "strict_slots_but_ignore_zero_end_slot",
+        &scored_rows,
+        |row| row.marker_slot_margin > 0 && row.end_slot_margin >= 0 && row.energy_margin >= 1,
+    );
+    let best_marker_threshold_policy =
+        best_single_threshold_policy("best_marker_slot_margin_threshold", &scored_rows, |row| {
+            row.marker_slot_margin
+        });
+    let best_energy_threshold_policy =
+        best_single_threshold_policy("best_energy_margin_threshold", &scored_rows, |row| {
+            row.energy_margin
+        });
+    let policies = vec![
+        current_policy,
+        energy_only_policy,
+        marker_slot_policy,
+        strict_without_zero_end_policy,
+        best_marker_threshold_policy,
+        best_energy_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_edit_local_accept_calibration_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
+        } else {
+            "EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Calibration only. It evaluates readout/admission policies against evidence-backed real Codex labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Promote the safe policy only behind a separate non-synthetic shadow gate with false_accepts=0, provider cost, and rollback.".to_owned()
+        } else {
+            "Do not relax score/readout thresholds. The current edit payload geometry does not separate verifier-true from verifier-false rows; build a request-side admission gate or improve payload features before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-edit-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("edit local accept calibration is review-only".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_verification_hook_audit_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -5099,6 +5249,41 @@ fn score_role_binding_profile_slot(
     (positive_score, negative_score)
 }
 
+fn score_role_binding_profile_request_detailed(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    request: &RoleBindingProfileScoreRequest,
+) -> Option<RoleBindingProfileDetailedScore> {
+    let profile = registry.select_profile(request)?;
+    if request.active_fringe.is_empty() || request.slots.is_empty() {
+        return None;
+    }
+    let prepared = profile.runtime.prepare_active_fringe_from_iter(
+        request
+            .active_fringe
+            .iter()
+            .map(|active| (active.center_id, active.strength)),
+    );
+    let mut energy_margin = 0i32;
+    let mut min_slot_margin = i32::MAX;
+    let mut slot_margins = Vec::with_capacity(request.slots.len());
+    for slot in &request.slots {
+        let (positive_score, negative_score) =
+            score_role_binding_profile_slot(&profile.runtime, &prepared, slot);
+        let slot_margin = positive_score - negative_score;
+        energy_margin += slot_margin;
+        min_slot_margin = min_slot_margin.min(slot_margin);
+        slot_margins.push(slot_margin);
+    }
+    if min_slot_margin == i32::MAX {
+        return None;
+    }
+    Some(RoleBindingProfileDetailedScore {
+        energy_margin,
+        min_slot_margin,
+        slot_margins,
+    })
+}
+
 fn replay_role_binding_profile_requests(
     registry: &RoleBindingProfileRuntimeRegistry,
     replay: &RoleBindingProfileReplayRequest,
@@ -5996,6 +6181,60 @@ struct RoleBindingEditOutputEvidenceReport {
     market_claim_allowed: bool,
     claim_boundary: String,
     next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditLocalAcceptCalibrationReport {
+    schema_version: String,
+    verdict: String,
+    registry_config_path: String,
+    trace_path: String,
+    hook_ready_rows: usize,
+    scored_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    no_score_rows: usize,
+    safe_policy_found: bool,
+    best_safe_true_accepts: usize,
+    policies: Vec<RoleBindingEditLocalAcceptPolicyReport>,
+    rows: Vec<RoleBindingEditLocalAcceptCalibrationRow>,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditLocalAcceptPolicyReport {
+    policy_name: String,
+    accepts: usize,
+    true_accepts: usize,
+    false_accepts: usize,
+    missed_true: usize,
+    safe: bool,
+    threshold: Option<i32>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditLocalAcceptCalibrationRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    response_fingerprint: Option<String>,
+    verifier_label: bool,
+    production_accepted: bool,
+    production_fallback_reason: Option<String>,
+    energy_margin: i32,
+    min_slot_margin: i32,
+    marker_slot_margin: i32,
+    end_slot_margin: i32,
+    slot_count: usize,
+}
+
+#[derive(Clone, Debug)]
+struct RoleBindingProfileDetailedScore {
+    energy_margin: i32,
+    min_slot_margin: i32,
+    slot_margins: Vec<i32>,
 }
 
 #[derive(Clone, Debug)]
@@ -7902,6 +8141,76 @@ fn projected_accepts(non_exact_candidate_calls: usize, accept_rate_milli: usize)
         .unwrap_or(0)
 }
 
+fn evaluate_edit_calibration_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingEditLocalAcceptCalibrationRow],
+    accepts: F,
+) -> RoleBindingEditLocalAcceptPolicyReport
+where
+    F: Fn(&RoleBindingEditLocalAcceptCalibrationRow) -> bool,
+{
+    let mut accepted = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut missed_true = 0usize;
+    for row in rows {
+        let accept = accepts(row);
+        accepted += usize::from(accept);
+        true_accepts += usize::from(accept && row.verifier_label);
+        false_accepts += usize::from(accept && !row.verifier_label);
+        missed_true += usize::from(!accept && row.verifier_label);
+    }
+    RoleBindingEditLocalAcceptPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: accepted,
+        true_accepts,
+        false_accepts,
+        missed_true,
+        safe: false_accepts == 0 && true_accepts > 0,
+        threshold: None,
+    }
+}
+
+fn best_single_threshold_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingEditLocalAcceptCalibrationRow],
+    value: F,
+) -> RoleBindingEditLocalAcceptPolicyReport
+where
+    F: Fn(&RoleBindingEditLocalAcceptCalibrationRow) -> i32,
+{
+    let mut thresholds = rows.iter().map(&value).collect::<Vec<_>>();
+    thresholds.sort_unstable();
+    thresholds.dedup();
+    thresholds.push(i32::MAX);
+    let mut best: Option<RoleBindingEditLocalAcceptPolicyReport> = None;
+    for threshold in thresholds {
+        let mut policy =
+            evaluate_edit_calibration_policy(policy_name, rows, |row| value(row) >= threshold);
+        policy.threshold = Some(threshold);
+        let replace = best.as_ref().is_none_or(|current| {
+            (policy.false_accepts == 0 && current.false_accepts > 0)
+                || (policy.false_accepts == current.false_accepts
+                    && policy.true_accepts > current.true_accepts)
+                || (policy.false_accepts == current.false_accepts
+                    && policy.true_accepts == current.true_accepts
+                    && policy.accepts < current.accepts)
+        });
+        if replace {
+            best = Some(policy);
+        }
+    }
+    best.unwrap_or_else(|| RoleBindingEditLocalAcceptPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: 0,
+        true_accepts: 0,
+        false_accepts: 0,
+        missed_true: 0,
+        safe: false,
+        threshold: None,
+    })
+}
+
 fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {
     if route_key.contains("edit_marker_length") {
         (
@@ -7954,7 +8263,7 @@ fn feedback_route_next_action(stage: &str) -> String {
             "Run non-synthetic soak with false_accepts=0 before any market claim.".to_owned()
         }
         "verification_hook_ready_waiting_local_accept" => {
-            "Tune score/readout threshold only after hook-backed rows prove safety.".to_owned()
+            "Run local-accept calibration; if no safe policy exists, improve request-side admission or payload features.".to_owned()
         }
         "scoreable_payload_missing_verification_hook" => {
             "Attach response/tool-call evidence and deterministic output verification.".to_owned()
