@@ -77,6 +77,7 @@ const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.trace.jsonl";
 const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json";
+const DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT: &str = "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
@@ -4482,6 +4483,176 @@ where
         report.tool_call_fingerprint_events
     );
     Err("planning artifact-progress verification is review-only; run shadow/audit".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_planning_next_step_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_TRACE_JSONL));
+    let report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT)
+    });
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_PLANNING_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let progress_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let boundary_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin: progress_slot_margin,
+            end_slot_margin: boundary_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_disabled_profile_policy", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_positive_policy =
+        evaluate_edit_calibration_policy("energy_positive_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let strict_positive_policy = evaluate_edit_calibration_policy(
+        "strict_positive_slots_and_energy_positive",
+        &scored_rows,
+        |row| row.min_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let progress_slot_policy =
+        evaluate_edit_calibration_policy("progress_slot_positive_only", &scored_rows, |row| {
+            row.marker_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let boundary_slot_policy =
+        evaluate_edit_calibration_policy("boundary_slot_positive_only", &scored_rows, |row| {
+            row.end_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let best_energy_threshold_policy = best_single_threshold_policy(
+        "best_energy_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.energy_margin,
+    );
+    let best_min_slot_threshold_policy = best_single_threshold_policy(
+        "best_min_slot_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.min_slot_margin,
+    );
+    let best_progress_slot_threshold_policy = best_single_threshold_policy(
+        "best_progress_slot_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.marker_slot_margin,
+    );
+    let best_boundary_slot_threshold_policy = best_single_threshold_policy(
+        "best_boundary_slot_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.end_slot_margin,
+    );
+    let policies = vec![
+        current_policy,
+        energy_positive_policy,
+        strict_positive_policy,
+        progress_slot_policy,
+        boundary_slot_policy,
+        best_energy_threshold_policy,
+        best_min_slot_threshold_policy,
+        best_progress_slot_threshold_policy,
+        best_boundary_slot_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_planning_next_step_local_accept_calibration_v1"
+            .to_owned(),
+        verdict: if safe_policy_found {
+            "PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
+        } else {
+            "PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_REQUEST_SIDE_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Planning-next-step calibration only. It evaluates request-side score/readout policies against tool-backed artifact-progress labels, writes only fingerprints and margins, enables no local accepts, and cannot be used as a market savings claim. Tool-call fingerprints are verifier evidence, not runtime admission features.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Do not promote from this singleton calibration alone. Require more non-synthetic true labels, provider cost, shadow/audit with false_accepts=0, and a separate promoted registry/trace before counting CPU savings.".to_owned()
+        } else {
+            "Do not lower the planning threshold. Current planning score geometry does not separate tool-backed true progress from false/unverified planning rows; improve request-side admission or payload features before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-planning-next-step-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("planning-next-step local accept calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_cpu_operator_catalog_v1<I>(

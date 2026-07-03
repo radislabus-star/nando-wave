@@ -1,5 +1,134 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Planning Next-Step Local Accept Calibration V1
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-planning-next-step-local-accept-calibration-v1
+
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The command evaluates request-side score/readout policies for the
+planning_next_step profile against artifact-progress labels. It writes only
+fingerprints and margins, does not use target/proof labels, does not use raw
+prompt/response/tool output as runtime features, and does not enable local
+accepts.
+```
+
+Artifacts:
+
+```text
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v1.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.trace.jsonl
+
+calibration_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json
+
+hook_ready_rows: 7
+scored_rows: 7
+label_true_rows: 1
+label_false_rows: 6
+no_score_rows: 0
+safe_policy_found: true
+best_safe_true_accepts: 1
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Best request-side policy candidate:
+
+```text
+policy_name:
+  best_boundary_slot_margin_threshold_request_side_only
+
+threshold:
+  884736
+
+accepts:
+  1
+
+true_accepts:
+  1
+
+false_accepts:
+  0
+```
+
+Interpretation:
+
+```text
+This is a useful calibration smoke, not CPU savings.
+
+The planning profile can separate the single tool-backed true row from the six
+artifact-verified false rows by the boundary-slot margin in the current 7-label
+sample. That is enough to identify a possible request-side policy candidate.
+
+It is not enough to promote local accept:
+  true support is only one row;
+  provider_cost_microusd is still missing;
+  the profile registry still has threshold=i32::MAX;
+  shadow accepts remain zero;
+  verification-hook audit still reports verified_cpu_accept_eligible_events=0.
+```
+
+Claim boundary:
+
+```text
+Do not count this as market savings or CPU Routability progress. It is
+calibration fuel only. A promoted planning trace would require more non-
+synthetic true labels, provider cost, a separate registry/trace promotion,
+shadow/audit with false_accepts=0 and unverified_shadow_accepts=0, and rollback
+documentation.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-local-accept-calibration-v1
+packet:
+  docs/structural_gates/planning-next-step-local-accept-calibration-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.nanda.json
+
+Scope:
+  The packet checks that a singleton safe-policy candidate is not promoted into
+  CPU savings.
+
+  NANDA reports no conflicts, but keeps VETO because candidate support is weak.
+  Treat this as proof-shape debt and promotion guard, not as a runtime failure
+  and not as structural PASS.
+```
+
+Next debt:
+
+```text
+planning_next_step_safe_policy_promote_guarded_v1:
+  do not implement broad promotion from this singleton support alone. First
+  collect more tool-backed planning true rows or add a minimum-support guard
+  that refuses promotion below a configured true-label floor.
+
+feedback loop integration:
+  planning_next_step currently lives in route-gap artifacts and is not counted
+  by the base cpu-route-forecast route list. Add explicit planning route-gap
+  rows to the CPU feedback loop before using it as the global CPU Routability
+  dashboard.
+```
+
 ## 2026-07-04 - Executor Integration: Planning Next-Step Artifact Progress V1
 
 Verdict:

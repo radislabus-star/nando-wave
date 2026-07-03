@@ -310,6 +310,12 @@ pub(crate) fn print_help() {
         "            Attach tool-call fingerprints for planning progress; true labels require successful project artifact progress"
     );
     println!(
+        "  role-binding-real-traffic-planning-next-step-local-accept-calibration-v1 [registry-config-json] [artifact-progress-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate request-side planning accept policies against artifact-progress labels without enabling local accepts"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
