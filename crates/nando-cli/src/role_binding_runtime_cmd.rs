@@ -78,6 +78,7 @@ const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_TRACE_JSONL: &str =
 const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json";
+const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT: &str = "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
@@ -171,6 +172,7 @@ const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT: usize = 3;
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -9026,6 +9028,37 @@ where
     } else {
         None
     };
+    let planning_next_step_dry_run_report_path =
+        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_PAYLOAD_DRY_RUN_REPORT);
+    let planning_next_step_dry_run = if planning_next_step_dry_run_report_path.exists() {
+        Some(read_json_file::<
+            RoleBindingPlanningNextStepPayloadDryRunReport,
+        >(&planning_next_step_dry_run_report_path)?)
+    } else {
+        None
+    };
+    let planning_next_step_verification_audit_report_path =
+        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT);
+    let planning_next_step_verification_audit =
+        if planning_next_step_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &planning_next_step_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
+    let planning_next_step_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let planning_next_step_local_accept_calibration =
+        if planning_next_step_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &planning_next_step_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
     let mut verification_by_route = verification_audit
         .routes
         .iter()
@@ -9066,6 +9099,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(planning_next_step_audit) = &planning_next_step_verification_audit {
+        for row in &planning_next_step_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     let effective_mixed_verification_audit = mixed_safe_policy_verification_audit
         .as_ref()
         .or(mixed_verification_audit.as_ref());
@@ -9078,6 +9116,8 @@ where
     let effective_agent_control_verification_audit = agent_control_safe_policy_verification_audit
         .as_ref()
         .or(agent_control_verification_audit.as_ref());
+    let effective_planning_next_step_verification_audit =
+        planning_next_step_verification_audit.as_ref();
 
     let target_routability_milli = 800usize;
     let target_verified_cpu_calls =
@@ -9092,6 +9132,9 @@ where
             .unwrap_or_default()
         + effective_agent_control_verification_audit
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + effective_planning_next_step_verification_audit
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
         .verified_cpu_accept_eligible_events
@@ -9103,9 +9146,17 @@ where
             .unwrap_or_default()
         + effective_agent_control_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + effective_planning_next_step_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
+    let planning_next_step_candidate_calls = effective_planning_next_step_verification_audit
+        .map(|report| report.operator_candidate_calls)
+        .unwrap_or_default();
+    let operator_candidate_calls =
+        forecast.operator_candidate_calls + planning_next_step_candidate_calls;
     let routing_gap_to_80_calls =
-        target_verified_cpu_calls.saturating_sub(forecast.operator_candidate_calls);
+        target_verified_cpu_calls.saturating_sub(operator_candidate_calls);
     let verified_gap_to_80_calls =
         target_verified_cpu_calls.saturating_sub(verified_cpu_accept_eligible_events);
     let mut route_rows = Vec::new();
@@ -9147,6 +9198,9 @@ where
                 .map(|report| report.best_safe_true_accepts)
                 .unwrap_or_default()
         };
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
         } else if is_conditional_route {
@@ -9225,6 +9279,7 @@ where
             false_accepts,
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
+            local_accept_support_qualified,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -9242,10 +9297,111 @@ where
             verification_hook_ready_events,
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
             false_accepts,
             candidate_share_milli_of_all_llm_calls: route.candidate_share_milli_of_all_llm_calls,
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
+    if planning_next_step_dry_run.is_some()
+        || planning_next_step_verification_audit.is_some()
+        || planning_next_step_local_accept_calibration.is_some()
+    {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_PLANNING_ROUTE_KEY)
+            .copied();
+        let payload_ready_events = planning_next_step_dry_run
+            .as_ref()
+            .map(|report| report.payload_ready_events)
+            .unwrap_or_default();
+        let payload_built_events = planning_next_step_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                planning_next_step_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
+            .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let candidate_events = verification
+            .map(|row| row.candidate_calls)
+            .or_else(|| {
+                planning_next_step_dry_run
+                    .as_ref()
+                    .map(|report| report.planning_next_step_candidate_events)
+            })
+            .unwrap_or_default();
+        let local_accept_calibration_ran = planning_next_step_local_accept_calibration.is_some();
+        let local_accept_safe_policy_found = planning_next_step_local_accept_calibration
+            .as_ref()
+            .map(|report| report.safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = planning_next_step_local_accept_calibration
+            .as_ref()
+            .map(|report| report.best_safe_true_accepts)
+            .unwrap_or_default();
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
+        });
+        let next_action = feedback_route_next_action(&stage);
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_PLANNING_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_PLANNING_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "planning_next_step_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
+            local_accept_best_safe_true_accepts,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
             scoreable_share_milli_of_all_llm_calls: ratio_milli(
                 scoreable_payload_events,
                 forecast.total_llm_calls,
@@ -9272,6 +9428,21 @@ where
         edit_safe_policy_verification_audit_report_path: edit_safe_policy_verification_audit
             .as_ref()
             .map(|_| edit_safe_policy_audit_report_path.display().to_string()),
+        planning_next_step_dry_run_report_path: planning_next_step_dry_run
+            .as_ref()
+            .map(|_| planning_next_step_dry_run_report_path.display().to_string()),
+        planning_next_step_local_accept_calibration_report_path:
+            planning_next_step_local_accept_calibration.as_ref().map(|_| {
+                planning_next_step_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
+        planning_next_step_verification_audit_report_path:
+            planning_next_step_verification_audit.as_ref().map(|_| {
+                planning_next_step_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         agent_control_dry_run_report_path: agent_control_dry_run
             .as_ref()
             .map(|_| agent_control_dry_run_report_path.display().to_string()),
@@ -9330,8 +9501,8 @@ where
         total_llm_calls: forecast.total_llm_calls,
         exact_cache_hits: forecast.exact_cache_hits,
         exact_cache_coverage_milli: forecast.exact_cache_coverage_milli,
-        operator_candidate_calls: forecast.operator_candidate_calls,
-        operator_candidate_coverage_milli: forecast.operator_candidate_coverage_milli,
+        operator_candidate_calls,
+        operator_candidate_coverage_milli: ratio_milli(operator_candidate_calls, forecast.total_llm_calls),
         scoreable_candidate_calls,
         scoreable_candidate_coverage_milli: ratio_milli(
             scoreable_candidate_calls,
@@ -9348,7 +9519,9 @@ where
         target_verified_cpu_calls,
         routing_gap_to_80_calls,
         verified_gap_to_80_calls,
-        no_candidate_calls: forecast.no_candidate_calls,
+        no_candidate_calls: forecast
+            .no_candidate_calls
+            .saturating_sub(planning_next_step_candidate_calls),
         market_claim_allowed: false,
         routes: route_rows,
         claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
@@ -9369,6 +9542,15 @@ where
     }
     if let Some(path) = &report.edit_safe_policy_verification_audit_report_path {
         println!("  edit_safe_policy_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.planning_next_step_dry_run_report_path {
+        println!("  planning_next_step_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.planning_next_step_local_accept_calibration_report_path {
+        println!("  planning_next_step_local_accept_calibration_report: {path}");
+    }
+    if let Some(path) = &report.planning_next_step_verification_audit_report_path {
+        println!("  planning_next_step_verification_audit_report: {path}");
     }
     if let Some(path) = &report.conditional_dry_run_report_path {
         println!("  conditional_dry_run_report: {path}");
@@ -12367,6 +12549,9 @@ struct RoleBindingFeedbackLoopReport {
     edit_dry_run_report_path: String,
     edit_local_accept_calibration_report_path: Option<String>,
     edit_safe_policy_verification_audit_report_path: Option<String>,
+    planning_next_step_dry_run_report_path: Option<String>,
+    planning_next_step_local_accept_calibration_report_path: Option<String>,
+    planning_next_step_verification_audit_report_path: Option<String>,
     agent_control_dry_run_report_path: Option<String>,
     agent_control_verification_audit_report_path: Option<String>,
     agent_control_safe_policy_verification_audit_report_path: Option<String>,
@@ -12418,6 +12603,8 @@ struct RoleBindingFeedbackLoopRouteRow {
     verification_hook_ready_events: usize,
     local_accept_calibration_ran: bool,
     local_accept_safe_policy_found: bool,
+    local_accept_minimum_true_support: usize,
+    local_accept_support_qualified: bool,
     local_accept_best_safe_true_accepts: usize,
     verified_cpu_accept_eligible_events: usize,
     false_accepts: usize,
@@ -16029,6 +16216,7 @@ struct FeedbackRouteStageInputs {
     false_accepts: usize,
     local_accept_calibration_ran: bool,
     local_accept_safe_policy_found: bool,
+    local_accept_support_qualified: bool,
 }
 
 fn feedback_route_stage(inputs: FeedbackRouteStageInputs) -> String {
@@ -16036,6 +16224,8 @@ fn feedback_route_stage(inputs: FeedbackRouteStageInputs) -> String {
         "false_accepts_block_local_policy".to_owned()
     } else if inputs.verified_cpu_accept_eligible_events > 0 {
         "verified_cpu_accept_eligible".to_owned()
+    } else if inputs.local_accept_safe_policy_found && !inputs.local_accept_support_qualified {
+        "local_accept_calibration_support_insufficient".to_owned()
     } else if inputs.local_accept_safe_policy_found {
         "local_accept_calibration_safe_policy_candidate".to_owned()
     } else if inputs.local_accept_calibration_ran {
@@ -16067,6 +16257,9 @@ fn feedback_route_next_action(stage: &str) -> String {
         }
         "local_accept_calibration_safe_policy_candidate" => {
             "Promote the safe policy only through a separate shadow trace rewrite with provider cost, rollback, and false_accepts=0.".to_owned()
+        }
+        "local_accept_calibration_support_insufficient" => {
+            "Collect more verifier-true rows or raise admission quality before promotion; singleton safe policies stay review-only.".to_owned()
         }
         "local_accept_calibration_failed" => {
             "Improve request-side admission or payload geometry before enabling local accepts.".to_owned()

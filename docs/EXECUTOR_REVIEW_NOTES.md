@@ -1,5 +1,120 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Feedback Loop Planning Route-Gap Row V1
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The feedback loop now auto-loads planning_next_step artifacts:
+  planning-next-step-payload-dry-run-v1.report.json
+  planning-next-step-local-accept-calibration-v1.report.json
+  planning-next-step-artifact-progress-v1.verification-hook-audit.report.json
+
+It appends planning_next_step as an explicit route-gap row even though the base
+cpu-route-forecast route list only contains conditional/edit/mixed profiles.
+```
+
+New dashboard metrics:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 302
+operator_candidate_coverage_milli: 302
+scoreable_candidate_calls: 93
+scoreable_candidate_coverage_milli: 93
+verification_hook_ready_events: 72
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli: 8
+verified_gap_to_80_calls: 792
+no_candidate_calls: 698
+```
+
+Planning route row:
+
+```text
+route_key: planning_next_step
+candidate_events: 14
+scoreable_payload_events: 14
+verification_hook_ready_events: 7
+local_accept_calibration_ran: true
+local_accept_safe_policy_found: true
+local_accept_minimum_true_support: 3
+local_accept_support_qualified: false
+local_accept_best_safe_true_accepts: 1
+verified_cpu_accept_eligible_events: 0
+false_accepts: 0
+stage: local_accept_calibration_support_insufficient
+next_action: Collect more verifier-true rows or raise admission quality before promotion; singleton safe policies stay review-only.
+```
+
+Interpretation:
+
+```text
+This fixes the global dashboard shape. Planning route-gap traffic is now counted
+as candidate and scoreable traffic, so the feedback-loop coverage picture no
+longer hides the 14 planning candidates.
+
+It does not increase verified CPU accepts. The planning singleton safe policy is
+visible, but it is blocked by minimum support:
+  local_accept_minimum_true_support: 3
+  local_accept_best_safe_true_accepts: 1
+```
+
+Claim boundary:
+
+```text
+Do not treat local_accept_safe_policy_found=true as promotion-ready. For route
+planning_next_step, support-qualified means:
+  safe_policy_found=true
+  best_safe_true_accepts >= 3
+  later promoted shadow/audit has false_accepts=0 and unverified accepts=0
+  provider cost exists before savings claims
+
+Current state remains CPU Routability 8/1000, not 80%.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: feedback-loop-planning-route-gap-row-v1
+packet:
+  docs/structural_gates/feedback-loop-planning-route-gap-row-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/feedback-loop-planning-route-gap-row-v1.nanda.json
+
+Scope:
+  The packet checks that planning route-gap traffic is counted in the feedback
+  dashboard while the singleton safe-policy candidate remains blocked.
+
+  NANDA reports no conflicts or evidence gaps, but keeps VETO because the
+  candidate-support triads are weak. Treat this as a promotion guard and proof-
+  shape debt, not as a runtime failure.
+```
+
+Next debt:
+
+```text
+planning_next_step_true_label_collection_v1:
+  collect more tool-backed planning true rows or improve request-side admission
+  until local_accept_support_qualified=true without false accepts.
+
+global_feedback_route_source_unification_v1:
+  stop treating route-gap rows as a side-channel. Fold route-gap families into
+  the same forecast/catalog layer without allowing them to bypass verifier and
+  support gates.
+```
+
 ## 2026-07-04 - Executor Integration: Planning Next-Step Local Accept Calibration V1
 
 Verdict:
