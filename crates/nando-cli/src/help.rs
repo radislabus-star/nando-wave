@@ -298,6 +298,18 @@ pub(crate) fn print_help() {
         "            Compile planning-next-step dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
     );
     println!(
+        "  role-binding-real-traffic-read-inspect-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run read-inspect payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-read-inspect-profile-v1 [base-registry-json] [read-inspect-dry-run-trace-jsonl] [read-inspect-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile read-inspect dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(
@@ -460,7 +472,7 @@ pub(crate) fn print_help() {
         "            Audit whether shadow trace rows carry enough output evidence to count verified CPU accepts"
     );
     println!(
-        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json]"
+        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json] [read-inspect-dry-run-report-json] [read-inspect-verification-audit-report-json]"
     );
     println!(
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"

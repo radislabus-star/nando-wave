@@ -1,5 +1,185 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Read-Inspect Route Payload/Profile
+
+Verdict:
+
+```text
+READ_INSPECT_ROUTE_V1_REVIEW_SCOREABLE_NO_VERIFIER
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added commands:
+  role-binding-real-traffic-read-inspect-payload-dry-run-v1
+  role-binding-real-traffic-read-inspect-profile-v1
+
+CodexHistoryRouteCatalog now recognizes read_inspect profiles whose
+operator_classes contain:
+  read_only_inspection
+  path_evidence
+```
+
+Read-inspect dry-run:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.trace.jsonl
+
+history window:                       1000 local Codex rows
+read_inspect_candidate_events:        27
+payload_ready_events:                 12
+payload_built_events:                 12
+scoreable_payload_events:             12
+raw_text_written:                     false
+response_text_used:                   false
+target_labels_used:                   false
+proof_labels_used:                    false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Read-inspect profile:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/read-inspect-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/read-inspect-profile-v1.report.json
+
+scoreable_payload_events:             12
+package_training_requests:            12
+edge_count:                           8
+package_bytes:                        140
+runtime_bytes_estimate:               33000
+median_energy_margin:                 1456128
+p10_energy_margin:                    1345536
+unexpected_local_accepts_under_disabled_threshold: 0
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed:                 false
+```
+
+Read-inspect shadow and audit:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.shadow-report.json
+
+verification audit:
+  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.verification-hook-audit.report.json
+
+operator_candidate_calls:             12
+scoreable_candidate_calls:            12
+verification_hook_ready_events:       0
+verified_cpu_accept_eligible_events:  0
+candidates_missing_output_evidence:   12
+candidates_missing_explicit_verification: 12
+shadow_accepts:                       0
+false_accepts:                        0
+market_claim_allowed:                 false
+```
+
+Current route map after registering read_inspect:
+
+```text
+route candidate report:
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-read-inspect-v1.report.json
+
+route-gap catalog:
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-read-inspect-v1.report.json
+
+route-gap readiness:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-read-inspect-v1.report.json
+
+forecast:
+  target/nando-wave/real-traffic-shadow/cpu-route-forecast-read-inspect-v1.report.json
+
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v4.read-inspect-current.report.json
+
+operator catalog:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v5.read-inspect.report.json
+
+existing_route_candidate_events:      489
+no_candidate_events:                  511
+route_gap_payload_ready_events:       23
+top_payload_ready_family:             metrics_report_readout
+read_inspect route candidates:        33
+read_inspect scoreable payloads:      12
+read_inspect stage:                   scoreable_payload_missing_verification_hook
+```
+
+Claim boundary:
+
+```text
+This is route/payload/profile progress, not verified CPU savings.
+
+The read_inspect profile is scoreable and registered, but its local accept
+threshold remains disabled and all 12 scoreable rows are missing output
+evidence / explicit verification.
+
+The rebuilt current feedback bundle reports 9 verified CPU accepts because it
+uses a fresh route-only forecast artifact set. The previous mixed-v2
+feedback bundle remains the historical 17/1000 verified-accept snapshot until
+all promoted/audit artifacts are regenerated on one unified route base.
+Do not mix these two numbers as a single claim.
+```
+
+Next engineering debt:
+
+```text
+Build read_only_path_and_excerpt_verifier_v1:
+  request path must match a read-only local file/path intent;
+  response/tool evidence must include path/excerpt fingerprint;
+  no raw prompt/response text is written to reports;
+  local accept may be calibrated only after verifier true/false labels exist;
+  false_accepts must remain 0.
+
+Next route-gap families after read_inspect moved into existing routes:
+  metrics_report_readout: 10 candidates / 6 payload-ready
+  retrieval_lookup:      25 candidates / 2 payload-ready
+```
+
+NANDA structural gate:
+
+```text
+task_id:
+  read-inspect-route-v1
+
+packet:
+  docs/structural_gates/read-inspect-route-v1.md
+
+report:
+  target/nando-wave/real-traffic-shadow/read-inspect-route-v1.nanda.json
+
+verdict:
+  VETO
+
+interpretation:
+  proof_shape_debt_not_runtime_failure
+
+details:
+  complexity_score: 74
+  reason: candidate group weak under composite-mode support
+
+Do not use this packet as structural PASS. JSON reports are the numeric
+authority for route/profile measurements; the packet is retained as review
+evidence until the NANDA proof shape is improved.
+```
+
 ## 2026-07-04 - Executor Integration: Current Route-Gap Mining After Planning Profile
 
 Verdict:

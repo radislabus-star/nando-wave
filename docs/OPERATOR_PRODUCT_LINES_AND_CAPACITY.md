@@ -201,6 +201,30 @@ Deployed HostWorld bounded individual POST /score throughput:
   core_score_p99_latency_ns: 221243
 ```
 
+Текущая real-traffic route линия:
+
+```text
+Historical strongest verified snapshot:
+  feedback_report: cpu-route-feedback-loop-v3.mixed-v2-agent-control-planning-v3.report.json
+  verified_cpu_accepts: 17 / 1000
+  operator_candidate_calls: 457
+  false_accepts: 0
+
+Read-inspect route/profile rung:
+  registry: profile-registry-read-inspect-v1.json
+  read_inspect_routed_candidates: 33 / 1000
+  read_inspect_scoreable_payloads: 12
+  read_inspect_profile_edges: 8
+  read_inspect_runtime_bytes_estimate: 33000
+  verified_cpu_accepts: 0
+  blocker: read_only_path_and_excerpt_verifier_v1 missing
+
+Fresh route-only forecast after read_inspect registry:
+  operator_candidate_calls: 489 / 1000
+  no_candidate_calls: 511 / 1000
+  market_claim_allowed: false
+```
+
 Интерпретация:
 
 ```text

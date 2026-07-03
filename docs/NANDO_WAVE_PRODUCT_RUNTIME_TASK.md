@@ -116,6 +116,41 @@ current route-gap mining:
   next_payload_builder: read_inspect_request_payload_builder_v1
   next_verifier: read_only_path_and_excerpt_verifier_v1
   claim_boundary: measurement only, local_accepts_enabled=false
+
+read_inspect route/profile rung:
+  dry_run_report:
+    target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.report.json
+  profile_report:
+    target/nando-wave/real-traffic-shadow/read-inspect-profile-v1.report.json
+  profile_registry:
+    target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json
+  route_gap_catalog_after_registry:
+    target/nando-wave/real-traffic-shadow/route-gap-catalog-read-inspect-v1.report.json
+  feedback_after_registry:
+    target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v4.read-inspect-current.report.json
+  read_inspect_candidate_events: 27 dry-run / 33 routed after registry
+  read_inspect_payload_ready_events: 12
+  read_inspect_scoreable_payload_events: 12
+  read_inspect_edge_count: 8
+  read_inspect_runtime_bytes_estimate: 33000
+  read_inspect_stage: scoreable_payload_missing_verification_hook
+  local_accepts_enabled: false
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 0
+  claim_boundary: scoreable route/profile only; no read-only verifier yet
+
+fresh route-only feedback after read_inspect registry:
+  operator_candidate_calls:            489
+  scoreable_candidate_calls:           105
+  verification_hook_ready_events:      70
+  verified_cpu_accept_eligible_events: 9
+  verified_gap_to_80_calls:            791
+
+historical/current-number warning:
+  The mixed-v2 bundle above remains the stronger historical 17/1000 verified
+  snapshot. The read_inspect-current bundle is a fresh route-only rebuild and
+  should not be mixed with that historical number until all promoted/audit
+  artifacts are regenerated on the same route base.
 ```
 
 Current real-traffic shadow path:
