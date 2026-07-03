@@ -95,6 +95,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_ingest_events_v1, run_role_binding_real_traffic_record_serve_v1,
     run_role_binding_real_traffic_record_v1, run_role_binding_real_traffic_shadow_smoke_v1,
     run_role_binding_real_traffic_shadow_v1,
+    run_role_binding_real_traffic_verification_hook_audit_v1,
 };
 use snapshot_io::{read_snapshot, save_snapshot};
 use status::{print_organ128_plan, print_status, print_wave_tick};
@@ -605,6 +606,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-edit-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_edit_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-edit-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-verification-hook-audit-v1") => exit_for_result(
+            run_role_binding_real_traffic_verification_hook_audit_v1(args),
+            "try: nando-cli role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]",
         ),
         Some("role-binding-real-traffic-shadow-smoke-v1") => exit_for_result(
             run_role_binding_real_traffic_shadow_smoke_v1(args),

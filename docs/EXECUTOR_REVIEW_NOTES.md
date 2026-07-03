@@ -1,5 +1,95 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Verification Hook Audit
+
+Verdict:
+
+```text
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND_ON_SYNTHETIC_CONTROL
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-verification-hook-audit-v1.
+
+The audit reads:
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json
+
+and writes:
+  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json
+```
+
+Validation contract tightened:
+
+```text
+If verified_safe_accept is present, the trace/event row must also carry:
+  nando_shadow_request
+  response_fingerprint or tool_call_fingerprints
+  verification_source
+
+This prevents a raw verified_safe_accept label from becoming evidence by
+itself.
+```
+
+Real edit dry-run hook audit:
+
+```text
+total_requests: 1000
+total_llm_calls: 1000
+operator_candidate_calls: 23
+scoreable_candidate_calls: 23
+local_accepts_disabled_events: 23
+local_accepts_enabled_events: 0
+response_fingerprint_events: 0
+tool_call_fingerprint_events: 0
+verification_source_events: 1000
+explicit_verified_safe_accept_events: 0
+provider_cost_events: 0
+candidates_missing_output_evidence: 23
+candidates_missing_explicit_verification: 23
+candidates_missing_provider_cost: 23
+verification_hook_ready_events: 0
+verified_cpu_accept_eligible_events: 0
+shadow_accepts: 0
+shadow_fallbacks: 23
+shadow_false_accepts: 0
+shadow_incremental_savings_over_exact_cache: 0
+market_claim_allowed: false
+```
+
+Synthetic positive-control hook audit:
+
+```text
+total_requests: 14
+operator_candidate_calls: 14
+scoreable_candidate_calls: 14
+response_fingerprint_events: 14
+verification_source_events: 14
+explicit_verified_safe_accept_events: 14
+provider_cost_events: 14
+verification_hook_ready_events: 14
+shadow_accepts: 7
+shadow_false_accepts: 0
+shadow_incremental_savings_over_exact_cache: 7
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Diagnostic read:
+
+```text
+The audit proves the hook logic works in both directions:
+  real Codex dry-run: scoreable payloads exist, but output evidence is missing;
+  synthetic control: output evidence exists, but synthetic source blocks market claim.
+
+Next debt:
+  attach real response/tool-call evidence and deterministic edit-output
+  verification to scoreable edit payloads before enabling any local accept.
+```
+
 ## 2026-07-03 - Executor Integration: Edit Payload Dry-Run Builder
 
 Verdict:

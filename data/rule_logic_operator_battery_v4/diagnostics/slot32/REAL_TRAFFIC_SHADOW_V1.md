@@ -24,6 +24,7 @@ New commands:
   role-binding-real-traffic-cpu-route-forecast-v1
   role-binding-real-traffic-edit-payload-readiness-v1
   role-binding-real-traffic-edit-payload-dry-run-v1
+  role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-shadow-smoke-v1
 ```
 
@@ -102,6 +103,18 @@ verified_safe_accept
 synthetic_source
 notes
 ```
+
+Validation rule:
+
+```text
+If verified_safe_accept is present, the row must also carry:
+  nando_shadow_request
+  response_fingerprint or tool_call_fingerprints
+  verification_source
+```
+
+So `verified_safe_accept` is not accepted as a naked label. It must be backed by
+output/tool evidence and a named verification source.
 
 The recorder/analyzer do not require raw prompts or raw responses. Real
 integrations can store fingerprints and verification source first, then decide
@@ -273,6 +286,66 @@ savings: verified accepts remain disabled, and every scoreable dry-run payload
 falls back safely. The observed margins are positive at sequence-energy level
 but not at strict slot level (`min_slot_margin = 0`), so the next engineering
 debt is an edit verifier/output hook, not a market claim.
+
+Verification hook audit over edit dry-run trace:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json
+result:
+  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+  total_requests: 1000
+  total_llm_calls: 1000
+  operator_candidate_calls: 23
+  scoreable_candidate_calls: 23
+  local_accepts_disabled_events: 23
+  local_accepts_enabled_events: 0
+  response_fingerprint_events: 0
+  tool_call_fingerprint_events: 0
+  verification_source_events: 1000
+  explicit_verified_safe_accept_events: 0
+  provider_cost_events: 0
+  candidates_missing_output_evidence: 23
+  candidates_missing_explicit_verification: 23
+  candidates_missing_provider_cost: 23
+  verification_hook_ready_events: 0
+  verified_cpu_accept_eligible_events: 0
+  shadow_accepts: 0
+  shadow_fallbacks: 23
+  shadow_false_accepts: 0
+  market_claim_allowed: false
+```
+
+Synthetic positive-control hook audit:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/verification-hook-synthetic-smoke.trace.jsonl target/nando-wave/real-traffic-shadow/verification-hook-synthetic-smoke.shadow-report.json target/nando-wave/real-traffic-shadow/verification-hook-synthetic-smoke.audit-report.json
+result:
+  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+  total_requests: 14
+  operator_candidate_calls: 14
+  scoreable_candidate_calls: 14
+  response_fingerprint_events: 14
+  verification_source_events: 14
+  explicit_verified_safe_accept_events: 14
+  provider_cost_events: 14
+  verification_hook_ready_events: 14
+  shadow_accepts: 7
+  shadow_false_accepts: 0
+  verified_cpu_accept_eligible_events: 0
+  market_claim_allowed: false
+```
+
+Interpretation: the audit now separates three states:
+
+```text
+route candidate
+  -> scoreable payload
+  -> evidence-backed verification hook
+  -> verified CPU accept eligible for savings
+```
+
+Current real Codex edit rows have reached `scoreable payload`, but not
+`evidence-backed verification hook`.
 
 CPU route forecast over real Codex route candidates:
 

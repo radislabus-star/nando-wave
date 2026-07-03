@@ -286,6 +286,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run edit payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]"
+    );
+    println!(
+        "            Audit whether shadow trace rows carry enough output evidence to count verified CPU accepts"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(

@@ -83,6 +83,7 @@ analyze_command: role-binding-real-traffic-shadow-v1
 cpu_route_forecast_command: role-binding-real-traffic-cpu-route-forecast-v1
 edit_payload_readiness_command: role-binding-real-traffic-edit-payload-readiness-v1
 edit_payload_dry_run_command: role-binding-real-traffic-edit-payload-dry-run-v1
+verification_hook_audit_command: role-binding-real-traffic-verification-hook-audit-v1
 smoke_command: role-binding-real-traffic-shadow-smoke-v1
 
 purpose:
@@ -128,6 +129,21 @@ current smoke:
   edit_payload_dry_run_shadow_false_accepts: 0.
   edit_payload_dry_run_shadow_incremental_reduction_vs_exact_cache_milli: 0.
   edit_payload_dry_run_shadow_p99_shadow_score_latency_ns: 683880.
+  verification_hook_audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS.
+  verification_hook_audit_report: target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json.
+  verification_hook_audit_operator_candidate_calls: 23.
+  verification_hook_audit_scoreable_candidate_calls: 23.
+  verification_hook_audit_response_fingerprint_events: 0.
+  verification_hook_audit_explicit_verified_safe_accept_events: 0.
+  verification_hook_audit_candidates_missing_output_evidence: 23.
+  verification_hook_audit_candidates_missing_explicit_verification: 23.
+  verification_hook_audit_verification_hook_ready_events: 0.
+  verification_hook_audit_verified_cpu_accept_eligible_events: 0.
+  verification_hook_audit_market_claim_allowed: false.
+  verification_hook_synthetic_control_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND.
+  verification_hook_synthetic_control_ready_events: 14.
+  verification_hook_synthetic_control_shadow_accepts: 7.
+  verification_hook_synthetic_control_market_claim_allowed: false.
   codex_history_events_verdict: CODEX_HISTORY_EVENTS_V1_READY.
   codex_history_events_written: 1000.
   codex_history_raw_text_written: false.

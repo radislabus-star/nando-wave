@@ -57,6 +57,10 @@ const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json";
+const DEFAULT_EDIT_PAYLOAD_DRY_RUN_SHADOW_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json";
+const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -3586,6 +3590,205 @@ where
     Err("edit payload dry-run is review-only; run shadow analysis before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_verification_hook_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let shadow_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_DRY_RUN_SHADOW_REPORT));
+    let audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let shadow_report = read_json_file::<RoleBindingRealTrafficShadowReport>(&shadow_report_path)?;
+    let shadow_by_trace = shadow_report
+        .rows
+        .iter()
+        .map(|row| (row.trace_id.as_str(), row))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut route_accumulators =
+        BTreeMap::<String, RoleBindingVerificationHookRouteAccumulator>::new();
+    let mut total_llm_calls = 0usize;
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut local_accepts_disabled_events = 0usize;
+    let mut local_accepts_enabled_events = 0usize;
+    let mut response_fingerprint_events = 0usize;
+    let mut tool_call_fingerprint_events = 0usize;
+    let mut verification_source_events = 0usize;
+    let mut explicit_verified_safe_accept_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut provider_cost_events = 0usize;
+    let mut candidates_missing_output_evidence = 0usize;
+    let mut candidates_missing_verification_source = 0usize;
+    let mut candidates_missing_explicit_verification = 0usize;
+    let mut candidates_missing_provider_cost = 0usize;
+    let mut verification_hook_ready_events = 0usize;
+    let mut verified_cpu_accept_eligible_events = 0usize;
+
+    for row in &trace_rows {
+        total_llm_calls += usize::from(row.llm_call);
+        response_fingerprint_events += usize::from(nonempty_option(&row.response_fingerprint));
+        tool_call_fingerprint_events += usize::from(!row.tool_call_fingerprints.is_empty());
+        verification_source_events += usize::from(nonempty_option(&row.verification_source));
+        explicit_verified_safe_accept_events += usize::from(row.verified_safe_accept.is_some());
+        verified_true_events += usize::from(row.verified_safe_accept == Some(true));
+        verified_false_events += usize::from(row.verified_safe_accept == Some(false));
+        provider_cost_events += usize::from(row.provider_cost_microusd.is_some());
+
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        operator_candidate_calls += 1;
+        let route_key = request
+            .route_key
+            .clone()
+            .unwrap_or_else(|| "none".to_owned());
+        let profile_id = request
+            .profile_id
+            .clone()
+            .unwrap_or_else(|| "route_selected".to_owned());
+        let route = route_accumulators
+            .entry(route_key.clone())
+            .or_insert_with(|| RoleBindingVerificationHookRouteAccumulator {
+                route_key,
+                profile_id,
+                ..RoleBindingVerificationHookRouteAccumulator::default()
+            });
+        route.candidate_calls += 1;
+
+        let scoreable = !request.active_fringe.is_empty() && !request.slots.is_empty();
+        scoreable_candidate_calls += usize::from(scoreable);
+        route.scoreable_candidate_calls += usize::from(scoreable);
+
+        let local_accepts_disabled = request.expect_local_operator == Some(false);
+        local_accepts_disabled_events += usize::from(local_accepts_disabled);
+        local_accepts_enabled_events += usize::from(!local_accepts_disabled);
+        route.local_accepts_disabled_events += usize::from(local_accepts_disabled);
+        route.local_accepts_enabled_events += usize::from(!local_accepts_disabled);
+
+        let has_output_evidence = trace_row_has_output_evidence(row);
+        let has_verification_source = nonempty_option(&row.verification_source);
+        let has_explicit_verification = row.verified_safe_accept.is_some();
+        let has_provider_cost = row.provider_cost_microusd.is_some();
+        candidates_missing_output_evidence += usize::from(!has_output_evidence);
+        candidates_missing_verification_source += usize::from(!has_verification_source);
+        candidates_missing_explicit_verification += usize::from(!has_explicit_verification);
+        candidates_missing_provider_cost += usize::from(!has_provider_cost);
+        route.candidates_missing_output_evidence += usize::from(!has_output_evidence);
+        route.candidates_missing_verification_source += usize::from(!has_verification_source);
+        route.candidates_missing_explicit_verification += usize::from(!has_explicit_verification);
+        route.candidates_missing_provider_cost += usize::from(!has_provider_cost);
+
+        let hook_ready =
+            has_output_evidence && has_verification_source && has_explicit_verification;
+        verification_hook_ready_events += usize::from(hook_ready);
+        route.verification_hook_ready_events += usize::from(hook_ready);
+
+        if let Some(shadow) = shadow_by_trace.get(row.trace_id.as_str()) {
+            route.shadow_accepts += usize::from(shadow.nando_shadow_accepted);
+            route.shadow_fallbacks += usize::from(shadow.nando_shadow_fallback);
+            route.false_accepts += usize::from(shadow.false_local_accept);
+            let eligible = hook_ready
+                && has_provider_cost
+                && shadow.nando_shadow_accepted
+                && row.verified_safe_accept == Some(true)
+                && row.synthetic_source != Some(true);
+            verified_cpu_accept_eligible_events += usize::from(eligible);
+            route.verified_cpu_accept_eligible_events += usize::from(eligible);
+        }
+    }
+
+    let routes = route_accumulators
+        .into_values()
+        .map(RoleBindingVerificationHookRouteRow::from)
+        .collect::<Vec<_>>();
+    let all_trace_rows_matched_shadow = trace_rows.iter().all(|row| {
+        shadow_by_trace.contains_key(row.trace_id.as_str()) || row.nando_shadow_request.is_none()
+    });
+    let market_claim_allowed = verified_cpu_accept_eligible_events > 0
+        && shadow_report.false_accepts == 0
+        && !shadow_report.synthetic_trace_used
+        && shadow_report.incremental_savings_over_exact_cache > 0;
+    let report = RoleBindingVerificationHookAuditReport {
+        schema_version: "nando_role_binding_real_traffic_verification_hook_audit_v1".to_owned(),
+        verdict: if verification_hook_ready_events > 0 {
+            "VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND"
+        } else {
+            "VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS"
+        }
+        .to_owned(),
+        trace_path: trace_path.display().to_string(),
+        shadow_report_path: shadow_report_path.display().to_string(),
+        total_requests: trace_rows.len(),
+        total_llm_calls,
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        local_accepts_disabled_events,
+        local_accepts_enabled_events,
+        response_fingerprint_events,
+        tool_call_fingerprint_events,
+        verification_source_events,
+        explicit_verified_safe_accept_events,
+        verified_true_events,
+        verified_false_events,
+        provider_cost_events,
+        candidates_missing_output_evidence,
+        candidates_missing_verification_source,
+        candidates_missing_explicit_verification,
+        candidates_missing_provider_cost,
+        verification_hook_ready_events,
+        verified_cpu_accept_eligible_events,
+        all_trace_rows_matched_shadow,
+        shadow_accepts: shadow_report.nando_shadow_accepts,
+        shadow_fallbacks: shadow_report.nando_shadow_fallbacks,
+        shadow_false_accepts: shadow_report.false_accepts,
+        shadow_incremental_savings_over_exact_cache: shadow_report.incremental_savings_over_exact_cache,
+        market_claim_allowed,
+        routes,
+        claim_boundary: "Verification-hook audit only. A real CPU accept can be counted only when the trace row has output evidence, verification_source, explicit verified_safe_accept=true, provider cost for savings, a shadow local accept, non-synthetic source, and false_accepts=0. Missing hooks keep the route in REVIEW.".to_owned(),
+        next_engineering_debt: "Attach real response/tool-call evidence and deterministic edit-output verification to scoreable request payloads before enabling local accepts.".to_owned(),
+    };
+    write_json_file(&audit_report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-verification-hook-audit-v1: {}",
+        report.verdict
+    );
+    println!("  trace: {}", trace_path.display());
+    println!("  shadow_report: {}", shadow_report_path.display());
+    println!("  audit_report: {}", audit_report_path.display());
+    println!(
+        "  operator_candidate_calls: {}",
+        report.operator_candidate_calls
+    );
+    println!(
+        "  scoreable_candidate_calls: {}",
+        report.scoreable_candidate_calls
+    );
+    println!(
+        "  verification_hook_ready_events: {}",
+        report.verification_hook_ready_events
+    );
+    println!(
+        "  verified_cpu_accept_eligible_events: {}",
+        report.verified_cpu_accept_eligible_events
+    );
+    println!("  market_claim_allowed: {}", report.market_claim_allowed);
+    Err("verification hook audit is review-only; it is not market savings".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_shadow_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -5431,6 +5634,103 @@ struct RoleBindingEditPayloadDryRunRow {
     slots: usize,
     positive_impulses: usize,
     negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingVerificationHookAuditReport {
+    schema_version: String,
+    verdict: String,
+    trace_path: String,
+    shadow_report_path: String,
+    total_requests: usize,
+    total_llm_calls: usize,
+    operator_candidate_calls: usize,
+    scoreable_candidate_calls: usize,
+    local_accepts_disabled_events: usize,
+    local_accepts_enabled_events: usize,
+    response_fingerprint_events: usize,
+    tool_call_fingerprint_events: usize,
+    verification_source_events: usize,
+    explicit_verified_safe_accept_events: usize,
+    verified_true_events: usize,
+    verified_false_events: usize,
+    provider_cost_events: usize,
+    candidates_missing_output_evidence: usize,
+    candidates_missing_verification_source: usize,
+    candidates_missing_explicit_verification: usize,
+    candidates_missing_provider_cost: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    all_trace_rows_matched_shadow: bool,
+    shadow_accepts: usize,
+    shadow_fallbacks: usize,
+    shadow_false_accepts: usize,
+    shadow_incremental_savings_over_exact_cache: usize,
+    market_claim_allowed: bool,
+    routes: Vec<RoleBindingVerificationHookRouteRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RoleBindingVerificationHookRouteAccumulator {
+    route_key: String,
+    profile_id: String,
+    candidate_calls: usize,
+    scoreable_candidate_calls: usize,
+    local_accepts_disabled_events: usize,
+    local_accepts_enabled_events: usize,
+    candidates_missing_output_evidence: usize,
+    candidates_missing_verification_source: usize,
+    candidates_missing_explicit_verification: usize,
+    candidates_missing_provider_cost: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    shadow_accepts: usize,
+    shadow_fallbacks: usize,
+    false_accepts: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingVerificationHookRouteRow {
+    route_key: String,
+    profile_id: String,
+    candidate_calls: usize,
+    scoreable_candidate_calls: usize,
+    local_accepts_disabled_events: usize,
+    local_accepts_enabled_events: usize,
+    candidates_missing_output_evidence: usize,
+    candidates_missing_verification_source: usize,
+    candidates_missing_explicit_verification: usize,
+    candidates_missing_provider_cost: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    shadow_accepts: usize,
+    shadow_fallbacks: usize,
+    false_accepts: usize,
+}
+
+impl From<RoleBindingVerificationHookRouteAccumulator> for RoleBindingVerificationHookRouteRow {
+    fn from(value: RoleBindingVerificationHookRouteAccumulator) -> Self {
+        Self {
+            route_key: value.route_key,
+            profile_id: value.profile_id,
+            candidate_calls: value.candidate_calls,
+            scoreable_candidate_calls: value.scoreable_candidate_calls,
+            local_accepts_disabled_events: value.local_accepts_disabled_events,
+            local_accepts_enabled_events: value.local_accepts_enabled_events,
+            candidates_missing_output_evidence: value.candidates_missing_output_evidence,
+            candidates_missing_verification_source: value.candidates_missing_verification_source,
+            candidates_missing_explicit_verification: value
+                .candidates_missing_explicit_verification,
+            candidates_missing_provider_cost: value.candidates_missing_provider_cost,
+            verification_hook_ready_events: value.verification_hook_ready_events,
+            verified_cpu_accept_eligible_events: value.verified_cpu_accept_eligible_events,
+            shadow_accepts: value.shadow_accepts,
+            shadow_fallbacks: value.shadow_fallbacks,
+            false_accepts: value.false_accepts,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -7764,6 +8064,18 @@ fn validate_real_traffic_event_row(row: &RoleBindingRealTrafficEventRow) -> Resu
             row.event_id
         ));
     }
+    if row.verified_safe_accept.is_some() && !event_row_has_output_evidence(row) {
+        return Err(format!(
+            "event_id={} has verified_safe_accept without response/tool-call evidence",
+            row.event_id
+        ));
+    }
+    if row.verified_safe_accept.is_some() && !nonempty_option(&row.verification_source) {
+        return Err(format!(
+            "event_id={} has verified_safe_accept without verification_source",
+            row.event_id
+        ));
+    }
     Ok(())
 }
 
@@ -7789,7 +8101,34 @@ fn validate_real_traffic_trace_row(row: &RoleBindingRealTrafficTraceRow) -> Resu
             row.trace_id
         ));
     }
+    if row.verified_safe_accept.is_some() && !trace_row_has_output_evidence(row) {
+        return Err(format!(
+            "trace_id={} has verified_safe_accept without response/tool-call evidence",
+            row.trace_id
+        ));
+    }
+    if row.verified_safe_accept.is_some() && !nonempty_option(&row.verification_source) {
+        return Err(format!(
+            "trace_id={} has verified_safe_accept without verification_source",
+            row.trace_id
+        ));
+    }
     Ok(())
+}
+
+fn event_row_has_output_evidence(row: &RoleBindingRealTrafficEventRow) -> bool {
+    nonempty_option(&row.response_fingerprint) || !row.tool_call_fingerprints.is_empty()
+}
+
+fn trace_row_has_output_evidence(row: &RoleBindingRealTrafficTraceRow) -> bool {
+    nonempty_option(&row.response_fingerprint) || !row.tool_call_fingerprints.is_empty()
+}
+
+fn nonempty_option(value: &Option<String>) -> bool {
+    value
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|text| !text.is_empty())
 }
 
 fn read_real_traffic_event_jsonl(
