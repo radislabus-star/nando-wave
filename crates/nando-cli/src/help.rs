@@ -298,6 +298,12 @@ pub(crate) fn print_help() {
         "            Attach Codex final-answer fingerprints plus deterministic control-plane verification to agent-control dry-run traces"
     );
     println!(
+        "  role-binding-real-traffic-agent-control-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Search request-side agent-control admission policies against evidence labels; no local accepts are enabled"
+    );
+    println!(
         "  role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
     );
     println!(

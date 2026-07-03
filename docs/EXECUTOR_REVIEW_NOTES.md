@@ -1,5 +1,101 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Agent-Control Admission Calibration
+
+Verdict:
+
+```text
+AGENT_CONTROL_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-agent-control-admission-calibration-v1
+
+The command searches request-side agent-control admission policies against the
+evidence-enriched real Codex trace. It reads request text at analysis time, but
+writes only fingerprints, feature booleans, policy counts, and labels. It
+writes no raw prompt text and no raw response text. It enables no local accepts.
+```
+
+Calibration result:
+
+```text
+input_trace:
+  target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1.report.json
+
+hook_ready_rows: 124
+rows_with_prompt_features: 124
+label_true_rows: 12
+label_false_rows: 112
+minimum_true_support: 3
+robust_safe_policy_found: true
+best_robust_true_accepts: 3
+```
+
+Safe candidate:
+
+```text
+hard_stop_exclamation_len_le_3:
+  accepts: 3
+  true_accepts: 3
+  false_accepts: 0
+  missed_true: 9
+  robust_safe: true
+
+hard_stop_exclamation_len_le_4:
+  accepts: 3
+  true_accepts: 3
+  false_accepts: 0
+  missed_true: 9
+  robust_safe: true
+```
+
+Feedback-loop after calibration:
+
+```text
+agent-control route:
+  local_accept_calibration_ran: true
+  local_accept_safe_policy_found: true
+  local_accept_best_safe_true_accepts: 3
+  stage: false_accepts_block_local_policy
+  false_accepts: 112
+  verified_cpu_accept_eligible_events: 0
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: PASS
+task_id: agent-control-admission-calibration-v1
+packet:
+  target/nando-wave/structural-gates/agent-control-admission-calibration-v1.md
+
+Scope:
+  The gate checks that the hard-stop safe candidate stays separate from the
+  still-blocked broad agent-control profile.
+```
+
+Claim boundary:
+
+```text
+This is not a market savings result.
+The calibration found a tiny request-side safe admission candidate for hard
+stop/exclamation rows, but the broad agent-control profile is still unsafe and
+must not be promoted.
+
+The next step is a separate request-side-admitted shadow trace for the hard-stop
+candidate, with provider cost, false_accepts=0, unverified_shadow_accepts=0,
+and NANDA claim-boundary gate. Do not count the 3 rows until that promotion
+trace and audit pass.
+```
+
 ## 2026-07-03 - Executor Integration: Agent-Control Output Evidence + False-Accept Blocker
 
 Verdicts:
