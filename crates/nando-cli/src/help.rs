@@ -292,6 +292,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run agent-control payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-agent-control-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach Codex final-answer fingerprints plus deterministic control-plane verification to agent-control dry-run traces"
+    );
+    println!(
         "  role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
     );
     println!(

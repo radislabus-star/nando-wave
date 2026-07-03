@@ -65,6 +65,11 @@ const DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1.report.json";
+const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.trace.jsonl";
+const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.report.json";
+const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -3758,6 +3763,153 @@ where
     Err("agent-control payload dry-run is review-only; run verifier before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_agent_control_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_agent_control_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "agent-control output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_agent_control_output_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "agent-control output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_agent_control_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "AGENT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "AGENT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-control output evidence join only. It reads local Codex session final answers at analysis time, writes fingerprints and explicit deterministic verification results, writes no raw prompt/response text, does not enable local accepts, and cannot prove market savings by itself. Continue/execute intents are rejected unless a later tool/state verifier proves they were only control-plane transitions.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the evidence-enriched trace. If continue rows become false accepts, split the control profile or change request-side admission before any safe-policy promotion.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-control-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("agent-control output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_edit_payload_readiness_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -6660,8 +6812,28 @@ where
     } else {
         None
     };
+    let agent_control_dry_run_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTROL_PAYLOAD_DRY_RUN_REPORT);
+    let agent_control_dry_run = if agent_control_dry_run_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingAgentControlPayloadDryRunReport>(
+                &agent_control_dry_run_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
     let verification_audit =
         read_json_file::<RoleBindingVerificationHookAuditReport>(&verification_audit_report_path)?;
+    let agent_control_audit_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let agent_control_verification_audit = if agent_control_audit_report_path.exists() {
+        Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+            &agent_control_audit_report_path,
+        )?)
+    } else {
+        None
+    };
     let edit_safe_policy_audit_report_path = PathBuf::from(DEFAULT_EDIT_SAFE_POLICY_AUDIT_REPORT);
     let edit_safe_policy_verification_audit = if edit_safe_policy_audit_report_path.exists() {
         Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -6723,6 +6895,11 @@ where
         .iter()
         .map(|row| (row.route_key.as_str(), row))
         .collect::<BTreeMap<_, _>>();
+    if let Some(agent_control_audit) = &agent_control_verification_audit {
+        for row in &agent_control_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(edit_safe_policy_audit) = &edit_safe_policy_verification_audit {
         for row in &edit_safe_policy_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -6761,6 +6938,10 @@ where
             .unwrap_or_default()
         + effective_mixed_verification_audit
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + agent_control_verification_audit
+            .as_ref()
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
         .verified_cpu_accept_eligible_events
@@ -6769,6 +6950,10 @@ where
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
         + effective_mixed_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + agent_control_verification_audit
+            .as_ref()
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
     let routing_gap_to_80_calls =
@@ -6782,6 +6967,7 @@ where
         let is_edit_route = route.route_key.contains("edit_marker_length");
         let is_conditional_route = route.route_key.contains("conditional_branch");
         let is_mixed_route = route.route_key.contains("mixed_map");
+        let is_agent_control_route = route.route_key.contains("agent_control");
         let local_accept_calibration = if is_edit_route {
             edit_local_accept_calibration.as_ref()
         } else if is_conditional_route {
@@ -6810,6 +6996,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_agent_control_route {
+            agent_control_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else {
             0
         };
@@ -6822,6 +7013,11 @@ where
                 .unwrap_or_default()
         } else if is_mixed_route {
             mixed_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
+        } else if is_agent_control_route {
+            agent_control_dry_run
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
@@ -6839,6 +7035,10 @@ where
                     mixed_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
+                } else if is_agent_control_route {
+                    agent_control_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
                 } else {
                     None
                 }
@@ -6853,15 +7053,16 @@ where
         let false_accepts = verification
             .map(|row| row.false_accepts)
             .unwrap_or_default();
-        let stage = feedback_route_stage(
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
             payload_built_events,
             scoreable_payload_events,
             verification_hook_ready_events,
             verified_cpu_accept_eligible_events,
+            false_accepts,
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
-        );
+        });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
             priority_rank: route.priority_rank,
@@ -6908,6 +7109,12 @@ where
         edit_safe_policy_verification_audit_report_path: edit_safe_policy_verification_audit
             .as_ref()
             .map(|_| edit_safe_policy_audit_report_path.display().to_string()),
+        agent_control_dry_run_report_path: agent_control_dry_run
+            .as_ref()
+            .map(|_| agent_control_dry_run_report_path.display().to_string()),
+        agent_control_verification_audit_report_path: agent_control_verification_audit
+            .as_ref()
+            .map(|_| agent_control_audit_report_path.display().to_string()),
         conditional_dry_run_report_path: conditional_dry_run
             .as_ref()
             .map(|_| conditional_dry_run_report_path.display().to_string()),
@@ -6959,7 +7166,7 @@ where
         market_claim_allowed: false,
         routes: route_rows,
         claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
-        next_engineering_debt: "Improve edit/conditional request-side admission or payload geometry after failed local-accept calibration, attach mixed output evidence after mixed payload dry-run, and add provider cost evidence before any savings claim.".to_owned(),
+        next_engineering_debt: "Improve agent-control verification/admission after evidence shadow, improve edit/conditional request-side admission or payload geometry after failed local-accept calibration, attach mixed output evidence after mixed payload dry-run, and add provider cost evidence before any savings claim.".to_owned(),
     };
     write_json_file(&feedback_report_path, &report)?;
     println!(
@@ -9529,6 +9736,8 @@ struct RoleBindingFeedbackLoopReport {
     edit_dry_run_report_path: String,
     edit_local_accept_calibration_report_path: Option<String>,
     edit_safe_policy_verification_audit_report_path: Option<String>,
+    agent_control_dry_run_report_path: Option<String>,
+    agent_control_verification_audit_report_path: Option<String>,
     conditional_dry_run_report_path: Option<String>,
     conditional_local_accept_calibration_report_path: Option<String>,
     conditional_verification_audit_report_path: Option<String>,
@@ -12399,28 +12608,33 @@ fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {
     }
 }
 
-fn feedback_route_stage(
+struct FeedbackRouteStageInputs {
     payload_ready_events: usize,
     payload_built_events: usize,
     scoreable_payload_events: usize,
     verification_hook_ready_events: usize,
     verified_cpu_accept_eligible_events: usize,
+    false_accepts: usize,
     local_accept_calibration_ran: bool,
     local_accept_safe_policy_found: bool,
-) -> String {
-    if verified_cpu_accept_eligible_events > 0 {
+}
+
+fn feedback_route_stage(inputs: FeedbackRouteStageInputs) -> String {
+    if inputs.false_accepts > 0 {
+        "false_accepts_block_local_policy".to_owned()
+    } else if inputs.verified_cpu_accept_eligible_events > 0 {
         "verified_cpu_accept_eligible".to_owned()
-    } else if local_accept_safe_policy_found {
+    } else if inputs.local_accept_safe_policy_found {
         "local_accept_calibration_safe_policy_candidate".to_owned()
-    } else if local_accept_calibration_ran {
+    } else if inputs.local_accept_calibration_ran {
         "local_accept_calibration_failed".to_owned()
-    } else if verification_hook_ready_events > 0 {
+    } else if inputs.verification_hook_ready_events > 0 {
         "verification_hook_ready_waiting_local_accept".to_owned()
-    } else if scoreable_payload_events > 0 {
+    } else if inputs.scoreable_payload_events > 0 {
         "scoreable_payload_missing_verification_hook".to_owned()
-    } else if payload_built_events > 0 {
+    } else if inputs.payload_built_events > 0 {
         "payload_built_not_scoreable".to_owned()
-    } else if payload_ready_events > 0 {
+    } else if inputs.payload_ready_events > 0 {
         "payload_ready_builder_not_scoreable".to_owned()
     } else {
         "payload_builder_missing".to_owned()
@@ -12429,6 +12643,10 @@ fn feedback_route_stage(
 
 fn feedback_route_next_action(stage: &str) -> String {
     match stage {
+        "false_accepts_block_local_policy" => {
+            "Do not promote; split the route or tighten request-side admission until false_accepts=0."
+                .to_owned()
+        }
         "verified_cpu_accept_eligible" => {
             "Run non-synthetic soak with false_accepts=0 before any market claim.".to_owned()
         }
@@ -13744,7 +13962,8 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
     let rest = trace_id
         .strip_prefix("codex_history_edit_payload_dry_run::")
         .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))
-        .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))?;
+        .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_agent_control_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
     Some(session_id.to_owned())
@@ -14130,6 +14349,121 @@ fn deterministic_mixed_output_verification(
         "rejected_destination_and_invariant_absent_from_response"
     };
     (verified, true, status.to_owned())
+}
+
+fn deterministic_agent_control_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let intent = agent_control_intent_kind(prompt_text);
+    let response_lower = response_text.to_lowercase();
+    let response_tokens = normalized_token_count(&response_lower);
+    let refusal_or_failure = contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    );
+    let work_claim = contains_any(
+        &response_lower,
+        &[
+            "commit",
+            "diff",
+            "patch",
+            "cargo",
+            "clippy",
+            "pytest",
+            "запуст",
+            "измен",
+            "добав",
+            "удал",
+            "исправ",
+            "закоммит",
+            "провер",
+            "прочит",
+            "собрал",
+            "создал",
+        ],
+    ) || response_text.contains("```");
+
+    match intent {
+        "stop" => {
+            let stop_ack = contains_any(
+                &response_lower,
+                &[
+                    "останов",
+                    "стоп",
+                    "пауза",
+                    "жду",
+                    "ничего не дел",
+                    "не трога",
+                    "stopped",
+                    "paused",
+                ],
+            );
+            let verified = stop_ack && !work_claim && !refusal_or_failure;
+            let status = if verified {
+                "verified_stop_ack_without_work_claim"
+            } else if !stop_ack {
+                "rejected_stop_ack_absent"
+            } else if work_claim {
+                "rejected_stop_response_claims_work"
+            } else {
+                "rejected_stop_response_reports_failure"
+            };
+            (verified, true, status.to_owned())
+        }
+        "short_ack" => {
+            let ack = contains_any(
+                &response_lower,
+                &[
+                    "да",
+                    "нет",
+                    "ок",
+                    "ага",
+                    "понял",
+                    "хорошо",
+                    "ладно",
+                    "можно",
+                    "yes",
+                    "no",
+                    "ok",
+                ],
+            );
+            let verified = ack && response_tokens <= 16 && !work_claim && !refusal_or_failure;
+            let status = if verified {
+                "verified_short_ack_without_work_claim"
+            } else if !ack {
+                "rejected_short_ack_absent"
+            } else if response_tokens > 16 {
+                "rejected_short_ack_response_too_long"
+            } else if work_claim {
+                "rejected_short_ack_response_claims_work"
+            } else {
+                "rejected_short_ack_response_reports_failure"
+            };
+            (verified, true, status.to_owned())
+        }
+        "continue" => (
+            false,
+            true,
+            "rejected_continue_requires_live_task_execution_or_tool_state_verifier".to_owned(),
+        ),
+        _ => (
+            false,
+            false,
+            "not_applicable_unknown_agent_control_intent".to_owned(),
+        ),
+    }
 }
 
 fn response_contains_branch_token(response_lower: &str, token: &str) -> bool {

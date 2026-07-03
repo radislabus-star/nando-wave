@@ -1,5 +1,170 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Agent-Control Output Evidence + False-Accept Blocker
+
+Verdicts:
+
+```text
+AGENT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-agent-control-output-evidence-v1
+
+Updated:
+  role-binding-real-traffic-feedback-loop-v1
+
+The new evidence command joins agent-control dry-run trace rows with local
+Codex session final-answer fingerprints and applies a deterministic
+control-plane verifier. It writes no raw prompt text and no raw response text.
+
+The feedback loop now reads the agent-control dry-run report and the
+agent-control verification audit, so the control route participates in the
+main CPU Routability ladder instead of living as a side report.
+```
+
+Agent-control output-evidence join:
+
+```text
+input_trace:
+  target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1.trace.jsonl
+
+output_trace:
+  target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.report.json
+
+operator_candidate_calls: 143
+scoreable_candidate_calls: 143
+output_evidence_matched_events: 124
+no_session_output_match_events: 19
+deterministic_verification_events: 124
+verified_true_events: 12
+verified_false_events: 112
+session_ids_requested: 9
+session_files_scanned: 9
+codex_turns_indexed: 395
+raw_prompt_text_written: false
+raw_response_text_written: false
+```
+
+Verifier status breakdown:
+
+```text
+verified_stop_ack_without_work_claim: 11
+verified_short_ack_without_work_claim: 1
+rejected_short_ack_response_too_long: 47
+rejected_continue_requires_live_task_execution_or_tool_state_verifier: 31
+rejected_stop_ack_absent: 19
+rejected_stop_response_claims_work: 14
+rejected_short_ack_absent: 1
+missing matching Codex final answer: 19
+```
+
+Shadow over the evidence-enriched trace:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 53
+nando_shadow_accepts: 143
+verified_safe_accepts: 12
+unverified_shadow_accepts: 19
+false_accepts: 112
+incremental_reduction_vs_exact_cache_milli: 7
+p99_shadow_score_latency_ns: 4052
+```
+
+Audit:
+
+```text
+scoreable_candidate_calls: 143
+verification_hook_ready_events: 124
+verified_cpu_accept_eligible_events: 0
+provider_cost_events: 0
+candidates_missing_provider_cost: 143
+shadow_false_accepts: 112
+market_claim_allowed: false
+```
+
+Feedback-loop with the agent-control overlay:
+
+```text
+operator_candidate_calls: 408 / 1000
+scoreable_candidate_calls: 246 / 1000
+verification_hook_ready_events: 209 / 1000
+verified_cpu_accept_eligible_events: 3 / 1000
+verified_cpu_routability_milli: 3
+verified_gap_to_80_calls: 797
+
+agent-control route:
+  candidate_events: 143
+  scoreable_payload_events: 143
+  verification_hook_ready_events: 124
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 112
+  stage: false_accepts_block_local_policy
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: PASS
+task_id: agent-control-output-evidence-v1
+packet:
+  target/nando-wave/structural-gates/agent-control-output-evidence-v1.md
+
+Scope:
+  The gate checks the coherent blocker route:
+    shadow_accepts_143
+    false_accepts_112
+    verified_cpu_accept_eligible_zero
+    false_accepts_block_local_policy
+    market_claim_allowed_false
+    must_not_promote
+
+It does not upgrade the market claim. It only verifies that the blocker and
+claim-boundary structure is not role-swapped.
+```
+
+Claim boundary:
+
+```text
+This is not a market savings result.
+The agent-control runtime path is scoreable and has output-evidence hooks, but
+the current profile is too broad: it local-accepts continue/ack/stop rows that
+the deterministic verifier rejects.
+
+Do not promote this profile.
+Do not count the 12 verified_true rows as product savings.
+Provider cost is absent, unverified accepts remain, and false_accepts are high.
+```
+
+Diagnostic read:
+
+```text
+The important finding is negative:
+  agent-control has real routable pressure, but a one-edge shared control
+  profile is not a safe local-accept policy.
+
+A quick request-side admission probe found no simple zero-false subset:
+  stop_tokens_le_2: 31 accepted -> 10 true / 14 false / 7 missing
+  stop_exact: 12 accepted -> 2 true / 10 false / 0 missing
+  short_ack_tokens_le_1: 28 accepted -> 0 true / 26 false / 2 missing
+
+So the next engineering route is not threshold tuning. It is one of:
+  split stop / ack / continue into separate profile routes;
+  attach real agent-state or tool-state evidence;
+  add a no-mutating-tool-after-stop verifier;
+  keep continue as fallback until active-goal state can prove the next step.
+```
+
 ## 2026-07-03 - Executor Integration: Agent-Control Profile + Payload Dry-Run
 
 Verdicts:
