@@ -14,6 +14,255 @@ snapshot, active Cell32 ids и короткой фазовой траектор�
 к согласованному гармоническому состоянию
 ```
 
+Зафиксированная цель проекта и исходная формулировка claim вынесены сюда:
+
+```text
+docs/architecture_lineage/00_recorded_project_goal_and_claim.md
+```
+
+## Родословная архитектуры и граница claim
+
+Короткая формула:
+
+```text
+кирпичи известные, сборка своя
+```
+
+Nando Wave нельзя честно описывать как полностью никем не описанную архитектуру:
+почти каждый отдельный принцип имеет родню в литературе. Но ее также нельзя
+сводить к одной известной архитектуре.
+
+Более точная формула:
+
+```text
+Nando Wave = custom sparse wave-associative, role-binding, proof-gated architecture
+inspired by associative memory, sparse distributed memory, vector-symbolic binding,
+and mechanistic grokking analysis, but not identical to any single standard architecture.
+```
+
+Известные семейства идей, к которым проект имеет родство:
+
+```text
+associative memory / attractor dynamics
+sparse distributed memory
+Hebbian updates
+role/filler binding
+vector-symbolic representations
+Fourier / progress-measure grokking analysis
+sparse feature superposition
+```
+
+Подробные рабочие карточки по каждой позиции вынесены отдельно:
+
+```text
+docs/architecture_lineage/README.md
+```
+
+Ориентиры, но не готовые доказательства для Nando Wave:
+
+- Hopfield networks: content-addressable memory, где динамика сходится к
+  устойчивому состоянию.
+- Kanerva Sparse Distributed Memory: высокоразмерная память и чтение по
+  близости.
+- Smolensky tensor-product binding и Plate HRR: role/filler binding.
+- Nanda et al. modular-addition grokking analysis: проверка learned algorithm
+  через Fourier/progress measures.
+- Toy models of superposition: collision/interference при sparse features.
+
+Что в этой сборке является местным R&D, а не готовым стандартным методом:
+
+```text
+exact SurfaceWave/L1 encoding
+L2 center/motif promotion gates
+L3 state-delta/action-role binding pressure
+anti-wave/trap proof loop
+strict no-shortcut claim boundary
+CPU/cache-resident runtime target
+v2/v3 corpus pressure methodology
+```
+
+Текущая L1-L2-L3 лестница проекта:
+
+```text
+L1 SurfaceWave4096
+-> L2 motifs / center sequences
+-> L3 state-delta / action-role binding
+-> L4 closed until L1-L3 debts are proven
+```
+
+Главное отличие проекта не только в математике, но и в proof-gate дисциплине:
+
+```text
+не называем grokking,
+если есть target_id / proof_rule_id / lookup / shortcut
+```
+
+Текущий WavePredictor state-delta путь:
+
+```text
+state_before + rule_action_example
+-> learned pressure over target_delta
+-> role/action slot binding
+-> flat parity check
+-> ablation checks
+```
+
+Это не классический Hopfield, не HRR, не TPR и не Transformer. Это кастомный
+sparse Hebbian/contrastive predictor с role-binding readout и явными
+anti-shortcut проверками.
+
+Граница заявления:
+
+```text
+literature novelty claim: not allowed yet
+engineering / R&D novelty inside this repo: yes
+```
+
+Самая безопасная формулировка:
+
+```text
+Это не открытие из пустоты.
+Это новая инженерная сборка известных физических и нейросетевых идей
+под конкретную цель:
+доказать компактный переносимый оператор без lookup-а и без большой модели.
+```
+
+### Позиция 1: Attractor / Associative Memory
+
+Классическая идея:
+
+```text
+частичный / шумный вход
+-> сеть динамически сходится
+-> к ближайшему устойчивому сохраненному состоянию
+```
+
+У Hopfield networks это content-addressable memory: не ищем запись по адресу, а
+подаем кусок состояния, и система сама доходит до устойчивого паттерна.
+
+Родство Nando Wave:
+
+```text
+active centers
+-> compatibility / conflict / anti-wave
+-> bounded settle / gap
+-> accept or reject
+```
+
+L3 field в проекте мыслится не как чистый Hopfield recall, а как typed sparse
+attractor-field:
+
+```text
+score(center) =
+  motif_votes
++ compatibility(other_centers)
+- conflict(other_centers)
+- anti_wave
+```
+
+Settle также должен быть bounded, а не бесконечной релаксацией:
+
+```text
+for step in 0..N:
+  centers += compatibility
+  centers -= conflict
+  centers *= damping(step)
+```
+
+В текущем `WavePredictorHebbianField` это проявлено через:
+
+```text
+base_mass
+edges
+state_delta_edges
+state_delta_role_binding_edges
+```
+
+А edge имеет отдельные каналы:
+
+```text
+compatibility
+conflict
+anti_wave
+```
+
+Что сильнее для нашей задачи, чем простой nearest-pattern recall:
+
+```text
+1. Не только attraction, но и explicit rejection:
+   correct attractor усиливается, wrong attractor / trap подавляется.
+
+2. Attractor сам по себе не считается proof:
+   нужны heldout, traps, ablation и no-shortcut gates.
+
+3. Цель смещена от pattern recall к transition recall:
+   не partial X -> full X,
+   а state_t + rule_action -> state_t+1.
+
+4. Attractor становится инженерным объектом проверки:
+   accuracy, gap, p10 gap, ablation drop, flat parity,
+   shortcut gates, bytes estimate.
+```
+
+Что пока упущено / не доказано:
+
+```text
+1. Нет строгой global energy function.
+   У Hopfield есть energy monotonicity; у нас пока инженерное поле
+   compatibility - conflict - anti_wave без формального energy proof.
+
+2. Нет доказанных attraction basins.
+   Мы пока не можем сказать:
+   "для такого радиуса шума система гарантированно восстановит состояние".
+
+3. V3 показал предел текущего binding/attractor separation:
+   ordered_sequence_accuracy_milli = 269
+   flat_gap_parity_mismatches = 0
+   Значит runtime честный, но field не разделяет dense rule/slot matrix.
+
+4. Текущий WavePredictor больше margin/readout-field, чем полноценный
+   recurrent attractor:
+   active fringe -> learned sparse pressure -> gap over target_delta.
+```
+
+Рабочий вывод:
+
+```text
+Классика: вспомнить устойчивый образ.
+Nando Wave цель: стабилизировать правильный переход и отвергнуть близкую ловушку.
+```
+
+Статус позиции:
+
+```text
+Attractor / associative memory:
+  родство с классикой: ДА
+  улучшение под нашу задачу: ДА
+  универсально лучше классики: НЕТ
+  доказано до конца: НЕТ
+```
+
+Следующий proof/debt для взятия в работу:
+
+```text
+basin stability:
+  measure which perturbation radius still preserves the correct transition.
+
+gap stability:
+  require median and p10 gap to stay positive under controlled noise.
+
+ablation stability:
+  remove learned compatibility/conflict/anti-wave channels separately and
+  prove the transition collapses in the expected way.
+
+transition stability:
+  measure state_t + rule_action -> state_t+1, not only final accuracy.
+
+energy proxy:
+  define a monotonic or bounded field-energy proxy before claiming mature
+  attractor behavior.
+```
+
 ## Жесткие решения
 
 ```text

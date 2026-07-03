@@ -35,6 +35,402 @@ pub(crate) fn print_help() {
     println!("            Measure SymbolL3 256/512/768/1024-cell tick speed");
     println!("  bench-wave-layers");
     println!("            Measure L1/L2/L3 layered Wave speed, size, heldout, and ablation");
+    println!("  phase-package-v4 [corpus-jsonl] [package-path] [cells] [manifest-path]");
+    println!(
+        "            Build, save, load, inspect, bench, and manifest the v4 phase-center package"
+    );
+    println!("  phase-package-inspect [package-path] [manifest-path]");
+    println!("            Inspect an existing v4 phase-center package and verify its manifest");
+    println!(
+        "  phase-package-score-v4 [package-path] [manifest-path] [corpus-jsonl] [score-report-json]"
+    );
+    println!(
+        "            Score v4 JSONL through an existing package and manifest without compiling"
+    );
+    println!("  phase-eval-pack-v4 [package-path] [manifest-path] [corpus-jsonl] [eval-pack-path]");
+    println!("            Precompile v4 heldout/action-ablation eval vectors into a binary pack");
+    println!(
+        "  phase-package-score-pack-v4 [package-path] [manifest-path] [eval-pack-path] [score-report-json]"
+    );
+    println!(
+        "            Score an existing package through a binary eval pack without JSONL rebuild"
+    );
+    println!("  phase-package-verify [package-path] [manifest-path] [score-report-json]");
+    println!(
+        "            Verify package, manifest, and score report as one product proof artifact"
+    );
+    println!("  phase-action-boundary-v4 [corpus-jsonl]");
+    println!(
+        "            Audit whether v4 action text is safe to claim as a raw action-router gate"
+    );
+    println!("  phase-action-corpus-v1 [output-jsonl] [report-json]");
+    println!("            Generate a deterministic clean action_contract_v1 corpus in Rust");
+    println!("  phase-action-domain-corpus-v1 [output-jsonl] [report-json]");
+    println!(
+        "            Generate a deterministic workflow-shaped action_contract_v1 corpus in Rust"
+    );
+    println!("  phase-action-coverage-corpus-v1 [output-jsonl] [report-json]");
+    println!(
+        "            Generate a V5 action_tree coverage corpus with select/transform/write/condition/check diversity"
+    );
+    println!("  phase-action-contract-v1 [contract-jsonl] [report-json]");
+    println!(
+        "            Validate the clean action_tree corpus contract before action-router training"
+    );
+    println!("  phase-action-operator-coverage-v1 [contract-jsonl] [report-json]");
+    println!(
+        "            Audit action_tree select/transform/write/condition/check coverage without label authority"
+    );
+    println!("  phase-action-shortcut-v1 [contract-jsonl] [report-json]");
+    println!(
+        "            Check exact/token/length/bag/source-bigram shortcuts on action_tree corpus"
+    );
+    println!("  phase-action-runtime-v1 [contract-jsonl] [cells] [report-json]");
+    println!(
+        "            Compile clean action_tree rows into PhaseCenterFlatRuntime and score heldout"
+    );
+    println!("  phase-action-package-v1 [contract-jsonl] [package-path] [cells] [manifest-path]");
+    println!(
+        "            Save/load a clean action_tree PhaseCenterFlatRuntime package and manifest"
+    );
+    println!("  phase-action-package-inspect-v1 [package-path] [manifest-path]");
+    println!("            Inspect a saved clean action_tree package and manifest");
+    println!(
+        "  phase-action-source-verify-v1 [package-path] [manifest-path] [source-verify-report-json]"
+    );
+    println!(
+        "            Rebuild a saved action package from its source JSONL through Rust and verify exact bytes"
+    );
+    println!(
+        "  phase-action-package-score-v1 [package-path] [manifest-path] [contract-jsonl] [score-report-json]"
+    );
+    println!("            Score a saved clean action_tree package without recompiling it");
+    println!(
+        "  phase-action-eval-pack-v1 [package-path] [manifest-path] [contract-jsonl] [eval-pack-path]"
+    );
+    println!("            Build a binary action eval pack once from JSONL");
+    println!(
+        "  phase-action-package-score-pack-v1 [package-path] [manifest-path] [eval-pack-path] [score-report-json]"
+    );
+    println!("            Score a saved clean action_tree package through a binary eval pack");
+    println!(
+        "  phase-action-package-bench-pack-v1 [package-path] [manifest-path] [eval-pack-path] [iterations] [bench-report-json]"
+    );
+    println!("            Benchmark a saved clean action_tree package through a binary eval pack");
+    println!(
+        "  phase-action-package-bench-verify-v1 [package-path] [manifest-path] [eval-pack-path] [bench-report-json]"
+    );
+    println!("            Verify a clean action_tree benchmark package report");
+    println!(
+        "  phase-action-product-proof-v1 [package-path] [manifest-path] [eval-pack-path] [score-report-json] [bench-report-json] [product-proof-json]"
+    );
+    println!("            Build a product-proof bundle over package, score, and benchmark reports");
+    println!(
+        "  phase-action-product-verify-v1 [package-path] [manifest-path] [eval-pack-path] [score-report-json] [bench-report-json] [product-proof-json]"
+    );
+    println!("            Verify a product-proof bundle for a clean action_tree package");
+    println!("  role-binding-package-inspect-v1 [package-path] [report-json]");
+    println!("            Inspect a serialized .nwrb role-binding package through public SDK APIs");
+    println!("  role-binding-package-verify-v1 [package-path] [report-json]");
+    println!("            Verify a saved .nwrb role-binding inspect report against package bytes");
+    println!(
+        "  role-binding-eval-pack-from-package-v1 [package-path] [eval-pack-json] [max-tasks]"
+    );
+    println!(
+        "            Build a package-derived .nwrb scoring smoke eval-pack; not independent corpus proof"
+    );
+    println!(
+        "  role-binding-eval-pack-binary-v1 [source-eval-pack-json] [binary-eval-pack] [report-json]"
+    );
+    println!("            Convert a role-binding eval-pack JSON into compact binary .nwreb format");
+    println!(
+        "  role-binding-binary-eval-pack-suite-v1 [root-dir] [suite-report-json] [margin-threshold]"
+    );
+    println!(
+        "            Convert/score all current slot32 role-binding corpus eval-packs as .nwreb"
+    );
+    println!(
+        "  role-binding-binary-eval-pack-suite-verify-v1 [root-dir] [suite-report-json] [margin-threshold]"
+    );
+    println!("            Rebuild and verify the all-seed slot32 .nwreb suite report");
+    println!(
+        "  role-binding-package-score-v1 [package-path] [eval-pack-json] [score-report-json] [margin-threshold]"
+    );
+    println!(
+        "            Score a serialized .nwrb role-binding package through an explicit eval-pack"
+    );
+    println!(
+        "  role-binding-package-score-verify-v1 [package-path] [eval-pack-json] [score-report-json] [margin-threshold]"
+    );
+    println!("            Rebuild and verify a saved .nwrb role-binding score report");
+    println!(
+        "  role-binding-release-suite-v1 [binary-suite-report-json] [release-suite-report-json]"
+    );
+    println!(
+        "            Bundle .nwrb packages, .nwreb eval-packs, and score reports into one proof"
+    );
+    println!(
+        "  role-binding-release-suite-verify-v1 [binary-suite-report-json] [release-suite-report-json]"
+    );
+    println!("            Rebuild and verify the role-binding release-suite proof bundle");
+    println!(
+        "  role-binding-operator-blueprint-gap-v1 [release-suite-report-json] [gap-report-json]"
+    );
+    println!(
+        "            Audit current .nwrb/.nwreb role-binding proof against OPERATOR_BLUEPRINT"
+    );
+    println!(
+        "  role-binding-operator-blueprint-gap-verify-v1 [release-suite-report-json] [gap-report-json]"
+    );
+    println!("            Rebuild and verify the OPERATOR_BLUEPRINT gap audit report");
+    println!(
+        "  role-binding-profile-registry-from-release-v1 [release-suite-report-json] [registry-config-json]"
+    );
+    println!("            Emit a serving-only .nwrb profile registry from a green release-suite");
+    println!("  role-binding-profile-serve-v1 [registry-config-json] [bind-addr] [request-limit]");
+    println!(
+        "            Serve .nwrb role-binding profiles over /health /profiles /score /replay /metrics"
+    );
+    println!(
+        "  role-binding-profile-runtime-smoke-v1 [registry-config-json] [runtime-smoke-report-json]"
+    );
+    println!("            Smoke-test the serving-only role-binding profile runtime endpoints");
+    println!(
+        "  role-binding-profile-replay-suite-v1 [registry-config-json] [binary-suite-report-json] [replay-suite-report-json] [max-unique-sequences-per-profile] [batch-unique-sequences]"
+    );
+    println!(
+        "            Replay release-suite requests through the serving-only .nwrb HTTP profile runtime"
+    );
+    println!(
+        "  role-binding-profile-fallback-smoke-v1 [registry-config-json] [fallback-smoke-report-json]"
+    );
+    println!(
+        "            Verify local accept, missing-route fallback, and low-margin fallback over .nwrb HTTP profile runtime"
+    );
+    println!(
+        "  role-binding-profile-worker-scaling-v1 [registry-config-json] [worker-scaling-report-json] [worker-count]"
+    );
+    println!("            Verify serving-only .nwrb profile shards across multiple local workers");
+    println!(
+        "  role-binding-profile-worker-replay-v1 [registry-config-json] [binary-suite-report-json] [worker-replay-report-json] [worker-count] [max-unique-sequences-per-profile] [batch-unique-sequences]"
+    );
+    println!(
+        "            Replay release-suite requests through multiple serving-only .nwrb profile workers"
+    );
+    println!("  role-binding-profile-lb-serve-v1 <lb-config-json> [bind-addr] [request-limit]");
+    println!(
+        "            Serve a metadata-only profile load-balancer over /health /profiles /score /replay /metrics"
+    );
+    println!(
+        "  role-binding-profile-lb-replay-v1 [registry-config-json] [binary-suite-report-json] [lb-replay-report-json] [worker-count] [max-unique-sequences-per-profile] [batch-unique-sequences]"
+    );
+    println!(
+        "            Replay release-suite requests through a local load-balancer and serving-only .nwrb worker shards"
+    );
+    println!(
+        "  role-binding-profile-lb-throughput-v1 [registry-config-json] [binary-suite-report-json] [throughput-report-json] [worker-count] [max-unique-sequences-per-profile] [client-threads] [sequence-repetitions]"
+    );
+    println!(
+        "            Run a bounded concurrent /score pressure proof through local LB and serving-only .nwrb worker shards"
+    );
+    println!("  role-binding-real-traffic-record-v1 [trace-jsonl] <record-json>");
+    println!(
+        "            Validate and append one real traffic shadow trace row without changing the live LLM flow"
+    );
+    println!(
+        "  role-binding-real-traffic-record-serve-v1 [trace-jsonl] [bind-addr] [request-limit]"
+    );
+    println!(
+        "            Serve a bounded local HTTP recorder over /health /trace /metrics for real traffic shadow rows"
+    );
+    println!(
+        "  role-binding-real-traffic-ingest-events-v1 <events-jsonl> [trace-jsonl] [ingest-report-json]"
+    );
+    println!(
+        "            Convert agent/API event JSONL into the real traffic shadow trace contract"
+    );
+    println!(
+        "  role-binding-real-traffic-codex-history-ingest-v1 [history-jsonl] [events-jsonl] [ingest-report-json] [max-events]"
+    );
+    println!(
+        "            Convert local Codex history prompts into privacy-safe event fingerprints without raw text"
+    );
+    println!(
+        "  role-binding-real-traffic-codex-history-route-candidates-v1 [history-jsonl] [registry-config-json] [events-jsonl] [route-report-json] [max-events]"
+    );
+    println!(
+        "            Build route-only Nando shadow candidates from local Codex history; payload remains empty so scoring must fallback"
+    );
+    println!(
+        "  role-binding-real-traffic-shadow-v1 [registry-config-json] [trace-jsonl] [shadow-report-json]"
+    );
+    println!(
+        "            Analyze recorded real traffic in shadow mode against serving-only .nwrb profiles"
+    );
+    println!(
+        "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
+    );
+    println!(
+        "            Build a synthetic smoke trace for the shadow analyzer; not a market savings claim"
+    );
+    println!("  phase-action-release-suite-v1 [release-suite-report-json]");
+    println!(
+        "            Build a release-suite report over the current generated/domain product-proof bundles"
+    );
+    println!("  phase-action-release-verify-v1 [release-suite-report-json]");
+    println!("            Verify a release-suite report against its saved product-proof inputs");
+    println!(
+        "  phase-action-license-package-v1 [release-suite-report-json] [license-file] [license-package-report-json]"
+    );
+    println!("            Build a non-commercial license package over the release-suite");
+    println!(
+        "  phase-action-license-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json]"
+    );
+    println!("            Verify the non-commercial license package against repo metadata");
+    println!(
+        "  phase-action-offload-audit-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [simulated-calls] [offload-audit-report-json]"
+    );
+    println!(
+        "            Audit local-operator vs LLM-fallback offload over packaged action runtimes"
+    );
+    println!(
+        "  phase-action-offload-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json]"
+    );
+    println!("            Verify the offload audit report against package/license sources");
+    println!(
+        "  phase-action-cache-offload-bench-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [simulated-calls] [cache-offload-bench-report-json]"
+    );
+    println!(
+        "            Compare no-cache, exact-cache, and exact-cache plus Nando local operator paths"
+    );
+    println!(
+        "  phase-action-cache-offload-bench-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [simulated-calls] [cache-offload-bench-report-json]"
+    );
+    println!(
+        "            Verify the cache-enabled offload benchmark against current release artifacts"
+    );
+    println!("  phase-action-daemon-smoke-v1 [daemon-smoke-report-json]");
+    println!(
+        "            Start a loopback HTTP service smoke over PhaseCenterOffloadRuntime package bytes"
+    );
+    println!(
+        "  phase-action-daemon-package-smoke-v1 [package-path] [manifest-path] [corpus-jsonl] [daemon-package-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test HTTP scoring over an existing .nwpc action package");
+    println!(
+        "  phase-action-daemon-hardening-smoke-v1 [package-path] [manifest-path] [corpus-jsonl] [daemon-hardening-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test HTTP health, stats, route errors, and request limits");
+    println!(
+        "  phase-action-daemon-auth-smoke-v1 [package-path] [manifest-path] [corpus-jsonl] [daemon-auth-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test bearer auth for HTTP /score and /stats");
+    println!(
+        "  phase-action-daemon-registry-smoke-v1 [daemon-registry-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!(
+        "            Smoke-test multi-package HTTP registry routing over existing .nwpc packages"
+    );
+    println!(
+        "  phase-action-daemon-registry-config-smoke-v1 [registry-config-json] [daemon-registry-config-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test loading multi-package HTTP registry routing from JSON config");
+    println!(
+        "  phase-action-daemon-config-validation-smoke-v1 [registry-config-json] [daemon-config-validation-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test registry config reject-before-serve validation");
+    println!(
+        "  phase-action-daemon-rate-limit-smoke-v1 [registry-config-json] [daemon-rate-limit-smoke-report-json] [margin-threshold-micro] [max-score-requests]"
+    );
+    println!("            Smoke-test HTTP /score rate-limit guard over JSON registry config");
+    println!(
+        "  phase-action-daemon-observability-smoke-v1 [registry-config-json] [daemon-observability-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test HTTP /stats counters and runtime provenance fields");
+    println!(
+        "  phase-action-daemon-audit-log-smoke-v1 [registry-config-json] [audit-log-jsonl] [daemon-audit-log-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test server-side structured JSONL audit events");
+    println!(
+        "  phase-action-daemon-error-taxonomy-smoke-v1 [registry-config-json] [daemon-error-taxonomy-smoke-report-json] [margin-threshold-micro]"
+    );
+    println!("            Smoke-test HTTP rejection taxonomy and no-scorer error counters");
+    println!("  phase-action-daemon-proof-suite-v1 [daemon-proof-suite-report-json]");
+    println!("            Verify saved HTTP daemon proof reports as one product bundle");
+    println!("  phase-action-daemon-live-proof-suite-v1 [daemon-live-proof-suite-report-json]");
+    println!("            Rerun HTTP daemon smoke gates and verify them as one product bundle");
+    println!(
+        "  phase-action-daemon-systemd-smoke-v1 [service-unit] [env-file] [registry-config-json] [daemon-systemd-smoke-report-json]"
+    );
+    println!(
+        "            Generate and verify local systemd service/env artifacts for daemon packaging"
+    );
+    println!(
+        "  phase-action-daemon-deployment-package-v1 [daemon-live-proof-suite-report-json] [daemon-systemd-smoke-report-json] [daemon-deployment-package-report-json]"
+    );
+    println!(
+        "            Verify daemon live proof, systemd smoke, service, env, and registry artifacts as one deployment package"
+    );
+    println!(
+        "  phase-action-daemon-deployment-verify-v1 [daemon-live-proof-suite-report-json] [daemon-systemd-smoke-report-json] [daemon-deployment-package-report-json]"
+    );
+    println!(
+        "            Verify the saved daemon deployment package report against current proof sources"
+    );
+    println!(
+        "  phase-action-daemon-serve-registry-v1 [registry-config-json] [bind-addr] [margin-threshold-micro] [auth-token] [max-score-requests] [audit-log-jsonl]"
+    );
+    println!("            Serve multiple existing .nwpc packages from a JSON registry config");
+    println!(
+        "  phase-action-daemon-serve-v1 [package-path] [bind-addr] [margin-threshold-micro] [auth-token] [max-score-requests] [audit-log-jsonl]"
+    );
+    println!("            Serve an existing .nwpc package through HTTP POST /score");
+    println!(
+        "  phase-action-workflow-bench-v1 [release-suite-report-json] [license-file] [license-package-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json]"
+    );
+    println!(
+        "            Verify the workflow-shaped domain_action artifact over the frozen package chain"
+    );
+    println!(
+        "  phase-action-workflow-bench-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json]"
+    );
+    println!("            Rebuild and verify the workflow-shaped benchmark proof");
+    println!(
+        "  phase-action-workflow-replay-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [workflow-sessions] [steps-per-session] [workflow-replay-report-json]"
+    );
+    println!(
+        "            Replay deterministic multi-package workflow traces through frozen .nwpc packages"
+    );
+    println!(
+        "  phase-action-workflow-replay-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [workflow-sessions] [steps-per-session] [workflow-replay-report-json]"
+    );
+    println!("            Rebuild and verify the workflow replay proof");
+    println!(
+        "  phase-action-regression-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]"
+    );
+    println!(
+        "            Freeze the current green release/license/offload/cache/workflow regression proof"
+    );
+    println!(
+        "  phase-action-regression-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]"
+    );
+    println!("            Verify the frozen green regression proof against current sources");
+    println!(
+        "  phase-action-regression-freeze-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [regression-freeze-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]"
+    );
+    println!(
+        "            Write a machine-checkable freeze checkpoint over a green regression proof"
+    );
+    println!(
+        "  phase-action-regression-freeze-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [regression-freeze-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]"
+    );
+    println!("            Verify a regression freeze checkpoint against current proof sources");
+    println!("  phase-action-package-verify-v1 [package-path] [manifest-path] [score-report-json]");
+    println!("            Verify a clean action_tree package, manifest, and score report");
+    println!("  strict-multiseed-rust-audit-v1 [diagnostics-root] [audit-report-json]");
+    println!("            Parse Rust strict runtime logs for the v4 multi-seed robustness rung");
+    println!("  strict-multiseed-rust-audit-verify-v1 [diagnostics-root] [audit-report-json]");
+    println!("            Rebuild and verify the Rust strict multi-seed audit report");
     println!("  live-byte-train [seed] <text...>");
     println!("            Run primitive online byte prediction with local feedback");
     println!("  live-byte-learn [seed] <text...>");

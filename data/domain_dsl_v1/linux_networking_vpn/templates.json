@@ -1,0 +1,270 @@
+{
+  "schema_version": "domain_dsl_v1",
+  "domain_id": "linux_networking_vpn",
+  "templates": [
+    {
+      "template_id": "route_scope_missing_subnet_v1",
+      "task_kind": "qa_context",
+      "operator_family": "evidence_to_route_scope",
+      "required_entity_ids": ["vpn_tunnel", "allowed_ips", "internal_subnet", "ping_probe"],
+      "negative_rule_ids": ["wrong_layer_dns_instead_route"],
+      "constraint_tags": ["positive_negative_reachability", "minimal_change", "scope_boundary"],
+      "input_pattern": "VPN is up; subnet A is reachable; subnet B times out; AllowedIPs contains subnet A only.",
+      "target_pattern": "Add or repair subnet B in AllowedIPs/route scope for the peer.",
+      "near_negative_pattern": "Keep the existing AllowedIPs and repair DNS or unrelated transport."
+    },
+    {
+      "template_id": "internal_dns_resolver_v1",
+      "task_kind": "qa_context",
+      "operator_family": "evidence_to_dns_layer",
+      "required_entity_ids": ["dns_resolver", "internal_domain", "vpn_tunnel", "ping_probe"],
+      "negative_rule_ids": ["wrong_layer_route_instead_dns"],
+      "constraint_tags": ["layer_separation", "direct_ip_control", "resolver_scope"],
+      "input_pattern": "VPN path and direct IP work; internal hostname fails; external DNS works.",
+      "target_pattern": "Route internal domain lookups to the internal resolver.",
+      "near_negative_pattern": "Change route or VPN transport while keeping resolver path wrong."
+    },
+    {
+      "template_id": "http_403_app_acl_v1",
+      "task_kind": "qa_context",
+      "operator_family": "layer_separation_between_network_and_app_auth",
+      "required_entity_ids": ["curl_probe", "http_403", "app_acl", "vpn_tunnel"],
+      "negative_rule_ids": ["wrong_subject_acl"],
+      "constraint_tags": ["network_success_app_denial", "subject_binding", "wrong_subject_trap"],
+      "input_pattern": "VPN/network path succeeds; internal service returns HTTP 403; firewall/route unchanged.",
+      "target_pattern": "Check app/domain ACL for the actual user/resource.",
+      "near_negative_pattern": "Check the same ACL family but for the wrong subject or move back to VPN routing."
+    },
+    {
+      "template_id": "keepalive_dpd_timeout_v1",
+      "task_kind": "qa_context",
+      "operator_family": "next_step_timeout_parameter_tuning",
+      "required_entity_ids": ["keepalive", "time_sync", "certificate", "mtu"],
+      "negative_rule_ids": ["mtu_instead_keepalive"],
+      "constraint_tags": ["timeout_liveness", "healthy_cert", "wrong_cause_trap"],
+      "input_pattern": "DPD/keepalive timeouts repeat; time and keys/cert status are healthy.",
+      "target_pattern": "Inspect keepalive/DPD timing parameters.",
+      "near_negative_pattern": "Tune MTU/MSS first while leaving keepalive unchanged."
+    },
+    {
+      "template_id": "radius_2fa_time_sync_v1",
+      "task_kind": "qa_context",
+      "operator_family": "cause_sequence_to_auth_layer",
+      "required_entity_ids": ["radius_server", "time_sync", "certificate"],
+      "negative_rule_ids": ["premature_certificate_replace"],
+      "constraint_tags": ["auth_sequence", "certificate_excluded", "time_boundary"],
+      "input_pattern": "Auth failure is tied to 2FA/RADIUS; certificate evidence is valid.",
+      "target_pattern": "Check time sync and RADIUS/2FA path before TLS certificate work.",
+      "near_negative_pattern": "Replace certificate while ignoring auth timing evidence."
+    },
+    {
+      "template_id": "config_snapshot_before_mutation_v1",
+      "task_kind": "procedure_next_step",
+      "operator_family": "config_snapshot_before_mutation",
+      "required_entity_ids": ["config_snapshot", "service_restart"],
+      "negative_rule_ids": ["skip_snapshot"],
+      "constraint_tags": ["wrong_order", "rollback", "baseline_required"],
+      "input_pattern": "A change or incident action is planned; config/version baseline is not captured.",
+      "target_pattern": "Capture baseline before mutation or blocking action.",
+      "near_negative_pattern": "Mutate/block first and capture baseline later."
+    },
+    {
+      "template_id": "rollout_completion_gate_v1",
+      "task_kind": "procedure_next_step",
+      "operator_family": "completion_gate_in_rollout",
+      "required_entity_ids": ["peer_profile", "config_snapshot"],
+      "negative_rule_ids": ["partial_rollout_before_gate"],
+      "constraint_tags": ["completion_gate", "mixed_state_rejection", "smoke_test_boundary"],
+      "input_pattern": "Ordered rollout prerequisite is only partially complete.",
+      "target_pattern": "Finish prerequisite before next rollout phase.",
+      "near_negative_pattern": "Apply next phase partially to move faster."
+    },
+    {
+      "template_id": "exposure_status_underfilled_v1",
+      "task_kind": "refusal_no_answer",
+      "operator_family": "refusal_when_exposure_evidence_underfilled",
+      "required_entity_ids": ["firewall_acl", "route_table", "server_peer"],
+      "negative_rule_ids": ["answer_without_runtime_evidence"],
+      "constraint_tags": ["underfilled", "safe_refusal", "runtime_evidence_required"],
+      "input_pattern": "Exposure/status question lacks socket, firewall, bind, or route evidence.",
+      "target_pattern": "Return underfilled and request exact runtime snapshots.",
+      "near_negative_pattern": "Assert exposed/safe without the missing evidence."
+    },
+    {
+      "template_id": "minimal_change_visible_mismatch_v1",
+      "task_kind": "procedure_next_step",
+      "operator_family": "minimal_change_before_restart",
+      "required_entity_ids": ["service_restart", "config_snapshot", "firewall_acl"],
+      "negative_rule_ids": ["overbroad_restart"],
+      "constraint_tags": ["minimal_change", "blast_radius", "bounded_mismatch"],
+      "input_pattern": "A bounded policy/config mismatch is visible and service restart has broad blast radius.",
+      "target_pattern": "Apply the narrow correction or collect exact evidence before restart.",
+      "near_negative_pattern": "Restart the broad service first although the bounded mismatch is already visible."
+    },
+    {
+      "template_id": "tcp_port_firewall_not_route_v1",
+      "task_kind": "qa_context",
+      "operator_family": "firewall_vs_route_disambiguation",
+      "required_entity_ids": ["ping_probe", "tcp_port_443", "firewall_acl", "route_table"],
+      "negative_rule_ids": ["route_instead_firewall_port"],
+      "constraint_tags": ["protocol_specific_failure", "route_control", "port_filter"],
+      "input_pattern": "Route and ping succeed; TCP 443 to the target fails.",
+      "target_pattern": "Inspect firewall/ACL for the blocked protocol or port.",
+      "near_negative_pattern": "Rewrite general route even though reachability is already proven."
+    },
+    {
+      "template_id": "interface_absent_before_route_v1",
+      "task_kind": "qa_context",
+      "operator_family": "interface_state_to_link_layer",
+      "required_entity_ids": ["network_interface", "wg_interface", "route_table"],
+      "negative_rule_ids": ["wrong_daemon_instead_link"],
+      "constraint_tags": ["link_layer_first", "interface_identity", "route_not_primary"],
+      "input_pattern": "Expected wg interface is absent or down; route table contains stale tunnel routes.",
+      "target_pattern": "Inspect interface/link state before route or DNS repair.",
+      "near_negative_pattern": "Edit DNS or routes while the tunnel interface itself is missing."
+    },
+    {
+      "template_id": "daemon_failed_before_firewall_v1",
+      "task_kind": "qa_context",
+      "operator_family": "service_state_to_daemon_layer",
+      "required_entity_ids": ["openvpn_service", "journal_log", "network_interface"],
+      "negative_rule_ids": ["wrong_link_instead_daemon"],
+      "constraint_tags": ["daemon_layer", "journal_evidence", "no_network_mutation"],
+      "input_pattern": "VPN interface is absent; service journal shows daemon startup failure.",
+      "target_pattern": "Inspect daemon/service unit and logs before network-layer changes.",
+      "near_negative_pattern": "Tune firewall or routes even though the daemon never started."
+    },
+    {
+      "template_id": "nat_return_path_v1",
+      "task_kind": "qa_context",
+      "operator_family": "nat_masquerade_for_return_path",
+      "required_entity_ids": ["nat_masquerade", "route_table", "internal_subnet", "packet_capture"],
+      "negative_rule_ids": ["route_instead_nat_return"],
+      "constraint_tags": ["return_path", "nat_boundary", "not_forward_route"],
+      "input_pattern": "Client packets reach the remote subnet; replies do not return through the tunnel; NAT policy is absent.",
+      "target_pattern": "Check NAT masquerade or explicit return route on the egress side.",
+      "near_negative_pattern": "Add another forward route while leaving the return path untranslated."
+    },
+    {
+      "template_id": "policy_table_selected_v1",
+      "task_kind": "qa_context",
+      "operator_family": "policy_routing_table_selection",
+      "required_entity_ids": ["policy_rule", "routing_table_id", "route_table"],
+      "negative_rule_ids": ["main_table_instead_policy_table"],
+      "constraint_tags": ["policy_routing", "selected_table", "wrong_scope_trap"],
+      "input_pattern": "Main route looks correct; ip rule selects table 100 for the affected source.",
+      "target_pattern": "Inspect and repair the selected policy routing table.",
+      "near_negative_pattern": "Rewrite only the main routing table."
+    },
+    {
+      "template_id": "rp_filter_asymmetric_tunnel_v1",
+      "task_kind": "qa_context",
+      "operator_family": "reverse_path_filter_asymmetry",
+      "required_entity_ids": ["rp_filter", "firewall_acl", "packet_capture"],
+      "negative_rule_ids": ["firewall_instead_rp_filter"],
+      "constraint_tags": ["asymmetric_path", "kernel_setting", "not_acl_first"],
+      "input_pattern": "Asymmetric tunnel traffic disappears on a Linux host; rp_filter is strict.",
+      "target_pattern": "Inspect rp_filter and asymmetric return path before firewall rewrite.",
+      "near_negative_pattern": "Treat the drop as ordinary firewall ACL failure."
+    },
+    {
+      "template_id": "large_tcp_blackhole_mss_v1",
+      "task_kind": "qa_context",
+      "operator_family": "mss_clamp_for_blackhole_mtu",
+      "required_entity_ids": ["mtu", "tcp_mss_clamp", "keepalive", "curl_probe"],
+      "negative_rule_ids": ["keepalive_instead_mss_clamp"],
+      "constraint_tags": ["small_probe_success", "large_flow_failure", "mtu_blackhole"],
+      "input_pattern": "Ping and small HTTP probes pass; large TCP transfers hang through the tunnel.",
+      "target_pattern": "Inspect MTU/MSS and apply MSS clamp if blackhole evidence holds.",
+      "near_negative_pattern": "Tune keepalive/DPD although liveness is not the failing signal."
+    },
+    {
+      "template_id": "stale_peer_endpoint_v1",
+      "task_kind": "qa_context",
+      "operator_family": "endpoint_roaming_to_peer_endpoint_update",
+      "required_entity_ids": ["peer_endpoint", "public_ip", "wireguard_handshake", "allowed_ips"],
+      "negative_rule_ids": ["restart_instead_endpoint_update"],
+      "constraint_tags": ["endpoint_roaming", "handshake_stale", "route_scope_not_primary"],
+      "input_pattern": "Peer public IP changed; endpoint still points to the old address; AllowedIPs still match intended subnets.",
+      "target_pattern": "Update or relearn the peer endpoint.",
+      "near_negative_pattern": "Widen AllowedIPs or restart repeatedly while endpoint remains stale."
+    },
+    {
+      "template_id": "resolved_link_split_dns_v1",
+      "task_kind": "qa_context",
+      "operator_family": "systemd_resolved_split_dns",
+      "required_entity_ids": ["systemd_resolved", "dns_resolver", "internal_domain", "vpn_tunnel"],
+      "negative_rule_ids": ["global_dns_instead_split_dns"],
+      "constraint_tags": ["split_dns", "link_scope", "no_global_dns_rewrite"],
+      "input_pattern": "VPN link should resolve internal domain; systemd-resolved sends that domain to the wrong link.",
+      "target_pattern": "Bind the internal domain resolver to the VPN link.",
+      "near_negative_pattern": "Replace global DNS and disturb unrelated name resolution."
+    },
+    {
+      "template_id": "short_name_suffix_v1",
+      "task_kind": "qa_context",
+      "operator_family": "dns_search_suffix_scope",
+      "required_entity_ids": ["dns_search_suffix", "dns_resolver", "internal_domain"],
+      "negative_rule_ids": ["resolver_instead_search_suffix"],
+      "constraint_tags": ["fqdn_control", "short_name_failure", "field_specific_fix"],
+      "input_pattern": "Internal FQDN resolves; short hostname fails; resolver IP is correct.",
+      "target_pattern": "Repair search suffix or domain search scope.",
+      "near_negative_pattern": "Change resolver IP although FQDN already works."
+    },
+    {
+      "template_id": "one_sided_capture_boundary_v1",
+      "task_kind": "qa_context",
+      "operator_family": "packet_capture_to_path_direction",
+      "required_entity_ids": ["packet_capture", "nat_masquerade", "firewall_acl", "route_table"],
+      "negative_rule_ids": ["single_side_capture_conclusion"],
+      "constraint_tags": ["evidence_boundary", "directional_capture", "no_full_causality_jump"],
+      "input_pattern": "tcpdump on one side shows packets leaving but no return packets at that capture point.",
+      "target_pattern": "Separate capture side, packet direction, and missing counterpart evidence before choosing route/NAT/firewall fix.",
+      "near_negative_pattern": "Declare a full route/NAT/firewall cause from that single capture point."
+    },
+    {
+      "template_id": "socket_bind_exposure_v1",
+      "task_kind": "qa_context",
+      "operator_family": "socket_bind_scope_exposure",
+      "required_entity_ids": ["ss_socket", "bind_address", "firewall_acl", "route_table"],
+      "negative_rule_ids": ["route_exposure_without_socket_bind"],
+      "constraint_tags": ["socket_bind", "exposure_boundary", "multi_evidence_required"],
+      "input_pattern": "Service is listening; bind address is localhost/private-only; route and firewall context are partial.",
+      "target_pattern": "Judge exposure from socket bind scope plus firewall and route context.",
+      "near_negative_pattern": "Call the service exposed just because the process is listening."
+    },
+    {
+      "template_id": "peer_key_mismatch_v1",
+      "task_kind": "qa_context",
+      "operator_family": "key_mismatch_to_peer_credential",
+      "required_entity_ids": ["private_key", "preshared_key", "wireguard_handshake", "peer_profile"],
+      "negative_rule_ids": ["route_or_dns_instead_key_mismatch"],
+      "constraint_tags": ["credential_binding", "handshake_failure", "not_route_dns"],
+      "input_pattern": "Handshake/auth evidence points to peer key mismatch; endpoint and route are plausible.",
+      "target_pattern": "Inspect peer credential binding: public/private/preshared key mapping.",
+      "near_negative_pattern": "Repair route or DNS while leaving the credential mismatch untouched."
+    },
+    {
+      "template_id": "forward_chain_for_transit_v1",
+      "task_kind": "qa_context",
+      "operator_family": "firewall_forward_chain_vs_input_chain",
+      "required_entity_ids": ["forward_chain", "input_chain", "firewall_acl", "vpn_tunnel"],
+      "negative_rule_ids": ["input_chain_instead_forward_chain"],
+      "constraint_tags": ["transit_traffic", "firewall_chain_scope", "wrong_chain_trap"],
+      "input_pattern": "Traffic should transit through the VPN host; local service on the host is not the target.",
+      "target_pattern": "Inspect FORWARD policy and counters, not only INPUT rules.",
+      "near_negative_pattern": "Change INPUT policy for traffic that is only being forwarded."
+    },
+    {
+      "template_id": "failed_smoke_requires_rollback_v1",
+      "task_kind": "procedure_next_step",
+      "operator_family": "rollback_when_change_regresses_smoke",
+      "required_entity_ids": ["smoke_test", "config_snapshot", "service_restart"],
+      "negative_rule_ids": ["continue_after_failed_smoke"],
+      "constraint_tags": ["post_change_gate", "rollback", "no_stacked_mutation"],
+      "input_pattern": "A bounded change was applied; post-change smoke test fails; rollback point exists.",
+      "target_pattern": "Rollback or isolate the last change before adding new changes.",
+      "near_negative_pattern": "Continue applying new changes on top of the failed smoke test."
+    }
+  ]
+}

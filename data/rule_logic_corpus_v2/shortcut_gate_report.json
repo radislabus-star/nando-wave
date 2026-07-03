@@ -1,0 +1,21 @@
+{
+  "metrics": {
+    "answer_status_majority_accuracy_milli": 244,
+    "exact_lookup_accuracy_milli": 0,
+    "heldout_rows": 2400,
+    "markov_choice_accuracy_milli": 497,
+    "proof_rule_id_majority_accuracy_milli": 0,
+    "rows": 12000,
+    "source_group_majority_accuracy_milli": 246,
+    "surface_family_majority_accuracy_milli": 256,
+    "target_label_balance": {
+      "choice=A": 2933,
+      "choice=B": 3111,
+      "choice=C": 2990,
+      "choice=D": 2966
+    },
+    "train_rows": 9600
+  },
+  "schema_version": "rule_logic_shortcut_gate_report_v2",
+  "verdict": "VALID_RULE_OPERATOR_PRESSURE_CANDIDATE_V2"
+}

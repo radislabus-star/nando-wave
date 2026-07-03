@@ -1,14 +1,21 @@
 //! L1 surface-wire compiler.
 //!
-//! This is deliberately below L3: it compiles raw bytes into a fixed wave
+//! This is deliberately below L3: it compiles surface form into a fixed wave
 //! pattern. It does not claim roles, relations, or meaning.
 
 pub const SURFACE_WAVE_DIM: usize = 4_096;
 pub const SURFACE_WAVE_NGRAM: usize = 4;
 pub const SURFACE_WAVE_TRITS: usize = 3;
+pub const SURFACE_WAVE_SHORT_TOKEN_IDENTITY_ATOMS: usize = 4;
 pub const SURFACE_WAVE_BYTES: usize = SURFACE_WAVE_DIM * std::mem::size_of::<SurfaceWaveLane>();
 
 pub type SurfaceWaveLane = i16;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SurfaceAtom {
+    pub position: u64,
+    pub bytes: Vec<u8>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SurfaceWaveTrit {
@@ -31,7 +38,11 @@ impl SurfaceWave4096 {
 
     #[must_use]
     pub fn compile(text: &str) -> Self {
-        Self::compile_bytes(text.as_bytes())
+        let mut wave = Self::zero();
+        for atom in surface_atoms(text) {
+            wave.add_atom(atom.position, &atom.bytes);
+        }
+        wave
     }
 
     #[must_use]
@@ -102,13 +113,23 @@ impl SurfaceWave4096 {
         debug_assert_eq!(gram.len(), SURFACE_WAVE_NGRAM);
 
         for trit in surface_ngram_projection(position, gram) {
-            if trit.value == 0 {
-                continue;
-            }
-
-            self.lanes[usize::from(trit.lane)] =
-                self.lanes[usize::from(trit.lane)].saturating_add(i16::from(trit.value));
+            self.add_trit(trit);
         }
+    }
+
+    fn add_atom(&mut self, position: u64, atom: &[u8]) {
+        for trit in surface_atom_projection(position, atom) {
+            self.add_trit(trit);
+        }
+    }
+
+    fn add_trit(&mut self, trit: SurfaceWaveTrit) {
+        if trit.value == 0 {
+            return;
+        }
+
+        self.lanes[usize::from(trit.lane)] =
+            self.lanes[usize::from(trit.lane)].saturating_add(i16::from(trit.value));
     }
 }
 
@@ -119,8 +140,245 @@ impl Default for SurfaceWave4096 {
 }
 
 #[must_use]
+pub fn surface_atoms(text: &str) -> Vec<SurfaceAtom> {
+    let mut atoms = raw_byte_atoms(text.as_bytes());
+    append_boundary_atoms(text, &mut atoms);
+    atoms
+}
+
+fn raw_byte_atoms(bytes: &[u8]) -> Vec<SurfaceAtom> {
+    if bytes.len() < SURFACE_WAVE_NGRAM {
+        return Vec::new();
+    }
+
+    bytes
+        .windows(SURFACE_WAVE_NGRAM)
+        .enumerate()
+        .map(|(position, gram)| SurfaceAtom {
+            position: position as u64,
+            bytes: gram.to_vec(),
+        })
+        .collect()
+}
+
+fn append_boundary_atoms(text: &str, atoms: &mut Vec<SurfaceAtom>) {
+    for raw_token in text.split_whitespace() {
+        let chars = lower_token_chars(raw_token);
+        if chars.is_empty() {
+            continue;
+        }
+
+        let mut padded = Vec::with_capacity(chars.len() + 2 * (SURFACE_WAVE_NGRAM - 1));
+        padded.extend(std::iter::repeat_n(
+            BoundarySlot::Begin,
+            SURFACE_WAVE_NGRAM - 1,
+        ));
+        padded.extend(chars.into_iter().map(BoundarySlot::Text));
+        padded.extend(std::iter::repeat_n(
+            BoundarySlot::End,
+            SURFACE_WAVE_NGRAM - 1,
+        ));
+
+        for (local_position, window) in padded.windows(SURFACE_WAVE_NGRAM).enumerate() {
+            if !window
+                .iter()
+                .any(|slot| matches!(slot, BoundarySlot::Begin | BoundarySlot::End))
+            {
+                continue;
+            }
+            atoms.push(SurfaceAtom {
+                position: local_position as u64,
+                bytes: encode_boundary_atom(window),
+            });
+        }
+
+        let service_token = normalize_service_token(raw_token);
+        append_short_token_identity_atoms(&service_token, atoms);
+        if is_service_word(&service_token) {
+            atoms.push(SurfaceAtom {
+                position: 0,
+                bytes: encode_service_atom(&service_token),
+            });
+        }
+    }
+}
+
+fn append_short_token_identity_atoms(token: &str, atoms: &mut Vec<SurfaceAtom>) {
+    if token.is_empty() || token.chars().count() >= SURFACE_WAVE_NGRAM {
+        return;
+    }
+
+    for salt in 0..SURFACE_WAVE_SHORT_TOKEN_IDENTITY_ATOMS {
+        atoms.push(SurfaceAtom {
+            position: 0,
+            bytes: encode_short_token_identity_atom(token, salt as u8),
+        });
+    }
+}
+
+fn lower_token_chars(token: &str) -> Vec<char> {
+    token
+        .chars()
+        .filter(|ch| !ch.is_control())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn normalize_service_token(token: &str) -> String {
+    token
+        .chars()
+        .filter(|ch| ch.is_alphanumeric() || *ch == '_')
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn is_service_word(token: &str) -> bool {
+    matches!(
+        token,
+        "и" | "а"
+            | "но"
+            | "или"
+            | "в"
+            | "во"
+            | "на"
+            | "к"
+            | "ко"
+            | "с"
+            | "со"
+            | "из"
+            | "у"
+            | "о"
+            | "об"
+            | "от"
+            | "до"
+            | "по"
+            | "за"
+            | "над"
+            | "под"
+            | "при"
+            | "для"
+            | "без"
+            | "не"
+            | "ни"
+            | "да"
+            | "же"
+            | "ли"
+            | "бы"
+            | "то"
+            | "это"
+            | "как"
+            | "что"
+            | "где"
+            | "кто"
+            | "мы"
+            | "я"
+            | "ты"
+            | "он"
+            | "она"
+            | "они"
+            | "the"
+            | "a"
+            | "an"
+            | "and"
+            | "or"
+            | "but"
+            | "not"
+            | "no"
+            | "to"
+            | "of"
+            | "in"
+            | "on"
+            | "at"
+            | "by"
+            | "for"
+            | "from"
+            | "with"
+            | "as"
+            | "is"
+            | "are"
+            | "was"
+            | "were"
+            | "be"
+            | "do"
+            | "does"
+            | "did"
+            | "if"
+            | "then"
+            | "than"
+            | "that"
+            | "this"
+            | "it"
+            | "we"
+            | "you"
+            | "he"
+            | "she"
+            | "they"
+    )
+}
+
+#[derive(Clone, Copy, Debug)]
+enum BoundarySlot {
+    Begin,
+    End,
+    Text(char),
+}
+
+fn encode_boundary_atom(slots: &[BoundarySlot]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(32);
+    bytes.extend_from_slice(b"\x1Fbd4\0");
+    for slot in slots {
+        match slot {
+            BoundarySlot::Begin => bytes.push(0x01),
+            BoundarySlot::End => bytes.push(0x02),
+            BoundarySlot::Text(ch) => {
+                let mut buffer = [0u8; 4];
+                let encoded = ch.encode_utf8(&mut buffer);
+                bytes.push(0x10);
+                bytes.push(encoded.len() as u8);
+                bytes.extend_from_slice(encoded.as_bytes());
+            }
+        }
+    }
+    bytes
+}
+
+fn encode_service_atom(token: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(8 + token.len());
+    bytes.extend_from_slice(b"\x1Fsvc\0");
+    bytes.extend_from_slice(token.as_bytes());
+    bytes
+}
+
+fn encode_short_token_identity_atom(token: &str, salt: u8) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(10 + token.len());
+    bytes.extend_from_slice(b"\x1Fst0\0");
+    bytes.push(salt);
+    bytes.extend_from_slice(token.as_bytes());
+    bytes
+}
+
+#[must_use]
 pub fn surface_ngram_count(text: &str) -> usize {
-    text.len().saturating_sub(SURFACE_WAVE_NGRAM - 1)
+    surface_atoms(text).len()
+}
+
+#[must_use]
+pub fn surface_atom_projection(
+    position: u64,
+    atom: &[u8],
+) -> [SurfaceWaveTrit; SURFACE_WAVE_TRITS] {
+    std::array::from_fn(|channel| {
+        let position_code = match channel {
+            0 => 0,
+            1 => position & 0x3f,
+            _ => position / 8,
+        };
+        let mixed = surface_mix(atom, channel as u64, position_code);
+        let value = balanced_trit(mixed);
+        let lane = (surface_mix(atom, channel as u64 + 17, position_code) % SURFACE_WAVE_DIM as u64)
+            as u16;
+        SurfaceWaveTrit { lane, value }
+    })
 }
 
 #[must_use]
@@ -129,19 +387,7 @@ pub fn surface_ngram_projection(
     gram: &[u8],
 ) -> [SurfaceWaveTrit; SURFACE_WAVE_TRITS] {
     debug_assert_eq!(gram.len(), SURFACE_WAVE_NGRAM);
-
-    std::array::from_fn(|channel| {
-        let position_code = match channel {
-            0 => 0,
-            1 => position & 0x3f,
-            _ => position / 8,
-        };
-        let mixed = surface_mix(gram, channel as u64, position_code);
-        let value = balanced_trit(mixed);
-        let lane = (surface_mix(gram, channel as u64 + 17, position_code) % SURFACE_WAVE_DIM as u64)
-            as u16;
-        SurfaceWaveTrit { lane, value }
-    })
+    surface_atom_projection(position, gram)
 }
 
 fn balanced_trit(value: u64) -> i8 {
@@ -179,6 +425,7 @@ mod tests {
         assert_eq!(SURFACE_WAVE_NGRAM, 4);
         assert_eq!(SURFACE_WAVE_DIM, 4_096);
         assert_eq!(SURFACE_WAVE_TRITS, 3);
+        assert_eq!(SURFACE_WAVE_SHORT_TOKEN_IDENTITY_ATOMS, 4);
         assert_eq!(SURFACE_WAVE_BYTES, 8_192);
         assert_eq!(size_of::<SurfaceWave4096>(), SURFACE_WAVE_BYTES);
     }
@@ -189,7 +436,10 @@ mod tests {
         let right = SurfaceWave4096::compile("https://mirror.dxdy.ru/topic3420.html");
 
         assert_eq!(left.lanes(), right.lanes());
-        assert_eq!(left.cosine_similarity(&right), 1.0);
+        assert!(
+            (left.cosine_similarity(&right) - 1.0).abs() < f32::EPSILON * 2.0,
+            "identical waves should have cosine 1"
+        );
         assert!(left.active_lanes() > 0);
     }
 
@@ -236,11 +486,67 @@ mod tests {
     }
 
     #[test]
-    fn shorter_than_one_ngram_is_empty() {
-        let wave = SurfaceWave4096::compile("abc");
+    fn short_unicode_words_have_boundary_wave_without_service_confusion() {
+        let service = SurfaceWave4096::compile("и");
+        let owl = SurfaceWave4096::compile("сыч");
 
-        assert_eq!(surface_ngram_count("abc"), 0);
-        assert_eq!(wave.energy(), 0);
-        assert_eq!(wave.active_lanes(), 0);
+        assert!(surface_ngram_count("и") > 0);
+        assert!(surface_ngram_count("сыч") > 0);
+        assert!(service.energy() > 0);
+        assert!(owl.energy() > 0);
+        assert!(
+            service.cosine_similarity(&owl) < 0.90,
+            "service/short-content words should not collapse into one center"
+        );
+    }
+
+    #[test]
+    fn short_symbol_tokens_get_identity_support_without_l3_labels() {
+        let token = SurfaceWave4096::compile("Z12");
+        let nearby = SurfaceWave4096::compile("Z13");
+        let shorter = SurfaceWave4096::compile("Z3");
+
+        assert!(
+            surface_ngram_count("Z12")
+                >= (SURFACE_WAVE_NGRAM + SURFACE_WAVE_SHORT_TOKEN_IDENTITY_ATOMS),
+            "short token should receive boundary atoms plus generic identity atoms"
+        );
+        assert!(
+            token.active_lanes() > shorter.active_lanes() / 2,
+            "short-token identity support should not collapse to near-zero"
+        );
+        assert!(
+            token.cosine_similarity(&shorter) < 0.55,
+            "different short symbolic fillers should remain separable"
+        );
+        assert!(
+            token.cosine_similarity(&nearby) > token.cosine_similarity(&shorter),
+            "nearby numbered fillers should stay closer than shorter unrelated fillers"
+        );
+    }
+
+    #[test]
+    fn real_dollar_text_is_not_end_boundary_marker() {
+        let price = SurfaceWave4096::compile("цена$");
+        let plain = SurfaceWave4096::compile("цена");
+
+        assert!(price.energy() > 0);
+        assert!(plain.energy() > 0);
+        assert!(
+            price.cosine_similarity(&plain) < 1.0,
+            "TEXT('$') must not be encoded as EOS"
+        );
+    }
+
+    #[test]
+    fn negation_function_word_changes_surface_wave() {
+        let positive = SurfaceWave4096::compile("работает");
+        let negated = SurfaceWave4096::compile("не работает");
+
+        assert!(negated.active_lanes() > positive.active_lanes());
+        assert!(
+            positive.cosine_similarity(&negated) < 0.95,
+            "service negation should be visible to L1"
+        );
     }
 }

@@ -1,0 +1,105 @@
+{
+  "schema_version": "domain_dsl_v1",
+  "domain_id": "linux_networking_vpn",
+  "lock_status": "locked",
+  "lock_scope": "first_proving_domain",
+  "locked_on": "2026-06-30",
+  "title_ru": "Linux / сеть / VPN / диагностика",
+  "title_en": "Linux networking VPN troubleshooting",
+  "why_locked_ru": "Домен узкий, практический и проверяемый: в нем много близких неправильных действий, слоев диагностики и evidence-boundary ловушек.",
+  "why_locked_en": "The domain is narrow, practical, and verifiable: it has many hard near-negative actions, diagnostic layers, and evidence-boundary traps.",
+  "included_boundaries": [
+    {
+      "boundary_id": "vpn_connectivity",
+      "title_ru": "VPN-подключение и туннель",
+      "title_en": "VPN connectivity and tunnel"
+    },
+    {
+      "boundary_id": "linux_routing",
+      "title_ru": "Linux-маршруты и область маршрутизации",
+      "title_en": "Linux routes and route scope"
+    },
+    {
+      "boundary_id": "dns_resolution",
+      "title_ru": "DNS и внутренние зоны",
+      "title_en": "DNS and internal zones"
+    },
+    {
+      "boundary_id": "firewall_acl",
+      "title_ru": "Firewall, ACL и фильтрация портов",
+      "title_en": "Firewall, ACL, and port filtering"
+    },
+    {
+      "boundary_id": "auth_tls_radius",
+      "title_ru": "Авторизация, TLS, RADIUS и время",
+      "title_en": "Auth, TLS, RADIUS, and time"
+    },
+    {
+      "boundary_id": "safe_troubleshooting",
+      "title_ru": "Безопасная диагностика: снимок до мутации, минимальное действие, отказ при нехватке evidence",
+      "title_en": "Safe troubleshooting: snapshot before mutation, minimal action, refusal when evidence is underfilled"
+    }
+  ],
+  "excluded_boundaries": [
+    {
+      "boundary_id": "general_linux_admin",
+      "title_ru": "Linux-администрирование вообще",
+      "title_en": "General Linux administration"
+    },
+    {
+      "boundary_id": "windows_networking",
+      "title_ru": "Windows-сети",
+      "title_en": "Windows networking"
+    },
+    {
+      "boundary_id": "cloud_platforms_full",
+      "title_ru": "Облака целиком: AWS, GCP, Azure как отдельные платформы",
+      "title_en": "Full cloud platforms: AWS, GCP, Azure as broad domains"
+    },
+    {
+      "boundary_id": "cybersecurity_full",
+      "title_ru": "Кибербезопасность целиком",
+      "title_en": "Cybersecurity as a broad domain"
+    },
+    {
+      "boundary_id": "general_chat",
+      "title_ru": "Болталка обо всем",
+      "title_en": "General chat"
+    },
+    {
+      "boundary_id": "runtime_answer_authority",
+      "title_ru": "Ответы из DSL как из источника истины",
+      "title_en": "Using DSL as runtime answer authority"
+    }
+  ],
+  "task_scope": {
+    "allowed_task_shapes": [
+      "context_to_correct_diagnostic_step",
+      "context_to_next_safe_action",
+      "context_to_refusal_when_evidence_underfilled",
+      "target_vs_hard_near_negative",
+      "state_t_to_state_t1"
+    ],
+    "required_shortcut_gates": [
+      "exact_lookup",
+      "l2_neighbor",
+      "markov_bigram",
+      "bayesian_conditional_frequency",
+      "target_leakage",
+      "near_negative_similarity"
+    ]
+  },
+  "pack_v1_counts": {
+    "entities": 48,
+    "operators": 24,
+    "negative_rules": 24,
+    "templates": 24
+  },
+  "claim_boundary": {
+    "domain_locked": true,
+    "training_dataset_ready": false,
+    "runtime_authority": false,
+    "task_factory_ready": false,
+    "step_5_full_pack_ready": true
+  }
+}

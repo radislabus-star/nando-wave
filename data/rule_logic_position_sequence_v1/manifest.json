@@ -1,0 +1,31 @@
+{
+  "correct_wrong_same_bag": true,
+  "heldout_has_context_noise": true,
+  "heldout_rows": 504,
+  "rows": 1764,
+  "rules": {
+    "mirror3_full_sequence": 252,
+    "mirror5_full_sequence": 252,
+    "pair_swap4_sequence": 252,
+    "pair_swap6_sequence": 252,
+    "rotate4_left_sequence": 252,
+    "rotate5_right_sequence": 252,
+    "rotate6_left2_sequence": 252
+  },
+  "schema_version": "position_sequence_manifest_v2",
+  "sequence_lengths": [
+    3,
+    4,
+    5,
+    6
+  ],
+  "surface_families": {
+    "business": 588,
+    "ru_words": 588,
+    "symbols": 588
+  },
+  "train_heldout_business_overlap": [],
+  "train_heldout_symbol_overlap": [],
+  "train_heldout_word_overlap": [],
+  "train_rows": 1260
+}

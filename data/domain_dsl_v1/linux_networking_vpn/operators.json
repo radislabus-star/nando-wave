@@ -1,0 +1,198 @@
+{
+  "schema_version": "domain_dsl_v1",
+  "domain_id": "linux_networking_vpn",
+  "operators": [
+    {
+      "operator_family": "evidence_to_route_scope",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "one subnet reachable, sibling subnet unreachable, DNS excluded or irrelevant",
+      "target_rule": "repair route scope or AllowedIPs for the missing subnet",
+      "anti_rule": "do not treat the failure as DNS or global VPN outage",
+      "evidence_need": ["positive reachability", "negative reachability", "scope config"]
+    },
+    {
+      "operator_family": "evidence_to_dns_layer",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "direct IP works, internal hostname fails, external DNS works",
+      "target_rule": "route internal names to the internal resolver or domain-specific resolver",
+      "anti_rule": "do not repair transport when name resolution is the isolated failure",
+      "evidence_need": ["direct IP probe", "name lookup result", "resolver path"]
+    },
+    {
+      "operator_family": "layer_separation_between_network_and_app_auth",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "network path works but application returns authorization error",
+      "target_rule": "inspect application ACL or user/domain policy",
+      "anti_rule": "do not restart VPN or rewrite routes when HTTP/application auth is the failing layer",
+      "evidence_need": ["network success", "application denial", "unchanged firewall/route"]
+    },
+    {
+      "operator_family": "next_step_timeout_parameter_tuning",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "keepalive/DPD/ping timeout repeats while keys and time are valid",
+      "target_rule": "inspect or tune keepalive and DPD timing parameters",
+      "anti_rule": "do not use MTU as first explanation when evidence points to liveness timing",
+      "evidence_need": ["timeout log", "time status", "key/cert status"]
+    },
+    {
+      "operator_family": "cause_sequence_to_auth_layer",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "auth failure appears around 2FA/RADIUS while TLS certificate is valid",
+      "target_rule": "check time sync and RADIUS/2FA path before certificate replacement",
+      "anti_rule": "do not move to TLS certificate if certificate evidence is healthy",
+      "evidence_need": ["auth log", "2FA/RADIUS evidence", "certificate status"]
+    },
+    {
+      "operator_family": "minimal_change_before_restart",
+      "operator_kind": "safety_transition",
+      "input_signal": "config scope or policy mismatch is visible before service mutation",
+      "target_rule": "prefer narrow config/policy correction over broad restart",
+      "anti_rule": "do not use restart as first action when a bounded change is available",
+      "evidence_need": ["bounded mismatch", "restart blast radius"]
+    },
+    {
+      "operator_family": "config_snapshot_before_mutation",
+      "operator_kind": "procedure_transition",
+      "input_signal": "planned change or incident action before baseline is recorded",
+      "target_rule": "capture config/version baseline before mutation",
+      "anti_rule": "do not mutate first when it destroys before/after comparison",
+      "evidence_need": ["change plan", "baseline status", "rollback need"]
+    },
+    {
+      "operator_family": "completion_gate_in_rollout",
+      "operator_kind": "procedure_transition",
+      "input_signal": "rollout prerequisite is partially complete",
+      "target_rule": "finish prerequisite before applying next phase",
+      "anti_rule": "do not mix states if it breaks smoke-test interpretation",
+      "evidence_need": ["ordered procedure", "current step state", "test boundary"]
+    },
+    {
+      "operator_family": "firewall_vs_route_disambiguation",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "route or ICMP succeeds but TCP to a specific port fails",
+      "target_rule": "inspect firewall/ACL for the blocked protocol or port",
+      "anti_rule": "do not repair general route when protocol-specific filtering explains failure",
+      "evidence_need": ["route or ping success", "tcp failure", "port identity"]
+    },
+    {
+      "operator_family": "refusal_when_exposure_evidence_underfilled",
+      "operator_kind": "refusal_transition",
+      "input_signal": "question asks exposure/status but runtime evidence chain is missing",
+      "target_rule": "return underfilled/refusal and request specific runtime snapshots",
+      "anti_rule": "do not assert exposed/safe without socket, firewall, bind, and route evidence",
+      "evidence_need": ["socket snapshot", "firewall snapshot", "bind scope", "route/exposure context"]
+    },
+    {
+      "operator_family": "interface_state_to_link_layer",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "VPN config exists but the expected interface is down or absent",
+      "target_rule": "inspect interface/link state before route or DNS repair",
+      "anti_rule": "do not edit DNS or routes when the link-layer object is missing",
+      "evidence_need": ["ip link state", "interface identity", "service relation"]
+    },
+    {
+      "operator_family": "service_state_to_daemon_layer",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "interface is absent and service logs show daemon startup failure",
+      "target_rule": "inspect the VPN daemon/service unit and journal before network-layer changes",
+      "anti_rule": "do not tune firewall/routing when the daemon never started",
+      "evidence_need": ["systemctl status", "journal log", "interface absence"]
+    },
+    {
+      "operator_family": "nat_masquerade_for_return_path",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "client reaches remote subnet but replies do not return through the tunnel",
+      "target_rule": "check NAT masquerade or explicit return route on the egress side",
+      "anti_rule": "do not add duplicate forward routes when the missing piece is return-path translation",
+      "evidence_need": ["forward path probe", "return path evidence", "nat policy"]
+    },
+    {
+      "operator_family": "policy_routing_table_selection",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "main route looks correct but marked/source traffic follows the wrong table",
+      "target_rule": "inspect ip rule and the selected routing table",
+      "anti_rule": "do not rewrite the main table when policy routing selects another table",
+      "evidence_need": ["ip rule", "route get", "routing table id"]
+    },
+    {
+      "operator_family": "reverse_path_filter_asymmetry",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "asymmetric tunnel traffic disappears on Linux host with strict reverse path filtering",
+      "target_rule": "inspect rp_filter and asymmetric return path before firewall rewrite",
+      "anti_rule": "do not treat rp_filter drops as generic firewall ACL drops",
+      "evidence_need": ["rp_filter setting", "asymmetric path", "drop symptom"]
+    },
+    {
+      "operator_family": "mss_clamp_for_blackhole_mtu",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "small probes pass but large TCP sessions hang after tunnel establishment",
+      "target_rule": "inspect MTU/MSS and add MSS clamping when blackhole evidence is present",
+      "anti_rule": "do not tune keepalive when only large packets fail",
+      "evidence_need": ["small probe success", "large flow failure", "mtu or mss evidence"]
+    },
+    {
+      "operator_family": "endpoint_roaming_to_peer_endpoint_update",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "peer address changed or NAT mapping moved while peer config points to an old endpoint",
+      "target_rule": "update or relearn the peer endpoint instead of changing AllowedIPs",
+      "anti_rule": "do not widen tunnel route scope when the peer endpoint is stale",
+      "evidence_need": ["peer endpoint", "public ip change", "handshake status"]
+    },
+    {
+      "operator_family": "systemd_resolved_split_dns",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "split DNS is expected but resolved routes internal names to the wrong link",
+      "target_rule": "bind the internal domain resolver to the VPN link with systemd-resolved/resolvectl",
+      "anti_rule": "do not globally replace DNS when link-scoped DNS is the required fix",
+      "evidence_need": ["resolvectl status", "link dns route", "internal domain"]
+    },
+    {
+      "operator_family": "dns_search_suffix_scope",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "FQDN works but short internal names fail",
+      "target_rule": "repair search suffix or domain search scope",
+      "anti_rule": "do not change resolver IP when the missing element is search suffix",
+      "evidence_need": ["fqdn success", "short name failure", "search suffix config"]
+    },
+    {
+      "operator_family": "packet_capture_to_path_direction",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "one-sided capture shows packets leave but no return packets arrive",
+      "target_rule": "separate outbound path, return path, and capture point before choosing route/NAT/firewall fix",
+      "anti_rule": "do not infer full path causality from a single capture point",
+      "evidence_need": ["capture side", "packet direction", "counterpart evidence"]
+    },
+    {
+      "operator_family": "socket_bind_scope_exposure",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "service is listening but bind address limits exposure to local or private interface",
+      "target_rule": "judge exposure from socket bind scope plus firewall and route context",
+      "anti_rule": "do not call service exposed just because a process listens",
+      "evidence_need": ["listening socket", "bind address", "firewall", "route context"]
+    },
+    {
+      "operator_family": "key_mismatch_to_peer_credential",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "handshake/auth fails with key mismatch evidence while route and endpoint are plausible",
+      "target_rule": "inspect peer credential binding: public/private/preshared key mapping",
+      "anti_rule": "do not repair routing or DNS when credential mismatch explains handshake failure",
+      "evidence_need": ["handshake log", "peer identity", "key status"]
+    },
+    {
+      "operator_family": "firewall_forward_chain_vs_input_chain",
+      "operator_kind": "diagnostic_transition",
+      "input_signal": "traffic is being forwarded through the VPN host rather than terminating on the host",
+      "target_rule": "inspect FORWARD policy, not only INPUT policy",
+      "anti_rule": "do not change local INPUT rules for transit traffic",
+      "evidence_need": ["traffic direction", "forwarding role", "chain counters"]
+    },
+    {
+      "operator_family": "rollback_when_change_regresses_smoke",
+      "operator_kind": "procedure_transition",
+      "input_signal": "post-change smoke test fails after a bounded mutation",
+      "target_rule": "rollback or isolate the last change before adding new changes",
+      "anti_rule": "do not stack additional changes on top of a failed smoke test",
+      "evidence_need": ["change record", "smoke test result", "rollback point"]
+    }
+  ]
+}

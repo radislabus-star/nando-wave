@@ -1,0 +1,30 @@
+{
+  "schema_version": "position_sequence_v3_static_diagnostics_v1",
+  "action_separability": {
+    "action_vectors": 32,
+    "same_rule_action_similarity_milli": 1000,
+    "different_rule_action_similarity_milli": 624,
+    "same_family_different_length_similarity_milli": 648,
+    "different_family_similarity_milli": 621,
+    "max_different_rule_similarity_milli": 910,
+    "nearest_rule_pairs": [
+      {"left": "block_swap_len10", "right": "edge_to_center_len10", "similarity_milli": 910},
+      {"left": "full_mirror_len9", "right": "rotate_left_1_len9", "similarity_milli": 882},
+      {"left": "block_swap_len12", "right": "edge_to_center_len12", "similarity_milli": 855},
+      {"left": "even_odd_split_len11", "right": "rotate_right_1_len11", "similarity_milli": 855},
+      {"left": "even_odd_split_len9", "right": "rotate_right_1_len9", "similarity_milli": 855},
+      {"left": "full_mirror_len10", "right": "rotate_left_1_len10", "similarity_milli": 855},
+      {"left": "pair_swap_len10", "right": "rotate_right_1_len10", "similarity_milli": 855},
+      {"left": "edge_to_center_len10", "right": "pair_swap_len10", "similarity_milli": 829}
+    ]
+  },
+  "folded_collision_pressure": {
+    "target_impulses_checked": 302818,
+    "multi_role_hit_count": 51111,
+    "wrong_role_hit_count": 51111,
+    "missing_true_role_count": 0,
+    "multi_role_hit_milli": 169,
+    "wrong_role_hit_milli": 169,
+    "missing_true_role_milli": 0
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "position_sequence_v3_capacity_curve_report_v1",
+  "source_artifact": "data/rule_logic_position_sequence_v3/diagnostics/combined_objective_probe/rust_gate.log",
+  "claim_boundary": "This is a current-field capacity slice, not a full retrain sweep across separately generated corpora.",
+  "global": {
+    "operators": 42,
+    "rule_families": 8,
+    "lengths": [3, 4, 5, 6, 7, 8],
+    "heldout_rows": 840,
+    "role_binding_edges": 16357,
+    "state_delta_edges": 0,
+    "slot_accuracy_milli": 705,
+    "sequence_energy_accuracy_milli": 988,
+    "p10_energy_gap": 36878
+  },
+  "by_length": [
+    {"length": 3, "rows": 80, "slot_accuracy_milli": 513, "energy_accuracy_milli": 925, "p10_energy_gap": 3718},
+    {"length": 4, "rows": 140, "slot_accuracy_milli": 729, "energy_accuracy_milli": 1000, "p10_energy_gap": 24034},
+    {"length": 5, "rows": 140, "slot_accuracy_milli": 700, "energy_accuracy_milli": 971, "p10_energy_gap": 33412},
+    {"length": 6, "rows": 160, "slot_accuracy_milli": 706, "energy_accuracy_milli": 1000, "p10_energy_gap": 73546},
+    {"length": 7, "rows": 160, "slot_accuracy_milli": 663, "energy_accuracy_milli": 1000, "p10_energy_gap": 115548},
+    {"length": 8, "rows": 160, "slot_accuracy_milli": 825, "energy_accuracy_milli": 1000, "p10_energy_gap": 165934}
+  ],
+  "by_cumulative_max_length": [
+    {"max_length": 3, "rows": 80, "slot_accuracy_milli": 513, "energy_accuracy_milli": 925, "p10_energy_gap": 3718},
+    {"max_length": 4, "rows": 220, "slot_accuracy_milli": 650, "energy_accuracy_milli": 973, "p10_energy_gap": 15266},
+    {"max_length": 5, "rows": 360, "slot_accuracy_milli": 669, "energy_accuracy_milli": 972, "p10_energy_gap": 18512},
+    {"max_length": 6, "rows": 520, "slot_accuracy_milli": 681, "energy_accuracy_milli": 981, "p10_energy_gap": 26098},
+    {"max_length": 7, "rows": 680, "slot_accuracy_milli": 676, "energy_accuracy_milli": 985, "p10_energy_gap": 30684},
+    {"max_length": 8, "rows": 840, "slot_accuracy_milli": 705, "energy_accuracy_milli": 988, "p10_energy_gap": 36878}
+  ],
+  "by_rule_family": [
+    {"family": "block_swap", "rows": 60, "slot_accuracy_milli": 850, "energy_accuracy_milli": 1000, "p10_energy_gap": 135090},
+    {"family": "edge_to_center", "rows": 100, "slot_accuracy_milli": 750, "energy_accuracy_milli": 1000, "p10_energy_gap": 40146},
+    {"family": "even_odd_split", "rows": 120, "slot_accuracy_milli": 1000, "energy_accuracy_milli": 1000, "p10_energy_gap": 50996},
+    {"family": "full_mirror", "rows": 120, "slot_accuracy_milli": 83, "energy_accuracy_milli": 917, "p10_energy_gap": 3488},
+    {"family": "pair_swap", "rows": 100, "slot_accuracy_milli": 670, "energy_accuracy_milli": 1000, "p10_energy_gap": 38808},
+    {"family": "rotate_left_1", "rows": 120, "slot_accuracy_milli": 750, "energy_accuracy_milli": 1000, "p10_energy_gap": 58128},
+    {"family": "rotate_left_2", "rows": 100, "slot_accuracy_milli": 800, "energy_accuracy_milli": 1000, "p10_energy_gap": 63298},
+    {"family": "rotate_right_1", "rows": 120, "slot_accuracy_milli": 825, "energy_accuracy_milli": 1000, "p10_energy_gap": 49512}
+  ],
+  "interpretation": "Capacity collapse is not monotonic with sequence length. Length 8 is stronger than length 3. The real current-field bottleneck is rule-family geometry, especially full_mirror: slot accuracy 83 milli and energy p10 gap only 3488, while most non-mirror families have sequence-energy 1000 milli."
+}

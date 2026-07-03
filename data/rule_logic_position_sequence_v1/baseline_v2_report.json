@@ -1,0 +1,58 @@
+{
+  "schema_version": "position_sequence_v2_baseline_report_v1",
+  "generated_at": "2026-06-30T23:49:42+03:00",
+  "git_head_short": "115d017",
+  "working_tree_state": "uncommitted_rnd_changes_present",
+  "corpus": "data/rule_logic_position_sequence_v1/accepted_position_sequence_tasks_v1.jsonl",
+  "manifest": "data/rule_logic_position_sequence_v1/manifest.json",
+  "shortcut_report": "data/rule_logic_position_sequence_v1/shortcut_gate_report.json",
+  "rust_test": "crates/nando-core/tests/wavepredictor_binding_pressure_l3.rs",
+  "proof_command": "cargo test -p nando-core --test wavepredictor_binding_pressure_l3 -- --ignored ordered_position_binding_must_learn_multi_slot_sequence_not_bag_copy --nocapture",
+  "ordinary_test_boundary": {
+    "command": "cargo test -p nando-core --test wavepredictor_binding_pressure_l3",
+    "meaning": "compile/smoke only; all R&D gates are ignored unless run explicitly with --ignored"
+  },
+  "corpus_metrics": {
+    "rows": 1764,
+    "train_rows": 1260,
+    "heldout_rows": 504,
+    "heldout_rules": 7,
+    "heldout_surface_families": 3,
+    "sequence_lengths": [3, 4, 5, 6],
+    "heldout_has_context_noise": true,
+    "same_bag_derangement_milli": 1000,
+    "train_heldout_symbol_overlap": 0,
+    "train_heldout_word_overlap": 0,
+    "train_heldout_business_overlap": 0
+  },
+  "shortcut_metrics": {
+    "exact_lookup_accuracy_milli": 0,
+    "proof_rule_id_majority_accuracy_milli": 0,
+    "surface_family_majority_accuracy_milli": 0,
+    "bag_of_tokens_accuracy_milli": 500,
+    "markov_bigram_pairwise_accuracy_milli": 466,
+    "verdict": "VALID_POSITION_SEQUENCE_CANDIDATE"
+  },
+  "ordered_gate_metrics": {
+    "ordered_sequence_accuracy_milli": 1000,
+    "flat_ordered_sequence_accuracy_milli": 1000,
+    "ordered_sequence_median_gap": 35882,
+    "ordered_sequence_p10_gap": 17064,
+    "flat_gap_parity_checked_slots": 2376,
+    "flat_gap_parity_mismatches": 0,
+    "ablation_without_binding_accuracy_milli": 0,
+    "state_delta_edges": 0,
+    "role_binding_edges": 2516,
+    "flat_role_binding_edges": 2299,
+    "flat_role_binding_bytes_estimate": 112106
+  },
+  "authority_guards": {
+    "target_center_id_training_used": false,
+    "proof_rule_id_training_authority_used": false,
+    "concrete_x_lookup_used": false,
+    "local_out_t_runtime_extension_used": false,
+    "folded_slot_projection_used": true
+  },
+  "claim": "ordered sequence gate against sampled same-bag derangement negatives with full flat gap parity",
+  "next_debt": "v3 must live in a separate path/schema and report per-group metrics before any architecture change"
+}

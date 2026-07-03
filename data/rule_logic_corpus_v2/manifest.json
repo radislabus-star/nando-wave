@@ -1,0 +1,45 @@
+{
+  "answer_status": {
+    "CONFLICT": 600,
+    "PROVEN": 10800,
+    "UNSETTLED": 600
+  },
+  "proof_rule_id_training_authority": false,
+  "rng_seed": 20260630,
+  "rows": 12000,
+  "rules": {
+    "alternation_next": 600,
+    "analogy_replace_feature": 600,
+    "classify_shared_feature": 600,
+    "compose_count_then_compare": 600,
+    "compose_shift_then_replace": 600,
+    "cyclic_shift_left": 600,
+    "cyclic_shift_right": 600,
+    "decrease_by_step": 600,
+    "evidence_conflict": 600,
+    "greater_less_compare": 600,
+    "if_then_apply": 600,
+    "increase_by_step": 600,
+    "intersection_feature": 600,
+    "mirror_complete": 600,
+    "missing_order_item": 600,
+    "negation_flip": 600,
+    "odd_one_out": 600,
+    "repeat_block_next": 600,
+    "required_variable_missing": 600,
+    "union_feature": 600
+  },
+  "schema_version": "rule_logic_corpus_manifest_v2",
+  "surface_families": {
+    "count_choice": 600,
+    "evidence_choice": 1200,
+    "feature_choice": 1800,
+    "logic_choice": 1200,
+    "mixed_choice": 1800,
+    "ru_words": 2132,
+    "set_choice": 1200,
+    "symbols": 2068
+  },
+  "target_contract": "multiple_choice_label_only",
+  "training_authority": "input,target,near_negative,answer_status"
+}

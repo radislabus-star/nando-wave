@@ -1,0 +1,46 @@
+{
+  "schema_version": "rule_logic_external_sources_v1",
+  "policy": "candidate_not_ingested_until_license_and_shortcut_gate_pass",
+  "sources": [
+    {
+      "source_id": "arc_agi_1",
+      "name": "ARC-AGI-1",
+      "url": "https://github.com/fchollet/ARC-AGI",
+      "license_hint": "Apache-2.0 shown by repository",
+      "use": "grid abstraction tasks; import only after grid-to-wave adapter",
+      "status": "candidate_not_ingested"
+    },
+    {
+      "source_id": "big_bench_json",
+      "name": "BIG-bench JSON tasks",
+      "url": "https://github.com/google/BIG-bench",
+      "license_hint": "Apache-2.0 shown by repository",
+      "use": "selected logic, arithmetic, and analogy tasks after task-level review",
+      "status": "candidate_not_ingested"
+    },
+    {
+      "source_id": "gsm8k",
+      "name": "GSM8K",
+      "url": "https://github.com/openai/grade-school-math",
+      "license_hint": "check repository LICENSE before import",
+      "use": "multi-step arithmetic reasoning with verifiable numeric answers",
+      "status": "candidate_not_ingested"
+    },
+    {
+      "source_id": "proofwriter",
+      "name": "ProofWriter",
+      "url": "https://github.com/allenai/proofwriter",
+      "license_hint": "license review required",
+      "use": "rule chaining and proof-depth tasks",
+      "status": "candidate_not_ingested"
+    },
+    {
+      "source_id": "clutrr",
+      "name": "CLUTRR",
+      "url": "https://github.com/facebookresearch/clutrr",
+      "license_hint": "license review required",
+      "use": "relational composition and heldout relation paths",
+      "status": "candidate_not_ingested"
+    }
+  ]
+}

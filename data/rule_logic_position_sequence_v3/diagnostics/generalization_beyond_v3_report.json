@@ -1,0 +1,565 @@
+{
+  "schema_version": "position_sequence_v3_beyond_v3_generalization_report_v3",
+  "status": "OPERATOR_PAIR_ACTION_MOTIF_BASE_AND_LENGTH_9_12_GREEN_PENDING_MULTI_SEED_AND_NEW_FAMILIES",
+  "base_v3_scope": {
+    "schema": "position_sequence_v3",
+    "lengths": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "rule_families": [
+      "full_mirror",
+      "rotate_left_1",
+      "rotate_right_1",
+      "rotate_left_2",
+      "pair_swap",
+      "block_swap",
+      "edge_to_center",
+      "even_odd_split"
+    ],
+    "surface_families": [
+      "symbols",
+      "ru_words",
+      "business",
+      "network"
+    ],
+    "noise_types": [
+      "clean",
+      "prefix_suffix",
+      "punctuation",
+      "distractor",
+      "instruction_noise"
+    ],
+    "same_bag_negatives": true
+  },
+  "current_best_inside_v3": {
+    "slot_accuracy_milli": 705,
+    "sequence_energy_accuracy_milli": 988,
+    "non_symmetry_sequence_energy_accuracy_milli": 1000,
+    "symmetry_sequence_energy_accuracy_milli": 955,
+    "learned_output_slot_key_preserves_base_v3": true,
+    "shortcut_verdict": "VALID_POSITION_SEQUENCE_V3_CANDIDATE"
+  },
+  "beyond_v3_length_9_12_seed_011": {
+    "artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011",
+    "corpus_rows": 1920,
+    "train_rows": 1280,
+    "heldout_rows": 640,
+    "matrix_cells": 640,
+    "lengths": [
+      9,
+      10,
+      11,
+      12
+    ],
+    "seed": 11,
+    "shortcut_verdict": "VALID_POSITION_SEQUENCE_V3_CANDIDATE",
+    "shortcut_metrics": {
+      "exact_lookup_accuracy_milli": 0,
+      "l2_neighbor_target_copy_accuracy_milli": 0,
+      "markov_bigram_pairwise_accuracy_milli": 500,
+      "bag_of_tokens_accuracy_milli": 500,
+      "same_bag_derangement_milli": 1000,
+      "output_position_prior_accuracy_milli": 0
+    },
+    "static_diagnostics": {
+      "action_vectors": 32,
+      "same_rule_action_similarity_milli": 1000,
+      "different_rule_action_similarity_milli": 635,
+      "same_family_different_length_similarity_milli": 648,
+      "different_family_similarity_milli": 633,
+      "max_different_rule_similarity_milli": 882,
+      "folded_target_impulses_checked": 302818,
+      "folded_multi_role_hit_milli": 86,
+      "folded_wrong_role_hit_milli": 108,
+      "folded_missing_true_role_milli": 239
+    },
+    "runtime_combined_objective": {
+      "strict_slot_ordered_accuracy_milli": 0,
+      "flat_strict_slot_ordered_accuracy_milli": 0,
+      "sequence_energy_accuracy_milli": 1000,
+      "sequence_energy_median_gap": 276766,
+      "sequence_energy_p10_gap": 131766,
+      "energy_pass_slot_fail_rows": 640,
+      "symmetry_sequence_energy_accuracy_milli": 1000,
+      "symmetry_p10_energy_gap": 100978,
+      "non_symmetry_sequence_energy_accuracy_milli": 1000,
+      "non_symmetry_p10_energy_gap": 147378,
+      "output_slot_cleanup_accuracy_milli": 693,
+      "output_slot_cleanup_accuracy_by_output_slot": {
+        "0": 852,
+        "1": 930,
+        "2": 950,
+        "3": 909,
+        "4": 869,
+        "5": 973,
+        "6": 895,
+        "7": 895,
+        "8": 0,
+        "9": 0,
+        "10": 0,
+        "11": 0
+      },
+      "capacity_curve_by_length": {
+        "9": {
+          "slot_accuracy_milli": 0,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 133246
+        },
+        "10": {
+          "slot_accuracy_milli": 0,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 129274
+        },
+        "11": {
+          "slot_accuracy_milli": 0,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 107170
+        },
+        "12": {
+          "slot_accuracy_milli": 0,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 140078
+        }
+      },
+      "address_radius_energy_accuracy_milli": {
+        "clean": 1000,
+        "action_wrapped": 961,
+        "source_slot0_suffix": 1000,
+        "source_all_suffix": 998,
+        "action_wrapped_source_slot0_suffix": 944
+      },
+      "ablation_without_binding_accuracy_milli": 0,
+      "ablation_without_action_accuracy_milli": 0,
+      "ablation_without_action_energy_accuracy_milli": 0,
+      "ablation_without_role_accuracy_milli": 0,
+      "ablation_without_role_energy_accuracy_milli": 0,
+      "ablation_without_active_fringe_accuracy_milli": 0,
+      "flat_sequence_energy_parity_checked_rows": 640,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_sequence_energy_parity_max_abs_gap_delta": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "role_binding_edges": 17649,
+      "target_center_id_training_used": false,
+      "proof_rule_id_training_authority_used": false,
+      "concrete_x_lookup_used": false,
+      "local_out_t_runtime_extension_used": false
+    },
+    "interpretation": [
+      "Length 9..12 generalizes at the sequence-energy/operator-judge level.",
+      "The current strict ordered slot decoder does not generalize beyond 8 output slots.",
+      "Output slots 8..11 are zero in cleanup readout, matching folded_missing_true_role pressure.",
+      "No forbidden authority or manual local_out_t was used."
+    ]
+  },
+  "learned_output_slot_key": {
+    "status": "ACCEPT_AS_CURRENT_MECHANISM_PARTIAL",
+    "mechanism": "(action_center, output_slot_id, source_role_slot_id, sign_key) -> learned weight",
+    "not_manual_local_out_t": true,
+    "base_v3_runtime_artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/learned_output_slot_base_v3",
+    "base_v3_runtime": {
+      "strict_slot_ordered_accuracy_milli": 705,
+      "flat_strict_slot_ordered_accuracy_milli": 705,
+      "sequence_energy_accuracy_milli": 988,
+      "sequence_energy_p10_gap": 36878,
+      "symmetry_sequence_energy_accuracy_milli": 955,
+      "output_slot_cleanup_accuracy_milli": 933,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "role_binding_edges": 16357,
+      "target_center_id_training_used": false,
+      "proof_rule_id_training_authority_used": false,
+      "concrete_x_lookup_used": false,
+      "local_out_t_runtime_extension_used": false
+    },
+    "beyond_v3_runtime_artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011_learned_output_slot",
+    "beyond_v3_static": {
+      "folded_wrong_role_hit_milli": 135,
+      "folded_missing_true_role_milli": 0
+    },
+    "beyond_v3_runtime": {
+      "strict_slot_ordered_accuracy_milli": 734,
+      "flat_strict_slot_ordered_accuracy_milli": 734,
+      "sequence_energy_accuracy_milli": 1000,
+      "sequence_energy_median_gap": 485690,
+      "sequence_energy_p10_gap": 233720,
+      "energy_pass_slot_fail_rows": 170,
+      "symmetry_sequence_energy_accuracy_milli": 1000,
+      "symmetry_p10_energy_gap": 170488,
+      "non_symmetry_sequence_energy_accuracy_milli": 1000,
+      "non_symmetry_p10_energy_gap": 295584,
+      "output_slot_cleanup_accuracy_milli": 970,
+      "output_slot_cleanup_accuracy_by_output_slot": {
+        "0": 998,
+        "1": 986,
+        "2": 973,
+        "3": 955,
+        "4": 986,
+        "5": 989,
+        "6": 961,
+        "7": 977,
+        "8": 955,
+        "9": 894,
+        "10": 969,
+        "11": 1000
+      },
+      "capacity_curve_by_length": {
+        "9": {
+          "slot_accuracy_milli": 625,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 173888
+        },
+        "10": {
+          "slot_accuracy_milli": 644,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 216994
+        },
+        "11": {
+          "slot_accuracy_milli": 700,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 277130
+        },
+        "12": {
+          "slot_accuracy_milli": 969,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 381244
+        }
+      },
+      "address_radius_energy_accuracy_milli": {
+        "clean": 1000,
+        "action_wrapped": 953,
+        "source_slot0_suffix": 1000,
+        "source_all_suffix": 1000,
+        "action_wrapped_source_slot0_suffix": 945
+      },
+      "ablation_without_binding_accuracy_milli": 0,
+      "ablation_without_action_accuracy_milli": 0,
+      "ablation_without_action_energy_accuracy_milli": 0,
+      "ablation_without_role_accuracy_milli": 0,
+      "ablation_without_role_energy_accuracy_milli": 0,
+      "ablation_without_active_fringe_accuracy_milli": 0,
+      "flat_sequence_energy_parity_checked_rows": 640,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_sequence_energy_parity_max_abs_gap_delta": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "role_binding_edges": 35505,
+      "target_center_id_training_used": false,
+      "proof_rule_id_training_authority_used": false,
+      "concrete_x_lookup_used": false,
+      "local_out_t_runtime_extension_used": false
+    },
+    "beyond_v3_cleanup8_runtime_artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011_learned_output_slot_cleanup8",
+    "beyond_v3_cleanup8_runtime": {
+      "cleanup_epochs": 8,
+      "strict_slot_ordered_accuracy_milli": 778,
+      "flat_strict_slot_ordered_accuracy_milli": 778,
+      "sequence_energy_accuracy_milli": 1000,
+      "sequence_energy_median_gap": 481082,
+      "sequence_energy_p10_gap": 267892,
+      "energy_pass_slot_fail_rows": 142,
+      "symmetry_sequence_energy_accuracy_milli": 1000,
+      "symmetry_p10_energy_gap": 235668,
+      "non_symmetry_sequence_energy_accuracy_milli": 1000,
+      "non_symmetry_p10_energy_gap": 283092,
+      "output_slot_cleanup_accuracy_milli": 976,
+      "output_slot_cleanup_accuracy_by_output_slot": {
+        "0": 994,
+        "1": 989,
+        "2": 975,
+        "3": 970,
+        "4": 995,
+        "5": 998,
+        "6": 967,
+        "7": 948,
+        "8": 958,
+        "9": 946,
+        "10": 994,
+        "11": 1000
+      },
+      "capacity_curve_by_length": {
+        "9": {
+          "slot_accuracy_milli": 825,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 242630
+        },
+        "10": {
+          "slot_accuracy_milli": 638,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 248654
+        },
+        "11": {
+          "slot_accuracy_milli": 750,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 294614
+        },
+        "12": {
+          "slot_accuracy_milli": 900,
+          "energy_accuracy_milli": 1000,
+          "p10_energy_gap": 374568
+        }
+      },
+      "capacity_curve_by_rule_family": {
+        "block_swap": 725,
+        "edge_to_center": 763,
+        "even_odd_split": 950,
+        "full_mirror": 300,
+        "pair_swap": 775,
+        "rotate_left_1": 988,
+        "rotate_left_2": 938,
+        "rotate_right_1": 788
+      },
+      "address_radius_energy_accuracy_milli": {
+        "clean": 1000,
+        "action_wrapped": 977,
+        "source_slot0_suffix": 1000,
+        "source_all_suffix": 1000,
+        "action_wrapped_source_slot0_suffix": 980
+      },
+      "ablation_without_binding_accuracy_milli": 0,
+      "ablation_without_action_accuracy_milli": 0,
+      "ablation_without_action_energy_accuracy_milli": 0,
+      "ablation_without_role_accuracy_milli": 0,
+      "ablation_without_role_energy_accuracy_milli": 0,
+      "ablation_without_active_fringe_accuracy_milli": 0,
+      "flat_sequence_energy_parity_checked_rows": 640,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_sequence_energy_parity_max_abs_gap_delta": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "role_binding_edges": 35530,
+      "target_center_id_training_used": false,
+      "proof_rule_id_training_authority_used": false,
+      "concrete_x_lookup_used": false,
+      "local_out_t_runtime_extension_used": false
+    },
+    "delta_vs_pre_learned_output_slot": {
+      "strict_slot_ordered_accuracy_milli": "0 -> 734 -> 778 with cleanup8",
+      "output_slot_cleanup_accuracy_milli": "693 -> 970 -> 976 with cleanup8",
+      "output_slots_8_to_11_accuracy_milli": "0 -> [955, 894, 969, 1000] -> [958, 946, 994, 1000] with cleanup8",
+      "sequence_energy_accuracy_milli": "1000 -> 1000"
+    },
+    "verdict": "LEARNED_OUTPUT_SLOT_KEY_SOLVES_LENGTH_9_12_SLOT_CEILING_PARTIALLY_BUT_STRICT_DECODER_REMAINS_BELOW_1000_FULL_MIRROR_IS_PRIMARY_STRICT_DEBT"
+  },
+  "slot_bank_capacity_attempts": [
+    {
+      "profile": "slot16_span2048",
+      "artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/slot16_span2048_base_v3",
+      "beyond_static_artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011_slot16_span2048",
+      "u16_center_budget": "16 output banks + 16 role banks, each 2048 folded lanes",
+      "base_v3_runtime": {
+        "strict_slot_ordered_accuracy_milli": 679,
+        "sequence_energy_accuracy_milli": 985,
+        "symmetry_sequence_energy_accuracy_milli": 941,
+        "output_slot_cleanup_accuracy_milli": 924,
+        "flat_sequence_energy_parity_mismatches": 0,
+        "state_delta_edges": 0,
+        "local_out_t_runtime_extension_used": false
+      },
+      "beyond_v3_static": {
+        "folded_wrong_role_hit_milli": 169,
+        "folded_missing_true_role_milli": 0
+      },
+      "verdict": "REJECT_AS_DEFAULT_BASE_V3_REGRESSION"
+    },
+    {
+      "profile": "slot12_span2730",
+      "artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/slot12_span2730_base_v3",
+      "beyond_static_artifact_dir": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011_slot12_span2730",
+      "u16_center_budget": "12 output banks + 12 role banks, each 2730 folded lanes",
+      "base_v3_runtime": {
+        "strict_slot_ordered_accuracy_milli": 649,
+        "sequence_energy_accuracy_milli": 983,
+        "symmetry_sequence_energy_accuracy_milli": 936,
+        "output_slot_cleanup_accuracy_milli": 910,
+        "flat_sequence_energy_parity_mismatches": 0,
+        "state_delta_edges": 0,
+        "local_out_t_runtime_extension_used": false
+      },
+      "beyond_v3_static": {
+        "folded_wrong_role_hit_milli": 154,
+        "folded_missing_true_role_milli": 0
+      },
+      "verdict": "REJECT_AS_DEFAULT_BASE_V3_REGRESSION"
+    }
+  ],
+  "still_not_validated": [
+    "multi_seed_beyond_v3",
+    "new_rule_families",
+    "new_token_families",
+    "new_noise_families",
+    "less_formal_rule_action_examples_without_explicit_operator_slots",
+    "learned_L2_induction_of_operator_pair_motifs_without_test_parser",
+    "lengths_greater_than_12_or_dynamic_slot_capacity"
+  ],
+  "next_required_axes": [
+    "operator_pair_action_motif_multi_seed_beyond_v3",
+    "v4_new_rule_families",
+    "v4_new_surface_and_noise_families",
+    "L2_time_phase_induction_of_operator_pair_motifs"
+  ],
+  "verdict": "CURRENT_V3_AND_LENGTH_9_12_TRANSFER_GREEN_WITH_OPERATOR_PAIR_ACTION_MOTIFS_BROAD_PROOF_STILL_OPEN",
+  "updated_at": "2026-07-01T12:45:00+03:00",
+  "operator_pair_action_motif_probe": {
+    "status": "GREEN_ON_BASE_V3_AND_LENGTH_9_12_SLICE_PENDING_MULTI_SEED_AND_NEW_FAMILIES",
+    "mechanism": "L2-derived operator-pair action motifs from rule_action_example: (output_slot, source_slot) centers feed learned role/filler binding edges",
+    "not_a_target_or_rule_id_lookup": true,
+    "not_manual_local_out_t": true,
+    "current_claim_boundary": "Proves compact transfer on current v3 and one beyond-v3 length slice. Does not yet prove broad LLMWave reasoning; still needs multi-seed beyond-v3, new rule/token/noise families, and learned L2 induction of these motifs from less formal action examples.",
+    "base_v3_runtime": {
+      "artifact": "data/rule_logic_position_sequence_v3/diagnostics/operator_pair_action_base_v3/combined_objective_rust_gate.log",
+      "operator_pair_action_centers_used": true,
+      "strict_slot_ordered_accuracy_milli": 1000,
+      "flat_strict_slot_ordered_accuracy_milli": 1000,
+      "sequence_energy_accuracy_milli": 1000,
+      "sequence_energy_median_gap": 616942,
+      "sequence_energy_p10_gap": 225820,
+      "energy_pass_slot_fail_rows": 0,
+      "symmetry_sequence_energy_accuracy_milli": 1000,
+      "symmetry_p10_energy_gap": 218516,
+      "non_symmetry_sequence_energy_accuracy_milli": 1000,
+      "non_symmetry_p10_energy_gap": 227336,
+      "output_slot_cleanup_accuracy_milli": 1000,
+      "full_mirror_strict_accuracy_milli": 1000,
+      "ablation_without_binding_accuracy_milli": 0,
+      "ablation_without_action_accuracy_milli": 0,
+      "ablation_without_action_energy_accuracy_milli": 0,
+      "ablation_without_role_accuracy_milli": 0,
+      "ablation_without_role_energy_accuracy_milli": 0,
+      "ablation_without_active_fringe_accuracy_milli": 0,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "role_binding_edges": 22460,
+      "target_center_id_training_used": false,
+      "proof_rule_id_training_authority_used": false,
+      "concrete_x_lookup_used": false,
+      "local_out_t_runtime_extension_used": false
+    },
+    "beyond_v3_length_9_12_seed_011_runtime": {
+      "artifact": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011_operator_pair_action/combined_objective_rust_gate.log",
+      "corpus_artifact": "data/rule_logic_position_sequence_v3/diagnostics/beyond_v3/length_9_12_seed_011/accepted_position_sequence_tasks_v3.jsonl",
+      "operator_pair_action_centers_used": true,
+      "lengths": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "train_rows": 1280,
+      "heldout_rows": 640,
+      "strict_slot_ordered_accuracy_milli": 1000,
+      "flat_strict_slot_ordered_accuracy_milli": 1000,
+      "sequence_energy_accuracy_milli": 1000,
+      "sequence_energy_median_gap": 2120416,
+      "sequence_energy_p10_gap": 1166244,
+      "energy_pass_slot_fail_rows": 0,
+      "symmetry_sequence_energy_accuracy_milli": 1000,
+      "symmetry_p10_energy_gap": 1144180,
+      "non_symmetry_sequence_energy_accuracy_milli": 1000,
+      "non_symmetry_p10_energy_gap": 1193472,
+      "output_slot_cleanup_accuracy_milli": 1000,
+      "output_slot_cleanup_accuracy_by_output_slot": {
+        "0": 1000,
+        "1": 1000,
+        "2": 1000,
+        "3": 1000,
+        "4": 1000,
+        "5": 1000,
+        "6": 1000,
+        "7": 1000,
+        "8": 1000,
+        "9": 1000,
+        "10": 1000,
+        "11": 1000
+      },
+      "capacity_curve_by_length": {
+        "9": {
+          "slot_accuracy_milli": 1000,
+          "energy_accuracy_milli": 1000
+        },
+        "10": {
+          "slot_accuracy_milli": 1000,
+          "energy_accuracy_milli": 1000
+        },
+        "11": {
+          "slot_accuracy_milli": 1000,
+          "energy_accuracy_milli": 1000
+        },
+        "12": {
+          "slot_accuracy_milli": 1000,
+          "energy_accuracy_milli": 1000
+        }
+      },
+      "capacity_curve_by_rule_family": {
+        "block_swap": 1000,
+        "edge_to_center": 1000,
+        "even_odd_split": 1000,
+        "full_mirror": 1000,
+        "pair_swap": 1000,
+        "rotate_left_1": 1000,
+        "rotate_left_2": 1000,
+        "rotate_right_1": 1000
+      },
+      "address_radius_energy_accuracy_milli": {
+        "clean": 1000,
+        "action_wrapped": 1000,
+        "source_slot0_suffix": 1000,
+        "source_all_suffix": 1000,
+        "action_wrapped_source_slot0_suffix": 1000
+      },
+      "address_radius_slot_accuracy_milli": {
+        "clean": 1000,
+        "action_wrapped": 1000,
+        "source_slot0_suffix": 1000,
+        "source_all_suffix": 983,
+        "action_wrapped_source_slot0_suffix": 1000
+      },
+      "ablation_without_binding_accuracy_milli": 0,
+      "ablation_without_action_accuracy_milli": 0,
+      "ablation_without_action_energy_accuracy_milli": 0,
+      "ablation_without_role_accuracy_milli": 0,
+      "ablation_without_role_energy_accuracy_milli": 0,
+      "ablation_without_active_fringe_accuracy_milli": 0,
+      "flat_sequence_energy_parity_checked_rows": 640,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_sequence_energy_parity_max_abs_gap_delta": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "role_binding_edges": 60638,
+      "target_center_id_training_used": false,
+      "proof_rule_id_training_authority_used": false,
+      "concrete_x_lookup_used": false,
+      "local_out_t_runtime_extension_used": false
+    },
+    "rejected_candidate_cleanup": {
+      "verdict": "REJECT_AS_DEFAULT_BASE_V3_REGRESSION",
+      "mechanism": "all-same-bag candidate cleanup",
+      "artifact_cleanup4_candidate1": "data/rule_logic_position_sequence_v3/diagnostics/learned_output_slot_base_v3_candidate1_cleanup4/combined_objective_rust_gate.log",
+      "artifact_cleanup8_candidate1": "data/rule_logic_position_sequence_v3/diagnostics/learned_output_slot_base_v3_candidate1/combined_objective_rust_gate.log",
+      "cleanup4_candidate1": {
+        "strict_slot_ordered_accuracy_milli": 587,
+        "sequence_energy_accuracy_milli": 981,
+        "symmetry_sequence_energy_accuracy_milli": 936,
+        "full_mirror_strict_accuracy_milli": 200,
+        "ablation_without_binding_accuracy_milli": 0,
+        "flat_sequence_energy_parity_mismatches": 0
+      },
+      "cleanup8_candidate1": {
+        "strict_slot_ordered_accuracy_milli": 624,
+        "sequence_energy_accuracy_milli": 974,
+        "symmetry_sequence_energy_accuracy_milli": 927,
+        "full_mirror_strict_accuracy_milli": 242,
+        "ablation_without_binding_accuracy_milli": 0,
+        "flat_sequence_energy_parity_mismatches": 0
+      },
+      "interpretation": "Pairwise pressure against every same-bag token over-regularizes local slot readout and weakens operator energy; it is preserved as a negative experiment, not accepted as architecture."
+    }
+  }
+}

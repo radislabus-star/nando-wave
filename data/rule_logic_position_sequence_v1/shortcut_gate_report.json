@@ -1,0 +1,15 @@
+{
+  "metrics": {
+    "bag_of_tokens_accuracy_milli": 500,
+    "exact_lookup_accuracy_milli": 0,
+    "heldout_rows": 504,
+    "markov_bigram_pairwise_accuracy_milli": 466,
+    "proof_rule_id_majority_accuracy_milli": 0,
+    "rows": 1764,
+    "same_bag_derangement_milli": 1000,
+    "surface_family_majority_accuracy_milli": 0,
+    "train_rows": 1260
+  },
+  "schema_version": "position_sequence_shortcut_gate_v2",
+  "verdict": "VALID_POSITION_SEQUENCE_CANDIDATE"
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "domain_dsl_v1",
+  "purpose": "Compact domain building blocks for WavePredictor Task Factory; not runtime answer authority.",
+  "domains": [
+    {
+      "domain_id": "linux_networking_vpn",
+      "domain_path": "it.networking.linux_vpn",
+      "status": "locked_first_proving_domain",
+      "title_ru": "Linux / сеть / VPN / диагностика",
+      "title_en": "Linux networking VPN troubleshooting",
+      "language_scope": ["ru", "en"],
+      "tags": ["linux", "networking", "vpn", "troubleshooting"],
+      "description": "First proving-ground candidate for operator-memory tasks around Linux networking, VPN, routing, DNS, auth, firewall, and safe troubleshooting.",
+      "description_ru": "Первый зафиксированный полигон для задач операторной памяти: Linux, сеть, VPN, маршруты, DNS, авторизация, firewall и безопасная диагностика.",
+      "claim_boundary": {
+        "domain_locked": true,
+        "training_dataset_ready": false,
+        "runtime_authority": false,
+        "task_factory_ready": false
+      },
+      "lock_contract": {
+        "lock_id": "domain_lock_v1_linux_networking_vpn_2026_06_30",
+        "locked_on": "2026-06-30",
+        "lock_scope": "first_proving_domain",
+        "locked": true,
+        "step_5_full_pack_ready": true
+      },
+      "files": {
+        "domain_lock": "linux_networking_vpn/domain_lock.json",
+        "entities": "linux_networking_vpn/entities.json",
+        "operators": "linux_networking_vpn/operators.json",
+        "templates": "linux_networking_vpn/templates.json",
+        "negative_rules": "linux_networking_vpn/negative_rules.json"
+      }
+    }
+  ]
+}

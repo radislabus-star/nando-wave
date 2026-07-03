@@ -1,0 +1,57 @@
+{
+  "correct_wrong_same_bag": true,
+  "heldout_per_cell": 1,
+  "heldout_rows": 120,
+  "lengths": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "matrix_cells": 120,
+  "negative_strategies": {
+    "adjacent_slot_swap": 60,
+    "block_swap_wrong": 60,
+    "inverse_rotation_trap": 60,
+    "mirror_vs_rotate_trap": 60,
+    "phase_shift": 60,
+    "sampled_derangement": 60
+  },
+  "noise_types": [
+    "clean",
+    "prefix_suffix",
+    "punctuation",
+    "distractor",
+    "instruction_noise"
+  ],
+  "rows": 360,
+  "rule_families": [
+    "full_mirror"
+  ],
+  "rules": {
+    "full_mirror_len3": 60,
+    "full_mirror_len4": 60,
+    "full_mirror_len5": 60,
+    "full_mirror_len6": 60,
+    "full_mirror_len7": 60,
+    "full_mirror_len8": 60
+  },
+  "same_bag_derangement_required": true,
+  "schema_version": "position_sequence_manifest_v3",
+  "surface_families": [
+    "symbols",
+    "ru_words",
+    "business",
+    "network"
+  ],
+  "train_heldout_overlap_by_surface": {
+    "business": [],
+    "network": [],
+    "ru_words": [],
+    "symbols": []
+  },
+  "train_per_cell": 2,
+  "train_rows": 240
+}

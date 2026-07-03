@@ -1,0 +1,224 @@
+{
+  "schema_version": "wave_compact_task_v1",
+  "domain_id": "linux_networking_vpn",
+  "source_family": "domain_dsl_compact_generated_v1",
+  "quality_status": "candidate",
+  "cases": [
+    {
+      "case_id": "lnvpn_c001",
+      "template_id": "route_scope_missing_subnet_v1",
+      "language": "ru",
+      "source_group": "vpn_route_scope",
+      "input": "VPN поднят. Адрес 10.10.0.1 пингуется, 10.11.0.5 не отвечает. В AllowedIPs у пира есть только 10.10.0.0/24.",
+      "target": "Добавить или исправить область маршрутизации для 10.11.0.0/24 в AllowedIPs или route scope этого пира.",
+      "near_negative": "Исправить область маршрутизации только для 10.10.0.0/24 в AllowedIPs и route scope, оставив 10.11.0.0/24 вне этого пира."
+    },
+    {
+      "case_id": "lnvpn_c002",
+      "template_id": "internal_dns_resolver_v1",
+      "language": "ru",
+      "source_group": "vpn_dns_layer",
+      "input": "Через VPN прямой IP внутреннего сервиса открывается. Имя service.office.local не резолвится. Внешние DNS-имена работают.",
+      "target": "Направить внутреннюю зону office.local на внутренний DNS resolver или link-specific resolver VPN.",
+      "near_negative": "Направить внутреннюю зону office.local через внешний DNS resolver, хотя прямой IP уже доказывает сетевой путь VPN."
+    },
+    {
+      "case_id": "lnvpn_c003",
+      "template_id": "http_403_app_acl_v1",
+      "language": "ru",
+      "source_group": "vpn_app_auth",
+      "input": "Через VPN curl до внутреннего сервиса отвечает HTTP 403. Ping и TCP до сервиса проходят. Firewall и route не менялись.",
+      "target": "Проверить ACL приложения или доменную политику для нужного пользователя и ресурса.",
+      "near_negative": "Проверить ACL приложения или доменную политику, но для другого пользователя и ресурса, хотя нужный пользователь уже получает HTTP 403."
+    },
+    {
+      "case_id": "lnvpn_c004",
+      "template_id": "keepalive_dpd_timeout_v1",
+      "language": "ru",
+      "source_group": "vpn_liveness_timeout",
+      "input": "В логах повторяются DPD timeout и keepalive timeout. Время синхронизировано, сертификаты и ключи валидны.",
+      "target": "Проверить и настроить keepalive, DPD, ping-timeout или ping-interval.",
+      "near_negative": "Проверить и настроить MTU/MSS вместо keepalive, DPD, ping-timeout и ping-interval при тех же timeout логах."
+    },
+    {
+      "case_id": "lnvpn_c005",
+      "template_id": "radius_2fa_time_sync_v1",
+      "language": "ru",
+      "source_group": "vpn_auth_radius",
+      "input": "AUTH_FAILED появляется вокруг 2FA/RADIUS. Сертификат сервера валидный, TLS-ошибок нет.",
+      "target": "Проверить синхронизацию времени и путь RADIUS/2FA до замены сертификата.",
+      "near_negative": "Проверить TLS-сертификат и заменить certificate до проверки синхронизации времени и пути RADIUS/2FA."
+    },
+    {
+      "case_id": "lnvpn_c006",
+      "template_id": "config_snapshot_before_mutation_v1",
+      "language": "ru",
+      "source_group": "vpn_safe_change",
+      "input": "Нужно менять VPN/firewall config во время инцидента. Снимок текущего конфига и версий еще не сделан.",
+      "target": "Сначала сохранить baseline: config snapshot, версии и rollback point.",
+      "near_negative": "Сначала изменить config и правила, а baseline, config snapshot, версии и rollback point сохранить после мутации."
+    },
+    {
+      "case_id": "lnvpn_c007",
+      "template_id": "rollout_completion_gate_v1",
+      "language": "ru",
+      "source_group": "vpn_rollout_gate",
+      "input": "Rollout профиля пира идет по шагам. Предварительный шаг выполнен только частично, smoke test еще нельзя читать однозначно.",
+      "target": "Завершить prerequisite полностью до следующей фазы rollout.",
+      "near_negative": "Начать следующую фазу rollout до полного prerequisite, оставив частично завершенное смешанное состояние."
+    },
+    {
+      "case_id": "lnvpn_c008",
+      "template_id": "exposure_status_underfilled_v1",
+      "language": "ru",
+      "source_group": "vpn_underfilled_refusal",
+      "input": "Спрашивают, открыт ли сервис наружу. Есть только общий route snapshot, но нет ss, bind address и firewall snapshot.",
+      "target": "Ответить underfilled и запросить socket, bind, firewall и route evidence.",
+      "near_negative": "Ответить, что сервис открыт или безопасен, не запрашивая socket, bind, firewall и route evidence."
+    },
+    {
+      "case_id": "lnvpn_c009",
+      "template_id": "minimal_change_visible_mismatch_v1",
+      "language": "ru",
+      "source_group": "vpn_minimal_change",
+      "input": "Видно одно неверное firewall правило для VPN subnet. Перезапуск всего сервиса заденет активных пользователей.",
+      "target": "Сделать узкую правку правила или собрать точное evidence перед broad restart.",
+      "near_negative": "Сделать broad restart всего VPN/firewall сервиса вместо узкой правки локализованного правила."
+    },
+    {
+      "case_id": "lnvpn_c010",
+      "template_id": "tcp_port_firewall_not_route_v1",
+      "language": "ru",
+      "source_group": "vpn_firewall_port",
+      "input": "Маршрут до хоста есть, ping проходит. TCP 443 к этому же хосту падает по timeout.",
+      "target": "Проверить firewall/ACL для TCP 443 или конкретного протокола.",
+      "near_negative": "Проверить общий route вместо firewall/ACL для TCP 443, хотя reachability уже доказан ping и route."
+    },
+    {
+      "case_id": "lnvpn_c011",
+      "template_id": "interface_absent_before_route_v1",
+      "language": "ru",
+      "source_group": "vpn_interface_layer",
+      "input": "Ожидался интерфейс wg0, но ip link его не показывает. В route table остались старые tunnel routes.",
+      "target": "Сначала проверить link/interface state и создание wg0.",
+      "near_negative": "Проверить DNS и route table до link/interface state, пока wg0 tunnel interface отсутствует."
+    },
+    {
+      "case_id": "lnvpn_c012",
+      "template_id": "daemon_failed_before_firewall_v1",
+      "language": "ru",
+      "source_group": "vpn_daemon_layer",
+      "input": "VPN interface не создан. journalctl для openvpn показывает startup failure до настройки сети.",
+      "target": "Проверить daemon/service unit и journal log до firewall или route изменений.",
+      "near_negative": "Проверить firewall и route изменения до daemon/service unit и journal log, хотя daemon еще не стартовал."
+    },
+    {
+      "case_id": "lnvpn_c013",
+      "template_id": "nat_return_path_v1",
+      "language": "ru",
+      "source_group": "vpn_nat_return",
+      "input": "Пакеты клиента доходят до удаленной подсети. Ответы не возвращаются через туннель. NAT masquerade на egress side отсутствует.",
+      "target": "Проверить NAT masquerade или явный обратный маршрут для return path.",
+      "near_negative": "Проверить forward route вместо NAT masquerade или явного обратного маршрута для return path."
+    },
+    {
+      "case_id": "lnvpn_c014",
+      "template_id": "policy_table_selected_v1",
+      "language": "ru",
+      "source_group": "vpn_policy_routing",
+      "input": "Main route выглядит верно. ip rule отправляет трафик этого source в table 100, где нужного маршрута нет.",
+      "target": "Исправить выбранную policy routing table, а не main table.",
+      "near_negative": "Исправить main table вместо выбранной policy routing table и игнорировать ip rule."
+    },
+    {
+      "case_id": "lnvpn_c015",
+      "template_id": "rp_filter_asymmetric_tunnel_v1",
+      "language": "ru",
+      "source_group": "vpn_rp_filter",
+      "input": "Асимметричный VPN-трафик исчезает на Linux host. rp_filter стоит strict, firewall counters не растут.",
+      "target": "Проверить rp_filter и асимметричный return path до firewall rewrite.",
+      "near_negative": "Проверить firewall ACL и менять ACL вместо rp_filter и асимметричного return path."
+    },
+    {
+      "case_id": "lnvpn_c016",
+      "template_id": "large_tcp_blackhole_mss_v1",
+      "language": "ru",
+      "source_group": "vpn_mtu_mss",
+      "input": "Ping и маленький curl через VPN проходят. Большая TCP-загрузка зависает после установки туннеля.",
+      "target": "Проверить MTU/MSS и применить MSS clamp при подтверждении blackhole.",
+      "near_negative": "Проверить keepalive/DPD вместо MTU/MSS и MSS clamp при large TCP blackhole."
+    },
+    {
+      "case_id": "lnvpn_c017",
+      "template_id": "stale_peer_endpoint_v1",
+      "language": "ru",
+      "source_group": "vpn_endpoint_roaming",
+      "input": "Публичный IP пира изменился. Peer endpoint все еще старый. AllowedIPs соответствуют нужным подсетям.",
+      "target": "Обновить или переобнаружить peer endpoint.",
+      "near_negative": "Обновить AllowedIPs и restart service вместо peer endpoint, хотя endpoint остался старым."
+    },
+    {
+      "case_id": "lnvpn_c018",
+      "template_id": "resolved_link_split_dns_v1",
+      "language": "ru",
+      "source_group": "vpn_split_dns",
+      "input": "Внутренняя зона должна идти через VPN link. resolvectl показывает, что systemd-resolved отправляет ее на другой link.",
+      "target": "Привязать internal domain resolver к VPN link через systemd-resolved/resolvectl.",
+      "near_negative": "Привязать internal domain resolver глобально, а не к VPN link через systemd-resolved/resolvectl."
+    },
+    {
+      "case_id": "lnvpn_c019",
+      "template_id": "short_name_suffix_v1",
+      "language": "ru",
+      "source_group": "vpn_dns_suffix",
+      "input": "Полный FQDN service.office.local резолвится. Короткое имя service не резолвится. DNS resolver правильный.",
+      "target": "Исправить search suffix или domain search scope.",
+      "near_negative": "Исправить resolver IP вместо search suffix или domain search scope, хотя FQDN уже работает."
+    },
+    {
+      "case_id": "lnvpn_c020",
+      "template_id": "one_sided_capture_boundary_v1",
+      "language": "ru",
+      "source_group": "vpn_capture_boundary",
+      "input": "tcpdump на одной стороне показывает исходящие пакеты. В этом же capture point обратных пакетов не видно.",
+      "target": "Разделить сторону capture, направление пакетов и недостающий counterpart evidence перед выбором route/NAT/firewall fix.",
+      "near_negative": "Разделить route/NAT/firewall fix только по одному capture point, без стороны capture и counterpart evidence."
+    },
+    {
+      "case_id": "lnvpn_c021",
+      "template_id": "socket_bind_exposure_v1",
+      "language": "ru",
+      "source_group": "vpn_socket_exposure",
+      "input": "ss показывает listening socket. Bind address равен 127.0.0.1. Firewall и route context неполные.",
+      "target": "Оценивать exposure по bind address вместе с firewall и route context.",
+      "near_negative": "Оценивать exposure только по listening socket и игнорировать bind address, firewall и route context."
+    },
+    {
+      "case_id": "lnvpn_c022",
+      "template_id": "peer_key_mismatch_v1",
+      "language": "ru",
+      "source_group": "vpn_key_binding",
+      "input": "Handshake падает с evidence на key mismatch. Endpoint достижим, route выглядит правдоподобно.",
+      "target": "Проверить binding public/private/preshared key для нужного peer profile.",
+      "near_negative": "Проверить route или DNS вместо binding public/private/preshared key для нужного peer profile."
+    },
+    {
+      "case_id": "lnvpn_c023",
+      "template_id": "forward_chain_for_transit_v1",
+      "language": "ru",
+      "source_group": "vpn_firewall_chain",
+      "input": "Трафик должен пройти через VPN host транзитом. Локальный сервис на host не является целью.",
+      "target": "Проверить FORWARD chain и counters для транзитного трафика.",
+      "near_negative": "Проверить INPUT chain и counters вместо FORWARD chain для транзитного VPN traffic."
+    },
+    {
+      "case_id": "lnvpn_c024",
+      "template_id": "failed_smoke_requires_rollback_v1",
+      "language": "ru",
+      "source_group": "vpn_rollback_smoke",
+      "input": "После bounded change smoke test падает. Config snapshot и rollback point есть.",
+      "target": "Rollback или изоляция последнего изменения до новых правок.",
+      "near_negative": "Сделать новые правки после failed smoke test вместо rollback или изоляции последнего изменения."
+    }
+  ]
+}

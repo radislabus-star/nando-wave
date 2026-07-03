@@ -1,0 +1,46 @@
+{
+  "schema_version": "position_sequence_v3_collision_audit_report_v1",
+  "source_artifacts": {
+    "static_diagnostics": "data/rule_logic_position_sequence_v3/static_diagnostics_report.json",
+    "combined_gate": "data/rule_logic_position_sequence_v3/diagnostics/combined_objective_probe/rust_gate.log"
+  },
+  "claim_boundary": "Collision audit v1 covers action-surface signatures, folded role-lane pressure, and flat L3 role-binding edge polysemy. It is not yet a full learned L2 motif ownership audit.",
+  "l1_action_signature_collision": {
+    "action_vectors": 42,
+    "different_rule_action_similarity_milli": 506,
+    "same_family_different_length_similarity_milli": 516,
+    "different_family_similarity_milli": 505,
+    "max_different_rule_similarity_milli": 969,
+    "nearest_rule_pairs": [
+      {"left": "full_mirror_len3", "right": "rotate_left_1_len3", "similarity_milli": 969},
+      {"left": "edge_to_center_len4", "right": "rotate_left_2_len4", "similarity_milli": 939},
+      {"left": "pair_swap_len4", "right": "rotate_right_1_len4", "similarity_milli": 939},
+      {"left": "even_odd_split_len3", "right": "rotate_right_1_len3", "similarity_milli": 910},
+      {"left": "full_mirror_len4", "right": "rotate_left_1_len4", "similarity_milli": 910}
+    ]
+  },
+  "l2_role_folded_lane_pressure": {
+    "target_impulses_checked": 218123,
+    "multi_role_hit_milli": 64,
+    "wrong_role_hit_milli": 64,
+    "missing_true_role_milli": 0
+  },
+  "l3_role_binding_polysemy": {
+    "flat_nonzero_role_binding_edges": 14600,
+    "raw_role_binding_edges": 16357,
+    "action_centers_with_edges": 1176,
+    "avg_edges_per_action_center_milli": 12415,
+    "max_edges_per_action_center": 16,
+    "action_centers_with_multi_slot_edges": 1176,
+    "max_slots_per_action_center": 8,
+    "role_slots_covered": 8
+  },
+  "linked_runtime_symptoms": {
+    "full_mirror_slot_accuracy_milli": 83,
+    "full_mirror_energy_accuracy_milli": 917,
+    "full_mirror_p10_energy_gap": 3488,
+    "action_wrapped_energy_accuracy_milli": 904,
+    "action_wrapped_source_slot0_suffix_p10_energy_gap": -4358
+  },
+  "interpretation": "The strongest collision path is action/operator ambiguity, not missing role recall. Folded role lanes have measurable wrong-role pressure but never miss the true role in this audit. L3 role-binding edges are deliberately shared across all 8 slots; this gives compactness, but under highly similar action signatures it becomes polysemantic pressure. The full_mirror collapse aligns with the nearest action-signature collisions."
+}

@@ -105,6 +105,25 @@ nando-cli live-tissue-diagnose
 nando-cli live-grok-trace
 nando-cli live-grok-sweep
 nando-cli bench-link-tissue
+nando-cli phase-package-v4
+nando-cli phase-package-inspect
+nando-cli phase-package-score-v4
+nando-cli phase-eval-pack-v4
+nando-cli phase-package-score-pack-v4
+nando-cli phase-package-verify
+nando-cli phase-action-boundary-v4
+nando-cli phase-action-corpus-v1
+nando-cli phase-action-domain-corpus-v1
+nando-cli phase-action-coverage-corpus-v1
+nando-cli phase-action-contract-v1
+nando-cli phase-action-shortcut-v1
+nando-cli phase-action-operator-coverage-v1
+nando-cli phase-action-runtime-v1
+nando-cli phase-action-package-v1
+nando-cli phase-action-package-inspect-v1
+nando-cli phase-action-source-verify-v1
+nando-cli phase-action-package-score-v1
+nando-cli phase-action-package-verify-v1
 scripts/check-goal.sh
 scripts/check.sh
 scripts/check-push.sh
@@ -1962,10 +1981,10 @@ ThinkPad T480 важен как ограничение:
 
 Исполняемое ядро Nando Wave должно быть Rust-first.
 
-Python, notebooks или внешние инструменты допустимы только как временная
-лаборатория для графиков, анализа и подготовки данных. Но сама система клеток,
-волновая шина, top-k активация, сохранение спектральных снимков и генерация
-ответа должны жить в Rust.
+Python, notebooks или внешние инструменты теперь считаются архивной или
+одноразовой лабораторией. Текущие proof/runtime-рубежи, генераторы корпусов,
+shortcut gates, flat packages, спектральные снимки и горячий путь должны жить в
+Rust, если отдельный throwaway-анализ явно не помечен как временный.
 
 Причины:
 
@@ -2001,6 +2020,700 @@ input byte/char
 Все, что должно работать быстро и постоянно, должно быть в Rust. Это не
 запрет на эксперименты, а защита идеи от случайного превращения в медленный
 скрипт.
+
+## Current Rust Package Scorer Commands
+
+Action runtime package proof now has a binary eval-pack step:
+
+Operator-dimension coverage audit is a separate Rust/CLI gate. It is not a
+Python demo and not a runtime proof:
+
+```bash
+cargo run -p nando-cli --release -- phase-action-operator-coverage-v1 \
+  data/rule_logic_operator_battery_v4/action_contract_v1/generated_action_contract_v1.jsonl \
+  target/nando-wave/action-contract-v1.generated-operator-coverage-report.json
+
+cargo run -p nando-cli --release -- phase-action-operator-coverage-v1 \
+  data/rule_logic_operator_battery_v4/action_contract_v1/generated_domain_action_contract_v1.jsonl \
+  target/nando-wave/action-contract-v1.generated-domain-operator-coverage-report.json
+
+cargo run -p nando-cli --release -- phase-action-coverage-corpus-v1 \
+  data/rule_logic_operator_battery_v5/action_contract_v1/generated_coverage_action_contract_v1.jsonl \
+  target/nando-wave/action-contract-v1.generated-coverage-corpus-report.json
+
+cargo run -p nando-cli --release -- phase-action-operator-coverage-v1 \
+  data/rule_logic_operator_battery_v5/action_contract_v1/generated_coverage_action_contract_v1.jsonl \
+  target/nando-wave/action-contract-v1.generated-coverage-operator-coverage-report.json
+```
+
+Current bounded corpora remain WATCH: generated_action has
+select/transform/write/condition/check counts `1/10/1/1/8`, and domain_action
+has `6/6/1/1/6`. The V5 coverage_action corpus has `6/10/5/5/10` and
+`PHASE_ACTION_OPERATOR_COVERAGE_V1_PASS`. Release/regression/freeze now require
+all operator-coverage reports to match their sources and at least one artifact
+to close full operator-dimension coverage.
+
+```bash
+cargo run -p nando-cli --release -- phase-action-eval-pack-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  data/rule_logic_operator_battery_v4/action_contract_v1/generated_domain_action_contract_v1.jsonl \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.eval-pack
+
+cargo run -p nando-cli --release -- phase-action-package-score-pack-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.eval-pack \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.score-pack-report.json
+
+cargo run -p nando-cli --release -- phase-action-package-verify-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.score-pack-report.json
+
+cargo run -p nando-cli --release -- phase-action-package-bench-pack-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.eval-pack \
+  1000 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.bench-report.json
+
+cargo run -p nando-cli --release -- phase-action-package-bench-verify-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.eval-pack \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.bench-report.json
+
+cargo run -p nando-cli --release -- phase-action-product-proof-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.eval-pack \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.score-pack-report.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.bench-report.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.product-proof.json
+
+cargo run -p nando-cli --release -- phase-action-product-verify-v1 \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.nwpc.manifest.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.eval-pack \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.score-pack-report.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.bench-report.json \
+  target/nando-wave/action-runtime-v1-generated-domain-c32.product-proof.json
+```
+
+Required score-pack flags:
+
+```text
+eval_task_package_used: true
+corpus_jsonl_used_in_score_loop: false
+compiler_used: false
+```
+
+Required benchmark-pack flags:
+
+```text
+eval_task_package_used: true
+corpus_jsonl_used_in_bench_loop: false
+compiler_used: false
+```
+
+Required product-proof flags:
+
+```text
+product_proof_kind: phase_action_product_proof_v1
+score_report_verdict: PHASE_ACTION_PACKAGE_SCORE_PACK_V1_PASS
+bench_report_verdict: PHASE_ACTION_PACKAGE_BENCH_PACK_V1_PASS
+compiler_used: false
+forbidden_used: false
+```
+
+Build and verify the current action release-suite:
+
+```bash
+cargo run -p nando-cli --release -- phase-action-release-suite-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json
+
+cargo run -p nando-cli --release -- phase-action-release-verify-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json
+```
+
+Required release-suite flags:
+
+```text
+release_suite_kind: phase_action_release_suite_v1
+artifact_count: 2
+distinct_package_fingerprints: true
+compiler_used: false
+eval_task_package_used: true
+corpus_jsonl_used: false
+forbidden_used: false
+total_source_verify_report_bytes: 3370
+total_shortcut_report_bytes: 2037
+all_source_verify_reports_pass: true
+all_shortcut_reports_pass: true
+all_manifest_package_parity_pass: true
+all_eval_pack_package_parity_pass: true
+all_score_report_package_parity_pass: true
+all_bench_report_package_parity_pass: true
+all_product_report_package_parity_pass: true
+all_source_rebuild_package_parity_pass: true
+all_source_verify_report_package_parity_pass: true
+all_package_report_parity_pass: true
+all_action_ablation_collapses: true
+max_score_action_ablation_accuracy_milli: 567
+max_bench_action_ablation_accuracy_milli: 567
+total_score_action_ablation_wrong_wins: 500
+total_bench_action_ablation_wrong_wins: 500000
+commercial_license_closed: false
+report_matches_sources: true
+```
+
+Build and verify the current non-commercial license package:
+
+```bash
+cargo run -p nando-cli --release -- phase-action-license-package-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json \
+  LICENSE-NONCOMMERCIAL.md \
+  target/nando-wave/action-runtime-v1-license-package.product-proof.json
+
+cargo run -p nando-cli --release -- phase-action-license-verify-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json \
+  LICENSE-NONCOMMERCIAL.md \
+  target/nando-wave/action-runtime-v1-license-package.product-proof.json
+```
+
+Required license-package flags:
+
+```text
+license_package_kind: phase_action_noncommercial_license_package_v1
+license_name: Nando Wave Non-Commercial Source License v1.0
+cargo_workspace_license_file_declared: true
+cargo_workspace_mit_license_declared: false
+cargo_crate_license_file_workspace_declared: true
+cargo_crate_license_workspace_declared: false
+release_suite_gate_pass: true
+release_suite_matches_sources: true
+release_suite_license_boundary_mentions_mit: false
+commercial_use_allowed: false
+noncommercial_use_allowed: true
+commercial_license_closed: false
+non_commercial_license_closed: true
+```
+
+Build and verify the current local-operator offload audit:
+
+```bash
+cargo run -p nando-cli --release -- phase-action-offload-audit-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json \
+  LICENSE-NONCOMMERCIAL.md \
+  target/nando-wave/action-runtime-v1-license-package.product-proof.json \
+  300000 \
+  1000 \
+  target/nando-wave/action-runtime-v1-offload-audit.product-proof.json
+
+cargo run -p nando-cli --release -- phase-action-offload-verify-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json \
+  LICENSE-NONCOMMERCIAL.md \
+  target/nando-wave/action-runtime-v1-license-package.product-proof.json \
+  target/nando-wave/action-runtime-v1-offload-audit.product-proof.json
+```
+
+Required offload-audit flags:
+
+```text
+offload_audit_kind: phase_action_offload_audit_v1
+margin_threshold_micro: 300000
+simulated_calls: 1000
+local_operator_calls: 904
+fallback_to_llm_calls: 96
+offload_rate_milli: 904
+local_accuracy_milli: 1000
+false_local_accepts: 0
+release_suite_gate_pass: true
+license_package_gate_pass: true
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+runtime_path: nando_core::PhaseCenterFlatRuntime
+offload_sdk_api: nando_core::PhaseCenterOffloadRuntime
+offload_sdk_inspect_api: nando_core::PhaseCenterOffloadRuntime::inspect_package_bytes
+offload_policy_api: nando_core::PhaseCenterOffloadPolicy
+offload_batch_api: nando_core::PhaseCenterFlatRuntime::offload_decisions
+offload_summary_api: nando_core::PhaseCenterOffloadSummary
+offload_buffer_api: nando_core::PhaseCenterFlatRuntime::offload_decisions_into
+offload_summary_buffer_api: nando_core::PhaseCenterOffloadSummary::from_repeated_decision_fn_into
+offload_runtime_summary_api: nando_core::PhaseCenterOffloadRuntime::offload_summary_into
+each artifact sdk_inspected_fingerprint64 == package_fingerprint64
+each artifact sdk_inspected_serialized_len == package_bytes
+each artifact sdk_inspect_matches_package: true
+each artifact sdk_inspect_matches_eval_pack: true
+report_matches_sources: true
+```
+
+Policy: use the packaged flat CPU operator only when `margin_micro >= 300000`;
+otherwise fall back to the LLM. The decision policy is exported from
+`nando_core::PhaseCenterOffloadPolicy`. The lower-level scorer remains
+`PhaseCenterFlatRuntime`, and its batch/buffer APIs stay part of the public core
+surface, but the product-facing packaged-runtime summary path is now
+`PhaseCenterOffloadRuntime::offload_summary_into`. That wrapper computes
+decisions and summary from packaged runtime data with caller-owned buffers; this
+is not a text-generation or autonomous raw-action-parser claim.
+
+Freeze and verify the current green regression:
+
+```bash
+cargo run -p nando-cli --release -- phase-action-regression-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json \
+  LICENSE-NONCOMMERCIAL.md \
+  target/nando-wave/action-runtime-v1-license-package.product-proof.json \
+  target/nando-wave/action-runtime-v1-offload-audit.product-proof.json \
+  target/nando-wave/action-runtime-v1-regression.product-proof.json
+
+cargo run -p nando-cli --release -- phase-action-regression-verify-v1 \
+  target/nando-wave/action-runtime-v1-release-suite.product-proof.json \
+  LICENSE-NONCOMMERCIAL.md \
+  target/nando-wave/action-runtime-v1-license-package.product-proof.json \
+  target/nando-wave/action-runtime-v1-offload-audit.product-proof.json \
+  target/nando-wave/action-runtime-v1-regression.product-proof.json
+```
+
+Required regression flags:
+
+```text
+regression_kind: phase_action_regression_v1
+release_verify_pass: true
+license_verify_pass: true
+offload_verify_pass: true
+release_suite_report_fingerprint64: 12340473504052004295
+release_suite_report_bytes: 10810
+license_package_report_fingerprint64: 17769124418356895286
+license_package_report_bytes: 2053
+offload_audit_report_fingerprint64: 6122761890799637522
+offload_audit_report_bytes: 6281
+generated_action_source_contract_fingerprint64: 6845017756676715377
+generated_action_source_contract_bytes: 122500
+generated_action_source_rebuild_matches_package: true
+generated_action_source_rebuild_package_fingerprint64: 14869999570221545448
+generated_action_source_rebuild_package_bytes: 10256
+domain_action_source_contract_fingerprint64: 9195974547787197795
+domain_action_source_contract_bytes: 101612
+domain_action_source_rebuild_matches_package: true
+domain_action_source_rebuild_package_fingerprint64: 5367415087033800111
+domain_action_source_rebuild_package_bytes: 6160
+artifact_count: 2
+total_runtime_bytes_estimate: 16896
+total_bench_samples: 128000
+total_source_verify_report_bytes: 3370
+total_shortcut_report_bytes: 2037
+all_source_verify_reports_pass: true
+all_shortcut_reports_pass: true
+all_manifest_package_parity_pass: true
+all_eval_pack_package_parity_pass: true
+all_score_report_package_parity_pass: true
+all_bench_report_package_parity_pass: true
+all_product_report_package_parity_pass: true
+all_source_rebuild_package_parity_pass: true
+all_source_verify_report_package_parity_pass: true
+all_package_report_parity_pass: true
+all_action_ablation_collapses: true
+max_score_action_ablation_accuracy_milli: 567
+max_bench_action_ablation_accuracy_milli: 567
+total_score_action_ablation_wrong_wins: 500
+total_bench_action_ablation_wrong_wins: 500000
+max_bench_p99_latency_ns: 86
+offload_rate_milli: 904
+local_accuracy_milli: 1000
+false_local_accepts: 0
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+runtime_path: nando_core::PhaseCenterFlatRuntime
+offload_sdk_api: nando_core::PhaseCenterOffloadRuntime
+offload_sdk_inspect_api: nando_core::PhaseCenterOffloadRuntime::inspect_package_bytes
+offload_runtime_summary_api: nando_core::PhaseCenterOffloadRuntime::offload_summary_into
+operator_blueprint_path: docs/OPERATOR_BLUEPRINT.md
+operator_blueprint_fingerprint64: 15636335857514266420
+operator_blueprint_formula_present: true
+operator_blueprint_runtime_package_contract_present: true
+operator_blueprint_source_verify_contract_present: true
+operator_blueprint_shortcut_report_contract_present: true
+operator_blueprint_rust_proof_path_present: true
+operator_blueprint_forbidden_invariants_present: true
+state_transition_formula: state_t + action_tree -> state_t+1
+```
+
+Public Rust SDK consumer proof:
+
+```text
+cargo test -p nando-core --test phase_center_offload_sdk_public: PASS
+```
+
+## Latest Packaged Runtime Rung
+
+Python demos are not proof artifacts. Current proof authority is the Rust CLI
+and flat CPU runtime package chain.
+
+```text
+state_t + action_tree -> state_t+1
+
+phase-action-release-suite-v1: PASS
+phase-action-release-verify-v1: PASS
+phase-action-license-package-v1: PASS
+phase-action-license-verify-v1: PASS
+phase-action-offload-audit-v1: PASS
+phase-action-offload-verify-v1: PASS
+phase-action-regression-v1: PASS
+phase-action-regression-verify-v1: PASS
+
+release_suite_report_fingerprint64: 6910835921617119291
+release_suite_report_bytes: 12128
+artifact_count: 2
+total_runtime_bytes_estimate: 16896
+total_bench_samples: 128000
+max_score_p99_latency_ns: 195
+max_bench_p99_latency_ns: 110
+
+all_action_contract_source_rebuild_clean: true
+total_source_rebuild_accepted_action_tree_rows: 320
+total_source_rebuild_rejected_action_tree_rows: 0
+total_source_rebuild_forbidden_contract_rows: 0
+all_package_report_parity_pass: true
+all_action_ablation_collapses: true
+
+offload_rate_milli: 968
+local_accuracy_milli: 1000
+false_local_accepts: 0
+operator_blueprint_fingerprint64: 15803322666366215503
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+```
+
+Negative checks:
+
+```text
+product source_rebuild_forbidden_operator_label_rows tamper -> WATCH
+release all_action_contract_source_rebuild_clean tamper -> WATCH
+regression all_action_contract_source_rebuild_clean tamper -> WATCH
+```
+
+Release-mode benchmark evidence:
+
+```text
+generated_action_bench_p99_latency_ns: 110
+domain_action_bench_p99_latency_ns: 85
+release_suite_max_score_p99_latency_ns: 195
+release_suite_max_bench_p99_latency_ns: 110
+phase-action-regression-verify-v1: PASS
+report_matches_sources: true
+```
+
+Boundary:
+
+```text
+This closes clean action_tree source-rebuild provenance for the packaged flat
+action scorer. It does not close autonomous raw action parsing, strict ordered
+decoder, text generation, broad workflow reasoning, or commercial licensing.
+```
+
+## Latest Optimized Runtime Gate
+
+Python demos are not proof artifacts. Debug builds are not benchmark proof
+artifacts. Current proof authority is the Rust release CLI and packaged flat
+CPU runtime report chain.
+
+```text
+state_t + action_tree -> state_t+1
+
+phase-action-product-verify-v1 generated_action: PASS
+phase-action-product-verify-v1 domain_action: PASS
+phase-action-release-suite-v1: PASS
+phase-action-release-verify-v1: PASS
+phase-action-license-package-v1: PASS
+phase-action-license-verify-v1: PASS
+phase-action-offload-audit-v1: PASS
+phase-action-offload-verify-v1: PASS
+phase-action-regression-v1: PASS
+phase-action-regression-verify-v1: PASS
+
+release_suite_report_fingerprint64: 15464041285945484691
+release_suite_report_bytes: 12234
+all_optimized_build_reports_pass: true
+max_score_p99_latency_ns: 312
+max_bench_p99_latency_ns: 117
+total_bench_samples: 128000
+total_runtime_bytes_estimate: 16896
+
+all_action_contract_source_rebuild_clean: true
+total_source_rebuild_accepted_action_tree_rows: 320
+total_source_rebuild_rejected_action_tree_rows: 0
+total_source_rebuild_forbidden_contract_rows: 0
+all_package_report_parity_pass: true
+all_action_ablation_collapses: true
+
+offload_rate_milli: 968
+local_accuracy_milli: 1000
+false_local_accepts: 0
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+```
+
+Negative checks:
+
+```text
+debug score-pack optimized_build=false -> WATCH
+debug bench-pack optimized_build=false -> WATCH
+product optimized_build=false tamper -> WATCH
+release all_optimized_build_reports_pass=false tamper -> WATCH
+regression all_optimized_build_reports_pass=false tamper -> WATCH
+```
+
+Boundary:
+
+```text
+This closes optimized release-build evidence for the packaged flat action
+scorer. It does not close autonomous raw action parsing, strict ordered
+decoder, text generation, broad workflow reasoning, or commercial licensing.
+```
+
+## Latest Frozen Regression Checkpoint
+
+The current green regression is now frozen by a separate Rust CLI checkpoint.
+This prevents the release proof from existing only as prose or terminal
+history.
+
+```text
+state_t + action_tree -> state_t+1
+
+phase-action-regression-v1: PASS
+phase-action-regression-verify-v1: PASS
+phase-action-regression-freeze-v1: PASS
+phase-action-regression-freeze-verify-v1: PASS
+
+regression_report_fingerprint64: 1510085368394183704
+regression_report_bytes: 4060
+regression_verdict: PHASE_ACTION_REGRESSION_V1_PASS
+regression_gate_pass: true
+regression_matches_sources: true
+release_suite_report_fingerprint64: 15464041285945484691
+license_package_report_fingerprint64: 7703393407740687299
+offload_audit_report_fingerprint64: 308995585512256485
+operator_blueprint_fingerprint64: 17789125758946021618
+
+all_package_report_parity_pass: true
+all_action_contract_source_rebuild_clean: true
+all_optimized_build_reports_pass: true
+max_bench_p99_latency_ns: 117
+offload_rate_milli: 968
+local_accuracy_milli: 1000
+false_local_accepts: 0
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+```
+
+Negative checks:
+
+```text
+freeze all_optimized_build_reports_pass=false tamper -> WATCH
+regression all_optimized_build_reports_pass=false tamper -> WATCH
+```
+
+Boundary:
+
+```text
+This freezes the packaged flat action scorer regression checkpoint. It does
+not close autonomous raw action parsing, strict ordered decoder, text
+generation, broad workflow reasoning, or commercial licensing.
+```
+
+## Latest Cache-Enabled Offload Benchmark
+
+The product offload claim is now measured against an exact-cache baseline, not
+only against a no-cache LLM baseline.
+
+```text
+phase-action-cache-offload-bench-v1: PASS
+phase-action-cache-offload-bench-verify-v1: PASS
+
+simulated_calls: 1000
+no_cache_llm_calls: 1000
+exact_cache_llm_calls: 128
+exact_cache_hits: 872
+exact_cache_hit_rate_milli: 872
+exact_cache_plus_nando_llm_calls: 4
+nando_local_operator_calls: 968
+nando_fallback_events: 32
+nando_operator_hit_rate_milli: 968
+incremental_llm_calls_removed_vs_cache: 124
+incremental_llm_call_reduction_vs_cache_milli: 969
+token_units_removed_vs_cache: 124
+cost_units_removed_vs_cache: 124
+local_accuracy_milli: 1000
+false_local_accepts: 0
+max_bench_p99_latency_ns: 117
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+```
+
+Negative checks:
+
+```text
+incremental_llm_calls_removed_vs_cache=0 tamper -> WATCH
+python_demo_used=true tamper -> WATCH
+margin_threshold_micro=100 no-fallback policy -> WATCH
+```
+
+Boundary:
+
+```text
+This proves incremental local CPU operator offload over an exact-cache baseline
+for the packaged flat action scorer. It does not close autonomous raw action
+parsing, strict ordered decoder, text generation, broad workflow reasoning, or
+commercial licensing.
+```
+
+## Latest Regression/Freeze Cache-Bench Promotion
+
+The cache-enabled offload benchmark is now part of the regression/freeze proof
+chain, not only a separate side benchmark.
+
+```text
+phase-action-cache-offload-bench-verify-v1: PASS
+phase-action-regression-v1: PASS
+phase-action-regression-verify-v1: PASS
+phase-action-regression-freeze-v1: PASS
+phase-action-regression-freeze-verify-v1: PASS
+
+cache_offload_bench_report_fingerprint64: 7742563455518673124
+cache_offload_bench_report_bytes: 4307
+cache_bench_verify_pass: true
+cache_bench_report_matches_sources: true
+cache_incremental_llm_calls_removed_vs_cache: 124
+cache_exact_cache_llm_calls: 128
+cache_exact_cache_plus_nando_llm_calls: 4
+python_demo_used: false
+forbidden_used: false
+```
+
+Negative checks:
+
+```text
+cache benchmark incremental_llm_calls_removed_vs_cache=0 tamper -> regression verify WATCH
+regression cache_offload_bench_report_fingerprint64=1 tamper -> regression verify WATCH
+freeze cache_bench_verify_pass=false tamper -> freeze verify WATCH
+```
+
+Boundary:
+
+```text
+This proves incremental local CPU operator offload over the current exact-cache
+baseline for the packaged flat action scorer. It does not close strict ordered
+decoder, text generation, autonomous raw action parsing, broad workflow
+reasoning, every production cache policy, or commercial licensing.
+```
+
+## Latest Action-Tree Coverage Gate Promotion
+
+Python demos are not proof artifacts. The packaged flat action scorer must now
+prove that source/product/release/regression/freeze reports carry enough
+distinct `action_tree` operator keys in both train and heldout splits.
+
+```text
+phase-action-source-verify-v1 generated_action: PASS
+phase-action-source-verify-v1 domain_action: PASS
+phase-action-product-proof-v1 generated_action: PASS
+phase-action-product-proof-v1 domain_action: PASS
+phase-action-release-suite-v1: PASS
+phase-action-release-verify-v1: PASS
+phase-action-regression-v1: PASS
+phase-action-regression-verify-v1: PASS
+phase-action-regression-freeze-v1: PASS
+phase-action-regression-freeze-verify-v1: PASS
+
+generated_action action_tree_key_count: 10
+domain_action action_tree_key_count: 6
+total_source_rebuild_action_tree_key_count: 16
+min_source_rebuild_action_tree_key_count: 6
+all_action_tree_key_coverage_pass: true
+source_rebuild_min_train_rows_per_action_tree: 12
+source_rebuild_min_heldout_rows_per_action_tree: 8
+release_suite_report_fingerprint64: 12772053458428771913
+regression_report_fingerprint64: 10589187500100786722
+operator_blueprint_fingerprint64: 15033540855767578891
+python_demo_used: false
+forbidden_used: false
+```
+
+Negative checks:
+
+```text
+source source_rebuild_action_tree_key_count=1 tamper -> release verify WATCH
+release all_action_tree_key_coverage_pass=false tamper -> regression verify WATCH
+regression all_action_tree_key_coverage_pass=false tamper -> freeze verify WATCH
+```
+
+Boundary:
+
+```text
+This closes action-tree key coverage promotion for the packaged flat action
+scorer proof chain. It does not close strict ordered decoder, 32-slot operator
+transfer, autonomous raw action parsing, text generation, broad workflow
+reasoning, every production cache policy, or commercial licensing.
+```
+
+## Latest V5 Operator-Dimension Coverage Gate
+
+Python demos are not proof artifacts. The current V5 coverage proof is a Rust
+corpus factory plus packaged flat runtime release chain.
+
+```text
+phase-action-coverage-corpus-v1: PASS
+phase-action-operator-coverage-v1 coverage_action: PASS
+phase-action-release-suite-v1: PASS
+phase-action-release-verify-v1: PASS
+phase-action-regression-v1: PASS
+phase-action-regression-verify-v1: PASS
+phase-action-regression-freeze-v1: PASS
+phase-action-regression-freeze-verify-v1: PASS
+
+coverage_action rows: 360
+coverage_action action_tree_key_count: 30
+coverage_action select/transform/write/condition/check counts: 6/10/5/5/10
+coverage_action full_operator_dimension_coverage_pass: true
+
+release artifact_count: 3
+release_operator_dimension_coverage_pass: true
+all_operator_coverage_reports_match_sources: true
+total_source_rebuild_action_tree_key_count: 46
+total_runtime_bytes_estimate: 48576
+max_bench_p99_latency_ns: 117
+offload_rate_milli: 880
+local_accuracy_milli: 1000
+false_local_accepts: 0
+compiler_used: false
+corpus_jsonl_used: false
+python_demo_used: false
+forbidden_used: false
+```
+
+Boundary:
+
+```text
+This closes V5 operator-dimension coverage for the packaged flat action scorer
+release/regression/freeze chain. It does not close strict ordered decoder,
+32-slot operator transfer, autonomous raw action parsing, text generation,
+broad workflow reasoning, every production cache policy, or commercial
+licensing.
+```
 
 ## Что важно не потерять
 
@@ -2039,3 +2752,35 @@ input byte/char
 метрики
 план реализации
 ```
+
+## Strict Multi-Seed Rust Audit
+
+Python demos are not proof artifacts. The current strict multi-seed robustness
+debt is recorded by a Rust log audit:
+
+```bash
+cargo run -p nando-cli --release -- strict-multiseed-rust-audit-v1 \
+  data/rule_logic_operator_battery_v4/diagnostics/multiseed \
+  target/nando-wave/strict-multiseed-rust-audit-v1.product-proof.json
+
+cargo run -p nando-cli --release -- strict-multiseed-rust-audit-verify-v1 \
+  data/rule_logic_operator_battery_v4/diagnostics/multiseed \
+  target/nando-wave/strict-multiseed-rust-audit-v1.product-proof.json
+```
+
+Current result:
+
+```text
+verdict: STRICT_MULTI_SEED_RUST_AUDIT_RED
+verify: STRICT_MULTI_SEED_RUST_AUDIT_VERIFY_PASS
+report_matches_sources: true
+observed_logs: 12
+missing_logs: 0
+red issue: seed=2 class=order, energy_pass_slot_fail=1,
+  output_slot_cleanup_failed_slots=1, slot_failure_total=1
+python_demo_used: false
+corpus_jsonl_used: false
+```
+
+Boundary: this records the red strict-readout debt. It does not close
+multi-seed strict robustness and does not repair the model.

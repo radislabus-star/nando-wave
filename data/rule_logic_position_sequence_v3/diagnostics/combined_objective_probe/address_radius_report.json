@@ -1,0 +1,13 @@
+{
+  "schema_version": "position_sequence_v3_address_radius_report_v1",
+  "source_artifact": "data/rule_logic_position_sequence_v3/diagnostics/combined_objective_probe/rust_gate.log",
+  "claim_boundary": "This sweep mutates only input surface addresses before L1/L2 preparation; target and wrong outputs stay unchanged.",
+  "points": [
+    {"label": "clean", "slot_accuracy_milli": 705, "energy_accuracy_milli": 988, "median_energy_gap": 149358, "p10_energy_gap": 36878},
+    {"label": "action_wrapped", "slot_accuracy_milli": 382, "energy_accuracy_milli": 904, "median_energy_gap": 75300, "p10_energy_gap": 1218},
+    {"label": "source_slot0_suffix", "slot_accuracy_milli": 682, "energy_accuracy_milli": 975, "median_energy_gap": 140644, "p10_energy_gap": 30694},
+    {"label": "source_all_suffix", "slot_accuracy_milli": 638, "energy_accuracy_milli": 983, "median_energy_gap": 79224, "p10_energy_gap": 12482},
+    {"label": "action_wrapped_source_slot0_suffix", "slot_accuracy_milli": 354, "energy_accuracy_milli": 889, "median_energy_gap": 69532, "p10_energy_gap": -4358}
+  ],
+  "interpretation": "Role/source token address radius is relatively robust: suffix typos on source tokens keep sequence energy at 975-983 milli with positive p10 gaps. Action/operator address is fragile: wrapping the action text drops energy to 904 milli and nearly erases p10 gap; combining action wrapper with one source typo turns p10 negative. This supports the diagnosis that action/operator separability is the next key bottleneck."
+}

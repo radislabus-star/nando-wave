@@ -1,0 +1,58 @@
+{
+  "schema_version": "rule_logic_l3_action_trace_training_report_v3",
+  "test": "crates/nando-core/tests/wavepredictor_action_trace_l3.rs",
+  "command": "cargo test -p nando-core --test wavepredictor_action_trace_l3 -- --ignored --nocapture",
+  "corpus": "data/rule_logic_corpus_v3/accepted_action_trace_tasks_v3.jsonl",
+  "corpus_verdict": "VALID_ACTION_TRACE_OPERATOR_PRESSURE_CANDIDATE",
+  "training_shape": "active_fringe = state_before + rule_action_example; target_delta = state_before -> state_after_correct; negative_delta = state_before -> state_after_wrong",
+  "train_rows": 6000,
+  "heldout_rows": 1500,
+  "train_action_trace_accuracy_milli": 959,
+  "heldout_action_trace_accuracy_milli": 891,
+  "heldout_action_trace_median_gap": 5007,
+  "heldout_action_trace_p10_gap": -82,
+  "shortcut_baselines": {
+    "source_group_prototype_accuracy_milli": 497,
+    "proof_rule_id_prototype_accuracy_milli": 0,
+    "surface_family_prototype_accuracy_milli": 655,
+    "answer_status_prototype_accuracy_milli": 380,
+    "l1_neighbor_accuracy_milli": 516,
+    "best_shortcut_accuracy_milli": 655
+  },
+  "state_delta_edges": 561112,
+  "error_audit": {
+    "error_count": 163,
+    "error_by_rule_top": {
+      "required_variable_missing": 93,
+      "alternation_next": 34,
+      "mirror_complete": 22,
+      "odd_one_out": 14
+    },
+    "error_by_surface_top": {
+      "evidence_trace": 93,
+      "symbols": 40,
+      "ru_words": 16,
+      "feature_trace": 14
+    },
+    "worst_error_examples": [
+      {
+        "task_id": "trace_v3_000165",
+        "gap": -6369,
+        "proof_rule_id": "mirror_complete",
+        "surface_family": "ru_words"
+      },
+      {
+        "task_id": "trace_v3_007080",
+        "gap": -6184,
+        "proof_rule_id": "alternation_next",
+        "surface_family": "symbols"
+      }
+    ]
+  },
+  "target_center_id_training_used": false,
+  "proof_rule_id_training_authority_used": false,
+  "trained_profile_exported": false,
+  "verdict": "ACTION_TRACE_L3_BEATS_SHORTCUT_BUT_SURFACE_BASELINE_STILL_HIGH",
+  "meaning": "The action-trace object makes current L3 learn again, but the surface-family prototype shortcut remains too strong for a final grokking claim.",
+  "next_debt": "First fix required_variable_missing action traces and then reduce surface-family shortcut and compress/reuse action operators instead of accumulating 561112 state_delta_edges."
+}

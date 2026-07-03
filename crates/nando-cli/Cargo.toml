@@ -2,13 +2,15 @@
 name = "nando-cli"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
 nando-core = { path = "../nando-core" }
 nando-eval = { path = "../nando-eval" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [lints]
 workspace = true

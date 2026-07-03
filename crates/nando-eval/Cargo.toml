@@ -2,7 +2,7 @@
 name = "nando-eval"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 publish.workspace = true
 rust-version.workspace = true
 
@@ -11,4 +11,3 @@ nando-core = { path = "../nando-core" }
 
 [lints]
 workspace = true
-

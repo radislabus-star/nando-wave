@@ -7,6 +7,10 @@ mod help;
 mod live;
 mod modadd_cmd;
 mod organ128_cmd;
+mod phase_daemon_cmd;
+mod phase_package_cmd;
+mod role_binding_package_cmd;
+mod role_binding_runtime_cmd;
 mod snapshot_io;
 mod status;
 use args::{
@@ -34,6 +38,60 @@ use modadd_cmd::{run_organ128_modadd_eval, run_organ128_modadd_seed_sweep};
 use organ128_cmd::{
     run_organ128_dialog_generate, run_organ128_response_gate_eval, run_organ128_settle_dialog,
     run_organ128_thought_probe_eval, run_organ128_train_generate, run_organ128_wave_scorer_eval,
+};
+use phase_daemon_cmd::{
+    run_phase_action_daemon_audit_log_smoke_v1, run_phase_action_daemon_auth_smoke_v1,
+    run_phase_action_daemon_config_validation_smoke_v1,
+    run_phase_action_daemon_deployment_package_v1, run_phase_action_daemon_deployment_verify_v1,
+    run_phase_action_daemon_error_taxonomy_smoke_v1, run_phase_action_daemon_hardening_smoke_v1,
+    run_phase_action_daemon_live_proof_suite_v1, run_phase_action_daemon_observability_smoke_v1,
+    run_phase_action_daemon_package_smoke_v1, run_phase_action_daemon_proof_suite_v1,
+    run_phase_action_daemon_rate_limit_smoke_v1, run_phase_action_daemon_registry_config_smoke_v1,
+    run_phase_action_daemon_registry_smoke_v1, run_phase_action_daemon_serve_registry_v1,
+    run_phase_action_daemon_serve_v1, run_phase_action_daemon_smoke_v1,
+    run_phase_action_daemon_systemd_smoke_v1,
+};
+use phase_package_cmd::{
+    run_phase_action_boundary_v4, run_phase_action_cache_offload_bench_v1,
+    run_phase_action_cache_offload_bench_verify_v1, run_phase_action_contract_v1,
+    run_phase_action_corpus_v1, run_phase_action_coverage_corpus_v1,
+    run_phase_action_domain_corpus_v1, run_phase_action_eval_pack_v1,
+    run_phase_action_license_package_v1, run_phase_action_license_verify_v1,
+    run_phase_action_offload_audit_v1, run_phase_action_offload_verify_v1,
+    run_phase_action_operator_coverage_v1, run_phase_action_package_bench_pack_v1,
+    run_phase_action_package_bench_verify_v1, run_phase_action_package_inspect_v1,
+    run_phase_action_package_score_pack_v1, run_phase_action_package_score_v1,
+    run_phase_action_package_v1, run_phase_action_package_verify_v1,
+    run_phase_action_product_proof_v1, run_phase_action_product_verify_v1,
+    run_phase_action_regression_freeze_v1, run_phase_action_regression_freeze_verify_v1,
+    run_phase_action_regression_v1, run_phase_action_regression_verify_v1,
+    run_phase_action_release_suite_v1, run_phase_action_release_verify_v1,
+    run_phase_action_runtime_v1, run_phase_action_shortcut_v1, run_phase_action_source_verify_v1,
+    run_phase_action_workflow_bench_v1, run_phase_action_workflow_bench_verify_v1,
+    run_phase_action_workflow_replay_v1, run_phase_action_workflow_replay_verify_v1,
+    run_phase_eval_pack_v4, run_phase_package_inspect, run_phase_package_score_pack_v4,
+    run_phase_package_score_v4, run_phase_package_v4, run_phase_package_verify,
+    run_strict_multiseed_rust_audit_v1, run_strict_multiseed_rust_audit_verify_v1,
+};
+use role_binding_package_cmd::{
+    run_role_binding_binary_eval_pack_suite_v1, run_role_binding_binary_eval_pack_suite_verify_v1,
+    run_role_binding_eval_pack_binary_v1, run_role_binding_eval_pack_from_package_v1,
+    run_role_binding_operator_blueprint_gap_v1, run_role_binding_operator_blueprint_gap_verify_v1,
+    run_role_binding_package_inspect_v1, run_role_binding_package_score_v1,
+    run_role_binding_package_score_verify_v1, run_role_binding_package_verify_v1,
+    run_role_binding_release_suite_v1, run_role_binding_release_suite_verify_v1,
+};
+use role_binding_runtime_cmd::{
+    run_role_binding_profile_fallback_smoke_v1, run_role_binding_profile_lb_replay_v1,
+    run_role_binding_profile_lb_serve_v1, run_role_binding_profile_lb_throughput_v1,
+    run_role_binding_profile_registry_from_release_v1, run_role_binding_profile_replay_suite_v1,
+    run_role_binding_profile_runtime_smoke_v1, run_role_binding_profile_serve_v1,
+    run_role_binding_profile_worker_replay_v1, run_role_binding_profile_worker_scaling_v1,
+    run_role_binding_real_traffic_codex_history_ingest_v1,
+    run_role_binding_real_traffic_codex_history_route_candidates_v1,
+    run_role_binding_real_traffic_ingest_events_v1, run_role_binding_real_traffic_record_serve_v1,
+    run_role_binding_real_traffic_record_v1, run_role_binding_real_traffic_shadow_smoke_v1,
+    run_role_binding_real_traffic_shadow_v1,
 };
 use snapshot_io::{read_snapshot, save_snapshot};
 use status::{print_organ128_plan, print_status, print_wave_tick};
@@ -189,6 +247,366 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("phase-package-v4") => exit_for_result(
+            run_phase_package_v4(args),
+            "try: nando-cli phase-package-v4 [corpus-jsonl] [package-path] [cells] [manifest-path]",
+        ),
+        Some("phase-package-inspect") => exit_for_result(
+            run_phase_package_inspect(args),
+            "try: nando-cli phase-package-inspect [package-path] [manifest-path]",
+        ),
+        Some("phase-package-score-v4") => exit_for_result(
+            run_phase_package_score_v4(args),
+            "try: nando-cli phase-package-score-v4 [package-path] [manifest-path] [corpus-jsonl] [score-report-json]",
+        ),
+        Some("phase-eval-pack-v4") => exit_for_result(
+            run_phase_eval_pack_v4(args),
+            "try: nando-cli phase-eval-pack-v4 [package-path] [manifest-path] [corpus-jsonl] [eval-pack-path]",
+        ),
+        Some("phase-package-score-pack-v4") => exit_for_result(
+            run_phase_package_score_pack_v4(args),
+            "try: nando-cli phase-package-score-pack-v4 [package-path] [manifest-path] [eval-pack-path] [score-report-json]",
+        ),
+        Some("phase-action-boundary-v4") => exit_for_result(
+            run_phase_action_boundary_v4(args),
+            "try: nando-cli phase-action-boundary-v4 [corpus-jsonl]",
+        ),
+        Some("phase-action-corpus-v1") => exit_for_result(
+            run_phase_action_corpus_v1(args),
+            "try: nando-cli phase-action-corpus-v1 [output-jsonl] [report-json]",
+        ),
+        Some("phase-action-domain-corpus-v1") => exit_for_result(
+            run_phase_action_domain_corpus_v1(args),
+            "try: nando-cli phase-action-domain-corpus-v1 [output-jsonl] [report-json]",
+        ),
+        Some("phase-action-coverage-corpus-v1") => exit_for_result(
+            run_phase_action_coverage_corpus_v1(args),
+            "try: nando-cli phase-action-coverage-corpus-v1 [output-jsonl] [report-json]",
+        ),
+        Some("phase-action-contract-v1") => exit_for_result(
+            run_phase_action_contract_v1(args),
+            "try: nando-cli phase-action-contract-v1 [contract-jsonl] [report-json]",
+        ),
+        Some("phase-action-operator-coverage-v1") => exit_for_result(
+            run_phase_action_operator_coverage_v1(args),
+            "try: nando-cli phase-action-operator-coverage-v1 [contract-jsonl] [report-json]",
+        ),
+        Some("phase-action-shortcut-v1") => exit_for_result(
+            run_phase_action_shortcut_v1(args),
+            "try: nando-cli phase-action-shortcut-v1 [contract-jsonl] [report-json]",
+        ),
+        Some("phase-action-runtime-v1") => exit_for_result(
+            run_phase_action_runtime_v1(args),
+            "try: nando-cli phase-action-runtime-v1 [contract-jsonl] [cells] [report-json]",
+        ),
+        Some("phase-action-package-v1") => exit_for_result(
+            run_phase_action_package_v1(args),
+            "try: nando-cli phase-action-package-v1 [contract-jsonl] [package-path] [cells] [manifest-path]",
+        ),
+        Some("phase-action-package-inspect-v1") => exit_for_result(
+            run_phase_action_package_inspect_v1(args),
+            "try: nando-cli phase-action-package-inspect-v1 [package-path] [manifest-path]",
+        ),
+        Some("phase-action-source-verify-v1") => exit_for_result(
+            run_phase_action_source_verify_v1(args),
+            "try: nando-cli phase-action-source-verify-v1 [package-path] [manifest-path] [source-verify-report-json]",
+        ),
+        Some("phase-action-package-score-v1") => exit_for_result(
+            run_phase_action_package_score_v1(args),
+            "try: nando-cli phase-action-package-score-v1 [package-path] [manifest-path] [contract-jsonl] [score-report-json]",
+        ),
+        Some("phase-action-eval-pack-v1") => exit_for_result(
+            run_phase_action_eval_pack_v1(args),
+            "try: nando-cli phase-action-eval-pack-v1 [package-path] [manifest-path] [contract-jsonl] [eval-pack-path]",
+        ),
+        Some("phase-action-package-score-pack-v1") => exit_for_result(
+            run_phase_action_package_score_pack_v1(args),
+            "try: nando-cli phase-action-package-score-pack-v1 [package-path] [manifest-path] [eval-pack-path] [score-report-json]",
+        ),
+        Some("phase-action-package-bench-pack-v1") => exit_for_result(
+            run_phase_action_package_bench_pack_v1(args),
+            "try: nando-cli phase-action-package-bench-pack-v1 [package-path] [manifest-path] [eval-pack-path] [iterations] [bench-report-json]",
+        ),
+        Some("phase-action-package-bench-verify-v1") => exit_for_result(
+            run_phase_action_package_bench_verify_v1(args),
+            "try: nando-cli phase-action-package-bench-verify-v1 [package-path] [manifest-path] [eval-pack-path] [bench-report-json]",
+        ),
+        Some("phase-action-product-proof-v1") => exit_for_result(
+            run_phase_action_product_proof_v1(args),
+            "try: nando-cli phase-action-product-proof-v1 [package-path] [manifest-path] [eval-pack-path] [score-report-json] [bench-report-json] [product-proof-json]",
+        ),
+        Some("phase-action-product-verify-v1") => exit_for_result(
+            run_phase_action_product_verify_v1(args),
+            "try: nando-cli phase-action-product-verify-v1 [package-path] [manifest-path] [eval-pack-path] [score-report-json] [bench-report-json] [product-proof-json]",
+        ),
+        Some("phase-action-release-suite-v1") => exit_for_result(
+            run_phase_action_release_suite_v1(args),
+            "try: nando-cli phase-action-release-suite-v1 [release-suite-report-json]",
+        ),
+        Some("phase-action-release-verify-v1") => exit_for_result(
+            run_phase_action_release_verify_v1(args),
+            "try: nando-cli phase-action-release-verify-v1 [release-suite-report-json]",
+        ),
+        Some("phase-action-license-package-v1") => exit_for_result(
+            run_phase_action_license_package_v1(args),
+            "try: nando-cli phase-action-license-package-v1 [release-suite-report-json] [license-file] [license-package-report-json]",
+        ),
+        Some("phase-action-license-verify-v1") => exit_for_result(
+            run_phase_action_license_verify_v1(args),
+            "try: nando-cli phase-action-license-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json]",
+        ),
+        Some("phase-action-offload-audit-v1") => exit_for_result(
+            run_phase_action_offload_audit_v1(args),
+            "try: nando-cli phase-action-offload-audit-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [simulated-calls] [offload-audit-report-json]",
+        ),
+        Some("phase-action-offload-verify-v1") => exit_for_result(
+            run_phase_action_offload_verify_v1(args),
+            "try: nando-cli phase-action-offload-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json]",
+        ),
+        Some("phase-action-cache-offload-bench-v1") => exit_for_result(
+            run_phase_action_cache_offload_bench_v1(args),
+            "try: nando-cli phase-action-cache-offload-bench-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [simulated-calls] [cache-offload-bench-report-json]",
+        ),
+        Some("phase-action-cache-offload-bench-verify-v1") => exit_for_result(
+            run_phase_action_cache_offload_bench_verify_v1(args),
+            "try: nando-cli phase-action-cache-offload-bench-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [simulated-calls] [cache-offload-bench-report-json]",
+        ),
+        Some("phase-action-daemon-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-smoke-v1 [daemon-smoke-report-json]",
+        ),
+        Some("phase-action-daemon-package-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_package_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-package-smoke-v1 [package-path] [manifest-path] [corpus-jsonl] [daemon-package-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-hardening-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_hardening_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-hardening-smoke-v1 [package-path] [manifest-path] [corpus-jsonl] [daemon-hardening-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-auth-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_auth_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-auth-smoke-v1 [package-path] [manifest-path] [corpus-jsonl] [daemon-auth-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-registry-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_registry_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-registry-smoke-v1 [daemon-registry-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-registry-config-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_registry_config_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-registry-config-smoke-v1 [registry-config-json] [daemon-registry-config-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-config-validation-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_config_validation_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-config-validation-smoke-v1 [registry-config-json] [daemon-config-validation-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-rate-limit-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_rate_limit_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-rate-limit-smoke-v1 [registry-config-json] [daemon-rate-limit-smoke-report-json] [margin-threshold-micro] [max-score-requests]",
+        ),
+        Some("phase-action-daemon-observability-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_observability_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-observability-smoke-v1 [registry-config-json] [daemon-observability-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-audit-log-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_audit_log_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-audit-log-smoke-v1 [registry-config-json] [audit-log-jsonl] [daemon-audit-log-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-error-taxonomy-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_error_taxonomy_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-error-taxonomy-smoke-v1 [registry-config-json] [daemon-error-taxonomy-smoke-report-json] [margin-threshold-micro]",
+        ),
+        Some("phase-action-daemon-proof-suite-v1") => exit_for_result(
+            run_phase_action_daemon_proof_suite_v1(args),
+            "try: nando-cli phase-action-daemon-proof-suite-v1 [daemon-proof-suite-report-json]",
+        ),
+        Some("phase-action-daemon-live-proof-suite-v1") => exit_for_result(
+            run_phase_action_daemon_live_proof_suite_v1(args),
+            "try: nando-cli phase-action-daemon-live-proof-suite-v1 [daemon-live-proof-suite-report-json]",
+        ),
+        Some("phase-action-daemon-systemd-smoke-v1") => exit_for_result(
+            run_phase_action_daemon_systemd_smoke_v1(args),
+            "try: nando-cli phase-action-daemon-systemd-smoke-v1 [service-unit] [env-file] [registry-config-json] [daemon-systemd-smoke-report-json]",
+        ),
+        Some("phase-action-daemon-deployment-package-v1") => exit_for_result(
+            run_phase_action_daemon_deployment_package_v1(args),
+            "try: nando-cli phase-action-daemon-deployment-package-v1 [daemon-live-proof-suite-report-json] [daemon-systemd-smoke-report-json] [daemon-deployment-package-report-json]",
+        ),
+        Some("phase-action-daemon-deployment-verify-v1") => exit_for_result(
+            run_phase_action_daemon_deployment_verify_v1(args),
+            "try: nando-cli phase-action-daemon-deployment-verify-v1 [daemon-live-proof-suite-report-json] [daemon-systemd-smoke-report-json] [daemon-deployment-package-report-json]",
+        ),
+        Some("phase-action-daemon-serve-registry-v1") => exit_for_result(
+            run_phase_action_daemon_serve_registry_v1(args),
+            "try: nando-cli phase-action-daemon-serve-registry-v1 [registry-config-json] [bind-addr] [margin-threshold-micro] [auth-token] [max-score-requests] [audit-log-jsonl]",
+        ),
+        Some("phase-action-daemon-serve-v1") => exit_for_result(
+            run_phase_action_daemon_serve_v1(args),
+            "try: nando-cli phase-action-daemon-serve-v1 [package-path] [bind-addr] [margin-threshold-micro] [auth-token] [max-score-requests] [audit-log-jsonl]",
+        ),
+        Some("phase-action-workflow-bench-v1") => exit_for_result(
+            run_phase_action_workflow_bench_v1(args),
+            "try: nando-cli phase-action-workflow-bench-v1 [release-suite-report-json] [license-file] [license-package-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json]",
+        ),
+        Some("phase-action-workflow-bench-verify-v1") => exit_for_result(
+            run_phase_action_workflow_bench_verify_v1(args),
+            "try: nando-cli phase-action-workflow-bench-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json]",
+        ),
+        Some("phase-action-workflow-replay-v1") => exit_for_result(
+            run_phase_action_workflow_replay_v1(args),
+            "try: nando-cli phase-action-workflow-replay-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [workflow-sessions] [steps-per-session] [workflow-replay-report-json]",
+        ),
+        Some("phase-action-workflow-replay-verify-v1") => exit_for_result(
+            run_phase_action_workflow_replay_verify_v1(args),
+            "try: nando-cli phase-action-workflow-replay-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [margin-threshold-micro] [workflow-sessions] [steps-per-session] [workflow-replay-report-json]",
+        ),
+        Some("phase-action-regression-v1") => exit_for_result(
+            run_phase_action_regression_v1(args),
+            "try: nando-cli phase-action-regression-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]",
+        ),
+        Some("phase-action-regression-verify-v1") => exit_for_result(
+            run_phase_action_regression_verify_v1(args),
+            "try: nando-cli phase-action-regression-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]",
+        ),
+        Some("phase-action-regression-freeze-v1") => exit_for_result(
+            run_phase_action_regression_freeze_v1(args),
+            "try: nando-cli phase-action-regression-freeze-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [regression-freeze-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]",
+        ),
+        Some("phase-action-regression-freeze-verify-v1") => exit_for_result(
+            run_phase_action_regression_freeze_verify_v1(args),
+            "try: nando-cli phase-action-regression-freeze-verify-v1 [release-suite-report-json] [license-file] [license-package-report-json] [offload-audit-report-json] [regression-report-json] [regression-freeze-report-json] [cache-offload-bench-report-json] [workflow-bench-report-json] [workflow-replay-report-json]",
+        ),
+        Some("phase-action-package-verify-v1") => exit_for_result(
+            run_phase_action_package_verify_v1(args),
+            "try: nando-cli phase-action-package-verify-v1 [package-path] [manifest-path] [score-report-json]",
+        ),
+        Some("role-binding-package-inspect-v1") => exit_for_result(
+            run_role_binding_package_inspect_v1(args),
+            "try: nando-cli role-binding-package-inspect-v1 [package-path] [report-json]",
+        ),
+        Some("role-binding-package-verify-v1") => exit_for_result(
+            run_role_binding_package_verify_v1(args),
+            "try: nando-cli role-binding-package-verify-v1 [package-path] [report-json]",
+        ),
+        Some("role-binding-eval-pack-from-package-v1") => exit_for_result(
+            run_role_binding_eval_pack_from_package_v1(args),
+            "try: nando-cli role-binding-eval-pack-from-package-v1 [package-path] [eval-pack-json] [max-tasks]",
+        ),
+        Some("role-binding-eval-pack-binary-v1") => exit_for_result(
+            run_role_binding_eval_pack_binary_v1(args),
+            "try: nando-cli role-binding-eval-pack-binary-v1 [source-eval-pack-json] [binary-eval-pack] [report-json]",
+        ),
+        Some("role-binding-binary-eval-pack-suite-v1") => exit_for_result(
+            run_role_binding_binary_eval_pack_suite_v1(args),
+            "try: nando-cli role-binding-binary-eval-pack-suite-v1 [root-dir] [suite-report-json] [margin-threshold]",
+        ),
+        Some("role-binding-binary-eval-pack-suite-verify-v1") => exit_for_result(
+            run_role_binding_binary_eval_pack_suite_verify_v1(args),
+            "try: nando-cli role-binding-binary-eval-pack-suite-verify-v1 [root-dir] [suite-report-json] [margin-threshold]",
+        ),
+        Some("role-binding-package-score-v1") => exit_for_result(
+            run_role_binding_package_score_v1(args),
+            "try: nando-cli role-binding-package-score-v1 [package-path] [eval-pack-json] [score-report-json] [margin-threshold]",
+        ),
+        Some("role-binding-package-score-verify-v1") => exit_for_result(
+            run_role_binding_package_score_verify_v1(args),
+            "try: nando-cli role-binding-package-score-verify-v1 [package-path] [eval-pack-json] [score-report-json] [margin-threshold]",
+        ),
+        Some("role-binding-release-suite-v1") => exit_for_result(
+            run_role_binding_release_suite_v1(args),
+            "try: nando-cli role-binding-release-suite-v1 [binary-suite-report-json] [release-suite-report-json]",
+        ),
+        Some("role-binding-release-suite-verify-v1") => exit_for_result(
+            run_role_binding_release_suite_verify_v1(args),
+            "try: nando-cli role-binding-release-suite-verify-v1 [binary-suite-report-json] [release-suite-report-json]",
+        ),
+        Some("role-binding-operator-blueprint-gap-v1") => exit_for_result(
+            run_role_binding_operator_blueprint_gap_v1(args),
+            "try: nando-cli role-binding-operator-blueprint-gap-v1 [release-suite-report-json] [gap-report-json]",
+        ),
+        Some("role-binding-operator-blueprint-gap-verify-v1") => exit_for_result(
+            run_role_binding_operator_blueprint_gap_verify_v1(args),
+            "try: nando-cli role-binding-operator-blueprint-gap-verify-v1 [release-suite-report-json] [gap-report-json]",
+        ),
+        Some("role-binding-profile-registry-from-release-v1") => exit_for_result(
+            run_role_binding_profile_registry_from_release_v1(args),
+            "try: nando-cli role-binding-profile-registry-from-release-v1 [release-suite-report-json] [registry-config-json]",
+        ),
+        Some("role-binding-profile-serve-v1") => exit_for_result(
+            run_role_binding_profile_serve_v1(args),
+            "try: nando-cli role-binding-profile-serve-v1 [registry-config-json] [bind-addr] [request-limit]",
+        ),
+        Some("role-binding-profile-runtime-smoke-v1") => exit_for_result(
+            run_role_binding_profile_runtime_smoke_v1(args),
+            "try: nando-cli role-binding-profile-runtime-smoke-v1 [registry-config-json] [runtime-smoke-report-json]",
+        ),
+        Some("role-binding-profile-replay-suite-v1") => exit_for_result(
+            run_role_binding_profile_replay_suite_v1(args),
+            "try: nando-cli role-binding-profile-replay-suite-v1 [registry-config-json] [binary-suite-report-json] [replay-suite-report-json] [max-unique-sequences-per-profile] [batch-unique-sequences]",
+        ),
+        Some("role-binding-profile-fallback-smoke-v1") => exit_for_result(
+            run_role_binding_profile_fallback_smoke_v1(args),
+            "try: nando-cli role-binding-profile-fallback-smoke-v1 [registry-config-json] [fallback-smoke-report-json]",
+        ),
+        Some("role-binding-profile-worker-scaling-v1") => exit_for_result(
+            run_role_binding_profile_worker_scaling_v1(args),
+            "try: nando-cli role-binding-profile-worker-scaling-v1 [registry-config-json] [worker-scaling-report-json] [worker-count]",
+        ),
+        Some("role-binding-profile-worker-replay-v1") => exit_for_result(
+            run_role_binding_profile_worker_replay_v1(args),
+            "try: nando-cli role-binding-profile-worker-replay-v1 [registry-config-json] [binary-suite-report-json] [worker-replay-report-json] [worker-count] [max-unique-sequences-per-profile] [batch-unique-sequences]",
+        ),
+        Some("role-binding-profile-lb-serve-v1") => exit_for_result(
+            run_role_binding_profile_lb_serve_v1(args),
+            "try: nando-cli role-binding-profile-lb-serve-v1 <lb-config-json> [bind-addr] [request-limit]",
+        ),
+        Some("role-binding-profile-lb-replay-v1") => exit_for_result(
+            run_role_binding_profile_lb_replay_v1(args),
+            "try: nando-cli role-binding-profile-lb-replay-v1 [registry-config-json] [binary-suite-report-json] [lb-replay-report-json] [worker-count] [max-unique-sequences-per-profile] [batch-unique-sequences]",
+        ),
+        Some("role-binding-profile-lb-throughput-v1") => exit_for_result(
+            run_role_binding_profile_lb_throughput_v1(args),
+            "try: nando-cli role-binding-profile-lb-throughput-v1 [registry-config-json] [binary-suite-report-json] [throughput-report-json] [worker-count] [max-unique-sequences-per-profile] [client-threads] [sequence-repetitions]",
+        ),
+        Some("role-binding-real-traffic-record-v1") => exit_for_result(
+            run_role_binding_real_traffic_record_v1(args),
+            "try: nando-cli role-binding-real-traffic-record-v1 [trace-jsonl] <record-json>",
+        ),
+        Some("role-binding-real-traffic-record-serve-v1") => exit_for_result(
+            run_role_binding_real_traffic_record_serve_v1(args),
+            "try: nando-cli role-binding-real-traffic-record-serve-v1 [trace-jsonl] [bind-addr] [request-limit]",
+        ),
+        Some("role-binding-real-traffic-ingest-events-v1") => exit_for_result(
+            run_role_binding_real_traffic_ingest_events_v1(args),
+            "try: nando-cli role-binding-real-traffic-ingest-events-v1 <events-jsonl> [trace-jsonl] [ingest-report-json]",
+        ),
+        Some("role-binding-real-traffic-codex-history-ingest-v1") => exit_for_result(
+            run_role_binding_real_traffic_codex_history_ingest_v1(args),
+            "try: nando-cli role-binding-real-traffic-codex-history-ingest-v1 [history-jsonl] [events-jsonl] [ingest-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-codex-history-route-candidates-v1") => exit_for_result(
+            run_role_binding_real_traffic_codex_history_route_candidates_v1(args),
+            "try: nando-cli role-binding-real-traffic-codex-history-route-candidates-v1 [history-jsonl] [registry-config-json] [events-jsonl] [route-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-shadow-v1") => exit_for_result(
+            run_role_binding_real_traffic_shadow_v1(args),
+            "try: nando-cli role-binding-real-traffic-shadow-v1 [registry-config-json] [trace-jsonl] [shadow-report-json]",
+        ),
+        Some("role-binding-real-traffic-shadow-smoke-v1") => exit_for_result(
+            run_role_binding_real_traffic_shadow_smoke_v1(args),
+            "try: nando-cli role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]",
+        ),
+        Some("strict-multiseed-rust-audit-v1") => exit_for_result(
+            run_strict_multiseed_rust_audit_v1(args),
+            "try: nando-cli strict-multiseed-rust-audit-v1 [diagnostics-root] [audit-report-json]",
+        ),
+        Some("strict-multiseed-rust-audit-verify-v1") => exit_for_result(
+            run_strict_multiseed_rust_audit_verify_v1(args),
+            "try: nando-cli strict-multiseed-rust-audit-verify-v1 [diagnostics-root] [audit-report-json]",
+        ),
+        Some("phase-package-verify") => exit_for_result(
+            run_phase_package_verify(args),
+            "try: nando-cli phase-package-verify [package-path] [manifest-path] [score-report-json]",
+        ),
         Some("live-byte-train") => match parse_live_byte_train_args(args) {
             Ok((seed, text)) => {
                 print_live_byte_train(seed, &text);

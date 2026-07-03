@@ -1,0 +1,29 @@
+{
+  "schema_version": "rule_logic_l3_training_report_v2",
+  "test": "crates/nando-core/tests/wavepredictor_rule_logic_trainer.rs",
+  "command": "cargo test -p nando-core --test wavepredictor_rule_logic_trainer -- --ignored --nocapture",
+  "corpus": "data/rule_logic_corpus_v2/accepted_rule_tasks_v2.jsonl",
+  "corpus_verdict": "VALID_RULE_OPERATOR_PRESSURE_CANDIDATE_V2",
+  "train_rows": 4800,
+  "heldout_rows": 1200,
+  "train_state_delta_accuracy_milli": 680,
+  "heldout_state_delta_accuracy_milli": 498,
+  "heldout_state_delta_tasks": 1200,
+  "heldout_state_delta_median_gap": -34,
+  "heldout_state_delta_p10_gap": -11041,
+  "shortcut_baselines": {
+    "source_group_prototype_accuracy_milli": 488,
+    "proof_rule_id_prototype_accuracy_milli": 0,
+    "surface_family_prototype_accuracy_milli": 493,
+    "answer_status_prototype_accuracy_milli": 353,
+    "l1_neighbor_accuracy_milli": 413,
+    "best_shortcut_accuracy_milli": 493
+  },
+  "state_delta_edges": 51208,
+  "target_center_id_training_used": false,
+  "proof_rule_id_training_authority_used": false,
+  "trained_profile_exported": false,
+  "verdict": "RULE_LOGIC_V2_HARD_CORPUS_CURRENT_L3_NOT_ABOVE_SHORTCUT",
+  "meaning": "The v2 corpus is much less shortcut-friendly than v1. Current L3 state-delta projection does not yet solve it.",
+  "next_debt": "L3 must learn option-conditioned rule application, not only input-to-label state_delta projection."
+}

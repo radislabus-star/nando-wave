@@ -1,0 +1,26 @@
+{
+  "schema_version": "rule_logic_l3_training_report_v1",
+  "test": "crates/nando-core/tests/wavepredictor_rule_logic_trainer.rs",
+  "command": "cargo test -p nando-core --test wavepredictor_rule_logic_trainer -- --ignored --nocapture",
+  "corpus": "data/rule_logic_corpus_v1/accepted_rule_tasks_v1.jsonl",
+  "train_rows": 4800,
+  "heldout_rows": 1200,
+  "train_state_delta_accuracy_milli": 954,
+  "heldout_state_delta_accuracy_milli": 893,
+  "heldout_state_delta_tasks": 1200,
+  "heldout_state_delta_median_gap": 2943,
+  "heldout_state_delta_p10_gap": -87,
+  "shortcut_baselines": {
+    "source_group_prototype_accuracy_milli": 593,
+    "proof_rule_id_prototype_accuracy_milli": 0,
+    "surface_family_prototype_accuracy_milli": 623,
+    "answer_status_prototype_accuracy_milli": 383,
+    "l1_neighbor_accuracy_milli": 213
+  },
+  "state_delta_edges": 332241,
+  "target_center_id_training_used": false,
+  "proof_rule_id_training_authority_used": false,
+  "trained_profile_exported": false,
+  "verdict": "RULE_LOGIC_L3_STATE_DELTA_TRAINING_PASSED_WITH_WEAK_TAIL",
+  "next_debt": "Export trained state_delta_edges into a compact profile and harden weak-tail heldout p10 gap."
+}

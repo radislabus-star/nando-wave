@@ -1,0 +1,25 @@
+{
+  "schema_version": "rule_logic_rules_v1",
+  "rules": [
+    {"rule_id": "alternation_next", "family": "sequence", "description": "Continue an A B A B alternation."},
+    {"rule_id": "repeat_block_next", "family": "sequence", "description": "Continue a repeated block."},
+    {"rule_id": "increase_by_step", "family": "quantity", "description": "Continue an arithmetic increase."},
+    {"rule_id": "decrease_by_step", "family": "quantity", "description": "Continue an arithmetic decrease."},
+    {"rule_id": "missing_order_item", "family": "order", "description": "Restore a missing item from an ordered chain."},
+    {"rule_id": "mirror_complete", "family": "symmetry", "description": "Complete a mirrored sequence."},
+    {"rule_id": "cyclic_shift_left", "family": "shift", "description": "Apply a left cyclic shift to a new triplet."},
+    {"rule_id": "cyclic_shift_right", "family": "shift", "description": "Apply a right cyclic shift to a new triplet."},
+    {"rule_id": "analogy_replace_feature", "family": "analogy", "description": "Apply an A:B = C:? feature replacement."},
+    {"rule_id": "classify_shared_feature", "family": "classification", "description": "Find the shared feature of examples."},
+    {"rule_id": "odd_one_out", "family": "classification", "description": "Find the element that breaks a feature pattern."},
+    {"rule_id": "intersection_feature", "family": "set", "description": "Return the common feature across two sets."},
+    {"rule_id": "union_feature", "family": "set", "description": "Return the combined features of two sets."},
+    {"rule_id": "negation_flip", "family": "logic", "description": "Apply a logical negation flip."},
+    {"rule_id": "if_then_apply", "family": "logic", "description": "Apply an if/then rule to a case."},
+    {"rule_id": "required_variable_missing", "family": "evidence", "description": "Detect a missing required variable and request it."},
+    {"rule_id": "evidence_conflict", "family": "evidence", "description": "Detect conflicting evidence instead of choosing a side."},
+    {"rule_id": "greater_less_compare", "family": "quantity", "description": "Compare quantities and select greater or less."},
+    {"rule_id": "compose_shift_then_replace", "family": "composition", "description": "Apply shift, then replacement."},
+    {"rule_id": "compose_count_then_compare", "family": "composition", "description": "Count items, then compare quantities."}
+  ]
+}

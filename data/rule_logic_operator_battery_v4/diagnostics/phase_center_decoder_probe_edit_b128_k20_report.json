@@ -1,0 +1,2714 @@
+{
+  "schema_version": "phase_center_decoder_probe_v1",
+  "diagnostic_only": true,
+  "verdict": "PHASE_CENTER_DECODER_PROBE_WATCH",
+  "method": "decode_output_slots_from_relation_phase_centers",
+  "not_used_at_heldout_decode_time": [
+    "correct_tokens",
+    "wrong_tokens",
+    "state_after_correct",
+    "state_after_wrong",
+    "proof_rule_id as key",
+    "source_group as key",
+    "explicit out<-src program table",
+    "epoch repair"
+  ],
+  "claim_boundary": [
+    "This is a zero-epoch phase-center decoder diagnostic.",
+    "It is not yet the production Wave flat runtime.",
+    "It does not prove semantic grokking.",
+    "The next step is to compile this decoder into Rust/Wave readout and run parity/ablations."
+  ],
+  "action_key_local_decoder": {
+    "key_mode": "action",
+    "decoder_mode": "local",
+    "cells": 32,
+    "beam_width": null,
+    "slot_top_k": null,
+    "relation_top_slots": null,
+    "train_rows": 1536,
+    "heldout_rows": 1536,
+    "compiled_operator_keys": 96,
+    "compiled_slot_centers": 1193,
+    "skipped_train_relations": 0,
+    "decoded_rows": 1536,
+    "missing_rows": 0,
+    "heldout_correct_rows": 512,
+    "heldout_accuracy_milli": 333,
+    "wrong_exact_rows": 0,
+    "same_bag_output_milli": 333,
+    "duplicate_source_rows": 1024,
+    "median_min_slot_margin": 0.0,
+    "p10_min_slot_margin": 0.0,
+    "by_class": {
+      "edit": {
+        "rows": 1536,
+        "correct": 512,
+        "other_wrong": 1024
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      },
+      "network": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      },
+      "ru_words": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      },
+      "symbols": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      },
+      "distractor": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      },
+      "instruction_noise": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      },
+      "prefix_suffix": {
+        "rows": 384,
+        "correct": 128,
+        "other_wrong": 256
+      }
+    },
+    "failure_examples": [
+      {
+        "task_id": "opbat_v4_s000_edit_0005664",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z24",
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z24",
+          "Z24",
+          "Z24",
+          "Z24"
+        ],
+        "correct": [
+          "Z24",
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32"
+        ],
+        "wrong": [
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005665",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z25",
+          "Z25",
+          "Z25",
+          "Z25"
+        ],
+        "correct": [
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33"
+        ],
+        "wrong": [
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005666",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z26",
+          "Z26",
+          "Z26",
+          "Z26"
+        ],
+        "correct": [
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34"
+        ],
+        "wrong": [
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005667",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z27",
+          "Z27",
+          "Z27",
+          "Z27"
+        ],
+        "correct": [
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35"
+        ],
+        "wrong": [
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005668",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "plita",
+          "nabor",
+          "otsek",
+          "fokus",
+          "plita",
+          "plita",
+          "plita",
+          "plita"
+        ],
+        "correct": [
+          "plita",
+          "nabor",
+          "otsek",
+          "fokus",
+          "kraj",
+          "center",
+          "luch",
+          "vklad"
+        ],
+        "wrong": [
+          "nabor",
+          "otsek",
+          "fokus",
+          "priem",
+          "kraj",
+          "center",
+          "luch",
+          "vklad"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005669",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "nabor",
+          "otsek",
+          "fokus",
+          "priem",
+          "nabor",
+          "nabor",
+          "nabor",
+          "nabor"
+        ],
+        "correct": [
+          "nabor",
+          "otsek",
+          "fokus",
+          "priem",
+          "center",
+          "luch",
+          "vklad",
+          "ten"
+        ],
+        "wrong": [
+          "otsek",
+          "fokus",
+          "priem",
+          "kraj",
+          "center",
+          "luch",
+          "vklad",
+          "ten"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005670",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "otsek",
+          "fokus",
+          "priem",
+          "kraj",
+          "otsek",
+          "otsek",
+          "otsek",
+          "otsek"
+        ],
+        "correct": [
+          "otsek",
+          "fokus",
+          "priem",
+          "kraj",
+          "luch",
+          "vklad",
+          "ten",
+          "osnova"
+        ],
+        "wrong": [
+          "fokus",
+          "priem",
+          "kraj",
+          "center",
+          "luch",
+          "vklad",
+          "ten",
+          "osnova"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005671",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "fokus",
+          "priem",
+          "kraj",
+          "center",
+          "fokus",
+          "fokus",
+          "fokus",
+          "fokus"
+        ],
+        "correct": [
+          "fokus",
+          "priem",
+          "kraj",
+          "center",
+          "vklad",
+          "ten",
+          "osnova",
+          "peredacha"
+        ],
+        "wrong": [
+          "priem",
+          "kraj",
+          "center",
+          "luch",
+          "vklad",
+          "ten",
+          "osnova",
+          "peredacha"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005672",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "lot2",
+          "vendor2",
+          "seller2",
+          "buyer2",
+          "lot2",
+          "lot2",
+          "lot2",
+          "lot2"
+        ],
+        "correct": [
+          "lot2",
+          "vendor2",
+          "seller2",
+          "buyer2",
+          "freight2",
+          "customs2",
+          "label2",
+          "order"
+        ],
+        "wrong": [
+          "vendor2",
+          "seller2",
+          "buyer2",
+          "agent2",
+          "freight2",
+          "customs2",
+          "label2",
+          "order"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005673",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "vendor2",
+          "seller2",
+          "buyer2",
+          "agent2",
+          "vendor2",
+          "vendor2",
+          "vendor2",
+          "vendor2"
+        ],
+        "correct": [
+          "vendor2",
+          "seller2",
+          "buyer2",
+          "agent2",
+          "customs2",
+          "label2",
+          "order",
+          "buyer"
+        ],
+        "wrong": [
+          "seller2",
+          "buyer2",
+          "agent2",
+          "freight2",
+          "customs2",
+          "label2",
+          "order",
+          "buyer"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005674",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "seller2",
+          "buyer2",
+          "agent2",
+          "freight2",
+          "seller2",
+          "seller2",
+          "seller2",
+          "seller2"
+        ],
+        "correct": [
+          "seller2",
+          "buyer2",
+          "agent2",
+          "freight2",
+          "label2",
+          "order",
+          "buyer",
+          "manifest"
+        ],
+        "wrong": [
+          "buyer2",
+          "agent2",
+          "freight2",
+          "customs2",
+          "label2",
+          "order",
+          "buyer",
+          "manifest"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005675",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "buyer2",
+          "agent2",
+          "freight2",
+          "customs2",
+          "buyer2",
+          "buyer2",
+          "buyer2",
+          "buyer2"
+        ],
+        "correct": [
+          "buyer2",
+          "agent2",
+          "freight2",
+          "customs2",
+          "order",
+          "buyer",
+          "manifest",
+          "allocation"
+        ],
+        "wrong": [
+          "agent2",
+          "freight2",
+          "customs2",
+          "label2",
+          "order",
+          "buyer",
+          "manifest",
+          "allocation"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005676",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "uplink2",
+          "dns2",
+          "vpn2",
+          "key2",
+          "uplink2",
+          "uplink2",
+          "uplink2",
+          "uplink2"
+        ],
+        "correct": [
+          "uplink2",
+          "dns2",
+          "vpn2",
+          "key2",
+          "router_h",
+          "cidr_h",
+          "relay_h",
+          "profile_h"
+        ],
+        "wrong": [
+          "dns2",
+          "vpn2",
+          "key2",
+          "wireguard",
+          "router_h",
+          "cidr_h",
+          "relay_h",
+          "profile_h"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005677",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "dns2",
+          "vpn2",
+          "key2",
+          "wireguard",
+          "dns2",
+          "dns2",
+          "dns2",
+          "dns2"
+        ],
+        "correct": [
+          "dns2",
+          "vpn2",
+          "key2",
+          "wireguard",
+          "cidr_h",
+          "relay_h",
+          "profile_h",
+          "firewall_h"
+        ],
+        "wrong": [
+          "vpn2",
+          "key2",
+          "wireguard",
+          "router_h",
+          "cidr_h",
+          "relay_h",
+          "profile_h",
+          "firewall_h"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005678",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "vpn2",
+          "key2",
+          "wireguard",
+          "router_h",
+          "vpn2",
+          "vpn2",
+          "vpn2",
+          "vpn2"
+        ],
+        "correct": [
+          "vpn2",
+          "key2",
+          "wireguard",
+          "router_h",
+          "relay_h",
+          "profile_h",
+          "firewall_h",
+          "session_h"
+        ],
+        "wrong": [
+          "key2",
+          "wireguard",
+          "router_h",
+          "cidr_h",
+          "relay_h",
+          "profile_h",
+          "firewall_h",
+          "session_h"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005679",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_middle",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "key2",
+          "wireguard",
+          "router_h",
+          "cidr_h",
+          "key2",
+          "key2",
+          "key2",
+          "key2"
+        ],
+        "correct": [
+          "key2",
+          "wireguard",
+          "router_h",
+          "cidr_h",
+          "profile_h",
+          "firewall_h",
+          "session_h",
+          "probe_h"
+        ],
+        "wrong": [
+          "wireguard",
+          "router_h",
+          "cidr_h",
+          "relay_h",
+          "profile_h",
+          "firewall_h",
+          "session_h",
+          "probe_h"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005712",
+        "operator_class": "edit",
+        "proof_rule_family": "insert_middle_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "mark_heldout_0_86",
+          "Z32",
+          "Z32",
+          "Z32",
+          "Z32",
+          "Z32"
+        ],
+        "correct": [
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "mark_heldout_0_86",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0"
+        ],
+        "wrong": [
+          "mark_heldout_0_86",
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005713",
+        "operator_class": "edit",
+        "proof_rule_family": "insert_middle_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "mark_heldout_0_87",
+          "Z33",
+          "Z33",
+          "Z33",
+          "Z33",
+          "Z33"
+        ],
+        "correct": [
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "mark_heldout_0_87",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1"
+        ],
+        "wrong": [
+          "mark_heldout_0_87",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005714",
+        "operator_class": "edit",
+        "proof_rule_family": "insert_middle_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "mark_heldout_0_88",
+          "Z34",
+          "Z34",
+          "Z34",
+          "Z34",
+          "Z34"
+        ],
+        "correct": [
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "mark_heldout_0_88",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2"
+        ],
+        "wrong": [
+          "mark_heldout_0_88",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005715",
+        "operator_class": "edit",
+        "proof_rule_family": "insert_middle_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "mark_heldout_0_89",
+          "Z35",
+          "Z35",
+          "Z35",
+          "Z35",
+          "Z35"
+        ],
+        "correct": [
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "mark_heldout_0_89",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2",
+          "Z3"
+        ],
+        "wrong": [
+          "mark_heldout_0_89",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2",
+          "Z3"
+        ]
+      }
+    ]
+  },
+  "action_key_capacity_cleanup_decoder": {
+    "key_mode": "action",
+    "decoder_mode": "capacity_cleanup",
+    "cells": 32,
+    "beam_width": 128,
+    "slot_top_k": 20,
+    "relation_top_slots": 10,
+    "train_rows": 1536,
+    "heldout_rows": 1536,
+    "compiled_operator_keys": 96,
+    "compiled_slot_centers": 1193,
+    "skipped_train_relations": 0,
+    "decoded_rows": 1536,
+    "missing_rows": 0,
+    "heldout_correct_rows": 1024,
+    "heldout_accuracy_milli": 667,
+    "wrong_exact_rows": 0,
+    "same_bag_output_milli": 1000,
+    "duplicate_source_rows": 0,
+    "median_min_slot_margin": 0.0,
+    "p10_min_slot_margin": 0.0,
+    "by_class": {
+      "edit": {
+        "rows": 1536,
+        "correct": 1024,
+        "other_wrong": 512
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      },
+      "network": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      },
+      "ru_words": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      },
+      "symbols": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      },
+      "distractor": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      },
+      "instruction_noise": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      },
+      "prefix_suffix": {
+        "rows": 384,
+        "correct": 256,
+        "other_wrong": 128
+      }
+    },
+    "failure_examples": [
+      {
+        "task_id": "opbat_v4_s000_edit_0005792",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z32",
+          "mark_heldout_0_69",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z38",
+          "Z39",
+          "Z37"
+        ],
+        "correct": [
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "mark_heldout_0_69"
+        ],
+        "wrong": [
+          "mark_heldout_0_69",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005793",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z33",
+          "mark_heldout_0_70",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z39",
+          "Z0",
+          "Z38"
+        ],
+        "correct": [
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "mark_heldout_0_70"
+        ],
+        "wrong": [
+          "mark_heldout_0_70",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005794",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z34",
+          "mark_heldout_0_71",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z0",
+          "Z1",
+          "Z39"
+        ],
+        "correct": [
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "mark_heldout_0_71"
+        ],
+        "wrong": [
+          "mark_heldout_0_71",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005795",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z35",
+          "mark_heldout_0_72",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z1",
+          "Z2",
+          "Z0"
+        ],
+        "correct": [
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2",
+          "mark_heldout_0_72"
+        ],
+        "wrong": [
+          "mark_heldout_0_72",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2",
+          "Z3"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005796",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "vklad",
+          "mark_heldout_0_73",
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "server",
+          "pravilo",
+          "klient"
+        ],
+        "correct": [
+          "vklad",
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "mark_heldout_0_73"
+        ],
+        "wrong": [
+          "mark_heldout_0_73",
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005797",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "ten",
+          "mark_heldout_0_74",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "pravilo",
+          "podpis",
+          "server"
+        ],
+        "correct": [
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "mark_heldout_0_74"
+        ],
+        "wrong": [
+          "mark_heldout_0_74",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005798",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "osnova",
+          "mark_heldout_0_75",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "podpis",
+          "paket",
+          "pravilo"
+        ],
+        "correct": [
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "mark_heldout_0_75"
+        ],
+        "wrong": [
+          "mark_heldout_0_75",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "smena"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005799",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "peredacha",
+          "mark_heldout_0_76",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "paket",
+          "smena",
+          "podpis"
+        ],
+        "correct": [
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "smena",
+          "mark_heldout_0_76"
+        ],
+        "wrong": [
+          "mark_heldout_0_76",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "smena",
+          "uzel"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005800",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "order",
+          "mark_heldout_0_77",
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "quota",
+          "sample2",
+          "carrier"
+        ],
+        "correct": [
+          "order",
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "mark_heldout_0_77"
+        ],
+        "wrong": [
+          "mark_heldout_0_77",
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005801",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "buyer",
+          "mark_heldout_0_78",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "sample2",
+          "broker2",
+          "quota"
+        ],
+        "correct": [
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "mark_heldout_0_78"
+        ],
+        "wrong": [
+          "mark_heldout_0_78",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005802",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "manifest",
+          "mark_heldout_0_79",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "broker2",
+          "counterparty",
+          "sample2"
+        ],
+        "correct": [
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "mark_heldout_0_79"
+        ],
+        "wrong": [
+          "mark_heldout_0_79",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "booking"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005803",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "allocation",
+          "mark_heldout_0_80",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "counterparty",
+          "booking",
+          "broker2"
+        ],
+        "correct": [
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "booking",
+          "mark_heldout_0_80"
+        ],
+        "wrong": [
+          "mark_heldout_0_80",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "booking",
+          "license"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005804",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "profile_h",
+          "mark_heldout_0_81",
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "prefix2",
+          "kernel2",
+          "lease2"
+        ],
+        "correct": [
+          "profile_h",
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "mark_heldout_0_81"
+        ],
+        "wrong": [
+          "mark_heldout_0_81",
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005805",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "firewall_h",
+          "mark_heldout_0_82",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "kernel2",
+          "socket2",
+          "prefix2"
+        ],
+        "correct": [
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "mark_heldout_0_82"
+        ],
+        "wrong": [
+          "mark_heldout_0_82",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005806",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "session_h",
+          "mark_heldout_0_83",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "socket2",
+          "tunnel2",
+          "kernel2"
+        ],
+        "correct": [
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "mark_heldout_0_83"
+        ],
+        "wrong": [
+          "mark_heldout_0_83",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "daemon2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005807",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "probe_h",
+          "mark_heldout_0_84",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "tunnel2",
+          "daemon2",
+          "socket2"
+        ],
+        "correct": [
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "daemon2",
+          "mark_heldout_0_84"
+        ],
+        "wrong": [
+          "mark_heldout_0_84",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "daemon2",
+          "metric2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005984",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 10,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z24",
+          "mark_heldout_0_67",
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z32",
+          "Z31"
+        ],
+        "correct": [
+          "Z24",
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "mark_heldout_0_67"
+        ],
+        "wrong": [
+          "mark_heldout_0_67",
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005985",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 10,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z25",
+          "mark_heldout_0_68",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z33",
+          "Z32"
+        ],
+        "correct": [
+          "Z25",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "mark_heldout_0_68"
+        ],
+        "wrong": [
+          "mark_heldout_0_68",
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005986",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 10,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z26",
+          "mark_heldout_0_69",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z34",
+          "Z33"
+        ],
+        "correct": [
+          "Z26",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34",
+          "mark_heldout_0_69"
+        ],
+        "wrong": [
+          "mark_heldout_0_69",
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005987",
+        "operator_class": "edit",
+        "proof_rule_family": "replace_last_marker",
+        "sequence_length": 10,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z27",
+          "mark_heldout_0_70",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z35",
+          "Z34"
+        ],
+        "correct": [
+          "Z27",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "mark_heldout_0_70"
+        ],
+        "wrong": [
+          "mark_heldout_0_70",
+          "Z28",
+          "Z29",
+          "Z30",
+          "Z31",
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36"
+        ]
+      }
+    ]
+  },
+  "no_action_key_capacity_cleanup_ablation": {
+    "key_mode": "class_length",
+    "decoder_mode": "capacity_cleanup",
+    "cells": 32,
+    "beam_width": 128,
+    "slot_top_k": 20,
+    "relation_top_slots": 10,
+    "train_rows": 1536,
+    "heldout_rows": 1536,
+    "compiled_operator_keys": 8,
+    "compiled_slot_centers": 108,
+    "skipped_train_relations": 0,
+    "decoded_rows": 1536,
+    "missing_rows": 0,
+    "heldout_correct_rows": 0,
+    "heldout_accuracy_milli": 0,
+    "wrong_exact_rows": 0,
+    "same_bag_output_milli": 250,
+    "duplicate_source_rows": 0,
+    "median_min_slot_margin": 0.0,
+    "p10_min_slot_margin": 0.0,
+    "by_class": {
+      "edit": {
+        "rows": 1536,
+        "other_wrong": 1536
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 384,
+        "other_wrong": 384
+      },
+      "network": {
+        "rows": 384,
+        "other_wrong": 384
+      },
+      "ru_words": {
+        "rows": 384,
+        "other_wrong": 384
+      },
+      "symbols": {
+        "rows": 384,
+        "other_wrong": 384
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 384,
+        "other_wrong": 384
+      },
+      "distractor": {
+        "rows": 384,
+        "other_wrong": 384
+      },
+      "instruction_noise": {
+        "rows": 384,
+        "other_wrong": 384
+      },
+      "prefix_suffix": {
+        "rows": 384,
+        "other_wrong": 384
+      }
+    },
+    "failure_examples": [
+      {
+        "task_id": "opbat_v4_s000_edit_0005632",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z39",
+          "Z37",
+          "Z38",
+          "mark_heldout_0_6",
+          "Z0"
+        ],
+        "correct": [
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0"
+        ],
+        "wrong": [
+          "Z32",
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005633",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z0",
+          "Z38",
+          "Z39",
+          "mark_heldout_0_7",
+          "Z1"
+        ],
+        "correct": [
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1"
+        ],
+        "wrong": [
+          "Z33",
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005634",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z1",
+          "Z39",
+          "Z0",
+          "mark_heldout_0_8",
+          "Z2"
+        ],
+        "correct": [
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2"
+        ],
+        "wrong": [
+          "Z34",
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005635",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z2",
+          "Z0",
+          "Z1",
+          "mark_heldout_0_9",
+          "Z3"
+        ],
+        "correct": [
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2",
+          "Z3"
+        ],
+        "wrong": [
+          "Z35",
+          "Z36",
+          "Z37",
+          "Z38",
+          "Z39",
+          "Z0",
+          "Z1",
+          "Z2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005636",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "vklad",
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "pravilo",
+          "klient",
+          "server",
+          "mark_heldout_0_10",
+          "podpis"
+        ],
+        "correct": [
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis"
+        ],
+        "wrong": [
+          "vklad",
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005637",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "podpis",
+          "server",
+          "pravilo",
+          "mark_heldout_0_11",
+          "paket"
+        ],
+        "correct": [
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket"
+        ],
+        "wrong": [
+          "ten",
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005638",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "paket",
+          "pravilo",
+          "podpis",
+          "mark_heldout_0_12",
+          "smena"
+        ],
+        "correct": [
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "smena"
+        ],
+        "wrong": [
+          "osnova",
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005639",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "smena",
+          "podpis",
+          "paket",
+          "mark_heldout_0_13",
+          "uzel"
+        ],
+        "correct": [
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "smena",
+          "uzel"
+        ],
+        "wrong": [
+          "peredacha",
+          "okno",
+          "klient",
+          "server",
+          "pravilo",
+          "podpis",
+          "paket",
+          "smena"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005640",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "order",
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "sample2",
+          "carrier",
+          "quota",
+          "mark_heldout_0_14",
+          "broker2"
+        ],
+        "correct": [
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2"
+        ],
+        "wrong": [
+          "order",
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005641",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "broker2",
+          "quota",
+          "sample2",
+          "mark_heldout_0_15",
+          "counterparty"
+        ],
+        "correct": [
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty"
+        ],
+        "wrong": [
+          "buyer",
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005642",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "counterparty",
+          "sample2",
+          "broker2",
+          "mark_heldout_0_16",
+          "booking"
+        ],
+        "correct": [
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "booking"
+        ],
+        "wrong": [
+          "manifest",
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005643",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "booking",
+          "broker2",
+          "counterparty",
+          "mark_heldout_0_17",
+          "license"
+        ],
+        "correct": [
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "booking",
+          "license"
+        ],
+        "wrong": [
+          "allocation",
+          "deal",
+          "carrier",
+          "quota",
+          "sample2",
+          "broker2",
+          "counterparty",
+          "booking"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005644",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "profile_h",
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "kernel2",
+          "lease2",
+          "prefix2",
+          "mark_heldout_0_18",
+          "socket2"
+        ],
+        "correct": [
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2"
+        ],
+        "wrong": [
+          "profile_h",
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005645",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "socket2",
+          "prefix2",
+          "kernel2",
+          "mark_heldout_0_19",
+          "tunnel2"
+        ],
+        "correct": [
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2"
+        ],
+        "wrong": [
+          "firewall_h",
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005646",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "tunnel2",
+          "kernel2",
+          "socket2",
+          "mark_heldout_0_20",
+          "daemon2"
+        ],
+        "correct": [
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "daemon2"
+        ],
+        "wrong": [
+          "session_h",
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005647",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_first",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "daemon2",
+          "socket2",
+          "tunnel2",
+          "mark_heldout_0_21",
+          "metric2"
+        ],
+        "correct": [
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "daemon2",
+          "metric2"
+        ],
+        "wrong": [
+          "probe_h",
+          "route3",
+          "lease2",
+          "prefix2",
+          "kernel2",
+          "socket2",
+          "tunnel2",
+          "daemon2"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005648",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_last",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z8",
+          "Z9",
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z15",
+          "Z13",
+          "Z14",
+          "mark_heldout_0_22",
+          "Z16"
+        ],
+        "correct": [
+          "Z8",
+          "Z9",
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15"
+        ],
+        "wrong": [
+          "Z9",
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005649",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_last",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z9",
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z16",
+          "Z14",
+          "Z15",
+          "mark_heldout_0_23",
+          "Z17"
+        ],
+        "correct": [
+          "Z9",
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16"
+        ],
+        "wrong": [
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16",
+          "Z17"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005650",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_last",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z17",
+          "Z15",
+          "Z16",
+          "mark_heldout_0_24",
+          "Z18"
+        ],
+        "correct": [
+          "Z10",
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16",
+          "Z17"
+        ],
+        "wrong": [
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16",
+          "Z17",
+          "Z18"
+        ]
+      },
+      {
+        "task_id": "opbat_v4_s000_edit_0005651",
+        "operator_class": "edit",
+        "proof_rule_family": "delete_last",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "other_wrong",
+        "generated": [
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z18",
+          "Z16",
+          "Z17",
+          "mark_heldout_0_25",
+          "Z19"
+        ],
+        "correct": [
+          "Z11",
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16",
+          "Z17",
+          "Z18"
+        ],
+        "wrong": [
+          "Z12",
+          "Z13",
+          "Z14",
+          "Z15",
+          "Z16",
+          "Z17",
+          "Z18",
+          "Z19"
+        ]
+      }
+    ]
+  }
+}

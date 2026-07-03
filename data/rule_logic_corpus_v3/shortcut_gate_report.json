@@ -1,0 +1,15 @@
+{
+  "metrics": {
+    "answer_status_majority_accuracy_milli": 0,
+    "exact_lookup_accuracy_milli": 0,
+    "heldout_rows": 2400,
+    "markov_pairwise_accuracy_milli": 489,
+    "proof_rule_id_majority_accuracy_milli": 0,
+    "rows": 12000,
+    "source_group_majority_accuracy_milli": 0,
+    "surface_family_majority_accuracy_milli": 0,
+    "train_rows": 9600
+  },
+  "schema_version": "rule_logic_action_trace_shortcut_gate_v3",
+  "verdict": "VALID_ACTION_TRACE_OPERATOR_PRESSURE_CANDIDATE"
+}

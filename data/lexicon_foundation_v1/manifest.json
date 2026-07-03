@@ -1,0 +1,76 @@
+{
+  "version": "lexicon_foundation_v1",
+  "generated_by": "data/lexicon_foundation_v1/build_lexicon_foundation.py",
+  "purpose": "L1/L2 surface lexicon foundation, not semantic authority.",
+  "claim_boundary": {
+    "l1_surface_foundation": true,
+    "l2_motif_support": true,
+    "semantic_understanding": false,
+    "operator_memory": false,
+    "general_llm_ready": false
+  },
+  "sources": {
+    "ru": [
+      "russian_words_300k.txt",
+      "russian_words_full.txt",
+      "russian_words_danakt_full.txt"
+    ],
+    "en": [
+      "english_words_system_full.txt"
+    ]
+  },
+  "audit": {
+    "ru": [
+      {
+        "source": "russian_words_300k.txt",
+        "lines": 300000,
+        "accepted_added": 296387,
+        "rejected_by_filter": 3613,
+        "duplicate_against_previous": 0,
+        "unique_seen_after_source": 296387,
+        "unique_seen_before_source": 0
+      },
+      {
+        "source": "russian_words_full.txt",
+        "lines": 185269,
+        "accepted_added": 3613,
+        "rejected_by_filter": 3613,
+        "duplicate_against_previous": 104026,
+        "unique_seen_after_source": 300000,
+        "unique_seen_before_source": 296387
+      }
+    ],
+    "en": [
+      {
+        "source": "english_words_system_full.txt",
+        "lines": 75119,
+        "accepted_added": 74960,
+        "rejected_by_filter": 159,
+        "duplicate_against_previous": 0,
+        "unique_seen_after_source": 74960,
+        "unique_seen_before_source": 0
+      }
+    ]
+  },
+  "outputs": {
+    "ru_hot_100k.txt": {
+      "entries": 100000,
+      "sha256": "b6055c489332e85f903dd8981beeaed8201303a05c24b6300ca415c808d67bc1"
+    },
+    "ru_cold_300k.txt": {
+      "entries": 300000,
+      "sha256": "bddd8e96c7f8ba055ed99b9507ee1559db7a166f4bfb94c63286303f83beba3e"
+    },
+    "en_hot.txt": {
+      "entries": 74960,
+      "sha256": "9bea28b64082a78f20443d6dac5ea985fe6dc5a6828bc3ca2f7e328dc38bef66"
+    }
+  },
+  "rules": {
+    "ru": "strict lowercase Russian letters plus internal hyphen/apostrophe; extended Cyrillic letters are rejected for v1 hot/cold.",
+    "en": "strict lowercase Latin letters plus internal hyphen/apostrophe.",
+    "dedupe": "preserve first occurrence across sources.",
+    "hot": "first 100k accepted Russian entries.",
+    "cold": "first 300k accepted Russian entries."
+  }
+}

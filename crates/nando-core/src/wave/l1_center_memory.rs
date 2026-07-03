@@ -1,15 +1,15 @@
-//! L1 center memory over SurfaceWave 4-grams.
+//! L1 center memory over SurfaceWave atoms.
 //!
 //! This is the first layered-center storage proof. It does not store whole
-//! words as waves. It stores reusable local 4-gram/position centers, per-word
+//! words as waves. It stores reusable local surface-atom/position centers, per-word
 //! center-id sequences, and residual counts for rare surface pieces.
 
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::TAU;
 
 use super::{
-    SURFACE_WAVE_BYTES, SURFACE_WAVE_DIM, SURFACE_WAVE_NGRAM, SURFACE_WAVE_TRITS, SurfaceWave4096,
-    SurfaceWaveTrit, surface_ngram_projection,
+    SURFACE_WAVE_BYTES, SURFACE_WAVE_DIM, SURFACE_WAVE_TRITS, SurfaceWave4096, SurfaceWaveTrit,
+    surface_atom_projection, surface_atoms,
 };
 
 pub const L1_CENTER_RECORD_BYTES: usize = 32;
@@ -258,17 +258,14 @@ impl L1CenterMemory {
     }
 
     fn center_refs_for_word(&self, word: &str) -> WordRefs {
-        let bytes = word.as_bytes();
-        if bytes.len() < SURFACE_WAVE_NGRAM {
-            return WordRefs::default();
-        }
+        let atoms = surface_atoms(word);
 
-        let mut center_refs = Vec::with_capacity(bytes.len() - SURFACE_WAVE_NGRAM + 1);
+        let mut center_refs = Vec::with_capacity(atoms.len());
         let mut residual_ngrams = 0usize;
-        for (position, gram) in bytes.windows(SURFACE_WAVE_NGRAM).enumerate() {
+        for atom in &atoms {
             let key = L1CenterKey {
-                ngram_hash: stable_hash(gram),
-                position_code: position_code(position),
+                ngram_hash: stable_hash(&atom.bytes),
+                position_code: position_code(atom.position),
             };
             if let Some(center_id) = self.center_index.get(&key) {
                 center_refs.push(*center_id);
@@ -278,7 +275,7 @@ impl L1CenterMemory {
         }
 
         WordRefs {
-            ngram_count: bytes.len() - SURFACE_WAVE_NGRAM + 1,
+            ngram_count: atoms.len(),
             center_refs,
             residual_ngrams,
         }
@@ -451,16 +448,12 @@ where
 {
     let mut candidates: HashMap<L1CenterKey, CenterStats> = HashMap::new();
     for word in words {
-        let bytes = word.as_bytes();
-        if bytes.len() < SURFACE_WAVE_NGRAM {
-            continue;
-        }
-        for (position, gram) in bytes.windows(SURFACE_WAVE_NGRAM).enumerate() {
-            let trits = surface_ngram_projection(position as u64, gram);
+        for atom in surface_atoms(word) {
+            let trits = surface_atom_projection(atom.position, &atom.bytes);
             candidates
                 .entry(L1CenterKey {
-                    ngram_hash: stable_hash(gram),
-                    position_code: position_code(position),
+                    ngram_hash: stable_hash(&atom.bytes),
+                    position_code: position_code(atom.position),
                 })
                 .and_modify(|stats| stats.support += 1)
                 .or_insert(CenterStats { support: 1, trits });
@@ -586,7 +579,7 @@ fn cosine_similarity_i16(left: &[i16; SURFACE_WAVE_DIM], right: &[i16; SURFACE_W
     dot as f32 / ((left_energy as f32).sqrt() * (right_energy as f32).sqrt())
 }
 
-fn position_code(position: usize) -> u16 {
+fn position_code(position: u64) -> u16 {
     let low = (position as u16) & 0x3f;
     let block = ((position / 8) as u16) & 0x03ff;
     low | (block << 6)
@@ -655,5 +648,30 @@ mod tests {
         assert!(assignment.ngram_count > 0);
         assert!(assignment.center_hits > 0);
         assert!(assignment.reconstruction_similarity > 0.0);
+    }
+
+    #[test]
+    fn l1_center_memory_keeps_short_words_and_function_words_as_surface_atoms() {
+        let words = ["и", "в", "не", "сыч", "и", "в", "не", "сыч", "не работает"];
+        let memory = L1CenterMemory::build(
+            words.iter().copied(),
+            L1CenterMemoryConfig {
+                min_center_support: 1,
+                ..L1CenterMemoryConfig::default()
+            },
+        );
+
+        for word in ["и", "в", "не", "сыч"] {
+            let sequence = memory.center_sequence_for_word(word);
+            assert!(
+                sequence.ngram_count > 0,
+                "word={word} sequence={sequence:?}"
+            );
+            assert!(!sequence.center_refs.is_empty(), "word={word}");
+        }
+
+        let service = memory.center_sequence_for_word("и");
+        let content = memory.center_sequence_for_word("сыч");
+        assert_ne!(service.center_refs, content.center_refs);
     }
 }

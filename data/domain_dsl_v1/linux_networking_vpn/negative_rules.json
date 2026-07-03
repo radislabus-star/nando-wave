@@ -1,0 +1,198 @@
+{
+  "schema_version": "domain_dsl_v1",
+  "domain_id": "linux_networking_vpn",
+  "negative_rules": [
+    {
+      "negative_rule_id": "wrong_layer_dns_instead_route",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["evidence_to_route_scope"],
+      "description": "Treat a route-scope failure as DNS resolution even when the failing probe is direct IP reachability.",
+      "must_share_entities": ["internal_subnet", "allowed_ips"],
+      "must_flip": "route scope -> dns layer"
+    },
+    {
+      "negative_rule_id": "wrong_layer_route_instead_dns",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["evidence_to_dns_layer"],
+      "description": "Treat isolated internal-name failure as route failure even when direct IP reachability works.",
+      "must_share_entities": ["dns_resolver", "internal_domain"],
+      "must_flip": "dns layer -> route scope"
+    },
+    {
+      "negative_rule_id": "wrong_subject_acl",
+      "negative_type": "wrong_subject",
+      "target_operator_families": ["layer_separation_between_network_and_app_auth"],
+      "description": "Check the right ACL family but for the wrong user/resource subject.",
+      "must_share_entities": ["app_acl", "http_403"],
+      "must_flip": "same layer, wrong subject"
+    },
+    {
+      "negative_rule_id": "mtu_instead_keepalive",
+      "negative_type": "wrong_cause",
+      "target_operator_families": ["next_step_timeout_parameter_tuning"],
+      "description": "Use packet-size tuning when the observed evidence is keepalive/DPD timing.",
+      "must_share_entities": ["keepalive", "mtu"],
+      "must_flip": "timeout liveness -> packet size"
+    },
+    {
+      "negative_rule_id": "premature_certificate_replace",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["cause_sequence_to_auth_layer"],
+      "description": "Replace certificate when certificate evidence is healthy and auth timing is the active clue.",
+      "must_share_entities": ["certificate", "radius_server", "time_sync"],
+      "must_flip": "auth timing -> tls certificate"
+    },
+    {
+      "negative_rule_id": "overbroad_restart",
+      "negative_type": "too_broad_action",
+      "target_operator_families": ["minimal_change_before_restart"],
+      "description": "Restart broad services instead of applying a narrow bounded correction.",
+      "must_share_entities": ["service_restart"],
+      "must_flip": "bounded change -> broad mutation"
+    },
+    {
+      "negative_rule_id": "skip_snapshot",
+      "negative_type": "wrong_order",
+      "target_operator_families": ["config_snapshot_before_mutation"],
+      "description": "Mutate or block first and capture config/version baseline later.",
+      "must_share_entities": ["config_snapshot"],
+      "must_flip": "baseline first -> mutation first"
+    },
+    {
+      "negative_rule_id": "partial_rollout_before_gate",
+      "negative_type": "wrong_order",
+      "target_operator_families": ["completion_gate_in_rollout"],
+      "description": "Apply the next rollout step before completing the prerequisite gate.",
+      "must_share_entities": ["peer_profile"],
+      "must_flip": "finish prerequisite -> mixed rollout"
+    },
+    {
+      "negative_rule_id": "route_instead_firewall_port",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["firewall_vs_route_disambiguation"],
+      "description": "Repair general route when evidence isolates a TCP-port filter.",
+      "must_share_entities": ["firewall_acl", "tcp_port_443"],
+      "must_flip": "port ACL -> route"
+    },
+    {
+      "negative_rule_id": "answer_without_runtime_evidence",
+      "negative_type": "premature_answer",
+      "target_operator_families": ["refusal_when_exposure_evidence_underfilled"],
+      "description": "Assert exposed/safe status without runtime socket/firewall/bind evidence.",
+      "must_share_entities": ["firewall_acl", "route_table"],
+      "must_flip": "underfilled refusal -> unsupported assertion"
+    },
+    {
+      "negative_rule_id": "wrong_daemon_instead_link",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["interface_state_to_link_layer"],
+      "description": "Debug the daemon or credentials while ignoring that the expected network interface is down or absent.",
+      "must_share_entities": ["network_interface"],
+      "must_flip": "link state -> daemon or credential layer"
+    },
+    {
+      "negative_rule_id": "wrong_link_instead_daemon",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["service_state_to_daemon_layer"],
+      "description": "Edit route/link settings while the service logs show the daemon never started.",
+      "must_share_entities": ["journal_log", "network_interface"],
+      "must_flip": "daemon startup -> link or route tuning"
+    },
+    {
+      "negative_rule_id": "route_instead_nat_return",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["nat_masquerade_for_return_path"],
+      "description": "Add or duplicate forward routes when return-path NAT or explicit return routing is missing.",
+      "must_share_entities": ["nat_masquerade", "route_table"],
+      "must_flip": "return path translation -> forward route"
+    },
+    {
+      "negative_rule_id": "main_table_instead_policy_table",
+      "negative_type": "wrong_scope",
+      "target_operator_families": ["policy_routing_table_selection"],
+      "description": "Rewrite the main routing table while policy rules select a different table for the traffic.",
+      "must_share_entities": ["policy_rule", "routing_table_id"],
+      "must_flip": "selected policy table -> main table"
+    },
+    {
+      "negative_rule_id": "firewall_instead_rp_filter",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["reverse_path_filter_asymmetry"],
+      "description": "Treat reverse-path filtering drops as ordinary firewall ACL drops.",
+      "must_share_entities": ["rp_filter", "firewall_acl"],
+      "must_flip": "kernel reverse path filter -> firewall ACL"
+    },
+    {
+      "negative_rule_id": "keepalive_instead_mss_clamp",
+      "negative_type": "wrong_cause",
+      "target_operator_families": ["mss_clamp_for_blackhole_mtu"],
+      "description": "Tune keepalive when the evidence says only large TCP packets hang.",
+      "must_share_entities": ["tcp_mss_clamp", "keepalive"],
+      "must_flip": "packet size blackhole -> liveness timeout"
+    },
+    {
+      "negative_rule_id": "restart_instead_endpoint_update",
+      "negative_type": "too_broad_action",
+      "target_operator_families": ["endpoint_roaming_to_peer_endpoint_update"],
+      "description": "Restart the VPN or widen AllowedIPs instead of updating the stale peer endpoint.",
+      "must_share_entities": ["peer_endpoint", "service_restart"],
+      "must_flip": "stale endpoint -> broad restart or route scope"
+    },
+    {
+      "negative_rule_id": "global_dns_instead_split_dns",
+      "negative_type": "wrong_scope",
+      "target_operator_families": ["systemd_resolved_split_dns"],
+      "description": "Replace global DNS when the failure is link-scoped split DNS for the VPN.",
+      "must_share_entities": ["systemd_resolved", "dns_resolver"],
+      "must_flip": "link-scoped DNS -> global DNS"
+    },
+    {
+      "negative_rule_id": "resolver_instead_search_suffix",
+      "negative_type": "wrong_field",
+      "target_operator_families": ["dns_search_suffix_scope"],
+      "description": "Change resolver IP when FQDN works and only short-name search suffix is missing.",
+      "must_share_entities": ["dns_search_suffix", "dns_resolver"],
+      "must_flip": "search suffix -> resolver IP"
+    },
+    {
+      "negative_rule_id": "single_side_capture_conclusion",
+      "negative_type": "evidence_overreach",
+      "target_operator_families": ["packet_capture_to_path_direction"],
+      "description": "Infer full route/NAT/firewall causality from a single capture point.",
+      "must_share_entities": ["packet_capture"],
+      "must_flip": "directional evidence boundary -> full causality"
+    },
+    {
+      "negative_rule_id": "route_exposure_without_socket_bind",
+      "negative_type": "premature_answer",
+      "target_operator_families": ["socket_bind_scope_exposure"],
+      "description": "Judge exposure from route/firewall alone while ignoring socket bind address.",
+      "must_share_entities": ["ss_socket", "bind_address"],
+      "must_flip": "socket bind scope -> route-only exposure"
+    },
+    {
+      "negative_rule_id": "route_or_dns_instead_key_mismatch",
+      "negative_type": "wrong_layer",
+      "target_operator_families": ["key_mismatch_to_peer_credential"],
+      "description": "Repair route or DNS when handshake evidence points to peer credential mismatch.",
+      "must_share_entities": ["private_key", "preshared_key"],
+      "must_flip": "credential mismatch -> route or DNS"
+    },
+    {
+      "negative_rule_id": "input_chain_instead_forward_chain",
+      "negative_type": "wrong_scope",
+      "target_operator_families": ["firewall_forward_chain_vs_input_chain"],
+      "description": "Change INPUT policy for traffic that is forwarded through the VPN host.",
+      "must_share_entities": ["forward_chain", "input_chain"],
+      "must_flip": "forwarded traffic -> local input traffic"
+    },
+    {
+      "negative_rule_id": "continue_after_failed_smoke",
+      "negative_type": "wrong_order",
+      "target_operator_families": ["rollback_when_change_regresses_smoke"],
+      "description": "Stack another change after a failed smoke test instead of rollback or isolation.",
+      "must_share_entities": ["smoke_test", "config_snapshot"],
+      "must_flip": "rollback/isolate -> keep changing"
+    }
+  ]
+}

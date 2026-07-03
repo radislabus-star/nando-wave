@@ -12,3 +12,6 @@
 # Python build/test noise
 __pycache__/
 *.py[cod]
+
+# Installed/vendored Codex skills live outside this repo.
+/skills/nanda-structural-gate/

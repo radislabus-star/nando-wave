@@ -1,0 +1,48 @@
+{
+  "class_metrics": {
+    "conditional": {
+      "bag_of_tokens_accuracy_milli": 500,
+      "bayesian_cooccurrence_pairwise_accuracy_milli": 500,
+      "edit_candidate_overlap_milli": 0,
+      "exact_lookup_accuracy_milli": 0,
+      "heldout_rows": 192,
+      "l2_neighbor_target_copy_accuracy_milli": 0,
+      "length_only_accuracy_milli": 0,
+      "markov_bigram_pairwise_accuracy_milli": 500,
+      "operator_class_majority_accuracy_milli": 0,
+      "operator_slots_non_order_count": 0,
+      "output_position_prior_accuracy_milli": 21,
+      "proof_rule_family_majority_accuracy_milli": 0,
+      "proof_rule_id_majority_accuracy_milli": 0,
+      "rows": 576,
+      "same_bag_derangement_milli": 1000,
+      "surface_family_majority_accuracy_milli": 0,
+      "train_rows": 384
+    }
+  },
+  "class_verdicts": {
+    "conditional": "VALID_OPERATOR_BATTERY_V4_CANDIDATE"
+  },
+  "overall_metrics": {
+    "bag_of_tokens_accuracy_milli": 500,
+    "bayesian_cooccurrence_pairwise_accuracy_milli": 500,
+    "edit_candidate_overlap_milli": 0,
+    "exact_lookup_accuracy_milli": 0,
+    "heldout_rows": 192,
+    "l2_neighbor_target_copy_accuracy_milli": 0,
+    "length_only_accuracy_milli": 0,
+    "markov_bigram_pairwise_accuracy_milli": 500,
+    "operator_class_majority_accuracy_milli": 0,
+    "operator_slots_non_order_count": 0,
+    "output_position_prior_accuracy_milli": 21,
+    "proof_rule_family_majority_accuracy_milli": 0,
+    "proof_rule_id_majority_accuracy_milli": 0,
+    "rows": 576,
+    "same_bag_derangement_milli": 1000,
+    "surface_family_majority_accuracy_milli": 0,
+    "train_rows": 384
+  },
+  "schema_version": "operator_battery_shortcut_gate_v4",
+  "tasks": "/home/ubu/projects/nando-wave/data/rule_logic_operator_battery_v4/diagnostics/conditional_noise_isolation/seed_001/instruction_noise/accepted_operator_tasks_v4.jsonl",
+  "verdict": "VALID_OPERATOR_BATTERY_V4_CANDIDATE"
+}

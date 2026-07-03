@@ -1,0 +1,58 @@
+{
+  "schema_version": "wave_shortcut_gate_report_v1",
+  "corpus": "data/task_candidates/linux_networking_vpn_compact_v1/generated_wave_task_v2.jsonl",
+  "quality_status": "candidate",
+  "accepted_training_tasks": 0,
+  "thresholds": {
+    "exact_lookup_max_milli": 20,
+    "l2_neighbor_max_milli": 200,
+    "bayesian_pairwise_max_milli": 700,
+    "markov_bigram_max_milli": 700,
+    "target_leak_max_milli": 200,
+    "single_token_max_milli": 250,
+    "near_negative_min_milli": 120
+  },
+  "heldout_groups": [
+    "vpn_app_auth",
+    "vpn_dns_suffix",
+    "vpn_key_binding",
+    "vpn_policy_routing",
+    "vpn_safe_change"
+  ],
+  "task_kinds_list": [
+    "procedure_next_step",
+    "qa_context",
+    "refusal_no_answer"
+  ],
+  "metrics": {
+    "tasks_total": 24,
+    "train_tasks": 19,
+    "heldout_tasks": 5,
+    "source_groups": 24,
+    "heldout_source_groups": 5,
+    "task_kinds": 3,
+    "exact_lookup_accuracy_milli": 0,
+    "l2_neighbor_accuracy_milli": 0,
+    "bayesian_pairwise_accuracy_milli": 600,
+    "markov_bigram_accuracy_milli": 400,
+    "target_leak_milli": 0,
+    "near_negative_similarity_milli": 487,
+    "single_token_ratio_milli": 0
+  },
+  "verdict": "VALID_OPERATOR_PRESSURE_CANDIDATE",
+  "useful_task_yield": {
+    "method": "corpus_level_shortcut_gate_v1",
+    "candidate_tasks": 24,
+    "useful_candidate_tasks": 24,
+    "useful_task_yield_milli": 1000,
+    "target_yield_milli": 300
+  },
+  "boundary": {
+    "gates_run": true,
+    "candidate_only": true,
+    "not_runtime_authority": true,
+    "not_training_acceptance": true,
+    "step_8_done": true,
+    "step_9_required_for_accepted_training_scale": true
+  }
+}

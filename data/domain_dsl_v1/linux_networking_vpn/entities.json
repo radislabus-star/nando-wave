@@ -1,0 +1,342 @@
+{
+  "schema_version": "domain_dsl_v1",
+  "domain_id": "linux_networking_vpn",
+  "entities": [
+    {
+      "entity_id": "vpn_tunnel",
+      "entity_type": "component",
+      "surface_ru": ["VPN-туннель", "туннель", "VPN"],
+      "surface_en": ["vpn tunnel", "vpn"],
+      "tags": ["vpn", "connectivity"]
+    },
+    {
+      "entity_id": "peer_profile",
+      "entity_type": "config_object",
+      "surface_ru": ["профиль пира", "профиль клиента", "peer profile"],
+      "surface_en": ["peer profile", "client profile"],
+      "tags": ["vpn", "config"]
+    },
+    {
+      "entity_id": "allowed_ips",
+      "entity_type": "config_field",
+      "surface_ru": ["AllowedIPs", "разрешенные сети", "список туннельных сетей"],
+      "surface_en": ["AllowedIPs", "allowed networks"],
+      "tags": ["vpn", "routing", "scope"]
+    },
+    {
+      "entity_id": "route_table",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["таблица маршрутов", "ip route", "маршрут"],
+      "surface_en": ["route table", "ip route", "route"],
+      "tags": ["routing", "runtime"]
+    },
+    {
+      "entity_id": "default_gateway",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["default gateway", "шлюз по умолчанию", "default route"],
+      "surface_en": ["default gateway", "default route"],
+      "tags": ["routing", "gateway"]
+    },
+    {
+      "entity_id": "internal_subnet",
+      "entity_type": "network_object",
+      "surface_ru": ["внутренняя подсеть", "частная сеть", "сеть офиса"],
+      "surface_en": ["internal subnet", "private subnet"],
+      "tags": ["routing", "private_network"]
+    },
+    {
+      "entity_id": "dns_resolver",
+      "entity_type": "service",
+      "surface_ru": ["DNS resolver", "резолвер", "DNS-сервер"],
+      "surface_en": ["dns resolver", "dns server"],
+      "tags": ["dns", "resolution"]
+    },
+    {
+      "entity_id": "internal_domain",
+      "entity_type": "namespace",
+      "surface_ru": ["внутренняя зона", "internal domain", "локальный домен"],
+      "surface_en": ["internal domain", "internal zone"],
+      "tags": ["dns", "namespace"]
+    },
+    {
+      "entity_id": "firewall_acl",
+      "entity_type": "policy",
+      "surface_ru": ["firewall ACL", "правило firewall", "сетевой ACL"],
+      "surface_en": ["firewall acl", "firewall rule"],
+      "tags": ["firewall", "policy"]
+    },
+    {
+      "entity_id": "app_acl",
+      "entity_type": "policy",
+      "surface_ru": ["ACL приложения", "права пользователя", "доменная политика"],
+      "surface_en": ["application acl", "user permissions", "domain policy"],
+      "tags": ["authorization", "application"]
+    },
+    {
+      "entity_id": "radius_server",
+      "entity_type": "service",
+      "surface_ru": ["RADIUS", "RADIUS-сервер", "сервер авторизации"],
+      "surface_en": ["radius", "radius server"],
+      "tags": ["auth", "2fa"]
+    },
+    {
+      "entity_id": "certificate",
+      "entity_type": "credential",
+      "surface_ru": ["сертификат", "TLS-сертификат", "серверный сертификат"],
+      "surface_en": ["certificate", "tls certificate"],
+      "tags": ["tls", "auth"]
+    },
+    {
+      "entity_id": "time_sync",
+      "entity_type": "condition",
+      "surface_ru": ["синхронизация времени", "NTP", "рассинхронизация"],
+      "surface_en": ["time sync", "ntp", "clock drift"],
+      "tags": ["time", "auth"]
+    },
+    {
+      "entity_id": "keepalive",
+      "entity_type": "config_field",
+      "surface_ru": ["keepalive", "DPD", "ping-timeout", "ping-interval"],
+      "surface_en": ["keepalive", "dpd", "ping-timeout", "ping-interval"],
+      "tags": ["vpn", "timeout"]
+    },
+    {
+      "entity_id": "mtu",
+      "entity_type": "config_field",
+      "surface_ru": ["MTU", "MSS", "фрагментация"],
+      "surface_en": ["mtu", "mss", "fragmentation"],
+      "tags": ["transport", "packet_size"]
+    },
+    {
+      "entity_id": "split_tunnel",
+      "entity_type": "config_mode",
+      "surface_ru": ["split tunneling", "split tunnel", "раздельная маршрутизация"],
+      "surface_en": ["split tunneling", "split tunnel"],
+      "tags": ["vpn", "routing", "scope"]
+    },
+    {
+      "entity_id": "tcp_port_443",
+      "entity_type": "probe_target",
+      "surface_ru": ["порт 443", "TCP 443", "https-порт"],
+      "surface_en": ["port 443", "tcp 443", "https port"],
+      "tags": ["tcp", "probe"]
+    },
+    {
+      "entity_id": "http_403",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["403", "HTTP 403", "доступ запрещен"],
+      "surface_en": ["403", "http 403", "forbidden"],
+      "tags": ["http", "authorization"]
+    },
+    {
+      "entity_id": "ping_probe",
+      "entity_type": "probe",
+      "surface_ru": ["ping", "пинг", "ICMP"],
+      "surface_en": ["ping", "icmp"],
+      "tags": ["probe", "reachability"]
+    },
+    {
+      "entity_id": "curl_probe",
+      "entity_type": "probe",
+      "surface_ru": ["curl", "HTTP-проверка", "запрос curl"],
+      "surface_en": ["curl", "http probe"],
+      "tags": ["probe", "http"]
+    },
+    {
+      "entity_id": "config_snapshot",
+      "entity_type": "evidence_record",
+      "surface_ru": ["снимок конфига", "backup config", "архив конфигурации"],
+      "surface_en": ["config snapshot", "config backup"],
+      "tags": ["change_control", "evidence"]
+    },
+    {
+      "entity_id": "service_restart",
+      "entity_type": "action",
+      "surface_ru": ["перезапуск сервиса", "restart service", "systemctl restart"],
+      "surface_en": ["service restart", "systemctl restart"],
+      "tags": ["action", "blast_radius"]
+    },
+    {
+      "entity_id": "client_device",
+      "entity_type": "actor_node",
+      "surface_ru": ["клиент", "устройство клиента", "рабочая станция"],
+      "surface_en": ["client", "client device", "workstation"],
+      "tags": ["endpoint", "actor"]
+    },
+    {
+      "entity_id": "server_peer",
+      "entity_type": "actor_node",
+      "surface_ru": ["сервер", "VPN-сервер", "server peer"],
+      "surface_en": ["server", "vpn server", "server peer"],
+      "tags": ["server", "actor"]
+    },
+    {
+      "entity_id": "network_interface",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["сетевой интерфейс", "link", "ip link"],
+      "surface_en": ["network interface", "link", "ip link"],
+      "tags": ["interface", "link_layer"]
+    },
+    {
+      "entity_id": "wg_interface",
+      "entity_type": "vpn_interface",
+      "surface_ru": ["wg0", "WireGuard interface", "wireguard-интерфейс"],
+      "surface_en": ["wg0", "wireguard interface"],
+      "tags": ["wireguard", "interface"]
+    },
+    {
+      "entity_id": "openvpn_service",
+      "entity_type": "service",
+      "surface_ru": ["OpenVPN service", "openvpn", "openvpn@server"],
+      "surface_en": ["openvpn service", "openvpn"],
+      "tags": ["openvpn", "service"]
+    },
+    {
+      "entity_id": "wireguard_handshake",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["handshake", "последний handshake", "latest handshake"],
+      "surface_en": ["handshake", "latest handshake"],
+      "tags": ["wireguard", "liveness"]
+    },
+    {
+      "entity_id": "peer_endpoint",
+      "entity_type": "network_object",
+      "surface_ru": ["endpoint", "адрес пира", "peer endpoint"],
+      "surface_en": ["endpoint", "peer endpoint"],
+      "tags": ["vpn", "peer", "address"]
+    },
+    {
+      "entity_id": "public_ip",
+      "entity_type": "network_object",
+      "surface_ru": ["публичный IP", "public IP", "внешний адрес"],
+      "surface_en": ["public ip", "external address"],
+      "tags": ["internet", "address"]
+    },
+    {
+      "entity_id": "nat_masquerade",
+      "entity_type": "policy",
+      "surface_ru": ["NAT masquerade", "masquerade", "SNAT"],
+      "surface_en": ["nat masquerade", "masquerade", "snat"],
+      "tags": ["nat", "return_path"]
+    },
+    {
+      "entity_id": "forward_chain",
+      "entity_type": "policy",
+      "surface_ru": ["FORWARD chain", "цепочка FORWARD", "forward policy"],
+      "surface_en": ["forward chain", "forward policy"],
+      "tags": ["firewall", "forwarding"]
+    },
+    {
+      "entity_id": "input_chain",
+      "entity_type": "policy",
+      "surface_ru": ["INPUT chain", "цепочка INPUT", "input policy"],
+      "surface_en": ["input chain", "input policy"],
+      "tags": ["firewall", "local_socket"]
+    },
+    {
+      "entity_id": "policy_rule",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["ip rule", "policy routing rule", "правило policy routing"],
+      "surface_en": ["ip rule", "policy routing rule"],
+      "tags": ["routing", "policy"]
+    },
+    {
+      "entity_id": "routing_table_id",
+      "entity_type": "config_object",
+      "surface_ru": ["таблица маршрутизации", "table 100", "routing table id"],
+      "surface_en": ["routing table", "table id"],
+      "tags": ["routing", "policy"]
+    },
+    {
+      "entity_id": "rp_filter",
+      "entity_type": "kernel_setting",
+      "surface_ru": ["rp_filter", "reverse path filter", "фильтр обратного пути"],
+      "surface_en": ["rp_filter", "reverse path filter"],
+      "tags": ["kernel", "asymmetry"]
+    },
+    {
+      "entity_id": "tcp_mss_clamp",
+      "entity_type": "config_field",
+      "surface_ru": ["MSS clamp", "TCPMSS", "clamp-mss-to-pmtu"],
+      "surface_en": ["mss clamp", "tcpmss", "clamp-mss-to-pmtu"],
+      "tags": ["transport", "mtu"]
+    },
+    {
+      "entity_id": "packet_capture",
+      "entity_type": "evidence_record",
+      "surface_ru": ["tcpdump", "pcap", "сниффер"],
+      "surface_en": ["tcpdump", "pcap", "packet capture"],
+      "tags": ["evidence", "packet_path"]
+    },
+    {
+      "entity_id": "ss_socket",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["ss -lntup", "слушающий сокет", "listening socket"],
+      "surface_en": ["ss -lntup", "listening socket"],
+      "tags": ["socket", "bind"]
+    },
+    {
+      "entity_id": "bind_address",
+      "entity_type": "runtime_evidence",
+      "surface_ru": ["bind address", "0.0.0.0", "127.0.0.1"],
+      "surface_en": ["bind address", "0.0.0.0", "127.0.0.1"],
+      "tags": ["socket", "exposure"]
+    },
+    {
+      "entity_id": "journal_log",
+      "entity_type": "evidence_record",
+      "surface_ru": ["journalctl", "лог сервиса", "systemd journal"],
+      "surface_en": ["journalctl", "service log", "systemd journal"],
+      "tags": ["logs", "service"]
+    },
+    {
+      "entity_id": "systemd_resolved",
+      "entity_type": "service",
+      "surface_ru": ["systemd-resolved", "resolvectl", "resolved"],
+      "surface_en": ["systemd-resolved", "resolvectl", "resolved"],
+      "tags": ["dns", "linux"]
+    },
+    {
+      "entity_id": "resolv_conf",
+      "entity_type": "config_object",
+      "surface_ru": ["resolv.conf", "/etc/resolv.conf", "конфиг DNS"],
+      "surface_en": ["resolv.conf", "/etc/resolv.conf"],
+      "tags": ["dns", "config"]
+    },
+    {
+      "entity_id": "dns_search_suffix",
+      "entity_type": "config_field",
+      "surface_ru": ["search suffix", "DNS suffix", "поисковый домен"],
+      "surface_en": ["search suffix", "dns suffix", "search domain"],
+      "tags": ["dns", "namespace"]
+    },
+    {
+      "entity_id": "private_key",
+      "entity_type": "credential",
+      "surface_ru": ["private key", "приватный ключ", "секретный ключ"],
+      "surface_en": ["private key", "secret key"],
+      "tags": ["credential", "vpn"]
+    },
+    {
+      "entity_id": "preshared_key",
+      "entity_type": "credential",
+      "surface_ru": ["preshared key", "PSK", "предварительный ключ"],
+      "surface_en": ["preshared key", "psk"],
+      "tags": ["credential", "vpn"]
+    },
+    {
+      "entity_id": "user_account",
+      "entity_type": "actor_identity",
+      "surface_ru": ["пользователь", "учетная запись", "user account"],
+      "surface_en": ["user", "user account"],
+      "tags": ["identity", "auth"]
+    },
+    {
+      "entity_id": "smoke_test",
+      "entity_type": "procedure_evidence",
+      "surface_ru": ["smoke test", "контрольная проверка", "проверка после изменения"],
+      "surface_en": ["smoke test", "post-change check"],
+      "tags": ["procedure", "verification"]
+    }
+  ]
+}

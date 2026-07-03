@@ -1,0 +1,371 @@
+{
+  "schema_version": "phase_center_operator_probe_v1",
+  "diagnostic_only": true,
+  "verdict": "PHASE_CENTER_OPERATOR_PROBE_WATCH",
+  "method": "transition_relation_waves_to_circular_center_of_mass",
+  "not_used": [
+    "proof_rule_id as key",
+    "source_group as key",
+    "task_id",
+    "state_after_correct text",
+    "state_after_wrong text",
+    "epoch repair",
+    "explicit out<-src program extraction"
+  ],
+  "claim_boundary": [
+    "This is a phase/center-mass diagnostic, not a production Wave runtime proof.",
+    "It tests whether candidate transition relation waves cluster around an operator center.",
+    "It does not prove semantic grokking.",
+    "A stronger next step must compile the phase centers into Wave field/readout weights and run flat parity/ablations."
+  ],
+  "action_key_center": {
+    "key_mode": "action",
+    "cells": 16,
+    "train_rows": 5312,
+    "heldout_rows": 5312,
+    "compiled_phase_centers": 380,
+    "skipped_train_rows": 0,
+    "missing_heldout_centers": 0,
+    "skipped_eval_rows": 0,
+    "wrong_wins": 1,
+    "heldout_correct_rows": 5311,
+    "heldout_accuracy_milli": 1000,
+    "median_margin": 0.745695339668544,
+    "p10_margin": 0.24661838083430487,
+    "median_positive_center_gap": 0.5309988081981409,
+    "p10_positive_center_gap": 0.16924771234438507,
+    "by_class": {
+      "composed": {
+        "rows": 960,
+        "correct": 960
+      },
+      "conditional": {
+        "rows": 768,
+        "correct": 768
+      },
+      "edit": {
+        "rows": 1536,
+        "correct": 1536
+      },
+      "order": {
+        "rows": 2048,
+        "correct": 2047,
+        "wrong_wins": 1
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "network": {
+        "rows": 1328,
+        "correct": 1327,
+        "wrong_wins": 1
+      },
+      "ru_words": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "symbols": {
+        "rows": 1328,
+        "correct": 1328
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 1328,
+        "correct": 1327,
+        "wrong_wins": 1
+      },
+      "distractor": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "instruction_noise": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "prefix_suffix": {
+        "rows": 1328,
+        "correct": 1328
+      }
+    },
+    "failure_examples": [
+      {
+        "task_id": "opbat_v4_s000_order_0003596",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 15,
+        "surface_family": "network",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      }
+    ]
+  },
+  "no_action_key_ablation": {
+    "key_mode": "class_length",
+    "cells": 16,
+    "train_rows": 5312,
+    "heldout_rows": 5312,
+    "compiled_phase_centers": 40,
+    "skipped_train_rows": 0,
+    "missing_heldout_centers": 0,
+    "skipped_eval_rows": 0,
+    "wrong_wins": 1392,
+    "heldout_correct_rows": 3920,
+    "heldout_accuracy_milli": 738,
+    "median_margin": 0.0653235034646582,
+    "p10_margin": -0.09012227514485927,
+    "median_positive_center_gap": 0.052933938547411796,
+    "p10_positive_center_gap": -0.30224827324420545,
+    "by_class": {
+      "composed": {
+        "rows": 960,
+        "correct": 758,
+        "wrong_wins": 202
+      },
+      "conditional": {
+        "rows": 768,
+        "correct": 644,
+        "wrong_wins": 124
+      },
+      "edit": {
+        "rows": 1536,
+        "wrong_wins": 544,
+        "correct": 992
+      },
+      "order": {
+        "rows": 2048,
+        "wrong_wins": 522,
+        "correct": 1526
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 1328,
+        "correct": 988,
+        "wrong_wins": 340
+      },
+      "network": {
+        "rows": 1328,
+        "correct": 982,
+        "wrong_wins": 346
+      },
+      "ru_words": {
+        "rows": 1328,
+        "wrong_wins": 349,
+        "correct": 979
+      },
+      "symbols": {
+        "rows": 1328,
+        "wrong_wins": 357,
+        "correct": 971
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 1328,
+        "wrong_wins": 337,
+        "correct": 991
+      },
+      "distractor": {
+        "rows": 1328,
+        "correct": 991,
+        "wrong_wins": 337
+      },
+      "instruction_noise": {
+        "rows": 1328,
+        "correct": 972,
+        "wrong_wins": 356
+      },
+      "prefix_suffix": {
+        "rows": 1328,
+        "correct": 966,
+        "wrong_wins": 362
+      }
+    },
+    "failure_examples": [
+      {
+        "task_id": "opbat_v4_s000_order_0002048",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002052",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002053",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002054",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002057",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002061",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002062",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002063",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002065",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002066",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002067",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002068",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002069",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002070",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002071",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002072",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002074",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002075",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002076",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002077",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      }
+    ]
+  }
+}

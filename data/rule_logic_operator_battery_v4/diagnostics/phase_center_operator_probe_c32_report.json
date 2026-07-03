@@ -1,0 +1,358 @@
+{
+  "schema_version": "phase_center_operator_probe_v1",
+  "diagnostic_only": true,
+  "verdict": "PHASE_CENTER_OPERATOR_PROBE_PASS",
+  "method": "transition_relation_waves_to_circular_center_of_mass",
+  "not_used": [
+    "proof_rule_id as key",
+    "source_group as key",
+    "task_id",
+    "state_after_correct text",
+    "state_after_wrong text",
+    "epoch repair",
+    "explicit out<-src program extraction"
+  ],
+  "claim_boundary": [
+    "This is a phase/center-mass diagnostic, not a production Wave runtime proof.",
+    "It tests whether candidate transition relation waves cluster around an operator center.",
+    "It does not prove semantic grokking.",
+    "A stronger next step must compile the phase centers into Wave field/readout weights and run flat parity/ablations."
+  ],
+  "action_key_center": {
+    "key_mode": "action",
+    "cells": 32,
+    "train_rows": 5312,
+    "heldout_rows": 5312,
+    "compiled_phase_centers": 380,
+    "skipped_train_rows": 0,
+    "missing_heldout_centers": 0,
+    "skipped_eval_rows": 0,
+    "wrong_wins": 0,
+    "heldout_correct_rows": 5312,
+    "heldout_accuracy_milli": 1000,
+    "median_margin": 0.7671086343467859,
+    "p10_margin": 0.31296456160384245,
+    "median_positive_center_gap": 0.5371499772933495,
+    "p10_positive_center_gap": 0.2429922099424453,
+    "by_class": {
+      "composed": {
+        "rows": 960,
+        "correct": 960
+      },
+      "conditional": {
+        "rows": 768,
+        "correct": 768
+      },
+      "edit": {
+        "rows": 1536,
+        "correct": 1536
+      },
+      "order": {
+        "rows": 2048,
+        "correct": 2048
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "network": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "ru_words": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "symbols": {
+        "rows": 1328,
+        "correct": 1328
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "distractor": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "instruction_noise": {
+        "rows": 1328,
+        "correct": 1328
+      },
+      "prefix_suffix": {
+        "rows": 1328,
+        "correct": 1328
+      }
+    },
+    "failure_examples": []
+  },
+  "no_action_key_ablation": {
+    "key_mode": "class_length",
+    "cells": 32,
+    "train_rows": 5312,
+    "heldout_rows": 5312,
+    "compiled_phase_centers": 40,
+    "skipped_train_rows": 0,
+    "missing_heldout_centers": 0,
+    "skipped_eval_rows": 0,
+    "wrong_wins": 1156,
+    "heldout_correct_rows": 4156,
+    "heldout_accuracy_milli": 782,
+    "median_margin": 0.07706384517049986,
+    "p10_margin": -0.06654306505343488,
+    "median_positive_center_gap": 0.0672364967487794,
+    "p10_positive_center_gap": -0.27886515946948676,
+    "by_class": {
+      "composed": {
+        "rows": 960,
+        "correct": 801,
+        "wrong_wins": 159
+      },
+      "conditional": {
+        "rows": 768,
+        "correct": 705,
+        "wrong_wins": 63
+      },
+      "edit": {
+        "rows": 1536,
+        "wrong_wins": 512,
+        "correct": 1024
+      },
+      "order": {
+        "rows": 2048,
+        "wrong_wins": 422,
+        "correct": 1626
+      }
+    },
+    "by_surface": {
+      "business": {
+        "rows": 1328,
+        "correct": 1051,
+        "wrong_wins": 277
+      },
+      "network": {
+        "rows": 1328,
+        "correct": 1040,
+        "wrong_wins": 288
+      },
+      "ru_words": {
+        "rows": 1328,
+        "correct": 1022,
+        "wrong_wins": 306
+      },
+      "symbols": {
+        "rows": 1328,
+        "wrong_wins": 285,
+        "correct": 1043
+      }
+    },
+    "by_noise": {
+      "clean": {
+        "rows": 1328,
+        "wrong_wins": 274,
+        "correct": 1054
+      },
+      "distractor": {
+        "rows": 1328,
+        "correct": 1046,
+        "wrong_wins": 282
+      },
+      "instruction_noise": {
+        "rows": 1328,
+        "correct": 1028,
+        "wrong_wins": 300
+      },
+      "prefix_suffix": {
+        "rows": 1328,
+        "correct": 1028,
+        "wrong_wins": 300
+      }
+    },
+    "failure_examples": [
+      {
+        "task_id": "opbat_v4_s000_order_0002048",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002057",
+        "operator_class": "order",
+        "proof_rule_family": "full_mirror",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002065",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002066",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002067",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002068",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002069",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002070",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002071",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002074",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002075",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002076",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002077",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002078",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002079",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_left_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002080",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_right_1",
+        "sequence_length": 9,
+        "surface_family": "symbols",
+        "noise_type": "clean",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002086",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_right_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "distractor",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002087",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_right_1",
+        "sequence_length": 9,
+        "surface_family": "ru_words",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002089",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_right_1",
+        "sequence_length": 9,
+        "surface_family": "business",
+        "noise_type": "prefix_suffix",
+        "outcome": "wrong_wins"
+      },
+      {
+        "task_id": "opbat_v4_s000_order_0002095",
+        "operator_class": "order",
+        "proof_rule_family": "rotate_right_1",
+        "sequence_length": 9,
+        "surface_family": "network",
+        "noise_type": "instruction_noise",
+        "outcome": "wrong_wins"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "metrics": {
+    "exact_lookup_accuracy_milli": 0,
+    "heldout_rows": 2400,
+    "markov_choice_accuracy_milli": 486,
+    "rows": 12000,
+    "rule_id_majority_accuracy_milli": 0,
+    "source_group_majority_accuracy_milli": 6,
+    "surface_majority_accuracy_milli": 30,
+    "target_in_input_milli": 800,
+    "target_negative_jaccard_milli": 175,
+    "train_rows": 9600
+  },
+  "schema_version": "rule_logic_shortcut_gate_report_v1",
+  "verdict": "VALID_RULE_OPERATOR_PRESSURE_CANDIDATE"
+}

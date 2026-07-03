@@ -1,0 +1,61 @@
+{
+  "schema_version": "operator_battery_v4_seed2_order_density_runtime_summary_v1",
+  "target_rule": "order_block_reverse_4_len13",
+  "classification": "data_weight_sparsity_under_local_multi_role_collision_pressure",
+  "baseline": {
+    "factor": 1,
+    "target_rule_train_rows": 16,
+    "order_energy_pass_slot_fail": 1,
+    "order_output_slot_cleanup_failed_slots": 1,
+    "slot_failure_total": 1,
+    "result": "RED"
+  },
+  "tested_factors": [
+    {
+      "factor": 2,
+      "target_rule_train_rows": 32,
+      "duplicated_train_rows": 16,
+      "order_slot_ordered_sequence_accuracy_milli": 1000,
+      "order_sequence_energy_accuracy_milli": 1000,
+      "order_energy_pass_slot_fail": 0,
+      "order_output_slot_cleanup_failed_slots": 0,
+      "slot_failure_total": 0,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "forbidden_flags": false,
+      "result": "GREEN"
+    },
+    {
+      "factor": 4,
+      "target_rule_train_rows": 64,
+      "duplicated_train_rows": 48,
+      "order_slot_ordered_sequence_accuracy_milli": 1000,
+      "order_sequence_energy_accuracy_milli": 1000,
+      "order_energy_pass_slot_fail": 0,
+      "order_output_slot_cleanup_failed_slots": 0,
+      "slot_failure_total": 0,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "forbidden_flags": false,
+      "result": "GREEN"
+    },
+    {
+      "factor": 16,
+      "target_rule_train_rows": 256,
+      "duplicated_train_rows": 240,
+      "order_slot_ordered_sequence_accuracy_milli": 1000,
+      "order_sequence_energy_accuracy_milli": 1000,
+      "order_energy_pass_slot_fail": 0,
+      "order_output_slot_cleanup_failed_slots": 0,
+      "slot_failure_total": 0,
+      "flat_sequence_energy_parity_mismatches": 0,
+      "flat_gap_parity_mismatches": 0,
+      "state_delta_edges": 0,
+      "forbidden_flags": false,
+      "result": "GREEN"
+    }
+  ],
+  "claim_boundary": "Targeted reweighting is diagnostic only. The next proof must use a principled full-corpus density policy and rerun all classes/seeds."
+}

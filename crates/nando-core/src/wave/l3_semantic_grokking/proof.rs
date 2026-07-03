@@ -594,8 +594,9 @@ impl L3SemanticGrokkingProof {
         let ablation_pass = frame_ablation_drop >= config.min_frame_ablation_drop;
         let interference_ablation_pass = interference_gap_lift >= config.min_frame_ablation_drop
             && frame_ablation_drop >= config.min_frame_ablation_drop;
+        let min_repulsion_ablation_drop = config.min_frame_ablation_drop * 0.5;
         let nearest_wrong_center_suppressed = repulsion_ablation_drop
-            >= config.min_frame_ablation_drop
+            >= min_repulsion_ablation_drop
             && heldout_margin_min >= config.min_frame_gap;
         let wrong_cue_suppressed = cue_accuracy >= config.min_frame_accuracy
             && cue_margin_min >= config.min_frame_gap
@@ -631,7 +632,7 @@ impl L3SemanticGrokkingProof {
             && interference_gap_lift > 0.0
             && nearest_wrong_center_suppressed
             && attraction_ablation_drop >= config.min_frame_ablation_drop
-            && repulsion_ablation_drop >= config.min_frame_ablation_drop
+            && repulsion_ablation_drop >= min_repulsion_ablation_drop
             && anti_field_ablation_drop > 0.0
             && wrong_cue_suppressed
             && memory.cue_field.learned

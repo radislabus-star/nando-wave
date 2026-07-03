@@ -1,0 +1,24 @@
+{
+  "schema_version": "wave_compact_task_manifest_v1",
+  "domain_id": "linux_networking_vpn",
+  "source_file": "data/task_candidates/linux_networking_vpn_compact_v1/compact_cases.json",
+  "materialized_file": "data/task_candidates/linux_networking_vpn_compact_v1/generated_wave_task_v2.jsonl",
+  "rows": 24,
+  "quality_status": "candidate",
+  "accepted_training_tasks": 0,
+  "boundary": {
+    "compact_cases_are_candidate_only": true,
+    "not_runtime_authority": true,
+    "shortcut_gates_pending": false,
+    "step_7_required_before_acceptance": true,
+    "shortcut_gates_run": true,
+    "step_7_done": true,
+    "step_8_required_for_yield": false,
+    "step_8_done": true,
+    "step_9_required_for_accepted_training_scale": true
+  },
+  "shortcut_gate_report": "data/task_candidates/linux_networking_vpn_compact_v1/shortcut_gate_report.json",
+  "shortcut_gate_verdict": "VALID_OPERATOR_PRESSURE_CANDIDATE",
+  "useful_task_yield_milli": 1000,
+  "useful_candidate_tasks": 24
+}

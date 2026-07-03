@@ -1,0 +1,101 @@
+{
+  "classes": [
+    "order",
+    "edit",
+    "conditional",
+    "composed"
+  ],
+  "notes": [
+    "Conditional generic action-surface is suppressed because raw action text contains both branches.",
+    "Composed generic action-surface is suppressed because raw action text contains the demo.",
+    "Accepted proof channels are selected condition/action conjunction and parsed neutral composed demo slot page.",
+    "No target_id, proof_rule_id authority, concrete_x_lookup, or manual local_out_t is used."
+  ],
+  "reuse_existing_logs": true,
+  "runtime_gates_enabled": true,
+  "schema_version": "operator_battery_v4_multiseed_summary_v1",
+  "seed_results": {
+    "1": {
+      "class_verdicts": {
+        "composed": "VALID_OPERATOR_BATTERY_V4_CANDIDATE",
+        "conditional": "VALID_OPERATOR_BATTERY_V4_CANDIDATE",
+        "edit": "VALID_OPERATOR_BATTERY_V4_CANDIDATE",
+        "order": "VALID_OPERATOR_BATTERY_V4_CANDIDATE"
+      },
+      "path": "/home/ubu/projects/nando-wave/data/rule_logic_operator_battery_v4/diagnostics/multiseed_train_per_cell_2/seed_001",
+      "runtime": {
+        "conditional": {
+          "concrete_x_lookup_used": "false",
+          "conditional_energy_pass_slot_fail": "273",
+          "conditional_flat_slot_ordered_sequence_accuracy_milli": "617",
+          "conditional_output_slot_cleanup_failed_slots": "1146",
+          "conditional_sequence_energy_accuracy_milli": "973",
+          "conditional_slot_failure_total": "1146",
+          "conditional_slot_ordered_sequence_accuracy_milli": "617",
+          "exit_code": "FAILED_LOG",
+          "flat_gap_parity_mismatches": "0",
+          "flat_sequence_energy_parity_mismatches": "0",
+          "local_out_t_runtime_extension_used": "false",
+          "proof_rule_id_training_authority_used": "false",
+          "role_binding_edges": "81739",
+          "runtime_log_path": "/home/ubu/projects/nando-wave/data/rule_logic_operator_battery_v4/diagnostics/multiseed_train_per_cell_2/seed_001/conditional/conditional_runtime_gate_release_with_breakdown.log",
+          "state_delta_edges": "0",
+          "target_center_id_training_used": "false",
+          "test_result": false
+        },
+        "edit": {
+          "concrete_x_lookup_used": "false",
+          "edit_energy_pass_slot_fail": "0",
+          "edit_flat_slot_ordered_sequence_accuracy_milli": "1000",
+          "edit_output_slot_cleanup_failed_slots": "MISSING",
+          "edit_sequence_energy_accuracy_milli": "1000",
+          "edit_slot_failure_total": "MISSING",
+          "edit_slot_ordered_sequence_accuracy_milli": "1000",
+          "exit_code": "0",
+          "flat_gap_parity_mismatches": "0",
+          "flat_sequence_energy_parity_mismatches": "0",
+          "local_out_t_runtime_extension_used": "false",
+          "proof_rule_id_training_authority_used": "false",
+          "role_binding_edges": "122576",
+          "runtime_log_path": "/home/ubu/projects/nando-wave/data/rule_logic_operator_battery_v4/diagnostics/multiseed_train_per_cell_2/seed_001/edit/edit_runtime_gate_release.log",
+          "state_delta_edges": "0",
+          "target_center_id_training_used": "false",
+          "test_result": true
+        },
+        "order": {
+          "concrete_x_lookup_used": "false",
+          "exit_code": "0",
+          "flat_gap_parity_mismatches": "0",
+          "flat_sequence_energy_parity_mismatches": "0",
+          "local_out_t_runtime_extension_used": "false",
+          "order_energy_pass_slot_fail": "0",
+          "order_flat_slot_ordered_sequence_accuracy_milli": "1000",
+          "order_output_slot_cleanup_failed_slots": "0",
+          "order_sequence_energy_accuracy_milli": "1000",
+          "order_slot_failure_total": "0",
+          "order_slot_ordered_sequence_accuracy_milli": "1000",
+          "proof_rule_id_training_authority_used": "false",
+          "role_binding_edges": "187264",
+          "runtime_log_path": "/home/ubu/projects/nando-wave/data/rule_logic_operator_battery_v4/diagnostics/multiseed_train_per_cell_2/seed_001/order/order_runtime_gate_release.log",
+          "state_delta_edges": "0",
+          "target_center_id_training_used": "false",
+          "test_result": true
+        }
+      },
+      "shortcut_verdict": "VALID_OPERATOR_BATTERY_V4_CANDIDATE"
+    }
+  },
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "strict_runtime_issues": [
+    "seed=1 conditional: exit_code=FAILED_LOG",
+    "seed=1 conditional: test_result=False",
+    "seed=1 conditional: conditional_energy_pass_slot_fail=273",
+    "seed=1 conditional: conditional_output_slot_cleanup_failed_slots=1146",
+    "seed=1 conditional: conditional_slot_failure_total=1146"
+  ],
+  "verdict": "RED_MULTI_SEED_CURRENT_SCOPE"
+}

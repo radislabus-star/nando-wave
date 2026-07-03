@@ -1,0 +1,47 @@
+{
+  "schema_version": "proxy_energy_monotonicity_report_v1",
+  "source_artifact": "data/rule_logic_position_sequence_v3/diagnostics/combined_objective_probe/rust_gate.log",
+  "claim_boundary": "This is a proxy sequence-energy diagnostic, not a formal thermodynamic energy proof.",
+  "cleanup_epochs": [
+    {
+      "epoch": 1,
+      "margin": 160,
+      "train_energy_accuracy_milli": 961,
+      "train_energy_median_gap": 154110,
+      "train_energy_p10_gap": 25148,
+      "min_energy_gap": -32876
+    },
+    {
+      "epoch": 2,
+      "margin": 213,
+      "train_energy_accuracy_milli": 961,
+      "train_energy_median_gap": 142050,
+      "train_energy_p10_gap": 30572,
+      "min_energy_gap": -20566
+    },
+    {
+      "epoch": 3,
+      "margin": 266,
+      "train_energy_accuracy_milli": 965,
+      "train_energy_median_gap": 150762,
+      "train_energy_p10_gap": 26346,
+      "min_energy_gap": -5602
+    },
+    {
+      "epoch": 4,
+      "margin": 320,
+      "train_energy_accuracy_milli": 992,
+      "train_energy_median_gap": 152108,
+      "train_energy_p10_gap": 36536,
+      "min_energy_gap": -168
+    }
+  ],
+  "checks": {
+    "min_energy_gap_monotonic_improves": true,
+    "energy_accuracy_non_decreasing": true,
+    "p10_energy_gap_positive_all_epochs": true,
+    "p10_energy_gap_strictly_monotonic": false,
+    "final_p10_energy_gap_greater_than_epoch1": true
+  },
+  "interpretation": "Cleanup does not provide a strictly monotonic p10 energy curve, but the worst-row proxy energy gap improves monotonically toward zero, energy accuracy improves from 961 to 992 milli, and p10 energy gap remains positive and ends above the first cleanup epoch."
+}

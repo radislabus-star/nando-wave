@@ -1,0 +1,136 @@
+{
+  "schema_version": "operator_grokking_probe_v1",
+  "diagnostic_only": true,
+  "method": "one_pass_program_induction_from_train_transitions",
+  "operator_key_uses": [
+    "operator_class",
+    "sequence_length",
+    "condition_flag",
+    "normalized_rule_action_example"
+  ],
+  "forbidden_fields_not_used_for_key_or_program": [
+    "proof_rule_id",
+    "source_group",
+    "task_id",
+    "state_after_correct",
+    "state_after_wrong",
+    "why_target_is_correct",
+    "why_negative_is_wrong"
+  ],
+  "rows": 10624,
+  "train_rows": 5312,
+  "heldout_rows": 5312,
+  "unknown_split_rows": 0,
+  "compiled_operator_programs": 380,
+  "operator_program_conflicts": 0,
+  "skipped_train_rows": 0,
+  "known_heldout_program_rows": 5312,
+  "predicted_heldout_rows": 5312,
+  "skipped_heldout_rows": 0,
+  "heldout_correct_rows": 5312,
+  "heldout_wrong_match_rows": 0,
+  "heldout_same_bag_as_correct_rows": 5312,
+  "heldout_accuracy_milli": 1000,
+  "known_program_accuracy_milli": 1000,
+  "same_bag_output_milli": 1000,
+  "compression": {
+    "train_rows_per_compiled_program_milli": 13979,
+    "heldout_rows_per_compiled_program_milli": 13979
+  },
+  "by_class": {
+    "composed": {
+      "rows": 960,
+      "correct": 960
+    },
+    "conditional": {
+      "rows": 768,
+      "correct": 768
+    },
+    "edit": {
+      "rows": 1536,
+      "correct": 1536
+    },
+    "order": {
+      "rows": 2048,
+      "correct": 2048
+    }
+  },
+  "by_surface": {
+    "business": {
+      "rows": 1328,
+      "correct": 1328
+    },
+    "network": {
+      "rows": 1328,
+      "correct": 1328
+    },
+    "ru_words": {
+      "rows": 1328,
+      "correct": 1328
+    },
+    "symbols": {
+      "rows": 1328,
+      "correct": 1328
+    }
+  },
+  "by_noise": {
+    "clean": {
+      "rows": 1328,
+      "correct": 1328
+    },
+    "distractor": {
+      "rows": 1328,
+      "correct": 1328
+    },
+    "instruction_noise": {
+      "rows": 1328,
+      "correct": 1328
+    },
+    "prefix_suffix": {
+      "rows": 1328,
+      "correct": 1328
+    }
+  },
+  "by_length": {
+    "10": {
+      "rows": 656,
+      "correct": 656
+    },
+    "11": {
+      "rows": 672,
+      "correct": 672
+    },
+    "12": {
+      "rows": 656,
+      "correct": 656
+    },
+    "13": {
+      "rows": 672,
+      "correct": 672
+    },
+    "14": {
+      "rows": 656,
+      "correct": 656
+    },
+    "15": {
+      "rows": 672,
+      "correct": 672
+    },
+    "16": {
+      "rows": 656,
+      "correct": 656
+    },
+    "9": {
+      "rows": 672,
+      "correct": 672
+    }
+  },
+  "conflict_examples": {},
+  "failure_examples": [],
+  "claim_boundary": [
+    "This proves only that compact operator programs can be induced from train transitions for this corpus.",
+    "It is not a Wave runtime proof and not a semantic grokking claim.",
+    "It does not parse proof_rule_id and does not use target rows at heldout time.",
+    "The next step is to compile these programs into Nando Wave weights/energy/cleanup and compare against epoch repair."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "heldout_rows": 800,
+  "heldout_values": [
+    "handoff_time",
+    "package_volume",
+    "arrival_terminal",
+    "vehicle_class",
+    "return_path",
+    "session_secret",
+    "endpoint_label",
+    "resolver_policy",
+    "route_prefix",
+    "restore_marker",
+    "smoke_trace",
+    "change_window",
+    "office_vlan",
+    "gateway_side",
+    "proof_window",
+    "wg_snapshot"
+  ],
+  "rows": 2800,
+  "rules": {
+    "alternation_second_bind": 700,
+    "conflict_fact_bind": 700,
+    "mirror_first_bind": 700,
+    "missing_variable_bind": 700
+  },
+  "schema_version": "binding_pressure_manifest_v1",
+  "train_heldout_symbol_overlap": [],
+  "train_heldout_value_overlap": [],
+  "train_heldout_word_overlap": [],
+  "train_rows": 2000,
+  "train_values": [
+    "start_time",
+    "cargo_weight",
+    "destination_point",
+    "transport_mode",
+    "route_scope",
+    "auth_token",
+    "peer_name",
+    "dns_profile",
+    "allowed_ips",
+    "rollback_point",
+    "baseline_log",
+    "incident_window",
+    "client_subnet",
+    "server_side",
+    "evidence_window",
+    "config_snapshot"
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "correct_wrong_same_bag_milli": 1000,
+  "correct_wrong_same_length_milli": 1000,
+  "heldout_per_cell": 1,
+  "heldout_rows": 384,
+  "lengths": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "matrix_cells": 384,
+  "negative_strategies": {
+    "wrong_branch_same_bag": 1152
+  },
+  "noise_types": [
+    "clean",
+    "distractor"
+  ],
+  "operator_class": "conditional",
+  "rows": 1152,
+  "rule_families": [
+    "if_alpha_mirror_else_rotate_left",
+    "if_alpha_pair_swap_else_block_swap",
+    "if_alpha_even_odd_else_odd_even",
+    "if_alpha_edge_center_else_center_edge",
+    "if_beta_rotate_right_else_mirror",
+    "if_beta_block_swap_else_pair_swap",
+    "if_beta_center_edge_else_rotate_left",
+    "if_beta_stride3_else_window3"
+  ],
+  "rules": {
+    "conditional_if_alpha_edge_center_else_center_edge_len10": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len11": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len12": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len13": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len14": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len15": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len16": 24,
+    "conditional_if_alpha_edge_center_else_center_edge_len9": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len10": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len11": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len12": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len13": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len14": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len15": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len16": 24,
+    "conditional_if_alpha_even_odd_else_odd_even_len9": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len10": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len11": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len12": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len13": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len14": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len15": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len16": 24,
+    "conditional_if_alpha_mirror_else_rotate_left_len9": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len10": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len11": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len12": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len13": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len14": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len15": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len16": 24,
+    "conditional_if_alpha_pair_swap_else_block_swap_len9": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len10": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len11": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len12": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len13": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len14": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len15": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len16": 24,
+    "conditional_if_beta_center_edge_else_rotate_left_len9": 24,
+    "conditional_if_beta_stride3_else_window3_len10": 24,
+    "conditional_if_beta_stride3_else_window3_len11": 24,
+    "conditional_if_beta_stride3_else_window3_len12": 24,
+    "conditional_if_beta_stride3_else_window3_len13": 24,
+    "conditional_if_beta_stride3_else_window3_len14": 24,
+    "conditional_if_beta_stride3_else_window3_len15": 24,
+    "conditional_if_beta_stride3_else_window3_len16": 24,
+    "conditional_if_beta_stride3_else_window3_len9": 24
+  },
+  "schema_version": "operator_battery_manifest_v4",
+  "seed": 1,
+  "selected_rule_families_by_length": {
+    "10": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "11": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "12": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "13": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "14": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "15": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "16": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ],
+    "9": [
+      "if_alpha_mirror_else_rotate_left",
+      "if_alpha_pair_swap_else_block_swap",
+      "if_alpha_even_odd_else_odd_even",
+      "if_alpha_edge_center_else_center_edge",
+      "if_beta_center_edge_else_rotate_left",
+      "if_beta_stride3_else_window3"
+    ]
+  },
+  "surface_families": [
+    "symbols",
+    "ru_words",
+    "business",
+    "network"
+  ],
+  "train_heldout_overlap_by_surface": {
+    "business": [],
+    "network": [],
+    "ru_words": [],
+    "symbols": []
+  },
+  "train_per_cell": 2,
+  "train_rows": 768
+}

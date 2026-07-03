@@ -1,0 +1,14 @@
+{
+  "metrics": {
+    "answer_status_majority_accuracy_milli": 0,
+    "exact_lookup_accuracy_milli": 0,
+    "heldout_rows": 800,
+    "markov_pairwise_accuracy_milli": 500,
+    "proof_rule_id_majority_accuracy_milli": 0,
+    "rows": 2800,
+    "surface_family_majority_accuracy_milli": 0,
+    "train_rows": 2000
+  },
+  "schema_version": "binding_pressure_shortcut_gate_v1",
+  "verdict": "VALID_BINDING_PRESSURE_CANDIDATE"
+}

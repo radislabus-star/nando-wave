@@ -118,7 +118,7 @@ fn fast_config() -> L2CenterMemoryConfig {
             max_fourier_eval_words: 512,
             ..L1CenterMemoryConfig::default()
         },
-        motif_len: 4,
+        motif_len: 3,
         min_motif_support: 4,
         min_heldout_ref_coverage: 0.60,
         min_heldout_word_coverage: 0.50,

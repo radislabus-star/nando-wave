@@ -90,6 +90,7 @@ mod learn;
 mod math;
 mod morphology_wave;
 mod organ;
+mod phase_center_runtime;
 mod semantic_extract;
 mod semantic_wave;
 mod snapshot;
@@ -103,6 +104,8 @@ mod symbol_cluster;
 mod symbol_l3;
 mod tick;
 mod wave_pattern_compiler;
+mod wavepredictor_hebbian;
+mod wavepredictor_trainer;
 
 pub use bus::WaveBus;
 pub use cache_plan::{CacheAwareOrganPlan, CacheProfile, HotWindowPlan, Organ128Plan};
@@ -138,6 +141,16 @@ pub use morphology_wave::{
 pub use organ::{
     LiveCycle, LivePrediction, LocalUpdateReport, OrganState, Stage2Organ, stage2_organ,
 };
+pub use phase_center_runtime::{
+    PHASE_CENTER_DEFAULT_OFFLOAD_MARGIN_THRESHOLD_MICRO,
+    PHASE_CENTER_RUNTIME_PACKAGE_FINGERPRINT_PERSONAL, PHASE_CENTER_RUNTIME_PACKAGE_HEADER_BYTES,
+    PHASE_CENTER_RUNTIME_PACKAGE_MAGIC, PhaseCenterCell, PhaseCenterCompiler, PhaseCenterEvalTask,
+    PhaseCenterFlatRecord, PhaseCenterFlatRuntime, PhaseCenterOffloadAction,
+    PhaseCenterOffloadDecision, PhaseCenterOffloadPolicy, PhaseCenterOffloadRuntime,
+    PhaseCenterOffloadSummary, PhaseCenterRuntimeError, PhaseCenterRuntimePackageInfo,
+    add_phase_vector, phase_center_from_sum, phase_circular_unit, phase_coherence,
+    phase_margin_from_centers, phase_margin_to_micro, phase_vector_from_atoms, stable_phase_cell,
+};
 pub use semantic_extract::{
     SemanticAtomExtractor, SemanticEquationForm, SemanticExtractedForm, SemanticExtraction,
     SemanticExtractionStatus, semantic_label_slot,
@@ -165,8 +178,9 @@ pub use surface_pattern::{
     SurfaceWavePatternProofConfig, SurfaceWavePatternVerdict,
 };
 pub use surface_wave::{
-    SURFACE_WAVE_BYTES, SURFACE_WAVE_DIM, SURFACE_WAVE_NGRAM, SURFACE_WAVE_TRITS, SurfaceWave4096,
-    SurfaceWaveLane, SurfaceWaveTrit, surface_ngram_count, surface_ngram_projection,
+    SURFACE_WAVE_BYTES, SURFACE_WAVE_DIM, SURFACE_WAVE_NGRAM, SURFACE_WAVE_TRITS, SurfaceAtom,
+    SurfaceWave4096, SurfaceWaveLane, SurfaceWaveTrit, surface_atom_projection, surface_atoms,
+    surface_ngram_count, surface_ngram_projection,
 };
 pub use surface_word::{
     SurfaceWordGrokkingConfig, SurfaceWordGrokkingProof, SurfaceWordGrokkingVerdict,
@@ -189,6 +203,24 @@ pub use tick::{
 pub use wave_pattern_compiler::{
     SURFACE_FOURIER_BINS, SurfaceFourierSignature, SurfaceWaveCenter, WavePatternCompileReport,
     WavePatternCompiler, WavePatternSelection, WavePatternTemplate,
+};
+pub use wavepredictor_hebbian::{
+    WAVE_PREDICTOR_ROLE_BINDING_PACKAGE_HEADER_BYTES, WAVE_PREDICTOR_ROLE_BINDING_PACKAGE_MAGIC,
+    WavePredictorActiveCenter, WavePredictorCenterId, WavePredictorConvergenceError,
+    WavePredictorFlatRoleBindingEdge, WavePredictorFlatRoleBindingTable,
+    WavePredictorHebbianConfig, WavePredictorHebbianEdge, WavePredictorHebbianField,
+    WavePredictorHebbianUpdateReport, WavePredictorRoleBindingDecision,
+    WavePredictorRoleBindingEvalTask, WavePredictorRoleBindingOffloadAction,
+    WavePredictorRoleBindingOffloadPolicy, WavePredictorRoleBindingOffloadRuntime,
+    WavePredictorRoleBindingOffloadSummary, WavePredictorRoleBindingPackageError,
+    WavePredictorRoleBindingPackageInfo, WavePredictorRoleBindingPreparedFringe,
+};
+pub use wavepredictor_trainer::{
+    WAVEPREDICTOR_STATE_DELTA_CAP, WAVEPREDICTOR_TARGET_AXIS_CAP, WavePredictorAxisTarget,
+    WavePredictorCompositionalTrainTask, WavePredictorEpochReport, WavePredictorMarginSchedule,
+    WavePredictorStateDeltaTarget, WavePredictorStateDeltaTrainTask, WavePredictorStateImpulse,
+    WavePredictorTrainTask, WavePredictorTrainer, WavePredictorTrainerConfig,
+    WavePredictorTrainerReport,
 };
 
 pub(crate) use math::{
