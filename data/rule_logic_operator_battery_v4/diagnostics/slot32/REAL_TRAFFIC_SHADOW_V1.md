@@ -278,6 +278,50 @@ non-zero verified CPU savings PASS on non-synthetic Codex traffic:
 `false_accepts = 0`, `unverified_shadow_accepts = 0`, and two verified local
 accepts. The broader CPU Routability 80 goal remains red.
 
+Current route-priority + edit-safe-policy rung:
+
+```text
+commands:
+  cargo run -p nando-cli -- role-binding-real-traffic-codex-history-route-candidates-v1
+  cargo run -p nando-cli -- role-binding-real-traffic-ingest-events-v1 target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.events.jsonl target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.trace.jsonl target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.ingest-report.json
+  cargo run -p nando-cli -- role-binding-real-traffic-cpu-route-forecast-v1
+  cargo run -p nando-cli -- role-binding-real-traffic-edit-safe-policy-promote-v1
+  cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 target/nando-wave/real-traffic-shadow/profile-registry-edit-safe-policy-v1.json target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.shadow-report.json
+  cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.shadow-report.json target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.verification-hook-audit.report.json
+  cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1
+result:
+  route_candidates: 288
+  exact_cache_hits: 53
+  route_counts:
+    conditional: 166
+    edit: 83
+    mixed: 39
+  conditional_scoreable_payloads: 79
+  conditional_verification_hooks: 63
+  conditional_safe_policy_found: false
+  edit_scoreable_payloads: 10
+  edit_verification_hooks: 9
+  edit_safe_policy_threshold: 9472
+  edit_shadow_verified_safe_accepts: 1
+  edit_shadow_unverified_shadow_accepts: 0
+  edit_shadow_false_accepts: 0
+  mixed_shadow_verified_safe_accepts: 2
+  mixed_shadow_unverified_shadow_accepts: 0
+  mixed_shadow_false_accepts: 0
+  feedback_scoreable_candidate_calls: 103
+  feedback_verification_hook_ready_events: 85
+  feedback_verified_cpu_accept_eligible_events: 3
+  feedback_verified_cpu_routability_milli: 3
+  feedback_verified_gap_to_80_calls: 797
+```
+
+Interpretation: route priority now sends validation/gate/fallback/pass-shaped
+requests to conditional before ambient code/edit surfaces. This exposes many
+more conditional payloads, but conditional readout still fails safe calibration.
+Edit now contributes one verified safe local accept through a promoted
+score-only threshold. The total verified CPU routability is still only 3 milli,
+so this is progress, not a completion claim.
+
 Codex history route-only candidate adapter:
 
 ```text

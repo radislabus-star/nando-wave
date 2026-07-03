@@ -1,5 +1,127 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Route Priority + Edit Safe-Policy Promotion
+
+Verdicts:
+
+```text
+CODEX_HISTORY_ROUTE_CANDIDATES_V1_REVIEW
+EDIT_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Route priority now treats explicit validation/gate/fallback/pass requests as
+conditional unless there is a direct edit command such as fix/patch/commit.
+
+Added:
+  role-binding-real-traffic-edit-safe-policy-promote-v1
+
+The command writes:
+  target/nando-wave/real-traffic-shadow/profile-registry-edit-safe-policy-v1.json
+  target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.report.json
+```
+
+Fresh route funnel over the same 1000 non-synthetic Codex calls:
+
+```text
+route_candidates: 288 / 1000
+exact_cache_hits: 53 / 1000
+
+role_binding_conditional_branch_seed0: 166 candidates
+role_binding_edit_marker_length_seed0: 83 candidates
+role_binding_mixed_map_seed0: 39 candidates
+
+conditional scoreable payloads: 79
+conditional verification hooks: 63
+conditional safe local-accept policy: false
+
+edit scoreable payloads: 10
+edit verification hooks: 9
+edit safe local-accept policy: true
+
+mixed scoreable payloads: 14
+mixed verification hooks: 13
+mixed safe local-accept policy: true
+```
+
+Edit promoted safe policy:
+
+```text
+selected_policy_name: market_safe_energy_margin_threshold
+selected_policy_source: evidence_trace_market_safe_threshold
+selected_acceptance_policy: energy_threshold_only
+selected_policy_threshold: 9472
+policy_accept_rows: 1
+policy_accept_verified_true_rows: 1
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+runtime_acceptance_mismatches: 0
+```
+
+Edit shadow + audit:
+
+```text
+shadow_verdict: REAL_TRAFFIC_SHADOW_V1_PASS
+shadow_nando_accepts: 1
+shadow_verified_safe_accepts: 1
+shadow_unverified_shadow_accepts: 0
+shadow_false_accepts: 0
+shadow_incremental_savings_over_exact_cache: 1
+shadow_incremental_reduction_vs_exact_cache_milli: 1
+shadow_p99_score_latency_ns: 439824
+
+audit_verified_cpu_accept_eligible_events: 1
+audit_market_claim_allowed: true
+```
+
+Updated feedback-loop:
+
+```text
+scoreable_candidate_calls: 103
+verification_hook_ready_events: 85
+verified_cpu_accept_eligible_events: 3
+verified_cpu_routability_milli: 3
+verified_gap_to_80_calls: 797
+
+route stages:
+  conditional: local_accept_calibration_failed
+  edit: verified_cpu_accept_eligible
+  mixed: verified_cpu_accept_eligible
+```
+
+Structural gate:
+
+```text
+NANDA route-priority gate: PASS
+checked route:
+  direct edit commands keep edit priority
+  validation/gate/pass/fallback/margin requests route before ambient code surfaces
+  evidence uses line anchors in role_binding_runtime_cmd.rs
+
+Edit safe-policy savings counts are verified by CLI/JSON shadow/audit reports,
+not by NANDA numeric count triads.
+```
+
+Diagnostic read:
+
+```text
+This is a real but small verified-routability increase: 2 -> 3 verified CPU
+accepts per 1000 non-synthetic Codex calls. The claim boundary remains tight:
+false_accepts=0 and unverified_shadow_accepts=0 on the promoted edit and mixed
+traces.
+
+The main next lever is conditional. Route priority fixed the funnel and exposed
+79 scoreable conditional payloads with 63 verification hooks and 17 true labels,
+but the current conditional payload/readout geometry still cannot separate true
+from false rows without false accepts.
+```
+
 ## 2026-07-03 - Executor Integration: Mixed Safe-Policy Promotion Shadow
 
 Verdicts:
