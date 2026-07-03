@@ -25,6 +25,7 @@ New commands:
   role-binding-real-traffic-edit-payload-readiness-v1
   role-binding-real-traffic-edit-payload-dry-run-v1
   role-binding-real-traffic-verification-hook-audit-v1
+  role-binding-real-traffic-feedback-loop-v1
   role-binding-real-traffic-shadow-smoke-v1
 ```
 
@@ -346,6 +347,54 @@ route candidate
 
 Current real Codex edit rows have reached `scoreable payload`, but not
 `evidence-backed verification hook`.
+
+CPU route feedback-loop report:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+result:
+  verdict: CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+  total_llm_calls: 1000
+  exact_cache_hits: 54
+  exact_cache_coverage_milli: 54
+  operator_candidate_calls: 285
+  operator_candidate_coverage_milli: 285
+  scoreable_candidate_calls: 23
+  scoreable_candidate_coverage_milli: 23
+  verification_hook_ready_events: 0
+  verified_cpu_accept_eligible_events: 0
+  verified_cpu_routability_milli: 0
+  target_routability_milli: 800
+  target_verified_cpu_calls: 800
+  routing_gap_to_80_calls: 515
+  verified_gap_to_80_calls: 800
+  market_claim_allowed: false
+```
+
+Feedback stages:
+
+```text
+role_binding_edit_marker_length_seed0:
+  candidate_events: 154
+  scoreable_payload_events: 23
+  stage: scoreable_payload_missing_verification_hook
+  next_action: Attach response/tool-call evidence and deterministic output verification.
+
+role_binding_conditional_branch_seed0:
+  candidate_events: 92
+  stage: payload_builder_missing
+  next_action: Build the request-side payload builder for this route family.
+
+role_binding_mixed_map_seed0:
+  candidate_events: 39
+  stage: payload_builder_missing
+  next_action: Build the request-side payload builder for this route family.
+```
+
+Interpretation: this report prevents the exact-cache, route-candidate,
+scoreable-payload, verification-hook, and verified-CPU stages from being mixed.
+CPU Routability 80 remains red until verified CPU routability reaches 800 milli
+on non-synthetic real traffic with false accepts at zero.
 
 CPU route forecast over real Codex route candidates:
 

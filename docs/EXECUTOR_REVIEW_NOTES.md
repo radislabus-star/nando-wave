@@ -1,5 +1,82 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: CPU Route Feedback Loop
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-feedback-loop-v1.
+
+The feedback loop reads:
+  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json
+  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json
+
+and writes:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+```
+
+Current real Codex funnel:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 54
+exact_cache_coverage_milli: 54
+operator_candidate_calls: 285
+operator_candidate_coverage_milli: 285
+scoreable_candidate_calls: 23
+scoreable_candidate_coverage_milli: 23
+verification_hook_ready_events: 0
+verification_hook_coverage_milli: 0
+verified_cpu_accept_eligible_events: 0
+verified_cpu_routability_milli: 0
+target_routability_milli: 800
+target_verified_cpu_calls: 800
+routing_gap_to_80_calls: 515
+verified_gap_to_80_calls: 800
+market_claim_allowed: false
+```
+
+Route stages:
+
+```text
+1. role_binding_edit_marker_length_seed0
+   candidate_events: 154
+   scoreable_payload_events: 23
+   stage: scoreable_payload_missing_verification_hook
+   next_action: attach response/tool-call evidence and deterministic output verification
+
+2. role_binding_conditional_branch_seed0
+   candidate_events: 92
+   stage: payload_builder_missing
+   next_action: build conditional_branch_payload_builder_v1
+
+3. role_binding_mixed_map_seed0
+   candidate_events: 39
+   stage: payload_builder_missing
+   next_action: build mixed_map_payload_builder_v1
+```
+
+Diagnostic read:
+
+```text
+The current real-traffic bottleneck is now explicit:
+  route coverage exists for 285/1000 calls;
+  executable scoreable payload exists for 23/1000 calls;
+  verified CPU eligibility is still 0/1000.
+
+The next highest-value move is not tuning score thresholds. It is either:
+  A) add edit response/tool evidence + deterministic edit verifier for the 23
+     scoreable edit rows; or
+  B) build the conditional payload builder to open the 92-call route.
+```
+
 ## 2026-07-03 - Executor Integration: Verification Hook Audit
 
 Verdict:
