@@ -92,9 +92,9 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_cpu_route_forecast_v1,
     run_role_binding_real_traffic_edit_payload_dry_run_v1,
     run_role_binding_real_traffic_edit_payload_readiness_v1,
-    run_role_binding_real_traffic_ingest_events_v1, run_role_binding_real_traffic_record_serve_v1,
-    run_role_binding_real_traffic_record_v1, run_role_binding_real_traffic_shadow_smoke_v1,
-    run_role_binding_real_traffic_shadow_v1,
+    run_role_binding_real_traffic_feedback_loop_v1, run_role_binding_real_traffic_ingest_events_v1,
+    run_role_binding_real_traffic_record_serve_v1, run_role_binding_real_traffic_record_v1,
+    run_role_binding_real_traffic_shadow_smoke_v1, run_role_binding_real_traffic_shadow_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
 };
 use snapshot_io::{read_snapshot, save_snapshot};
@@ -610,6 +610,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-verification-hook-audit-v1") => exit_for_result(
             run_role_binding_real_traffic_verification_hook_audit_v1(args),
             "try: nando-cli role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]",
+        ),
+        Some("role-binding-real-traffic-feedback-loop-v1") => exit_for_result(
+            run_role_binding_real_traffic_feedback_loop_v1(args),
+            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json]",
         ),
         Some("role-binding-real-traffic-shadow-smoke-v1") => exit_for_result(
             run_role_binding_real_traffic_shadow_smoke_v1(args),

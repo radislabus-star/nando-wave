@@ -292,6 +292,12 @@ pub(crate) fn print_help() {
         "            Audit whether shadow trace rows carry enough output evidence to count verified CPU accepts"
     );
     println!(
+        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json]"
+    );
+    println!(
+        "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(

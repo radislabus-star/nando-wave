@@ -61,6 +61,8 @@ const DEFAULT_EDIT_PAYLOAD_DRY_RUN_SHADOW_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json";
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -3789,6 +3791,184 @@ where
     Err("verification hook audit is review-only; it is not market savings".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_feedback_loop_v1<I>(mut args: I) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let forecast_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT));
+    let edit_dry_run_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_DRY_RUN_REPORT));
+    let verification_audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT));
+    let feedback_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT));
+
+    let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
+    let edit_dry_run =
+        read_json_file::<RoleBindingEditPayloadDryRunReport>(&edit_dry_run_report_path)?;
+    let verification_audit =
+        read_json_file::<RoleBindingVerificationHookAuditReport>(&verification_audit_report_path)?;
+    let verification_by_route = verification_audit
+        .routes
+        .iter()
+        .map(|row| (row.route_key.as_str(), row))
+        .collect::<BTreeMap<_, _>>();
+
+    let target_routability_milli = 800usize;
+    let target_verified_cpu_calls =
+        projected_accepts(forecast.total_llm_calls, target_routability_milli);
+    let verified_cpu_accept_eligible_events =
+        verification_audit.verified_cpu_accept_eligible_events;
+    let routing_gap_to_80_calls =
+        target_verified_cpu_calls.saturating_sub(forecast.operator_candidate_calls);
+    let verified_gap_to_80_calls =
+        target_verified_cpu_calls.saturating_sub(verified_cpu_accept_eligible_events);
+    let mut route_rows = Vec::new();
+
+    for route in &forecast.routes {
+        let verification = verification_by_route.get(route.route_key.as_str()).copied();
+        let is_edit_route = route.route_key.contains("edit_marker_length");
+        let payload_ready_events = if is_edit_route {
+            edit_dry_run.payload_ready_events
+        } else {
+            0
+        };
+        let payload_built_events = if is_edit_route {
+            edit_dry_run.payload_built_events
+        } else {
+            0
+        };
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let stage = feedback_route_stage(
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+        );
+        let next_action = feedback_route_next_action(&stage);
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route.priority_rank,
+            route_key: route.route_key.clone(),
+            profile_id: route.profile_id.clone(),
+            candidate_events: route.candidate_events,
+            non_exact_candidate_calls: route.non_exact_candidate_calls,
+            payload_builder: route.recommended_payload_builder.clone(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: route.candidate_share_milli_of_all_llm_calls,
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
+    let report = RoleBindingFeedbackLoopReport {
+        schema_version: "nando_role_binding_real_traffic_feedback_loop_v1".to_owned(),
+        verdict: "CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW".to_owned(),
+        forecast_report_path: forecast_report_path.display().to_string(),
+        edit_dry_run_report_path: edit_dry_run_report_path.display().to_string(),
+        verification_audit_report_path: verification_audit_report_path.display().to_string(),
+        total_llm_calls: forecast.total_llm_calls,
+        exact_cache_hits: forecast.exact_cache_hits,
+        exact_cache_coverage_milli: forecast.exact_cache_coverage_milli,
+        operator_candidate_calls: forecast.operator_candidate_calls,
+        operator_candidate_coverage_milli: forecast.operator_candidate_coverage_milli,
+        scoreable_candidate_calls: verification_audit.scoreable_candidate_calls,
+        scoreable_candidate_coverage_milli: ratio_milli(
+            verification_audit.scoreable_candidate_calls,
+            forecast.total_llm_calls,
+        ),
+        verification_hook_ready_events: verification_audit.verification_hook_ready_events,
+        verification_hook_coverage_milli: ratio_milli(
+            verification_audit.verification_hook_ready_events,
+            forecast.total_llm_calls,
+        ),
+        verified_cpu_accept_eligible_events,
+        verified_cpu_routability_milli: ratio_milli(
+            verified_cpu_accept_eligible_events,
+            forecast.total_llm_calls,
+        ),
+        target_routability_milli,
+        target_verified_cpu_calls,
+        routing_gap_to_80_calls,
+        verified_gap_to_80_calls,
+        no_candidate_calls: forecast.no_candidate_calls,
+        market_claim_allowed: false,
+        routes: route_rows,
+        claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
+        next_engineering_debt: "Increase real route coverage beyond 285/1000, attach output verification hooks to scoreable edit payloads, then build conditional and mixed payload builders.".to_owned(),
+    };
+    write_json_file(&feedback_report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-feedback-loop-v1: {}",
+        report.verdict
+    );
+    println!("  forecast_report: {}", forecast_report_path.display());
+    println!(
+        "  edit_dry_run_report: {}",
+        edit_dry_run_report_path.display()
+    );
+    println!(
+        "  verification_audit_report: {}",
+        verification_audit_report_path.display()
+    );
+    println!("  feedback_report: {}", feedback_report_path.display());
+    println!("  total_llm_calls: {}", report.total_llm_calls);
+    println!(
+        "  operator_candidate_calls: {}",
+        report.operator_candidate_calls
+    );
+    println!(
+        "  scoreable_candidate_calls: {}",
+        report.scoreable_candidate_calls
+    );
+    println!(
+        "  verification_hook_ready_events: {}",
+        report.verification_hook_ready_events
+    );
+    println!(
+        "  verified_cpu_routability_milli: {}",
+        report.verified_cpu_routability_milli
+    );
+    println!(
+        "  verified_gap_to_80_calls: {}",
+        report.verified_gap_to_80_calls
+    );
+    Err("CPU route feedback loop is review-only; routability 80 is not achieved".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_shadow_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -5734,6 +5914,56 @@ impl From<RoleBindingVerificationHookRouteAccumulator> for RoleBindingVerificati
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingFeedbackLoopReport {
+    schema_version: String,
+    verdict: String,
+    forecast_report_path: String,
+    edit_dry_run_report_path: String,
+    verification_audit_report_path: String,
+    total_llm_calls: usize,
+    exact_cache_hits: usize,
+    exact_cache_coverage_milli: usize,
+    operator_candidate_calls: usize,
+    operator_candidate_coverage_milli: usize,
+    scoreable_candidate_calls: usize,
+    scoreable_candidate_coverage_milli: usize,
+    verification_hook_ready_events: usize,
+    verification_hook_coverage_milli: usize,
+    verified_cpu_accept_eligible_events: usize,
+    verified_cpu_routability_milli: usize,
+    target_routability_milli: usize,
+    target_verified_cpu_calls: usize,
+    routing_gap_to_80_calls: usize,
+    verified_gap_to_80_calls: usize,
+    no_candidate_calls: usize,
+    market_claim_allowed: bool,
+    routes: Vec<RoleBindingFeedbackLoopRouteRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingFeedbackLoopRouteRow {
+    priority_rank: usize,
+    route_key: String,
+    profile_id: String,
+    candidate_events: usize,
+    non_exact_candidate_calls: usize,
+    payload_builder: String,
+    stage: String,
+    next_action: String,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    false_accepts: usize,
+    candidate_share_milli_of_all_llm_calls: usize,
+    scoreable_share_milli_of_all_llm_calls: usize,
+    verified_share_milli_of_all_llm_calls: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingNamedCount {
     name: String,
     count: usize,
@@ -7496,6 +7726,50 @@ fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {
             "CPU-process route candidates only after a request-side payload builder can emit active_fringe and slots without answer leakage.".to_owned(),
             "generic_request_side_payload_builder_v1".to_owned(),
         )
+    }
+}
+
+fn feedback_route_stage(
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+) -> String {
+    if verified_cpu_accept_eligible_events > 0 {
+        "verified_cpu_accept_eligible".to_owned()
+    } else if verification_hook_ready_events > 0 {
+        "verification_hook_ready_waiting_local_accept".to_owned()
+    } else if scoreable_payload_events > 0 {
+        "scoreable_payload_missing_verification_hook".to_owned()
+    } else if payload_built_events > 0 {
+        "payload_built_not_scoreable".to_owned()
+    } else if payload_ready_events > 0 {
+        "payload_ready_builder_not_scoreable".to_owned()
+    } else {
+        "payload_builder_missing".to_owned()
+    }
+}
+
+fn feedback_route_next_action(stage: &str) -> String {
+    match stage {
+        "verified_cpu_accept_eligible" => {
+            "Run non-synthetic soak with false_accepts=0 before any market claim.".to_owned()
+        }
+        "verification_hook_ready_waiting_local_accept" => {
+            "Tune score/readout threshold only after hook-backed rows prove safety.".to_owned()
+        }
+        "scoreable_payload_missing_verification_hook" => {
+            "Attach response/tool-call evidence and deterministic output verification.".to_owned()
+        }
+        "payload_built_not_scoreable" => {
+            "Fix active_fringe/slot impulse construction until scorer leaves empty-contract fallback."
+                .to_owned()
+        }
+        "payload_ready_builder_not_scoreable" => {
+            "Finish request-side active_fringe and slot builder for ready rows.".to_owned()
+        }
+        _ => "Build the request-side payload builder for this route family.".to_owned(),
     }
 }
 
