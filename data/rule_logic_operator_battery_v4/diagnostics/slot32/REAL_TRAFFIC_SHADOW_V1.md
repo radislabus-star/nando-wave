@@ -24,6 +24,7 @@ New commands:
   role-binding-real-traffic-cpu-route-forecast-v1
   role-binding-real-traffic-edit-payload-readiness-v1
   role-binding-real-traffic-edit-payload-dry-run-v1
+  role-binding-real-traffic-edit-output-evidence-v1
   role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-feedback-loop-v1
   role-binding-real-traffic-shadow-smoke-v1
@@ -345,13 +346,61 @@ route candidate
   -> verified CPU accept eligible for savings
 ```
 
-Current real Codex edit rows have reached `scoreable payload`, but not
-`evidence-backed verification hook`.
+Before the output-evidence join, current real Codex edit rows had reached
+`scoreable payload`, but not `evidence-backed verification hook`.
+
+Edit output-evidence join:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-edit-output-evidence-v1 target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl /home/ubu/.codex/sessions target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json
+result:
+  verdict: EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+  total_trace_rows: 1000
+  operator_candidate_calls: 23
+  scoreable_candidate_calls: 23
+  output_evidence_matched_events: 17
+  no_session_output_match_events: 6
+  deterministic_verification_events: 17
+  verified_true_events: 3
+  verified_false_events: 14
+  raw_prompt_text_written: false
+  raw_response_text_written: false
+  response_text_used_for_verification: true
+  target_labels_used: false
+  proof_labels_used: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Shadow + audit over the evidence-enriched trace:
+
+```text
+shadow:
+  verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
+  exact_cache_hits: 54
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  p99_shadow_score_latency_ns: 555869
+
+audit:
+  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+  scoreable_candidate_calls: 23
+  verification_hook_ready_events: 17
+  verified_cpu_accept_eligible_events: 0
+  market_claim_allowed: false
+```
+
+Updated interpretation: the first edit route has moved past the blanket
+`missing output evidence` blocker. The remaining blocker is local CPU accept:
+the current profile runtime accepts 0/17 hook-ready real edit rows and therefore
+still proves no real savings.
 
 CPU route feedback-loop report:
 
 ```text
-command: cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+command: cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.verification-hook-audit.report.json target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
 result:
   verdict: CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
   total_llm_calls: 1000
@@ -361,7 +410,7 @@ result:
   operator_candidate_coverage_milli: 285
   scoreable_candidate_calls: 23
   scoreable_candidate_coverage_milli: 23
-  verification_hook_ready_events: 0
+  verification_hook_ready_events: 17
   verified_cpu_accept_eligible_events: 0
   verified_cpu_routability_milli: 0
   target_routability_milli: 800
@@ -377,8 +426,9 @@ Feedback stages:
 role_binding_edit_marker_length_seed0:
   candidate_events: 154
   scoreable_payload_events: 23
-  stage: scoreable_payload_missing_verification_hook
-  next_action: Attach response/tool-call evidence and deterministic output verification.
+  verification_hook_ready_events: 17
+  stage: verification_hook_ready_waiting_local_accept
+  next_action: Tune score/readout threshold only after hook-backed rows prove safety.
 
 role_binding_conditional_branch_seed0:
   candidate_events: 92

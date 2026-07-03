@@ -83,6 +83,7 @@ analyze_command: role-binding-real-traffic-shadow-v1
 cpu_route_forecast_command: role-binding-real-traffic-cpu-route-forecast-v1
 edit_payload_readiness_command: role-binding-real-traffic-edit-payload-readiness-v1
 edit_payload_dry_run_command: role-binding-real-traffic-edit-payload-dry-run-v1
+edit_output_evidence_command: role-binding-real-traffic-edit-output-evidence-v1
 verification_hook_audit_command: role-binding-real-traffic-verification-hook-audit-v1
 feedback_loop_command: role-binding-real-traffic-feedback-loop-v1
 smoke_command: role-binding-real-traffic-shadow-smoke-v1
@@ -145,12 +146,22 @@ current smoke:
   verification_hook_synthetic_control_ready_events: 14.
   verification_hook_synthetic_control_shadow_accepts: 7.
   verification_hook_synthetic_control_market_claim_allowed: false.
+  edit_output_evidence_verdict: EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED.
+  edit_output_evidence_trace: target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl.
+  edit_output_evidence_output_matches: 17.
+  edit_output_evidence_verified_true: 3.
+  edit_output_evidence_verified_false: 14.
+  edit_output_evidence_raw_response_written: false.
+  edit_output_evidence_market_claim_allowed: false.
+  edit_output_evidence_shadow_accepts: 0.
+  edit_output_evidence_shadow_false_accepts: 0.
+  edit_output_evidence_audit_ready_events: 17.
   feedback_loop_verdict: CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW.
   feedback_loop_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json.
   feedback_loop_exact_cache_hits: 54.
   feedback_loop_operator_candidate_calls: 285.
   feedback_loop_scoreable_candidate_calls: 23.
-  feedback_loop_verification_hook_ready_events: 0.
+  feedback_loop_verification_hook_ready_events: 17.
   feedback_loop_verified_cpu_routability_milli: 0.
   feedback_loop_routing_gap_to_80_calls: 515.
   feedback_loop_verified_gap_to_80_calls: 800.

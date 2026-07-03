@@ -286,6 +286,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run edit payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-edit-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach response fingerprints and deterministic edit verification to scoreable real Codex edit rows"
+    );
+    println!(
         "  role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]"
     );
     println!(

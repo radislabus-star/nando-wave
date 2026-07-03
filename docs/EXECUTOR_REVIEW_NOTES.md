@@ -1,5 +1,101 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Edit Output Evidence Join
+
+Verdict:
+
+```text
+EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-edit-output-evidence-v1.
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl
+  /home/ubu/.codex/sessions
+
+and writes:
+  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json
+```
+
+Privacy / anti-leak boundary:
+
+```text
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Real Codex output-evidence result:
+
+```text
+total_trace_rows: 1000
+operator_candidate_calls: 23
+scoreable_candidate_calls: 23
+output_evidence_matched_events: 17
+no_session_output_match_events: 6
+deterministic_verification_events: 17
+verified_true_events: 3
+verified_false_events: 14
+```
+
+Shadow + audit over evidence-enriched trace:
+
+```text
+shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
+shadow_operator_candidate_calls: 23
+shadow_nando_accepts: 0
+shadow_verified_safe_accepts: 0
+shadow_false_accepts: 0
+shadow_incremental_reduction_vs_exact_cache_milli: 0
+shadow_p99_score_latency_ns: 555869
+
+audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+audit_verification_hook_ready_events: 17
+audit_verified_cpu_accept_eligible_events: 0
+audit_market_claim_allowed: false
+```
+
+Updated feedback-loop stage:
+
+```text
+role_binding_edit_marker_length_seed0:
+  candidate_events: 154
+  scoreable_payload_events: 23
+  verification_hook_ready_events: 17
+  stage: verification_hook_ready_waiting_local_accept
+  next_action: tune score/readout threshold only after hook-backed rows prove safety
+
+verified_cpu_routability_milli: 0
+verified_gap_to_80_calls: 800
+```
+
+Diagnostic read:
+
+```text
+The edit route is no longer blocked at "missing output evidence" for all
+scoreable rows. 17/23 scoreable rows now have real Codex final-answer evidence
+and explicit deterministic verification. The blocker moved forward:
+  output evidence exists;
+  local CPU runtime still accepts 0 real rows;
+  verified CPU savings are still 0.
+
+Next debt:
+  inspect the 3 verifier-true edit rows by fingerprint/metrics only, then tune
+  score/readout or the edit payload geometry so hook-backed true rows can become
+  local accepts without creating false accepts on the 14 verifier-false rows.
+```
+
 ## 2026-07-03 - Executor Integration: CPU Route Feedback Loop
 
 Verdict:

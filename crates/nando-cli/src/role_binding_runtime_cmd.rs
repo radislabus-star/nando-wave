@@ -59,6 +59,10 @@ const DEFAULT_EDIT_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_SHADOW_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json";
+const DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl";
+const DEFAULT_EDIT_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
@@ -3592,6 +3596,154 @@ where
     Err("edit payload dry-run is review-only; run shadow analysis before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_edit_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "edit output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_edit_output_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += 1;
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        if !evidence.verifier_applicable {
+            verifier_not_applicable_events += 1;
+        }
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "edit output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_edit_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "EDIT_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Edit output evidence join only. It reads local Codex session final answers at analysis time, writes fingerprints and explicit deterministic verification results, writes no raw prompt/response text, does not enable local accepts, and cannot prove market savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the evidence-enriched trace; only hook-backed true verifications with local accepts and provider cost can count as verified CPU savings.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-edit-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("edit output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_verification_hook_audit_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -5814,6 +5966,51 @@ struct RoleBindingEditPayloadDryRunRow {
     slots: usize,
     positive_impulses: usize,
     negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditOutputEvidenceReport {
+    schema_version: String,
+    verdict: String,
+    input_trace_path: String,
+    sessions_root: String,
+    output_trace_path: String,
+    total_trace_rows: usize,
+    operator_candidate_calls: usize,
+    scoreable_candidate_calls: usize,
+    session_ids_requested: usize,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    output_evidence_matched_events: usize,
+    no_session_output_match_events: usize,
+    deterministic_verification_events: usize,
+    verifier_not_applicable_events: usize,
+    verified_true_events: usize,
+    verified_false_events: usize,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_verification: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionOutputEvidenceIndex {
+    by_request_fingerprint: BTreeMap<String, CodexSessionOutputEvidence>,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionOutputEvidence {
+    response_fingerprint: String,
+    verified_safe_accept: bool,
+    verifier_applicable: bool,
+    verifier_status: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -8396,6 +8593,235 @@ fn event_row_has_output_evidence(row: &RoleBindingRealTrafficEventRow) -> bool {
 
 fn trace_row_has_output_evidence(row: &RoleBindingRealTrafficTraceRow) -> bool {
     nonempty_option(&row.response_fingerprint) || !row.tool_call_fingerprints.is_empty()
+}
+
+fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
+    let rest = trace_id.strip_prefix("codex_history_edit_payload_dry_run::")?;
+    let (without_index, _) = rest.rsplit_once("::")?;
+    let (session_id, _) = without_index.rsplit_once("::")?;
+    Some(session_id.to_owned())
+}
+
+fn build_codex_session_output_evidence_index(
+    sessions_root: &Path,
+    session_ids: &HashSet<String>,
+    wanted_request_fingerprints: &HashSet<String>,
+) -> Result<CodexSessionOutputEvidenceIndex, String> {
+    let mut session_files = Vec::new();
+    collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
+    let mut by_request_fingerprint = BTreeMap::new();
+    let mut codex_turns_indexed = 0usize;
+    for session_file in &session_files {
+        let text = fs::read_to_string(session_file).map_err(|error| {
+            format!(
+                "failed to read Codex session JSONL {}: {error}",
+                session_file.display()
+            )
+        })?;
+        let mut pending_request_fingerprint: Option<String> = None;
+        let mut pending_prompt_text: Option<String> = None;
+        for (line_index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(trimmed).map_err(|error| {
+                format!(
+                    "failed to parse Codex session JSONL {} line {}: {error}",
+                    session_file.display(),
+                    line_index + 1
+                )
+            })?;
+            if value.get("type").and_then(serde_json::Value::as_str) != Some("event_msg") {
+                continue;
+            }
+            let Some(payload) = value.get("payload") else {
+                continue;
+            };
+            match payload.get("type").and_then(serde_json::Value::as_str) {
+                Some("user_message") => {
+                    if let Some(message) =
+                        payload.get("message").and_then(serde_json::Value::as_str)
+                    {
+                        let fingerprint = format!(
+                            "fnv1a64:{:016x}",
+                            stable_real_traffic_fingerprint64(message.as_bytes())
+                        );
+                        pending_prompt_text = Some(message.to_owned());
+                        pending_request_fingerprint = Some(fingerprint);
+                    }
+                }
+                Some("agent_message")
+                    if payload.get("phase").and_then(serde_json::Value::as_str)
+                        == Some("final_answer") =>
+                {
+                    let Some(request_fingerprint) = pending_request_fingerprint.take() else {
+                        continue;
+                    };
+                    let Some(prompt_text) = pending_prompt_text.take() else {
+                        continue;
+                    };
+                    if !wanted_request_fingerprints.contains(&request_fingerprint) {
+                        continue;
+                    }
+                    let Some(response_text) =
+                        payload.get("message").and_then(serde_json::Value::as_str)
+                    else {
+                        continue;
+                    };
+                    let response_fingerprint = format!(
+                        "fnv1a64:{:016x}",
+                        stable_real_traffic_fingerprint64(response_text.as_bytes())
+                    );
+                    let (verified_safe_accept, verifier_applicable, verifier_status) =
+                        deterministic_edit_output_verification(&prompt_text, response_text);
+                    by_request_fingerprint.entry(request_fingerprint).or_insert(
+                        CodexSessionOutputEvidence {
+                            response_fingerprint,
+                            verified_safe_accept,
+                            verifier_applicable,
+                            verifier_status,
+                        },
+                    );
+                    codex_turns_indexed += 1;
+                }
+                Some("task_complete") => {
+                    pending_request_fingerprint = None;
+                    pending_prompt_text = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(CodexSessionOutputEvidenceIndex {
+        by_request_fingerprint,
+        session_files_scanned: session_files.len(),
+        codex_turns_indexed,
+    })
+}
+
+fn collect_codex_session_jsonl_files(
+    root: &Path,
+    session_ids: &HashSet<String>,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), String> {
+    if session_ids.is_empty() {
+        return Ok(());
+    }
+    let entries = fs::read_dir(root)
+        .map_err(|error| format!("failed to read sessions root {}: {error}", root.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "failed to read sessions root entry {}: {error}",
+                root.display()
+            )
+        })?;
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(|error| {
+            format!(
+                "failed to read sessions entry type {}: {error}",
+                path.display()
+            )
+        })?;
+        if file_type.is_dir() {
+            collect_codex_session_jsonl_files(&path, session_ids, files)?;
+        } else if file_type.is_file()
+            && path.extension().and_then(|extension| extension.to_str()) == Some("jsonl")
+            && path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    session_ids
+                        .iter()
+                        .any(|session_id| name.contains(session_id))
+                })
+        {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(())
+}
+
+fn deterministic_edit_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness = analyze_edit_payload_readiness(prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let tokens = extract_request_side_edit_tokens(
+        prompt_text,
+        usize::from(REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT),
+    );
+    let Some(marker) = extract_request_side_marker_token(prompt_text, &tokens) else {
+        return (false, false, "not_applicable_missing_marker".to_owned());
+    };
+    if marker.chars().count() < 3 {
+        return (false, false, "not_applicable_marker_too_short".to_owned());
+    }
+    let response_lower = response_text.to_lowercase();
+    let marker_lower = marker.to_lowercase();
+    let marker_present = response_lower.contains(&marker_lower);
+    let refusal_or_failure = contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    );
+    let edit_confirmation = contains_any(
+        &response_lower,
+        &[
+            "```",
+            "diff",
+            "patch",
+            "updated",
+            "changed",
+            "fixed",
+            "rewrote",
+            "исправ",
+            "обнов",
+            "замен",
+            "перепис",
+            "готов",
+        ],
+    );
+    let verified = marker_present && edit_confirmation && !refusal_or_failure;
+    let status = if verified {
+        "verified_marker_present_with_edit_confirmation"
+    } else if !marker_present {
+        "rejected_marker_absent_from_response"
+    } else if refusal_or_failure {
+        "rejected_response_reports_failure"
+    } else {
+        "rejected_no_edit_confirmation"
+    };
+    (verified, true, status.to_owned())
+}
+
+fn append_trace_note(previous: Option<&str>, addition: &str) -> String {
+    match previous.map(str::trim).filter(|text| !text.is_empty()) {
+        Some(previous) => format!("{previous}; {addition}"),
+        None => addition.to_owned(),
+    }
 }
 
 fn nonempty_option(value: &Option<String>) -> bool {
