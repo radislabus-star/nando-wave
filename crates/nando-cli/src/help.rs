@@ -310,6 +310,12 @@ pub(crate) fn print_help() {
         "            Compile read-inspect dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
     );
     println!(
+        "  role-binding-real-traffic-read-inspect-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach Codex final-answer fingerprints plus conservative read-only path/evidence verifier results; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(

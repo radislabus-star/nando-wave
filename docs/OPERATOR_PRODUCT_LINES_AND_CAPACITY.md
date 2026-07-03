@@ -216,12 +216,20 @@ Read-inspect route/profile rung:
   read_inspect_scoreable_payloads: 12
   read_inspect_profile_edges: 8
   read_inspect_runtime_bytes_estimate: 33000
+  output_evidence_report: read-inspect-output-evidence-v1.report.json
+  output_evidence_matched_events: 9
+  verifier_true_events: 1
+  verifier_false_events: 8
+  verification_hook_ready_events: 9
   verified_cpu_accepts: 0
-  blocker: read_only_path_and_excerpt_verifier_v1 missing
+  blocker: local_accept_policy_not_calibrated; singleton true support is not promotable
 
-Fresh route-only forecast after read_inspect registry:
-  operator_candidate_calls: 489 / 1000
-  no_candidate_calls: 511 / 1000
+Fresh default feedback after read_inspect output evidence:
+  operator_candidate_calls: 314 / 1000
+  scoreable_candidate_calls: 105 / 1000
+  verification_hook_ready_events: 81
+  verified_cpu_accepts: 8 / 1000
+  verified_gap_to_80_calls: 792
   market_claim_allowed: false
 ```
 

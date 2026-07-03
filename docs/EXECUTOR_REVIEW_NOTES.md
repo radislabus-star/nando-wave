@@ -1,5 +1,160 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Read-Inspect Output Evidence Verifier
+
+Verdict:
+
+```text
+READ_INSPECT_OUTPUT_EVIDENCE_V1_REVIEW_HOOKS_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-read-inspect-output-evidence-v1
+
+Added verifier:
+  deterministic_read_inspect_output_verification
+  verification_source:
+    codex_session_final_answer_fingerprint_plus_deterministic_read_only_path_and_excerpt_verifier_v1
+
+Feedback-loop default read_inspect audit path now points to:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json
+```
+
+Read-inspect output evidence:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl
+
+input trace:
+  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.trace.jsonl
+
+output_evidence_matched_events:       9
+deterministic_verification_events:    8
+verifier_not_applicable_events:       1
+verified_true_events:                 1
+verified_false_events:                8
+raw_prompt_text_written:              false
+raw_response_text_written:            false
+response_text_used_for_verification:  true
+target_labels_used:                   false
+proof_labels_used:                    false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Read-inspect shadow and audit after output evidence:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.shadow-report.json
+
+verification audit:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json
+
+total_llm_calls:                      1000
+exact_cache_hits:                     53
+operator_candidate_calls:             12
+scoreable_candidate_calls:            12
+verification_hook_ready_events:       9
+verified_cpu_accept_eligible_events:  0
+candidates_missing_output_evidence:   3
+candidates_missing_explicit_verification: 3
+nando_shadow_accepts:                 0
+verified_safe_accepts:                0
+false_accepts:                        0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns:          249929
+market_claim_allowed:                 false
+```
+
+Feedback loop after read_inspect output evidence:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             314
+scoreable_candidate_calls:            105
+verification_hook_ready_events:       81
+verified_cpu_accept_eligible_events:  8
+verified_cpu_routability_milli:       8
+verified_gap_to_80_calls:             792
+market_claim_allowed:                 false
+```
+
+Claim boundary:
+
+```text
+This closes the missing read_only_path_and_excerpt_verifier_v1 integration debt
+for read_inspect output evidence. It does not enable read_inspect local accepts
+and does not prove savings.
+
+The read_inspect route now has verifier labels:
+  true:  1
+  false: 8
+
+But all 12 read_inspect scoreable rows still have local accepts disabled, so
+verified_cpu_accept_eligible_events remains 0 for this route.
+
+The current default feedback bundle reports 8/1000 verified CPU accepts on its
+own artifact base. The historical mixed-v2 bundle remains the stronger 17/1000
+snapshot. Do not mix these numbers as a single claim.
+```
+
+Next engineering debt:
+
+```text
+Calibrate read_inspect local accept only after verifier-true support is large
+enough. Singleton true support is not enough to promote a policy.
+
+Next route-gap families remain:
+  metrics_report_readout
+  retrieval_lookup
+
+Also refresh stale extended feedback/catalog defaults that still point at older
+schema artifacts.
+```
+
+NANDA structural gate:
+
+```text
+task_id:
+  read-inspect-output-evidence-v1
+
+packet:
+  docs/structural_gates/read-inspect-output-evidence-v1.md
+
+report:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.nanda.json
+
+verdict:
+  VETO
+
+complexity_score:
+  89
+
+explanation:
+  weak route coherence / weak composite-mode support / task should be split
+
+interpretation:
+  proof_shape_debt_not_runtime_failure
+
+Do not use this packet as structural PASS. JSON reports are the numeric
+authority for route/profile/evidence measurements.
+```
+
 ## 2026-07-04 - Executor Integration: Read-Inspect Route Payload/Profile
 
 Verdict:

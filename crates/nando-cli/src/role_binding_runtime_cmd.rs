@@ -79,6 +79,11 @@ const DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json";
 const DEFAULT_READ_INSPECT_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-profile-v1.report.json";
+const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl";
+const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.report.json";
+const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_REPORT: &str =
@@ -4660,6 +4665,161 @@ where
     );
     println!("  local_accepts_enabled_on_real_traffic: false");
     Err("read-inspect profile is review-only; attach verifier before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_read_inspect_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_READ_INSPECT_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_read_inspect_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_READ_INSPECT_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "read-inspect output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_read_only_path_and_excerpt_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "read-inspect output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_read_inspect_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "READ_INSPECT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "READ_INSPECT_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Read-inspect output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and deterministic path/evidence verification results, writes no raw prompt/response text, and does not enable local accepts or market savings claims.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the read-inspect evidence trace, then calibrate local accept only if verifier-true support is sufficient and false_accepts remain 0.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-read-inspect-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("read-inspect output evidence is review-only; run shadow/audit before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_output_evidence_v1<I>(
@@ -9890,11 +10050,7 @@ where
     let read_inspect_verification_audit_report_path = args
         .next()
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(
-                "target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.verification-hook-audit.report.json",
-            )
-        });
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_AUDIT_REPORT));
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -20188,6 +20344,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_planning_next_step_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_read_inspect_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_agent_control_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
@@ -21060,6 +21217,126 @@ fn deterministic_planning_next_step_output_verification(
         true,
         "rejected_requires_artifact_progress_verifier".to_owned(),
     )
+}
+
+fn deterministic_read_inspect_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(tokens) = extract_read_inspect_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_read_inspect_tokens".to_owned(),
+        );
+    };
+    if tokens.path_token.chars().count() < 3 {
+        return (
+            false,
+            false,
+            "not_applicable_path_token_too_short".to_owned(),
+        );
+    }
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "недостаточно",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+
+    let path_present = response_contains_read_inspect_path(&response_lower, &tokens.path_token);
+    let read_evidence_signal = contains_any(
+        &response_lower,
+        &[
+            "```",
+            "line",
+            "lines",
+            "excerpt",
+            "file",
+            "path",
+            "read",
+            "checked",
+            "found",
+            "source",
+            "строк",
+            "строка",
+            "выдерж",
+            "файл",
+            "путь",
+            "прочит",
+            "посмотр",
+            "провер",
+            "нашёл",
+            "нашел",
+            "источник",
+        ],
+    );
+    let explicit_no_write_signal = !contains_any(
+        &response_lower,
+        &[
+            "changed",
+            "updated",
+            "patched",
+            "wrote",
+            "deleted",
+            "исправ",
+            "измен",
+            "обнов",
+            "запис",
+            "удал",
+        ],
+    );
+    let verified = path_present && read_evidence_signal && explicit_no_write_signal;
+    let status = if verified {
+        "verified_path_with_read_evidence"
+    } else if !path_present {
+        "rejected_path_absent_from_response"
+    } else if !read_evidence_signal {
+        "rejected_missing_read_evidence_signal"
+    } else {
+        "rejected_response_claims_write_action"
+    };
+    (verified, true, status.to_owned())
+}
+
+fn response_contains_read_inspect_path(response_lower: &str, path_token: &str) -> bool {
+    let path_lower = path_token.to_lowercase();
+    if path_lower.len() >= 3 && response_lower.contains(&path_lower) {
+        return true;
+    }
+    path_lower
+        .rsplit(['/', '\\'])
+        .next()
+        .map(str::trim)
+        .filter(|name| name.len() >= 3)
+        .is_some_and(|name| response_lower.contains(name))
 }
 
 fn deterministic_agent_control_output_verification(
