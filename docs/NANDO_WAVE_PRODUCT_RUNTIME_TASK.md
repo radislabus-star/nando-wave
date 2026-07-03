@@ -85,10 +85,14 @@ edit_payload_readiness_command: role-binding-real-traffic-edit-payload-readiness
 edit_payload_dry_run_command: role-binding-real-traffic-edit-payload-dry-run-v1
 conditional_payload_readiness_command: role-binding-real-traffic-conditional-payload-readiness-v1
 conditional_payload_dry_run_command: role-binding-real-traffic-conditional-payload-dry-run-v1
+mixed_payload_readiness_command: role-binding-real-traffic-mixed-payload-readiness-v1
+mixed_payload_dry_run_command: role-binding-real-traffic-mixed-payload-dry-run-v1
 edit_output_evidence_command: role-binding-real-traffic-edit-output-evidence-v1
 conditional_output_evidence_command: role-binding-real-traffic-conditional-output-evidence-v1
+mixed_output_evidence_command: role-binding-real-traffic-mixed-output-evidence-v1
 edit_local_accept_calibration_command: role-binding-real-traffic-edit-local-accept-calibration-v1
 conditional_local_accept_calibration_command: role-binding-real-traffic-conditional-local-accept-calibration-v1
+mixed_local_accept_calibration_command: role-binding-real-traffic-mixed-local-accept-calibration-v1
 edit_admission_calibration_command: role-binding-real-traffic-edit-admission-calibration-v1
 verification_hook_audit_command: role-binding-real-traffic-verification-hook-audit-v1
 feedback_loop_command: role-binding-real-traffic-feedback-loop-v1
@@ -176,6 +180,36 @@ current smoke:
   conditional_local_accept_calibration_label_false_rows: 15.
   conditional_local_accept_calibration_safe_policy_found: false.
   conditional_local_accept_calibration_best_safe_true_accepts: 0.
+  mixed_payload_readiness_verdict: MIXED_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND.
+  mixed_payload_readiness_candidate_events: 39.
+  mixed_payload_readiness_payload_ready_events: 14.
+  mixed_payload_readiness_payload_ready_rate_milli: 358.
+  mixed_payload_dry_run_verdict: MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT.
+  mixed_payload_dry_run_trace: target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.trace.jsonl.
+  mixed_payload_dry_run_report: target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.report.json.
+  mixed_payload_dry_run_payload_built_events: 14.
+  mixed_payload_dry_run_scoreable_payload_events: 14.
+  mixed_payload_dry_run_raw_text_written: false.
+  mixed_payload_dry_run_response_text_used: false.
+  mixed_payload_dry_run_target_labels_used: false.
+  mixed_payload_dry_run_proof_labels_used: false.
+  mixed_output_evidence_verdict: MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED.
+  mixed_output_evidence_trace: target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl.
+  mixed_output_evidence_output_matches: 13.
+  mixed_output_evidence_verified_true: 10.
+  mixed_output_evidence_verified_false: 3.
+  mixed_output_evidence_raw_response_written: false.
+  mixed_output_evidence_market_claim_allowed: false.
+  mixed_local_accept_calibration_verdict: MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND.
+  mixed_local_accept_calibration_hook_ready_rows: 13.
+  mixed_local_accept_calibration_label_true_rows: 10.
+  mixed_local_accept_calibration_label_false_rows: 3.
+  mixed_local_accept_calibration_safe_policy_found: true.
+  mixed_local_accept_calibration_best_safe_true_accepts: 4.
+  feedback_loop_scoreable_candidate_calls: 61.
+  feedback_loop_verification_hook_ready_events: 51.
+  feedback_loop_verified_cpu_routability_milli: 0.
+  feedback_loop_verified_gap_to_80_calls: 800.
   verification_hook_audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS.
   verification_hook_audit_report: target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json.
   verification_hook_audit_operator_candidate_calls: 23.

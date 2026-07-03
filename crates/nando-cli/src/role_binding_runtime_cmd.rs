@@ -74,6 +74,19 @@ const DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
 const DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.report.json";
 const DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.verification-hook-audit.report.json";
+const DEFAULT_MIXED_PAYLOAD_READINESS_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-payload-readiness-v1.report.json";
+const DEFAULT_MIXED_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_MIXED_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.report.json";
+const DEFAULT_MIXED_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl";
+const DEFAULT_MIXED_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.report.json";
+const DEFAULT_MIXED_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.verification-hook-audit.report.json";
+const DEFAULT_MIXED_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1.report.json";
 const DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json";
 const DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
@@ -113,6 +126,16 @@ const REAL_TRAFFIC_CONDITIONAL_REFUSED_ROLE_SLOT: u8 = 3;
 const REAL_TRAFFIC_CONDITIONAL_OPERATOR_PAIR_SHIFT: u32 = 5;
 const REAL_TRAFFIC_CONDITIONAL_TOP_ROLE_L1_LANES: usize = 32;
 const REAL_TRAFFIC_CONDITIONAL_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_MIXED_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_MIXED_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_MIXED_OPERATOR_PAIR_BASE: u32 = 33 << 12;
+const REAL_TRAFFIC_MIXED_SOURCE_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_MIXED_DESTINATION_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_MIXED_ACTION_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_MIXED_INVARIANT_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_MIXED_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_MIXED_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_MIXED_STATE_DELTA_LANES_PER_SIDE: usize = 24;
 
 pub(crate) fn run_role_binding_profile_registry_from_release_v1<I>(
     mut args: I,
@@ -4005,6 +4028,388 @@ where
     Err("conditional payload dry-run is review-only; run shadow analysis before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_mixed_payload_readiness_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_PAYLOAD_READINESS_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut rows = Vec::new();
+    let mut candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut missing_action_signal = 0usize;
+    let mut missing_source_signal = 0usize;
+    let mut missing_destination_signal = 0usize;
+    let mut missing_mapping_signal = 0usize;
+    let mut missing_map_tokens = 0usize;
+    let mut route_counts = BTreeMap::<String, usize>::new();
+    let mut builder_kind_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let Some(candidate) = route_catalog.classify_request_text(&row.text) else {
+            continue;
+        };
+        if !candidate.route_key.contains("mixed_map") {
+            continue;
+        }
+        candidate_events += 1;
+        *route_counts.entry(candidate.route_key.clone()).or_insert(0) += 1;
+        let readiness = analyze_mixed_payload_readiness(&row.text);
+        payload_ready_events += usize::from(readiness.payload_ready);
+        missing_action_signal += usize::from(!readiness.has_action_signal);
+        missing_source_signal += usize::from(!readiness.has_source_signal);
+        missing_destination_signal += usize::from(!readiness.has_destination_signal);
+        missing_mapping_signal += usize::from(!readiness.has_mapping_signal);
+        missing_map_tokens += usize::from(!readiness.has_map_tokens);
+        *builder_kind_counts
+            .entry(readiness.recommended_builder_kind.clone())
+            .or_insert(0) += 1;
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        rows.push(RoleBindingMixedPayloadReadinessRow {
+            event_id: format!(
+                "codex_history_mixed_readiness::{}::{}::{}",
+                row.session_id, row.ts, index
+            ),
+            request_fingerprint: format!("fnv1a64:{fingerprint:016x}"),
+            route_key: candidate.route_key,
+            profile_id: candidate.profile_id,
+            has_action_signal: readiness.has_action_signal,
+            has_source_signal: readiness.has_source_signal,
+            has_destination_signal: readiness.has_destination_signal,
+            has_mapping_signal: readiness.has_mapping_signal,
+            has_map_tokens: readiness.has_map_tokens,
+            payload_ready: readiness.payload_ready,
+            recommended_builder_kind: readiness.recommended_builder_kind,
+            missing_reasons: readiness.missing_reasons,
+        });
+    }
+
+    let report = RoleBindingMixedPayloadReadinessReport {
+        schema_version: "nando_role_binding_mixed_payload_readiness_v1".to_owned(),
+        verdict: if payload_ready_events > 0 {
+            "MIXED_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND"
+        } else {
+            "MIXED_PAYLOAD_READINESS_V1_REVIEW_NO_READY_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        candidate_events,
+        payload_ready_events,
+        payload_ready_rate_milli: ratio_milli(payload_ready_events, candidate_events),
+        missing_action_signal,
+        missing_source_signal,
+        missing_destination_signal,
+        missing_mapping_signal,
+        missing_map_tokens,
+        route_counts: route_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        builder_kind_counts: builder_kind_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows,
+        claim_boundary: "Request-side mixed-map payload readiness only. It reads local Codex prompt text at analysis time, writes no raw text, and does not use response, target, proof, or expected answer labels. Payload-ready means enough request-side action/source/destination/mapping signals exist to attempt dry-run active_fringe/slot construction; it is not verified savings.".to_owned(),
+        next_engineering_debt: "Use ready rows to build mixed_map_payload_builder_v1 that emits active_fringe and slots from request text only, then run shadow and verification-hook audits before any local accept.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-mixed-payload-readiness-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  candidate_events: {}", report.candidate_events);
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!(
+        "  payload_ready_rate_milli: {}",
+        report.payload_ready_rate_milli
+    );
+    println!("  raw_text_written: {}", report.raw_text_written);
+    Err("mixed payload readiness is review-only; it is not verified savings".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_mixed_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut mixed_route_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_mixed_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "no mixed_map route candidate".to_owned();
+
+        if let Some(candidate) = route_catalog.classify_request_text(&row.text)
+            && candidate.route_key.contains("mixed_map")
+        {
+            mixed_route_candidate_events += 1;
+            let readiness = analyze_mixed_payload_readiness(&row.text);
+            if readiness.payload_ready {
+                payload_ready_events += 1;
+                let built =
+                    build_mixed_map_dry_run_request(&event_id, &fingerprint, &candidate, &row.text);
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable {
+                            "scoreable_payload_built"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingMixedPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: candidate.route_key.clone(),
+                            profile_id: candidate.profile_id.clone(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side dry-run mixed payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingMixedPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: candidate.route_key.clone(),
+                            profile_id: candidate.profile_id.clone(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "readiness_rejected".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = format!(
+                    "mixed route candidate rejected by readiness gate: {}",
+                    readiness.missing_reasons.join(",")
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_local_mixed_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side mixed payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let report = RoleBindingMixedPayloadDryRunReport {
+        schema_version: "nando_role_binding_mixed_payload_dry_run_v1".to_owned(),
+        verdict: if scoreable_payload_events > 0 {
+            "MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT"
+        } else {
+            "MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        mixed_route_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run mixed payload builder only. It emits active_fringe/slots for ready mixed-route rows from prompt text only, sets verified_safe_accept=None and expect_local_operator=false, and therefore cannot prove savings. Any local accept in the following shadow run is unverified and must not become a market claim.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook audit on this trace. If local accepts stay zero, attach deterministic response/tool verification before calibration.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-mixed-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  mixed_route_candidate_events: {}",
+        report.mixed_route_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  raw_text_written: {}", report.raw_text_written);
+    Err("mixed payload dry-run is review-only; run shadow analysis before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_edit_output_evidence_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -4303,6 +4708,140 @@ where
     Err("conditional output evidence is review-only; run shadow/audit before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_mixed_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_REPORT));
+
+    let mut trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| row.request_fingerprint.clone())
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_mixed_output_verification,
+    )?;
+
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+
+    for row in &mut trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        let Some(request_fingerprint) = &row.request_fingerprint else {
+            no_session_output_match_events += 1;
+            continue;
+        };
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(format!(
+            "codex_session_final_answer_mixed_verifier:{}",
+            evidence.verifier_status
+        ));
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &trace_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_mixed_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "MIXED_OUTPUT_EVIDENCE_V1_REVIEW_NO_EVIDENCE_MATCH"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Mixed output evidence join only. It reads local Codex session final answers at analysis time, writes fingerprints and deterministic verification results, writes no raw prompt/response text, does not enable local accepts, and cannot prove market savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the mixed evidence trace. Only hook-backed true verifications with local accepts, provider cost, non-synthetic traces, and false_accepts=0 can count as verified CPU savings.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-mixed-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("mixed output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_edit_local_accept_calibration_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -4598,6 +5137,156 @@ where
         report.best_safe_true_accepts
     );
     Err("conditional local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_mixed_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_LOCAL_ACCEPT_CALIBRATION_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let destination_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let action_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin: destination_slot_margin,
+            end_slot_margin: action_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_strict_all_slots", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_only_policy =
+        evaluate_edit_calibration_policy("energy_only_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let destination_slot_policy = evaluate_edit_calibration_policy(
+        "destination_slot_only_ignore_action_slot",
+        &scored_rows,
+        |row| row.marker_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let action_slot_policy = evaluate_edit_calibration_policy(
+        "action_slot_only_ignore_destination_slot",
+        &scored_rows,
+        |row| row.end_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let best_destination_threshold_policy = best_single_threshold_policy(
+        "best_destination_slot_margin_threshold",
+        &scored_rows,
+        |row| row.marker_slot_margin,
+    );
+    let best_energy_threshold_policy =
+        best_single_threshold_policy("best_energy_margin_threshold", &scored_rows, |row| {
+            row.energy_margin
+        });
+    let policies = vec![
+        current_policy,
+        energy_only_policy,
+        destination_slot_policy,
+        action_slot_policy,
+        best_destination_threshold_policy,
+        best_energy_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_mixed_local_accept_calibration_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
+        } else {
+            "MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Mixed calibration only. It evaluates readout policies against evidence-backed real Codex mixed labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Promote the safe policy only behind a separate non-synthetic shadow trace rewrite with false_accepts=0, provider cost, rollback, and explicit admission rules.".to_owned()
+        } else {
+            "Do not relax score/readout thresholds. The current mixed payload geometry does not separate verifier-true from verifier-false rows; improve map extraction/admission before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-mixed-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("mixed local accept calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_edit_admission_calibration_v1<I>(
@@ -4993,6 +5682,14 @@ where
     } else {
         None
     };
+    let mixed_dry_run_report_path = PathBuf::from(DEFAULT_MIXED_PAYLOAD_DRY_RUN_REPORT);
+    let mixed_dry_run = if mixed_dry_run_report_path.exists() {
+        Some(read_json_file::<RoleBindingMixedPayloadDryRunReport>(
+            &mixed_dry_run_report_path,
+        )?)
+    } else {
+        None
+    };
     let verification_audit =
         read_json_file::<RoleBindingVerificationHookAuditReport>(&verification_audit_report_path)?;
     let conditional_audit_report_path =
@@ -5016,6 +5713,25 @@ where
         } else {
             None
         };
+    let mixed_audit_report_path = PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let mixed_verification_audit = if mixed_audit_report_path.exists() {
+        Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+            &mixed_audit_report_path,
+        )?)
+    } else {
+        None
+    };
+    let mixed_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_MIXED_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let mixed_local_accept_calibration = if mixed_local_accept_calibration_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                &mixed_local_accept_calibration_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
     let mut verification_by_route = verification_audit
         .routes
         .iter()
@@ -5023,6 +5739,11 @@ where
         .collect::<BTreeMap<_, _>>();
     if let Some(conditional_audit) = &conditional_verification_audit {
         for row in &conditional_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
+    if let Some(mixed_audit) = &mixed_verification_audit {
+        for row in &mixed_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
@@ -5034,10 +5755,18 @@ where
         + conditional_verification_audit
             .as_ref()
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + mixed_verification_audit
+            .as_ref()
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = verification_audit
         .verified_cpu_accept_eligible_events
         + conditional_verification_audit
+            .as_ref()
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + mixed_verification_audit
             .as_ref()
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
@@ -5051,10 +5780,13 @@ where
         let verification = verification_by_route.get(route.route_key.as_str()).copied();
         let is_edit_route = route.route_key.contains("edit_marker_length");
         let is_conditional_route = route.route_key.contains("conditional_branch");
+        let is_mixed_route = route.route_key.contains("mixed_map");
         let local_accept_calibration = if is_edit_route {
             edit_local_accept_calibration.as_ref()
         } else if is_conditional_route {
             conditional_local_accept_calibration.as_ref()
+        } else if is_mixed_route {
+            mixed_local_accept_calibration.as_ref()
         } else {
             None
         };
@@ -5072,6 +5804,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_mixed_route {
+            mixed_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else {
             0
         };
@@ -5079,6 +5816,11 @@ where
             edit_dry_run.payload_built_events
         } else if is_conditional_route {
             conditional_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
+        } else if is_mixed_route {
+            mixed_dry_run
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
@@ -5090,6 +5832,10 @@ where
             .or_else(|| {
                 if is_conditional_route {
                     conditional_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else if is_mixed_route {
+                    mixed_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
                 } else {
@@ -5171,6 +5917,15 @@ where
         conditional_verification_audit_report_path: conditional_verification_audit
             .as_ref()
             .map(|_| conditional_audit_report_path.display().to_string()),
+        mixed_dry_run_report_path: mixed_dry_run
+            .as_ref()
+            .map(|_| mixed_dry_run_report_path.display().to_string()),
+        mixed_local_accept_calibration_report_path: mixed_local_accept_calibration
+            .as_ref()
+            .map(|_| mixed_local_accept_calibration_report_path.display().to_string()),
+        mixed_verification_audit_report_path: mixed_verification_audit
+            .as_ref()
+            .map(|_| mixed_audit_report_path.display().to_string()),
         verification_audit_report_path: verification_audit_report_path.display().to_string(),
         total_llm_calls: forecast.total_llm_calls,
         exact_cache_hits: forecast.exact_cache_hits,
@@ -5197,7 +5952,7 @@ where
         market_claim_allowed: false,
         routes: route_rows,
         claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
-        next_engineering_debt: "Improve edit/conditional request-side admission or payload geometry after failed local-accept calibration, build the mixed route payload builder, and add provider cost evidence before any savings claim.".to_owned(),
+        next_engineering_debt: "Improve edit/conditional request-side admission or payload geometry after failed local-accept calibration, attach mixed output evidence after mixed payload dry-run, and add provider cost evidence before any savings claim.".to_owned(),
     };
     write_json_file(&feedback_report_path, &report)?;
     println!(
@@ -5220,6 +5975,15 @@ where
     }
     if let Some(path) = &report.conditional_verification_audit_report_path {
         println!("  conditional_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.mixed_dry_run_report_path {
+        println!("  mixed_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.mixed_local_accept_calibration_report_path {
+        println!("  mixed_local_accept_calibration_report: {path}");
+    }
+    if let Some(path) = &report.mixed_verification_audit_report_path {
+        println!("  mixed_verification_audit_report: {path}");
     }
     println!(
         "  verification_audit_report: {}",
@@ -7224,6 +7988,99 @@ struct RoleBindingConditionalPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedPayloadReadinessReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    missing_action_signal: usize,
+    missing_source_signal: usize,
+    missing_destination_signal: usize,
+    missing_mapping_signal: usize,
+    missing_map_tokens: usize,
+    route_counts: Vec<RoleBindingNamedCount>,
+    builder_kind_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingMixedPayloadReadinessRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedPayloadReadinessRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    has_action_signal: bool,
+    has_source_signal: bool,
+    has_destination_signal: bool,
+    has_mapping_signal: bool,
+    has_map_tokens: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    mixed_route_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingMixedPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedPayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditOutputEvidenceReport {
     schema_version: String,
     verdict: String,
@@ -7506,6 +8363,9 @@ struct RoleBindingFeedbackLoopReport {
     conditional_dry_run_report_path: Option<String>,
     conditional_local_accept_calibration_report_path: Option<String>,
     conditional_verification_audit_report_path: Option<String>,
+    mixed_dry_run_report_path: Option<String>,
+    mixed_local_accept_calibration_report_path: Option<String>,
+    mixed_verification_audit_report_path: Option<String>,
     verification_audit_report_path: String,
     total_llm_calls: usize,
     exact_cache_hits: usize,
@@ -7583,11 +8443,31 @@ struct ConditionalPayloadReadiness {
 }
 
 #[derive(Clone, Debug)]
+struct MixedPayloadReadiness {
+    has_action_signal: bool,
+    has_source_signal: bool,
+    has_destination_signal: bool,
+    has_mapping_signal: bool,
+    has_map_tokens: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
 struct ConditionalBranchTokens {
     condition_token: String,
     evidence_token: String,
     allowed_token: String,
     refused_token: String,
+}
+
+#[derive(Clone, Debug)]
+struct MixedMapTokens {
+    source_token: String,
+    destination_token: String,
+    action_token: String,
+    invariant_token: String,
 }
 
 #[derive(Clone, Debug)]
@@ -9937,6 +10817,358 @@ fn analyze_conditional_payload_readiness(text: &str) -> ConditionalPayloadReadin
     }
 }
 
+fn analyze_mixed_payload_readiness(text: &str) -> MixedPayloadReadiness {
+    let lower = text.to_lowercase();
+    let has_action_signal = contains_any(
+        &lower,
+        &[
+            "запиши",
+            "обнови",
+            "перенеси",
+            "перенос",
+            "добавь",
+            "сделай",
+            "собери",
+            "сохрани",
+            "map",
+            "mapping",
+            "route",
+            "operator",
+            "оператор",
+            "runtime",
+            "traffic",
+            "trace",
+        ],
+    );
+    let has_source_signal = contains_marker_like_signal(text)
+        || contains_any(
+            &lower,
+            &[
+                "это",
+                "вот",
+                "цель",
+                "правило",
+                "оператор",
+                "trace",
+                "route",
+                "runtime",
+                "архитект",
+                "список",
+            ],
+        )
+        || contains_file_like_token(text);
+    let has_destination_signal = contains_any(
+        &lower,
+        &[
+            "сюда",
+            "в ",
+            "to ",
+            "into",
+            "roadmap",
+            ".md",
+            "docs",
+            "памят",
+            "план",
+            "док",
+            "файл",
+            "список",
+            "правило",
+            "goal",
+            "архитект",
+        ],
+    ) || contains_file_like_token(text);
+    let has_mapping_signal = contains_any(
+        &lower,
+        &[
+            "->",
+            "=>",
+            "из ",
+            "в ",
+            "from",
+            " to ",
+            "map",
+            "mapping",
+            "route",
+            "перенес",
+            "связ",
+            "оператор",
+            "обнови",
+            "запиши",
+            "собери",
+        ],
+    );
+    let has_map_tokens = extract_mixed_map_tokens(text).is_some();
+    let payload_ready = has_action_signal
+        && has_source_signal
+        && has_destination_signal
+        && has_mapping_signal
+        && has_map_tokens;
+    let mut missing_reasons = Vec::new();
+    if !has_action_signal {
+        missing_reasons.push("missing_action_signal".to_owned());
+    }
+    if !has_source_signal {
+        missing_reasons.push("missing_source_signal".to_owned());
+    }
+    if !has_destination_signal {
+        missing_reasons.push("missing_destination_signal".to_owned());
+    }
+    if !has_mapping_signal {
+        missing_reasons.push("missing_mapping_signal".to_owned());
+    }
+    if !has_map_tokens {
+        missing_reasons.push("missing_map_tokens".to_owned());
+    }
+    let recommended_builder_kind = if payload_ready {
+        "mixed_map_payload_builder_v1_candidate".to_owned()
+    } else if has_action_signal && has_source_signal {
+        "mixed_map_needs_destination_or_mapping".to_owned()
+    } else if has_action_signal {
+        "mixed_router_needs_source_destination_mapping".to_owned()
+    } else {
+        "not_mixed_payload_ready".to_owned()
+    };
+    MixedPayloadReadiness {
+        has_action_signal,
+        has_source_signal,
+        has_destination_signal,
+        has_mapping_signal,
+        has_map_tokens,
+        payload_ready,
+        recommended_builder_kind,
+        missing_reasons,
+    }
+}
+
+fn build_mixed_map_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    candidate: &CodexHistoryRouteCandidate,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let tokens = extract_mixed_map_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(mixed_request_operator_centers());
+    active_fringe.extend(mixed_role_surface_centers(
+        REAL_TRAFFIC_MIXED_SOURCE_ROLE_SLOT,
+        &tokens.source_token,
+    ));
+    active_fringe.extend(mixed_role_surface_centers(
+        REAL_TRAFFIC_MIXED_DESTINATION_ROLE_SLOT,
+        &tokens.destination_token,
+    ));
+    active_fringe.extend(mixed_role_surface_centers(
+        REAL_TRAFFIC_MIXED_ACTION_ROLE_SLOT,
+        &tokens.action_token,
+    ));
+    active_fringe.extend(mixed_role_surface_centers(
+        REAL_TRAFFIC_MIXED_INVARIANT_ROLE_SLOT,
+        &tokens.invariant_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = mixed_request_score_slot(0, &tokens.destination_token, &tokens.source_token)
+    {
+        slots.push(slot);
+    }
+    if let Some(slot) = mixed_request_score_slot(1, &tokens.action_token, &tokens.destination_token)
+    {
+        slots.push(slot);
+    }
+    if let Some(slot) = mixed_request_score_slot(2, &tokens.invariant_token, &tokens.source_token) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(candidate.route_key.clone()),
+        profile_id: Some(candidate.profile_id.clone()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: response verification has not proven a safe local operator.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn mixed_request_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_MIXED_DESTINATION_ROLE_SLOT),
+        (1, REAL_TRAFFIC_MIXED_ACTION_ROLE_SLOT),
+        (2, REAL_TRAFFIC_MIXED_INVARIANT_ROLE_SLOT),
+        (0, REAL_TRAFFIC_MIXED_SOURCE_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_MIXED_OPERATOR_PAIR_BASE
+                + mixed_request_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn mixed_request_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_MIXED_OPERATOR_PAIR_SHIFT) | u32::from(role_slot)
+}
+
+fn mixed_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_MIXED_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_MIXED_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_MIXED_PAGE_SIZE,
+        REAL_TRAFFIC_MIXED_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn mixed_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_MIXED_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_MIXED_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_mixed_map_tokens(text: &str) -> Option<MixedMapTokens> {
+    let tokens = extract_request_side_edit_tokens(text, 16);
+    if tokens.len() < 2 {
+        return None;
+    }
+    let lower = text.to_lowercase();
+    let action_token = first_matching_branch_token(
+        &lower,
+        &[
+            "запиши",
+            "обнови",
+            "перенеси",
+            "перенос",
+            "добавь",
+            "сделай",
+            "собери",
+            "сохрани",
+            "map",
+            "mapping",
+            "route",
+            "operator",
+            "оператор",
+            "runtime",
+            "traffic",
+            "trace",
+        ],
+    )
+    .unwrap_or_else(|| tokens[0].clone());
+    let source_token = quoted_or_marked_chunks(text)
+        .into_iter()
+        .find_map(|chunk| {
+            extract_request_side_edit_tokens(&chunk, 1)
+                .into_iter()
+                .next()
+        })
+        .or_else(|| {
+            tokens
+                .iter()
+                .find(|token| token.as_str() != action_token)
+                .cloned()
+        })?;
+    let destination_token = tokens
+        .iter()
+        .find(|token| {
+            let lower = token.to_lowercase();
+            token.contains('/')
+                || token.contains('.')
+                || contains_any(
+                    &lower,
+                    &[
+                        "roadmap",
+                        "docs",
+                        "goal",
+                        "план",
+                        "правило",
+                        "список",
+                        "файл",
+                        "памят",
+                        "архитект",
+                        "runtime",
+                        "operator",
+                        "оператор",
+                    ],
+                )
+        })
+        .cloned()
+        .or_else(|| {
+            tokens
+                .iter()
+                .rev()
+                .find(|token| token.as_str() != source_token && token.as_str() != action_token)
+                .cloned()
+        })?;
+    let invariant_token = tokens
+        .iter()
+        .find(|token| {
+            let lower = token.to_lowercase();
+            contains_any(
+                &lower,
+                &[
+                    "operator",
+                    "оператор",
+                    "runtime",
+                    "traffic",
+                    "trace",
+                    "goal",
+                    "proof",
+                    "архитект",
+                    "route",
+                    "map",
+                ],
+            )
+        })
+        .cloned()
+        .unwrap_or_else(|| source_token.clone());
+    if source_token == destination_token {
+        return None;
+    }
+    Some(MixedMapTokens {
+        source_token,
+        destination_token,
+        action_token,
+        invariant_token,
+    })
+}
+
 fn contains_marker_like_signal(text: &str) -> bool {
     text.contains('`')
         || text.contains('"')
@@ -10627,7 +11859,8 @@ fn trace_row_has_output_evidence(row: &RoleBindingRealTrafficTraceRow) -> bool {
 fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
     let rest = trace_id
         .strip_prefix("codex_history_edit_payload_dry_run::")
-        .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))?;
+        .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
     Some(session_id.to_owned())
@@ -10926,6 +12159,91 @@ fn deterministic_conditional_output_verification(
         "rejected_response_reports_failure"
     } else {
         "rejected_missing_condition_or_evidence_signal"
+    };
+    (verified, true, status.to_owned())
+}
+
+fn deterministic_mixed_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness = analyze_mixed_payload_readiness(prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(tokens) = extract_mixed_map_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_mixed_tokens".to_owned(),
+        );
+    };
+    let response_lower = response_text.to_lowercase();
+    let action_present = response_contains_branch_token(&response_lower, &tokens.action_token)
+        || contains_any(
+            &response_lower,
+            &[
+                "updated",
+                "mapped",
+                "moved",
+                "recorded",
+                "wrote",
+                "обнов",
+                "запис",
+                "перен",
+                "собран",
+                "готов",
+            ],
+        );
+    let destination_present =
+        response_contains_branch_token(&response_lower, &tokens.destination_token);
+    let invariant_present =
+        response_contains_branch_token(&response_lower, &tokens.invariant_token)
+            || contains_any(
+                &response_lower,
+                &[
+                    "operator",
+                    "оператор",
+                    "runtime",
+                    "trace",
+                    "route",
+                    "map",
+                    "mapping",
+                ],
+            );
+    let refusal_or_failure = contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    );
+    let verified =
+        action_present && (destination_present || invariant_present) && !refusal_or_failure;
+    let status = if verified {
+        "verified_mixed_action_with_destination_or_invariant"
+    } else if refusal_or_failure {
+        "rejected_response_reports_failure"
+    } else if !action_present {
+        "rejected_action_absent_from_response"
+    } else {
+        "rejected_destination_and_invariant_absent_from_response"
     };
     (verified, true, status.to_owned())
 }

@@ -298,6 +298,18 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run conditional payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-mixed-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
+    );
+    println!(
+        "            Count real mixed-map route rows with enough request-side map/update structure for payload dry-run"
+    );
+    println!(
+        "  role-binding-real-traffic-mixed-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run mixed-map payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
         "  role-binding-real-traffic-edit-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(
@@ -310,6 +322,12 @@ pub(crate) fn print_help() {
         "            Attach response fingerprints and deterministic conditional verification to scoreable real Codex conditional rows"
     );
     println!(
+        "  role-binding-real-traffic-mixed-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach response fingerprints and deterministic mixed-map verification to scoreable real Codex mixed rows"
+    );
+    println!(
         "  role-binding-real-traffic-edit-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
     );
     println!(
@@ -320,6 +338,12 @@ pub(crate) fn print_help() {
     );
     println!(
         "            Compare safe/unsafe readout policies on evidence-backed real Codex conditional rows"
+    );
+    println!(
+        "  role-binding-real-traffic-mixed-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Compare safe/unsafe readout policies on evidence-backed real Codex mixed-map rows"
     );
     println!(
         "  role-binding-real-traffic-edit-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"

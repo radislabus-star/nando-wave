@@ -26,10 +26,14 @@ New commands:
   role-binding-real-traffic-edit-payload-dry-run-v1
   role-binding-real-traffic-conditional-payload-readiness-v1
   role-binding-real-traffic-conditional-payload-dry-run-v1
+  role-binding-real-traffic-mixed-payload-readiness-v1
+  role-binding-real-traffic-mixed-payload-dry-run-v1
   role-binding-real-traffic-edit-output-evidence-v1
   role-binding-real-traffic-conditional-output-evidence-v1
+  role-binding-real-traffic-mixed-output-evidence-v1
   role-binding-real-traffic-edit-local-accept-calibration-v1
   role-binding-real-traffic-conditional-local-accept-calibration-v1
+  role-binding-real-traffic-mixed-local-accept-calibration-v1
   role-binding-real-traffic-edit-admission-calibration-v1
   role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-feedback-loop-v1
@@ -204,6 +208,34 @@ Interpretation: we now have a real, non-synthetic local traffic baseline, but it
 contains no Nando shadow candidates. The next missing piece is a router/candidate
 adapter that turns a real agent event into a `nando_shadow_request` without
 reading target answers or using proof labels.
+
+Mixed-map request-side payload and evidence rung:
+
+```text
+commands:
+  cargo run -p nando-cli -- role-binding-real-traffic-mixed-payload-readiness-v1 /home/ubu/.codex/history.jsonl target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/mixed-payload-readiness-v1.report.json 1000
+  cargo run -p nando-cli -- role-binding-real-traffic-mixed-payload-dry-run-v1 /home/ubu/.codex/history.jsonl target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.report.json 1000
+  cargo run -p nando-cli -- role-binding-real-traffic-mixed-output-evidence-v1 target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.trace.jsonl /home/ubu/.codex/sessions target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.report.json
+  cargo run -p nando-cli -- role-binding-real-traffic-mixed-local-accept-calibration-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1.report.json
+result:
+  mixed_route_candidate_events: 39
+  payload_ready_events: 14
+  payload_built_events: 14
+  scoreable_payload_events: 14
+  output_evidence_matched_events: 13
+  verified_true_events: 10
+  verified_false_events: 3
+  safe_policy_found: true
+  best_safe_true_accepts: 4
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Interpretation: the mixed route now has prompt-side payloads and response-backed
+deterministic labels. It found a safe local-accept policy candidate on the
+current evidence sample, but it is not promoted. Market savings remain zero
+until a separate shadow rewrite with provider cost, rollback, and false
+accepts = 0 passes.
 
 Codex history route-only candidate adapter:
 

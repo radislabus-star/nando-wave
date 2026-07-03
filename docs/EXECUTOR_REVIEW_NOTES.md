@@ -1,5 +1,106 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Mixed Map Payload/Evidence/Calibration
+
+Verdicts:
+
+```text
+MIXED_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
+MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-mixed-payload-readiness-v1
+  role-binding-real-traffic-mixed-payload-dry-run-v1
+  role-binding-real-traffic-mixed-output-evidence-v1
+  role-binding-real-traffic-mixed-local-accept-calibration-v1
+
+The mixed commands write:
+  target/nando-wave/real-traffic-shadow/mixed-payload-readiness-v1.report.json
+  target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.report.json
+  target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.report.json
+  target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1.report.json
+```
+
+Privacy / anti-leak boundary:
+
+```text
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Mixed payload dry-run over the same 1000 real Codex calls:
+
+```text
+mixed_route_candidate_events: 39
+payload_ready_events: 14
+payload_built_events: 14
+scoreable_payload_events: 14
+shadow_nando_accepts: 0
+shadow_false_accepts: 0
+shadow_incremental_reduction_vs_exact_cache_milli: 0
+shadow_p99_score_latency_ns: 241947
+```
+
+Mixed output evidence and calibration:
+
+```text
+output_evidence_matched_events: 13
+deterministic_verification_events: 13
+verified_true_events: 10
+verified_false_events: 3
+
+hook_ready_rows: 13
+scored_rows: 13
+safe_policy_found: true
+best_safe_true_accepts: 4
+```
+
+Updated feedback-loop:
+
+```text
+scoreable_candidate_calls: 61 = 23 edit + 24 conditional + 14 mixed
+verification_hook_ready_events: 51 = 17 edit + 21 conditional + 13 mixed
+verified_cpu_routability_milli: 0
+verified_gap_to_80_calls: 800
+
+role_binding_mixed_map_seed0:
+  candidate_events: 39
+  payload_ready_events: 14
+  payload_built_events: 14
+  scoreable_payload_events: 14
+  verification_hook_ready_events: 13
+  local_accept_calibration_ran: true
+  local_accept_safe_policy_found: true
+  local_accept_best_safe_true_accepts: 4
+  stage: local_accept_calibration_safe_policy_candidate
+```
+
+Diagnostic read:
+
+```text
+The mixed route is no longer payload-builder missing. It now has request-side
+active_fringe/slot construction, response-backed deterministic labels, and a
+safe-policy candidate on the current 13-row hook-ready sample.
+
+This is still not verified CPU savings. Local accepts are not promoted, provider
+cost is absent, shadow accepts are 0, market_claim_allowed is false, and CPU
+Routability 80 remains red.
+```
+
 ## 2026-07-03 - Executor Integration: Conditional Output Evidence Hook
 
 Verdicts:
