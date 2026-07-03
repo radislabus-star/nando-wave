@@ -247,29 +247,36 @@ commands:
   cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.shadow-report.json target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.verification-hook-audit.report.json
 result:
   promoted_acceptance_policy: energy_threshold_only
-  selected_policy: best_energy_margin_threshold
-  threshold: 393216
-  policy_accept_rows: 5
-  policy_accept_verified_true_rows: 4
+  calibration_policy: best_energy_margin_threshold
+  calibration_threshold: 393216
+  selected_policy: market_safe_energy_margin_threshold
+  selected_policy_source: evidence_trace_market_safe_threshold
+  threshold: 466944
+  policy_accept_rows: 2
+  policy_accept_verified_true_rows: 2
   policy_accept_verified_false_rows: 0
-  policy_accept_unverified_rows: 1
+  policy_accept_unverified_rows: 0
   runtime_acceptance_mismatches: 0
-  shadow_nando_accepts: 5
-  shadow_verified_safe_accepts: 4
-  shadow_unverified_shadow_accepts: 1
+  shadow_nando_accepts: 2
+  shadow_verified_safe_accepts: 2
+  shadow_unverified_shadow_accepts: 0
   shadow_false_accepts: 0
-  shadow_incremental_savings_over_exact_cache: 4
-  shadow_incremental_reduction_vs_exact_cache_milli: 4
-  shadow_estimated_cost_saved_microusd: 400
-  shadow_p99_score_latency_ns: 203134
-  audit_verified_cpu_accept_eligible_events: 4
-  audit_market_claim_allowed: false
+  shadow_incremental_savings_over_exact_cache: 2
+  shadow_incremental_reduction_vs_exact_cache_milli: 2
+  shadow_estimated_cost_saved_microusd: 200
+  shadow_p99_score_latency_ns: 270771
+  audit_verified_cpu_accept_eligible_events: 2
+  audit_market_claim_allowed: true
 ```
 
-Interpretation: this is the first non-zero verified CPU routability signal on
-non-synthetic Codex traffic. It is still REVIEW, not PASS, because one local
-accept is unverified. The next gate is either attach output evidence for that
-accepted row or tighten admission/policy until `unverified_shadow_accepts = 0`.
+Interpretation: the original calibration threshold 393216 accepted one
+unverified row. The promoter now recomputes a market-safe energy threshold from
+the full evidence trace and selects 466944. Serving still uses only
+`energy_margin >= threshold`; verifier labels are used offline to choose the
+threshold, not as a runtime branch. This promoted mixed trace is the first
+non-zero verified CPU savings PASS on non-synthetic Codex traffic:
+`false_accepts = 0`, `unverified_shadow_accepts = 0`, and two verified local
+accepts. The broader CPU Routability 80 goal remains red.
 
 Codex history route-only candidate adapter:
 

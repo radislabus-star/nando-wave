@@ -207,33 +207,36 @@ current smoke:
   mixed_local_accept_calibration_label_false_rows: 3.
   mixed_local_accept_calibration_safe_policy_found: true.
   mixed_local_accept_calibration_best_safe_true_accepts: 4.
-  mixed_safe_policy_promote_verdict: MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT.
+  mixed_safe_policy_promote_verdict: MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY.
   mixed_safe_policy_promote_registry: target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v1.json.
   mixed_safe_policy_promote_trace: target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl.
-  mixed_safe_policy_selected_policy: best_energy_margin_threshold.
+  mixed_safe_policy_calibration_policy: best_energy_margin_threshold.
+  mixed_safe_policy_calibration_threshold: 393216.
+  mixed_safe_policy_selected_policy: market_safe_energy_margin_threshold.
+  mixed_safe_policy_selected_policy_source: evidence_trace_market_safe_threshold.
   mixed_safe_policy_acceptance_policy: energy_threshold_only.
-  mixed_safe_policy_threshold: 393216.
-  mixed_safe_policy_accept_rows: 5.
-  mixed_safe_policy_accept_verified_true_rows: 4.
+  mixed_safe_policy_threshold: 466944.
+  mixed_safe_policy_accept_rows: 2.
+  mixed_safe_policy_accept_verified_true_rows: 2.
   mixed_safe_policy_accept_verified_false_rows: 0.
-  mixed_safe_policy_accept_unverified_rows: 1.
+  mixed_safe_policy_accept_unverified_rows: 0.
   mixed_safe_policy_runtime_acceptance_mismatches: 0.
-  mixed_safe_policy_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW.
-  mixed_safe_policy_shadow_accepts: 5.
-  mixed_safe_policy_shadow_verified_safe_accepts: 4.
-  mixed_safe_policy_shadow_unverified_accepts: 1.
+  mixed_safe_policy_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_PASS.
+  mixed_safe_policy_shadow_accepts: 2.
+  mixed_safe_policy_shadow_verified_safe_accepts: 2.
+  mixed_safe_policy_shadow_unverified_accepts: 0.
   mixed_safe_policy_shadow_false_accepts: 0.
-  mixed_safe_policy_shadow_incremental_savings: 4.
-  mixed_safe_policy_shadow_incremental_reduction_vs_exact_cache_milli: 4.
-  mixed_safe_policy_shadow_estimated_cost_saved_microusd: 400.
-  mixed_safe_policy_shadow_p99_score_latency_ns: 203134.
-  mixed_safe_policy_audit_verified_cpu_accept_eligible_events: 4.
-  mixed_safe_policy_audit_market_claim_allowed: false.
+  mixed_safe_policy_shadow_incremental_savings: 2.
+  mixed_safe_policy_shadow_incremental_reduction_vs_exact_cache_milli: 2.
+  mixed_safe_policy_shadow_estimated_cost_saved_microusd: 200.
+  mixed_safe_policy_shadow_p99_score_latency_ns: 270771.
+  mixed_safe_policy_audit_verified_cpu_accept_eligible_events: 2.
+  mixed_safe_policy_audit_market_claim_allowed: true.
   feedback_loop_scoreable_candidate_calls: 61.
-  feedback_loop_verification_hook_ready_events: 51.
-  feedback_loop_verified_cpu_accept_eligible_events: 4.
-  feedback_loop_verified_cpu_routability_milli: 4.
-  feedback_loop_verified_gap_to_80_calls: 796.
+  feedback_loop_verification_hook_ready_events: 34.
+  feedback_loop_verified_cpu_accept_eligible_events: 2.
+  feedback_loop_verified_cpu_routability_milli: 2.
+  feedback_loop_verified_gap_to_80_calls: 798.
   verification_hook_audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS.
   verification_hook_audit_report: target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json.
   verification_hook_audit_operator_candidate_calls: 23.

@@ -5,8 +5,8 @@
 Verdicts:
 
 ```text
-MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT
-REAL_TRAFFIC_SHADOW_V1_REVIEW
+MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
 VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
 CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
 ```
@@ -30,9 +30,12 @@ The command writes:
 Selected safe policy:
 
 ```text
-selected_policy_name: best_energy_margin_threshold
+calibration_policy_name: best_energy_margin_threshold
+calibration_policy_threshold: 393216
+selected_policy_name: market_safe_energy_margin_threshold
+selected_policy_source: evidence_trace_market_safe_threshold
 selected_acceptance_policy: energy_threshold_only
-selected_policy_threshold: 393216
+selected_policy_threshold: 466944
 promoted_profile_ids:
   role_binding_mixed_map_seed0
 provider_cost_microusd: 100
@@ -42,55 +45,74 @@ runtime_acceptance_mismatches: 0
 Promoted trace result:
 
 ```text
-policy_accept_rows: 5
-policy_accept_verified_true_rows: 4
+policy_accept_rows: 2
+policy_accept_verified_true_rows: 2
 policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 1
+policy_accept_unverified_rows: 0
 ```
 
 Shadow + audit over promoted registry/trace:
 
 ```text
-shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-shadow_nando_accepts: 5
-shadow_verified_safe_accepts: 4
-shadow_unverified_shadow_accepts: 1
+shadow_verdict: REAL_TRAFFIC_SHADOW_V1_PASS
+shadow_nando_accepts: 2
+shadow_verified_safe_accepts: 2
+shadow_unverified_shadow_accepts: 0
 shadow_false_accepts: 0
-shadow_incremental_savings_over_exact_cache: 4
-shadow_incremental_reduction_vs_exact_cache_milli: 4
-shadow_estimated_cost_saved_microusd: 400
-shadow_p99_score_latency_ns: 203134
+shadow_incremental_savings_over_exact_cache: 2
+shadow_incremental_reduction_vs_exact_cache_milli: 2
+shadow_estimated_cost_saved_microusd: 200
+shadow_p99_score_latency_ns: 270771
 
-audit_verified_cpu_accept_eligible_events: 4
+audit_verified_cpu_accept_eligible_events: 2
 audit_provider_cost_events: 14
 audit_candidates_missing_provider_cost: 0
-audit_market_claim_allowed: false
+audit_market_claim_allowed: true
 ```
 
 Updated feedback-loop:
 
 ```text
 scoreable_candidate_calls: 61
-verification_hook_ready_events: 51
-verified_cpu_accept_eligible_events: 4
-verified_cpu_routability_milli: 4
-verified_gap_to_80_calls: 796
+verification_hook_ready_events: 34
+verified_cpu_accept_eligible_events: 2
+verified_cpu_routability_milli: 2
+verified_gap_to_80_calls: 798
 
 role_binding_mixed_map_seed0:
   stage: verified_cpu_accept_eligible
-  verified_cpu_accept_eligible_events: 4
+  verified_cpu_accept_eligible_events: 2
+```
+
+Structural gate:
+
+```text
+NANDA mixed-safe-policy route: PASS
+checked route:
+  promoted shadow verdict / unverified boundary
+  selected threshold
+  runtime branch = energy_margin >= threshold
+  forbidden branch = verifier label at serving time
+
+numeric accept counts are verified by CLI/JSON reports, not by NANDA, because
+the sparse triad checker VETOed raw count triads as weak composite support.
 ```
 
 Diagnostic read:
 
 ```text
-This is the first non-zero verified CPU routability signal on non-synthetic
-Codex traffic. It is not a market PASS: one promoted local accept lacks output
-verification, so unverified_shadow_accepts=1 and market_claim_allowed=false.
+The old calibration threshold 393216 accepted one unverified row. The promoter
+now recomputes an evidence-trace market-safe threshold and selects 466944, which
+keeps serving score-only while suppressing unverified local accepts.
 
-Next debt: attach/obtain output evidence for the remaining accepted mixed row
-or tighten the energy policy/admission gate until unverified_shadow_accepts=0,
-then rerun shadow/audit before any savings claim.
+This is the first non-zero verified CPU savings PASS on non-synthetic Codex
+traffic for the promoted mixed trace: 2 verified local accepts, false_accepts=0,
+unverified_shadow_accepts=0. The overall CPU Routability 80 goal remains red:
+feedback-loop routability is 2 milli and gap_to_80 is 798 calls.
+
+Next debt: grow verified route coverage, starting with edit/conditional safe
+admission or stronger mixed payload/evidence coverage, without relaxing the
+zero false/unverified accept boundary.
 ```
 
 ## 2026-07-03 - Executor Integration: Mixed Map Payload/Evidence/Calibration

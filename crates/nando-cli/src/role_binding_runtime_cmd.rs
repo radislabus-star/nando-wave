@@ -5343,15 +5343,20 @@ where
     let calibration =
         read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(&calibration_report_path)?;
     let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
-    let Some(policy) = select_supported_mixed_safe_policy(&calibration) else {
+    let Some(calibration_policy) = select_supported_mixed_safe_policy(&calibration) else {
         return Err(
             "mixed calibration report has no supported safe policy candidate for runtime promotion"
                 .to_owned(),
         );
     };
-    let threshold = policy
-        .threshold
-        .ok_or_else(|| "selected mixed safe policy has no threshold".to_owned())?;
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let policy = select_mixed_promotion_policy_from_evidence(
+        &base_registry,
+        &trace_rows,
+        calibration_policy,
+    )?;
+    let threshold = policy.threshold;
     let acceptance_policy = "energy_threshold_only".to_owned();
     let mixed_profile_ids = trace_rows
         .iter()
@@ -5464,11 +5469,16 @@ where
         calibration_report_path: calibration_report_path.display().to_string(),
         promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
         promoted_trace_path: promoted_trace_path.display().to_string(),
+        calibration_policy_name: calibration_policy.policy_name.clone(),
+        calibration_policy_threshold: calibration_policy.threshold,
         selected_policy_name: policy.policy_name.clone(),
+        selected_policy_source: policy.selection_source.clone(),
         selected_policy_threshold: threshold,
         selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: policy.accepts,
         selected_policy_true_accepts: policy.true_accepts,
         selected_policy_false_accepts: policy.false_accepts,
+        selected_policy_unverified_accepts: policy.unverified_accepts,
         promoted_profile_ids,
         provider_cost_microusd,
         trace_rows_written: trace_rows.len(),
@@ -5485,7 +5495,7 @@ where
         target_labels_used_for_runtime: false,
         proof_labels_used_for_runtime: false,
         market_claim_allowed: false,
-        claim_boundary: "Promotion artifact only. It creates a promoted serving registry with an explicit mixed-map acceptance policy and rewrites a shadow trace with provider-cost estimates. It does not prove market savings until role-binding-real-traffic-shadow-v1 and verification-hook audit pass with false_accepts=0.".to_owned(),
+        claim_boundary: "Promotion artifact only. It creates a promoted serving registry with an explicit mixed-map acceptance policy and rewrites a shadow trace with provider-cost estimates. Offline labels/evidence may choose the threshold, but serving uses only request-side score >= threshold. It does not prove market savings until role-binding-real-traffic-shadow-v1 and verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
         next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted registry/trace. Only a shadow PASS with provider cost, non-synthetic rows, and false_accepts=0 can advance verified CPU routability.".to_owned(),
     };
     write_json_file(&report_path, &report)?;
@@ -5500,6 +5510,10 @@ where
     println!("  promoted_trace: {}", promoted_trace_path.display());
     println!("  report: {}", report_path.display());
     println!("  selected_policy_name: {}", report.selected_policy_name);
+    println!(
+        "  selected_policy_source: {}",
+        report.selected_policy_source
+    );
     println!(
         "  selected_policy_threshold: {}",
         report.selected_policy_threshold
@@ -8411,11 +8425,16 @@ struct RoleBindingMixedSafePolicyPromoteReport {
     calibration_report_path: String,
     promoted_registry_config_path: String,
     promoted_trace_path: String,
+    calibration_policy_name: String,
+    calibration_policy_threshold: Option<i32>,
     selected_policy_name: String,
+    selected_policy_source: String,
     selected_policy_threshold: i32,
     selected_acceptance_policy: String,
+    selected_policy_accepts: usize,
     selected_policy_true_accepts: usize,
     selected_policy_false_accepts: usize,
+    selected_policy_unverified_accepts: usize,
     promoted_profile_ids: Vec<String>,
     provider_cost_microusd: u64,
     trace_rows_written: usize,
@@ -8434,6 +8453,17 @@ struct RoleBindingMixedSafePolicyPromoteReport {
     market_claim_allowed: bool,
     claim_boundary: String,
     next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug)]
+struct RoleBindingMixedPromotionPolicySelection {
+    policy_name: String,
+    selection_source: String,
+    threshold: i32,
+    accepts: usize,
+    true_accepts: usize,
+    false_accepts: usize,
+    unverified_accepts: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -10628,6 +10658,110 @@ fn select_supported_mixed_safe_policy(
                 .then_with(|| right.accepts.cmp(&left.accepts))
                 .then_with(|| left.policy_name.cmp(&right.policy_name))
         })
+}
+
+fn select_mixed_promotion_policy_from_evidence(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+    calibration_policy: &RoleBindingEditLocalAcceptPolicyReport,
+) -> Result<RoleBindingMixedPromotionPolicySelection, String> {
+    let calibration_threshold = calibration_policy
+        .threshold
+        .ok_or_else(|| "selected mixed calibration policy has no threshold".to_owned())?;
+    let mut scored_rows = Vec::new();
+    for row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_mixed = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route.contains("mixed_map"));
+        if !is_mixed || request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
+            continue;
+        };
+        scored_rows.push((score.energy_margin, row.verified_safe_accept));
+    }
+    if scored_rows.is_empty() {
+        return Err("mixed promotion policy selection found no scoreable mixed rows".to_owned());
+    }
+
+    let mut thresholds = scored_rows
+        .iter()
+        .map(|(energy_margin, _)| *energy_margin)
+        .collect::<Vec<_>>();
+    thresholds.push(calibration_threshold);
+    thresholds.sort_unstable();
+    thresholds.dedup();
+
+    let mut best_market_safe: Option<RoleBindingMixedPromotionPolicySelection> = None;
+    for threshold in thresholds {
+        let selection = evaluate_mixed_energy_promotion_threshold(
+            "market_safe_energy_margin_threshold",
+            "evidence_trace_market_safe_threshold",
+            threshold,
+            &scored_rows,
+        );
+        let market_safe = selection.true_accepts > 0
+            && selection.false_accepts == 0
+            && selection.unverified_accepts == 0;
+        if !market_safe {
+            continue;
+        }
+        let replace = best_market_safe.as_ref().is_none_or(|current| {
+            selection.true_accepts > current.true_accepts
+                || (selection.true_accepts == current.true_accepts
+                    && selection.threshold < current.threshold)
+        });
+        if replace {
+            best_market_safe = Some(selection);
+        }
+    }
+    if let Some(selection) = best_market_safe {
+        return Ok(selection);
+    }
+
+    Ok(evaluate_mixed_energy_promotion_threshold(
+        &calibration_policy.policy_name,
+        "calibration_report_fallback_requires_shadow_audit",
+        calibration_threshold,
+        &scored_rows,
+    ))
+}
+
+fn evaluate_mixed_energy_promotion_threshold(
+    policy_name: &str,
+    selection_source: &str,
+    threshold: i32,
+    scored_rows: &[(i32, Option<bool>)],
+) -> RoleBindingMixedPromotionPolicySelection {
+    let mut accepts = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut unverified_accepts = 0usize;
+    for (energy_margin, verified_safe_accept) in scored_rows {
+        if *energy_margin < threshold {
+            continue;
+        }
+        accepts += 1;
+        match verified_safe_accept {
+            Some(true) => true_accepts += 1,
+            Some(false) => false_accepts += 1,
+            None => unverified_accepts += 1,
+        }
+    }
+    RoleBindingMixedPromotionPolicySelection {
+        policy_name: policy_name.to_owned(),
+        selection_source: selection_source.to_owned(),
+        threshold,
+        accepts,
+        true_accepts,
+        false_accepts,
+        unverified_accepts,
+    }
 }
 
 fn extract_edit_admission_features(text: &str) -> RoleBindingEditAdmissionFeatures {
