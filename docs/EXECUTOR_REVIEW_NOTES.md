@@ -1,5 +1,124 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Planning Next-Step Payload Dry-Run V1
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-planning-next-step-payload-dry-run-v1
+
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The command takes no-candidate real Codex prompts whose route-gap family is
+planning_next_step and builds request-side active_fringe/slots from prompt text
+only. It writes fingerprints, lane/impulse payloads, and counts; it does not
+write raw prompt text, response text, target labels, proof labels, or verified
+accepts.
+```
+
+Artifacts:
+
+```text
+dry_run_trace:
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.trace.jsonl
+
+dry_run_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.report.json
+
+shadow_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.verification-hook-audit.report.json
+
+sampled_llm_calls: 1000
+planning_next_step_candidate_events: 54
+payload_ready_events: 19
+payload_built_events: 14
+scoreable_payload_events: 14
+builder_rejected_events: 5
+readiness_rejected_events: 35
+profile_registered: false
+shadow_score_ready: false
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow / audit:
+
+```text
+operator_candidate_calls: 14
+exact_cache_hits: 53
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 4151
+synthetic_trace_used: false
+
+verification_hook_ready_events: 0
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 14
+candidates_missing_explicit_verification: 14
+```
+
+Interpretation:
+
+```text
+This closes the next request-side bridge for the largest payload-ready
+route-gap family. The 14 scoreable payloads are not CPU savings yet: the
+planning profile is not registered and the deterministic plan/artifact
+verifier is missing, so shadow correctly stays REVIEW with zero accepts.
+
+Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
+792 calls. The next engineering debt is a planning-next-step .nwrb profile plus
+plan_step_artifact_progress_verifier_v1.
+```
+
+Claim boundary:
+
+```text
+Payload is not savings. Planning-next-step contributes to CPU Routability only
+after a registered profile scores the request, deterministic output/artifact
+evidence verifies the predicted transition, verified_safe_accepts > 0, and
+false_accepts remain zero.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-payload-dry-run-v1
+packet:
+  docs/structural_gates/planning-next-step-payload-dry-run-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.nanda.json
+
+Scope:
+  The packet checks that planning_next_step payloads are built from request-side
+  signals while local accepts and market claims stay disabled.
+
+  NANDA found no role conflicts, but VETOs the packet because the exact
+  candidate triads are weak under composite-mode support. Treat this as
+  proof-shape debt, not as runtime failure and not as structural PASS.
+```
+
 ## 2026-07-03 - Executor Integration: Route-Gap Payload Readiness V1
 
 Verdict:

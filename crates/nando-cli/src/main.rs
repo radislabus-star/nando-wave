@@ -113,6 +113,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_mixed_payload_dry_run_v1,
     run_role_binding_real_traffic_mixed_payload_readiness_v1,
     run_role_binding_real_traffic_mixed_safe_policy_promote_v1,
+    run_role_binding_real_traffic_planning_next_step_payload_dry_run_v1,
     run_role_binding_real_traffic_record_serve_v1, run_role_binding_real_traffic_record_v1,
     run_role_binding_real_traffic_route_gap_catalog_v1,
     run_role_binding_real_traffic_route_gap_payload_readiness_v1,
@@ -628,6 +629,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-route-gap-payload-readiness-v1") => exit_for_result(
             run_role_binding_real_traffic_route_gap_payload_readiness_v1(args),
             "try: nando-cli role-binding-real-traffic-route-gap-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-planning-next-step-payload-dry-run-v1") => exit_for_result(
+            run_role_binding_real_traffic_planning_next_step_payload_dry_run_v1(args),
+            "try: nando-cli role-binding-real-traffic-planning-next-step-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
         ),
         Some("role-binding-real-traffic-agent-control-profile-v1") => exit_for_result(
             run_role_binding_real_traffic_agent_control_profile_v1(args),

@@ -286,6 +286,12 @@ pub(crate) fn print_help() {
         "            Measure request-side payload-builder readiness for no-candidate route-gap families without enabling local accepts"
     );
     println!(
+        "  role-binding-real-traffic-planning-next-step-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run planning-next-step payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
