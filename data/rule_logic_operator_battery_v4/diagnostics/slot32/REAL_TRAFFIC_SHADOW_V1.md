@@ -34,6 +34,7 @@ New commands:
   role-binding-real-traffic-edit-local-accept-calibration-v1
   role-binding-real-traffic-conditional-local-accept-calibration-v1
   role-binding-real-traffic-mixed-local-accept-calibration-v1
+  role-binding-real-traffic-mixed-safe-policy-promote-v1
   role-binding-real-traffic-edit-admission-calibration-v1
   role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-feedback-loop-v1
@@ -236,6 +237,39 @@ deterministic labels. It found a safe local-accept policy candidate on the
 current evidence sample, but it is not promoted. Market savings remain zero
 until a separate shadow rewrite with provider cost, rollback, and false
 accepts = 0 passes.
+
+Mixed-map safe-policy promotion shadow:
+
+```text
+commands:
+  cargo run -p nando-cli -- role-binding-real-traffic-mixed-safe-policy-promote-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1.report.json target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v1.json target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.report.json 100
+  cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v1.json target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.shadow-report.json
+  cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.shadow-report.json target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.verification-hook-audit.report.json
+result:
+  promoted_acceptance_policy: energy_threshold_only
+  selected_policy: best_energy_margin_threshold
+  threshold: 393216
+  policy_accept_rows: 5
+  policy_accept_verified_true_rows: 4
+  policy_accept_verified_false_rows: 0
+  policy_accept_unverified_rows: 1
+  runtime_acceptance_mismatches: 0
+  shadow_nando_accepts: 5
+  shadow_verified_safe_accepts: 4
+  shadow_unverified_shadow_accepts: 1
+  shadow_false_accepts: 0
+  shadow_incremental_savings_over_exact_cache: 4
+  shadow_incremental_reduction_vs_exact_cache_milli: 4
+  shadow_estimated_cost_saved_microusd: 400
+  shadow_p99_score_latency_ns: 203134
+  audit_verified_cpu_accept_eligible_events: 4
+  audit_market_claim_allowed: false
+```
+
+Interpretation: this is the first non-zero verified CPU routability signal on
+non-synthetic Codex traffic. It is still REVIEW, not PASS, because one local
+accept is unverified. The next gate is either attach output evidence for that
+accepted row or tighten admission/policy until `unverified_shadow_accepts = 0`.
 
 Codex history route-only candidate adapter:
 

@@ -104,6 +104,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_mixed_output_evidence_v1,
     run_role_binding_real_traffic_mixed_payload_dry_run_v1,
     run_role_binding_real_traffic_mixed_payload_readiness_v1,
+    run_role_binding_real_traffic_mixed_safe_policy_promote_v1,
     run_role_binding_real_traffic_record_serve_v1, run_role_binding_real_traffic_record_v1,
     run_role_binding_real_traffic_shadow_smoke_v1, run_role_binding_real_traffic_shadow_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
@@ -659,6 +660,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-mixed-local-accept-calibration-v1") => exit_for_result(
             run_role_binding_real_traffic_mixed_local_accept_calibration_v1(args),
             "try: nando-cli role-binding-real-traffic-mixed-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]",
+        ),
+        Some("role-binding-real-traffic-mixed-safe-policy-promote-v1") => exit_for_result(
+            run_role_binding_real_traffic_mixed_safe_policy_promote_v1(args),
+            "try: nando-cli role-binding-real-traffic-mixed-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]",
         ),
         Some("role-binding-real-traffic-edit-admission-calibration-v1") => exit_for_result(
             run_role_binding_real_traffic_edit_admission_calibration_v1(args),

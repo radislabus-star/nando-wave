@@ -346,6 +346,12 @@ pub(crate) fn print_help() {
         "            Compare safe/unsafe readout policies on evidence-backed real Codex mixed-map rows"
     );
     println!(
+        "  role-binding-real-traffic-mixed-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
+    );
+    println!(
+        "            Create a promoted mixed-map registry/trace from a safe calibration policy; still requires shadow/audit before claims"
+    );
+    println!(
         "  role-binding-real-traffic-edit-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
     );
     println!(

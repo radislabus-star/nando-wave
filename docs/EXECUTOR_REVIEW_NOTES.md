@@ -1,5 +1,98 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Mixed Safe-Policy Promotion Shadow
+
+Verdicts:
+
+```text
+MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-mixed-safe-policy-promote-v1
+
+Also added profile acceptance_policy:
+  strict_ordered_energy_threshold  # default / backwards compatible
+  energy_threshold_only            # used only in promoted mixed safe-policy registry
+
+The command writes:
+  target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v1.json
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.report.json
+```
+
+Selected safe policy:
+
+```text
+selected_policy_name: best_energy_margin_threshold
+selected_acceptance_policy: energy_threshold_only
+selected_policy_threshold: 393216
+promoted_profile_ids:
+  role_binding_mixed_map_seed0
+provider_cost_microusd: 100
+runtime_acceptance_mismatches: 0
+```
+
+Promoted trace result:
+
+```text
+policy_accept_rows: 5
+policy_accept_verified_true_rows: 4
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 1
+```
+
+Shadow + audit over promoted registry/trace:
+
+```text
+shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
+shadow_nando_accepts: 5
+shadow_verified_safe_accepts: 4
+shadow_unverified_shadow_accepts: 1
+shadow_false_accepts: 0
+shadow_incremental_savings_over_exact_cache: 4
+shadow_incremental_reduction_vs_exact_cache_milli: 4
+shadow_estimated_cost_saved_microusd: 400
+shadow_p99_score_latency_ns: 203134
+
+audit_verified_cpu_accept_eligible_events: 4
+audit_provider_cost_events: 14
+audit_candidates_missing_provider_cost: 0
+audit_market_claim_allowed: false
+```
+
+Updated feedback-loop:
+
+```text
+scoreable_candidate_calls: 61
+verification_hook_ready_events: 51
+verified_cpu_accept_eligible_events: 4
+verified_cpu_routability_milli: 4
+verified_gap_to_80_calls: 796
+
+role_binding_mixed_map_seed0:
+  stage: verified_cpu_accept_eligible
+  verified_cpu_accept_eligible_events: 4
+```
+
+Diagnostic read:
+
+```text
+This is the first non-zero verified CPU routability signal on non-synthetic
+Codex traffic. It is not a market PASS: one promoted local accept lacks output
+verification, so unverified_shadow_accepts=1 and market_claim_allowed=false.
+
+Next debt: attach/obtain output evidence for the remaining accepted mixed row
+or tighten the energy policy/admission gate until unverified_shadow_accepts=0,
+then rerun shadow/audit before any savings claim.
+```
+
 ## 2026-07-03 - Executor Integration: Mixed Map Payload/Evidence/Calibration
 
 Verdicts:
