@@ -752,7 +752,7 @@ fn main() -> ExitCode {
         ),
         Some("role-binding-real-traffic-feedback-loop-v1") => exit_for_result(
             run_role_binding_real_traffic_feedback_loop_v1(args),
-            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json]\n     note: route-specific conditional/agent-control/mixed reports are auto-loaded from default artifact paths when present",
+            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json]\n     note: route-specific conditional/agent-control/mixed reports are auto-loaded from default artifact paths when present; planning paths default to v1 artifacts unless supplied",
         ),
         Some("role-binding-real-traffic-cpu-operator-catalog-v1") => exit_for_result(
             run_role_binding_real_traffic_cpu_operator_catalog_v1(args),

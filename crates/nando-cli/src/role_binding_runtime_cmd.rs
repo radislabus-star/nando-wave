@@ -8900,6 +8900,18 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT));
+    let planning_next_step_dry_run_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_PAYLOAD_DRY_RUN_REPORT));
+    let planning_next_step_local_accept_calibration_report_path =
+        args.next().map(PathBuf::from).unwrap_or_else(|| {
+            PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT)
+        });
+    let planning_next_step_verification_audit_report_path =
+        args.next().map(PathBuf::from).unwrap_or_else(|| {
+            PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT)
+        });
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -9040,8 +9052,6 @@ where
     } else {
         None
     };
-    let planning_next_step_dry_run_report_path =
-        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_PAYLOAD_DRY_RUN_REPORT);
     let planning_next_step_dry_run = if planning_next_step_dry_run_report_path.exists() {
         Some(read_json_file::<
             RoleBindingPlanningNextStepPayloadDryRunReport,
@@ -9049,8 +9059,6 @@ where
     } else {
         None
     };
-    let planning_next_step_verification_audit_report_path =
-        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT);
     let planning_next_step_verification_audit =
         if planning_next_step_verification_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -9059,8 +9067,6 @@ where
         } else {
             None
         };
-    let planning_next_step_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let planning_next_step_local_accept_calibration =
         if planning_next_step_local_accept_calibration_report_path.exists() {
             Some(

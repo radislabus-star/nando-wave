@@ -1,5 +1,109 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Feedback Loop Planning Artifact Args V1
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_PLANNING_ARTIFACT_ARGS_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+role-binding-real-traffic-feedback-loop-v1 now accepts explicit planning
+artifact paths after the existing 4 positional arguments:
+  planning dry-run report
+  planning local-accept calibration report
+  planning verification audit report
+
+If these arguments are omitted, the command keeps the old default v1 artifact
+paths.
+```
+
+Default v1 dashboard check:
+
+```text
+operator_candidate_calls: 302
+scoreable_candidate_calls: 93
+verification_hook_ready_events: 72
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli: 8
+verified_gap_to_80_calls: 792
+
+planning_next_step row:
+  candidate_events: 14
+  payload_ready_events: 19
+  payload_built_events: 14
+  scoreable_payload_events: 14
+  verification_hook_ready_events: 7
+  local_accept_best_safe_true_accepts: 1
+  local_accept_support_qualified: false
+  verified_cpu_accept_eligible_events: 0
+```
+
+Explicit planning v2 dashboard check:
+
+```text
+operator_candidate_calls: 319
+scoreable_candidate_calls: 110
+verification_hook_ready_events: 87
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli: 8
+verified_gap_to_80_calls: 792
+
+planning_next_step row:
+  candidate_events: 31
+  payload_ready_events: 36
+  payload_built_events: 31
+  scoreable_payload_events: 31
+  verification_hook_ready_events: 22
+  local_accept_best_safe_true_accepts: 1
+  local_accept_support_qualified: false
+  verified_cpu_accept_eligible_events: 0
+```
+
+Interpretation:
+
+```text
+The feedback dashboard can now compare route-gap artifact windows without
+overwriting the baseline. The v2 artifact set increases planning_next_step
+candidate / scoreable / hook-ready coverage, but does not increase verified CPU
+accepts because the support guard still blocks promotion.
+```
+
+Claim boundary:
+
+```text
+This is dashboard plumbing, not a savings claim.
+The default path remains v1-compatible.
+The explicit v2 path remains REVIEW because verified CPU stays 8/1000.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: feedback-loop-planning-artifact-args-v1
+packet:
+  docs/structural_gates/feedback-loop-planning-artifact-args-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/feedback-loop-planning-artifact-args-v1.nanda.json
+
+Scope:
+  The packet checks that optional planning artifacts can change dashboard
+  planning coverage while preserving v1 defaults and not promoting local
+  accepts.
+
+  Treat VETO as a promotion guard: v2 coverage is stronger, but still not
+  support-qualified.
+```
+
 ## 2026-07-04 - Executor Integration: Planning Next-Step Trace Window V2
 
 Verdict:
