@@ -298,6 +298,12 @@ pub(crate) fn print_help() {
         "            Compile planning-next-step dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
     );
     println!(
+        "  role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach Codex final-answer fingerprints plus conservative planning verifier results; true accepts require artifact-progress verification"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

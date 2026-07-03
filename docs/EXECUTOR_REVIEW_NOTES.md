@@ -1,5 +1,153 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Planning Next-Step Output Evidence V1
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-planning-next-step-output-evidence-v1
+
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The command joins planning_next_step scoreable trace rows with local Codex
+final-answer evidence by request fingerprint. It writes only response
+fingerprints and explicit deterministic verifier results. It writes no raw
+prompt/response text and does not enable local accepts.
+
+Important guard:
+  deterministic_planning_next_step_output_verification intentionally refuses
+  verified_safe_accept=true from final-answer text alone. True planning accepts
+  require a later plan_step_artifact_progress_verifier_v1 that can prove
+  project-state progress through artifacts such as reports, checks, diffs, or
+  commits.
+```
+
+Artifacts:
+
+```text
+input_trace:
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.trace.jsonl
+
+evidence_trace:
+  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl
+
+evidence_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.report.json
+
+shadow_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.verification-hook-audit.report.json
+
+total_trace_rows: 1000
+operator_candidate_calls: 14
+scoreable_candidate_calls: 14
+session_ids_requested: 4
+session_files_scanned: 4
+codex_turns_indexed: 7
+output_evidence_matched_events: 7
+no_session_output_match_events: 7
+deterministic_verification_events: 7
+verifier_not_applicable_events: 0
+verified_true_events: 0
+verified_false_events: 7
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow / audit:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 14
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+unverified_shadow_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 212160
+synthetic_trace_used: false
+
+verification_hook_ready_events: 7
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 7
+candidates_missing_explicit_verification: 7
+candidates_missing_provider_cost: 14
+shadow_accepts: 0
+shadow_false_accepts: 0
+```
+
+Interpretation:
+
+```text
+This closes half of the planning_next_step verification-hook debt: the route now
+has real response fingerprints and explicit false verifier labels for matched
+Codex turns. The other half remains open: seven rows still lack matching output
+evidence, no row has artifact-progress verification, provider costs are absent,
+and the profile threshold remains disabled, so verified CPU accepts stay zero.
+
+Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
+792 calls.
+```
+
+Claim boundary:
+
+```text
+Output evidence is not savings. A planning row can count as verified CPU only
+after artifact-progress verification marks verified_safe_accept=true, local
+shadow accept is enabled by a calibrated safe policy, provider cost is attached,
+the trace is non-synthetic, and false_accepts/unverified accepts remain zero.
+```
+
+Next debt:
+
+```text
+plan_step_artifact_progress_verifier_v1:
+  verify planning_next_step by real project-state progress, not by response
+  prose. Candidate evidence sources: report JSON timestamps/fingerprints,
+  generated structural-gate packets, git diff/commit facts, cargo/check/clippy
+  artifacts, and explicit tool-call fingerprints when available.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-output-evidence-v1
+packet:
+  docs/structural_gates/planning-next-step-output-evidence-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.nanda.json
+
+Scope:
+  The packet checks that output evidence is attached without converting it into
+  verified CPU savings.
+
+  After switching to JSON-field evidence anchors, NANDA reports no conflicts,
+  but keeps VETO because candidate route coherence / composite support is weak.
+  Treat this as proof-shape debt. It is not a runtime failure and not a
+  structural PASS.
+```
+
 ## 2026-07-04 - Executor Integration: Planning Next-Step Profile V1
 
 Verdict:

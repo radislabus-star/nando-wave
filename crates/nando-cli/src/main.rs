@@ -113,6 +113,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_mixed_payload_dry_run_v1,
     run_role_binding_real_traffic_mixed_payload_readiness_v1,
     run_role_binding_real_traffic_mixed_safe_policy_promote_v1,
+    run_role_binding_real_traffic_planning_next_step_output_evidence_v1,
     run_role_binding_real_traffic_planning_next_step_payload_dry_run_v1,
     run_role_binding_real_traffic_planning_next_step_profile_v1,
     run_role_binding_real_traffic_record_serve_v1, run_role_binding_real_traffic_record_v1,
@@ -638,6 +639,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-planning-next-step-profile-v1") => exit_for_result(
             run_role_binding_real_traffic_planning_next_step_profile_v1(args),
             "try: nando-cli role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]",
+        ),
+        Some("role-binding-real-traffic-planning-next-step-output-evidence-v1") => exit_for_result(
+            run_role_binding_real_traffic_planning_next_step_output_evidence_v1(args),
+            "try: nando-cli role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]",
         ),
         Some("role-binding-real-traffic-agent-control-profile-v1") => exit_for_result(
             run_role_binding_real_traffic_agent_control_profile_v1(args),
