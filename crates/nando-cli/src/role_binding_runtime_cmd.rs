@@ -15424,6 +15424,35 @@ fn build_codex_session_output_evidence_index(
                     codex_turns_indexed += 1;
                 }
                 Some("task_complete") => {
+                    if let Some(response_text) = payload
+                        .get("last_agent_message")
+                        .and_then(serde_json::Value::as_str)
+                    {
+                        let Some(request_fingerprint) = pending_request_fingerprint.take() else {
+                            pending_prompt_text = None;
+                            continue;
+                        };
+                        let Some(prompt_text) = pending_prompt_text.take() else {
+                            continue;
+                        };
+                        if wanted_request_fingerprints.contains(&request_fingerprint) {
+                            let response_fingerprint = format!(
+                                "fnv1a64:{:016x}",
+                                stable_real_traffic_fingerprint64(response_text.as_bytes())
+                            );
+                            let (verified_safe_accept, verifier_applicable, verifier_status) =
+                                verifier(&prompt_text, response_text);
+                            by_request_fingerprint.entry(request_fingerprint).or_insert(
+                                CodexSessionOutputEvidence {
+                                    response_fingerprint,
+                                    verified_safe_accept,
+                                    verifier_applicable,
+                                    verifier_status,
+                                },
+                            );
+                            codex_turns_indexed += 1;
+                        }
+                    }
                     pending_request_fingerprint = None;
                     pending_prompt_text = None;
                 }

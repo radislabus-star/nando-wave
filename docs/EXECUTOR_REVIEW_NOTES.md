@@ -1,5 +1,138 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Mixed Evidence Index Hardening
+
+Verdict:
+
+```text
+MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  build_codex_session_output_evidence_index
+
+The Codex session evidence index now has a conservative fallback for older or
+alternate session JSONL rows: when a pending user_message is followed by
+task_complete.last_agent_message, the index may attach that final answer as
+output evidence, but only if the pending request fingerprint is in the wanted
+real-traffic set.
+
+It still writes no raw prompt/response text, does not enable local accepts, and
+does not use target/proof labels for runtime.
+```
+
+Mixed route finding:
+
+```text
+calibration:
+  hook_ready_rows: 13
+  label_true_rows: 10
+  label_false_rows: 3
+  best_safe_true_accepts: 4
+  best_energy_margin_threshold: 393216
+
+promotion:
+  selected_policy_name: market_safe_energy_margin_threshold
+  selected_policy_threshold: 466944
+  policy_accept_rows: 2
+  policy_accept_verified_true_rows: 2
+  policy_accept_verified_false_rows: 0
+  policy_accept_unverified_rows: 0
+```
+
+Interpretation:
+
+```text
+The lower 393216 threshold is not promoted because it touches one scoreable
+mixed row without explicit output evidence. That row remains unverified after
+the session-index fallback, so the firewall correctly keeps the promoted
+threshold at 466944.
+
+This preserves the claim boundary: no fake accept, no inferred response, no
+market savings from calibration labels.
+```
+
+Latest mixed shadow/audit:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.shadow-report.json
+
+audit report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.verification-hook-audit.report.json
+
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 14
+nando_shadow_accepts: 2
+verified_safe_accepts: 2
+false_accepts: 0
+unverified_shadow_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 2
+p99_shadow_score_latency_ns: 271120
+verification_hook_ready_events: 13
+verified_cpu_accept_eligible_events: 2
+route-local market_claim_allowed: true
+```
+
+Feedback-loop status after rerun:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json
+
+total_llm_calls: 1000
+operator_candidate_calls: 408
+scoreable_candidate_calls: 82
+verification_hook_ready_events: 65
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli: 8
+verified_gap_to_80_calls: 792
+overall market_claim_allowed: false
+```
+
+Checks:
+
+```text
+cargo fmt --check
+cargo check -p nando-cli
+cargo clippy -p nando-cli -- -D warnings
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: mixed-evidence-index-hardening-v1
+packet:
+  docs/structural_gates/mixed-evidence-index-hardening-v1.md
+
+Scope:
+  The packet checks mixed evidence-index hardening, the mixed route-local
+  promoted threshold, and the still-red overall CPU Routability 80 boundary.
+
+  NANDA VETOs the current packet because the exact numeric candidate triads are
+  weak under composite-mode support. Treat this as proof-shape debt, not as a
+  runtime safety failure and not as a structural PASS.
+```
+
+Claim boundary:
+
+```text
+This hardens the real-traffic evidence join, but it does not improve total CPU
+routability. The goal remains open at 8/1000 verified CPU accepts. The next
+real route work must add deterministic output/tool-call evidence for currently
+unverified scoreable rows or build new request-side payload/verifier pairs for
+high-frequency route-gap families.
+```
+
 ## 2026-07-03 - Executor Integration: Conditional Safe Policy Promotion
 
 Verdict:
