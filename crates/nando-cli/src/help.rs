@@ -448,19 +448,25 @@ pub(crate) fn print_help() {
         "            Calibrate request-side edit admission gates without writing raw prompt/response text"
     );
     println!(
+        "  role-binding-real-traffic-mixed-safe-policy-promote-v2 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Promote mixed-map safe policy with request-side goal/control admission before energy threshold"
+    );
+    println!(
         "  role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]"
     );
     println!(
         "            Audit whether shadow trace rows carry enough output evidence to count verified CPU accepts"
     );
     println!(
-        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json]"
+        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json]"
     );
     println!(
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / mixed route reports from default artifact paths when present; planning and agent-control reports default to v1 unless supplied"
+        "            Auto-loads conditional / mixed route reports from default artifact paths when present; planning, agent-control, and mixed reports default to v1 unless supplied"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"

@@ -1,11 +1,11 @@
 # Nando Wave Product Runtime Task
 
-Date: 2026-07-03
+Date: 2026-07-04
 
 Status:
 
 ```text
-REAL_TRAFFIC_CPU_ROUTABILITY_REVIEW_16_OF_1000
+REAL_TRAFFIC_CPU_ROUTABILITY_REVIEW_17_OF_1000
 ```
 
 ## Goal
@@ -75,22 +75,30 @@ Current real-traffic CPU routability snapshot:
 
 ```text
 feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v2.agent-control-planning-v3.report.json
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.mixed-v2-agent-control-planning-v3.report.json
 
 total_llm_calls:                     1000
 exact_cache_hits:                    53
 operator_candidate_calls:            457
-scoreable_candidate_calls:           139
-verification_hook_ready_events:      102
-verified_cpu_accept_eligible_events: 16
-verified_cpu_routability_milli:      16
-verified_gap_to_80_calls:            784
+scoreable_candidate_calls:           136
+verification_hook_ready_events:      100
+verified_cpu_accept_eligible_events: 17
+verified_cpu_routability_milli:      17
+verified_gap_to_80_calls:            783
 false_accepts:                       0
 
 strongest verified route:
   role_binding_agent_control_seed0
   strict_control_stop_forms
   verified_cpu_accept_eligible_events: 11
+
+latest route gain:
+  role_binding_mixed_map_seed0
+  mixed_no_goal_control_prompt + energy_threshold_only
+  selected_policy_threshold: 393216
+  verified_cpu_accept_eligible_events: 3
+  false_accepts: 0
+  unverified_shadow_accepts: 0
 ```
 
 Current real-traffic shadow path:

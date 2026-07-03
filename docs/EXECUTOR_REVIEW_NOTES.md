@@ -1,5 +1,171 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Mixed-Map Safe Policy V2
+
+Verdict:
+
+```text
+MIXED_SAFE_POLICY_V2_REVIEW_VERIFIED_GAIN
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-mixed-safe-policy-promote-v2
+
+The v2 promotion keeps the same mixed-map `.nwrb` score path and adds a
+request-side admission gate:
+  mixed_no_goal_control_prompt
+
+Goal/control prompts are forced to fallback before energy threshold selection.
+This prevents an unverified meta-goal row from raising the mixed-map runtime
+threshold and blocking verified safe rows.
+```
+
+V2 promotion:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.report.json
+
+request_side_policy_name:             mixed_no_goal_control_prompt
+selected_policy_threshold:            393216
+selected_policy_accepts:              3
+selected_policy_true_accepts:         3
+selected_policy_false_accepts:        0
+selected_policy_unverified_accepts:   0
+request_side_policy_accept_rows:      11
+request_side_policy_reject_rows:      3
+policy_accept_rows:                   3
+policy_accept_verified_true_rows:     3
+policy_accept_verified_false_rows:    0
+policy_accept_unverified_rows:        0
+runtime_acceptance_mismatches:        0
+```
+
+V2 shadow:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.shadow-report.json
+
+nando_shadow_accepts:                 3
+verified_safe_accepts:                3
+unverified_shadow_accepts:            0
+false_accepts:                        0
+incremental_savings_over_exact_cache: 3
+p99_shadow_score_latency_ns:          214688
+synthetic_trace_used:                 false
+```
+
+V2 verification audit:
+
+```text
+audit report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.verification-hook-audit.report.json
+
+operator_candidate_calls:             11
+scoreable_candidate_calls:            11
+verification_hook_ready_events:       11
+verified_cpu_accept_eligible_events:  3
+false_accepts:                        0
+market_claim_allowed:                 true for the route-specific audit only
+```
+
+Unified feedback with mixed v2 + agent-control v2 + planning v3:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.mixed-v2-agent-control-planning-v3.report.json
+
+total_llm_calls:                      1000
+exact_cache_hits:                     53
+operator_candidate_calls:             457
+scoreable_candidate_calls:            136
+verification_hook_ready_events:       100
+verified_cpu_accept_eligible_events:  17
+verified_cpu_routability_milli:       17
+verified_gap_to_80_calls:             783
+market_claim_allowed:                 false
+
+mixed-map row:
+  candidate_events:                   37
+  scoreable_payload_events:           11
+  verification_hook_ready_events:     11
+  local_accept_best_safe_true_accepts: 4
+  local_accept_support_qualified:     true
+  verified_cpu_accept_eligible_events: 3
+  false_accepts:                      0
+```
+
+Operator catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v3.mixed-v2-agent-control-planning-v3.report.json
+
+current_verified_cpu_accepts:         17
+verified_gap_to_80_calls:             783
+top_catalog_row:                      role_binding_agent_control_seed0
+```
+
+Claim boundary:
+
+```text
+This is real verified progress, not CPU Routability 80.
+The project moved from 16/1000 to 17/1000 verified CPU accepts on the current
+1000-call Codex trace window.
+
+The mixed route-specific audit is market-claim-eligible for that route packet,
+but the unified market-wide CPU Routability claim remains closed while
+verified_cpu_routability_milli is 17.
+
+Conditional branch remains blocked by prompt/score collisions:
+  verifier true rows:  17
+  verifier false rows: 46
+  safe prompt+energy accepts found: 2
+
+No response text, target labels, proof labels, concrete lookup, or manual
+local_out_t are used by the serving policy.
+```
+
+NANDA structural gate:
+
+```text
+task_id:
+  mixed-safe-policy-v2
+
+packet:
+  docs/structural_gates/mixed-safe-policy-v2.md
+
+report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.nanda.json
+
+verdict:
+  VETO
+
+interpretation:
+  proof_shape_debt_not_runtime_failure
+
+details:
+  route_coherence: 1.0
+  conflicts: []
+  evidence_gaps: []
+  exact_candidate_matches: 16
+  reason: candidate rows still weak under composite-mode support
+
+Do not use this packet as a structural PASS. The JSON runtime/shadow/audit
+reports are the numeric authority for the route-specific mixed v2 gain.
+The NANDA packet is retained as review evidence and must be improved before
+any public structural claim.
+```
+
 ## 2026-07-04 - Executor Integration: Agent-Control Strict Control Forms V2
 
 Verdict:

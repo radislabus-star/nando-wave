@@ -1,6 +1,6 @@
 # Nando Wave Project Progress Tree
 
-Дата среза: 2026-07-03
+Дата среза: 2026-07-04
 
 Назначение: короткая карта текущего положения проекта без stale PASS.
 
@@ -141,18 +141,19 @@ Nando Wave / Operator Layer
 |   |   +-- lb_upstream_roundtrip_p99_latency_ns     [3610931]
 |   |   +-- worker_score_p99_latency_ns              [577626]
 |   |   +-- core_score_p99_latency_ns                [221243]
-|   +-- real traffic routability / savings claim     [REVIEW, 16/1000]
+|   +-- real traffic routability / savings claim     [REVIEW, 17/1000]
 |   |   |
 |   |   +-- source                                  [non-synthetic Codex history trace]
-|   |   +-- current verified CPU accepts             [16 / 1000]
+|   |   +-- current verified CPU accepts             [17 / 1000]
 |   |   +-- exact_cache_hits                         [53]
 |   |   +-- operator_candidate_calls                 [457]
-|   |   +-- scoreable_candidate_calls                [139]
-|   |   +-- verification_hook_ready_events           [102]
+|   |   +-- scoreable_candidate_calls                [136]
+|   |   +-- verification_hook_ready_events           [100]
 |   |   +-- false_accepts                            [0]
-|   |   +-- verified_gap_to_80_calls                 [784]
+|   |   +-- verified_gap_to_80_calls                 [783]
 |   |   +-- strongest current route                  [agent-control strict forms: 11 verified]
-|   |   +-- market claim boundary                    [not achieved; 16 milli != 800 milli]
+|   |   +-- mixed_map v2 route                       [3 verified, request-side goal/control fallback]
+|   |   +-- market claim boundary                    [not achieved; 17 milli != 800 milli]
 |   +-- role-binding release suite                   [PASS]
 |   |   |
 |   |   +-- package_count                            [7]
