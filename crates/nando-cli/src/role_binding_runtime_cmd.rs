@@ -51,6 +51,8 @@ const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_SHADOW_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -3280,6 +3282,165 @@ where
     );
     println!("  market_claim_allowed: {}", report.market_claim_allowed);
     Err("CPU route forecast is review-only; it is not verified savings".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_route_gap_catalog_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let sampled_llm_calls = history_rows.len().saturating_sub(skip);
+    let mut existing_route_candidate_events = 0usize;
+    let mut no_candidate_events = 0usize;
+    let mut existing_route_counts = BTreeMap::<String, usize>::new();
+    let mut gap_family_counts = BTreeMap::<String, usize>::new();
+
+    for row in history_rows.iter().skip(skip) {
+        if let Some(candidate) = route_catalog.classify_request_text(&row.text) {
+            existing_route_candidate_events += 1;
+            *existing_route_counts
+                .entry(candidate.route_key)
+                .or_insert(0) += 1;
+        } else {
+            no_candidate_events += 1;
+            *gap_family_counts
+                .entry(route_gap_family_key(&row.text).to_owned())
+                .or_insert(0) += 1;
+        }
+    }
+
+    let mut existing_routes = existing_route_counts
+        .into_iter()
+        .map(|(name, count)| RoleBindingNamedCount { name, count })
+        .collect::<Vec<_>>();
+    existing_routes.sort_by(|left, right| {
+        right
+            .count
+            .cmp(&left.count)
+            .then_with(|| left.name.cmp(&right.name))
+    });
+
+    let mut families = gap_family_counts
+        .into_iter()
+        .map(|(family_key, candidate_events)| {
+            let meta = route_gap_family_metadata(&family_key);
+            RoleBindingRouteGapCatalogFamilyRow {
+                priority_rank: 0,
+                family_key,
+                candidate_events,
+                coverage_milli_of_all_llm_calls: ratio_milli(candidate_events, sampled_llm_calls),
+                coverage_milli_of_no_candidate_zone: ratio_milli(
+                    candidate_events,
+                    no_candidate_events,
+                ),
+                cpu_operator_readiness: meta.cpu_operator_readiness.to_owned(),
+                recommended_profile_line: meta.recommended_profile_line.to_owned(),
+                recommended_payload_builder: meta.recommended_payload_builder.to_owned(),
+                recommended_verifier: meta.recommended_verifier.to_owned(),
+                claim_boundary: meta.claim_boundary.to_owned(),
+            }
+        })
+        .collect::<Vec<_>>();
+    families.sort_by(|left, right| {
+        right
+            .candidate_events
+            .cmp(&left.candidate_events)
+            .then_with(|| left.family_key.cmp(&right.family_key))
+    });
+    for (index, family) in families.iter_mut().enumerate() {
+        family.priority_rank = index + 1;
+    }
+
+    let top_gap_family = families.first().map(|family| family.family_key.clone());
+    let top_three_no_candidate_events = families
+        .iter()
+        .take(3)
+        .map(|family| family.candidate_events)
+        .sum();
+    let report = RoleBindingRouteGapCatalogReport {
+        schema_version: "nando_role_binding_real_traffic_route_gap_catalog_v1".to_owned(),
+        verdict: if no_candidate_events > 0 {
+            "ROUTE_GAP_CATALOG_V1_REVIEW"
+        } else {
+            "ROUTE_GAP_CATALOG_V1_NO_GAP"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        total_history_rows: history_rows.len(),
+        max_events,
+        sampled_llm_calls,
+        existing_route_candidate_events,
+        existing_route_coverage_milli: ratio_milli(
+            existing_route_candidate_events,
+            sampled_llm_calls,
+        ),
+        no_candidate_events,
+        no_candidate_coverage_milli: ratio_milli(no_candidate_events, sampled_llm_calls),
+        top_gap_family,
+        top_three_no_candidate_events,
+        top_three_no_candidate_coverage_milli: ratio_milli(
+            top_three_no_candidate_events,
+            sampled_llm_calls,
+        ),
+        existing_routes,
+        no_candidate_families: families,
+        raw_text_written: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Route-gap catalog only. It classifies privacy-safe no-candidate request families from real Codex prompts, writes no raw prompt text, enables no local accepts, and does not prove savings. Each family still needs a request-side payload builder, deterministic verifier, shadow/audit pass, and false_accepts=0 before it can contribute to CPU Routability 80.".to_owned(),
+        next_engineering_debt: "Build the top no-candidate operator family as a separate profile route, then run payload readiness, dry-run scoring, output evidence, calibration, shadow, audit, and feedback-loop reports. Do not merge families into edit/conditional/mixed just to inflate routability.".to_owned(),
+    };
+
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-route-gap-catalog-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  sampled_llm_calls: {}", report.sampled_llm_calls);
+    println!(
+        "  existing_route_candidate_events: {}",
+        report.existing_route_candidate_events
+    );
+    println!("  no_candidate_events: {}", report.no_candidate_events);
+    if let Some(top_gap_family) = &report.top_gap_family {
+        println!("  top_gap_family: {top_gap_family}");
+    }
+    println!("  raw_text_written: false");
+    println!("  local_accepts_enabled: false");
+    Ok(())
 }
 
 pub(crate) fn run_role_binding_real_traffic_edit_payload_readiness_v1<I>(
@@ -8352,6 +8513,54 @@ struct RoleBindingCpuRouteForecastRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingRouteGapCatalogReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    total_history_rows: usize,
+    max_events: usize,
+    sampled_llm_calls: usize,
+    existing_route_candidate_events: usize,
+    existing_route_coverage_milli: usize,
+    no_candidate_events: usize,
+    no_candidate_coverage_milli: usize,
+    top_gap_family: Option<String>,
+    top_three_no_candidate_events: usize,
+    top_three_no_candidate_coverage_milli: usize,
+    existing_routes: Vec<RoleBindingNamedCount>,
+    no_candidate_families: Vec<RoleBindingRouteGapCatalogFamilyRow>,
+    raw_text_written: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingRouteGapCatalogFamilyRow {
+    priority_rank: usize,
+    family_key: String,
+    candidate_events: usize,
+    coverage_milli_of_all_llm_calls: usize,
+    coverage_milli_of_no_candidate_zone: usize,
+    cpu_operator_readiness: String,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RouteGapFamilyMetadata {
+    cpu_operator_readiness: &'static str,
+    recommended_profile_line: &'static str,
+    recommended_payload_builder: &'static str,
+    recommended_verifier: &'static str,
+    claim_boundary: &'static str,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditPayloadReadinessReport {
     schema_version: String,
     verdict: String,
@@ -9185,6 +9394,346 @@ impl CodexHistoryRouteCatalog {
 struct CodexHistoryRouteCandidate {
     route_key: String,
     profile_id: String,
+}
+
+fn route_gap_family_key(text: &str) -> &'static str {
+    let lower = text.to_lowercase();
+    if contains_any(
+        &lower,
+        &["стоп", "стой", "останов", "не делай", "не трогай", "пауза"],
+    ) {
+        return "agent_control_stop";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "делай",
+            "выполни",
+            "выполняй",
+            "продолжай",
+            "поехали",
+            "идем дальше",
+            "идём дальше",
+            "go ahead",
+        ],
+    ) {
+        return "agent_continue_execute";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "найди",
+            "поищи",
+            "ссылк",
+            "pdf",
+            "документ",
+            "документы",
+            "где лежит",
+            "где найти",
+        ],
+    ) {
+        return "retrieval_lookup";
+    }
+    if contains_any(
+        &lower,
+        &["коммит", "пуш", "push", "ветк", "branch", "status"],
+    ) {
+        return "git_control";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "p99",
+            "latency",
+            "метрик",
+            "report",
+            "отчет",
+            "отчёт",
+            "accuracy",
+            "false_accept",
+            "эконом",
+            "savings",
+            "coverage",
+            "milli",
+        ],
+    ) {
+        return "metrics_report_readout";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "читай",
+            "посмотри",
+            "ознакомь",
+            "прочитай",
+            "inspect",
+            "read",
+        ],
+    ) {
+        return "read_inspect";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "сервер",
+            "daemon",
+            "демон",
+            "worker",
+            "lb",
+            "http",
+            "hostworld",
+            "vps",
+            "nginx",
+            "systemd",
+        ],
+    ) {
+        return "serving_ops";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "датасет",
+            "корпус",
+            "задач",
+            "jsonl",
+            "batch",
+            "negative",
+            "near_negative",
+        ],
+    ) {
+        return "dataset_corpus";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "литератур",
+            "стать",
+            "paper",
+            "arxiv",
+            "фурье",
+            "fourier",
+            "hopfield",
+            "kuramoto",
+            "hrr",
+            "vsa",
+        ],
+    ) {
+        return "research_literature";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "дальше",
+            "план",
+            "следующий",
+            "что делать",
+            "roadmap",
+            "цель",
+            "goal",
+        ],
+    ) {
+        return "planning_next_step";
+    }
+    if contains_any(
+        &lower,
+        &["коротко", "простын", "без воды", "не пиши", "кратко"],
+    ) {
+        return "style_brevity";
+    }
+    if contains_any(
+        &lower,
+        &[
+            "что",
+            "почему",
+            "зачем",
+            "как",
+            "сколько",
+            "где",
+            "когда",
+            "можно",
+            "можешь",
+            "какой",
+            "какая",
+            "какие",
+            "объясни",
+            "расскажи",
+            "оцени",
+            "вердикт",
+        ],
+    ) {
+        return "answer_or_explain";
+    }
+    if contains_any(
+        &lower,
+        &["спасибо", "молодец", "горжусь", "люблю", "брат", "дорогой"],
+    ) {
+        return "social_affect";
+    }
+    let token_count = lower
+        .split_whitespace()
+        .filter(|token| {
+            !token
+                .trim_matches(|ch: char| !ch.is_alphanumeric())
+                .is_empty()
+        })
+        .count();
+    if token_count <= 3
+        && contains_any(
+            &lower,
+            &[
+                "да",
+                "нет",
+                "ок",
+                "ага",
+                "понял",
+                "хорошо",
+                "ладно",
+                "можно",
+            ],
+        )
+    {
+        return "short_decision_ack";
+    }
+    if token_count <= 12
+        || contains_any(
+            &lower,
+            &[
+                "проект",
+                "модель",
+                "архитект",
+                "nando",
+                "wave",
+                "llmwave",
+                "l1",
+                "l2",
+                "l3",
+                "нам",
+                "тут",
+                "там",
+                "сейчас",
+            ],
+        )
+    {
+        return "project_context_dialogue";
+    }
+    "uncatalogued"
+}
+
+fn route_gap_family_metadata(family_key: &str) -> RouteGapFamilyMetadata {
+    match family_key {
+        "agent_control_stop" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "high_control_policy_candidate",
+            recommended_profile_line: "agent_control_operator",
+            recommended_payload_builder: "agent_control_intent_payload_builder_v1",
+            recommended_verifier: "no_mutating_tool_after_stop_verifier_v1",
+            claim_boundary: "Can become CPU-safe only for control-plane decisions such as stop/pause/fallback; it must not answer task content.",
+        },
+        "agent_continue_execute" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_goal_state_transition_candidate",
+            recommended_profile_line: "agent_continuation_operator",
+            recommended_payload_builder: "active_goal_next_step_payload_builder_v1",
+            recommended_verifier: "artifact_progress_and_no_drift_verifier_v1",
+            claim_boundary: "Can continue only when an active goal and next runnable step are explicit in artifacts; otherwise fallback to LLM planning.",
+        },
+        "retrieval_lookup" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_evidence_retrieval_candidate",
+            recommended_profile_line: "local_evidence_lookup_operator",
+            recommended_payload_builder: "local_path_or_link_lookup_payload_builder_v1",
+            recommended_verifier: "source_path_or_url_presence_verifier_v1",
+            claim_boundary: "Can route local/source lookup and provenance checks; external freshness still requires source retrieval.",
+        },
+        "git_control" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_workspace_policy_candidate",
+            recommended_profile_line: "workspace_command_operator",
+            recommended_payload_builder: "git_command_intent_payload_builder_v1",
+            recommended_verifier: "git_status_and_command_outcome_verifier_v1",
+            claim_boundary: "Needs live workspace evidence and command outcome verification; no automatic mutation without explicit user intent.",
+        },
+        "metrics_report_readout" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_structured_readout_candidate",
+            recommended_profile_line: "metrics_summary_operator",
+            recommended_payload_builder: "metrics_report_payload_builder_v1",
+            recommended_verifier: "numeric_report_field_verifier_v1",
+            claim_boundary: "Can summarize existing reports only when metric fields are already present; cannot invent missing measurements.",
+        },
+        "read_inspect" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_read_only_tool_candidate",
+            recommended_profile_line: "read_inspect_operator",
+            recommended_payload_builder: "read_inspect_request_payload_builder_v1",
+            recommended_verifier: "read_only_path_and_excerpt_verifier_v1",
+            claim_boundary: "Can route read-only inspections, but final answers still need source-grounded evidence and path checks.",
+        },
+        "serving_ops" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_ops_diagnostic_candidate",
+            recommended_profile_line: "serving_ops_operator",
+            recommended_payload_builder: "serving_ops_metric_payload_builder_v1",
+            recommended_verifier: "service_health_metric_verifier_v1",
+            claim_boundary: "Needs daemon/LB/worker evidence; no server mutation claim without live health and rollback checks.",
+        },
+        "dataset_corpus" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_data_quality_candidate",
+            recommended_profile_line: "dataset_quality_operator",
+            recommended_payload_builder: "dataset_contract_payload_builder_v1",
+            recommended_verifier: "jsonl_schema_balance_verifier_v1",
+            claim_boundary: "Can verify structural dataset gates; semantic accept still needs heldout and shortcut checks.",
+        },
+        "research_literature" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "low_requires_external_evidence",
+            recommended_profile_line: "literature_triage_operator",
+            recommended_payload_builder: "literature_question_payload_builder_v1",
+            recommended_verifier: "citation_and_primary_source_verifier_v1",
+            claim_boundary: "Requires current source retrieval before claims; CPU can triage route shape, not replace literature evidence.",
+        },
+        "planning_next_step" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_state_transition_candidate",
+            recommended_profile_line: "project_planning_operator",
+            recommended_payload_builder: "goal_state_transition_payload_builder_v1",
+            recommended_verifier: "plan_step_artifact_progress_verifier_v1",
+            claim_boundary: "Can rank next engineering step only against explicit project artifacts and current goal state.",
+        },
+        "style_brevity" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "high_response_policy_candidate",
+            recommended_profile_line: "response_style_operator",
+            recommended_payload_builder: "style_constraint_payload_builder_v1",
+            recommended_verifier: "response_length_and_format_verifier_v1",
+            claim_boundary: "Can enforce style constraints on generated responses; it is not a semantic task solver.",
+        },
+        "answer_or_explain" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "low_needs_knowledge_evidence",
+            recommended_profile_line: "short_answer_evidence_operator",
+            recommended_payload_builder: "question_shape_payload_builder_v1",
+            recommended_verifier: "grounded_answer_evidence_verifier_v1",
+            claim_boundary: "High-volume but not locally safe by default; requires grounded evidence or fallback to LLM.",
+        },
+        "social_affect" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "low_optional_policy_candidate",
+            recommended_profile_line: "conversation_ack_operator",
+            recommended_payload_builder: "affect_ack_payload_builder_v1",
+            recommended_verifier: "no_task_claim_ack_verifier_v1",
+            claim_boundary: "Can only acknowledge tone; it must not claim task progress or produce technical answers.",
+        },
+        "short_decision_ack" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "medium_dialogue_state_candidate",
+            recommended_profile_line: "short_decision_operator",
+            recommended_payload_builder: "short_ack_decision_payload_builder_v1",
+            recommended_verifier: "active_turn_state_transition_verifier_v1",
+            claim_boundary: "Can update dialogue control state only when the previous assistant turn defines the decision; it must not infer hidden task content.",
+        },
+        "project_context_dialogue" => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "low_stateful_dialogue_candidate",
+            recommended_profile_line: "project_context_dialogue_operator",
+            recommended_payload_builder: "active_project_state_payload_builder_v1",
+            recommended_verifier: "workspace_artifact_or_goal_state_verifier_v1",
+            claim_boundary: "Can only route against explicit active project state and artifacts; free-form reasoning still falls back to LLM.",
+        },
+        _ => RouteGapFamilyMetadata {
+            cpu_operator_readiness: "unknown_requires_manual_review",
+            recommended_profile_line: "uncatalogued_operator_backlog",
+            recommended_payload_builder: "manual_route_discovery_payload_builder_v1",
+            recommended_verifier: "manual_route_claim_boundary_verifier_v1",
+            claim_boundary: "Uncatalogued prompts require manual route discovery before any CPU accept path exists.",
+        },
+    }
 }
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {

@@ -274,6 +274,12 @@ pub(crate) fn print_help() {
         "            Rank real CPU offload routes and forecast capacity before executable payload builders exist"
     );
     println!(
+        "  role-binding-real-traffic-route-gap-catalog-v1 [history-jsonl] [registry-config-json] [route-gap-report-json] [max-events]"
+    );
+    println!(
+        "            Classify no-candidate real Codex prompts into privacy-safe operator-family backlog counts"
+    );
+    println!(
         "  role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
     );
     println!(

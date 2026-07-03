@@ -1,5 +1,111 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Real-Traffic Route-Gap Catalog
+
+Verdict:
+
+```text
+ROUTE_GAP_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-route-gap-catalog-v1
+
+The command reads real local Codex prompt history and the serving profile
+registry, separates already-routed calls from no-candidate calls, and writes a
+privacy-safe operator-family backlog. It writes no raw prompt text and enables
+no local accepts.
+
+Report:
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json
+```
+
+Fresh route-gap catalog over the same 1000 non-synthetic Codex calls:
+
+```text
+sampled_llm_calls: 1000
+existing_route_candidate_events: 288
+existing_route_coverage_milli: 288
+no_candidate_events: 712
+no_candidate_coverage_milli: 712
+
+top three no-candidate families:
+  answer_or_explain: 215
+  project_context_dialogue: 211
+  planning_next_step: 82
+
+top_three_no_candidate_events: 508
+top_three_no_candidate_coverage_milli: 508
+```
+
+Full no-candidate family rank:
+
+```text
+answer_or_explain: 215
+project_context_dialogue: 211
+planning_next_step: 82
+agent_continue_execute: 36
+agent_control_stop: 36
+read_inspect: 27
+retrieval_lookup: 25
+short_decision_ack: 19
+serving_ops: 13
+uncatalogued: 13
+metrics_report_readout: 10
+git_control: 8
+research_literature: 7
+dataset_corpus: 6
+style_brevity: 3
+social_affect: 1
+```
+
+Claim boundary:
+
+```text
+This is not savings and not a market claim.
+raw_text_written: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Structural gate:
+
+```text
+NANDA route-gap catalog claim-boundary gate: PASS
+checked:
+  existing_route_candidate_events: 288
+  no_candidate_events: 712
+  top_three_no_candidate_events: 508
+  raw_text_written: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+  conditional safe_policy_found: false
+
+Note:
+  earlier broad packets VETOed because they mixed interpretation with source
+  counts. The accepted gate is intentionally narrow: counts and claim-boundary
+  only.
+```
+
+Diagnostic read:
+
+```text
+The current three runtime routes cover only 288/1000 real Codex calls, so CPU
+Routability 80 cannot be reached by tuning edit/conditional/mixed alone.
+
+The largest gap is not an edit route. It is conversational/project-state work:
+answer_or_explain + project_context_dialogue + planning_next_step account for
+508/1000 calls. Those families need separate request-side payload builders and
+deterministic verifiers, not forced promotion through conditional/mixed.
+
+Conditional remains unsafe to promote: its calibration still has no safe
+readout policy. Route-gap catalog is the correct next map for deciding which
+operator profile to build next.
+```
+
 ## 2026-07-03 - Executor Integration: Route Priority + Edit Safe-Policy Promotion
 
 Verdicts:
