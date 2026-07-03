@@ -292,6 +292,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run planning-next-step payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile planning-next-step dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

@@ -1,5 +1,134 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Planning Next-Step Profile V1
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-planning-next-step-profile-v1
+
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The command compiles the request-side planning_next_step dry-run payloads into
+a real `.nwrb` package and writes a serving registry overlay. The profile is
+registered, but its threshold is i32::MAX, so shadow can measure score/margins
+while local accepts stay disabled until a deterministic verifier exists.
+```
+
+Artifacts:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/planning-next-step-seed0.nwrb
+
+overlay_registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v1.json
+
+profile_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.report.json
+
+shadow_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.verification-hook-audit.report.json
+
+trace_rows_read: 1000
+scoreable_payload_events: 14
+package_training_requests: 14
+edge_count: 8
+package_bytes: 140
+runtime_bytes_estimate: 33000
+changed_edges: 155
+positive_updates: 608
+negative_updates: 672
+threshold: 2147483647
+positive_margin_rows: 14
+strict_ordered_pass_rows: 14
+unexpected_local_accepts_under_disabled_threshold: 0
+median_energy_margin: 1106944
+p10_energy_margin: 873472
+min_energy_margin: 873472
+median_min_slot_margin: 366592
+p10_min_slot_margin: 316416
+min_slot_margin: 287744
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed: false
+```
+
+Shadow / audit:
+
+```text
+operator_candidate_calls: 14
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 213476
+
+verification_hook_ready_events: 0
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 14
+candidates_missing_explicit_verification: 14
+```
+
+Interpretation:
+
+```text
+This closes the profile-missing gap for planning_next_step. The runtime now
+loads and scores the planning payload path, producing strong positive margins,
+but the disabled threshold keeps every row in fallback_to_llm. This is scoring
+telemetry, not savings.
+
+Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
+792 calls. The next engineering debt is plan_step_artifact_progress_verifier_v1
+plus safe-policy calibration before any threshold can be lowered.
+```
+
+Claim boundary:
+
+```text
+Profile-ready is not verified CPU. Planning-next-step contributes to CPU
+Routability only after deterministic output/artifact evidence verifies the
+predicted transition, verified_safe_accepts > 0, provider cost is attached,
+and false_accepts remain zero.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-profile-v1
+packet:
+  docs/structural_gates/planning-next-step-profile-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.nanda.json
+
+Scope:
+  The packet checks that the planning_next_step profile is registered and
+  scored while the disabled threshold prevents local accepts and market claims.
+
+  NANDA found no role conflicts, but VETOs the packet because the exact
+  candidate triads are weak under composite-mode support. Treat this as
+  proof-shape debt, not as runtime failure and not as structural PASS.
+```
+
 ## 2026-07-03 - Executor Integration: Planning Next-Step Payload Dry-Run V1
 
 Verdict:
