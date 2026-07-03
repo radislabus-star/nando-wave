@@ -85,6 +85,7 @@ edit_payload_readiness_command: role-binding-real-traffic-edit-payload-readiness
 edit_payload_dry_run_command: role-binding-real-traffic-edit-payload-dry-run-v1
 edit_output_evidence_command: role-binding-real-traffic-edit-output-evidence-v1
 edit_local_accept_calibration_command: role-binding-real-traffic-edit-local-accept-calibration-v1
+edit_admission_calibration_command: role-binding-real-traffic-edit-admission-calibration-v1
 verification_hook_audit_command: role-binding-real-traffic-verification-hook-audit-v1
 feedback_loop_command: role-binding-real-traffic-feedback-loop-v1
 smoke_command: role-binding-real-traffic-shadow-smoke-v1
@@ -165,6 +166,14 @@ current smoke:
   edit_local_accept_calibration_best_safe_true_accepts: 0.
   edit_local_accept_calibration_energy_only_false_accepts: 14.
   edit_local_accept_calibration_marker_only_false_accepts: 14.
+  edit_admission_calibration_verdict: EDIT_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY.
+  edit_admission_calibration_hook_ready_rows: 17.
+  edit_admission_calibration_label_true_rows: 3.
+  edit_admission_calibration_label_false_rows: 14.
+  edit_admission_calibration_minimum_true_support: 2.
+  edit_admission_calibration_robust_safe_policy_found: false.
+  edit_admission_calibration_singleton_safe_policy_found: true.
+  edit_admission_calibration_best_robust_true_accepts: 0.
   feedback_loop_verdict: CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW.
   feedback_loop_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json.
   feedback_loop_exact_cache_hits: 54.

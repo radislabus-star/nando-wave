@@ -1,5 +1,104 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Edit Admission Calibration
+
+Verdict:
+
+```text
+EDIT_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-edit-admission-calibration-v1.
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl
+  /home/ubu/.codex/history.jsonl
+
+and writes:
+  target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json
+```
+
+Privacy / anti-leak boundary:
+
+```text
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_features: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Admission population:
+
+```text
+hook_ready_rows: 17
+rows_with_prompt_features: 17
+label_true_rows: 3
+label_false_rows: 14
+minimum_true_support: 2
+robust_safe_policy_found: false
+singleton_safe_policy_found: true
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 1
+```
+
+Policy read:
+
+```text
+all_hook_ready_rows:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+starts_what:
+  accepts: 1
+  true_accepts: 1
+  false_accepts: 0
+  singleton_safe: true
+  robust_safe: false
+
+starts_goal_or_starts_what_length_lt_1800:
+  accepts: 1
+  true_accepts: 1
+  false_accepts: 0
+  singleton_safe: true
+  robust_safe: false
+
+runtime_and_length_lt_1800:
+  accepts: 2
+  true_accepts: 1
+  false_accepts: 1
+
+not_report_marker_and_length_lt_1800:
+  accepts: 3
+  true_accepts: 1
+  false_accepts: 2
+```
+
+Diagnostic read:
+
+```text
+No robust request-side admission policy exists on the current 17 hook-ready
+real edit rows. Singleton-safe gates exist, but support only 1 true row, so they
+are not product proof and must not enable local accepts.
+
+Combined with local-accept calibration, this closes the cheap edit route:
+  readout loosening is unsafe;
+  request-side admission from current features is too weak;
+  verified CPU accepts remain 0.
+
+Next debt:
+  either collect more real edit evidence and add richer edit payload/admission
+  features, or move to the larger route pool:
+    conditional_branch: 92 candidates;
+    mixed_map: 39 candidates.
+```
+
 ## 2026-07-03 - Executor Integration: Edit Local Accept Calibration
 
 Verdict:

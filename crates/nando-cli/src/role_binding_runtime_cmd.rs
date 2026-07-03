@@ -65,6 +65,8 @@ const DEFAULT_EDIT_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json";
 const DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json";
+const DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
@@ -3894,6 +3896,157 @@ where
     Err("edit local accept calibration is review-only".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_edit_admission_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+
+    for trace in &trace_rows {
+        let Some(label) = trace.verified_safe_accept else {
+            continue;
+        };
+        if trace.nando_shadow_request.is_none() {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let features = extract_edit_admission_features(prompt_text);
+        rows.push(RoleBindingEditAdmissionCalibrationRow {
+            trace_id: trace.trace_id.clone(),
+            request_fingerprint: trace.request_fingerprint.clone(),
+            response_fingerprint: trace.response_fingerprint.clone(),
+            verifier_label: label,
+            features,
+        });
+    }
+
+    let minimum_true_support = 2usize;
+    let policies = edit_admission_policy_reports(&rows, minimum_true_support);
+    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
+    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
+    let best_robust_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.robust_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let best_singleton_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.singleton_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let feature_counts = edit_admission_feature_counts(&rows);
+    let report = RoleBindingEditAdmissionCalibrationReport {
+        schema_version: "nando_role_binding_edit_admission_calibration_v1".to_owned(),
+        verdict: if robust_safe_policy_found {
+            "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND"
+        } else if singleton_safe_policy_found {
+            "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
+        } else {
+            "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY"
+        }
+        .to_owned(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        hook_ready_rows,
+        rows_with_prompt_features: rows.len(),
+        history_prompt_missing_rows,
+        label_true_rows,
+        label_false_rows,
+        minimum_true_support,
+        robust_safe_policy_found,
+        singleton_safe_policy_found,
+        best_robust_true_accepts,
+        best_singleton_true_accepts,
+        feature_counts,
+        policies,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Admission calibration only. It reads real request text at analysis time, writes only fingerprints/features/counts, uses verification labels only to evaluate candidate request-side gates, enables no local accepts, and cannot be used as market savings claim.".to_owned(),
+        next_engineering_debt: if robust_safe_policy_found {
+            "Promote the robust admission candidate only through a separate shadow trace rewrite and false_accepts=0 gate; do not count singleton policies as product proof.".to_owned()
+        } else {
+            "Current real edit request-side features do not provide a robust safe admission gate. Leave edit local accepts disabled and either improve edit features with more real evidence or build the conditional/mixed payload builders.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-edit-admission-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!(
+        "  rows_with_prompt_features: {}",
+        report.rows_with_prompt_features
+    );
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!(
+        "  robust_safe_policy_found: {}",
+        report.robust_safe_policy_found
+    );
+    println!(
+        "  singleton_safe_policy_found: {}",
+        report.singleton_safe_policy_found
+    );
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    Err("edit admission calibration is review-only".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_verification_hook_audit_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -6230,6 +6383,83 @@ struct RoleBindingEditLocalAcceptCalibrationRow {
     slot_count: usize,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditAdmissionCalibrationReport {
+    schema_version: String,
+    verdict: String,
+    evidence_trace_path: String,
+    history_path: String,
+    hook_ready_rows: usize,
+    rows_with_prompt_features: usize,
+    history_prompt_missing_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    minimum_true_support: usize,
+    robust_safe_policy_found: bool,
+    singleton_safe_policy_found: bool,
+    best_robust_true_accepts: usize,
+    best_singleton_true_accepts: usize,
+    feature_counts: Vec<RoleBindingEditAdmissionFeatureCount>,
+    policies: Vec<RoleBindingEditAdmissionPolicyReport>,
+    rows: Vec<RoleBindingEditAdmissionCalibrationRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditAdmissionFeatureCount {
+    feature: String,
+    label_true_count: usize,
+    label_false_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditAdmissionPolicyReport {
+    policy_name: String,
+    accepts: usize,
+    true_accepts: usize,
+    false_accepts: usize,
+    missed_true: usize,
+    singleton_safe: bool,
+    robust_safe: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditAdmissionCalibrationRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    response_fingerprint: Option<String>,
+    verifier_label: bool,
+    features: RoleBindingEditAdmissionFeatures,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditAdmissionFeatures {
+    request_len: usize,
+    line_count: usize,
+    starts_goal: bool,
+    starts_what: bool,
+    starts_yes: bool,
+    has_runtime_terms: bool,
+    has_goal_terms: bool,
+    has_next_terms: bool,
+    has_direct_edit_command: bool,
+    has_report_markers: bool,
+    has_proof_boundary_terms: bool,
+    has_code_diff_lines: bool,
+    has_file_like_token: bool,
+    has_question_mark: bool,
+    marker_len: usize,
+    marker_present: bool,
+}
+
 #[derive(Clone, Debug)]
 struct RoleBindingProfileDetailedScore {
     energy_margin: i32,
@@ -8209,6 +8439,233 @@ where
         safe: false,
         threshold: None,
     })
+}
+
+fn extract_edit_admission_features(text: &str) -> RoleBindingEditAdmissionFeatures {
+    let lower = text.to_lowercase();
+    let trimmed = text.trim_start();
+    let tokens =
+        extract_request_side_edit_tokens(text, usize::from(REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT));
+    let marker = extract_request_side_marker_token(text, &tokens);
+    RoleBindingEditAdmissionFeatures {
+        request_len: text.len(),
+        line_count: text.lines().count().max(1),
+        starts_goal: trimmed.starts_with("Цель") || trimmed.to_lowercase().starts_with("goal"),
+        starts_what: trimmed.starts_with("Что") || trimmed.to_lowercase().starts_with("what"),
+        starts_yes: trimmed.starts_with("Да") || trimmed.to_lowercase().starts_with("yes"),
+        has_runtime_terms: contains_any(&lower, &["runtime", "рантайм", "profile", "operator"]),
+        has_goal_terms: contains_any(&lower, &["цель", "goal"]),
+        has_next_terms: contains_any(&lower, &["следующ", "next"]),
+        has_direct_edit_command: contains_any(
+            &lower,
+            &[
+                "сделай",
+                "добавь",
+                "исправ",
+                "чини",
+                "почини",
+                "перепиши",
+                "обнови",
+                "замени",
+                "edit",
+                "fix",
+                "patch",
+                "update",
+            ],
+        ),
+        has_report_markers: contains_any(
+            &lower,
+            &[
+                "verdict:",
+                "what changed",
+                "что изменил",
+                "diagnostic read",
+                "current smoke",
+                "result:",
+                "результат:",
+            ],
+        ),
+        has_proof_boundary_terms: contains_any(
+            &lower,
+            &[
+                "lookup",
+                "target_id",
+                "proof_rule_id",
+                "local_out_t",
+                "false_accept",
+            ],
+        ),
+        has_code_diff_lines: text
+            .lines()
+            .any(|line| line.trim_start().starts_with('+') || line.contains(" +fn ")),
+        has_file_like_token: contains_file_like_token(text),
+        has_question_mark: text.contains('?') || text.contains('؟'),
+        marker_len: marker.as_deref().map(str::len).unwrap_or_default(),
+        marker_present: marker.is_some(),
+    }
+}
+
+fn edit_admission_policy_reports(
+    rows: &[RoleBindingEditAdmissionCalibrationRow],
+    minimum_true_support: usize,
+) -> Vec<RoleBindingEditAdmissionPolicyReport> {
+    type EditAdmissionPredicate = fn(&RoleBindingEditAdmissionFeatures) -> bool;
+    let policy_defs: Vec<(&str, EditAdmissionPredicate)> = vec![
+        ("all_hook_ready_rows", |_| true),
+        ("length_lt_1000", |features| features.request_len < 1000),
+        ("length_lt_1800", |features| features.request_len < 1800),
+        ("starts_goal", |features| features.starts_goal),
+        ("starts_what", |features| features.starts_what),
+        ("starts_yes", |features| features.starts_yes),
+        ("runtime_and_length_lt_1000", |features| {
+            features.has_runtime_terms && features.request_len < 1000
+        }),
+        ("runtime_and_length_lt_1800", |features| {
+            features.has_runtime_terms && features.request_len < 1800
+        }),
+        ("starts_goal_and_length_lt_1000", |features| {
+            features.starts_goal && features.request_len < 1000
+        }),
+        ("starts_goal_or_starts_what_length_lt_1800", |features| {
+            (features.starts_goal || features.starts_what) && features.request_len < 1800
+        }),
+        ("starts_what_and_runtime", |features| {
+            features.starts_what && features.has_runtime_terms
+        }),
+        ("direct_edit_command_and_length_lt_1000", |features| {
+            features.has_direct_edit_command && features.request_len < 1000
+        }),
+        ("not_report_marker_and_length_lt_1800", |features| {
+            !features.has_report_markers && features.request_len < 1800
+        }),
+        ("not_code_diff_and_length_lt_1800", |features| {
+            !features.has_code_diff_lines && features.request_len < 1800
+        }),
+        ("marker_len_at_least_3_and_length_lt_1800", |features| {
+            features.marker_len >= 3 && features.request_len < 1800
+        }),
+        ("question_mark_and_runtime", |features| {
+            features.has_question_mark && features.has_runtime_terms
+        }),
+    ];
+    policy_defs
+        .into_iter()
+        .map(|(name, predicate)| {
+            evaluate_edit_admission_policy(name, rows, minimum_true_support, |row| {
+                predicate(&row.features)
+            })
+        })
+        .collect()
+}
+
+fn evaluate_edit_admission_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingEditAdmissionCalibrationRow],
+    minimum_true_support: usize,
+    accepts: F,
+) -> RoleBindingEditAdmissionPolicyReport
+where
+    F: Fn(&RoleBindingEditAdmissionCalibrationRow) -> bool,
+{
+    let mut accepted = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut missed_true = 0usize;
+    for row in rows {
+        let accept = accepts(row);
+        accepted += usize::from(accept);
+        true_accepts += usize::from(accept && row.verifier_label);
+        false_accepts += usize::from(accept && !row.verifier_label);
+        missed_true += usize::from(!accept && row.verifier_label);
+    }
+    RoleBindingEditAdmissionPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: accepted,
+        true_accepts,
+        false_accepts,
+        missed_true,
+        singleton_safe: false_accepts == 0 && true_accepts == 1,
+        robust_safe: false_accepts == 0 && true_accepts >= minimum_true_support,
+    }
+}
+
+fn edit_admission_feature_counts(
+    rows: &[RoleBindingEditAdmissionCalibrationRow],
+) -> Vec<RoleBindingEditAdmissionFeatureCount> {
+    let mut counts = BTreeMap::<String, (usize, usize)>::new();
+    for row in rows {
+        for feature in edit_admission_feature_names(&row.features) {
+            let entry = counts.entry(feature).or_default();
+            if row.verifier_label {
+                entry.0 += 1;
+            } else {
+                entry.1 += 1;
+            }
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(feature, (label_true_count, label_false_count))| {
+            RoleBindingEditAdmissionFeatureCount {
+                feature,
+                label_true_count,
+                label_false_count,
+            }
+        })
+        .collect()
+}
+
+fn edit_admission_feature_names(features: &RoleBindingEditAdmissionFeatures) -> Vec<String> {
+    let mut names = Vec::new();
+    if features.request_len < 1000 {
+        names.push("length_lt_1000".to_owned());
+    }
+    if features.request_len < 1800 {
+        names.push("length_lt_1800".to_owned());
+    }
+    if features.starts_goal {
+        names.push("starts_goal".to_owned());
+    }
+    if features.starts_what {
+        names.push("starts_what".to_owned());
+    }
+    if features.starts_yes {
+        names.push("starts_yes".to_owned());
+    }
+    if features.has_runtime_terms {
+        names.push("has_runtime_terms".to_owned());
+    }
+    if features.has_goal_terms {
+        names.push("has_goal_terms".to_owned());
+    }
+    if features.has_next_terms {
+        names.push("has_next_terms".to_owned());
+    }
+    if features.has_direct_edit_command {
+        names.push("has_direct_edit_command".to_owned());
+    }
+    if features.has_report_markers {
+        names.push("has_report_markers".to_owned());
+    }
+    if features.has_proof_boundary_terms {
+        names.push("has_proof_boundary_terms".to_owned());
+    }
+    if features.has_code_diff_lines {
+        names.push("has_code_diff_lines".to_owned());
+    }
+    if features.has_file_like_token {
+        names.push("has_file_like_token".to_owned());
+    }
+    if features.has_question_mark {
+        names.push("has_question_mark".to_owned());
+    }
+    if features.marker_present {
+        names.push("marker_present".to_owned());
+    }
+    if features.marker_len >= 3 {
+        names.push("marker_len_at_least_3".to_owned());
+    }
+    names
 }
 
 fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {

@@ -26,6 +26,7 @@ New commands:
   role-binding-real-traffic-edit-payload-dry-run-v1
   role-binding-real-traffic-edit-output-evidence-v1
   role-binding-real-traffic-edit-local-accept-calibration-v1
+  role-binding-real-traffic-edit-admission-calibration-v1
   role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-feedback-loop-v1
   role-binding-real-traffic-shadow-smoke-v1
@@ -444,6 +445,60 @@ Updated interpretation: tuning readout cannot safely unlock this edit route.
 The end slot causes current fallback, but ignoring it would accept 14
 verifier-false rows. The next safe step is request-side admission / richer edit
 payload features, not threshold lowering.
+
+Edit request-side admission calibration:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-edit-admission-calibration-v1 target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl /home/ubu/.codex/history.jsonl target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json
+result:
+  verdict: EDIT_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+  hook_ready_rows: 17
+  rows_with_prompt_features: 17
+  label_true_rows: 3
+  label_false_rows: 14
+  minimum_true_support: 2
+  robust_safe_policy_found: false
+  singleton_safe_policy_found: true
+  best_robust_true_accepts: 0
+  best_singleton_true_accepts: 1
+  raw_prompt_text_written: false
+  raw_response_text_written: false
+  response_text_used_for_features: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Policy read:
+
+```text
+all_hook_ready_rows:
+  accepts: 17
+  true_accepts: 3
+  false_accepts: 14
+
+starts_what:
+  accepts: 1
+  true_accepts: 1
+  false_accepts: 0
+  singleton_safe: true
+  robust_safe: false
+
+runtime_and_length_lt_1800:
+  accepts: 2
+  true_accepts: 1
+  false_accepts: 1
+
+not_report_marker_and_length_lt_1800:
+  accepts: 3
+  true_accepts: 1
+  false_accepts: 2
+```
+
+Updated interpretation: the cheap request-side admission path is not enough
+for current real edit rows. A singleton-safe gate can isolate one true row, but
+support of one is not a product proof and must not enable local accepts. The
+edit route remains diagnostic-only until richer payload/admission features or
+more real evidence separate verifier-true rows from verifier-false rows.
 
 CPU route feedback-loop report:
 

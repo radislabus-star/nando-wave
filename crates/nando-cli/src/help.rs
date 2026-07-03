@@ -298,6 +298,12 @@ pub(crate) fn print_help() {
         "            Compare safe/unsafe readout policies on evidence-backed real Codex edit rows"
     );
     println!(
+        "  role-binding-real-traffic-edit-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Calibrate request-side edit admission gates without writing raw prompt/response text"
+    );
+    println!(
         "  role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]"
     );
     println!(
