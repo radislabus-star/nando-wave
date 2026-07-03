@@ -168,6 +168,8 @@ const DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/conditional-local-accept-calibration-v1.report.json";
 const DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json";
+const DEFAULT_PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/planning-next-step-admission-calibration-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
@@ -4661,6 +4663,157 @@ where
         report.best_safe_true_accepts
     );
     Err("planning-next-step local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_planning_next_step_admission_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+
+    for trace in &trace_rows {
+        let Some(label) = trace.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &trace.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_PLANNING_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let features = extract_planning_next_step_admission_features(prompt_text);
+        rows.push(RoleBindingPlanningNextStepAdmissionCalibrationRow {
+            trace_id: trace.trace_id.clone(),
+            request_fingerprint: trace.request_fingerprint.clone(),
+            response_fingerprint: trace.response_fingerprint.clone(),
+            verifier_label: label,
+            features,
+        });
+    }
+
+    let minimum_true_support = 2usize;
+    let policies = planning_next_step_admission_policy_reports(&rows, minimum_true_support);
+    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
+    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
+    let best_robust_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.robust_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let best_singleton_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.singleton_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let feature_counts = planning_next_step_admission_feature_counts(&rows);
+    let report = RoleBindingPlanningNextStepAdmissionCalibrationReport {
+        schema_version: "nando_role_binding_planning_next_step_admission_calibration_v1"
+            .to_owned(),
+        verdict: if robust_safe_policy_found {
+            "PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND"
+        } else if singleton_safe_policy_found {
+            "PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
+        } else {
+            "PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY"
+        }
+        .to_owned(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        hook_ready_rows,
+        rows_with_prompt_features: rows.len(),
+        history_prompt_missing_rows,
+        label_true_rows,
+        label_false_rows,
+        minimum_true_support,
+        robust_safe_policy_found,
+        singleton_safe_policy_found,
+        best_robust_true_accepts,
+        best_singleton_true_accepts,
+        feature_counts,
+        policies,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Planning-next-step admission calibration only. It reads real request text at analysis time, writes only fingerprints/features/counts, uses verification labels only to evaluate request-side gates, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if robust_safe_policy_found {
+            "Use the robust request-side admission candidate only in a separate promoted shadow trace with provider cost, false_accepts=0, unverified_shadow_accepts=0, and explicit rollback. It still needs shadow/audit before counting CPU savings.".to_owned()
+        } else {
+            "Current planning prompt-side features do not robustly separate tool-backed progress from false planning rows. Improve admission features or capture richer request-side state before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-planning-next-step-admission-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!(
+        "  rows_with_prompt_features: {}",
+        report.rows_with_prompt_features
+    );
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!(
+        "  robust_safe_policy_found: {}",
+        report.robust_safe_policy_found
+    );
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    Err("planning-next-step admission calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_cpu_operator_catalog_v1<I>(
@@ -12384,6 +12537,66 @@ struct RoleBindingAgentControlAdmissionCalibrationRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingPlanningNextStepAdmissionCalibrationReport {
+    schema_version: String,
+    verdict: String,
+    evidence_trace_path: String,
+    history_path: String,
+    hook_ready_rows: usize,
+    rows_with_prompt_features: usize,
+    history_prompt_missing_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    minimum_true_support: usize,
+    robust_safe_policy_found: bool,
+    singleton_safe_policy_found: bool,
+    best_robust_true_accepts: usize,
+    best_singleton_true_accepts: usize,
+    feature_counts: Vec<RoleBindingEditAdmissionFeatureCount>,
+    policies: Vec<RoleBindingEditAdmissionPolicyReport>,
+    rows: Vec<RoleBindingPlanningNextStepAdmissionCalibrationRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingPlanningNextStepAdmissionCalibrationRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    response_fingerprint: Option<String>,
+    verifier_label: bool,
+    features: RoleBindingPlanningNextStepAdmissionFeatures,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingPlanningNextStepAdmissionFeatures {
+    request_len: usize,
+    line_count: usize,
+    token_count: usize,
+    starts_goal: bool,
+    starts_continue_or_next: bool,
+    starts_direct_action: bool,
+    has_direct_action_words: bool,
+    has_next_or_plan_words: bool,
+    has_git_commit_terms: bool,
+    has_patch_apply_terms: bool,
+    has_project_artifact_terms: bool,
+    has_nando_wave_terms: bool,
+    has_goal_control_terms: bool,
+    has_report_or_failure_terms: bool,
+    has_question_mark: bool,
+    has_code_diff_lines: bool,
+    has_file_like_token: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingAgentControlAdmissionFeatures {
     request_len: usize,
     token_count: usize,
@@ -15922,6 +16135,167 @@ fn extract_agent_control_admission_features(
     }
 }
 
+fn extract_planning_next_step_admission_features(
+    text: &str,
+) -> RoleBindingPlanningNextStepAdmissionFeatures {
+    let lower = text.to_lowercase();
+    let trimmed = text.trim_start();
+    let token_count = normalized_token_count(&lower);
+    RoleBindingPlanningNextStepAdmissionFeatures {
+        request_len: text.trim().len(),
+        line_count: text.lines().count().max(1),
+        token_count,
+        starts_goal: trimmed.starts_with("Цель") || trimmed.to_lowercase().starts_with("goal"),
+        starts_continue_or_next: contains_any(
+            &trimmed.to_lowercase(),
+            &["дальше", "следующ", "continue", "next"],
+        ),
+        starts_direct_action: contains_any(
+            &trimmed.to_lowercase(),
+            &[
+                "делай",
+                "давай",
+                "сделай",
+                "сделат",
+                "выполни",
+                "запусти",
+                "чини",
+                "почини",
+                "исправ",
+                "добавь",
+                "добавит",
+                "перепечат",
+                "пиши",
+                "write",
+                "run",
+                "do ",
+                "fix",
+                "add",
+            ],
+        ),
+        has_direct_action_words: contains_any(
+            &lower,
+            &[
+                "делай",
+                "давай",
+                "сделай",
+                "сделат",
+                "выполни",
+                "запусти",
+                "продолж",
+                "чини",
+                "почини",
+                "исправ",
+                "добавь",
+                "добавит",
+                "обнови",
+                "перепечат",
+                "запуш",
+                "коммит",
+                "commit",
+                "run",
+                "do ",
+                "fix",
+                "add",
+                "update",
+                "push",
+            ],
+        ),
+        has_next_or_plan_words: contains_any(
+            &lower,
+            &[
+                "дальше",
+                "следующ",
+                "план",
+                "цель",
+                "goal",
+                "next",
+                "continue",
+            ],
+        ),
+        has_git_commit_terms: contains_any(
+            &lower,
+            &["git", "commit", "коммит", "закоммит", "запуш", "push"],
+        ),
+        has_patch_apply_terms: contains_any(
+            &lower,
+            &[
+                "patch",
+                "apply_patch",
+                "diff",
+                "исправ",
+                "чини",
+                "почини",
+                "правк",
+            ],
+        ),
+        has_project_artifact_terms: contains_any(
+            &lower,
+            &[
+                "artifact",
+                "артефакт",
+                "report",
+                "отчёт",
+                "отчет",
+                "cargo",
+                "clippy",
+                "test",
+                "тест",
+                "файл",
+                "docs/",
+                "crates/",
+                ".rs",
+                ".md",
+                ".json",
+                ".jsonl",
+            ],
+        ) || contains_file_like_token(text),
+        has_nando_wave_terms: contains_any(
+            &lower,
+            &[
+                "nando",
+                "wave",
+                "llmwave",
+                "нандо",
+                "волн",
+                "runtime",
+                "рантайм",
+            ],
+        ),
+        has_goal_control_terms: contains_any(
+            &lower,
+            &[
+                "/goal",
+                " goal ",
+                "goal:",
+                "goal workflows",
+                "цель:",
+                "цели можно",
+            ],
+        ),
+        has_report_or_failure_terms: contains_any(
+            &lower,
+            &[
+                "verdict:",
+                "report:",
+                "failure",
+                "failed",
+                "ошибка",
+                "провал",
+                "не прошло",
+                "не проходит",
+                "review",
+                "watch",
+            ],
+        ),
+        has_question_mark: text.contains('?') || text.contains('؟'),
+        has_code_diff_lines: text
+            .lines()
+            .any(|line| line.trim_start().starts_with('+') || line.contains(" +fn ")),
+        has_file_like_token: contains_file_like_token(text),
+    }
+}
+
 fn edit_admission_policy_reports(
     rows: &[RoleBindingEditAdmissionCalibrationRow],
     minimum_true_support: usize,
@@ -15969,6 +16343,83 @@ fn edit_admission_policy_reports(
         .into_iter()
         .map(|(name, predicate)| {
             evaluate_edit_admission_policy(name, rows, minimum_true_support, |row| {
+                predicate(&row.features)
+            })
+        })
+        .collect()
+}
+
+fn planning_next_step_admission_policy_reports(
+    rows: &[RoleBindingPlanningNextStepAdmissionCalibrationRow],
+    minimum_true_support: usize,
+) -> Vec<RoleBindingEditAdmissionPolicyReport> {
+    type PlanningAdmissionPredicate = fn(&RoleBindingPlanningNextStepAdmissionFeatures) -> bool;
+    let policy_defs: Vec<(&str, PlanningAdmissionPredicate)> = vec![
+        ("all_hook_ready_rows", |_| true),
+        ("direct_action_words", |features| {
+            features.has_direct_action_words
+        }),
+        ("git_commit_terms", |features| features.has_git_commit_terms),
+        ("patch_apply_terms", |features| {
+            features.has_patch_apply_terms
+        }),
+        ("project_artifact_terms", |features| {
+            features.has_project_artifact_terms
+        }),
+        ("nando_wave_terms", |features| features.has_nando_wave_terms),
+        ("git_or_patch_terms", |features| {
+            features.has_git_commit_terms || features.has_patch_apply_terms
+        }),
+        ("direct_action_and_git_or_patch", |features| {
+            features.has_direct_action_words
+                && (features.has_git_commit_terms || features.has_patch_apply_terms)
+        }),
+        ("direct_action_and_project_artifact", |features| {
+            features.has_direct_action_words && features.has_project_artifact_terms
+        }),
+        ("nando_wave_and_patch_apply", |features| {
+            features.has_nando_wave_terms && features.has_patch_apply_terms
+        }),
+        ("nando_wave_and_project_artifact", |features| {
+            features.has_nando_wave_terms && features.has_project_artifact_terms
+        }),
+        ("git_or_patch_no_report_failure", |features| {
+            (features.has_git_commit_terms || features.has_patch_apply_terms)
+                && !features.has_report_or_failure_terms
+        }),
+        ("project_artifact_no_report_failure", |features| {
+            features.has_project_artifact_terms && !features.has_report_or_failure_terms
+        }),
+        ("direct_action_project_no_report_failure", |features| {
+            features.has_direct_action_words
+                && features.has_project_artifact_terms
+                && !features.has_report_or_failure_terms
+        }),
+        (
+            "direct_action_project_no_goal_control_no_failure",
+            |features| {
+                features.has_direct_action_words
+                    && features.has_project_artifact_terms
+                    && !features.has_goal_control_terms
+                    && !features.has_report_or_failure_terms
+            },
+        ),
+        ("direct_action_project_or_nando_no_failure", |features| {
+            features.has_direct_action_words
+                && (features.has_project_artifact_terms || features.has_nando_wave_terms)
+                && !features.has_report_or_failure_terms
+        }),
+        ("concise_action_project_no_failure", |features| {
+            features.has_direct_action_words
+                && features.has_project_artifact_terms
+                && !features.has_report_or_failure_terms
+                && features.request_len < 1800
+        }),
+    ];
+    policy_defs
+        .into_iter()
+        .map(|(name, predicate)| {
+            evaluate_planning_next_step_admission_policy(name, rows, minimum_true_support, |row| {
                 predicate(&row.features)
             })
         })
@@ -16107,12 +16558,69 @@ where
     }
 }
 
+fn evaluate_planning_next_step_admission_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingPlanningNextStepAdmissionCalibrationRow],
+    minimum_true_support: usize,
+    accepts: F,
+) -> RoleBindingEditAdmissionPolicyReport
+where
+    F: Fn(&RoleBindingPlanningNextStepAdmissionCalibrationRow) -> bool,
+{
+    let mut accepted = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut missed_true = 0usize;
+    for row in rows {
+        let accept = accepts(row);
+        accepted += usize::from(accept);
+        true_accepts += usize::from(accept && row.verifier_label);
+        false_accepts += usize::from(accept && !row.verifier_label);
+        missed_true += usize::from(!accept && row.verifier_label);
+    }
+    RoleBindingEditAdmissionPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: accepted,
+        true_accepts,
+        false_accepts,
+        missed_true,
+        singleton_safe: false_accepts == 0 && true_accepts == 1,
+        robust_safe: false_accepts == 0 && true_accepts >= minimum_true_support,
+    }
+}
+
 fn edit_admission_feature_counts(
     rows: &[RoleBindingEditAdmissionCalibrationRow],
 ) -> Vec<RoleBindingEditAdmissionFeatureCount> {
     let mut counts = BTreeMap::<String, (usize, usize)>::new();
     for row in rows {
         for feature in edit_admission_feature_names(&row.features) {
+            let entry = counts.entry(feature).or_default();
+            if row.verifier_label {
+                entry.0 += 1;
+            } else {
+                entry.1 += 1;
+            }
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(feature, (label_true_count, label_false_count))| {
+            RoleBindingEditAdmissionFeatureCount {
+                feature,
+                label_true_count,
+                label_false_count,
+            }
+        })
+        .collect()
+}
+
+fn planning_next_step_admission_feature_counts(
+    rows: &[RoleBindingPlanningNextStepAdmissionCalibrationRow],
+) -> Vec<RoleBindingEditAdmissionFeatureCount> {
+    let mut counts = BTreeMap::<String, (usize, usize)>::new();
+    for row in rows {
+        for feature in planning_next_step_admission_feature_names(&row.features) {
             let entry = counts.entry(feature).or_default();
             if row.verifier_label {
                 entry.0 += 1;
@@ -16216,6 +16724,67 @@ fn agent_control_admission_feature_names(
     }
     if features.chars_le_20 {
         names.push("chars_le_20".to_owned());
+    }
+    names
+}
+
+fn planning_next_step_admission_feature_names(
+    features: &RoleBindingPlanningNextStepAdmissionFeatures,
+) -> Vec<String> {
+    let mut names = Vec::new();
+    if features.request_len < 1000 {
+        names.push("length_lt_1000".to_owned());
+    }
+    if features.request_len < 1800 {
+        names.push("length_lt_1800".to_owned());
+    }
+    if features.line_count <= 3 {
+        names.push("line_count_le_3".to_owned());
+    }
+    if features.token_count <= 30 {
+        names.push("token_count_le_30".to_owned());
+    }
+    if features.starts_goal {
+        names.push("starts_goal".to_owned());
+    }
+    if features.starts_continue_or_next {
+        names.push("starts_continue_or_next".to_owned());
+    }
+    if features.starts_direct_action {
+        names.push("starts_direct_action".to_owned());
+    }
+    if features.has_direct_action_words {
+        names.push("has_direct_action_words".to_owned());
+    }
+    if features.has_next_or_plan_words {
+        names.push("has_next_or_plan_words".to_owned());
+    }
+    if features.has_git_commit_terms {
+        names.push("has_git_commit_terms".to_owned());
+    }
+    if features.has_patch_apply_terms {
+        names.push("has_patch_apply_terms".to_owned());
+    }
+    if features.has_project_artifact_terms {
+        names.push("has_project_artifact_terms".to_owned());
+    }
+    if features.has_nando_wave_terms {
+        names.push("has_nando_wave_terms".to_owned());
+    }
+    if features.has_goal_control_terms {
+        names.push("has_goal_control_terms".to_owned());
+    }
+    if features.has_report_or_failure_terms {
+        names.push("has_report_or_failure_terms".to_owned());
+    }
+    if features.has_question_mark {
+        names.push("has_question_mark".to_owned());
+    }
+    if features.has_code_diff_lines {
+        names.push("has_code_diff_lines".to_owned());
+    }
+    if features.has_file_like_token {
+        names.push("has_file_like_token".to_owned());
     }
     names
 }

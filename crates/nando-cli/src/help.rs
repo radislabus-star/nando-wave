@@ -316,6 +316,12 @@ pub(crate) fn print_help() {
         "            Calibrate request-side planning accept policies against artifact-progress labels without enabling local accepts"
     );
     println!(
+        "  role-binding-real-traffic-planning-next-step-admission-calibration-v1 [artifact-progress-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Calibrate prompt-side planning admission features against artifact-progress labels without writing raw prompt text"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

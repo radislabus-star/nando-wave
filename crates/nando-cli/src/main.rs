@@ -113,6 +113,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_mixed_payload_dry_run_v1,
     run_role_binding_real_traffic_mixed_payload_readiness_v1,
     run_role_binding_real_traffic_mixed_safe_policy_promote_v1,
+    run_role_binding_real_traffic_planning_next_step_admission_calibration_v1,
     run_role_binding_real_traffic_planning_next_step_artifact_progress_v1,
     run_role_binding_real_traffic_planning_next_step_local_accept_calibration_v1,
     run_role_binding_real_traffic_planning_next_step_output_evidence_v1,
@@ -656,6 +657,12 @@ fn main() -> ExitCode {
             exit_for_result(
                 run_role_binding_real_traffic_planning_next_step_local_accept_calibration_v1(args),
                 "try: nando-cli role-binding-real-traffic-planning-next-step-local-accept-calibration-v1 [registry-config-json] [artifact-progress-trace-jsonl] [calibration-report-json]",
+            )
+        }
+        Some("role-binding-real-traffic-planning-next-step-admission-calibration-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_planning_next_step_admission_calibration_v1(args),
+                "try: nando-cli role-binding-real-traffic-planning-next-step-admission-calibration-v1 [artifact-progress-trace-jsonl] [history-jsonl] [admission-report-json]",
             )
         }
         Some("role-binding-real-traffic-agent-control-profile-v1") => exit_for_result(

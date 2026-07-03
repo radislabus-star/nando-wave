@@ -1,5 +1,127 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Planning Next-Step Admission Calibration V1/V3
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-planning-next-step-admission-calibration-v1
+
+The command calibrates request-side prompt features against
+planning_next_step artifact-progress verifier labels without writing raw
+prompt text and without enabling local accepts.
+```
+
+V2 lesson:
+
+```text
+The first v2 admission split looked promising, but it was not enough. On the
+full v3 artifact window the direct-action + project-artifact policy admitted:
+
+  accepts:       4
+  true_accepts:  2
+  false_accepts: 2
+
+The two false collisions were goal-control/meta-workflow prompts, not real
+artifact-progress execution prompts.
+```
+
+V3 diagnostic result:
+
+```text
+hook_ready_rows:              29
+rows_with_prompt_features:    29
+label_true_rows:              2
+label_false_rows:             27
+minimum_true_support:         2
+robust_safe_policy_found:     true
+best_robust_true_accepts:     2
+market_claim_allowed:         false
+local_accepts_enabled:        false
+response_text_used_for_features: false
+target_labels_used_for_runtime:  false
+proof_labels_used_for_runtime:   false
+
+policy:
+  direct_action_project_no_goal_control_no_failure
+  accepts:       2
+  true_accepts:  2
+  false_accepts: 0
+  missed_true:   0
+  robust_safe:   true
+```
+
+Feedback dashboard v3 check:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.planning-v3.report.json
+
+operator_candidate_calls:              337
+scoreable_candidate_calls:             128
+verification_hook_ready_events:        94
+verified_cpu_accept_eligible_events:   8
+verified_cpu_routability_milli:        8
+verified_gap_to_80_calls:              792
+market_claim_allowed:                  false
+
+planning_next_step row:
+  candidate_events:                    49
+  payload_ready_events:                63
+  payload_built_events:                49
+  scoreable_payload_events:            49
+  verification_hook_ready_events:      29
+  local_accept_best_safe_true_accepts: 1
+  local_accept_support_qualified:      false
+  verified_cpu_accept_eligible_events: 0
+```
+
+Interpretation:
+
+```text
+The new admission split is a useful request-side diagnostic: it separates both
+known artifact-progress true rows from the goal-control false collisions.
+
+It is not a CPU savings improvement. It does not promote planning_next_step,
+does not enable local accepts, and does not change verified CPU routability.
+
+Promotion still needs a larger support window and a full shadow/audit path
+where verified_safe_accepts increase while false_accepts remain zero.
+```
+
+Claim boundary:
+
+```text
+Current global verified CPU remains 8/1000.
+The gap to the 80% goal remains 792 calls.
+This is admission calibration, not market savings.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-admission-calibration-v1
+packet:
+  docs/structural_gates/planning-next-step-admission-calibration-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-admission-calibration-v1.nanda.json
+
+Treat VETO as a promotion guard: the split is useful but still REVIEW-only.
+```
+
 ## 2026-07-04 - Executor Integration: Feedback Loop Planning Artifact Args V1
 
 Verdict:
