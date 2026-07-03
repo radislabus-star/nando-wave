@@ -81,6 +81,7 @@ codex_history_ingest_command: role-binding-real-traffic-codex-history-ingest-v1
 codex_history_route_candidate_command: role-binding-real-traffic-codex-history-route-candidates-v1
 analyze_command: role-binding-real-traffic-shadow-v1
 cpu_route_forecast_command: role-binding-real-traffic-cpu-route-forecast-v1
+edit_payload_readiness_command: role-binding-real-traffic-edit-payload-readiness-v1
 smoke_command: role-binding-real-traffic-shadow-smoke-v1
 
 purpose:
@@ -92,8 +93,8 @@ purpose:
 
 current smoke:
   real_shadow_pass_gate_requires_verified_savings: true.
-  codex_history_route_candidate_events: 282.
-  codex_history_route_no_candidate_events: 718.
+  codex_history_route_candidate_events: 285.
+  codex_history_route_no_candidate_events: 715.
   codex_history_route_full_shadow_request_payload_built: false.
   codex_history_route_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW.
   codex_history_route_shadow_nando_shadow_accepts: 0.
@@ -101,11 +102,15 @@ current smoke:
   cpu_route_forecast_verdict: CPU_ROUTE_FORECAST_V1_REVIEW.
   cpu_route_forecast_report: target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json.
   cpu_route_forecast_market_claim_allowed: false.
-  cpu_route_forecast_priority_1: role_binding_edit_marker_length_seed0, 152 candidates.
+  cpu_route_forecast_priority_1: role_binding_edit_marker_length_seed0, 154 candidates.
   cpu_route_forecast_priority_2: role_binding_conditional_branch_seed0, 92 candidates.
-  cpu_route_forecast_priority_3: role_binding_mixed_map_seed0, 38 candidates.
-  cpu_route_forecast_50_percent_additional_savings: 140 calls.
-  cpu_route_forecast_50_percent_total_calls_removed_with_exact_cache: 194 calls.
+  cpu_route_forecast_priority_3: role_binding_mixed_map_seed0, 39 candidates.
+  cpu_route_forecast_50_percent_additional_savings: 141 calls.
+  cpu_route_forecast_50_percent_total_calls_removed_with_exact_cache: 195 calls.
+  edit_payload_readiness_verdict: EDIT_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND.
+  edit_payload_readiness_candidate_events: 154.
+  edit_payload_readiness_payload_ready_events: 23.
+  edit_payload_readiness_payload_ready_rate_milli: 149.
   codex_history_events_verdict: CODEX_HISTORY_EVENTS_V1_READY.
   codex_history_events_written: 1000.
   codex_history_raw_text_written: false.

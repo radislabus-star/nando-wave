@@ -189,13 +189,13 @@ command: cargo run --release -p nando-cli -- role-binding-real-traffic-codex-his
 result:
   verdict: CODEX_HISTORY_ROUTE_CANDIDATES_V1_REVIEW
   events_written: 1000
-  candidate_events: 282
-  no_candidate_events: 718
+  candidate_events: 285
+  no_candidate_events: 715
   full_shadow_request_payload_built: false
   route_counts:
-    role_binding_edit_marker_length_seed0: 152
+    role_binding_edit_marker_length_seed0: 154
     role_binding_conditional_branch_seed0: 92
-    role_binding_mixed_map_seed0: 38
+    role_binding_mixed_map_seed0: 39
 ```
 
 Route-only candidate shadow analyzer:
@@ -207,7 +207,7 @@ result:
   total_requests: 1000
   total_llm_calls: 1000
   exact_cache_hits: 54
-  operator_candidate_calls: 282
+  operator_candidate_calls: 285
   nando_shadow_accepts: 0
   verified_safe_accepts: 0
   false_accepts: 0
@@ -228,27 +228,27 @@ result:
   total_llm_calls: 1000
   exact_cache_hits: 54
   exact_cache_coverage_milli: 54
-  operator_candidate_calls: 282
-  operator_candidate_coverage_milli: 282
+  operator_candidate_calls: 285
+  operator_candidate_coverage_milli: 285
   current_nando_accepts: 0
   current_verified_safe_accepts: 0
   current_false_accepts: 0
   full_shadow_request_payload_built: false
   market_claim_allowed: false
   forecast_25_percent_additional_savings: 69
-  forecast_50_percent_additional_savings: 140
-  forecast_80_percent_additional_savings: 223
+  forecast_50_percent_additional_savings: 141
+  forecast_80_percent_additional_savings: 226
   forecast_25_percent_total_calls_removed: 123
-  forecast_50_percent_total_calls_removed: 194
-  forecast_80_percent_total_calls_removed: 277
+  forecast_50_percent_total_calls_removed: 195
+  forecast_80_percent_total_calls_removed: 280
 ```
 
 Priority CPU route backlog:
 
 ```text
 1. role_binding_edit_marker_length_seed0
-   candidate_events: 152
-   candidate_share_of_all_llm_calls: 152 milli
+   candidate_events: 154
+   candidate_share_of_all_llm_calls: 154 milli
    recommended_payload_builder: edit_marker_length_payload_builder_v1
    work: detect edit intent, affected file/text marker, requested length/shape
          constraint, and deterministic patch slots from request text only.
@@ -262,8 +262,8 @@ Priority CPU route backlog:
          fallback threshold from request text only.
 
 3. role_binding_mixed_map_seed0
-   candidate_events: 38
-   candidate_share_of_all_llm_calls: 38 milli
+   candidate_events: 39
+   candidate_share_of_all_llm_calls: 39 milli
    recommended_payload_builder: mixed_map_payload_builder_v1
    work: extract source slots, destination slots, ordered mapping action, and
          invariant checks from request text only.
@@ -275,6 +275,33 @@ Forecast boundary:
 This is route-zone capacity, not verified savings.
 The route forecast may become a market claim only after real request-side
 payload builders produce verified_safe_accepts > 0 with false_accepts = 0.
+```
+
+Edit route payload readiness over the same real Codex window:
+
+```text
+command: cargo run --release -p nando-cli -- role-binding-real-traffic-edit-payload-readiness-v1 /home/ubu/.codex/history.jsonl target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json 1000
+result:
+  verdict: EDIT_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
+  candidate_events: 154
+  payload_ready_events: 23
+  payload_ready_rate_milli: 149
+  missing_scope_or_file: 14
+  missing_marker: 57
+  missing_length_or_shape: 90
+  missing_edit_intent: 119
+  raw_text_written: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Interpretation:
+
+```text
+The edit route is the largest real CPU offload candidate zone, but only
+23/154 current edit candidates have enough request-side structure for the first
+payload-builder attempt. That is the honest first sub-target for verified
+local accepts; the rest need better route taxonomy or richer event capture.
 ```
 
 Batch event ingestion smoke:

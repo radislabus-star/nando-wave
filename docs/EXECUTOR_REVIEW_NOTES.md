@@ -6,19 +6,25 @@ Verdict:
 
 ```text
 CPU_ROUTE_FORECAST_V1_REVIEW
+EDIT_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
 ```
 
 What changed:
 
 ```text
 Added role-binding-real-traffic-cpu-route-forecast-v1.
+Added role-binding-real-traffic-edit-payload-readiness-v1.
 
-It reads:
+The forecast reads:
   target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.report.json
   target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json
 
 and writes:
   target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json
+
+The edit readiness audit reads real local Codex history at analysis time and
+writes:
+  target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json
 ```
 
 Current real Codex forecast:
@@ -27,8 +33,8 @@ Current real Codex forecast:
 total_llm_calls: 1000
 exact_cache_hits: 54
 exact_cache_coverage_milli: 54
-operator_candidate_calls: 282
-operator_candidate_coverage_milli: 282
+operator_candidate_calls: 285
+operator_candidate_coverage_milli: 285
 current_nando_accepts: 0
 current_verified_safe_accepts: 0
 current_false_accepts: 0
@@ -36,18 +42,18 @@ full_shadow_request_payload_built: false
 market_claim_allowed: false
 
 forecast_25_percent_additional_savings: 69
-forecast_50_percent_additional_savings: 140
-forecast_80_percent_additional_savings: 223
+forecast_50_percent_additional_savings: 141
+forecast_80_percent_additional_savings: 226
 forecast_25_percent_total_calls_removed: 123
-forecast_50_percent_total_calls_removed: 194
-forecast_80_percent_total_calls_removed: 277
+forecast_50_percent_total_calls_removed: 195
+forecast_80_percent_total_calls_removed: 280
 ```
 
 Priority CPU route backlog:
 
 ```text
 1. role_binding_edit_marker_length_seed0
-   candidate_events: 152
+   candidate_events: 154
    payload_builder: edit_marker_length_payload_builder_v1
 
 2. role_binding_conditional_branch_seed0
@@ -56,8 +62,23 @@ Priority CPU route backlog:
    payload_builder: conditional_branch_payload_builder_v1
 
 3. role_binding_mixed_map_seed0
-   candidate_events: 38
+   candidate_events: 39
    payload_builder: mixed_map_payload_builder_v1
+```
+
+Edit payload readiness:
+
+```text
+candidate_events: 154
+payload_ready_events: 23
+payload_ready_rate_milli: 149
+missing_scope_or_file: 14
+missing_marker: 57
+missing_length_or_shape: 90
+missing_edit_intent: 119
+raw_text_written: false
+local_accepts_enabled: false
+market_claim_allowed: false
 ```
 
 Boundary:
@@ -68,6 +89,9 @@ Do not use it as market claim.
 The next debt is request-side payload builders:
   route/profile candidate -> active_fringe + slots
 without response text, target labels, proof labels, or expected answer.
+
+The first concrete builder target is the 23 payload-ready edit-route rows, not
+all 154 edit route candidates.
 ```
 
 ## 2026-07-03 - Executor Integration: Real Traffic Shadow Recorder And Operator Mining
@@ -149,15 +173,15 @@ codex_history_exact_cache_hits: 54
 codex_history_operator_candidate_calls: 0
 codex_history_incremental_reduction_vs_exact_cache_milli: 0
 codex_history_route_candidate_verdict: CODEX_HISTORY_ROUTE_CANDIDATES_V1_REVIEW
-codex_history_route_candidate_events: 282
-codex_history_route_no_candidate_events: 718
+codex_history_route_candidate_events: 285
+codex_history_route_no_candidate_events: 715
 codex_history_route_full_shadow_request_payload_built: false
 codex_history_route_counts:
-  role_binding_edit_marker_length_seed0: 152
+  role_binding_edit_marker_length_seed0: 154
   role_binding_conditional_branch_seed0: 92
-  role_binding_mixed_map_seed0: 38
+  role_binding_mixed_map_seed0: 39
 codex_history_route_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-codex_history_route_shadow_operator_candidate_calls: 282
+codex_history_route_shadow_operator_candidate_calls: 285
 codex_history_route_shadow_nando_shadow_accepts: 0
 codex_history_route_shadow_incremental_reduction_vs_exact_cache_milli: 0
 trace: target/nando-wave/real-traffic-shadow/real-traffic-shadow-smoke-v1.trace.jsonl
@@ -201,7 +225,7 @@ The first local non-synthetic baseline exists now, but it has no Nando route
 candidates. That means the next engineering debt is a real route/candidate
 adapter, not more synthetic replay.
 
-The route-only adapter now finds 282/1000 real local Codex candidate events, but
+The route-only adapter now finds 285/1000 real local Codex candidate events, but
 builds no executable payload and therefore saves 0 calls. The next debt is the
 request-side builder for active fringe and slot impulses.
 ```

@@ -50,6 +50,8 @@ const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_SHADOW_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
+const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -3188,6 +3190,140 @@ where
     Err("CPU route forecast is review-only; it is not verified savings".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_edit_payload_readiness_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_READINESS_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut rows = Vec::new();
+    let mut candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut missing_scope_or_file = 0usize;
+    let mut missing_marker = 0usize;
+    let mut missing_length_or_shape = 0usize;
+    let mut missing_edit_intent = 0usize;
+    let mut route_counts = BTreeMap::<String, usize>::new();
+    let mut builder_kind_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let Some(candidate) = route_catalog.classify_request_text(&row.text) else {
+            continue;
+        };
+        if !candidate.route_key.contains("edit_marker_length") {
+            continue;
+        }
+        candidate_events += 1;
+        *route_counts.entry(candidate.route_key.clone()).or_insert(0) += 1;
+        let readiness = analyze_edit_payload_readiness(&row.text);
+        payload_ready_events += usize::from(readiness.payload_ready);
+        missing_scope_or_file += usize::from(!readiness.has_scope_or_file);
+        missing_marker += usize::from(!readiness.has_marker);
+        missing_length_or_shape += usize::from(!readiness.has_length_or_shape);
+        missing_edit_intent += usize::from(!readiness.has_edit_intent);
+        *builder_kind_counts
+            .entry(readiness.recommended_builder_kind.clone())
+            .or_insert(0) += 1;
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        rows.push(RoleBindingEditPayloadReadinessRow {
+            event_id: format!(
+                "codex_history_edit_readiness::{}::{}::{}",
+                row.session_id, row.ts, index
+            ),
+            request_fingerprint: format!("fnv1a64:{fingerprint:016x}"),
+            route_key: candidate.route_key,
+            profile_id: candidate.profile_id,
+            has_edit_intent: readiness.has_edit_intent,
+            has_scope_or_file: readiness.has_scope_or_file,
+            has_marker: readiness.has_marker,
+            has_length_or_shape: readiness.has_length_or_shape,
+            has_code_or_patch_signal: readiness.has_code_or_patch_signal,
+            payload_ready: readiness.payload_ready,
+            recommended_builder_kind: readiness.recommended_builder_kind,
+            missing_reasons: readiness.missing_reasons,
+        });
+    }
+
+    let report = RoleBindingEditPayloadReadinessReport {
+        schema_version: "nando_role_binding_edit_payload_readiness_v1".to_owned(),
+        verdict: if payload_ready_events > 0 {
+            "EDIT_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND"
+        } else {
+            "EDIT_PAYLOAD_READINESS_V1_REVIEW_NO_READY_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        candidate_events,
+        payload_ready_events,
+        payload_ready_rate_milli: ratio_milli(payload_ready_events, candidate_events),
+        missing_scope_or_file,
+        missing_marker,
+        missing_length_or_shape,
+        missing_edit_intent,
+        route_counts: route_counts
+            .into_iter()
+            .map(|(route_key, count)| RoleBindingNamedCount { name: route_key, count })
+            .collect(),
+        builder_kind_counts: builder_kind_counts
+            .into_iter()
+            .map(|(kind, count)| RoleBindingNamedCount { name: kind, count })
+            .collect(),
+        raw_text_written: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows,
+        claim_boundary: "Request-side edit payload readiness only. This reads local Codex prompt text at analysis time, writes no raw text, and does not create local accepts. Payload-ready means the request has enough request-side structure to attempt a future active_fringe/slot builder; it is not verified savings.".to_owned(),
+        next_engineering_debt: "Use ready rows to build edit_marker_length_payload_builder_v1 that emits active_fringe and slots from request text only, then verify shadow accepts with false_accepts=0.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-edit-payload-readiness-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  candidate_events: {}", report.candidate_events);
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!(
+        "  payload_ready_rate_milli: {}",
+        report.payload_ready_rate_milli
+    );
+    println!("  raw_text_written: {}", report.raw_text_written);
+    Err("edit payload readiness is review-only; it is not verified savings".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_shadow_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -4946,6 +5082,65 @@ struct RoleBindingCpuRouteForecastRow {
     forecast_accept_80_percent_calls: usize,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditPayloadReadinessReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    missing_scope_or_file: usize,
+    missing_marker: usize,
+    missing_length_or_shape: usize,
+    missing_edit_intent: usize,
+    route_counts: Vec<RoleBindingNamedCount>,
+    builder_kind_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingEditPayloadReadinessRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditPayloadReadinessRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    has_edit_intent: bool,
+    has_scope_or_file: bool,
+    has_marker: bool,
+    has_length_or_shape: bool,
+    has_code_or_patch_signal: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingNamedCount {
+    name: String,
+    count: usize,
+}
+
+#[derive(Clone, Debug)]
+struct EditPayloadReadiness {
+    has_edit_intent: bool,
+    has_scope_or_file: bool,
+    has_marker: bool,
+    has_length_or_shape: bool,
+    has_code_or_patch_signal: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
 #[derive(Clone, Debug)]
 struct CodexHistoryRouteCatalog {
     edit: Option<CodexHistoryRouteCandidate>,
@@ -6692,6 +6887,182 @@ fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {
             "generic_request_side_payload_builder_v1".to_owned(),
         )
     }
+}
+
+fn analyze_edit_payload_readiness(text: &str) -> EditPayloadReadiness {
+    let lower = text.to_lowercase();
+    let has_edit_intent = contains_any(
+        &lower,
+        &[
+            "edit",
+            "rewrite",
+            "replace",
+            "patch",
+            "fix",
+            "update",
+            "change",
+            "refactor",
+            "format",
+            "shorten",
+            "перепиши",
+            "исправ",
+            "измени",
+            "замени",
+            "сделай",
+            "добавь",
+            "убери",
+            "сократи",
+            "почини",
+            "отредакт",
+        ],
+    );
+    let has_scope_or_file = contains_file_like_token(text)
+        || contains_any(
+            &lower,
+            &[
+                "file",
+                "path",
+                "function",
+                "module",
+                "test",
+                "doc",
+                "readme",
+                "код",
+                "файл",
+                "функц",
+                "модул",
+                "тест",
+                "док",
+                "строк",
+            ],
+        );
+    let has_marker = contains_marker_like_signal(text)
+        || contains_any(
+            &lower,
+            &[
+                "this",
+                "above",
+                "below",
+                "selected",
+                "fragment",
+                "snippet",
+                "block",
+                "это",
+                "этот",
+                "выше",
+                "ниже",
+                "фрагмент",
+                "кусок",
+                "блок",
+                "вот это",
+            ],
+        );
+    let has_length_or_shape = contains_any(
+        &lower,
+        &[
+            "short",
+            "shorter",
+            "brief",
+            "compact",
+            "concise",
+            "one line",
+            "lines",
+            "tokens",
+            "json",
+            "jsonl",
+            "markdown",
+            "table",
+            "format",
+            "schema",
+            "коротко",
+            "короче",
+            "кратко",
+            "без простын",
+            "меньше",
+            "строк",
+            "формат",
+            "таблиц",
+            "схем",
+        ],
+    );
+    let has_code_or_patch_signal = contains_any(
+        &lower,
+        &[
+            "diff",
+            "patch",
+            "apply_patch",
+            "cargo",
+            "rust",
+            "python",
+            "json",
+            "yaml",
+            "toml",
+            "markdown",
+            "```",
+            "код",
+            "патч",
+            "дифф",
+        ],
+    ) || contains_file_like_token(text);
+    let payload_ready = has_edit_intent && has_scope_or_file && has_marker && has_length_or_shape;
+    let mut missing_reasons = Vec::new();
+    if !has_edit_intent {
+        missing_reasons.push("missing_edit_intent".to_owned());
+    }
+    if !has_scope_or_file {
+        missing_reasons.push("missing_scope_or_file".to_owned());
+    }
+    if !has_marker {
+        missing_reasons.push("missing_marker".to_owned());
+    }
+    if !has_length_or_shape {
+        missing_reasons.push("missing_length_or_shape".to_owned());
+    }
+    let recommended_builder_kind = if payload_ready {
+        "edit_marker_length_payload_builder_v1_candidate".to_owned()
+    } else if has_edit_intent && has_scope_or_file {
+        "edit_scope_payload_builder_needs_marker_or_shape".to_owned()
+    } else if has_edit_intent {
+        "edit_intent_router_needs_scope_marker_shape".to_owned()
+    } else {
+        "not_edit_payload_ready".to_owned()
+    };
+    EditPayloadReadiness {
+        has_edit_intent,
+        has_scope_or_file,
+        has_marker,
+        has_length_or_shape,
+        has_code_or_patch_signal,
+        payload_ready,
+        recommended_builder_kind,
+        missing_reasons,
+    }
+}
+
+fn contains_marker_like_signal(text: &str) -> bool {
+    text.contains('`')
+        || text.contains('"')
+        || text.contains('\'')
+        || text.contains("```")
+        || text.contains("->")
+        || text.contains("=>")
+}
+
+fn contains_file_like_token(text: &str) -> bool {
+    text.split(|ch: char| {
+        ch.is_whitespace() || matches!(ch, ',' | ';' | ':' | '(' | ')' | '[' | ']')
+    })
+    .any(|token| {
+        let token = token
+            .trim_matches(|ch: char| matches!(ch, '"' | '\'' | '`' | '<' | '>' | '.' | ',' | ';'));
+        contains_any(
+            token,
+            &[
+                ".rs", ".py", ".md", ".json", ".jsonl", ".toml", ".yaml", ".yml", ".ts", ".tsx",
+                ".js", ".jsx", ".html", ".css", ".sh", ".sql", ".txt",
+            ],
+        ) || token.contains('/')
+    })
 }
 
 fn real_traffic_operator_rankings(

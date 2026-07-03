@@ -274,6 +274,12 @@ pub(crate) fn print_help() {
         "            Rank real CPU offload routes and forecast capacity before executable payload builders exist"
     );
     println!(
+        "  role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
+    );
+    println!(
+        "            Audit real edit-route candidates for request-side payload-builder readiness without writing raw text"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(
