@@ -1,5 +1,75 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Real Traffic CPU Route Forecast
+
+Verdict:
+
+```text
+CPU_ROUTE_FORECAST_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-cpu-route-forecast-v1.
+
+It reads:
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.report.json
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json
+
+and writes:
+  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json
+```
+
+Current real Codex forecast:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 54
+exact_cache_coverage_milli: 54
+operator_candidate_calls: 282
+operator_candidate_coverage_milli: 282
+current_nando_accepts: 0
+current_verified_safe_accepts: 0
+current_false_accepts: 0
+full_shadow_request_payload_built: false
+market_claim_allowed: false
+
+forecast_25_percent_additional_savings: 69
+forecast_50_percent_additional_savings: 140
+forecast_80_percent_additional_savings: 223
+forecast_25_percent_total_calls_removed: 123
+forecast_50_percent_total_calls_removed: 194
+forecast_80_percent_total_calls_removed: 277
+```
+
+Priority CPU route backlog:
+
+```text
+1. role_binding_edit_marker_length_seed0
+   candidate_events: 152
+   payload_builder: edit_marker_length_payload_builder_v1
+
+2. role_binding_conditional_branch_seed0
+   candidate_events: 92
+   exact_cache_hits_inside_route: 2
+   payload_builder: conditional_branch_payload_builder_v1
+
+3. role_binding_mixed_map_seed0
+   candidate_events: 38
+   payload_builder: mixed_map_payload_builder_v1
+```
+
+Boundary:
+
+```text
+This is route-zone capacity, not verified savings.
+Do not use it as market claim.
+The next debt is request-side payload builders:
+  route/profile candidate -> active_fringe + slots
+without response text, target labels, proof labels, or expected answer.
+```
+
 ## 2026-07-03 - Executor Integration: Real Traffic Shadow Recorder And Operator Mining
 
 Verdict:

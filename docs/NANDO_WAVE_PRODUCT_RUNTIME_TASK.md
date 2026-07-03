@@ -80,6 +80,7 @@ ingest_events_command: role-binding-real-traffic-ingest-events-v1
 codex_history_ingest_command: role-binding-real-traffic-codex-history-ingest-v1
 codex_history_route_candidate_command: role-binding-real-traffic-codex-history-route-candidates-v1
 analyze_command: role-binding-real-traffic-shadow-v1
+cpu_route_forecast_command: role-binding-real-traffic-cpu-route-forecast-v1
 smoke_command: role-binding-real-traffic-shadow-smoke-v1
 
 purpose:
@@ -97,6 +98,14 @@ current smoke:
   codex_history_route_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW.
   codex_history_route_shadow_nando_shadow_accepts: 0.
   codex_history_route_shadow_incremental_reduction_vs_exact_cache_milli: 0.
+  cpu_route_forecast_verdict: CPU_ROUTE_FORECAST_V1_REVIEW.
+  cpu_route_forecast_report: target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json.
+  cpu_route_forecast_market_claim_allowed: false.
+  cpu_route_forecast_priority_1: role_binding_edit_marker_length_seed0, 152 candidates.
+  cpu_route_forecast_priority_2: role_binding_conditional_branch_seed0, 92 candidates.
+  cpu_route_forecast_priority_3: role_binding_mixed_map_seed0, 38 candidates.
+  cpu_route_forecast_50_percent_additional_savings: 140 calls.
+  cpu_route_forecast_50_percent_total_calls_removed_with_exact_cache: 194 calls.
   codex_history_events_verdict: CODEX_HISTORY_EVENTS_V1_READY.
   codex_history_events_written: 1000.
   codex_history_raw_text_written: false.

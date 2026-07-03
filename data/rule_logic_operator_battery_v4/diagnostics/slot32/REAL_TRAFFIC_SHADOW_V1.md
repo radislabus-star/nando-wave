@@ -18,7 +18,10 @@ New commands:
   role-binding-real-traffic-record-v1
   role-binding-real-traffic-record-serve-v1
   role-binding-real-traffic-ingest-events-v1
+  role-binding-real-traffic-codex-history-ingest-v1
+  role-binding-real-traffic-codex-history-route-candidates-v1
   role-binding-real-traffic-shadow-v1
+  role-binding-real-traffic-cpu-route-forecast-v1
   role-binding-real-traffic-shadow-smoke-v1
 ```
 
@@ -215,6 +218,64 @@ result:
 This closes route/profile candidate discovery only. The missing next piece is a
 request-side builder for `active_fringe` and slot impulses. Until that exists,
 route-only candidates must remain fallback-only.
+
+CPU route forecast over real Codex route candidates:
+
+```text
+command: cargo run --release -p nando-cli -- role-binding-real-traffic-cpu-route-forecast-v1 target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.report.json target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json
+result:
+  verdict: CPU_ROUTE_FORECAST_V1_REVIEW
+  total_llm_calls: 1000
+  exact_cache_hits: 54
+  exact_cache_coverage_milli: 54
+  operator_candidate_calls: 282
+  operator_candidate_coverage_milli: 282
+  current_nando_accepts: 0
+  current_verified_safe_accepts: 0
+  current_false_accepts: 0
+  full_shadow_request_payload_built: false
+  market_claim_allowed: false
+  forecast_25_percent_additional_savings: 69
+  forecast_50_percent_additional_savings: 140
+  forecast_80_percent_additional_savings: 223
+  forecast_25_percent_total_calls_removed: 123
+  forecast_50_percent_total_calls_removed: 194
+  forecast_80_percent_total_calls_removed: 277
+```
+
+Priority CPU route backlog:
+
+```text
+1. role_binding_edit_marker_length_seed0
+   candidate_events: 152
+   candidate_share_of_all_llm_calls: 152 milli
+   recommended_payload_builder: edit_marker_length_payload_builder_v1
+   work: detect edit intent, affected file/text marker, requested length/shape
+         constraint, and deterministic patch slots from request text only.
+
+2. role_binding_conditional_branch_seed0
+   candidate_events: 92
+   candidate_share_of_all_llm_calls: 92 milli
+   exact_cache_hits_inside_route: 2
+   recommended_payload_builder: conditional_branch_payload_builder_v1
+   work: extract condition, evidence slots, allowed/refused branch, and
+         fallback threshold from request text only.
+
+3. role_binding_mixed_map_seed0
+   candidate_events: 38
+   candidate_share_of_all_llm_calls: 38 milli
+   recommended_payload_builder: mixed_map_payload_builder_v1
+   work: extract source slots, destination slots, ordered mapping action, and
+         invariant checks from request text only.
+```
+
+Forecast boundary:
+
+```text
+This is route-zone capacity, not verified savings.
+The route forecast may become a market claim only after real request-side
+payload builders produce verified_safe_accepts > 0 with false_accepts = 0.
+```
 
 Batch event ingestion smoke:
 

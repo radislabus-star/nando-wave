@@ -268,6 +268,12 @@ pub(crate) fn print_help() {
         "            Analyze recorded real traffic in shadow mode against serving-only .nwrb profiles"
     );
     println!(
+        "  role-binding-real-traffic-cpu-route-forecast-v1 [route-report-json] [shadow-report-json] [forecast-report-json]"
+    );
+    println!(
+        "            Rank real CPU offload routes and forecast capacity before executable payload builders exist"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(

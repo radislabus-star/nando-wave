@@ -46,6 +46,10 @@ const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_EVENTS_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.events.jsonl";
 const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.report.json";
+const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_SHADOW_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json";
+const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -2977,6 +2981,213 @@ where
     }
 }
 
+pub(crate) fn run_role_binding_real_traffic_cpu_route_forecast_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let route_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_REPORT));
+    let shadow_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_SHADOW_REPORT));
+    let forecast_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT));
+
+    let route_report =
+        read_json_file::<RoleBindingCodexHistoryRouteCandidateReport>(&route_report_path)?;
+    let shadow_report = read_json_file::<RoleBindingRealTrafficShadowReport>(&shadow_report_path)?;
+
+    let rankings_by_route = shadow_report
+        .operator_rankings
+        .iter()
+        .map(|ranking| (ranking.route_key.as_str(), ranking))
+        .collect::<BTreeMap<_, _>>();
+    let mut routes = route_report
+        .route_counts
+        .iter()
+        .map(|route_count| {
+            let ranking = rankings_by_route.get(route_count.route_key.as_str());
+            let exact_cache_hits_inside_route = ranking
+                .map(|ranking| ranking.exact_cache_hits)
+                .unwrap_or_default();
+            let current_accepts = ranking
+                .map(|ranking| ranking.nando_shadow_accepts)
+                .unwrap_or_default();
+            let current_verified_safe_accepts = ranking
+                .map(|ranking| ranking.verified_safe_accepts)
+                .unwrap_or_default();
+            let current_false_accepts = ranking
+                .map(|ranking| ranking.false_accepts)
+                .unwrap_or_default();
+            let current_incremental_savings = ranking
+                .map(|ranking| ranking.incremental_savings_over_exact_cache)
+                .unwrap_or_default();
+            let non_exact_candidate_calls = route_count
+                .candidate_events
+                .saturating_sub(exact_cache_hits_inside_route);
+            let forecast_accept_25_percent_calls =
+                projected_accepts(non_exact_candidate_calls, 250);
+            let forecast_accept_50_percent_calls =
+                projected_accepts(non_exact_candidate_calls, 500);
+            let forecast_accept_80_percent_calls =
+                projected_accepts(non_exact_candidate_calls, 800);
+            let (recommended_cpu_work, recommended_payload_builder) =
+                cpu_route_builder_recommendation(&route_count.route_key);
+            RoleBindingCpuRouteForecastRow {
+                route_key: route_count.route_key.clone(),
+                profile_id: ranking
+                    .map(|ranking| ranking.profile_id.clone())
+                    .unwrap_or_else(|| route_count.route_key.clone()),
+                candidate_events: route_count.candidate_events,
+                candidate_share_milli_of_all_llm_calls: ratio_milli(
+                    route_count.candidate_events,
+                    shadow_report.total_llm_calls,
+                ),
+                candidate_share_milli_of_candidate_zone: ratio_milli(
+                    route_count.candidate_events,
+                    route_report.candidate_events,
+                ),
+                exact_cache_hits_inside_route,
+                non_exact_candidate_calls,
+                current_accepts,
+                current_verified_safe_accepts,
+                current_false_accepts,
+                current_incremental_savings,
+                payload_builder_status: "missing_request_side_active_fringe_and_slots".to_owned(),
+                recommended_cpu_work,
+                recommended_payload_builder,
+                forecast_accept_25_percent_calls,
+                forecast_accept_50_percent_calls,
+                forecast_accept_80_percent_calls,
+                priority_rank: 0,
+            }
+        })
+        .collect::<Vec<_>>();
+    routes.sort_by(|left, right| {
+        right
+            .non_exact_candidate_calls
+            .cmp(&left.non_exact_candidate_calls)
+            .then_with(|| left.route_key.cmp(&right.route_key))
+    });
+    for (index, route) in routes.iter_mut().enumerate() {
+        route.priority_rank = index + 1;
+    }
+
+    let forecast_25_percent_additional_savings = routes
+        .iter()
+        .map(|route| route.forecast_accept_25_percent_calls)
+        .sum();
+    let forecast_50_percent_additional_savings = routes
+        .iter()
+        .map(|route| route.forecast_accept_50_percent_calls)
+        .sum();
+    let forecast_80_percent_additional_savings = routes
+        .iter()
+        .map(|route| route.forecast_accept_80_percent_calls)
+        .sum();
+    let forecast_25_percent_total_calls_removed = shadow_report
+        .exact_cache_hits
+        .saturating_add(forecast_25_percent_additional_savings);
+    let forecast_50_percent_total_calls_removed = shadow_report
+        .exact_cache_hits
+        .saturating_add(forecast_50_percent_additional_savings);
+    let forecast_80_percent_total_calls_removed = shadow_report
+        .exact_cache_hits
+        .saturating_add(forecast_80_percent_additional_savings);
+
+    let market_claim_allowed = shadow_report.verified_safe_accepts > 0
+        && shadow_report.incremental_savings_over_exact_cache > 0
+        && !shadow_report.synthetic_trace_used
+        && shadow_report.false_accepts == 0;
+    let report = RoleBindingCpuRouteForecastReport {
+        schema_version: "nando_role_binding_cpu_route_forecast_v1".to_owned(),
+        verdict: if route_report.candidate_events > 0 {
+            "CPU_ROUTE_FORECAST_V1_REVIEW"
+        } else {
+            "CPU_ROUTE_FORECAST_V1_NO_ROUTE_CANDIDATES"
+        }
+        .to_owned(),
+        route_report_path: route_report_path.display().to_string(),
+        shadow_report_path: shadow_report_path.display().to_string(),
+        traffic_source: shadow_report.traffic_source.clone(),
+        total_llm_calls: shadow_report.total_llm_calls,
+        exact_cache_hits: shadow_report.exact_cache_hits,
+        exact_cache_coverage_milli: ratio_milli(
+            shadow_report.exact_cache_hits,
+            shadow_report.total_llm_calls,
+        ),
+        operator_candidate_calls: route_report.candidate_events,
+        operator_candidate_coverage_milli: ratio_milli(
+            route_report.candidate_events,
+            shadow_report.total_llm_calls,
+        ),
+        no_candidate_calls: route_report.no_candidate_events,
+        current_nando_accepts: shadow_report.nando_shadow_accepts,
+        current_verified_safe_accepts: shadow_report.verified_safe_accepts,
+        current_false_accepts: shadow_report.false_accepts,
+        current_incremental_savings_over_exact_cache: shadow_report
+            .incremental_savings_over_exact_cache,
+        current_incremental_reduction_vs_exact_cache_milli: shadow_report
+            .incremental_reduction_vs_exact_cache_milli,
+        full_shadow_request_payload_built: route_report.full_shadow_request_payload_built,
+        market_claim_allowed,
+        forecast_25_percent_additional_savings,
+        forecast_50_percent_additional_savings,
+        forecast_80_percent_additional_savings,
+        forecast_25_percent_total_calls_removed,
+        forecast_50_percent_total_calls_removed,
+        forecast_80_percent_total_calls_removed,
+        forecast_25_percent_total_reduction_milli: ratio_milli(
+            forecast_25_percent_total_calls_removed,
+            shadow_report.total_llm_calls,
+        ),
+        forecast_50_percent_total_reduction_milli: ratio_milli(
+            forecast_50_percent_total_calls_removed,
+            shadow_report.total_llm_calls,
+        ),
+        forecast_80_percent_total_reduction_milli: ratio_milli(
+            forecast_80_percent_total_calls_removed,
+            shadow_report.total_llm_calls,
+        ),
+        routes,
+        claim_boundary: "Forecast only. It ranks real request-side CPU route candidates and estimates capacity if future payload builders create verified_safe_accepts. It is not market savings: current local accepts are zero and route candidates have empty active_fringe/slots.".to_owned(),
+        next_engineering_debt: "Build request-side payload builders for priority routes: route/profile candidate -> active_fringe + slots, without response text, target labels, proof labels, or expected answer.".to_owned(),
+    };
+
+    write_json_file(&forecast_report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-cpu-route-forecast-v1: {}",
+        report.verdict
+    );
+    println!("  route_report: {}", route_report_path.display());
+    println!("  shadow_report: {}", shadow_report_path.display());
+    println!("  forecast_report: {}", forecast_report_path.display());
+    println!("  total_llm_calls: {}", report.total_llm_calls);
+    println!("  exact_cache_hits: {}", report.exact_cache_hits);
+    println!(
+        "  operator_candidate_calls: {}",
+        report.operator_candidate_calls
+    );
+    println!(
+        "  operator_candidate_coverage_milli: {}",
+        report.operator_candidate_coverage_milli
+    );
+    println!("  current_nando_accepts: {}", report.current_nando_accepts);
+    println!(
+        "  forecast_50_percent_additional_savings: {}",
+        report.forecast_50_percent_additional_savings
+    );
+    println!("  market_claim_allowed: {}", report.market_claim_allowed);
+    Err("CPU route forecast is review-only; it is not verified savings".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_shadow_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -4677,6 +4888,62 @@ struct RoleBindingRealTrafficOperatorAccumulator {
     incremental_savings_over_exact_cache: usize,
     estimated_cost_saved_microusd: u128,
     latencies_ns: Vec<u128>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingCpuRouteForecastReport {
+    schema_version: String,
+    verdict: String,
+    route_report_path: String,
+    shadow_report_path: String,
+    traffic_source: String,
+    total_llm_calls: usize,
+    exact_cache_hits: usize,
+    exact_cache_coverage_milli: usize,
+    operator_candidate_calls: usize,
+    operator_candidate_coverage_milli: usize,
+    no_candidate_calls: usize,
+    current_nando_accepts: usize,
+    current_verified_safe_accepts: usize,
+    current_false_accepts: usize,
+    current_incremental_savings_over_exact_cache: usize,
+    current_incremental_reduction_vs_exact_cache_milli: usize,
+    full_shadow_request_payload_built: bool,
+    market_claim_allowed: bool,
+    forecast_25_percent_additional_savings: usize,
+    forecast_50_percent_additional_savings: usize,
+    forecast_80_percent_additional_savings: usize,
+    forecast_25_percent_total_calls_removed: usize,
+    forecast_50_percent_total_calls_removed: usize,
+    forecast_80_percent_total_calls_removed: usize,
+    forecast_25_percent_total_reduction_milli: usize,
+    forecast_50_percent_total_reduction_milli: usize,
+    forecast_80_percent_total_reduction_milli: usize,
+    routes: Vec<RoleBindingCpuRouteForecastRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingCpuRouteForecastRow {
+    priority_rank: usize,
+    route_key: String,
+    profile_id: String,
+    candidate_events: usize,
+    candidate_share_milli_of_all_llm_calls: usize,
+    candidate_share_milli_of_candidate_zone: usize,
+    exact_cache_hits_inside_route: usize,
+    non_exact_candidate_calls: usize,
+    current_accepts: usize,
+    current_verified_safe_accepts: usize,
+    current_false_accepts: usize,
+    current_incremental_savings: usize,
+    payload_builder_status: String,
+    recommended_cpu_work: String,
+    recommended_payload_builder: String,
+    forecast_accept_25_percent_calls: usize,
+    forecast_accept_50_percent_calls: usize,
+    forecast_accept_80_percent_calls: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -6394,6 +6661,37 @@ fn ratio_milli(numerator: usize, denominator: usize) -> usize {
         .saturating_mul(1000)
         .checked_div(denominator)
         .unwrap_or(0)
+}
+
+fn projected_accepts(non_exact_candidate_calls: usize, accept_rate_milli: usize) -> usize {
+    non_exact_candidate_calls
+        .saturating_mul(accept_rate_milli)
+        .checked_div(1000)
+        .unwrap_or(0)
+}
+
+fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {
+    if route_key.contains("edit_marker_length") {
+        (
+            "CPU-process structured edit requests: detect edit intent, affected file/text marker, requested length/shape constraint, and deterministic patch slots from request text only.".to_owned(),
+            "edit_marker_length_payload_builder_v1".to_owned(),
+        )
+    } else if route_key.contains("conditional_branch") {
+        (
+            "CPU-process check/gate/branch requests: extract condition, evidence slots, allowed/refused branch, and fallback threshold from request text only.".to_owned(),
+            "conditional_branch_payload_builder_v1".to_owned(),
+        )
+    } else if route_key.contains("mixed_map") {
+        (
+            "CPU-process mapping/update/reorder requests: extract source slots, destination slots, ordered mapping action, and invariant checks from request text only.".to_owned(),
+            "mixed_map_payload_builder_v1".to_owned(),
+        )
+    } else {
+        (
+            "CPU-process route candidates only after a request-side payload builder can emit active_fringe and slots without answer leakage.".to_owned(),
+            "generic_request_side_payload_builder_v1".to_owned(),
+        )
+    }
 }
 
 fn real_traffic_operator_rankings(
