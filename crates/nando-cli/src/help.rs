@@ -376,6 +376,12 @@ pub(crate) fn print_help() {
         "            Compare safe/unsafe readout policies on evidence-backed real Codex conditional rows"
     );
     println!(
+        "  role-binding-real-traffic-conditional-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Create a request-side admitted conditional registry/trace from safe evidence; still requires shadow/audit before claims"
+    );
+    println!(
         "  role-binding-real-traffic-mixed-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
     );
     println!(

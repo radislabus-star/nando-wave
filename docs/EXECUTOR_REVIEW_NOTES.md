@@ -1,5 +1,154 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Conditional Safe Policy Promotion
+
+Verdict:
+
+```text
+CONDITIONAL_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-conditional-safe-policy-promote-v1
+
+Updated:
+  role-binding-real-traffic-feedback-loop-v1
+
+The new command builds a separate conditional safe-policy registry and trace.
+It does not promote the broad conditional route. Rows rejected by the
+request-side admission gate have nando_shadow_request removed, so broad
+conditional false rows stay fallback-only.
+```
+
+Selected admission/readout:
+
+```text
+request-side policy:
+  conditional_gate_terms_prompt_len_ge_300
+
+runtime acceptance policy:
+  energy_threshold_only
+
+selected positive threshold:
+  8192
+
+selection rule:
+  offline evidence may choose the threshold;
+  serving sees only request-side prompt features plus score >= threshold.
+```
+
+Promotion artifact:
+
+```text
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-conditional-safe-policy-v1.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.report.json
+
+conditional_candidate_rows: 79
+scoreable_candidate_calls: 79
+request_side_policy_accept_rows: 55
+runtime_policy_accept_rows: 2
+runtime_policy_verified_true_rows: 2
+runtime_policy_verified_false_rows: 0
+runtime_policy_unverified_rows: 0
+runtime_acceptance_mismatches: 0
+raw_prompt_text_written: false
+raw_response_text_written: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+```
+
+Shadow/audit result:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.shadow-report.json
+
+audit report:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.verification-hook-audit.report.json
+
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 55
+nando_shadow_accepts: 2
+verified_safe_accepts: 2
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 2
+p99_shadow_score_latency_ns: 282856
+verification_hook_ready_events: 40
+verified_cpu_accept_eligible_events: 2
+route-local market_claim_allowed: true
+```
+
+Feedback-loop after conditional safe-policy audit:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json
+
+total_llm_calls: 1000
+operator_candidate_calls: 408
+scoreable_candidate_calls: 82
+verification_hook_ready_events: 65
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli: 8
+verified_gap_to_80_calls: 792
+overall market_claim_allowed: false
+
+conditional route:
+  stage: verified_cpu_accept_eligible
+  candidate_events: 150
+  scoreable_payload_events: 55
+  verification_hook_ready_events: 40
+  verified_cpu_accept_eligible_events: 2
+  false_accepts: 0
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: conditional-safe-policy-v1
+packet:
+  docs/structural_gates/conditional-safe-policy-v1.md
+
+Scope:
+  The packet checks the route-local safety core for the conditional safe policy:
+  request-side admitted gate rows, positive threshold 8192, 2 verified true
+  accepts, zero false rows, zero unverified rows, zero runtime acceptance
+  mismatches, and zero shadow false/unverified accepts.
+
+  NANDA reports no conflicts, no evidence gaps, no foreign_pull, and
+  route_coherence=1.0, but VETOs the packet because most exact-match numeric
+  candidate triads are weak under composite-mode support. Treat this as a gate
+  formatting/proof-shape debt, not as a route-local runtime safety PASS.
+```
+
+Claim boundary:
+
+```text
+This is a tiny conditional route-local savings proof, not CPU Routability 80.
+The broad conditional route is still unsafe by calibration: 17 verifier-true
+rows and 46 verifier-false rows under the broad hook-ready set. The overall
+feedback loop remains REVIEW because verified CPU routability is 8/1000, not
+800/1000.
+
+Do not use route-local market_claim_allowed=true as a broad market claim. It
+only applies to the 2 admitted conditional rows in this non-synthetic trace.
+```
+
 ## 2026-07-03 - Executor Integration: Agent-Control Hard-Stop Safe Policy Promotion
 
 Verdict:
