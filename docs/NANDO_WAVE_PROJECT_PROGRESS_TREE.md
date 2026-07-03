@@ -154,6 +154,17 @@ Nando Wave / Operator Layer
 |   |   +-- strongest current route                  [agent-control strict forms: 11 verified]
 |   |   +-- mixed_map v2 route                       [3 verified, request-side goal/control fallback]
 |   |   +-- market claim boundary                    [not achieved; 17 milli != 800 milli]
+|   +-- current route-gap mining                     [REVIEW, measurement only]
+|   |   |
+|   |   +-- report                                  [route-gap-catalog-current-v1.report.json]
+|   |   +-- registry                                [profile-registry-planning-next-step-v3.json]
+|   |   +-- routed_candidate_events                  [462 / 1000]
+|   |   +-- no_candidate_events                      [538 / 1000]
+|   |   +-- readiness_report                         [route-gap-payload-readiness-current-v1.report.json]
+|   |   +-- payload_ready_gap_events                 [35]
+|   |   +-- top_payload_ready_gap_family             [read_inspect: 12 ready / 27 candidates]
+|   |   +-- next deterministic route                 [read_inspect_request_payload_builder_v1 + read_only_path_and_excerpt_verifier_v1]
+|   |   +-- market claim boundary                    [not savings; local_accepts_enabled=false]
 |   +-- role-binding release suite                   [PASS]
 |   |   |
 |   |   +-- package_count                            [7]

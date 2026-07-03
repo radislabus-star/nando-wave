@@ -1,5 +1,133 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Current Route-Gap Mining After Planning Profile
+
+Verdict:
+
+```text
+CURRENT_ROUTE_GAP_MINING_V1_REVIEW_NEXT_ROUTE_READ_INSPECT
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+CodexHistoryRouteCatalog now recognizes profiles whose operator_classes contain:
+  project_planning
+  state_transition
+  route_gap
+
+Those profiles are classified through the planning_next_step route family
+instead of being left in the no-candidate zone.
+```
+
+Why this matters:
+
+```text
+The old route-gap catalog was stale after planning_next_step was added.
+It counted planning-shaped calls as route gaps even though the current feedback
+loop already accounts for the planning profile separately.
+
+The new current route-gap run uses:
+  target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v3.json
+```
+
+Current route-gap catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-current-v1.report.json
+
+sampled_llm_calls:                   1000
+existing_route_candidate_events:     462
+no_candidate_events:                 538
+top_gap_family:                      answer_or_explain
+raw_text_written:                    false
+local_accepts_enabled:               false
+```
+
+Current route-gap payload readiness:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-current-v1.report.json
+
+existing_route_candidate_events:     462
+no_candidate_events:                 538
+payload_ready_events:                35
+top_payload_ready_family:            read_inspect
+
+read_inspect:
+  candidate_events:                  27
+  payload_ready_events:              12
+  recommended_payload_builder:       read_inspect_request_payload_builder_v1
+  recommended_verifier:              read_only_path_and_excerpt_verifier_v1
+
+metrics_report_readout:
+  candidate_events:                  10
+  payload_ready_events:              6
+
+retrieval_lookup:
+  candidate_events:                  25
+  payload_ready_events:              2
+```
+
+Current CPU operator catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v4.current-route-gap.report.json
+
+current_verified_cpu_accepts:        17
+verified_gap_to_80_calls:            783
+existing_operator_candidate_calls:   457
+no_candidate_calls:                  538
+route_gap_payload_ready_events:      35
+market_claim_allowed:                false
+```
+
+Claim boundary:
+
+```text
+This is measurement progress, not verified CPU savings.
+No local accepts were enabled by the route-gap mining run.
+
+The next deterministic route should be read_inspect because it is the top
+payload-ready no-candidate family after planning is removed from the gap.
+Do not rebuild planning as a duplicate route.
+```
+
+NANDA structural gate:
+
+```text
+task_id:
+  route-gap-current-v1
+
+packet:
+  docs/structural_gates/route-gap-current-v1.md
+
+report:
+  target/nando-wave/real-traffic-shadow/route-gap-current-v1.nanda.json
+
+verdict:
+  VETO
+
+interpretation:
+  proof_shape_debt_not_runtime_failure
+
+details:
+  route_coherence: 1.0
+  conflicts: []
+  evidence_gaps: []
+  reason: candidate rows still weak under composite-mode support
+
+Do not use this packet as structural PASS. JSON reports are the numeric
+authority for the route-gap measurement. The packet is retained as review
+evidence until the NANDA proof shape is improved.
+```
+
 ## 2026-07-04 - Executor Integration: Mixed-Map Safe Policy V2
 
 Verdict:

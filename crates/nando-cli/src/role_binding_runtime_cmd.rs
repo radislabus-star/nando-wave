@@ -13267,6 +13267,7 @@ struct CodexHistoryRouteCatalog {
     edit: Option<CodexHistoryRouteCandidate>,
     conditional: Option<CodexHistoryRouteCandidate>,
     mixed: Option<CodexHistoryRouteCandidate>,
+    planning: Option<CodexHistoryRouteCandidate>,
 }
 
 impl CodexHistoryRouteCatalog {
@@ -13276,6 +13277,7 @@ impl CodexHistoryRouteCatalog {
             edit: None,
             conditional: None,
             mixed: None,
+            planning: None,
         };
         for profile in &config.profiles {
             let route_key = profile
@@ -13307,6 +13309,10 @@ impl CodexHistoryRouteCatalog {
                 .any(|class| class == "move_copy" || class == "order" || class == "compose")
             {
                 catalog.mixed.get_or_insert(candidate);
+            } else if profile.operator_classes.iter().any(|class| {
+                class == "project_planning" || class == "state_transition" || class == "route_gap"
+            }) {
+                catalog.planning.get_or_insert(candidate);
             }
         }
         Ok(catalog)
@@ -13357,9 +13363,14 @@ impl CodexHistoryRouteCatalog {
                 "код", "файл", "diff", "clippy", "cargo", "git", "runtime", "ошиб", "тест",
             ],
         );
+        let has_planning_next_step_intent =
+            route_gap_family_key(text) == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
 
         if has_direct_edit_intent {
             return self.edit.clone().or_else(|| self.mixed.clone());
+        }
+        if has_planning_next_step_intent {
+            return self.planning.clone().or_else(|| self.mixed.clone());
         }
         if has_conditional_intent {
             return self.conditional.clone().or_else(|| self.mixed.clone());

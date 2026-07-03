@@ -99,6 +99,23 @@ latest route gain:
   verified_cpu_accept_eligible_events: 3
   false_accepts: 0
   unverified_shadow_accepts: 0
+
+current route-gap mining:
+  route_gap_catalog_current:
+    target/nando-wave/real-traffic-shadow/route-gap-catalog-current-v1.report.json
+  route_gap_payload_readiness_current:
+    target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-current-v1.report.json
+  registry:
+    target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v3.json
+  routed_candidate_events: 462
+  no_candidate_events: 538
+  payload_ready_gap_events: 35
+  top_payload_ready_gap_family: read_inspect
+  read_inspect_candidate_events: 27
+  read_inspect_payload_ready_events: 12
+  next_payload_builder: read_inspect_request_payload_builder_v1
+  next_verifier: read_only_path_and_excerpt_verifier_v1
+  claim_boundary: measurement only, local_accepts_enabled=false
 ```
 
 Current real-traffic shadow path:
