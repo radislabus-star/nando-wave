@@ -1,5 +1,95 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Edit Payload Dry-Run Builder
+
+Verdict:
+
+```text
+EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-edit-payload-dry-run-v1.
+
+The dry-run builder reads real local Codex history at analysis time, writes no
+raw prompt text, and emits scoreable edit-route payloads only for rows that
+already passed edit-payload readiness.
+
+It writes:
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json
+```
+
+Dry-run payload result:
+
+```text
+trace_rows_written: 1000
+edit_route_candidate_events: 154
+payload_ready_events: 23
+payload_built_events: 23
+scoreable_payload_events: 23
+builder_rejected_events: 0
+readiness_rejected_events: 131
+active_fringe_centers_total: 11019
+slots_total: 46
+positive_impulses_total: 1077
+negative_impulses_total: 1010
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow result over the dry-run trace:
+
+```text
+total_requests: 1000
+total_llm_calls: 1000
+operator_candidate_calls: 23
+exact_cache_hits: 54
+nando_shadow_accepts: 0
+nando_shadow_fallbacks: 23
+verified_safe_accepts: 0
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_savings_over_exact_cache: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p50_shadow_score_latency_ns: 422771
+p90_shadow_score_latency_ns: 585353
+p99_shadow_score_latency_ns: 683880
+synthetic_trace_used: false
+```
+
+Diagnostic read:
+
+```text
+The request-side path is no longer empty for the first edit route slice:
+  route/profile candidate -> active_fringe + slots works for 23 real rows.
+
+The scorer still falls back:
+  energy_margin: 6912..10752
+  min_slot_margin: 0
+
+So the next debt is not another route classifier. It is an edit verifier/output
+hook that can prove a local edit candidate safe before enabling local accepts.
+Until then, the dry-run correctly keeps verified_safe_accepts=0 and
+market_claim_allowed=false.
+```
+
+Boundary:
+
+```text
+This is a scoreable request payload proof, not savings.
+Any local accept from this command would be counted as unverified/false because
+expect_local_operator=false and verified_safe_accept=None.
+```
+
 ## 2026-07-03 - Executor Integration: Real Traffic CPU Route Forecast
 
 Verdict:

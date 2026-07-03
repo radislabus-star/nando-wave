@@ -2,6 +2,7 @@ use nando_core::wave::{
     WavePredictorRoleBindingOffloadPolicy, WavePredictorRoleBindingOffloadRuntime,
     WavePredictorRoleBindingPackageInfo, WavePredictorRoleBindingPreparedFringe,
 };
+use nando_core::{SURFACE_WAVE_DIM, SurfaceWave4096};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -52,6 +53,10 @@ const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
+const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_EDIT_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json";
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -60,6 +65,17 @@ const DEFAULT_REPLAY_BATCH_UNIQUE_SEQUENCES: usize = 4;
 const DEFAULT_PROFILE_WORKER_COUNT: usize = 2;
 const DEFAULT_THROUGHPUT_CLIENT_THREADS: usize = 4;
 const DEFAULT_THROUGHPUT_SEQUENCE_REPETITIONS: usize = 1;
+const REAL_TRAFFIC_EDIT_PAGE_BITS: u32 = 12;
+const REAL_TRAFFIC_EDIT_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_EDIT_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT: u8 = 16;
+const REAL_TRAFFIC_EDIT_DEMO_PAGE: u32 = 18;
+const REAL_TRAFFIC_EDIT_DEMO_BASE: u32 = REAL_TRAFFIC_EDIT_DEMO_PAGE << REAL_TRAFFIC_EDIT_PAGE_BITS;
+const REAL_TRAFFIC_EDIT_OUTPUT_SLOT_COUNT: u8 = 17;
+const REAL_TRAFFIC_EDIT_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_EDIT_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_EDIT_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_EDIT_END_TOKEN: &str = "__EDIT_END__";
 
 pub(crate) fn run_role_binding_profile_registry_from_release_v1<I>(
     mut args: I,
@@ -3324,6 +3340,252 @@ where
     Err("edit payload readiness is review-only; it is not verified savings".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_edit_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut edit_route_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_edit_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "no edit_marker_length route candidate".to_owned();
+
+        if let Some(candidate) = route_catalog.classify_request_text(&row.text)
+            && candidate.route_key.contains("edit_marker_length")
+        {
+            edit_route_candidate_events += 1;
+            let readiness = analyze_edit_payload_readiness(&row.text);
+            if readiness.payload_ready {
+                payload_ready_events += 1;
+                let built = build_edit_marker_length_dry_run_request(
+                    &event_id,
+                    &fingerprint,
+                    &candidate,
+                    &row.text,
+                );
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable {
+                            "scoreable_payload_built"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingEditPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: candidate.route_key.clone(),
+                            profile_id: candidate.profile_id.clone(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side dry-run edit payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingEditPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: candidate.route_key.clone(),
+                            profile_id: candidate.profile_id.clone(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "readiness_rejected".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = format!(
+                    "edit route candidate rejected by readiness gate: {}",
+                    readiness.missing_reasons.join(",")
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_local_edit_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side edit payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let report = RoleBindingEditPayloadDryRunReport {
+        schema_version: "nando_role_binding_edit_payload_dry_run_v1".to_owned(),
+        verdict: if scoreable_payload_events > 0 {
+            "EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT"
+        } else {
+            "EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        edit_route_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run payload builder only. It emits non-empty active_fringe/slots for ready edit-route rows from prompt text only, sets verified_safe_accept=None and expect_local_operator=false, and therefore cannot prove savings. Any local accept in the following shadow run must be treated as unverified/false, not as a market claim.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 on this trace, inspect fallback/false-accept behavior, then add verification hooks before enabling any local accept.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-edit-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  edit_route_candidate_events: {}",
+        report.edit_route_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  raw_text_written: {}", report.raw_text_written);
+    Err("edit payload dry-run is review-only; run shadow analysis before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_shadow_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -5121,6 +5383,54 @@ struct RoleBindingEditPayloadReadinessRow {
     payload_ready: bool,
     recommended_builder_kind: String,
     missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    edit_route_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingEditPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingEditPayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -7063,6 +7373,306 @@ fn contains_file_like_token(text: &str) -> bool {
             ],
         ) || token.contains('/')
     })
+}
+
+fn build_edit_marker_length_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    candidate: &CodexHistoryRouteCandidate,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let tokens =
+        extract_request_side_edit_tokens(text, usize::from(REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT));
+    let marker = extract_request_side_marker_token(text, &tokens)?;
+    let wrong_token = tokens
+        .iter()
+        .find(|token| token.as_str() != marker)
+        .cloned()
+        .unwrap_or_else(|| REAL_TRAFFIC_EDIT_END_TOKEN.to_owned());
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(edit_request_operator_centers());
+    for (slot_id, token) in tokens
+        .iter()
+        .take(usize::from(REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT))
+        .enumerate()
+    {
+        let slot_base = REAL_TRAFFIC_EDIT_ROLE_BASE
+            + (slot_id as u32).saturating_mul(REAL_TRAFFIC_EDIT_PAGE_SIZE);
+        active_fringe.extend(surface_lane_centers_folded_for_profile(
+            token,
+            slot_base,
+            REAL_TRAFFIC_EDIT_PAGE_SIZE,
+            REAL_TRAFFIC_EDIT_TOP_ROLE_L1_LANES,
+        ));
+    }
+    let marker_slot_base = REAL_TRAFFIC_EDIT_ROLE_BASE
+        + u32::from(REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT) * REAL_TRAFFIC_EDIT_PAGE_SIZE;
+    active_fringe.extend(surface_lane_centers_folded_for_profile(
+        &marker,
+        marker_slot_base,
+        REAL_TRAFFIC_EDIT_PAGE_SIZE,
+        REAL_TRAFFIC_EDIT_TOP_ROLE_L1_LANES,
+    ));
+    active_fringe.extend(surface_lane_centers_folded_for_profile(
+        REAL_TRAFFIC_EDIT_END_TOKEN,
+        marker_slot_base,
+        REAL_TRAFFIC_EDIT_PAGE_SIZE,
+        REAL_TRAFFIC_EDIT_TOP_ROLE_L1_LANES,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+    let mut slots = Vec::new();
+    if let Some(slot) = edit_request_score_slot(0, &marker, &wrong_token) {
+        slots.push(slot);
+    }
+    if let Some(slot) = edit_request_score_slot(1, REAL_TRAFFIC_EDIT_END_TOKEN, &marker) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(candidate.route_key.clone()),
+        profile_id: Some(candidate.profile_id.clone()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: any local accept is intentionally counted as false/unverified.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn edit_request_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    (0..REAL_TRAFFIC_EDIT_OUTPUT_SLOT_COUNT)
+        .map(|output_slot| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_EDIT_DEMO_BASE
+                + edit_request_operator_pair_lane(output_slot, REAL_TRAFFIC_EDIT_MARKER_ROLE_SLOT),
+            strength: 8,
+        })
+        .collect()
+}
+
+fn edit_request_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_EDIT_OPERATOR_PAIR_SHIFT) | u32::from(role_slot)
+}
+
+fn edit_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_EDIT_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_EDIT_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn surface_lane_centers_folded_for_profile(
+    input: &str,
+    center_base: u32,
+    center_span: u32,
+    limit: usize,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let wave = SurfaceWave4096::compile(input);
+    let mut by_lane: BTreeMap<u32, i16> = BTreeMap::new();
+    for (lane, value) in wave.lanes().iter().enumerate() {
+        let magnitude = value.abs();
+        if magnitude == 0 {
+            continue;
+        }
+        let folded_lane = lane as u32 % center_span;
+        by_lane
+            .entry(folded_lane)
+            .and_modify(|current| *current = (*current).max(magnitude))
+            .or_insert(magnitude);
+    }
+    let mut lanes = by_lane
+        .into_iter()
+        .map(|(lane, magnitude)| (i32::from(magnitude), lane))
+        .collect::<Vec<_>>();
+    lanes.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    lanes
+        .into_iter()
+        .take(limit)
+        .map(|(magnitude, lane)| RoleBindingProfileActiveCenterRow {
+            center_id: center_base + lane,
+            strength: (magnitude as i16).clamp(1, 8),
+        })
+        .collect()
+}
+
+fn merge_profile_active_centers(
+    centers: Vec<RoleBindingProfileActiveCenterRow>,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let mut by_center = BTreeMap::<u32, i16>::new();
+    for center in centers {
+        by_center
+            .entry(center.center_id)
+            .and_modify(|strength| *strength = (*strength).max(center.strength))
+            .or_insert(center.strength);
+    }
+    by_center
+        .into_iter()
+        .map(|(center_id, strength)| RoleBindingProfileActiveCenterRow {
+            center_id,
+            strength,
+        })
+        .collect()
+}
+
+fn discriminative_profile_impulses(
+    base: &[i16; SURFACE_WAVE_DIM],
+    wanted: &[i16; SURFACE_WAVE_DIM],
+    other: &[i16; SURFACE_WAVE_DIM],
+    cap: usize,
+) -> Vec<RoleBindingProfileImpulseRow> {
+    let mut candidates = Vec::new();
+    for lane in 0..SURFACE_WAVE_DIM {
+        let wanted_delta = wanted[lane].saturating_sub(base[lane]);
+        if wanted_delta == 0 {
+            continue;
+        }
+        let other_delta = other[lane].saturating_sub(base[lane]);
+        let wanted_abs = i32::from(wanted_delta).abs();
+        let other_abs = i32::from(other_delta).abs();
+        let same_direction = wanted_delta.signum() == other_delta.signum();
+        if same_direction && wanted_abs <= other_abs {
+            continue;
+        }
+        let separation = if same_direction {
+            wanted_abs - other_abs
+        } else {
+            wanted_abs + other_abs
+        };
+        candidates.push((
+            separation,
+            lane as u16,
+            clamp_profile_impulse_strength(wanted_delta),
+        ));
+    }
+    candidates.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    candidates
+        .into_iter()
+        .take(cap)
+        .map(
+            |(_, lane_id, signed_strength)| RoleBindingProfileImpulseRow {
+                lane_id,
+                signed_strength,
+            },
+        )
+        .collect()
+}
+
+fn clamp_profile_impulse_strength(value: i16) -> i16 {
+    let sign = if value < 0 { -1 } else { 1 };
+    let magnitude = i32::from(value).abs().clamp(1, 8) as i16;
+    sign * magnitude
+}
+
+fn extract_request_side_marker_token(text: &str, tokens: &[String]) -> Option<String> {
+    for chunk in quoted_or_marked_chunks(text) {
+        if let Some(token) = extract_request_side_edit_tokens(&chunk, 1)
+            .into_iter()
+            .next()
+        {
+            return Some(token);
+        }
+    }
+    tokens
+        .iter()
+        .find(|token| token.contains('/') || token.contains('.') || token.contains('_'))
+        .cloned()
+        .or_else(|| tokens.first().cloned())
+}
+
+fn quoted_or_marked_chunks(text: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    for delimiter in ['`', '"', '\''] {
+        let parts = text.split(delimiter).collect::<Vec<_>>();
+        for index in (1..parts.len()).step_by(2) {
+            let chunk = parts[index].trim();
+            if !chunk.is_empty() {
+                chunks.push(chunk.to_owned());
+            }
+        }
+    }
+    chunks
+}
+
+fn extract_request_side_edit_tokens(text: &str, limit: usize) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut seen = HashSet::new();
+    for raw in
+        text.split(|ch: char| !(ch.is_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':')))
+    {
+        let token = raw
+            .trim_matches(|ch: char| {
+                matches!(
+                    ch,
+                    '"' | '\'' | '`' | '<' | '>' | '.' | ',' | ';' | ':' | '(' | ')' | '[' | ']'
+                )
+            })
+            .to_lowercase();
+        if token.len() < 2 || token.len() > 96 || is_low_information_edit_token(&token) {
+            continue;
+        }
+        if seen.insert(token.clone()) {
+            tokens.push(token);
+        }
+        if tokens.len() >= limit {
+            break;
+        }
+    }
+    tokens
+}
+
+fn is_low_information_edit_token(token: &str) -> bool {
+    matches!(
+        token,
+        "the"
+            | "and"
+            | "for"
+            | "with"
+            | "this"
+            | "that"
+            | "что"
+            | "это"
+            | "как"
+            | "для"
+            | "или"
+            | "надо"
+            | "нужно"
+            | "сейчас"
+            | "тут"
+            | "там"
+            | "вот"
+            | "пожалуйста"
+            | "давай"
+            | "делай"
+            | "сделай"
+    )
 }
 
 fn real_traffic_operator_rankings(

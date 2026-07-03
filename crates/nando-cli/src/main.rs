@@ -90,6 +90,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_codex_history_ingest_v1,
     run_role_binding_real_traffic_codex_history_route_candidates_v1,
     run_role_binding_real_traffic_cpu_route_forecast_v1,
+    run_role_binding_real_traffic_edit_payload_dry_run_v1,
     run_role_binding_real_traffic_edit_payload_readiness_v1,
     run_role_binding_real_traffic_ingest_events_v1, run_role_binding_real_traffic_record_serve_v1,
     run_role_binding_real_traffic_record_v1, run_role_binding_real_traffic_shadow_smoke_v1,
@@ -600,6 +601,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-edit-payload-readiness-v1") => exit_for_result(
             run_role_binding_real_traffic_edit_payload_readiness_v1(args),
             "try: nando-cli role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-edit-payload-dry-run-v1") => exit_for_result(
+            run_role_binding_real_traffic_edit_payload_dry_run_v1(args),
+            "try: nando-cli role-binding-real-traffic-edit-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
         ),
         Some("role-binding-real-traffic-shadow-smoke-v1") => exit_for_result(
             run_role_binding_real_traffic_shadow_smoke_v1(args),

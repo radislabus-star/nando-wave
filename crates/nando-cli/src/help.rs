@@ -280,6 +280,12 @@ pub(crate) fn print_help() {
         "            Audit real edit-route candidates for request-side payload-builder readiness without writing raw text"
     );
     println!(
+        "  role-binding-real-traffic-edit-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run edit payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(

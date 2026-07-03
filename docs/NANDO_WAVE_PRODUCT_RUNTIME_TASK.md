@@ -82,6 +82,7 @@ codex_history_route_candidate_command: role-binding-real-traffic-codex-history-r
 analyze_command: role-binding-real-traffic-shadow-v1
 cpu_route_forecast_command: role-binding-real-traffic-cpu-route-forecast-v1
 edit_payload_readiness_command: role-binding-real-traffic-edit-payload-readiness-v1
+edit_payload_dry_run_command: role-binding-real-traffic-edit-payload-dry-run-v1
 smoke_command: role-binding-real-traffic-shadow-smoke-v1
 
 purpose:
@@ -111,6 +112,22 @@ current smoke:
   edit_payload_readiness_candidate_events: 154.
   edit_payload_readiness_payload_ready_events: 23.
   edit_payload_readiness_payload_ready_rate_milli: 149.
+  edit_payload_dry_run_verdict: EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT.
+  edit_payload_dry_run_trace: target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl.
+  edit_payload_dry_run_report: target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json.
+  edit_payload_dry_run_shadow_report: target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json.
+  edit_payload_dry_run_payload_built_events: 23.
+  edit_payload_dry_run_scoreable_payload_events: 23.
+  edit_payload_dry_run_raw_text_written: false.
+  edit_payload_dry_run_response_text_used: false.
+  edit_payload_dry_run_target_labels_used: false.
+  edit_payload_dry_run_proof_labels_used: false.
+  edit_payload_dry_run_shadow_operator_candidate_calls: 23.
+  edit_payload_dry_run_shadow_nando_shadow_accepts: 0.
+  edit_payload_dry_run_shadow_verified_safe_accepts: 0.
+  edit_payload_dry_run_shadow_false_accepts: 0.
+  edit_payload_dry_run_shadow_incremental_reduction_vs_exact_cache_milli: 0.
+  edit_payload_dry_run_shadow_p99_shadow_score_latency_ns: 683880.
   codex_history_events_verdict: CODEX_HISTORY_EVENTS_V1_READY.
   codex_history_events_written: 1000.
   codex_history_raw_text_written: false.

@@ -22,6 +22,8 @@ New commands:
   role-binding-real-traffic-codex-history-route-candidates-v1
   role-binding-real-traffic-shadow-v1
   role-binding-real-traffic-cpu-route-forecast-v1
+  role-binding-real-traffic-edit-payload-readiness-v1
+  role-binding-real-traffic-edit-payload-dry-run-v1
   role-binding-real-traffic-shadow-smoke-v1
 ```
 
@@ -218,6 +220,59 @@ result:
 This closes route/profile candidate discovery only. The missing next piece is a
 request-side builder for `active_fringe` and slot impulses. Until that exists,
 route-only candidates must remain fallback-only.
+
+Edit payload dry-run builder:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-edit-payload-dry-run-v1 /home/ubu/.codex/history.jsonl target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json 1000
+result:
+  verdict: EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+  trace_rows_written: 1000
+  edit_route_candidate_events: 154
+  payload_ready_events: 23
+  payload_built_events: 23
+  scoreable_payload_events: 23
+  builder_rejected_events: 0
+  readiness_rejected_events: 131
+  active_fringe_centers_total: 11019
+  slots_total: 46
+  positive_impulses_total: 1077
+  negative_impulses_total: 1010
+  raw_text_written: false
+  response_text_used: false
+  target_labels_used: false
+  proof_labels_used: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Edit payload dry-run shadow analyzer:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json
+result:
+  verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
+  total_requests: 1000
+  total_llm_calls: 1000
+  exact_cache_hits: 54
+  operator_candidate_calls: 23
+  nando_shadow_accepts: 0
+  nando_shadow_fallbacks: 23
+  verified_safe_accepts: 0
+  unverified_shadow_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  p99_shadow_score_latency_ns: 683880
+  synthetic_trace_used: false
+```
+
+Interpretation: the first request-side edit builder now emits non-empty
+`active_fringe` and slot impulses for 23 real prompt-side rows. This proves the
+empty-payload blocker is removed for the priority edit slice. It does not prove
+savings: verified accepts remain disabled, and every scoreable dry-run payload
+falls back safely. The observed margins are positive at sequence-energy level
+but not at strict slot level (`min_slot_margin = 0`), so the next engineering
+debt is an edit verifier/output hook, not a market claim.
 
 CPU route forecast over real Codex route candidates:
 
