@@ -72,6 +72,11 @@ const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1.report.json";
+const DEFAULT_AGENT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.trace.jsonl";
+const DEFAULT_AGENT_CONTROL_SAFE_POLICY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.report.json";
+const DEFAULT_AGENT_CONTROL_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.verification-hook-audit.report.json";
 const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -4059,6 +4064,237 @@ where
     Err("agent-control admission calibration is review-only".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_agent_control_safe_policy_promote_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_SAFE_POLICY_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_SAFE_POLICY_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let calibration = read_json_file::<RoleBindingAgentControlAdmissionCalibrationReport>(
+        &calibration_report_path,
+    )?;
+    let Some(calibration_policy) = select_supported_agent_control_admission_policy(&calibration)
+    else {
+        return Err(
+            "agent-control calibration report has no supported hard-stop safe policy candidate"
+                .to_owned(),
+        );
+    };
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut agent_control_candidate_rows = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_reject_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+
+    for row in &mut trace_rows {
+        let is_agent_control = row
+            .nando_shadow_request
+            .as_ref()
+            .and_then(|request| request.route_key.as_deref())
+            .is_some_and(|route| route.contains("agent_control"));
+        if !is_agent_control {
+            continue;
+        }
+        agent_control_candidate_rows += 1;
+        let scoreable = row
+            .nando_shadow_request
+            .as_ref()
+            .is_some_and(|request| !request.active_fringe.is_empty() && !request.slots.is_empty());
+        scoreable_candidate_calls += usize::from(scoreable);
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; agent_control_safe_policy_promote_v1 policy={} policy_accept=false reason=history_prompt_missing",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                calibration_policy.policy_name
+            ));
+            continue;
+        };
+        request_side_policy_evaluated_rows += 1;
+        let features = extract_agent_control_admission_features(prompt_text);
+        let policy_accept =
+            agent_control_admission_policy_accepts(&calibration_policy.policy_name, &features)
+                .unwrap_or(false);
+        if policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+            row.provider_cost_microusd = Some(provider_cost_microusd);
+            provider_cost_events_written += 1;
+            if let Some(request) = &mut row.nando_shadow_request {
+                request.expect_local_operator = Some(true);
+                let score = score_role_binding_profile_request(&registry, request);
+                runtime_acceptance_mismatches += usize::from(!score.accepted);
+                no_score_rows +=
+                    usize::from(score.fallback_reason.as_deref().is_some_and(|reason| {
+                        matches!(
+                            reason,
+                            "profile_not_found"
+                                | "input_outside_profile_contract"
+                                | "no_scorable_slots"
+                        )
+                    }));
+            }
+        } else {
+            policy_reject_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+        }
+        row.notes = Some(format!(
+            "{}; agent_control_safe_policy_promote_v1 policy={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            calibration_policy.policy_name,
+            provider_cost_microusd,
+            policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingAgentControlSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_agent_control_safe_policy_promote_v1".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "AGENT_CONTROL_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "AGENT_CONTROL_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: calibration_report_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        selected_policy_name: calibration_policy.policy_name.clone(),
+        selected_policy_true_accepts: calibration_policy.true_accepts,
+        selected_policy_false_accepts: calibration_policy.false_accepts,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        agent_control_candidate_rows,
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        history_prompt_missing_rows,
+        policy_accept_rows,
+        policy_reject_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        profile_acceptance_policy_changed: false,
+        broad_agent_control_profile_promoted: false,
+        local_accepts_enabled_by_request_side_policy_only: true,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It rewrites the evidence-backed agent-control trace so only the selected request-side hard-stop policy keeps nando_shadow_request; rejected agent-control rows are forced to fallback by removing the shadow request. It does not change the .nwrb profile acceptance policy and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted trace, then route the safe-policy audit into the CPU feedback loop. The broad agent-control profile remains blocked unless split/admission proves zero false accepts.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-control-safe-policy-promote-v1: {}",
+        report.verdict
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  selected_policy_name: {}", report.selected_policy_name);
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    println!(
+        "  runtime_acceptance_mismatches: {}",
+        report.runtime_acceptance_mismatches
+    );
+    Err(
+        "agent-control safe-policy promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
 pub(crate) fn run_role_binding_real_traffic_edit_payload_readiness_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -6983,6 +7219,16 @@ where
     } else {
         None
     };
+    let agent_control_safe_policy_audit_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTROL_SAFE_POLICY_AUDIT_REPORT);
+    let agent_control_safe_policy_verification_audit =
+        if agent_control_safe_policy_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &agent_control_safe_policy_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let agent_control_admission_calibration_report_path =
         PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT);
     let agent_control_admission_calibration = if agent_control_admission_calibration_report_path
@@ -7060,6 +7306,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(agent_control_safe_policy_audit) = &agent_control_safe_policy_verification_audit {
+        for row in &agent_control_safe_policy_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(edit_safe_policy_audit) = &edit_safe_policy_verification_audit {
         for row in &edit_safe_policy_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -7086,6 +7337,9 @@ where
     let effective_edit_verification_audit = edit_safe_policy_verification_audit
         .as_ref()
         .unwrap_or(&verification_audit);
+    let effective_agent_control_verification_audit = agent_control_safe_policy_verification_audit
+        .as_ref()
+        .or(agent_control_verification_audit.as_ref());
 
     let target_routability_milli = 800usize;
     let target_verified_cpu_calls =
@@ -7099,8 +7353,7 @@ where
         + effective_mixed_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
-        + agent_control_verification_audit
-            .as_ref()
+        + effective_agent_control_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
@@ -7112,8 +7365,7 @@ where
         + effective_mixed_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
-        + agent_control_verification_audit
-            .as_ref()
+        + effective_agent_control_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
     let routing_gap_to_80_calls =
@@ -7290,6 +7542,14 @@ where
         agent_control_verification_audit_report_path: agent_control_verification_audit
             .as_ref()
             .map(|_| agent_control_audit_report_path.display().to_string()),
+        agent_control_safe_policy_verification_audit_report_path:
+            agent_control_safe_policy_verification_audit
+                .as_ref()
+                .map(|_| {
+                    agent_control_safe_policy_audit_report_path
+                        .display()
+                        .to_string()
+                }),
         agent_control_admission_calibration_report_path: agent_control_admission_calibration
             .as_ref()
             .map(|_| {
@@ -7389,6 +7649,9 @@ where
     }
     if let Some(path) = &report.agent_control_admission_calibration_report_path {
         println!("  agent_control_admission_calibration_report: {path}");
+    }
+    if let Some(path) = &report.agent_control_safe_policy_verification_audit_report_path {
+        println!("  agent_control_safe_policy_verification_audit_report: {path}");
     }
     println!(
         "  verification_audit_report: {}",
@@ -9691,6 +9954,45 @@ struct RoleBindingMixedSafePolicyPromoteReport {
     next_engineering_debt: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentControlSafePolicyPromoteReport {
+    schema_version: String,
+    verdict: String,
+    registry_config_path: String,
+    evidence_trace_path: String,
+    calibration_report_path: String,
+    promoted_trace_path: String,
+    history_path: String,
+    selected_policy_name: String,
+    selected_policy_true_accepts: usize,
+    selected_policy_false_accepts: usize,
+    provider_cost_microusd: u64,
+    trace_rows_written: usize,
+    agent_control_candidate_rows: usize,
+    scoreable_candidate_calls: usize,
+    request_side_policy_evaluated_rows: usize,
+    history_prompt_missing_rows: usize,
+    policy_accept_rows: usize,
+    policy_reject_rows: usize,
+    policy_accept_verified_true_rows: usize,
+    policy_accept_verified_false_rows: usize,
+    policy_accept_unverified_rows: usize,
+    provider_cost_events_written: usize,
+    no_score_rows: usize,
+    runtime_acceptance_mismatches: usize,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    profile_acceptance_policy_changed: bool,
+    broad_agent_control_profile_promoted: bool,
+    local_accepts_enabled_by_request_side_policy_only: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
 #[derive(Clone, Debug)]
 struct RoleBindingMixedPromotionPolicySelection {
     policy_name: String,
@@ -9986,6 +10288,7 @@ struct RoleBindingFeedbackLoopReport {
     edit_safe_policy_verification_audit_report_path: Option<String>,
     agent_control_dry_run_report_path: Option<String>,
     agent_control_verification_audit_report_path: Option<String>,
+    agent_control_safe_policy_verification_audit_report_path: Option<String>,
     agent_control_admission_calibration_report_path: Option<String>,
     conditional_dry_run_report_path: Option<String>,
     conditional_local_accept_calibration_report_path: Option<String>,
@@ -12499,6 +12802,87 @@ fn select_supported_mixed_safe_policy(
         })
 }
 
+fn select_supported_agent_control_admission_policy(
+    calibration: &RoleBindingAgentControlAdmissionCalibrationReport,
+) -> Option<&RoleBindingEditAdmissionPolicyReport> {
+    const PREFERRED_POLICIES: &[&str] = &[
+        "hard_stop_exclamation_caps_or_one_token",
+        "hard_stop_exclamation_len_le_3",
+        "hard_stop_exclamation_len_le_4",
+    ];
+    PREFERRED_POLICIES.iter().find_map(|policy_name| {
+        calibration.policies.iter().find(|policy| {
+            policy.policy_name == *policy_name
+                && policy.robust_safe
+                && policy.false_accepts == 0
+                && policy.true_accepts >= calibration.minimum_true_support
+        })
+    })
+}
+
+fn agent_control_admission_policy_accepts(
+    policy_name: &str,
+    features: &RoleBindingAgentControlAdmissionFeatures,
+) -> Option<bool> {
+    let accepts = match policy_name {
+        "all_hook_ready_rows" => true,
+        "stop_intent" => features.intent_stop,
+        "continue_intent" => features.intent_continue,
+        "short_ack_intent" => features.intent_short_ack,
+        "stop_no_work_tokens_le_2" => {
+            features.intent_stop && !features.has_work_words && features.tokens_le_2
+        }
+        "stop_no_work_tokens_le_4" => {
+            features.intent_stop && !features.has_work_words && features.tokens_le_4
+        }
+        "hard_stop_exclamation_len_le_4" => {
+            features.intent_stop
+                && features.has_ostanov_word
+                && features.has_exclamation
+                && features.tokens_le_4
+                && !features.has_work_words
+        }
+        "hard_stop_exclamation_len_le_3" => {
+            features.intent_stop
+                && features.has_ostanov_word
+                && features.has_exclamation
+                && features.tokens_le_3
+                && !features.has_work_words
+        }
+        "hard_stop_exclamation_caps_or_one_token" => {
+            features.intent_stop
+                && features.has_ostanov_word
+                && features.has_exclamation
+                && features.tokens_le_3
+                && !features.has_work_words
+                && (features.tokens_le_1 || features.all_capsish)
+        }
+        "one_token_ostanov" => {
+            features.intent_stop && features.has_ostanov_word && features.tokens_le_1
+        }
+        "one_token_stop_word" => {
+            features.intent_stop && features.has_stop_word && features.tokens_le_1
+        }
+        "short_ack_no_work_tokens_le_2" => {
+            features.intent_short_ack && !features.has_work_words && features.tokens_le_2
+        }
+        "short_ack_no_work_chars_le_12" => {
+            features.intent_short_ack && !features.has_work_words && features.chars_le_12
+        }
+        "continue_no_work_tokens_le_4" => {
+            features.intent_continue && !features.has_work_words && features.tokens_le_4
+        }
+        "caps_stop_no_question" => {
+            features.intent_stop
+                && features.all_capsish
+                && !features.has_question_mark
+                && !features.has_work_words
+        }
+        _ => return None,
+    };
+    Some(accepts)
+}
+
 fn select_mixed_promotion_policy_from_evidence(
     registry: &RoleBindingProfileRuntimeRegistry,
     trace_rows: &[RoleBindingRealTrafficTraceRow],
@@ -12806,6 +13190,14 @@ fn agent_control_admission_policy_reports(
                 && features.has_exclamation
                 && features.tokens_le_3
                 && !features.has_work_words
+        }),
+        ("hard_stop_exclamation_caps_or_one_token", |features| {
+            features.intent_stop
+                && features.has_ostanov_word
+                && features.has_exclamation
+                && features.tokens_le_3
+                && !features.has_work_words
+                && (features.tokens_le_1 || features.all_capsish)
         }),
         ("one_token_ostanov", |features| {
             features.intent_stop && features.has_ostanov_word && features.tokens_le_1

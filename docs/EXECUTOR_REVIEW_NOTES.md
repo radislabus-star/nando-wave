@@ -1,5 +1,155 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Agent-Control Hard-Stop Safe Policy Promotion
+
+Verdict:
+
+```text
+AGENT_CONTROL_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-agent-control-safe-policy-promote-v1
+
+Updated:
+  role-binding-real-traffic-agent-control-admission-calibration-v1
+  role-binding-real-traffic-feedback-loop-v1
+
+The new command builds a separate request-side-admitted hard-stop trace. It
+does not promote the broad agent-control .nwrb profile. Rows rejected by the
+selected request-side policy have nando_shadow_request removed, so the shadow
+runtime cannot accidentally accept the broad unsafe route.
+```
+
+Selected admission policy:
+
+```text
+policy:
+  hard_stop_exclamation_caps_or_one_token
+
+definition:
+  intent_stop
+  has_ostanov_word
+  has_exclamation
+  tokens <= 3
+  no work/action words
+  and (tokens <= 1 or all_capsish)
+
+calibration report:
+  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1.report.json
+
+hook_ready_rows: 124
+rows_with_prompt_features: 124
+label_true_rows: 12
+label_false_rows: 112
+policy_accepts: 3
+policy_true_accepts: 3
+policy_false_accepts: 0
+missed_true: 9
+robust_safe: true
+```
+
+Promotion artifact:
+
+```text
+trace:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.report.json
+
+policy_accept_rows: 3
+policy_accept_verified_true_rows: 3
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+runtime_acceptance_mismatches: 0
+profile_acceptance_policy_changed: false
+broad_agent_control_profile_promoted: false
+raw_prompt_text_written: false
+raw_response_text_written: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+```
+
+Shadow/audit result:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.shadow-report.json
+
+audit report:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.verification-hook-audit.report.json
+
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 3
+nando_shadow_accepts: 3
+verified_safe_accepts: 3
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 3
+p99_shadow_score_latency_ns: 25829
+verified_cpu_accept_eligible_events: 3
+route-local market_claim_allowed: true
+```
+
+Feedback-loop after safe-policy audit:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-agent-control-v1.report.json
+
+total_llm_calls: 1000
+operator_candidate_calls: 408
+scoreable_candidate_calls: 106
+verification_hook_ready_events: 88
+verified_cpu_accept_eligible_events: 6
+verified_cpu_routability_milli: 6
+verified_gap_to_80_calls: 794
+overall market_claim_allowed: false
+
+agent-control route:
+  stage: verified_cpu_accept_eligible
+  payload_ready_events: 143
+  scoreable_payload_events: 3
+  verification_hook_ready_events: 3
+  verified_cpu_accept_eligible_events: 3
+  false_accepts: 0
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: PASS
+task_id: agent-control-hard-stop-safe-policy-v1
+packet:
+  docs/structural_gates/agent-control-hard-stop-safe-policy-v1.md
+
+Scope:
+  The gate checks the route-local safety core for the hard-stop safe policy:
+  selected policy, 3 verified true rows, zero false rows, zero unverified rows,
+  zero runtime acceptance mismatches, and zero shadow false/unverified accepts.
+  The wider CPU Routability 80 claim remains outside this PASS and stays red.
+```
+
+Claim boundary:
+
+```text
+This is a tiny hard-stop route-local savings proof, not CPU Routability 80.
+The broad agent-control route is still unsafe unless split/admission proves
+zero false accepts. The overall feedback loop remains REVIEW because verified
+CPU routability is 6/1000, not 800/1000.
+
+Do not use the route-local market_claim_allowed=true as a broad market claim.
+It only applies to the 3 admitted hard-stop rows in this non-synthetic trace.
+```
+
 ## 2026-07-03 - Executor Integration: Agent-Control Admission Calibration
 
 Verdict:

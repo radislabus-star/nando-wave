@@ -91,6 +91,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_agent_control_output_evidence_v1,
     run_role_binding_real_traffic_agent_control_payload_dry_run_v1,
     run_role_binding_real_traffic_agent_control_profile_v1,
+    run_role_binding_real_traffic_agent_control_safe_policy_promote_v1,
     run_role_binding_real_traffic_codex_history_ingest_v1,
     run_role_binding_real_traffic_codex_history_route_candidates_v1,
     run_role_binding_real_traffic_conditional_local_accept_calibration_v1,
@@ -639,6 +640,10 @@ fn main() -> ExitCode {
                 "try: nando-cli role-binding-real-traffic-agent-control-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]",
             )
         }
+        Some("role-binding-real-traffic-agent-control-safe-policy-promote-v1") => exit_for_result(
+            run_role_binding_real_traffic_agent_control_safe_policy_promote_v1(args),
+            "try: nando-cli role-binding-real-traffic-agent-control-safe-policy-promote-v1 [agent-control-registry-json] [evidence-trace-jsonl] [admission-report-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]",
+        ),
         Some("role-binding-real-traffic-edit-payload-readiness-v1") => exit_for_result(
             run_role_binding_real_traffic_edit_payload_readiness_v1(args),
             "try: nando-cli role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]",

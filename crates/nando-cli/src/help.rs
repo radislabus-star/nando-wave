@@ -304,6 +304,12 @@ pub(crate) fn print_help() {
         "            Search request-side agent-control admission policies against evidence labels; no local accepts are enabled"
     );
     println!(
+        "  role-binding-real-traffic-agent-control-safe-policy-promote-v1 [agent-control-registry-json] [evidence-trace-jsonl] [admission-report-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Build a request-side-admitted hard-stop trace; broad agent-control rows remain fallback until shadow/audit pass"
+    );
+    println!(
         "  role-binding-real-traffic-edit-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
     );
     println!(
