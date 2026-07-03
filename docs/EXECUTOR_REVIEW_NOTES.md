@@ -1,5 +1,164 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent-Control Strict Control Forms V2
+
+Verdict:
+
+```text
+AGENT_CONTROL_STRICT_CONTROL_FORMS_V2_REVIEW_VERIFIED_GAIN
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added agent-control admission features:
+  one_token_lowercase_stop
+  stop_uppercase_goal_control
+
+Added request-side policy:
+  strict_control_stop_forms
+
+Extended role-binding-real-traffic-feedback-loop-v1 with optional explicit
+agent-control artifact paths:
+  agent-control admission calibration report
+  agent-control safe-policy verification audit report
+```
+
+Why this was needed:
+
+```text
+The broad agent-control route is unsafe as a local accept policy:
+  verifier true rows:  12
+  verifier false rows: 112
+
+The previous hard-stop policy was safe but small:
+  true_accepts:  3
+  false_accepts: 0
+
+The new policy keeps broad agent-control blocked and admits only narrow
+control-plane forms: strict hard-stop forms, explicit pause request, uppercase
+GOAL stop control, and one-token lowercase stop.
+```
+
+V2 calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json
+
+hook_ready_rows:          124
+label_true_rows:          12
+label_false_rows:         112
+selected policy candidate:
+  strict_control_stop_forms
+  accepts:                11
+  true_accepts:           11
+  false_accepts:          0
+  missed_true:            1
+  robust_safe:            true
+```
+
+V2 promoted shadow:
+
+```text
+promoted trace:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.trace.jsonl
+
+shadow report:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.shadow-report.json
+
+nando_shadow_accepts:                  11
+verified_safe_accepts:                 11
+unverified_shadow_accepts:             0
+false_accepts:                         0
+incremental_savings_over_exact_cache:  6
+incremental_reduction_vs_exact_cache:  6 milli
+p99_shadow_score_latency_ns:           23783
+synthetic_trace_used:                  false
+```
+
+V2 verification audit:
+
+```text
+audit report:
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.verification-hook-audit.report.json
+
+verification_hook_ready_events:        11
+verified_cpu_accept_eligible_events:   11
+shadow_accepts:                        11
+shadow_false_accepts:                  0
+market_claim_allowed:                  true
+```
+
+Unified feedback with agent-control v2 + planning v3:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v2.agent-control-planning-v3.report.json
+
+total_llm_calls:                       1000
+exact_cache_hits:                      53
+operator_candidate_calls:              457
+scoreable_candidate_calls:             139
+verification_hook_ready_events:        102
+verified_cpu_accept_eligible_events:   16
+verified_cpu_routability_milli:        16
+verified_gap_to_80_calls:              784
+market_claim_allowed:                  false
+
+agent-control row:
+  candidate_events:                    143
+  scoreable_payload_events:            11
+  verification_hook_ready_events:      11
+  local_accept_best_safe_true_accepts: 11
+  local_accept_support_qualified:      true
+  verified_cpu_accept_eligible_events: 11
+  false_accepts:                       0
+```
+
+Operator catalog v2:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v2.agent-control-planning-v3.report.json
+
+current_verified_cpu_accepts:          16
+verified_gap_to_80_calls:              784
+top_catalog_row:                       role_binding_agent_control_seed0
+```
+
+Claim boundary:
+
+```text
+This is real verified progress, not CPU Routability 80.
+The project moved from 8/1000 to 16/1000 verified CPU accepts on the current
+1000-call Codex trace window.
+
+Broad agent-control remains blocked. Only the strict request-side policy is
+promoted into the v2 trace.
+
+No market-wide savings claim is allowed from the unified feedback report while
+verified_cpu_routability_milli is 16.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: agent-control-strict-control-safe-policy-v2
+packet:
+  docs/structural_gates/agent-control-strict-control-safe-policy-v2.md
+report:
+  target/nando-wave/real-traffic-shadow/agent-control-strict-control-safe-policy-v2.nanda.json
+
+Treat VETO as the CPU Routability 80 promotion guard, not as a route failure.
+```
+
 ## 2026-07-04 - Executor Integration: Planning Next-Step Admission Calibration V1/V3
 
 Verdict:

@@ -5,7 +5,7 @@ Date: 2026-07-03
 Status:
 
 ```text
-PROFILE_RUNTIME_DEPLOYED_CHEAP_VPS_REPLAY_PASS
+REAL_TRAFFIC_CPU_ROUTABILITY_REVIEW_16_OF_1000
 ```
 
 ## Goal
@@ -66,8 +66,31 @@ Replay cache result:
 Boundary:
 
 ```text
-The first product-shaped serving smoke is now green. This is still local smoke,
-not real Codex production traffic yet.
+The product-shaped serving smoke is green and the real Codex shadow path is now
+active. The current real-traffic CPU routability result is still REVIEW, not a
+market-wide savings claim.
+```
+
+Current real-traffic CPU routability snapshot:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v2.agent-control-planning-v3.report.json
+
+total_llm_calls:                     1000
+exact_cache_hits:                    53
+operator_candidate_calls:            457
+scoreable_candidate_calls:           139
+verification_hook_ready_events:      102
+verified_cpu_accept_eligible_events: 16
+verified_cpu_routability_milli:      16
+verified_gap_to_80_calls:            784
+false_accepts:                       0
+
+strongest verified route:
+  role_binding_agent_control_seed0
+  strict_control_stop_forms
+  verified_cpu_accept_eligible_events: 11
 ```
 
 Current real-traffic shadow path:

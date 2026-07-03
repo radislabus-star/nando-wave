@@ -454,13 +454,13 @@ pub(crate) fn print_help() {
         "            Audit whether shadow trace rows carry enough output evidence to count verified CPU accepts"
     );
     println!(
-        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json]"
+        "  role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json]"
     );
     println!(
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / agent-control / mixed route reports from default artifact paths when present; planning reports default to v1 unless supplied"
+        "            Auto-loads conditional / mixed route reports from default artifact paths when present; planning and agent-control reports default to v1 unless supplied"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"

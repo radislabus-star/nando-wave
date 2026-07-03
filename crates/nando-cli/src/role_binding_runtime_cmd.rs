@@ -9065,6 +9065,14 @@ where
         args.next().map(PathBuf::from).unwrap_or_else(|| {
             PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT)
         });
+    let agent_control_admission_calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT));
+    let agent_control_safe_policy_audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_SAFE_POLICY_AUDIT_REPORT));
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -9118,8 +9126,6 @@ where
     } else {
         None
     };
-    let agent_control_safe_policy_audit_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTROL_SAFE_POLICY_AUDIT_REPORT);
     let agent_control_safe_policy_verification_audit =
         if agent_control_safe_policy_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -9128,8 +9134,6 @@ where
         } else {
             None
         };
-    let agent_control_admission_calibration_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT);
     let agent_control_admission_calibration = if agent_control_admission_calibration_report_path
         .exists()
     {
@@ -12607,6 +12611,8 @@ struct RoleBindingAgentControlAdmissionFeatures {
     has_stoy_word: bool,
     has_ostanov_word: bool,
     has_pause_word: bool,
+    one_token_lowercase_stop: bool,
+    stop_uppercase_goal_control: bool,
     has_exclamation: bool,
     has_question_mark: bool,
     has_work_words: bool,
@@ -15739,6 +15745,7 @@ fn select_supported_agent_control_admission_policy(
     calibration: &RoleBindingAgentControlAdmissionCalibrationReport,
 ) -> Option<&RoleBindingEditAdmissionPolicyReport> {
     const PREFERRED_POLICIES: &[&str] = &[
+        "strict_control_stop_forms",
         "hard_stop_exclamation_caps_or_one_token",
         "hard_stop_exclamation_len_le_3",
         "hard_stop_exclamation_len_le_4",
@@ -15753,12 +15760,32 @@ fn select_supported_agent_control_admission_policy(
     })
 }
 
+fn agent_control_strict_control_stop_forms(
+    features: &RoleBindingAgentControlAdmissionFeatures,
+) -> bool {
+    let hard_stop_exclamation = features.intent_stop
+        && features.has_ostanov_word
+        && features.has_exclamation
+        && features.tokens_le_3
+        && !features.has_work_words
+        && (features.tokens_le_1 || features.all_capsish);
+    let pause_request = features.intent_stop
+        && features.has_pause_word
+        && !features.has_work_words
+        && !features.has_question_mark;
+    hard_stop_exclamation
+        || pause_request
+        || features.stop_uppercase_goal_control
+        || features.one_token_lowercase_stop
+}
+
 fn agent_control_admission_policy_accepts(
     policy_name: &str,
     features: &RoleBindingAgentControlAdmissionFeatures,
 ) -> Option<bool> {
     let accepts = match policy_name {
         "all_hook_ready_rows" => true,
+        "strict_control_stop_forms" => agent_control_strict_control_stop_forms(features),
         "stop_intent" => features.intent_stop,
         "continue_intent" => features.intent_continue,
         "short_ack_intent" => features.intent_short_ack,
@@ -16091,9 +16118,11 @@ fn extract_agent_control_admission_features(
         .chars()
         .filter(|ch| ch.is_alphabetic() && ch.is_uppercase())
         .count();
+    let trimmed = text.trim();
+    let raw_tokens = trimmed.split_whitespace().collect::<Vec<_>>();
     let intent = agent_control_intent_kind(text);
     RoleBindingAgentControlAdmissionFeatures {
-        request_len: text.trim().len(),
+        request_len: trimmed.len(),
         token_count,
         intent_stop: intent == "stop",
         intent_continue: intent == "continue",
@@ -16102,6 +16131,10 @@ fn extract_agent_control_admission_features(
         has_stoy_word: lower.contains("стой"),
         has_ostanov_word: lower.contains("останов"),
         has_pause_word: lower.contains("пауза"),
+        one_token_lowercase_stop: raw_tokens.len() == 1 && raw_tokens[0] == "стоп",
+        stop_uppercase_goal_control: raw_tokens.len() == 2
+            && raw_tokens[0] == "СТОП"
+            && raw_tokens[1] == "GOAL",
         has_exclamation: text.contains('!'),
         has_question_mark: text.contains('?') || text.contains('؟'),
         has_work_words: contains_any(
@@ -16130,8 +16163,8 @@ fn extract_agent_control_admission_features(
         tokens_le_2: token_count <= 2,
         tokens_le_3: token_count <= 3,
         tokens_le_4: token_count <= 4,
-        chars_le_12: text.trim().len() <= 12,
-        chars_le_20: text.trim().len() <= 20,
+        chars_le_12: trimmed.len() <= 12,
+        chars_le_20: trimmed.len() <= 20,
     }
 }
 
@@ -16433,6 +16466,10 @@ fn agent_control_admission_policy_reports(
     type AgentControlAdmissionPredicate = fn(&RoleBindingAgentControlAdmissionFeatures) -> bool;
     let policy_defs: Vec<(&str, AgentControlAdmissionPredicate)> = vec![
         ("all_hook_ready_rows", |_| true),
+        (
+            "strict_control_stop_forms",
+            agent_control_strict_control_stop_forms,
+        ),
         ("stop_intent", |features| features.intent_stop),
         ("continue_intent", |features| features.intent_continue),
         ("short_ack_intent", |features| features.intent_short_ack),
@@ -16691,6 +16728,12 @@ fn agent_control_admission_feature_names(
     }
     if features.has_pause_word {
         names.push("has_pause_word".to_owned());
+    }
+    if features.one_token_lowercase_stop {
+        names.push("one_token_lowercase_stop".to_owned());
+    }
+    if features.stop_uppercase_goal_control {
+        names.push("stop_uppercase_goal_control".to_owned());
     }
     if features.has_exclamation {
         names.push("has_exclamation".to_owned());
