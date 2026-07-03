@@ -1,5 +1,125 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Conditional Output Evidence Hook
+
+Verdicts:
+
+```text
+CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-conditional-output-evidence-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl
+  /home/ubu/.codex/sessions
+
+and writes:
+  target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.report.json
+```
+
+Privacy / anti-leak boundary:
+
+```text
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Conditional output evidence:
+
+```text
+operator_candidate_calls: 24
+scoreable_candidate_calls: 24
+session_ids_requested: 3
+session_files_scanned: 3
+codex_turns_indexed: 21
+output_evidence_matched_events: 21
+no_session_output_match_events: 3
+deterministic_verification_events: 21
+verified_true_events: 6
+verified_false_events: 15
+```
+
+Shadow + audit over the evidence trace:
+
+```text
+shadow_nando_accepts: 0
+shadow_verified_safe_accepts: 0
+shadow_false_accepts: 0
+shadow_incremental_reduction_vs_exact_cache_milli: 0
+shadow_p99_score_latency_ns: 169208
+
+audit_scoreable_candidate_calls: 24
+audit_response_fingerprint_events: 21
+audit_explicit_verified_safe_accept_events: 21
+audit_verification_hook_ready_events: 21
+audit_verified_cpu_accept_eligible_events: 0
+audit_provider_cost_events: 0
+audit_market_claim_allowed: false
+```
+
+Updated feedback-loop stage:
+
+```text
+role_binding_conditional_branch_seed0:
+  candidate_events: 92
+  payload_ready_events: 24
+  payload_built_events: 24
+  scoreable_payload_events: 24
+  verification_hook_ready_events: 21
+  stage: verification_hook_ready_waiting_local_accept
+
+Total verification_hook_ready_events in feedback loop:
+  38 = 17 edit + 21 conditional
+```
+
+Conditional local-accept calibration:
+
+```text
+verdict: CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+hook_ready_rows: 21
+scored_rows: 21
+label_true_rows: 6
+label_false_rows: 15
+safe_policy_found: false
+best_safe_true_accepts: 0
+
+energy_only_no_slot_order:
+  accepts: 6
+  true_accepts: 1
+  false_accepts: 5
+
+branch_slot_only_ignore_evidence_slot:
+  accepts: 6
+  true_accepts: 1
+  false_accepts: 5
+```
+
+Diagnostic read:
+
+```text
+The conditional route is no longer missing a verification hook. It now has
+21 real response-backed deterministic verification rows, including 6 true and
+15 false labels for later local-accept calibration.
+
+The first readout calibration did not find a safe policy. Local accepts remain
+disabled, provider cost is absent, shadow accepts are 0, and verified CPU
+accepts remain 0. CPU Routability 80 is still red.
+```
+
 ## 2026-07-03 - Executor Integration: Conditional Payload Dry-Run
 
 Verdicts:
@@ -102,9 +222,9 @@ The conditional route is no longer payload_builder_missing. It now has a
 request-side active_fringe/slot dry-run for 24 real prompt-side rows. This is
 real funnel progress, not verified savings.
 
-The next blocker is output/tool evidence and deterministic verification for
-conditional rows. Local accepts remain disabled and verified CPU accepts remain
-0, so CPU Routability 80 is still red.
+Superseded by the Conditional Output Evidence Hook section above: output
+evidence is now attached for 21 conditional rows, but local accepts remain
+disabled and verified CPU accepts remain 0, so CPU Routability 80 is still red.
 ```
 
 ## 2026-07-03 - Executor Integration: Edit Admission Calibration

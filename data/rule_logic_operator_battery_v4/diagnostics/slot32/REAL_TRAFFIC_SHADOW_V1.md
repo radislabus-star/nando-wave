@@ -27,7 +27,9 @@ New commands:
   role-binding-real-traffic-conditional-payload-readiness-v1
   role-binding-real-traffic-conditional-payload-dry-run-v1
   role-binding-real-traffic-edit-output-evidence-v1
+  role-binding-real-traffic-conditional-output-evidence-v1
   role-binding-real-traffic-edit-local-accept-calibration-v1
+  role-binding-real-traffic-conditional-local-accept-calibration-v1
   role-binding-real-traffic-edit-admission-calibration-v1
   role-binding-real-traffic-verification-hook-audit-v1
   role-binding-real-traffic-feedback-loop-v1
@@ -574,11 +576,98 @@ result:
   market_claim_allowed: false
 ```
 
+Conditional output evidence join:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-conditional-output-evidence-v1 target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl /home/ubu/.codex/sessions target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.report.json
+result:
+  verdict: CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+  operator_candidate_calls: 24
+  scoreable_candidate_calls: 24
+  session_ids_requested: 3
+  session_files_scanned: 3
+  codex_turns_indexed: 21
+  output_evidence_matched_events: 21
+  no_session_output_match_events: 3
+  deterministic_verification_events: 21
+  verified_true_events: 6
+  verified_false_events: 15
+  raw_prompt_text_written: false
+  raw_response_text_written: false
+  response_text_used_for_verification: true
+  target_labels_used: false
+  proof_labels_used: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Conditional evidence shadow analyzer:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.shadow-report.json
+result:
+  verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
+  total_requests: 1000
+  total_llm_calls: 1000
+  exact_cache_hits: 53
+  operator_candidate_calls: 24
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  p99_shadow_score_latency_ns: 169208
+  synthetic_trace_used: false
+```
+
+Conditional evidence verification hook audit:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.shadow-report.json target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.verification-hook-audit.report.json
+result:
+  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+  operator_candidate_calls: 24
+  scoreable_candidate_calls: 24
+  response_fingerprint_events: 21
+  explicit_verified_safe_accept_events: 21
+  verification_hook_ready_events: 21
+  verified_cpu_accept_eligible_events: 0
+  shadow_accepts: 0
+  shadow_false_accepts: 0
+  provider_cost_events: 0
+  market_claim_allowed: false
+```
+
+Conditional local-accept calibration:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-conditional-local-accept-calibration-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-local-accept-calibration-v1.report.json
+result:
+  verdict: CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+  hook_ready_rows: 21
+  scored_rows: 21
+  label_true_rows: 6
+  label_false_rows: 15
+  safe_policy_found: false
+  best_safe_true_accepts: 0
+
+  energy_only_no_slot_order:
+    accepts: 6
+    true_accepts: 1
+    false_accepts: 5
+
+  branch_slot_only_ignore_evidence_slot:
+    accepts: 6
+    true_accepts: 1
+    false_accepts: 5
+```
+
 Updated interpretation: `role_binding_conditional_branch_seed0` is no longer a
-pure `payload_builder_missing` route. It now has 24 request-side scoreable
-payloads from real Codex prompt traffic. The remaining blocker is the
-output/tool-call evidence and deterministic verification hook. There are still
-zero verified CPU accepts and zero market savings.
+pure `payload_builder_missing` route and is no longer missing verification
+hooks. It now has 24 request-side scoreable payloads and 21 response-backed
+deterministic verification rows from real Codex traffic. The remaining blocker
+is better request-side admission or payload geometry plus provider cost
+evidence: the first local-accept calibration found no safe readout policy.
+There are still zero verified CPU accepts and zero market savings.
 
 CPU route feedback-loop report:
 
@@ -593,7 +682,7 @@ result:
   operator_candidate_coverage_milli: 285
   scoreable_candidate_calls: 47
   scoreable_candidate_coverage_milli: 47
-  verification_hook_ready_events: 17
+  verification_hook_ready_events: 38
   verified_cpu_accept_eligible_events: 0
   verified_cpu_routability_milli: 0
   target_routability_milli: 800
@@ -610,16 +699,21 @@ role_binding_edit_marker_length_seed0:
   candidate_events: 154
   scoreable_payload_events: 23
   verification_hook_ready_events: 17
-  stage: verification_hook_ready_waiting_local_accept
-  next_action: Run local-accept calibration; if no safe policy exists, improve request-side admission or payload features.
+  local_accept_calibration_ran: true
+  local_accept_safe_policy_found: false
+  stage: local_accept_calibration_failed
+  next_action: Improve request-side admission or payload geometry before enabling local accepts.
 
 role_binding_conditional_branch_seed0:
   candidate_events: 92
   payload_ready_events: 24
   payload_built_events: 24
   scoreable_payload_events: 24
-  stage: scoreable_payload_missing_verification_hook
-  next_action: Attach response/tool-call evidence and deterministic output verification.
+  verification_hook_ready_events: 21
+  local_accept_calibration_ran: true
+  local_accept_safe_policy_found: false
+  stage: local_accept_calibration_failed
+  next_action: Improve request-side admission or payload geometry before enabling local accepts.
 
 role_binding_mixed_map_seed0:
   candidate_events: 39
@@ -631,6 +725,14 @@ Interpretation: this report prevents the exact-cache, route-candidate,
 scoreable-payload, verification-hook, and verified-CPU stages from being mixed.
 CPU Routability 80 remains red until verified CPU routability reaches 800 milli
 on non-synthetic real traffic with false accepts at zero.
+
+Current next engineering debt:
+
+```text
+Improve edit/conditional request-side admission or payload geometry after
+failed local-accept calibration, build the mixed route payload builder, and add
+provider cost evidence before any savings claim.
+```
 
 CPU route forecast over real Codex route candidates:
 

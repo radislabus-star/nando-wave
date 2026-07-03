@@ -69,8 +69,15 @@ const DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl";
 const DEFAULT_EDIT_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json";
+const DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl";
+const DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.report.json";
+const DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json";
+const DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-local-accept-calibration-v1.report.json";
 const DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
@@ -4037,6 +4044,7 @@ where
         &sessions_root,
         &session_ids,
         &wanted_request_fingerprints,
+        deterministic_edit_output_verification,
     )?;
 
     let mut enriched_rows = Vec::with_capacity(trace_rows.len());
@@ -4144,6 +4152,155 @@ where
     println!("  verified_false_events: {}", report.verified_false_events);
     println!("  raw_response_text_written: false");
     Err("edit output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_conditional_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_conditional_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "conditional output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_conditional_output_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += 1;
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        if !evidence.verifier_applicable {
+            verifier_not_applicable_events += 1;
+        }
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "conditional output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_conditional_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Conditional output evidence join only. It reads local Codex session final answers at analysis time, writes fingerprints and explicit deterministic verification results, writes no raw prompt/response text, does not enable local accepts, and cannot prove market savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the conditional evidence trace. Only hook-backed true verifications with local accepts, provider cost, non-synthetic traces, and false_accepts=0 can count as verified CPU savings.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-conditional-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("conditional output evidence is review-only; run shadow/audit before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_edit_local_accept_calibration_v1<I>(
@@ -4292,6 +4449,155 @@ where
         report.best_safe_true_accepts
     );
     Err("edit local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_conditional_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let branch_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let evidence_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin: branch_slot_margin,
+            end_slot_margin: evidence_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_strict_all_slots", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_only_policy =
+        evaluate_edit_calibration_policy("energy_only_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let branch_slot_policy = evaluate_edit_calibration_policy(
+        "branch_slot_only_ignore_evidence_slot",
+        &scored_rows,
+        |row| row.marker_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let strict_without_zero_evidence_policy = evaluate_edit_calibration_policy(
+        "strict_slots_but_ignore_zero_evidence_slot",
+        &scored_rows,
+        |row| row.marker_slot_margin > 0 && row.end_slot_margin >= 0 && row.energy_margin >= 1,
+    );
+    let best_branch_threshold_policy =
+        best_single_threshold_policy("best_branch_slot_margin_threshold", &scored_rows, |row| {
+            row.marker_slot_margin
+        });
+    let best_energy_threshold_policy =
+        best_single_threshold_policy("best_energy_margin_threshold", &scored_rows, |row| {
+            row.energy_margin
+        });
+    let policies = vec![
+        current_policy,
+        energy_only_policy,
+        branch_slot_policy,
+        strict_without_zero_evidence_policy,
+        best_branch_threshold_policy,
+        best_energy_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_conditional_local_accept_calibration_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
+        } else {
+            "CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Conditional calibration only. It evaluates readout policies against evidence-backed real Codex conditional labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Promote the safe policy only behind a separate non-synthetic shadow trace rewrite with false_accepts=0, provider cost, rollback, and explicit admission rules.".to_owned()
+        } else {
+            "Do not relax score/readout thresholds. The current conditional payload geometry does not separate verifier-true from verifier-false rows; improve branch extraction/admission before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-conditional-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("conditional local accept calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_edit_admission_calibration_v1<I>(
@@ -4668,6 +4974,17 @@ where
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
         read_json_file::<RoleBindingEditPayloadDryRunReport>(&edit_dry_run_report_path)?;
+    let edit_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let edit_local_accept_calibration = if edit_local_accept_calibration_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                &edit_local_accept_calibration_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
     let conditional_dry_run_report_path = PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_REPORT);
     let conditional_dry_run = if conditional_dry_run_report_path.exists() {
         Some(read_json_file::<RoleBindingConditionalPayloadDryRunReport>(
@@ -4678,17 +4995,52 @@ where
     };
     let verification_audit =
         read_json_file::<RoleBindingVerificationHookAuditReport>(&verification_audit_report_path)?;
-    let verification_by_route = verification_audit
+    let conditional_audit_report_path =
+        PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let conditional_verification_audit = if conditional_audit_report_path.exists() {
+        Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+            &conditional_audit_report_path,
+        )?)
+    } else {
+        None
+    };
+    let conditional_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let conditional_local_accept_calibration =
+        if conditional_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &conditional_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
+    let mut verification_by_route = verification_audit
         .routes
         .iter()
         .map(|row| (row.route_key.as_str(), row))
         .collect::<BTreeMap<_, _>>();
+    if let Some(conditional_audit) = &conditional_verification_audit {
+        for row in &conditional_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
 
     let target_routability_milli = 800usize;
     let target_verified_cpu_calls =
         projected_accepts(forecast.total_llm_calls, target_routability_milli);
-    let verified_cpu_accept_eligible_events =
-        verification_audit.verified_cpu_accept_eligible_events;
+    let verification_hook_ready_events = verification_audit.verification_hook_ready_events
+        + conditional_verification_audit
+            .as_ref()
+            .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default();
+    let verified_cpu_accept_eligible_events = verification_audit
+        .verified_cpu_accept_eligible_events
+        + conditional_verification_audit
+            .as_ref()
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
     let routing_gap_to_80_calls =
         target_verified_cpu_calls.saturating_sub(forecast.operator_candidate_calls);
     let verified_gap_to_80_calls =
@@ -4699,6 +5051,20 @@ where
         let verification = verification_by_route.get(route.route_key.as_str()).copied();
         let is_edit_route = route.route_key.contains("edit_marker_length");
         let is_conditional_route = route.route_key.contains("conditional_branch");
+        let local_accept_calibration = if is_edit_route {
+            edit_local_accept_calibration.as_ref()
+        } else if is_conditional_route {
+            conditional_local_accept_calibration.as_ref()
+        } else {
+            None
+        };
+        let local_accept_calibration_ran = local_accept_calibration.is_some();
+        let local_accept_safe_policy_found = local_accept_calibration
+            .map(|report| report.safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = local_accept_calibration
+            .map(|report| report.best_safe_true_accepts)
+            .unwrap_or_default();
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
         } else if is_conditional_route {
@@ -4746,6 +5112,8 @@ where
             scoreable_payload_events,
             verification_hook_ready_events,
             verified_cpu_accept_eligible_events,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
         );
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -4761,6 +5129,9 @@ where
             payload_built_events,
             scoreable_payload_events,
             verification_hook_ready_events,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
             false_accepts,
             candidate_share_milli_of_all_llm_calls: route.candidate_share_milli_of_all_llm_calls,
@@ -4784,9 +5155,22 @@ where
         verdict: "CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW".to_owned(),
         forecast_report_path: forecast_report_path.display().to_string(),
         edit_dry_run_report_path: edit_dry_run_report_path.display().to_string(),
+        edit_local_accept_calibration_report_path: edit_local_accept_calibration
+            .as_ref()
+            .map(|_| edit_local_accept_calibration_report_path.display().to_string()),
         conditional_dry_run_report_path: conditional_dry_run
             .as_ref()
             .map(|_| conditional_dry_run_report_path.display().to_string()),
+        conditional_local_accept_calibration_report_path: conditional_local_accept_calibration
+            .as_ref()
+            .map(|_| {
+                conditional_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
+        conditional_verification_audit_report_path: conditional_verification_audit
+            .as_ref()
+            .map(|_| conditional_audit_report_path.display().to_string()),
         verification_audit_report_path: verification_audit_report_path.display().to_string(),
         total_llm_calls: forecast.total_llm_calls,
         exact_cache_hits: forecast.exact_cache_hits,
@@ -4798,11 +5182,8 @@ where
             scoreable_candidate_calls,
             forecast.total_llm_calls,
         ),
-        verification_hook_ready_events: verification_audit.verification_hook_ready_events,
-        verification_hook_coverage_milli: ratio_milli(
-            verification_audit.verification_hook_ready_events,
-            forecast.total_llm_calls,
-        ),
+        verification_hook_ready_events,
+        verification_hook_coverage_milli: ratio_milli(verification_hook_ready_events, forecast.total_llm_calls),
         verified_cpu_accept_eligible_events,
         verified_cpu_routability_milli: ratio_milli(
             verified_cpu_accept_eligible_events,
@@ -4816,7 +5197,7 @@ where
         market_claim_allowed: false,
         routes: route_rows,
         claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
-        next_engineering_debt: "Increase real route coverage beyond 285/1000, attach output/tool verification hooks to scoreable edit and conditional payloads, then build the mixed route payload builder.".to_owned(),
+        next_engineering_debt: "Improve edit/conditional request-side admission or payload geometry after failed local-accept calibration, build the mixed route payload builder, and add provider cost evidence before any savings claim.".to_owned(),
     };
     write_json_file(&feedback_report_path, &report)?;
     println!(
@@ -4828,8 +5209,17 @@ where
         "  edit_dry_run_report: {}",
         edit_dry_run_report_path.display()
     );
+    if let Some(path) = &report.edit_local_accept_calibration_report_path {
+        println!("  edit_local_accept_calibration_report: {path}");
+    }
     if let Some(path) = &report.conditional_dry_run_report_path {
         println!("  conditional_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.conditional_local_accept_calibration_report_path {
+        println!("  conditional_local_accept_calibration_report: {path}");
+    }
+    if let Some(path) = &report.conditional_verification_audit_report_path {
+        println!("  conditional_verification_audit_report: {path}");
     }
     println!(
         "  verification_audit_report: {}",
@@ -7112,7 +7502,10 @@ struct RoleBindingFeedbackLoopReport {
     verdict: String,
     forecast_report_path: String,
     edit_dry_run_report_path: String,
+    edit_local_accept_calibration_report_path: Option<String>,
     conditional_dry_run_report_path: Option<String>,
+    conditional_local_accept_calibration_report_path: Option<String>,
+    conditional_verification_audit_report_path: Option<String>,
     verification_audit_report_path: String,
     total_llm_calls: usize,
     exact_cache_hits: usize,
@@ -7150,6 +7543,9 @@ struct RoleBindingFeedbackLoopRouteRow {
     payload_built_events: usize,
     scoreable_payload_events: usize,
     verification_hook_ready_events: usize,
+    local_accept_calibration_ran: bool,
+    local_accept_safe_policy_found: bool,
+    local_accept_best_safe_true_accepts: usize,
     verified_cpu_accept_eligible_events: usize,
     false_accepts: usize,
     candidate_share_milli_of_all_llm_calls: usize,
@@ -9245,9 +9641,15 @@ fn feedback_route_stage(
     scoreable_payload_events: usize,
     verification_hook_ready_events: usize,
     verified_cpu_accept_eligible_events: usize,
+    local_accept_calibration_ran: bool,
+    local_accept_safe_policy_found: bool,
 ) -> String {
     if verified_cpu_accept_eligible_events > 0 {
         "verified_cpu_accept_eligible".to_owned()
+    } else if local_accept_safe_policy_found {
+        "local_accept_calibration_safe_policy_candidate".to_owned()
+    } else if local_accept_calibration_ran {
+        "local_accept_calibration_failed".to_owned()
     } else if verification_hook_ready_events > 0 {
         "verification_hook_ready_waiting_local_accept".to_owned()
     } else if scoreable_payload_events > 0 {
@@ -9268,6 +9670,12 @@ fn feedback_route_next_action(stage: &str) -> String {
         }
         "verification_hook_ready_waiting_local_accept" => {
             "Run local-accept calibration; if no safe policy exists, improve request-side admission or payload features.".to_owned()
+        }
+        "local_accept_calibration_safe_policy_candidate" => {
+            "Promote the safe policy only through a separate shadow trace rewrite with provider cost, rollback, and false_accepts=0.".to_owned()
+        }
+        "local_accept_calibration_failed" => {
+            "Improve request-side admission or payload geometry before enabling local accepts.".to_owned()
         }
         "scoreable_payload_missing_verification_hook" => {
             "Attach response/tool-call evidence and deterministic output verification.".to_owned()
@@ -10217,7 +10625,9 @@ fn trace_row_has_output_evidence(row: &RoleBindingRealTrafficTraceRow) -> bool {
 }
 
 fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
-    let rest = trace_id.strip_prefix("codex_history_edit_payload_dry_run::")?;
+    let rest = trace_id
+        .strip_prefix("codex_history_edit_payload_dry_run::")
+        .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
     Some(session_id.to_owned())
@@ -10227,6 +10637,7 @@ fn build_codex_session_output_evidence_index(
     sessions_root: &Path,
     session_ids: &HashSet<String>,
     wanted_request_fingerprints: &HashSet<String>,
+    verifier: fn(&str, &str) -> (bool, bool, String),
 ) -> Result<CodexSessionOutputEvidenceIndex, String> {
     let mut session_files = Vec::new();
     collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
@@ -10295,7 +10706,7 @@ fn build_codex_session_output_evidence_index(
                         stable_real_traffic_fingerprint64(response_text.as_bytes())
                     );
                     let (verified_safe_accept, verifier_applicable, verifier_status) =
-                        deterministic_edit_output_verification(&prompt_text, response_text);
+                        verifier(&prompt_text, response_text);
                     by_request_fingerprint.entry(request_fingerprint).or_insert(
                         CodexSessionOutputEvidence {
                             response_fingerprint,
@@ -10436,6 +10847,102 @@ fn deterministic_edit_output_verification(
         "rejected_no_edit_confirmation"
     };
     (verified, true, status.to_owned())
+}
+
+fn deterministic_conditional_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness = analyze_conditional_payload_readiness(prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(branch) = extract_conditional_branch_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_branch_tokens".to_owned(),
+        );
+    };
+    let response_lower = response_text.to_lowercase();
+    let allowed_present = response_contains_branch_token(&response_lower, &branch.allowed_token);
+    let refused_present = response_contains_branch_token(&response_lower, &branch.refused_token);
+    let condition_present =
+        response_contains_branch_token(&response_lower, &branch.condition_token)
+            || contains_any(
+                &response_lower,
+                &["if", "when", "condition", "branch", "если", "услов"],
+            );
+    let evidence_present = response_contains_branch_token(&response_lower, &branch.evidence_token)
+        || contains_any(
+            &response_lower,
+            &[
+                "evidence",
+                "report",
+                "verdict",
+                "result",
+                "trace",
+                "audit",
+                "доказ",
+                "отч",
+                "вердикт",
+                "результат",
+            ],
+        );
+    let refusal_or_failure = contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "недостаточно",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    );
+    let exactly_one_branch = allowed_present ^ refused_present;
+    let verified =
+        exactly_one_branch && (condition_present || evidence_present) && !refusal_or_failure;
+    let status = if verified {
+        "verified_single_branch_with_condition_or_evidence"
+    } else if allowed_present && refused_present {
+        "rejected_ambiguous_both_branches_present"
+    } else if !allowed_present && !refused_present {
+        "rejected_no_branch_token_in_response"
+    } else if refusal_or_failure {
+        "rejected_response_reports_failure"
+    } else {
+        "rejected_missing_condition_or_evidence_signal"
+    };
+    (verified, true, status.to_owned())
+}
+
+fn response_contains_branch_token(response_lower: &str, token: &str) -> bool {
+    let token_lower = token.to_lowercase();
+    let token_lower = token_lower.trim();
+    if token_lower.is_empty() {
+        return false;
+    }
+    if token_lower.chars().count() < 3 {
+        response_lower
+            .split(|ch: char| !ch.is_alphanumeric())
+            .any(|part| part == token_lower)
+    } else {
+        response_lower.contains(token_lower)
+    }
 }
 
 fn append_trace_note(previous: Option<&str>, addition: &str) -> String {

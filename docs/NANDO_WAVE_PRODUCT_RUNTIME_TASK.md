@@ -86,7 +86,9 @@ edit_payload_dry_run_command: role-binding-real-traffic-edit-payload-dry-run-v1
 conditional_payload_readiness_command: role-binding-real-traffic-conditional-payload-readiness-v1
 conditional_payload_dry_run_command: role-binding-real-traffic-conditional-payload-dry-run-v1
 edit_output_evidence_command: role-binding-real-traffic-edit-output-evidence-v1
+conditional_output_evidence_command: role-binding-real-traffic-conditional-output-evidence-v1
 edit_local_accept_calibration_command: role-binding-real-traffic-edit-local-accept-calibration-v1
+conditional_local_accept_calibration_command: role-binding-real-traffic-conditional-local-accept-calibration-v1
 edit_admission_calibration_command: role-binding-real-traffic-edit-admission-calibration-v1
 verification_hook_audit_command: role-binding-real-traffic-verification-hook-audit-v1
 feedback_loop_command: role-binding-real-traffic-feedback-loop-v1
@@ -155,9 +157,25 @@ current smoke:
   conditional_payload_dry_run_shadow_false_accepts: 0.
   conditional_payload_dry_run_shadow_incremental_reduction_vs_exact_cache_milli: 0.
   conditional_payload_dry_run_shadow_p99_shadow_score_latency_ns: 153389.
-  conditional_verification_hook_audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS.
+  conditional_output_evidence_verdict: CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED.
+  conditional_output_evidence_trace: target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl.
+  conditional_output_evidence_output_matches: 21.
+  conditional_output_evidence_verified_true: 6.
+  conditional_output_evidence_verified_false: 15.
+  conditional_output_evidence_raw_response_written: false.
+  conditional_output_evidence_market_claim_allowed: false.
+  conditional_output_evidence_shadow_accepts: 0.
+  conditional_output_evidence_shadow_false_accepts: 0.
+  conditional_output_evidence_audit_ready_events: 21.
+  conditional_verification_hook_audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND.
   conditional_verification_hook_audit_scoreable_candidate_calls: 24.
-  conditional_verification_hook_audit_ready_events: 0.
+  conditional_verification_hook_audit_ready_events: 21.
+  conditional_local_accept_calibration_verdict: CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY.
+  conditional_local_accept_calibration_hook_ready_rows: 21.
+  conditional_local_accept_calibration_label_true_rows: 6.
+  conditional_local_accept_calibration_label_false_rows: 15.
+  conditional_local_accept_calibration_safe_policy_found: false.
+  conditional_local_accept_calibration_best_safe_true_accepts: 0.
   verification_hook_audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS.
   verification_hook_audit_report: target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json.
   verification_hook_audit_operator_candidate_calls: 23.
@@ -204,7 +222,10 @@ current smoke:
   feedback_loop_exact_cache_hits: 54.
   feedback_loop_operator_candidate_calls: 285.
   feedback_loop_scoreable_candidate_calls: 47.
-  feedback_loop_verification_hook_ready_events: 17.
+  feedback_loop_verification_hook_ready_events: 38.
+  feedback_loop_edit_stage: local_accept_calibration_failed.
+  feedback_loop_conditional_stage: local_accept_calibration_failed.
+  feedback_loop_mixed_stage: payload_builder_missing.
   feedback_loop_verified_cpu_routability_milli: 0.
   feedback_loop_routing_gap_to_80_calls: 515.
   feedback_loop_verified_gap_to_80_calls: 800.

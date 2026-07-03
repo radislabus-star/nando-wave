@@ -304,10 +304,22 @@ pub(crate) fn print_help() {
         "            Attach response fingerprints and deterministic edit verification to scoreable real Codex edit rows"
     );
     println!(
+        "  role-binding-real-traffic-conditional-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach response fingerprints and deterministic conditional verification to scoreable real Codex conditional rows"
+    );
+    println!(
         "  role-binding-real-traffic-edit-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
     );
     println!(
         "            Compare safe/unsafe readout policies on evidence-backed real Codex edit rows"
+    );
+    println!(
+        "  role-binding-real-traffic-conditional-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Compare safe/unsafe readout policies on evidence-backed real Codex conditional rows"
     );
     println!(
         "  role-binding-real-traffic-edit-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
