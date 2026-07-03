@@ -59,6 +59,12 @@ const DEFAULT_EDIT_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_SHADOW_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json";
+const DEFAULT_CONDITIONAL_PAYLOAD_READINESS_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-payload-readiness-v1.report.json";
+const DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.report.json";
 const DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl";
 const DEFAULT_EDIT_OUTPUT_EVIDENCE_REPORT: &str =
@@ -90,6 +96,16 @@ const REAL_TRAFFIC_EDIT_OPERATOR_PAIR_SHIFT: u32 = 5;
 const REAL_TRAFFIC_EDIT_TOP_ROLE_L1_LANES: usize = 32;
 const REAL_TRAFFIC_EDIT_STATE_DELTA_LANES_PER_SIDE: usize = 24;
 const REAL_TRAFFIC_EDIT_END_TOKEN: &str = "__EDIT_END__";
+const REAL_TRAFFIC_CONDITIONAL_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_CONDITIONAL_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_CONDITIONAL_OPERATOR_PAIR_BASE: u32 = 35 << 12;
+const REAL_TRAFFIC_CONDITIONAL_CONDITION_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_CONDITIONAL_EVIDENCE_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_CONDITIONAL_ALLOWED_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_CONDITIONAL_REFUSED_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_CONDITIONAL_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_CONDITIONAL_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_CONDITIONAL_STATE_DELTA_LANES_PER_SIDE: usize = 24;
 
 pub(crate) fn run_role_binding_profile_registry_from_release_v1<I>(
     mut args: I,
@@ -3600,6 +3616,388 @@ where
     Err("edit payload dry-run is review-only; run shadow analysis before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_conditional_payload_readiness_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_READINESS_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut rows = Vec::new();
+    let mut candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut missing_condition_signal = 0usize;
+    let mut missing_branch_signal = 0usize;
+    let mut missing_evidence_signal = 0usize;
+    let mut missing_branch_tokens = 0usize;
+    let mut route_counts = BTreeMap::<String, usize>::new();
+    let mut builder_kind_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let Some(candidate) = route_catalog.classify_request_text(&row.text) else {
+            continue;
+        };
+        if !candidate.route_key.contains("conditional_branch") {
+            continue;
+        }
+        candidate_events += 1;
+        *route_counts.entry(candidate.route_key.clone()).or_insert(0) += 1;
+        let readiness = analyze_conditional_payload_readiness(&row.text);
+        payload_ready_events += usize::from(readiness.payload_ready);
+        missing_condition_signal += usize::from(!readiness.has_condition_signal);
+        missing_branch_signal += usize::from(!readiness.has_branch_signal);
+        missing_evidence_signal += usize::from(!readiness.has_evidence_signal);
+        missing_branch_tokens += usize::from(!readiness.has_branch_tokens);
+        *builder_kind_counts
+            .entry(readiness.recommended_builder_kind.clone())
+            .or_insert(0) += 1;
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        rows.push(RoleBindingConditionalPayloadReadinessRow {
+            event_id: format!(
+                "codex_history_conditional_readiness::{}::{}::{}",
+                row.session_id, row.ts, index
+            ),
+            request_fingerprint: format!("fnv1a64:{fingerprint:016x}"),
+            route_key: candidate.route_key,
+            profile_id: candidate.profile_id,
+            has_condition_signal: readiness.has_condition_signal,
+            has_branch_signal: readiness.has_branch_signal,
+            has_evidence_signal: readiness.has_evidence_signal,
+            has_branch_tokens: readiness.has_branch_tokens,
+            payload_ready: readiness.payload_ready,
+            recommended_builder_kind: readiness.recommended_builder_kind,
+            missing_reasons: readiness.missing_reasons,
+        });
+    }
+
+    let report = RoleBindingConditionalPayloadReadinessReport {
+        schema_version: "nando_role_binding_conditional_payload_readiness_v1".to_owned(),
+        verdict: if payload_ready_events > 0 {
+            "CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND"
+        } else {
+            "CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_NO_READY_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        candidate_events,
+        payload_ready_events,
+        payload_ready_rate_milli: ratio_milli(payload_ready_events, candidate_events),
+        missing_condition_signal,
+        missing_branch_signal,
+        missing_evidence_signal,
+        missing_branch_tokens,
+        route_counts: route_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        builder_kind_counts: builder_kind_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows,
+        claim_boundary: "Request-side conditional payload readiness only. It reads local Codex prompt text at analysis time, writes no raw text, and does not use response, target, proof, or expected answer labels. Payload-ready means there are enough request-side branch/evidence signals to attempt a dry-run active_fringe/slot builder; it is not verified savings.".to_owned(),
+        next_engineering_debt: "Use ready rows to build conditional_branch_payload_builder_v1 that emits active_fringe and slots from request text only, then run shadow and verification-hook audits before any local accept.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-conditional-payload-readiness-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  candidate_events: {}", report.candidate_events);
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!(
+        "  payload_ready_rate_milli: {}",
+        report.payload_ready_rate_milli
+    );
+    println!("  raw_text_written: {}", report.raw_text_written);
+    Err("conditional payload readiness is review-only; it is not verified savings".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_conditional_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut conditional_route_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_conditional_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "no conditional_branch route candidate".to_owned();
+
+        if let Some(candidate) = route_catalog.classify_request_text(&row.text)
+            && candidate.route_key.contains("conditional_branch")
+        {
+            conditional_route_candidate_events += 1;
+            let readiness = analyze_conditional_payload_readiness(&row.text);
+            if readiness.payload_ready {
+                payload_ready_events += 1;
+                let built = build_conditional_branch_dry_run_request(
+                    &event_id,
+                    &fingerprint,
+                    &candidate,
+                    &row.text,
+                );
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable {
+                            "scoreable_payload_built"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingConditionalPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: candidate.route_key.clone(),
+                            profile_id: candidate.profile_id.clone(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side dry-run conditional payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingConditionalPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: candidate.route_key.clone(),
+                            profile_id: candidate.profile_id.clone(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "readiness_rejected".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = format!(
+                    "conditional route candidate rejected by readiness gate: {}",
+                    readiness.missing_reasons.join(",")
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_local_conditional_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side conditional payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let report = RoleBindingConditionalPayloadDryRunReport {
+        schema_version: "nando_role_binding_conditional_payload_dry_run_v1".to_owned(),
+        verdict: if scoreable_payload_events > 0 {
+            "CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT"
+        } else {
+            "CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        conditional_route_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run conditional payload builder only. It emits active_fringe/slots for ready conditional-route rows from prompt text only, sets verified_safe_accept=None and expect_local_operator=false, and therefore cannot prove savings. Any local accept in the following shadow run is unverified and must not become a market claim.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook audit on this trace. If local accepts stay zero, either improve conditional branch extraction or attach deterministic response/tool verification before calibration.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-conditional-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  conditional_route_candidate_events: {}",
+        report.conditional_route_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  raw_text_written: {}", report.raw_text_written);
+    Err("conditional payload dry-run is review-only; run shadow analysis before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_edit_output_evidence_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -4270,6 +4668,14 @@ where
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
         read_json_file::<RoleBindingEditPayloadDryRunReport>(&edit_dry_run_report_path)?;
+    let conditional_dry_run_report_path = PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_REPORT);
+    let conditional_dry_run = if conditional_dry_run_report_path.exists() {
+        Some(read_json_file::<RoleBindingConditionalPayloadDryRunReport>(
+            &conditional_dry_run_report_path,
+        )?)
+    } else {
+        None
+    };
     let verification_audit =
         read_json_file::<RoleBindingVerificationHookAuditReport>(&verification_audit_report_path)?;
     let verification_by_route = verification_audit
@@ -4292,18 +4698,38 @@ where
     for route in &forecast.routes {
         let verification = verification_by_route.get(route.route_key.as_str()).copied();
         let is_edit_route = route.route_key.contains("edit_marker_length");
+        let is_conditional_route = route.route_key.contains("conditional_branch");
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
+        } else if is_conditional_route {
+            conditional_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else {
             0
         };
         let payload_built_events = if is_edit_route {
             edit_dry_run.payload_built_events
+        } else if is_conditional_route {
+            conditional_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else {
             0
         };
         let scoreable_payload_events = verification
             .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                if is_conditional_route {
+                    conditional_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else {
+                    None
+                }
+            })
             .unwrap_or_default();
         let verification_hook_ready_events = verification
             .map(|row| row.verification_hook_ready_events)
@@ -4349,20 +4775,27 @@ where
         });
     }
 
+    let scoreable_candidate_calls = route_rows
+        .iter()
+        .map(|row| row.scoreable_payload_events)
+        .sum();
     let report = RoleBindingFeedbackLoopReport {
         schema_version: "nando_role_binding_real_traffic_feedback_loop_v1".to_owned(),
         verdict: "CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW".to_owned(),
         forecast_report_path: forecast_report_path.display().to_string(),
         edit_dry_run_report_path: edit_dry_run_report_path.display().to_string(),
+        conditional_dry_run_report_path: conditional_dry_run
+            .as_ref()
+            .map(|_| conditional_dry_run_report_path.display().to_string()),
         verification_audit_report_path: verification_audit_report_path.display().to_string(),
         total_llm_calls: forecast.total_llm_calls,
         exact_cache_hits: forecast.exact_cache_hits,
         exact_cache_coverage_milli: forecast.exact_cache_coverage_milli,
         operator_candidate_calls: forecast.operator_candidate_calls,
         operator_candidate_coverage_milli: forecast.operator_candidate_coverage_milli,
-        scoreable_candidate_calls: verification_audit.scoreable_candidate_calls,
+        scoreable_candidate_calls,
         scoreable_candidate_coverage_milli: ratio_milli(
-            verification_audit.scoreable_candidate_calls,
+            scoreable_candidate_calls,
             forecast.total_llm_calls,
         ),
         verification_hook_ready_events: verification_audit.verification_hook_ready_events,
@@ -4383,7 +4816,7 @@ where
         market_claim_allowed: false,
         routes: route_rows,
         claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
-        next_engineering_debt: "Increase real route coverage beyond 285/1000, attach output verification hooks to scoreable edit payloads, then build conditional and mixed payload builders.".to_owned(),
+        next_engineering_debt: "Increase real route coverage beyond 285/1000, attach output/tool verification hooks to scoreable edit and conditional payloads, then build the mixed route payload builder.".to_owned(),
     };
     write_json_file(&feedback_report_path, &report)?;
     println!(
@@ -4395,6 +4828,9 @@ where
         "  edit_dry_run_report: {}",
         edit_dry_run_report_path.display()
     );
+    if let Some(path) = &report.conditional_dry_run_report_path {
+        println!("  conditional_dry_run_report: {path}");
+    }
     println!(
         "  verification_audit_report: {}",
         verification_audit_report_path.display()
@@ -6307,6 +6743,97 @@ struct RoleBindingEditPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalPayloadReadinessReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    missing_condition_signal: usize,
+    missing_branch_signal: usize,
+    missing_evidence_signal: usize,
+    missing_branch_tokens: usize,
+    route_counts: Vec<RoleBindingNamedCount>,
+    builder_kind_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingConditionalPayloadReadinessRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalPayloadReadinessRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    has_condition_signal: bool,
+    has_branch_signal: bool,
+    has_evidence_signal: bool,
+    has_branch_tokens: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    conditional_route_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingConditionalPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalPayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditOutputEvidenceReport {
     schema_version: String,
     verdict: String,
@@ -6585,6 +7112,7 @@ struct RoleBindingFeedbackLoopReport {
     verdict: String,
     forecast_report_path: String,
     edit_dry_run_report_path: String,
+    conditional_dry_run_report_path: Option<String>,
     verification_audit_report_path: String,
     total_llm_calls: usize,
     exact_cache_hits: usize,
@@ -6645,6 +7173,25 @@ struct EditPayloadReadiness {
     payload_ready: bool,
     recommended_builder_kind: String,
     missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ConditionalPayloadReadiness {
+    has_condition_signal: bool,
+    has_branch_signal: bool,
+    has_evidence_signal: bool,
+    has_branch_tokens: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct ConditionalBranchTokens {
+    condition_token: String,
+    evidence_token: String,
+    allowed_token: String,
+    refused_token: String,
 }
 
 #[derive(Clone, Debug)]
@@ -8886,6 +9433,102 @@ fn analyze_edit_payload_readiness(text: &str) -> EditPayloadReadiness {
     }
 }
 
+fn analyze_conditional_payload_readiness(text: &str) -> ConditionalPayloadReadiness {
+    let lower = text.to_lowercase();
+    let has_condition_signal = contains_any(
+        &lower,
+        &[
+            "если",
+            "when",
+            "if ",
+            "if/then",
+            "услов",
+            "condition",
+            "branch",
+            "gate",
+            "проверь",
+            "провер",
+            "verify",
+        ],
+    );
+    let has_branch_signal = contains_any(
+        &lower,
+        &[
+            "pass",
+            "fail",
+            "accept",
+            "reject",
+            "allow",
+            "refuse",
+            "fallback",
+            "true",
+            "false",
+            "yes",
+            "no",
+            "иначе",
+            "то ",
+            "принять",
+            "отклон",
+            "запрет",
+            "разреш",
+        ],
+    );
+    let has_evidence_signal = contains_any(
+        &lower,
+        &[
+            "evidence",
+            "доказ",
+            "метрик",
+            "report",
+            "verdict",
+            "result",
+            "результат",
+            "false_accept",
+            "margin",
+            "latency",
+            "p99",
+            "trace",
+            "hook",
+            "audit",
+        ],
+    ) || contains_marker_like_signal(text)
+        || contains_file_like_token(text);
+    let has_branch_tokens = extract_conditional_branch_tokens(text).is_some();
+    let payload_ready =
+        has_condition_signal && has_branch_signal && has_evidence_signal && has_branch_tokens;
+    let mut missing_reasons = Vec::new();
+    if !has_condition_signal {
+        missing_reasons.push("missing_condition_signal".to_owned());
+    }
+    if !has_branch_signal {
+        missing_reasons.push("missing_branch_signal".to_owned());
+    }
+    if !has_evidence_signal {
+        missing_reasons.push("missing_evidence_signal".to_owned());
+    }
+    if !has_branch_tokens {
+        missing_reasons.push("missing_branch_tokens".to_owned());
+    }
+    let recommended_builder_kind = if payload_ready {
+        "conditional_branch_payload_builder_v1_candidate".to_owned()
+    } else if has_condition_signal && has_branch_signal {
+        "conditional_branch_needs_evidence_or_branch_tokens".to_owned()
+    } else if has_condition_signal {
+        "conditional_router_needs_branch_and_evidence".to_owned()
+    } else {
+        "not_conditional_payload_ready".to_owned()
+    };
+    ConditionalPayloadReadiness {
+        has_condition_signal,
+        has_branch_signal,
+        has_evidence_signal,
+        has_branch_tokens,
+        payload_ready,
+        recommended_builder_kind,
+        missing_reasons,
+    }
+}
+
 fn contains_marker_like_signal(text: &str) -> bool {
     text.contains('`')
         || text.contains('"')
@@ -8910,6 +9553,218 @@ fn contains_file_like_token(text: &str) -> bool {
             ],
         ) || token.contains('/')
     })
+}
+
+fn build_conditional_branch_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    candidate: &CodexHistoryRouteCandidate,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let branch = extract_conditional_branch_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(conditional_request_operator_centers());
+    active_fringe.extend(conditional_role_surface_centers(
+        REAL_TRAFFIC_CONDITIONAL_CONDITION_ROLE_SLOT,
+        &branch.condition_token,
+    ));
+    active_fringe.extend(conditional_role_surface_centers(
+        REAL_TRAFFIC_CONDITIONAL_EVIDENCE_ROLE_SLOT,
+        &branch.evidence_token,
+    ));
+    active_fringe.extend(conditional_role_surface_centers(
+        REAL_TRAFFIC_CONDITIONAL_ALLOWED_ROLE_SLOT,
+        &branch.allowed_token,
+    ));
+    active_fringe.extend(conditional_role_surface_centers(
+        REAL_TRAFFIC_CONDITIONAL_REFUSED_ROLE_SLOT,
+        &branch.refused_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+    let mut slots = Vec::new();
+    if let Some(slot) =
+        conditional_request_score_slot(0, &branch.allowed_token, &branch.refused_token)
+    {
+        slots.push(slot);
+    }
+    if let Some(slot) =
+        conditional_request_score_slot(1, &branch.condition_token, &branch.refused_token)
+    {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(candidate.route_key.clone()),
+        profile_id: Some(candidate.profile_id.clone()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: response verification has not proven a safe local operator.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn conditional_request_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_CONDITIONAL_ALLOWED_ROLE_SLOT),
+        (1, REAL_TRAFFIC_CONDITIONAL_CONDITION_ROLE_SLOT),
+        (0, REAL_TRAFFIC_CONDITIONAL_EVIDENCE_ROLE_SLOT),
+        (1, REAL_TRAFFIC_CONDITIONAL_REFUSED_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_CONDITIONAL_OPERATOR_PAIR_BASE
+                + conditional_request_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn conditional_request_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_CONDITIONAL_OPERATOR_PAIR_SHIFT) | u32::from(role_slot)
+}
+
+fn conditional_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_CONDITIONAL_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_CONDITIONAL_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_CONDITIONAL_PAGE_SIZE,
+        REAL_TRAFFIC_CONDITIONAL_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn conditional_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_CONDITIONAL_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_CONDITIONAL_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_conditional_branch_tokens(text: &str) -> Option<ConditionalBranchTokens> {
+    let tokens = extract_request_side_edit_tokens(text, 12);
+    if tokens.len() < 2 {
+        return None;
+    }
+    let condition_token = quoted_or_marked_chunks(text)
+        .into_iter()
+        .find_map(|chunk| {
+            extract_request_side_edit_tokens(&chunk, 1)
+                .into_iter()
+                .next()
+        })
+        .or_else(|| tokens.first().cloned())?;
+    let lower = text.to_lowercase();
+    let allowed_token = first_matching_branch_token(
+        &lower,
+        &[
+            "pass",
+            "accept",
+            "allow",
+            "true",
+            "yes",
+            "green",
+            "ok",
+            "принять",
+            "разреш",
+            "да",
+        ],
+    )
+    .unwrap_or_else(|| condition_token.clone());
+    let refused_token = first_matching_branch_token(
+        &lower,
+        &[
+            "fallback",
+            "fail",
+            "reject",
+            "refuse",
+            "false",
+            "no",
+            "red",
+            "block",
+            "отклон",
+            "запрет",
+            "нет",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| token.as_str() != allowed_token)
+            .cloned()
+    })?;
+    let evidence_token = tokens
+        .iter()
+        .find(|token| {
+            let token_lower = token.to_lowercase();
+            contains_any(
+                &token_lower,
+                &[
+                    "report",
+                    "trace",
+                    "gate",
+                    "audit",
+                    "p99",
+                    "margin",
+                    "false_accept",
+                    "verdict",
+                ],
+            ) || token.contains('/')
+                || token.contains('.')
+        })
+        .cloned()
+        .unwrap_or_else(|| condition_token.clone());
+    if allowed_token == refused_token {
+        return None;
+    }
+    Some(ConditionalBranchTokens {
+        condition_token,
+        evidence_token,
+        allowed_token,
+        refused_token,
+    })
+}
+
+fn first_matching_branch_token(text: &str, candidates: &[&str]) -> Option<String> {
+    candidates
+        .iter()
+        .find(|candidate| text.contains(**candidate))
+        .map(|candidate| (*candidate).to_owned())
 }
 
 fn build_edit_marker_length_dry_run_request(

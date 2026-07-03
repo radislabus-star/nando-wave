@@ -286,6 +286,18 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run edit payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-conditional-payload-readiness-v1 [history-jsonl] [registry-config-json] [readiness-report-json] [max-events]"
+    );
+    println!(
+        "            Count real conditional route rows with enough request-side branch/evidence structure for payload dry-run"
+    );
+    println!(
+        "  role-binding-real-traffic-conditional-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run conditional payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
         "  role-binding-real-traffic-edit-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(

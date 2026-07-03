@@ -1,5 +1,112 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Conditional Payload Dry-Run
+
+Verdicts:
+
+```text
+CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
+CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-conditional-payload-readiness-v1
+  role-binding-real-traffic-conditional-payload-dry-run-v1
+
+The dry-run command writes:
+  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.report.json
+
+Shadow/audit reports:
+  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.shadow-report.json
+  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.verification-hook-audit.report.json
+```
+
+Privacy / anti-leak boundary:
+
+```text
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Conditional readiness over the same 1000 real Codex calls:
+
+```text
+candidate_events: 92
+payload_ready_events: 24
+payload_ready_rate_milli: 260
+missing_condition_signal: 5
+missing_branch_signal: 35
+missing_evidence_signal: 58
+missing_branch_tokens: 2
+```
+
+Conditional dry-run result:
+
+```text
+conditional_route_candidate_events: 92
+payload_ready_events: 24
+payload_built_events: 24
+scoreable_payload_events: 24
+active_fringe_centers_total: 2287
+slots_total: 36
+positive_impulses_total: 709
+negative_impulses_total: 752
+```
+
+Shadow + audit:
+
+```text
+shadow_operator_candidate_calls: 24
+shadow_nando_accepts: 0
+shadow_verified_safe_accepts: 0
+shadow_false_accepts: 0
+shadow_incremental_reduction_vs_exact_cache_milli: 0
+shadow_p99_score_latency_ns: 153389
+
+audit_scoreable_candidate_calls: 24
+audit_verification_hook_ready_events: 0
+audit_verified_cpu_accept_eligible_events: 0
+audit_market_claim_allowed: false
+```
+
+Updated feedback-loop stage:
+
+```text
+role_binding_conditional_branch_seed0:
+  candidate_events: 92
+  payload_ready_events: 24
+  payload_built_events: 24
+  scoreable_payload_events: 24
+  stage: scoreable_payload_missing_verification_hook
+  next_action: Attach response/tool-call evidence and deterministic output verification.
+
+Total scoreable_candidate_calls in feedback loop:
+  47 = 23 edit + 24 conditional
+```
+
+Diagnostic read:
+
+```text
+The conditional route is no longer payload_builder_missing. It now has a
+request-side active_fringe/slot dry-run for 24 real prompt-side rows. This is
+real funnel progress, not verified savings.
+
+The next blocker is output/tool evidence and deterministic verification for
+conditional rows. Local accepts remain disabled and verified CPU accepts remain
+0, so CPU Routability 80 is still red.
+```
+
 ## 2026-07-03 - Executor Integration: Edit Admission Calibration
 
 Verdict:

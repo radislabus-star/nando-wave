@@ -24,6 +24,8 @@ New commands:
   role-binding-real-traffic-cpu-route-forecast-v1
   role-binding-real-traffic-edit-payload-readiness-v1
   role-binding-real-traffic-edit-payload-dry-run-v1
+  role-binding-real-traffic-conditional-payload-readiness-v1
+  role-binding-real-traffic-conditional-payload-dry-run-v1
   role-binding-real-traffic-edit-output-evidence-v1
   role-binding-real-traffic-edit-local-accept-calibration-v1
   role-binding-real-traffic-edit-admission-calibration-v1
@@ -500,6 +502,84 @@ support of one is not a product proof and must not enable local accepts. The
 edit route remains diagnostic-only until richer payload/admission features or
 more real evidence separate verifier-true rows from verifier-false rows.
 
+Conditional payload readiness over the same real Codex window:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-conditional-payload-readiness-v1 /home/ubu/.codex/history.jsonl target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/conditional-payload-readiness-v1.report.json 1000
+result:
+  verdict: CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
+  candidate_events: 92
+  payload_ready_events: 24
+  payload_ready_rate_milli: 260
+  missing_condition_signal: 5
+  missing_branch_signal: 35
+  missing_evidence_signal: 58
+  missing_branch_tokens: 2
+  raw_text_written: false
+  market_claim_allowed: false
+```
+
+Conditional payload dry-run builder:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-conditional-payload-dry-run-v1 /home/ubu/.codex/history.jsonl target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.report.json 1000
+result:
+  verdict: CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+  conditional_route_candidate_events: 92
+  payload_ready_events: 24
+  payload_built_events: 24
+  scoreable_payload_events: 24
+  active_fringe_centers_total: 2287
+  slots_total: 36
+  positive_impulses_total: 709
+  negative_impulses_total: 752
+  raw_text_written: false
+  response_text_used: false
+  target_labels_used: false
+  proof_labels_used: false
+  local_accepts_enabled: false
+  market_claim_allowed: false
+```
+
+Conditional dry-run shadow analyzer:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.shadow-report.json
+result:
+  verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
+  total_requests: 1000
+  total_llm_calls: 1000
+  exact_cache_hits: 53
+  operator_candidate_calls: 24
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  p99_shadow_score_latency_ns: 153389
+  synthetic_trace_used: false
+```
+
+Conditional verification hook audit:
+
+```text
+command: cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.shadow-report.json target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.verification-hook-audit.report.json
+result:
+  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+  operator_candidate_calls: 24
+  scoreable_candidate_calls: 24
+  verification_hook_ready_events: 0
+  verified_cpu_accept_eligible_events: 0
+  shadow_accepts: 0
+  shadow_false_accepts: 0
+  market_claim_allowed: false
+```
+
+Updated interpretation: `role_binding_conditional_branch_seed0` is no longer a
+pure `payload_builder_missing` route. It now has 24 request-side scoreable
+payloads from real Codex prompt traffic. The remaining blocker is the
+output/tool-call evidence and deterministic verification hook. There are still
+zero verified CPU accepts and zero market savings.
+
 CPU route feedback-loop report:
 
 ```text
@@ -511,8 +591,8 @@ result:
   exact_cache_coverage_milli: 54
   operator_candidate_calls: 285
   operator_candidate_coverage_milli: 285
-  scoreable_candidate_calls: 23
-  scoreable_candidate_coverage_milli: 23
+  scoreable_candidate_calls: 47
+  scoreable_candidate_coverage_milli: 47
   verification_hook_ready_events: 17
   verified_cpu_accept_eligible_events: 0
   verified_cpu_routability_milli: 0
@@ -535,8 +615,11 @@ role_binding_edit_marker_length_seed0:
 
 role_binding_conditional_branch_seed0:
   candidate_events: 92
-  stage: payload_builder_missing
-  next_action: Build the request-side payload builder for this route family.
+  payload_ready_events: 24
+  payload_built_events: 24
+  scoreable_payload_events: 24
+  stage: scoreable_payload_missing_verification_hook
+  next_action: Attach response/tool-call evidence and deterministic output verification.
 
 role_binding_mixed_map_seed0:
   candidate_events: 39
