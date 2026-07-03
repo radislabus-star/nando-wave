@@ -418,6 +418,9 @@ pub(crate) fn print_help() {
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
+        "            Auto-loads conditional / agent-control / mixed route reports from default artifact paths when present"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(

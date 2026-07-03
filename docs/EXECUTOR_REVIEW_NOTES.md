@@ -1,5 +1,105 @@
 # Executor Review Notes
 
+## 2026-07-03 - Executor Integration: Feedback Loop CLI Audit
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CLI_INTEGRATION_AUDIT_PASS
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The feedback-loop command was already implemented and wired:
+  feedback_route_stage(...)
+  feedback_route_next_action(...)
+  run_role_binding_real_traffic_feedback_loop_v1(...)
+  main.rs dispatch
+  help.rs command listing
+
+The stale CLI usage text made this look incomplete because it showed only the
+base 4 reports. The usage/help now states that conditional, agent-control, and
+mixed route reports are auto-loaded from default artifact paths when present.
+```
+
+Current feedback-loop artifact:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json
+
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 408
+scoreable_candidate_calls: 82
+verification_hook_ready_events: 65
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli: 8
+verified_gap_to_80_calls: 792
+false_accepts: 0
+```
+
+Route ladder:
+
+```text
+conditional:
+  candidates: 150
+  scoreable: 55
+  hook_ready: 40
+  verified_cpu: 2
+
+agent_control:
+  candidates: 143
+  scoreable: 3
+  hook_ready: 3
+  verified_cpu: 3
+
+edit:
+  candidates: 78
+  scoreable: 10
+  hook_ready: 9
+  verified_cpu: 1
+
+mixed:
+  candidates: 37
+  scoreable: 14
+  hook_ready: 13
+  verified_cpu: 2
+```
+
+Claim boundary:
+
+```text
+No new accepts were created by this audit. CPU Routability 80 remains open:
+8/1000 verified CPU accepts, 792 verified accepts short of the target.
+The next real engineering work is still route expansion / verifier evidence,
+not threshold relaxation.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: feedback-loop-cli-audit-v1
+packet:
+  docs/structural_gates/feedback-loop-cli-audit-v1.md
+
+Scope:
+  The packet checks that the feedback-loop CLI command is wired, route-specific
+  reports are auto-loaded from default artifact paths, and CPU Routability 80 is
+  still not achieved.
+
+  NANDA VETOs the current packet because exact numeric candidate triads remain
+  weak under composite-mode support. Treat this as proof-shape debt, not as a
+  runtime safety failure and not as a structural PASS.
+```
+
 ## 2026-07-03 - Executor Integration: Mixed Evidence Index Hardening
 
 Verdict:
