@@ -1,5 +1,168 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Planning Next-Step Artifact Progress V1
+
+Verdict:
+
+```text
+PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_V1_REVIEW_TOOL_BACKED_TRUE_LABELS_FOUND
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+What changed:
+
+```text
+Added:
+  role-binding-real-traffic-planning-next-step-artifact-progress-v1
+
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+The command scans local Codex rollout JSONL for planning_next_step turns and
+attaches tool-call fingerprints when the same turn contains successful
+project-progress tools. It writes no raw prompt, raw response, or raw tool
+output. It does not use target labels or proof labels.
+
+True-label rule:
+  verified_safe_accept=true is allowed only when the planning prompt is
+  request-side ready, the turn has successful nando-wave project-progress tool
+  evidence, and the final answer does not report failure.
+
+  Current progress kinds:
+    progress_apply_patch_nando_wave
+    progress_git_commit
+    progress_real_traffic_report_generation
+    progress_structural_gate_artifact
+    progress_generated_target_artifact
+
+  Validation-only tools such as cargo check, cargo clippy, cargo fmt, and
+  git diff --check are recorded as evidence, but do not by themselves become a
+  true label.
+```
+
+Artifacts:
+
+```text
+input_trace:
+  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl
+
+artifact_progress_trace:
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.trace.jsonl
+
+artifact_progress_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json
+
+shadow_report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json
+
+total_trace_rows: 1000
+operator_candidate_calls: 14
+scoreable_candidate_calls: 14
+session_ids_requested: 4
+session_files_scanned: 4
+codex_turns_indexed: 7
+tool_events_indexed: 1
+artifact_evidence_matched_events: 7
+no_session_artifact_match_events: 7
+verifier_not_applicable_events: 0
+verified_true_events: 1
+verified_false_events: 6
+tool_call_fingerprint_events: 1
+raw_prompt_text_written: false
+raw_response_text_written: false
+tool_outputs_written: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow / audit:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 53
+operator_candidate_calls: 14
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+unverified_shadow_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 217288
+synthetic_trace_used: false
+
+verification_hook_ready_events: 7
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 7
+candidates_missing_explicit_verification: 7
+candidates_missing_provider_cost: 14
+shadow_accepts: 0
+shadow_false_accepts: 0
+```
+
+Interpretation:
+
+```text
+This is the first planning_next_step rung with a tool-backed true verification
+label on real Codex traffic. It proves the verifier can distinguish a plain
+final-answer claim from project-state progress evidence.
+
+It is still not CPU savings: the planning profile threshold remains disabled,
+shadow accepts are zero, provider cost is absent, and seven scoreable planning
+rows still lack matching output/artifact evidence.
+
+Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
+792 calls.
+```
+
+Claim boundary:
+
+```text
+Tool-backed true labels are calibration fuel, not product savings. A planning
+row can count as verified CPU only after a calibrated safe policy enables a
+local shadow accept, provider cost is attached, the trace is non-synthetic,
+false_accepts=0, unverified accepts=0, and verification-hook audit reports
+verified_cpu_accept_eligible_events > 0.
+```
+
+Next debt:
+
+```text
+planning_next_step_safe_policy_calibration_v1:
+  use the artifact-progress trace to search thresholds/admission policy. Do not
+  promote if false labels would be accepted, if provider cost is missing for
+  market savings, or if the disabled threshold still masks runtime behavior.
+
+missing-output-evidence gap:
+  7 of 14 planning rows still lack matching Codex output/artifact evidence.
+  Keep them false/unverified until session matching or trace capture improves.
+```
+
+Structural gate:
+
+```text
+nanda_structural_gate: VETO
+task_id: planning-next-step-artifact-progress-v1
+packet:
+  docs/structural_gates/planning-next-step-artifact-progress-v1.md
+report:
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.nanda.json
+
+Scope:
+  The packet checks that a tool-backed planning true label is not promoted into
+  CPU local accept or market savings.
+
+  NANDA reports no conflicts, but keeps VETO because candidate route coherence
+  / composite support is weak. Treat this as proof-shape debt. It is not a
+  runtime failure and not a structural PASS.
+```
+
 ## 2026-07-04 - Executor Integration: Planning Next-Step Output Evidence V1
 
 Verdict:

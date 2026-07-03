@@ -304,6 +304,12 @@ pub(crate) fn print_help() {
         "            Attach Codex final-answer fingerprints plus conservative planning verifier results; true accepts require artifact-progress verification"
     );
     println!(
+        "  role-binding-real-traffic-planning-next-step-artifact-progress-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [artifact-report-json]"
+    );
+    println!(
+        "            Attach tool-call fingerprints for planning progress; true labels require successful project artifact progress"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-profile-v1 [base-registry-json] [agent-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

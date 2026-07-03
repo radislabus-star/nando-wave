@@ -73,6 +73,10 @@ const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.report.json";
+const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.trace.jsonl";
+const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT: &str = "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
@@ -4320,6 +4324,164 @@ where
     println!("  verified_false_events: {}", report.verified_false_events);
     println!("  raw_response_text_written: false");
     Err("planning-next-step output evidence is review-only; artifact verifier required".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_planning_next_step_artifact_progress_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_REPORT));
+
+    let mut trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_PLANNING_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let artifact_index = build_codex_session_planning_artifact_progress_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+    )?;
+
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut artifact_evidence_matched_events = 0usize;
+    let mut no_session_artifact_match_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+    let mut tool_call_fingerprint_events = 0usize;
+
+    for row in &mut trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_PLANNING_PROFILE_ID) {
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = artifact_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_artifact_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "planning artifact-progress evidence missing: no matching Codex turn found",
+            ));
+            continue;
+        };
+        artifact_evidence_matched_events += 1;
+        if row.response_fingerprint.is_none() {
+            row.response_fingerprint = evidence.response_fingerprint.clone();
+        }
+        row.tool_call_fingerprints = evidence.tool_call_fingerprints.clone();
+        tool_call_fingerprint_events += usize::from(!row.tool_call_fingerprints.is_empty());
+        row.verification_source = Some(
+            "codex_session_tool_call_fingerprints_plus_plan_step_artifact_progress_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "planning artifact-progress evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &trace_rows)?;
+    let report = RoleBindingPlanningNextStepArtifactProgressReport {
+        schema_version: "nando_role_binding_planning_next_step_artifact_progress_v1".to_owned(),
+        verdict: if verified_true_events > 0 {
+            "PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_V1_REVIEW_TOOL_BACKED_TRUE_LABELS_FOUND"
+        } else if artifact_evidence_matched_events > 0 {
+            "PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_V1_REVIEW_ARTIFACT_EVIDENCE_ATTACHED"
+        } else {
+            "PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_V1_REVIEW_NO_ARTIFACT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: artifact_index.session_files_scanned,
+        codex_turns_indexed: artifact_index.codex_turns_indexed,
+        tool_events_indexed: artifact_index.tool_events_indexed,
+        artifact_evidence_matched_events,
+        no_session_artifact_match_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        tool_call_fingerprint_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        tool_outputs_written: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Planning artifact-progress verification only. It scans local Codex session tool events, writes tool-call fingerprints instead of raw tool output, and marks true only for successful nando-wave project-progress tools such as apply_patch, commits, generated reports, or structural gates. It does not enable local accepts or prove market savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow/audit over the artifact-progress trace, then calibrate a planning safe policy only if true labels exist, provider cost is attached, and false accepts remain zero.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-planning-next-step-artifact-progress-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  artifact_evidence_matched_events: {}",
+        report.artifact_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!(
+        "  tool_call_fingerprint_events: {}",
+        report.tool_call_fingerprint_events
+    );
+    Err("planning artifact-progress verification is review-only; run shadow/audit".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_cpu_operator_catalog_v1<I>(
@@ -11528,6 +11690,37 @@ struct RoleBindingEditOutputEvidenceReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingPlanningNextStepArtifactProgressReport {
+    schema_version: String,
+    verdict: String,
+    input_trace_path: String,
+    sessions_root: String,
+    output_trace_path: String,
+    total_trace_rows: usize,
+    operator_candidate_calls: usize,
+    scoreable_candidate_calls: usize,
+    session_ids_requested: usize,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    tool_events_indexed: usize,
+    artifact_evidence_matched_events: usize,
+    no_session_artifact_match_events: usize,
+    verifier_not_applicable_events: usize,
+    verified_true_events: usize,
+    verified_false_events: usize,
+    tool_call_fingerprint_events: usize,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    tool_outputs_written: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditLocalAcceptCalibrationReport {
     schema_version: String,
     verdict: String,
@@ -11870,6 +12063,32 @@ struct CodexSessionOutputEvidence {
     verified_safe_accept: bool,
     verifier_applicable: bool,
     verifier_status: String,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionPlanningArtifactProgressIndex {
+    by_request_fingerprint: BTreeMap<String, CodexSessionPlanningArtifactProgressEvidence>,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    tool_events_indexed: usize,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionPlanningArtifactProgressEvidence {
+    response_fingerprint: Option<String>,
+    tool_call_fingerprints: Vec<String>,
+    verified_safe_accept: bool,
+    verifier_applicable: bool,
+    verifier_status: String,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PlanningArtifactTurnEvidence {
+    progress_tool_fingerprints: Vec<String>,
+    successful_progress_kinds: BTreeSet<String>,
+    validation_tool_fingerprints: Vec<String>,
+    successful_validation_kinds: BTreeSet<String>,
+    pending_tool_kinds: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -17429,6 +17648,382 @@ fn build_codex_session_output_evidence_index(
         session_files_scanned: session_files.len(),
         codex_turns_indexed,
     })
+}
+
+fn build_codex_session_planning_artifact_progress_index(
+    sessions_root: &Path,
+    session_ids: &HashSet<String>,
+    wanted_request_fingerprints: &HashSet<String>,
+) -> Result<CodexSessionPlanningArtifactProgressIndex, String> {
+    let mut session_files = Vec::new();
+    collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
+    let mut by_request_fingerprint = BTreeMap::new();
+    let mut codex_turns_indexed = 0usize;
+    let mut tool_events_indexed = 0usize;
+
+    for session_file in &session_files {
+        let text = fs::read_to_string(session_file).map_err(|error| {
+            format!(
+                "failed to read Codex session JSONL {}: {error}",
+                session_file.display()
+            )
+        })?;
+        let mut pending_request_fingerprint: Option<String> = None;
+        let mut pending_prompt_text: Option<String> = None;
+        let mut pending_artifacts = PlanningArtifactTurnEvidence::default();
+
+        for (line_index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(trimmed).map_err(|error| {
+                format!(
+                    "failed to parse Codex session JSONL {} line {}: {error}",
+                    session_file.display(),
+                    line_index + 1
+                )
+            })?;
+            match value.get("type").and_then(serde_json::Value::as_str) {
+                Some("event_msg") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    match payload.get("type").and_then(serde_json::Value::as_str) {
+                        Some("user_message") => {
+                            if let Some(message) =
+                                payload.get("message").and_then(serde_json::Value::as_str)
+                            {
+                                let fingerprint = format!(
+                                    "fnv1a64:{:016x}",
+                                    stable_real_traffic_fingerprint64(message.as_bytes())
+                                );
+                                pending_prompt_text = Some(message.to_owned());
+                                pending_request_fingerprint = Some(fingerprint);
+                                pending_artifacts = PlanningArtifactTurnEvidence::default();
+                            }
+                        }
+                        Some("agent_message")
+                            if payload.get("phase").and_then(serde_json::Value::as_str)
+                                == Some("final_answer") =>
+                        {
+                            let Some(response_text) =
+                                payload.get("message").and_then(serde_json::Value::as_str)
+                            else {
+                                continue;
+                            };
+                            if finalize_planning_artifact_turn(
+                                &mut by_request_fingerprint,
+                                wanted_request_fingerprints,
+                                pending_request_fingerprint.take(),
+                                pending_prompt_text.take(),
+                                Some(response_text),
+                                std::mem::take(&mut pending_artifacts),
+                            ) {
+                                codex_turns_indexed += 1;
+                            }
+                        }
+                        Some("task_complete") => {
+                            let response_text = payload
+                                .get("last_agent_message")
+                                .and_then(serde_json::Value::as_str);
+                            if finalize_planning_artifact_turn(
+                                &mut by_request_fingerprint,
+                                wanted_request_fingerprints,
+                                pending_request_fingerprint.take(),
+                                pending_prompt_text.take(),
+                                response_text,
+                                std::mem::take(&mut pending_artifacts),
+                            ) {
+                                codex_turns_indexed += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Some("response_item") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    if pending_request_fingerprint
+                        .as_ref()
+                        .is_some_and(|fingerprint| {
+                            wanted_request_fingerprints.contains(fingerprint)
+                        })
+                    {
+                        tool_events_indexed += usize::from(track_planning_artifact_tool_event(
+                            payload,
+                            &mut pending_artifacts,
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(CodexSessionPlanningArtifactProgressIndex {
+        by_request_fingerprint,
+        session_files_scanned: session_files.len(),
+        codex_turns_indexed,
+        tool_events_indexed,
+    })
+}
+
+fn finalize_planning_artifact_turn(
+    by_request_fingerprint: &mut BTreeMap<String, CodexSessionPlanningArtifactProgressEvidence>,
+    wanted_request_fingerprints: &HashSet<String>,
+    request_fingerprint: Option<String>,
+    prompt_text: Option<String>,
+    response_text: Option<&str>,
+    artifact_evidence: PlanningArtifactTurnEvidence,
+) -> bool {
+    let Some(request_fingerprint) = request_fingerprint else {
+        return false;
+    };
+    if !wanted_request_fingerprints.contains(&request_fingerprint) {
+        return false;
+    }
+    let Some(prompt_text) = prompt_text else {
+        return false;
+    };
+    let response_fingerprint = response_text.map(|text| {
+        format!(
+            "fnv1a64:{:016x}",
+            stable_real_traffic_fingerprint64(text.as_bytes())
+        )
+    });
+    let (verified_safe_accept, verifier_applicable, verifier_status) =
+        deterministic_planning_artifact_progress_verification(
+            &prompt_text,
+            response_text.unwrap_or(""),
+            &artifact_evidence,
+        );
+    let tool_call_fingerprints = artifact_evidence
+        .progress_tool_fingerprints
+        .into_iter()
+        .chain(artifact_evidence.validation_tool_fingerprints)
+        .collect::<Vec<_>>();
+    by_request_fingerprint.entry(request_fingerprint).or_insert(
+        CodexSessionPlanningArtifactProgressEvidence {
+            response_fingerprint,
+            tool_call_fingerprints,
+            verified_safe_accept,
+            verifier_applicable,
+            verifier_status,
+        },
+    );
+    true
+}
+
+fn track_planning_artifact_tool_event(
+    payload: &serde_json::Value,
+    artifact_evidence: &mut PlanningArtifactTurnEvidence,
+) -> bool {
+    match payload.get("type").and_then(serde_json::Value::as_str) {
+        Some("function_call") | Some("custom_tool_call") => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if call_id.is_empty() {
+                return false;
+            }
+            let name = payload
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let detail = payload
+                .get("arguments")
+                .or_else(|| payload.get("input"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if let Some(kind) = planning_artifact_tool_kind(name, detail) {
+                artifact_evidence
+                    .pending_tool_kinds
+                    .insert(call_id.to_owned(), kind);
+            }
+            false
+        }
+        Some("function_call_output") | Some("custom_tool_call_output") => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let Some(kind) = artifact_evidence.pending_tool_kinds.remove(call_id) else {
+                return false;
+            };
+            let output = payload
+                .get("output")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if !planning_artifact_tool_output_success(output) {
+                return false;
+            }
+            let fingerprint = format!(
+                "toolfnv1a64:{:016x}",
+                stable_real_traffic_fingerprint64(format!("{kind}:{call_id}:{output}").as_bytes())
+            );
+            if kind.starts_with("validation_") {
+                artifact_evidence.successful_validation_kinds.insert(kind);
+                artifact_evidence
+                    .validation_tool_fingerprints
+                    .push(fingerprint);
+            } else {
+                artifact_evidence.successful_progress_kinds.insert(kind);
+                artifact_evidence
+                    .progress_tool_fingerprints
+                    .push(fingerprint);
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+fn planning_artifact_tool_kind(name: &str, detail: &str) -> Option<String> {
+    let name = name.trim();
+    let lower = detail.to_lowercase();
+    let touches_nando_wave = contains_any(
+        &lower,
+        &[
+            "/home/ubu/projects/nando-wave",
+            "projects/nando-wave",
+            "target/nando-wave",
+            "docs/executor_review_notes.md",
+            "docs/structural_gates",
+            "crates/nando-cli",
+            "crates/nando-core",
+        ],
+    );
+
+    if name == "apply_patch" && touches_nando_wave {
+        return Some("progress_apply_patch_nando_wave".to_owned());
+    }
+    if name != "exec_command" {
+        return None;
+    }
+    if !touches_nando_wave && !contains_any(&lower, &["cargo ", "git ", "nanda-gate"]) {
+        return None;
+    }
+    if lower.contains("git commit") {
+        return Some("progress_git_commit".to_owned());
+    }
+    if lower.contains("cargo run -p nando-cli") && lower.contains("role-binding-real-traffic") {
+        return Some("progress_real_traffic_report_generation".to_owned());
+    }
+    if lower.contains("nanda-gate") || lower.contains("nanda-check") {
+        return Some("progress_structural_gate_artifact".to_owned());
+    }
+    if lower.contains("> target/nando-wave") || lower.contains("write_json_file") {
+        return Some("progress_generated_target_artifact".to_owned());
+    }
+    if lower.contains("cargo check") {
+        return Some("validation_cargo_check".to_owned());
+    }
+    if lower.contains("cargo clippy") {
+        return Some("validation_cargo_clippy".to_owned());
+    }
+    if lower.contains("cargo fmt") {
+        return Some("validation_cargo_fmt".to_owned());
+    }
+    if lower.contains("git diff --check") {
+        return Some("validation_git_diff_check".to_owned());
+    }
+    None
+}
+
+fn planning_artifact_tool_output_success(output: &str) -> bool {
+    let lower = output.to_lowercase();
+    contains_any(
+        &lower,
+        &[
+            "process exited with code 0",
+            "exit code: 0",
+            "success. updated",
+            "success. added",
+        ],
+    )
+}
+
+fn deterministic_planning_artifact_progress_verification(
+    prompt_text: &str,
+    response_text: &str,
+    artifact_evidence: &PlanningArtifactTurnEvidence,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_PLANNING_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    if extract_planning_next_step_tokens(prompt_text).is_none() {
+        return (
+            false,
+            false,
+            "not_applicable_missing_planning_tokens".to_owned(),
+        );
+    }
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+    if !artifact_evidence.successful_progress_kinds.is_empty() {
+        return (
+            true,
+            true,
+            format!(
+                "verified_tool_backed_project_progress:{}",
+                artifact_evidence
+                    .successful_progress_kinds
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("+")
+            ),
+        );
+    }
+    if !artifact_evidence.successful_validation_kinds.is_empty() {
+        return (
+            false,
+            true,
+            format!(
+                "rejected_validation_only_without_project_progress:{}",
+                artifact_evidence
+                    .successful_validation_kinds
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("+")
+            ),
+        );
+    }
+    (
+        false,
+        true,
+        "rejected_no_successful_project_progress_tool".to_owned(),
+    )
 }
 
 fn collect_codex_session_jsonl_files(
