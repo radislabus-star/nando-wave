@@ -1,5 +1,69 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Retrieval-Lookup Payload Dry-Run V1
+
+Verdict:
+
+```text
+RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-retrieval-lookup-payload-dry-run-v1
+```
+
+Fresh dry-run:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-payload-dry-run-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-payload-dry-run-v1.trace.jsonl
+
+retrieval_lookup_candidate_events: 25 / 1000
+payload_ready_events:              2
+payload_built_events:              2
+scoreable_payload_events:          2
+active_fringe_centers_total:     246
+slots_total:                       6
+positive_impulses_total:         144
+negative_impulses_total:         144
+profile_registered:            false
+shadow_score_ready:            false
+raw_text_written:              false
+response_text_used:            false
+target_labels_used:            false
+proof_labels_used:             false
+local_accepts_enabled:         false
+market_claim_allowed:          false
+```
+
+Decision:
+
+```text
+retrieval_lookup now has a request-side payload path for its strict-ready
+subset, but it is still profile-missing and verifier-missing. It must not be
+merged with read_inspect and must not affect the 16/1000 CPU scoreboard.
+```
+
+Next engineering debt:
+
+```text
+Compile a disabled-threshold retrieval_lookup .nwrb profile, attach
+source_path_or_url_presence_verifier_v1 from Codex final-answer/tool evidence,
+then run shadow/audit/calibration. Do not local-accept external freshness or
+free-form answer lookup without a concrete source/path/URL verifier.
+```
+
 ## 2026-07-04 - Executor Integration: Project-Context Subfamily Audit V1
 
 Verdict:
