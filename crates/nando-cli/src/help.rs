@@ -316,6 +316,12 @@ pub(crate) fn print_help() {
         "            Measure request-side payload-builder readiness for no-candidate route-gap families without enabling local accepts"
     );
     println!(
+        "  role-binding-real-traffic-manual-route-discovery-v1 [history-jsonl] [route-gap-readiness-report-json] [discovery-report-json]"
+    );
+    println!(
+        "            Split uncatalogued real Codex prompts into privacy-safe next-route subfamilies; review-only"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

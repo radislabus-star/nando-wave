@@ -1,5 +1,152 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Manual Route Discovery V1
+
+Verdict:
+
+```text
+MANUAL_ROUTE_DISCOVERY_V1_REVIEW_SUBFAMILIES_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-manual-route-discovery-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
+
+and writes:
+  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.report.json
+
+The CPU operator catalog now auto-loads that manual discovery report when
+present and carries the top uncatalogued subfamily into the uncatalogued row.
+```
+
+Why:
+
+```text
+After style_brevity was correctly blocked, the top catalog row became:
+
+  route_or_family_key: uncatalogued
+  candidate_events: 13
+  payload_ready_events: 3
+  scoreable_payload_events: 0
+
+That was too vague to guide CPU80 work. We needed a privacy-safe route backlog
+that says which concrete route family should be built next, without enabling
+local accepts or writing raw prompt text.
+```
+
+Discovery run:
+
+```text
+uncatalogued_events: 13
+payload_ready_events: 3
+missing_history_rows: 0
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+
+top_subfamily:
+  resource_pressure_budget
+```
+
+Discovered subfamilies:
+
+```text
+1. resource_pressure_budget
+   events: 3
+   payload_ready: 1
+   builder: resource_pressure_payload_builder_v1
+   verifier: write_rate_or_resource_budget_verifier_v1
+
+2. wave_architecture_layout_decision
+   events: 2
+   payload_ready: 1
+   builder: architecture_layout_delta_payload_builder_v1
+   verifier: typed_layout_budget_and_invariant_verifier_v1
+
+3. business_logistics_route_constraint
+   events: 1
+   payload_ready: 1
+   builder: business_logistics_route_payload_builder_v1
+   verifier: named_party_route_constraint_verifier_v1
+
+Remaining one-off review families:
+  claim_boundary_definition
+  affective_rejection_control
+  implementation_cost_objection
+  project_synthesis_summary
+  research_theory_gap
+  skill_route_split_advice
+```
+
+Catalog after regeneration:
+
+```text
+top row:
+  route_or_family_key: uncatalogued
+  manual_route_discovery_top_subfamily: resource_pressure_budget
+  manual_route_discovery_top_subfamily_events: 3
+  manual_route_discovery_payload_ready_events: 1
+  priority_score: 1065
+
+next_action:
+  Build resource_pressure_payload_builder_v1
+  + write_rate_or_resource_budget_verifier_v1;
+  keep local accepts disabled until false_accepts=0 is proven.
+```
+
+Decision:
+
+```text
+Do not treat uncatalogued as a CPU accept route.
+Do not merge these rows into broad answer_or_explain or project_context_dialogue
+just to inflate routability.
+
+The next concrete route candidate is resource_pressure_budget, because it is
+the top discovered uncatalogued subfamily and has at least one payload-ready
+row.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+CPU Routability 80 remains open:
+
+  current_verified_cpu_accepts: 26
+  verified_gap_to_80_calls: 774
+
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/manual-route-discovery-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 31
+note: narrow claim-boundary check only: manual discovery identifies
+      resource_pressure_budget as the top uncatalogued subfamily, but enables
+      no local accepts and no CPU-savings claim.
+```
+
 ## 2026-07-04 - Executor Integration: Style Brevity Evidence Hook V1
 
 Verdict:

@@ -57,6 +57,8 @@ const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json";
+const DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -4068,6 +4070,190 @@ where
     println!("  raw_text_written: false");
     println!("  local_accepts_enabled: false");
     Err("route-gap payload readiness is review-only; it is not verified savings".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_manual_route_discovery_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let readiness_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT));
+
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let readiness_report =
+        read_json_file::<RoleBindingRouteGapPayloadReadinessReport>(&readiness_report_path)?;
+    let mut accumulators = BTreeMap::<String, ManualRouteDiscoveryAccumulator>::new();
+    let mut rows = Vec::new();
+    let mut uncatalogued_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut missing_history_rows = 0usize;
+
+    for readiness in readiness_report
+        .rows
+        .iter()
+        .filter(|row| row.family_key == "uncatalogued")
+    {
+        uncatalogued_events += 1;
+        payload_ready_events += usize::from(readiness.payload_ready);
+        let Some(history_index) = route_gap_payload_readiness_history_index(&readiness.event_id)
+        else {
+            missing_history_rows += 1;
+            continue;
+        };
+        let Some(history_row) = history_rows.get(history_index) else {
+            missing_history_rows += 1;
+            continue;
+        };
+        let discovery = manual_route_discovery_subfamily(&history_row.text);
+        let features = manual_route_discovery_feature_flags(&history_row.text);
+        let accumulator = accumulators
+            .entry(discovery.subfamily_key.to_owned())
+            .or_insert_with(|| ManualRouteDiscoveryAccumulator {
+                profile_line: discovery.recommended_profile_line.to_owned(),
+                payload_builder: discovery.recommended_payload_builder.to_owned(),
+                verifier: discovery.recommended_verifier.to_owned(),
+                claim_boundary: discovery.claim_boundary.to_owned(),
+                ..ManualRouteDiscoveryAccumulator::default()
+            });
+        accumulator.candidate_events += 1;
+        accumulator.payload_ready_events += usize::from(readiness.payload_ready);
+        accumulator.context_signal_events += usize::from(readiness.has_context_signal);
+        accumulator.evidence_signal_events += usize::from(readiness.has_evidence_signal);
+        accumulator.verifier_signal_events += usize::from(readiness.has_verifier_signal);
+        for feature in &features {
+            accumulator
+                .feature_counts
+                .entry(feature.clone())
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
+        }
+        rows.push(RoleBindingManualRouteDiscoveryEventRow {
+            event_id: readiness.event_id.clone(),
+            request_fingerprint: readiness.request_fingerprint.clone(),
+            discovered_subfamily: discovery.subfamily_key.to_owned(),
+            payload_ready: readiness.payload_ready,
+            has_context_signal: readiness.has_context_signal,
+            has_evidence_signal: readiness.has_evidence_signal,
+            has_verifier_signal: readiness.has_verifier_signal,
+            feature_flags: features,
+            recommended_profile_line: discovery.recommended_profile_line.to_owned(),
+            recommended_payload_builder: discovery.recommended_payload_builder.to_owned(),
+            recommended_verifier: discovery.recommended_verifier.to_owned(),
+            claim_boundary: discovery.claim_boundary.to_owned(),
+        });
+    }
+
+    let mut subfamilies = accumulators
+        .into_iter()
+        .map(|(subfamily_key, accumulator)| {
+            let mut top_features = accumulator
+                .feature_counts
+                .into_iter()
+                .map(|(name, count)| RoleBindingNamedCount { name, count })
+                .collect::<Vec<_>>();
+            top_features.sort_by(|left, right| {
+                right
+                    .count
+                    .cmp(&left.count)
+                    .then_with(|| left.name.cmp(&right.name))
+            });
+            top_features.truncate(8);
+            let next_action = format!(
+                "Build {} + {}; keep local accepts disabled until a route-specific deterministic verifier proves false_accepts=0.",
+                accumulator.payload_builder, accumulator.verifier
+            );
+            RoleBindingManualRouteDiscoverySubfamilyRow {
+                priority_rank: 0,
+                subfamily_key,
+                candidate_events: accumulator.candidate_events,
+                payload_ready_events: accumulator.payload_ready_events,
+                payload_ready_rate_milli: ratio_milli(
+                    accumulator.payload_ready_events,
+                    accumulator.candidate_events,
+                ),
+                context_signal_events: accumulator.context_signal_events,
+                evidence_signal_events: accumulator.evidence_signal_events,
+                verifier_signal_events: accumulator.verifier_signal_events,
+                top_features,
+                recommended_profile_line: accumulator.profile_line,
+                recommended_payload_builder: accumulator.payload_builder,
+                recommended_verifier: accumulator.verifier,
+                local_accepts_enabled: false,
+                market_claim_allowed: false,
+                claim_boundary: accumulator.claim_boundary,
+                next_action,
+            }
+        })
+        .collect::<Vec<_>>();
+    subfamilies.sort_by(|left, right| {
+        right
+            .payload_ready_events
+            .cmp(&left.payload_ready_events)
+            .then_with(|| right.candidate_events.cmp(&left.candidate_events))
+            .then_with(|| left.subfamily_key.cmp(&right.subfamily_key))
+    });
+    for (index, subfamily) in subfamilies.iter_mut().enumerate() {
+        subfamily.priority_rank = index + 1;
+    }
+    let top_subfamily = subfamilies
+        .first()
+        .map(|subfamily| subfamily.subfamily_key.clone());
+
+    let report = RoleBindingManualRouteDiscoveryReport {
+        schema_version: "nando_role_binding_manual_route_discovery_v1".to_owned(),
+        verdict: if uncatalogued_events > 0 {
+            "MANUAL_ROUTE_DISCOVERY_V1_REVIEW_SUBFAMILIES_FOUND"
+        } else {
+            "MANUAL_ROUTE_DISCOVERY_V1_NO_UNCATALOGUED_ROWS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        readiness_report_path: readiness_report_path.display().to_string(),
+        total_history_rows: history_rows.len(),
+        sampled_llm_calls: readiness_report.sampled_llm_calls,
+        uncatalogued_events,
+        payload_ready_events,
+        missing_history_rows,
+        top_subfamily,
+        subfamilies,
+        rows,
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Manual route discovery only. It reads uncatalogued real Codex prompts at analysis time, writes fingerprints/features/counts but no raw prompt text, enables no local accepts, and cannot prove CPU savings. Each discovered subfamily still needs a request-side payload builder, profile, deterministic verifier, shadow/audit pass, provider-cost evidence, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Promote the top discovered subfamily into a dedicated route only if its verifier can be deterministic from request/tool/artifact evidence. Do not merge uncatalogued rows into broad answer_or_explain or project_context buckets to inflate routability.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-manual-route-discovery-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  readiness_report: {}", readiness_report_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  uncatalogued_events: {}", report.uncatalogued_events);
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    if let Some(top_subfamily) = &report.top_subfamily {
+        println!("  top_subfamily: {top_subfamily}");
+    }
+    println!("  raw_text_written: false");
+    println!("  local_accepts_enabled: false");
+    Err("manual route discovery is review-only; it is not verified savings".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_answer_evidence_payload_dry_run_v1<I>(
@@ -14642,6 +14828,14 @@ where
     } else {
         None
     };
+    let manual_route_discovery_report_path = PathBuf::from(DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT);
+    let manual_route_discovery = if manual_route_discovery_report_path.exists() {
+        Some(read_json_file::<RoleBindingManualRouteDiscoveryReport>(
+            &manual_route_discovery_report_path,
+        )?)
+    } else {
+        None
+    };
     let answer_evidence_payload_dry_run_report_path =
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT);
     let answer_evidence_payload_dry_run = if answer_evidence_payload_dry_run_report_path.exists() {
@@ -15077,6 +15271,9 @@ where
             style_brevity_verifier_true_events,
             style_brevity_verifier_false_events,
             style_brevity_verifier_true_support_zero,
+            manual_route_discovery_top_subfamily: String::new(),
+            manual_route_discovery_top_subfamily_events: 0,
+            manual_route_discovery_payload_ready_events: 0,
             short_decision_ack_prior_true_accepts: 0,
             short_decision_ack_prior_false_accepts: 0,
             short_decision_ack_prior_blocked: false,
@@ -15178,6 +15375,22 @@ where
             family_false_accepts,
             family.cpu_operator_readiness.as_str(),
         );
+        let manual_top_subfamily = manual_route_discovery
+            .as_ref()
+            .filter(|_| family.family_key == "uncatalogued")
+            .and_then(|report| report.subfamilies.first());
+        let manual_route_discovery_top_subfamily = manual_top_subfamily
+            .map(|subfamily| subfamily.subfamily_key.clone())
+            .unwrap_or_default();
+        let manual_route_discovery_top_subfamily_events = manual_top_subfamily
+            .map(|subfamily| subfamily.candidate_events)
+            .unwrap_or_default();
+        let manual_route_discovery_payload_ready_events = manual_top_subfamily
+            .map(|subfamily| subfamily.payload_ready_events)
+            .unwrap_or_default();
+        if manual_top_subfamily.is_some() {
+            priority_score += manual_route_discovery_payload_ready_events as i64 * 120;
+        }
         if agent_control_stop_support_exhausted
             || metrics_report_support_exhausted
             || git_control_support_exhausted
@@ -15248,6 +15461,15 @@ where
                 family.family_key,
                 feedback_row.scoreable_payload_events,
                 family.recommended_verifier
+            )
+        } else if let Some(subfamily) = manual_top_subfamily {
+            format!(
+                "Manual route discovery split uncatalogued into top subfamily {} ({} events, {} payload-ready). Build {} + {}; keep local accepts disabled until false_accepts=0 is proven.",
+                subfamily.subfamily_key,
+                subfamily.candidate_events,
+                subfamily.payload_ready_events,
+                subfamily.recommended_payload_builder,
+                subfamily.recommended_verifier
             )
         } else {
             format!(
@@ -15340,6 +15562,9 @@ where
             style_brevity_verifier_true_events: 0,
             style_brevity_verifier_false_events: 0,
             style_brevity_verifier_true_support_zero: false,
+            manual_route_discovery_top_subfamily,
+            manual_route_discovery_top_subfamily_events,
+            manual_route_discovery_payload_ready_events,
             short_decision_ack_prior_true_accepts,
             short_decision_ack_prior_false_accepts,
             short_decision_ack_prior_blocked,
@@ -15391,6 +15616,9 @@ where
                 .display()
                 .to_string()
         }),
+        manual_route_discovery_report_path: manual_route_discovery
+            .as_ref()
+            .map(|_| manual_route_discovery_report_path.display().to_string()),
         answer_evidence_payload_dry_run_report_path: answer_evidence_payload_dry_run
             .as_ref()
             .map(|_| answer_evidence_payload_dry_run_report_path.display().to_string()),
@@ -15480,6 +15708,12 @@ where
         println!(
             "  route_gap_payload_readiness_report: {}",
             route_gap_payload_readiness_report_path.display()
+        );
+    }
+    if manual_route_discovery.is_some() {
+        println!(
+            "  manual_route_discovery_report: {}",
+            manual_route_discovery_report_path.display()
         );
     }
     if answer_evidence_payload_dry_run.is_some() {
@@ -26253,6 +26487,66 @@ struct RoleBindingRouteGapPayloadReadinessEventRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingManualRouteDiscoveryReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    readiness_report_path: String,
+    total_history_rows: usize,
+    sampled_llm_calls: usize,
+    uncatalogued_events: usize,
+    payload_ready_events: usize,
+    missing_history_rows: usize,
+    top_subfamily: Option<String>,
+    subfamilies: Vec<RoleBindingManualRouteDiscoverySubfamilyRow>,
+    rows: Vec<RoleBindingManualRouteDiscoveryEventRow>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingManualRouteDiscoverySubfamilyRow {
+    priority_rank: usize,
+    subfamily_key: String,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    top_features: Vec<RoleBindingNamedCount>,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_action: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingManualRouteDiscoveryEventRow {
+    event_id: String,
+    request_fingerprint: String,
+    discovered_subfamily: String,
+    payload_ready: bool,
+    has_context_signal: bool,
+    has_evidence_signal: bool,
+    has_verifier_signal: bool,
+    feature_flags: Vec<String>,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingPlanningNextStepPayloadDryRunReport {
     schema_version: String,
     verdict: String,
@@ -27252,6 +27546,20 @@ struct RouteGapPayloadFamilyAccumulator {
 }
 
 #[derive(Clone, Debug, Default)]
+struct ManualRouteDiscoveryAccumulator {
+    candidate_events: usize,
+    payload_ready_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    feature_counts: BTreeMap<String, usize>,
+    profile_line: String,
+    payload_builder: String,
+    verifier: String,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Debug, Default)]
 struct ProjectContextSubfamilyAccumulator {
     candidate_events: usize,
     payload_ready_events: usize,
@@ -27280,6 +27588,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     feedback_report_path: String,
     route_gap_report_path: String,
     route_gap_payload_readiness_report_path: Option<String>,
+    #[serde(default)]
+    manual_route_discovery_report_path: Option<String>,
     #[serde(default)]
     answer_evidence_payload_dry_run_report_path: Option<String>,
     #[serde(default)]
@@ -27400,6 +27710,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     #[serde(default)]
     style_brevity_verifier_true_support_zero: bool,
     #[serde(default)]
+    manual_route_discovery_top_subfamily: String,
+    #[serde(default)]
+    manual_route_discovery_top_subfamily_events: usize,
+    #[serde(default)]
+    manual_route_discovery_payload_ready_events: usize,
+    #[serde(default)]
     short_decision_ack_prior_true_accepts: usize,
     #[serde(default)]
     short_decision_ack_prior_false_accepts: usize,
@@ -27419,6 +27735,15 @@ struct RoleBindingCpuOperatorCatalogRow {
 #[derive(Clone, Copy, Debug)]
 struct RouteGapFamilyMetadata {
     cpu_operator_readiness: &'static str,
+    recommended_profile_line: &'static str,
+    recommended_payload_builder: &'static str,
+    recommended_verifier: &'static str,
+    claim_boundary: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ManualRouteDiscoveryMetadata {
+    subfamily_key: &'static str,
     recommended_profile_line: &'static str,
     recommended_payload_builder: &'static str,
     recommended_verifier: &'static str,
@@ -37833,6 +38158,278 @@ fn cpu_operator_priority_score(
         + (verification_hook_ready_events as i64 * 500)
         + (verified_cpu_accept_eligible_events as i64 * 10_000)
         - (false_accepts as i64 * 100_000)
+}
+
+fn route_gap_payload_readiness_history_index(event_id: &str) -> Option<usize> {
+    event_id.rsplit("::").next()?.parse::<usize>().ok()
+}
+
+fn manual_route_discovery_subfamily(text: &str) -> ManualRouteDiscoveryMetadata {
+    let lower = text.to_lowercase();
+    if contains_any(
+        &lower,
+        &[
+            "centerid",
+            "slot",
+            "slots",
+            "stride",
+            "u32",
+            "u16",
+            "page",
+            "pages",
+            "layout",
+            "компонов",
+            "центр",
+            "слот",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "wave_architecture_layout_decision",
+            recommended_profile_line: "architecture_layout_operator",
+            recommended_payload_builder: "architecture_layout_delta_payload_builder_v1",
+            recommended_verifier: "typed_layout_budget_and_invariant_verifier_v1",
+            claim_boundary: "Can verify numeric layout constraints and invariant drift; cannot choose architecture from hidden target labels.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "лог",
+            "log",
+            "терабайт",
+            "желез",
+            "канал",
+            "диск",
+            "ssd",
+            "ram",
+            "памят",
+            "memory",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "resource_pressure_budget",
+            recommended_profile_line: "resource_budget_operator",
+            recommended_payload_builder: "resource_pressure_payload_builder_v1",
+            recommended_verifier: "write_rate_or_resource_budget_verifier_v1",
+            claim_boundary: "Can check explicit resource-rate/budget pressure; cannot infer performance claims without measured rates.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "кат",
+            "бал",
+            "led",
+            "санкт-петербург",
+            "спб",
+            "груз",
+            "брокер",
+            "оформлен",
+            "приём",
+            "прием",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "business_logistics_route_constraint",
+            recommended_profile_line: "business_logistics_route_operator",
+            recommended_payload_builder: "business_logistics_route_payload_builder_v1",
+            recommended_verifier: "named_party_route_constraint_verifier_v1",
+            claim_boundary: "Can route explicit party/place/logistics constraints; external commercial action still needs live evidence and user approval.",
+        }
+    } else if contains_any(&lower, &["скил", "skill", "разрезать", "split", "подскаж"])
+    {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "skill_route_split_advice",
+            recommended_profile_line: "skill_route_split_operator",
+            recommended_payload_builder: "skill_route_split_payload_builder_v1",
+            recommended_verifier: "skill_scope_and_route_split_verifier_v1",
+            claim_boundary: "Can suggest skill/route split only from explicit scope evidence; cannot rewrite skills or claim readiness without a gate.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "теорем",
+            "литератур",
+            "инете",
+            "стать",
+            "paper",
+            "arxiv",
+            "бейса",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "research_theory_gap",
+            recommended_profile_line: "research_theory_gap_operator",
+            recommended_payload_builder: "literature_gap_payload_builder_v1",
+            recommended_verifier: "primary_source_or_known_brick_verifier_v1",
+            claim_boundary: "Can triage missing-theory/literature requests; claims still need source-backed evidence.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "вопрос был",
+            "кто спрашивает",
+            "кто судья",
+            "считается",
+            "передача",
+            "определ",
+            "boundary",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "claim_boundary_definition",
+            recommended_profile_line: "claim_boundary_definition_operator",
+            recommended_payload_builder: "claim_boundary_state_payload_builder_v1",
+            recommended_verifier: "explicit_definition_consistency_verifier_v1",
+            claim_boundary: "Can stabilize explicit definitions and question roles; cannot answer hidden ontology without user-provided state.",
+        }
+    } else if contains_any(
+        &lower,
+        &["обобщ", "интеграц", "движение", "сводк", "summary", "итог"],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "project_synthesis_summary",
+            recommended_profile_line: "project_synthesis_operator",
+            recommended_payload_builder: "integration_synthesis_payload_builder_v1",
+            recommended_verifier: "source_artifact_summary_coverage_verifier_v1",
+            claim_boundary: "Can summarize only explicit artifacts and checked movement; cannot invent project progress.",
+        }
+    } else if contains_any(&lower, &["асме", "asm", "года", "лет", "сложно", "долго"])
+    {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "implementation_cost_objection",
+            recommended_profile_line: "implementation_cost_operator",
+            recommended_payload_builder: "implementation_cost_objection_payload_builder_v1",
+            recommended_verifier: "cost_scope_ack_verifier_v1",
+            claim_boundary: "Can acknowledge explicit implementation-cost objection; cannot decide architecture without measured alternatives.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "каналов",
+            "каналы",
+            "1%",
+            "предсказ",
+            "prediction",
+            "фактор",
+            "decomposition",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "multi_factor_prediction_decomposition",
+            recommended_profile_line: "prediction_decomposition_operator",
+            recommended_payload_builder: "multi_factor_prediction_payload_builder_v1",
+            recommended_verifier: "factor_decomposition_claim_boundary_verifier_v1",
+            claim_boundary: "Can structure explicit factor/channel decomposition; cannot prove prediction quality without heldout metrics.",
+        }
+    } else if contains_any(
+        &lower,
+        &["саботиру", "дебил", "говно", "хуй", "блять", "сука"],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "affective_rejection_control",
+            recommended_profile_line: "conversation_repair_operator",
+            recommended_payload_builder: "affective_rejection_payload_builder_v1",
+            recommended_verifier: "no_task_claim_ack_verifier_v1",
+            claim_boundary: "Can acknowledge frustration and avoid task claims; technical work still requires a concrete route.",
+        }
+    } else {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "manual_review_required",
+            recommended_profile_line: "manual_review_operator",
+            recommended_payload_builder: "manual_route_discovery_payload_builder_v1",
+            recommended_verifier: "manual_route_claim_boundary_verifier_v1",
+            claim_boundary: "Requires manual route discovery before any CPU accept path exists.",
+        }
+    }
+}
+
+fn manual_route_discovery_feature_flags(text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let mut flags = Vec::new();
+    for (flag, needles) in [
+        (
+            "layout_terms",
+            &[
+                "centerid",
+                "slot",
+                "stride",
+                "u32",
+                "u16",
+                "layout",
+                "компонов",
+            ][..],
+        ),
+        (
+            "resource_terms",
+            &[
+                "лог",
+                "log",
+                "терабайт",
+                "желез",
+                "канал",
+                "диск",
+                "ssd",
+                "ram",
+            ][..],
+        ),
+        (
+            "logistics_terms",
+            &[
+                "led",
+                "спб",
+                "санкт-петербург",
+                "груз",
+                "брокер",
+                "приём",
+                "прием",
+            ][..],
+        ),
+        ("skill_terms", &["скил", "skill", "разрезать", "split"][..]),
+        (
+            "research_terms",
+            &["теорем", "литератур", "инете", "paper", "arxiv", "бейса"][..],
+        ),
+        (
+            "definition_terms",
+            &["вопрос", "считается", "передача", "определ", "boundary"][..],
+        ),
+        (
+            "summary_terms",
+            &["обобщ", "интеграц", "движение", "сводк", "summary", "итог"][..],
+        ),
+        (
+            "cost_terms",
+            &["асме", "asm", "года", "лет", "сложно", "долго"][..],
+        ),
+        (
+            "prediction_terms",
+            &[
+                "каналов",
+                "каналы",
+                "1%",
+                "предсказ",
+                "prediction",
+                "фактор",
+            ][..],
+        ),
+        (
+            "frustration_terms",
+            &["саботиру", "дебил", "говно", "хуй", "блять", "сука"][..],
+        ),
+    ] {
+        if contains_any(&lower, needles) {
+            flags.push(flag.to_owned());
+        }
+    }
+    if contains_file_like_token(text) {
+        flags.push("file_like_token".to_owned());
+    }
+    if contains_marker_like_signal(text) {
+        flags.push("marker_like_signal".to_owned());
+    }
+    if flags.is_empty() {
+        flags.push("no_known_manual_route_features".to_owned());
+    }
+    flags
 }
 
 fn analyze_route_gap_payload_readiness(family_key: &str, text: &str) -> RouteGapPayloadReadiness {
