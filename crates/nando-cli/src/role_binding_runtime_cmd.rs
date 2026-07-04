@@ -42381,6 +42381,121 @@ fn manual_route_discovery_subfamily(text: &str) -> ManualRouteDiscoveryMetadata 
     } else if contains_any(
         &lower,
         &[
+            "печать",
+            "подпись",
+            "прозрачн",
+            "поднимай",
+            "улитела",
+            "вниз",
+            "докмуент",
+            "документ",
+            "прикрепить",
+            "письмо",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "document_stamp_layout_edit",
+            recommended_profile_line: "document_stamp_layout_operator",
+            recommended_payload_builder: "document_stamp_layout_payload_builder_v1",
+            recommended_verifier: "document_position_and_attachment_verifier_v1",
+            claim_boundary: "Can route explicit document/stamp/layout edit requests; cannot claim document validity without source files and user approval.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "coca-cola",
+            "monster",
+            "sprite",
+            "fanta",
+            "exw",
+            "диаметр",
+            "кол-во",
+            "цена",
+            "сумма",
+            "стоимость",
+            "заявк",
+            "заваод",
+            "завод",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "product_price_certification_table",
+            recommended_profile_line: "product_price_certification_operator",
+            recommended_payload_builder: "product_price_cert_payload_builder_v1",
+            recommended_verifier: "price_table_and_product_doc_verifier_v1",
+            claim_boundary: "Can route explicit product/price/certification table work; cannot infer market price, compliance, or deal readiness without live evidence.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "поверхност",
+            "гравитац",
+            "напряж",
+            "вселенной",
+            "солнце",
+            "объектов",
+            "объекты",
+            "a_u",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "gravity_material_physics_question",
+            recommended_profile_line: "gravity_material_reasoning_operator",
+            recommended_payload_builder: "gravity_material_question_payload_builder_v1",
+            recommended_verifier: "material_formula_and_claim_boundary_verifier_v1",
+            claim_boundary: "Can route explicit gravity/material reasoning questions; cannot assert physical proof without checked formulas and artifacts.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "128 patterns",
+            "turbo-256",
+            "near-miss",
+            "patterns",
+            "capacity",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "nando_capacity_benchmark_state",
+            recommended_profile_line: "nando_capacity_benchmark_operator",
+            recommended_payload_builder: "capacity_checkpoint_payload_builder_v1",
+            recommended_verifier: "capacity_metric_artifact_verifier_v1",
+            claim_boundary: "Can route explicit Nando capacity/benchmark checkpoint talk; cannot upgrade claims without current metrics artifacts.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "liaocheng",
+            "shandong",
+            "guangzhou",
+            "dongchangfu",
+            "uscc",
+            "огрн",
+            "инн",
+            "кпп",
+            "rustrade",
+            "рустрейд",
+            "ltd",
+            "llc",
+            "ооо",
+            "адрес",
+            "address",
+            "premises",
+            "office complex",
+            "gagarin",
+            "гагарин",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "business_party_identity_address",
+            recommended_profile_line: "business_party_identity_operator",
+            recommended_payload_builder: "party_identity_address_payload_builder_v1",
+            recommended_verifier: "party_registration_and_address_field_verifier_v1",
+            claim_boundary: "Can verify explicit party identity/address fields already present in artifacts; cannot infer authority, certification status, or commercial readiness.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
             "кат",
             "бал",
             "led",
@@ -42399,6 +42514,27 @@ fn manual_route_discovery_subfamily(text: &str) -> ManualRouteDiscoveryMetadata 
             recommended_payload_builder: "business_logistics_route_payload_builder_v1",
             recommended_verifier: "named_party_route_constraint_verifier_v1",
             claim_boundary: "Can route explicit party/place/logistics constraints; external commercial action still needs live evidence and user approval.",
+        }
+    } else if contains_any(
+        &lower,
+        &[
+            "ime",
+            "ibus",
+            "preedit",
+            "кандидат",
+            "подсказк",
+            "расклад",
+            "язык",
+            "окно настроек",
+            "включается",
+        ],
+    ) {
+        ManualRouteDiscoveryMetadata {
+            subfamily_key: "ime_input_state_debug",
+            recommended_profile_line: "ime_input_state_operator",
+            recommended_payload_builder: "ime_state_signal_payload_builder_v1",
+            recommended_verifier: "ime_state_artifact_and_symptom_verifier_v1",
+            claim_boundary: "Can classify explicit IME/input-state symptoms and artifacts; cannot mutate input configuration without live session evidence and user approval.",
         }
     } else if contains_any(&lower, &["скил", "skill", "разрезать", "split", "подскаж"])
     {
@@ -42538,6 +42674,83 @@ fn manual_route_discovery_feature_flags(text: &str) -> Vec<String> {
             ][..],
         ),
         (
+            "document_stamp_layout_terms",
+            &[
+                "печать",
+                "подпись",
+                "прозрачн",
+                "поднимай",
+                "улитела",
+                "вниз",
+                "докмуент",
+                "документ",
+                "прикрепить",
+                "письмо",
+            ][..],
+        ),
+        (
+            "product_price_cert_terms",
+            &[
+                "coca-cola",
+                "monster",
+                "sprite",
+                "fanta",
+                "exw",
+                "диаметр",
+                "кол-во",
+                "цена",
+                "сумма",
+                "стоимость",
+                "заявк",
+                "завод",
+            ][..],
+        ),
+        (
+            "gravity_material_terms",
+            &[
+                "поверхност",
+                "гравитац",
+                "напряж",
+                "вселенной",
+                "солнце",
+                "объектов",
+                "объекты",
+                "a_u",
+            ][..],
+        ),
+        (
+            "capacity_benchmark_terms",
+            &[
+                "128 patterns",
+                "turbo-256",
+                "near-miss",
+                "patterns",
+                "capacity",
+            ][..],
+        ),
+        (
+            "business_party_identity_terms",
+            &[
+                "liaocheng",
+                "shandong",
+                "guangzhou",
+                "dongchangfu",
+                "uscc",
+                "огрн",
+                "инн",
+                "кпп",
+                "rustrade",
+                "рустрейд",
+                "ltd",
+                "llc",
+                "ооо",
+                "адрес",
+                "address",
+                "premises",
+                "gagarin",
+            ][..],
+        ),
+        (
             "logistics_terms",
             &[
                 "led",
@@ -42547,6 +42760,19 @@ fn manual_route_discovery_feature_flags(text: &str) -> Vec<String> {
                 "брокер",
                 "приём",
                 "прием",
+            ][..],
+        ),
+        (
+            "ime_terms",
+            &[
+                "ime",
+                "ibus",
+                "preedit",
+                "кандидат",
+                "подсказк",
+                "расклад",
+                "язык",
+                "включается",
             ][..],
         ),
         ("skill_terms", &["скил", "skill", "разрезать", "split"][..]),

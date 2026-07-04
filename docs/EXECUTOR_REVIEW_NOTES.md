@@ -1,5 +1,93 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Manual Route Discovery 5k Taxonomy Split
+
+Verdict:
+
+```text
+MANUAL_ROUTE_DISCOVERY_V1_REVIEW_SUBFAMILIES_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Added privacy-safe manual route discovery subfamilies:
+  ime_input_state_debug
+  document_stamp_layout_edit
+  product_price_certification_table
+  business_party_identity_address
+  gravity_material_physics_question
+  nando_capacity_benchmark_state
+```
+
+Why:
+
+```text
+After the 1000-call registry was exhausted, a 5000-call real Codex history
+window was run into separate diagnostic artifacts:
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.report.json
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-5k.report.json
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-5k.report.json
+  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1-5k.report.json
+
+The first 5k manual discovery pass left too much uncatalogued traffic in
+manual_review_required:
+  manual_review_required: 78 events, 18 payload-ready
+
+Local frequency inspection showed repeated privacy-safe route families rather
+than one-off raw prompts.
+```
+
+5k result after taxonomy split:
+
+```text
+sampled_llm_calls: 5000
+existing_route_candidate_events: 1457
+no_candidate_events: 3543
+route_gap_payload_ready_events: 803
+
+manual_discovery_uncatalogued_events: 116
+manual_discovery_payload_ready_events: 27
+top_subfamily: ime_input_state_debug
+
+Top discovered subfamilies:
+  ime_input_state_debug: 16 events, 6 payload-ready
+  document_stamp_layout_edit: 5 events, 4 payload-ready
+  product_price_certification_table: 7 events, 3 payload-ready
+  resource_pressure_budget: 7 events, 3 payload-ready
+  business_party_identity_address: 6 events, 3 payload-ready
+  manual_review_required: 39 events, 2 payload-ready
+  wave_architecture_layout_decision: 7 events, 2 payload-ready
+  gravity_material_physics_question: 6 events, 2 payload-ready
+```
+
+Decision:
+
+```text
+This is route visibility only.
+No local accepts are enabled.
+No raw prompt text is written.
+No CPU savings are claimed.
+
+The useful next profile candidate from 5k is not a broad answer route. It is
+ime_input_state_debug, followed by document_stamp_layout_edit and
+product_price_certification_table, but each still needs request-side payload,
+deterministic verifier, shadow/audit, provider-cost evidence where relevant,
+and false_accepts=0 before any promotion.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Loop Registry Audit Rerank
 
 Verdict:
