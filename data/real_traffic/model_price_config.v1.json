@@ -1,0 +1,8 @@
+{
+  "schema_version": "nando_model_price_config_v1",
+  "default_provider": "codex_history_estimated",
+  "default_model_id": "codex_history_chars_div4_estimate",
+  "input_cost_microusd_per_1k_tokens": 1000,
+  "output_cost_microusd_per_1k_tokens": 5000,
+  "price_source": "User-editable placeholder for cost-meter estimates. Replace with real provider billing prices before using money_saved as a market claim."
+}

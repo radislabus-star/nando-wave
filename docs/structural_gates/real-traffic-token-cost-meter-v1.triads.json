@@ -1,0 +1,185 @@
+{
+  "task_id": "real-traffic-token-cost-meter-v1",
+  "domain": "code",
+  "query": "Verify real-traffic economics separates calls, tokens, money, exact-cache savings, Nando incremental savings, combined savings, and estimated-vs-observed token cost boundaries.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "current5k_feedback_loop",
+      "relation": "total_llm_calls",
+      "object": "5000",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t2",
+      "subject": "current5k_feedback_loop",
+      "relation": "exact_cache_hits",
+      "object": "452",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "metric",
+      "route": "exact_cache"
+    },
+    {
+      "id": "t3",
+      "subject": "current5k_feedback_loop",
+      "relation": "incremental_cpu_accept_unique_request_fingerprints",
+      "object": "110",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "metric",
+      "route": "nando_incremental"
+    },
+    {
+      "id": "t4",
+      "subject": "current5k_feedback_loop",
+      "relation": "total_baseline_tokens",
+      "object": "609118",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "token_metric",
+      "route": "baseline"
+    },
+    {
+      "id": "t5",
+      "subject": "exact_cache_route",
+      "relation": "exact_cache_tokens_saved",
+      "object": "4046",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "savings_route",
+      "object_role": "token_metric",
+      "route": "exact_cache"
+    },
+    {
+      "id": "t6",
+      "subject": "nando_incremental_route",
+      "relation": "nando_cpu_tokens_saved",
+      "object": "23224",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "savings_route",
+      "object_role": "token_metric",
+      "route": "nando_incremental"
+    },
+    {
+      "id": "t7",
+      "subject": "combined_route",
+      "relation": "combined_tokens_saved",
+      "object": "27270",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "savings_route",
+      "object_role": "token_metric",
+      "route": "combined"
+    },
+    {
+      "id": "t8",
+      "subject": "current5k_feedback_loop",
+      "relation": "total_baseline_cost_microusd",
+      "object": "1827354",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "cost_metric",
+      "route": "baseline"
+    },
+    {
+      "id": "t9",
+      "subject": "exact_cache_route",
+      "relation": "exact_cache_cost_saved_microusd",
+      "object": "12138",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "savings_route",
+      "object_role": "cost_metric",
+      "route": "exact_cache"
+    },
+    {
+      "id": "t10",
+      "subject": "nando_incremental_route",
+      "relation": "nando_cpu_cost_saved_microusd",
+      "object": "69672",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "savings_route",
+      "object_role": "cost_metric",
+      "route": "nando_incremental"
+    },
+    {
+      "id": "t11",
+      "subject": "combined_route",
+      "relation": "combined_cost_saved_microusd",
+      "object": "81810",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "savings_route",
+      "object_role": "cost_metric",
+      "route": "combined"
+    },
+    {
+      "id": "t12",
+      "subject": "model_price_config",
+      "relation": "prices_estimator",
+      "object": "data/real_traffic/model_price_config.v1.json",
+      "evidence": "data/real_traffic/model_price_config.v1.json",
+      "confidence": 1.0,
+      "subject_role": "config",
+      "object_role": "price_config",
+      "route": "estimator"
+    },
+    {
+      "id": "t13",
+      "subject": "current_codex_history",
+      "relation": "token_cost_estimate_used",
+      "object": "true",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "traffic_source",
+      "object_role": "claim_boundary",
+      "route": "estimator"
+    },
+    {
+      "id": "t14",
+      "subject": "current_codex_history",
+      "relation": "provider_billing_counter",
+      "object": "not_present",
+      "evidence": "docs/structural_gates/real-traffic-token-cost-meter-v1.md",
+      "confidence": 1.0,
+      "subject_role": "traffic_source",
+      "object_role": "evidence_gap",
+      "route": "billing_truth"
+    },
+    {
+      "id": "t15",
+      "subject": "market_money_claim",
+      "relation": "blocked_by",
+      "object": "token_cost_estimate_used_true",
+      "evidence": "docs/structural_gates/real-traffic-token-cost-meter-v1.md",
+      "confidence": 1.0,
+      "subject_role": "claim",
+      "object_role": "claim_boundary",
+      "route": "billing_truth"
+    },
+    {
+      "id": "t16",
+      "subject": "cpu_operator_catalog",
+      "relation": "copies_token_cost_meter_from",
+      "object": "current5k_feedback_loop",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog",
+      "object_role": "source_report",
+      "route": "catalog"
+    }
+  ],
+  "candidate_triads": [],
+  "candidate_answer": "Source packet only. It separates exact-cache savings, Nando incremental savings, combined savings, estimated token cost, and the blocked billing-grade market claim boundary."
+}

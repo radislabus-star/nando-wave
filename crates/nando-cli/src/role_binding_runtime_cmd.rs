@@ -55,6 +55,8 @@ const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_SHADOW_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_MODEL_PRICE_CONFIG: &str =
+    "data/real_traffic/model_price_config.v1.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT: &str =
@@ -650,6 +652,7 @@ const REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN: usize = 114;
 const PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114: &str =
     "first_slot_threshold_active_fringe_min_114";
 const PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE: &str = "energy_nonnegative";
+const PROFILE_ACCEPTANCE_POLICY_SECOND_SLOT_THRESHOLD: &str = "second_slot_threshold";
 const REAL_TRAFFIC_TEST_OUTPUT_PARSE_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_TEST_OUTPUT_PARSE_OPERATOR_PAIR_BASE: u32 = 50 << 12;
@@ -3176,6 +3179,7 @@ where
             exact_cache_key: event.exact_cache_key,
             provider_cache_hit: event.provider_cache_hit,
             provider_cost_microusd: event.provider_cost_microusd,
+            token_cost: event.token_cost,
             nando_shadow_request: event.nando_shadow_request,
             verified_safe_accept: event.verified_safe_accept,
             synthetic_source: event.synthetic_source,
@@ -3256,6 +3260,8 @@ where
         .unwrap_or(1000);
 
     let history_rows = read_codex_history_jsonl(&history_path)?;
+    let model_price_config_path = role_binding_model_price_config_path();
+    let model_price_config = read_role_binding_model_price_config(&model_price_config_path)?;
     let skip = history_rows.len().saturating_sub(max_events);
     let mut events = Vec::with_capacity(history_rows.len().saturating_sub(skip));
     for (index, row) in history_rows.iter().enumerate().skip(skip) {
@@ -3275,6 +3281,7 @@ where
             exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: trace_token_cost_from_text(&row.text, &model_price_config),
             nando_shadow_request: None,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -3355,6 +3362,8 @@ where
     validate_registry_config(&registry_config)?;
     let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
     let history_rows = read_codex_history_jsonl(&history_path)?;
+    let model_price_config_path = role_binding_model_price_config_path();
+    let model_price_config = read_role_binding_model_price_config(&model_price_config_path)?;
     let skip = history_rows.len().saturating_sub(max_events);
     let mut events = Vec::with_capacity(history_rows.len().saturating_sub(skip));
     let mut candidate_events = 0usize;
@@ -3397,6 +3406,7 @@ where
             exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: trace_token_cost_from_text(&row.text, &model_price_config),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -4910,6 +4920,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -5348,6 +5359,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -5619,6 +5631,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -6045,6 +6058,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -6332,6 +6346,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -8430,6 +8445,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -8701,6 +8717,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -8963,6 +8980,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -10857,6 +10875,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -12402,6 +12421,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -12664,6 +12684,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -12925,6 +12946,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -14769,6 +14791,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -16521,1049 +16544,7 @@ where
     )
 }
 
-pub(crate) fn run_role_binding_real_traffic_serving_ops_payload_dry_run_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let history_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
-    let registry_config_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
-    let trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_TRACE_JSONL));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_REPORT));
-    let max_events = args
-        .next()
-        .map(|value| {
-            value
-                .parse::<usize>()
-                .map_err(|error| format!("invalid max_events '{}': {error}", value))
-        })
-        .transpose()?
-        .unwrap_or(1000);
-
-    let registry_config =
-        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
-    validate_registry_config(&registry_config)?;
-    let profile_registered = registry_config
-        .profiles
-        .iter()
-        .any(|profile| profile.profile_id == REAL_TRAFFIC_SERVING_OPS_PROFILE_ID);
-    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
-    let history_rows = read_codex_history_jsonl(&history_path)?;
-    let skip = history_rows.len().saturating_sub(max_events);
-    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
-    let mut report_rows = Vec::new();
-    let mut serving_ops_candidate_events = 0usize;
-    let mut payload_ready_events = 0usize;
-    let mut payload_built_events = 0usize;
-    let mut scoreable_payload_events = 0usize;
-    let mut builder_rejected_events = 0usize;
-    let mut readiness_rejected_events = 0usize;
-    let mut active_fringe_centers_total = 0usize;
-    let mut slots_total = 0usize;
-    let mut positive_impulses_total = 0usize;
-    let mut negative_impulses_total = 0usize;
-    let mut builder_status_counts = BTreeMap::<String, usize>::new();
-
-    for (index, row) in history_rows.iter().enumerate().skip(skip) {
-        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
-        let event_id = format!(
-            "codex_history_serving_ops_payload_dry_run::{}::{}::{}",
-            row.session_id, row.ts, index
-        );
-        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
-        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
-        let mut nando_shadow_request = None;
-        let mut notes = "not serving_ops route-gap candidate".to_owned();
-
-        if route_catalog.classify_request_text(&row.text).is_none()
-            && route_gap_family_key(&row.text) == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
-        {
-            serving_ops_candidate_events += 1;
-            let readiness =
-                analyze_route_gap_payload_readiness(REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY, &row.text);
-            if readiness.payload_ready {
-                payload_ready_events += 1;
-                let built = build_serving_ops_dry_run_request(&event_id, &fingerprint, &row.text);
-                match built {
-                    Some(request) => {
-                        let active_fringe_centers = request.active_fringe.len();
-                        let slots = request.slots.len();
-                        let positive_impulses = request
-                            .slots
-                            .iter()
-                            .map(|slot| slot.positive_impulses.len())
-                            .sum::<usize>();
-                        let negative_impulses = request
-                            .slots
-                            .iter()
-                            .map(|slot| slot.negative_impulses.len())
-                            .sum::<usize>();
-                        let scoreable = active_fringe_centers > 0 && slots > 0;
-                        payload_built_events += 1;
-                        scoreable_payload_events += usize::from(scoreable);
-                        active_fringe_centers_total += active_fringe_centers;
-                        slots_total += slots;
-                        positive_impulses_total += positive_impulses;
-                        negative_impulses_total += negative_impulses;
-                        let builder_status = if scoreable && profile_registered {
-                            "scoreable_payload_built_profile_registered"
-                        } else if scoreable {
-                            "scoreable_payload_built_profile_missing"
-                        } else {
-                            "payload_built_but_not_scoreable"
-                        }
-                        .to_owned();
-                        *builder_status_counts
-                            .entry(builder_status.clone())
-                            .or_insert(0) += 1;
-                        report_rows.push(RoleBindingServingOpsPayloadDryRunRow {
-                            event_id: event_id.clone(),
-                            request_fingerprint: request_fingerprint.clone(),
-                            route_key: REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY.to_owned(),
-                            profile_id: REAL_TRAFFIC_SERVING_OPS_PROFILE_ID.to_owned(),
-                            readiness_payload_ready: true,
-                            payload_built: true,
-                            scoreable,
-                            profile_registered,
-                            builder_status: builder_status.clone(),
-                            active_fringe_centers,
-                            slots,
-                            positive_impulses,
-                            negative_impulses,
-                        });
-                        notes = format!(
-                            "request-side serving-ops payload built; status={builder_status}; server mutations and verified accepts disabled"
-                        );
-                        nando_shadow_request = Some(request);
-                    }
-                    None => {
-                        builder_rejected_events += 1;
-                        let builder_status = "builder_rejected_request_side_features".to_owned();
-                        *builder_status_counts
-                            .entry(builder_status.clone())
-                            .or_insert(0) += 1;
-                        report_rows.push(RoleBindingServingOpsPayloadDryRunRow {
-                            event_id: event_id.clone(),
-                            request_fingerprint: request_fingerprint.clone(),
-                            route_key: REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY.to_owned(),
-                            profile_id: REAL_TRAFFIC_SERVING_OPS_PROFILE_ID.to_owned(),
-                            readiness_payload_ready: true,
-                            payload_built: false,
-                            scoreable: false,
-                            profile_registered,
-                            builder_status: builder_status.clone(),
-                            active_fringe_centers: 0,
-                            slots: 0,
-                            positive_impulses: 0,
-                            negative_impulses: 0,
-                        });
-                        notes = builder_status;
-                    }
-                }
-            } else {
-                readiness_rejected_events += 1;
-                let builder_status = "readiness_rejected".to_owned();
-                *builder_status_counts
-                    .entry(builder_status.clone())
-                    .or_insert(0) += 1;
-                notes = format!(
-                    "serving_ops route-gap candidate rejected by readiness gate: {}",
-                    readiness.missing_reasons.join(",")
-                );
-            }
-        }
-
-        trace_rows.push(RoleBindingRealTrafficTraceRow {
-            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
-            trace_id: event_id,
-            traffic_source: Some("codex_history_local_serving_ops_payload_dry_run".to_owned()),
-            time_ms: Some(row.ts.saturating_mul(1000)),
-            request_fingerprint: Some(request_fingerprint),
-            response_fingerprint: None,
-            tool_call_fingerprints: Vec::new(),
-            verification_source: Some(
-                "request-side serving-ops payload dry-run from local Codex prompt only; raw text, response text, target labels, proof labels, and server mutations are not used"
-                    .to_owned(),
-            ),
-            llm_call: true,
-            exact_cache_key,
-            provider_cache_hit: None,
-            provider_cost_microusd: None,
-            nando_shadow_request,
-            verified_safe_accept: None,
-            synthetic_source: Some(false),
-            notes: Some(notes),
-        });
-    }
-
-    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
-    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
-    let report = RoleBindingServingOpsPayloadDryRunReport {
-        schema_version: "nando_role_binding_serving_ops_payload_dry_run_v1".to_owned(),
-        verdict: if shadow_score_ready {
-            "SERVING_OPS_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
-        } else if scoreable_payload_events > 0 {
-            "SERVING_OPS_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
-        } else {
-            "SERVING_OPS_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
-        }
-        .to_owned(),
-        history_path: history_path.display().to_string(),
-        registry_config_path: registry_config_path.display().to_string(),
-        trace_path: trace_path.display().to_string(),
-        max_events,
-        total_history_rows: history_rows.len(),
-        trace_rows_written: trace_rows.len(),
-        serving_ops_candidate_events,
-        payload_ready_events,
-        payload_built_events,
-        scoreable_payload_events,
-        builder_rejected_events,
-        readiness_rejected_events,
-        profile_registered,
-        shadow_score_ready,
-        active_fringe_centers_total,
-        slots_total,
-        positive_impulses_total,
-        negative_impulses_total,
-        builder_status_counts: builder_status_counts
-            .into_iter()
-            .map(|(name, count)| RoleBindingNamedCount { name, count })
-            .collect(),
-        raw_text_written: false,
-        response_text_used: false,
-        target_labels_used: false,
-        proof_labels_used: false,
-        server_mutation_enabled: false,
-        local_accepts_enabled: false,
-        market_claim_allowed: false,
-        rows: report_rows,
-        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for serving_ops route-gap rows from prompt text only, writes no raw prompt text, performs no server/daemon mutation, keeps verified_safe_accept=None and expect_local_operator=false, and cannot prove savings.".to_owned(),
-        next_engineering_debt: "Compile a serving_ops .nwrb scoring profile, rerun shadow, then attach service_health_metric_verifier_v1 before any local accept, daemon action, or market savings claim.".to_owned(),
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-serving-ops-payload-dry-run-v1: {}",
-        report.verdict
-    );
-    println!("  history: {}", history_path.display());
-    println!("  registry_config: {}", registry_config_path.display());
-    println!("  trace: {}", trace_path.display());
-    println!("  report: {}", report_path.display());
-    println!(
-        "  serving_ops_candidate_events: {}",
-        report.serving_ops_candidate_events
-    );
-    println!("  payload_ready_events: {}", report.payload_ready_events);
-    println!("  payload_built_events: {}", report.payload_built_events);
-    println!(
-        "  scoreable_payload_events: {}",
-        report.scoreable_payload_events
-    );
-    println!("  profile_registered: {}", report.profile_registered);
-    println!("  server_mutation_enabled: false");
-    println!("  local_accepts_enabled: false");
-    Err(
-        "serving-ops payload dry-run is review-only; build profile+verifier before claims"
-            .to_owned(),
-    )
-}
-
-pub(crate) fn run_role_binding_real_traffic_serving_ops_profile_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let base_registry_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
-    let dry_run_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_TRACE_JSONL));
-    let package_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PACKAGE_PATH));
-    let registry_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PROFILE_REGISTRY_CONFIG));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PROFILE_REPORT));
-
-    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
-    validate_registry_config(&registry)?;
-    let trace_rows = read_real_traffic_trace_jsonl(&dry_run_trace_path)?;
-    let build = build_serving_ops_role_binding_package_from_trace(&trace_rows)?;
-    if let Some(parent) = package_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "failed to create serving-ops package directory {}: {error}",
-                parent.display()
-            )
-        })?;
-    }
-    fs::write(&package_path, &build.package_bytes).map_err(|error| {
-        format!(
-            "failed to write serving-ops package {}: {error}",
-            package_path.display()
-        )
-    })?;
-    let package_info =
-        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&build.package_bytes)
-            .map_err(|error| format!("failed to inspect serving-ops package: {error:?}"))?;
-    let policy =
-        WavePredictorRoleBindingOffloadPolicy::new(REAL_TRAFFIC_SERVING_OPS_DISABLED_THRESHOLD)
-            .map_err(|error| format!("invalid serving-ops disabled policy: {error:?}"))?;
-    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
-        &build.package_bytes,
-        policy,
-    )
-    .map_err(|error| format!("failed to load serving-ops package: {error:?}"))?;
-
-    let requests = serving_ops_scoreable_requests(&trace_rows);
-    let mut energy_margins = Vec::with_capacity(requests.len());
-    let mut min_slot_margins = Vec::with_capacity(requests.len());
-    let mut positive_margin_rows = 0usize;
-    let mut strict_ordered_pass_rows = 0usize;
-    let mut unexpected_local_accepts_under_disabled_threshold = 0usize;
-    for request in &requests {
-        let prepared = sdk.prepare_active_fringe_from_iter(
-            request
-                .active_fringe
-                .iter()
-                .map(|active| (active.center_id, active.strength)),
-        );
-        let mut energy_margin = 0i32;
-        let mut min_slot_margin = i32::MAX;
-        let mut first_slot_margin = 0i32;
-        let mut strict_ordered_pass = true;
-        for (slot_index, slot) in request.slots.iter().enumerate() {
-            let (positive_score, negative_score) =
-                score_role_binding_profile_slot(&sdk, &prepared, slot);
-            let slot_margin = positive_score - negative_score;
-            if slot_index == 0 {
-                first_slot_margin = slot_margin;
-            }
-            energy_margin = energy_margin.saturating_add(slot_margin);
-            min_slot_margin = min_slot_margin.min(slot_margin);
-            strict_ordered_pass &= slot_margin > 0;
-        }
-        if min_slot_margin == i32::MAX {
-            continue;
-        }
-        positive_margin_rows += usize::from(energy_margin > 0);
-        strict_ordered_pass_rows += usize::from(strict_ordered_pass);
-        unexpected_local_accepts_under_disabled_threshold += usize::from(profile_accepts_score(
-            &default_profile_acceptance_policy(),
-            strict_ordered_pass,
-            energy_margin,
-            first_slot_margin,
-            REAL_TRAFFIC_SERVING_OPS_DISABLED_THRESHOLD,
-        ));
-        energy_margins.push(energy_margin);
-        min_slot_margins.push(min_slot_margin);
-    }
-
-    let profile = RoleBindingProfileConfig {
-        profile_id: REAL_TRAFFIC_SERVING_OPS_PROFILE_ID.to_owned(),
-        profile_kind: "role_binding_nwrb".to_owned(),
-        operator_classes: vec![
-            "serving_ops".to_owned(),
-            "service_health".to_owned(),
-            "route_gap".to_owned(),
-        ],
-        package_path: package_path.clone(),
-        runtime_bytes_estimate: sdk.bytes_estimate(),
-        edge_count: package_info.edge_count,
-        slot_count: 3,
-        threshold: REAL_TRAFFIC_SERVING_OPS_DISABLED_THRESHOLD,
-        acceptance_policy: default_profile_acceptance_policy(),
-        accepted_route_keys: vec![
-            REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY.to_owned(),
-            REAL_TRAFFIC_SERVING_OPS_PROFILE_ID.to_owned(),
-            "serving_ops_metric_payload_builder_v1".to_owned(),
-        ],
-    };
-    registry
-        .profiles
-        .retain(|existing| existing.profile_id != profile.profile_id);
-    registry.profiles.push(profile);
-    registry.claim_boundary = "serving registry overlay for serving-ops .nwrb profile; generated from request-side dry-run payloads with threshold=i32::MAX so scoring telemetry is available but local accepts and server mutations remain disabled until service-health verification exists".to_owned();
-    validate_registry_config(&registry)?;
-    write_json_file(&registry_path, &registry)?;
-
-    let mut sorted_energy = energy_margins.clone();
-    let mut sorted_min_slot = min_slot_margins.clone();
-    sorted_energy.sort_unstable();
-    sorted_min_slot.sort_unstable();
-    let report = RoleBindingServingOpsProfileReport {
-        schema_version: "nando_role_binding_serving_ops_profile_v1".to_owned(),
-        verdict: if unexpected_local_accepts_under_disabled_threshold == 0
-            && build.package_training_requests > 0
-            && package_info.edge_count > 0
-        {
-            "SERVING_OPS_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED"
-        } else {
-            "SERVING_OPS_PROFILE_V1_REVIEW_REPAIR_REQUIRED"
-        }
-        .to_owned(),
-        base_registry_path: base_registry_path.display().to_string(),
-        dry_run_trace_path: dry_run_trace_path.display().to_string(),
-        package_path: package_path.display().to_string(),
-        registry_path: registry_path.display().to_string(),
-        profile_id: REAL_TRAFFIC_SERVING_OPS_PROFILE_ID.to_owned(),
-        package_fingerprint64: package_info.fingerprint64,
-        package_bytes: build.package_bytes.len(),
-        edge_count: package_info.edge_count,
-        runtime_bytes_estimate: sdk.bytes_estimate(),
-        threshold: REAL_TRAFFIC_SERVING_OPS_DISABLED_THRESHOLD,
-        trace_rows_read: trace_rows.len(),
-        scoreable_payload_events: requests.len(),
-        package_training_requests: build.package_training_requests,
-        positive_updates: build.positive_updates,
-        negative_updates: build.negative_updates,
-        changed_edges: build.changed_edges,
-        positive_margin_rows,
-        strict_ordered_pass_rows,
-        unexpected_local_accepts_under_disabled_threshold,
-        median_energy_margin: percentile_i32_sorted(&sorted_energy, 50),
-        p10_energy_margin: percentile_i32_sorted(&sorted_energy, 10),
-        min_energy_margin: sorted_energy.first().copied().unwrap_or(0),
-        median_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 50),
-        p10_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 10),
-        min_slot_margin: sorted_min_slot.first().copied().unwrap_or(0),
-        raw_text_written: false,
-        response_text_used: false,
-        target_labels_used: false,
-        proof_labels_used: false,
-        server_mutation_enabled: false,
-        local_accepts_enabled_on_real_traffic: false,
-        market_claim_allowed: false,
-        claim_boundary: "Serving-ops profile compilation only. The .nwrb package can measure real score/margins over request-side service/metric/status payloads, but it cannot restart daemons, local-accept, or prove savings without service_health_metric_verifier_v1 and false_accepts=0.".to_owned(),
-        next_engineering_debt: "Run serving-ops shadow with this overlay registry, then attach service_health_metric_verifier_v1 before threshold calibration, local accept, or daemon/server action paths.".to_owned(),
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-serving-ops-profile-v1: {}",
-        report.verdict
-    );
-    println!("  base_registry: {}", base_registry_path.display());
-    println!("  dry_run_trace: {}", dry_run_trace_path.display());
-    println!("  package: {}", package_path.display());
-    println!("  registry: {}", registry_path.display());
-    println!("  report: {}", report_path.display());
-    println!("  edge_count: {}", report.edge_count);
-    println!(
-        "  scoreable_payload_events: {}",
-        report.scoreable_payload_events
-    );
-    println!("  median_energy_margin: {}", report.median_energy_margin);
-    println!(
-        "  unexpected_local_accepts_under_disabled_threshold: {}",
-        report.unexpected_local_accepts_under_disabled_threshold
-    );
-    println!("  server_mutation_enabled: false");
-    println!("  local_accepts_enabled_on_real_traffic: false");
-    Err("serving-ops profile is review-only; attach verifier before claims".to_owned())
-}
-
-pub(crate) fn run_role_binding_real_traffic_serving_ops_output_evidence_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let input_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_TRACE_JSONL));
-    let sessions_root = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
-    let output_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_OUTPUT_EVIDENCE_TRACE_JSONL));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_OUTPUT_EVIDENCE_REPORT));
-
-    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
-    let wanted_request_fingerprints = trace_rows
-        .iter()
-        .filter(|row| {
-            row.nando_shadow_request.as_ref().is_some_and(|request| {
-                request.profile_id.as_deref() == Some(REAL_TRAFFIC_SERVING_OPS_PROFILE_ID)
-            })
-        })
-        .filter_map(|row| row.request_fingerprint.as_deref())
-        .map(str::to_owned)
-        .collect::<HashSet<_>>();
-    let session_ids = trace_rows
-        .iter()
-        .filter(|row| row.nando_shadow_request.is_some())
-        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
-        .collect::<HashSet<_>>();
-    let session_index = build_codex_session_output_evidence_index(
-        &sessions_root,
-        &session_ids,
-        &wanted_request_fingerprints,
-        deterministic_serving_ops_output_verification,
-    )?;
-
-    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
-    let mut operator_candidate_calls = 0usize;
-    let mut scoreable_candidate_calls = 0usize;
-    let mut output_evidence_matched_events = 0usize;
-    let mut deterministic_verification_events = 0usize;
-    let mut verified_true_events = 0usize;
-    let mut verified_false_events = 0usize;
-    let mut no_session_output_match_events = 0usize;
-    let mut verifier_not_applicable_events = 0usize;
-
-    for mut row in trace_rows {
-        let Some(request) = &row.nando_shadow_request else {
-            enriched_rows.push(row);
-            continue;
-        };
-        operator_candidate_calls += 1;
-        scoreable_candidate_calls +=
-            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
-        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_SERVING_OPS_PROFILE_ID) {
-            enriched_rows.push(row);
-            continue;
-        }
-        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
-        let Some(evidence) = session_index
-            .by_request_fingerprint
-            .get(&request_fingerprint)
-        else {
-            no_session_output_match_events += 1;
-            row.notes = Some(append_trace_note(
-                row.notes.as_deref(),
-                "serving-ops output evidence missing: no matching Codex final answer found",
-            ));
-            enriched_rows.push(row);
-            continue;
-        };
-        output_evidence_matched_events += 1;
-        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
-        row.verification_source = Some(
-            "codex_session_final_answer_fingerprint_plus_deterministic_service_health_metric_verifier_v1"
-                .to_owned(),
-        );
-        row.verified_safe_accept = Some(evidence.verified_safe_accept);
-        deterministic_verification_events += usize::from(evidence.verifier_applicable);
-        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
-        verified_true_events += usize::from(evidence.verified_safe_accept);
-        verified_false_events += usize::from(!evidence.verified_safe_accept);
-        row.notes = Some(append_trace_note(
-            row.notes.as_deref(),
-            &format!(
-                "serving-ops output evidence attached; verifier_status={}",
-                evidence.verifier_status
-            ),
-        ));
-        enriched_rows.push(row);
-    }
-
-    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
-    let report = RoleBindingEditOutputEvidenceReport {
-        schema_version: "nando_role_binding_serving_ops_output_evidence_v1".to_owned(),
-        verdict: if output_evidence_matched_events > 0 {
-            "SERVING_OPS_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
-        } else {
-            "SERVING_OPS_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
-        }
-        .to_owned(),
-        input_trace_path: input_trace_path.display().to_string(),
-        sessions_root: sessions_root.display().to_string(),
-        output_trace_path: output_trace_path.display().to_string(),
-        total_trace_rows: enriched_rows.len(),
-        operator_candidate_calls,
-        scoreable_candidate_calls,
-        session_ids_requested: session_ids.len(),
-        session_files_scanned: session_index.session_files_scanned,
-        codex_turns_indexed: session_index.codex_turns_indexed,
-        output_evidence_matched_events,
-        no_session_output_match_events,
-        deterministic_verification_events,
-        verifier_not_applicable_events,
-        verified_true_events,
-        verified_false_events,
-        raw_prompt_text_written: false,
-        raw_response_text_written: false,
-        response_text_used_for_verification: true,
-        target_labels_used: false,
-        proof_labels_used: false,
-        local_accepts_enabled: false,
-        market_claim_allowed: false,
-        claim_boundary: "Serving-ops output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and deterministic service/metric/status verification results, writes no raw prompt/response text, performs no server mutation, and does not enable local accepts or market savings claims.".to_owned(),
-        next_engineering_debt: "Run shadow analysis and verification-hook audit over the serving-ops evidence trace, then calibrate local accept only if verifier-true support is sufficient and false_accepts remain 0.".to_owned(),
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-serving-ops-output-evidence-v1: {}",
-        report.verdict
-    );
-    println!("  input_trace: {}", input_trace_path.display());
-    println!("  sessions_root: {}", sessions_root.display());
-    println!("  output_trace: {}", output_trace_path.display());
-    println!("  report: {}", report_path.display());
-    println!(
-        "  output_evidence_matched_events: {}",
-        report.output_evidence_matched_events
-    );
-    println!("  verified_true_events: {}", report.verified_true_events);
-    println!("  verified_false_events: {}", report.verified_false_events);
-    println!("  raw_response_text_written: false");
-    println!("  server_mutation_enabled: false");
-    Err("serving-ops output evidence is review-only; run shadow/audit before claims".to_owned())
-}
-
-pub(crate) fn run_role_binding_real_traffic_serving_ops_local_accept_calibration_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let registry_config_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PROFILE_REGISTRY_CONFIG));
-    let trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_OUTPUT_EVIDENCE_TRACE_JSONL));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT));
-
-    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
-    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
-    let mut scored_rows = Vec::new();
-    let mut hook_ready_rows = 0usize;
-    let mut label_true_rows = 0usize;
-    let mut label_false_rows = 0usize;
-    let mut no_score_rows = 0usize;
-
-    for row in &trace_rows {
-        let Some(label) = row.verified_safe_accept else {
-            continue;
-        };
-        let Some(request) = &row.nando_shadow_request else {
-            continue;
-        };
-        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_SERVING_OPS_PROFILE_ID) {
-            continue;
-        }
-        hook_ready_rows += 1;
-        label_true_rows += usize::from(label);
-        label_false_rows += usize::from(!label);
-        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
-            no_score_rows += 1;
-            continue;
-        };
-        let current_response = score_role_binding_profile_request(&registry, request);
-        let service_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
-        let metric_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
-        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
-            trace_id: row.trace_id.clone(),
-            request_fingerprint: row.request_fingerprint.clone(),
-            response_fingerprint: row.response_fingerprint.clone(),
-            verifier_label: label,
-            production_accepted: current_response.accepted,
-            production_fallback_reason: current_response.fallback_reason,
-            energy_margin: score.energy_margin,
-            min_slot_margin: score.min_slot_margin,
-            marker_slot_margin: service_slot_margin,
-            end_slot_margin: metric_slot_margin,
-            slot_count: score.slot_margins.len(),
-        });
-    }
-
-    let current_policy =
-        evaluate_edit_calibration_policy("current_disabled_profile_policy", &scored_rows, |row| {
-            row.production_accepted
-        });
-    let energy_positive_policy =
-        evaluate_edit_calibration_policy("energy_positive_no_slot_order", &scored_rows, |row| {
-            row.energy_margin >= 1
-        });
-    let strict_positive_policy = evaluate_edit_calibration_policy(
-        "strict_positive_slots_and_energy_positive",
-        &scored_rows,
-        |row| row.min_slot_margin > 0 && row.energy_margin >= 1,
-    );
-    let service_slot_policy =
-        evaluate_edit_calibration_policy("service_slot_positive_only", &scored_rows, |row| {
-            row.marker_slot_margin > 0 && row.energy_margin >= 1
-        });
-    let metric_slot_policy =
-        evaluate_edit_calibration_policy("metric_slot_positive_only", &scored_rows, |row| {
-            row.end_slot_margin > 0 && row.energy_margin >= 1
-        });
-    let best_energy_threshold_policy =
-        best_single_threshold_policy("best_energy_margin_threshold", &scored_rows, |row| {
-            row.energy_margin
-        });
-    let best_min_slot_threshold_policy =
-        best_single_threshold_policy("best_min_slot_margin_threshold", &scored_rows, |row| {
-            row.min_slot_margin
-        });
-    let best_service_slot_threshold_policy =
-        best_single_threshold_policy("best_service_slot_margin_threshold", &scored_rows, |row| {
-            row.marker_slot_margin
-        });
-    let best_metric_slot_threshold_policy =
-        best_single_threshold_policy("best_metric_slot_margin_threshold", &scored_rows, |row| {
-            row.end_slot_margin
-        });
-    let margin_collision_diagnostics = planning_margin_collision_diagnostics(&scored_rows);
-    let request_side_margin_only_accepts_all_true_without_false = margin_collision_diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.safe_accepts_all_true_rows);
-    let policies = vec![
-        current_policy,
-        energy_positive_policy,
-        strict_positive_policy,
-        service_slot_policy,
-        metric_slot_policy,
-        best_energy_threshold_policy,
-        best_min_slot_threshold_policy,
-        best_service_slot_threshold_policy,
-        best_metric_slot_threshold_policy,
-    ];
-    let safe_policy_found = policies
-        .iter()
-        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
-    let best_safe_true_accepts = policies
-        .iter()
-        .filter(|policy| policy.false_accepts == 0)
-        .map(|policy| policy.true_accepts)
-        .max()
-        .unwrap_or(0);
-    let report = RoleBindingEditLocalAcceptCalibrationReport {
-        schema_version: "nando_role_binding_serving_ops_local_accept_calibration_v1".to_owned(),
-        verdict: if safe_policy_found {
-            "SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
-        } else {
-            "SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
-        }
-        .to_owned(),
-        registry_config_path: registry_config_path.display().to_string(),
-        trace_path: trace_path.display().to_string(),
-        hook_ready_rows,
-        scored_rows: scored_rows.len(),
-        label_true_rows,
-        label_false_rows,
-        no_score_rows,
-        safe_policy_found,
-        best_safe_true_accepts,
-        policies,
-        rows: scored_rows,
-        margin_collision_diagnostics,
-        request_side_margin_only_accepts_all_true_without_false,
-        local_accepts_enabled: false,
-        market_claim_allowed: false,
-        claim_boundary: "Serving-ops calibration only. It evaluates score/readout policies against deterministic service-health/metric verifier labels, writes fingerprints and margins only, performs no server mutation, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
-        next_engineering_debt: if safe_policy_found {
-            "Promote only through a separate serving-ops safe-policy artifact, then rerun shadow/audit with provider cost, false_accepts=0, and unverified_shadow_accepts=0 before counting savings or touching daemons.".to_owned()
-        } else {
-            "Do not lower the serving-ops threshold. Current score geometry does not separate verifier-true from verifier-false rows; improve request-side admission, payload features, or tool-output verification before enabling local accepts.".to_owned()
-        },
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-serving-ops-local-accept-calibration-v1: {}",
-        report.verdict
-    );
-    println!("  registry_config: {}", registry_config_path.display());
-    println!("  trace: {}", trace_path.display());
-    println!("  report: {}", report_path.display());
-    println!("  hook_ready_rows: {}", report.hook_ready_rows);
-    println!("  label_true_rows: {}", report.label_true_rows);
-    println!("  label_false_rows: {}", report.label_false_rows);
-    println!("  safe_policy_found: {}", report.safe_policy_found);
-    println!(
-        "  best_safe_true_accepts: {}",
-        report.best_safe_true_accepts
-    );
-    Err("serving-ops local accept calibration is review-only".to_owned())
-}
-
-pub(crate) fn run_role_binding_real_traffic_serving_ops_safe_policy_promote_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let base_registry_config_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_PROFILE_REGISTRY_CONFIG));
-    let evidence_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_OUTPUT_EVIDENCE_TRACE_JSONL));
-    let calibration_report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT));
-    let promoted_registry_config_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_SAFE_POLICY_REGISTRY_CONFIG));
-    let promoted_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_SAFE_POLICY_TRACE_JSONL));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SERVING_OPS_SAFE_POLICY_REPORT));
-    let provider_cost_microusd = args
-        .next()
-        .map(|value| {
-            value
-                .parse::<u64>()
-                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
-        })
-        .transpose()?
-        .unwrap_or(100);
-
-    let mut promoted_config =
-        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
-    validate_registry_config(&promoted_config)?;
-    let calibration =
-        read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(&calibration_report_path)?;
-    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
-    let Some(calibration_policy) = select_supported_mixed_safe_policy(&calibration) else {
-        return Err(
-            "serving-ops calibration report has no supported safe energy-threshold policy"
-                .to_owned(),
-        );
-    };
-    let base_registry =
-        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
-    let policy = select_mixed_promotion_policy_from_evidence(
-        &base_registry,
-        &trace_rows,
-        calibration_policy,
-        REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY,
-    )?;
-    let threshold = policy.threshold;
-    let acceptance_policy = "energy_threshold_only".to_owned();
-    let serving_ops_profile_ids = trace_rows
-        .iter()
-        .filter_map(|row| row.nando_shadow_request.as_ref())
-        .filter(|request| {
-            request
-                .route_key
-                .as_deref()
-                .is_some_and(|route| route == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY)
-        })
-        .filter_map(|request| request.profile_id.clone())
-        .collect::<BTreeSet<_>>();
-    if serving_ops_profile_ids.is_empty() {
-        return Err(
-            "serving-ops safe policy promotion found no serving_ops profile ids in trace"
-                .to_owned(),
-        );
-    }
-    let mut promoted_profile_ids = Vec::new();
-    for profile in &mut promoted_config.profiles {
-        if serving_ops_profile_ids.contains(&profile.profile_id) {
-            profile.threshold = threshold;
-            profile.acceptance_policy = acceptance_policy.clone();
-            promoted_profile_ids.push(profile.profile_id.clone());
-        }
-    }
-    if promoted_profile_ids.is_empty() {
-        return Err(format!(
-            "serving-ops safe policy promotion found no matching profiles in registry for {:?}",
-            serving_ops_profile_ids
-        ));
-    }
-    validate_registry_config(&promoted_config)?;
-    write_json_file(&promoted_registry_config_path, &promoted_config)?;
-    let promoted_registry =
-        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
-
-    let mut scoreable_candidate_calls = 0usize;
-    let mut policy_accept_rows = 0usize;
-    let mut policy_accept_verified_true_rows = 0usize;
-    let mut policy_accept_verified_false_rows = 0usize;
-    let mut policy_accept_unverified_rows = 0usize;
-    let mut provider_cost_events_written = 0usize;
-    let mut runtime_acceptance_mismatches = 0usize;
-    let mut no_score_rows = 0usize;
-
-    for row in &mut trace_rows {
-        let Some(request) = &mut row.nando_shadow_request else {
-            continue;
-        };
-        let is_serving_ops = request
-            .route_key
-            .as_deref()
-            .is_some_and(|route| route == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY);
-        if !is_serving_ops {
-            continue;
-        }
-        scoreable_candidate_calls +=
-            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
-        row.provider_cost_microusd = Some(provider_cost_microusd);
-        provider_cost_events_written += 1;
-
-        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
-        else {
-            no_score_rows += 1;
-            request.expect_local_operator = Some(false);
-            continue;
-        };
-        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
-        let policy_accept = profile_accepts_score(
-            &acceptance_policy,
-            strict_ordered_pass,
-            score.energy_margin,
-            score.slot_margins.first().copied().unwrap_or(0),
-            threshold,
-        );
-        request.expect_local_operator = Some(policy_accept);
-        if policy_accept {
-            policy_accept_rows += 1;
-            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
-            policy_accept_verified_false_rows +=
-                usize::from(row.verified_safe_accept == Some(false));
-            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
-        }
-        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
-        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
-        row.notes = Some(format!(
-            "{}; serving_ops_safe_policy_promote_v1 policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
-            row.notes
-                .clone()
-                .unwrap_or_else(|| "real_codex_trace".to_owned()),
-            acceptance_policy,
-            threshold,
-            provider_cost_microusd,
-            policy_accept
-        ));
-    }
-
-    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
-    let report = RoleBindingMixedSafePolicyPromoteReport {
-        schema_version: "nando_role_binding_serving_ops_safe_policy_promote_v1".to_owned(),
-        verdict: if policy_accept_rows > 0
-            && policy_accept_verified_false_rows == 0
-            && policy_accept_unverified_rows == 0
-            && runtime_acceptance_mismatches == 0
-        {
-            "SERVING_OPS_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
-        } else {
-            "SERVING_OPS_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
-        }
-        .to_owned(),
-        base_registry_config_path: base_registry_config_path.display().to_string(),
-        evidence_trace_path: evidence_trace_path.display().to_string(),
-        calibration_report_path: calibration_report_path.display().to_string(),
-        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
-        promoted_trace_path: promoted_trace_path.display().to_string(),
-        history_path: None,
-        request_side_policy_name: None,
-        calibration_policy_name: calibration_policy.policy_name.clone(),
-        calibration_policy_threshold: calibration_policy.threshold,
-        selected_policy_name: policy.policy_name.clone(),
-        selected_policy_source: policy.selection_source.clone(),
-        selected_policy_threshold: threshold,
-        selected_acceptance_policy: acceptance_policy,
-        selected_policy_accepts: policy.accepts,
-        selected_policy_true_accepts: policy.true_accepts,
-        selected_policy_false_accepts: policy.false_accepts,
-        selected_policy_unverified_accepts: policy.unverified_accepts,
-        promoted_profile_ids,
-        provider_cost_microusd,
-        trace_rows_written: trace_rows.len(),
-        scoreable_candidate_calls,
-        request_side_policy_evaluated_rows: 0,
-        request_side_policy_accept_rows: 0,
-        request_side_policy_reject_rows: 0,
-        history_prompt_missing_rows: 0,
-        policy_accept_rows,
-        policy_accept_verified_true_rows,
-        policy_accept_verified_false_rows,
-        policy_accept_unverified_rows,
-        provider_cost_events_written,
-        no_score_rows,
-        runtime_acceptance_mismatches,
-        raw_prompt_text_written: false,
-        raw_response_text_written: false,
-        target_labels_used_for_runtime: false,
-        proof_labels_used_for_runtime: false,
-        market_claim_allowed: false,
-        claim_boundary: "Promotion artifact only. It creates a promoted serving-ops registry and rewrites an evidence-backed shadow trace with provider-cost estimates. Offline labels/evidence choose the threshold, but serving uses only request-side payload score >= threshold. It performs no server mutation and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
-        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted serving-ops registry/trace, then feed that safe-policy audit into CPU route feedback. Server/daemon actions stay disabled until a separate action executor gate exists.".to_owned(),
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-serving-ops-safe-policy-promote-v1: {}",
-        report.verdict
-    );
-    println!(
-        "  promoted_registry: {}",
-        promoted_registry_config_path.display()
-    );
-    println!("  promoted_trace: {}", promoted_trace_path.display());
-    println!("  report: {}", report_path.display());
-    println!("  selected_policy_name: {}", report.selected_policy_name);
-    println!(
-        "  selected_policy_source: {}",
-        report.selected_policy_source
-    );
-    println!(
-        "  selected_policy_threshold: {}",
-        report.selected_policy_threshold
-    );
-    println!("  policy_accept_rows: {}", report.policy_accept_rows);
-    println!(
-        "  policy_accept_verified_true_rows: {}",
-        report.policy_accept_verified_true_rows
-    );
-    println!(
-        "  policy_accept_verified_false_rows: {}",
-        report.policy_accept_verified_false_rows
-    );
-    println!(
-        "  policy_accept_unverified_rows: {}",
-        report.policy_accept_unverified_rows
-    );
-    Err(
-        "serving-ops safe policy promotion is review-only; run shadow/audit before claims"
-            .to_owned(),
-    )
-}
+include!("role_binding_runtime_cmd/serving_ops.rs");
 
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_output_evidence_v1<I>(
     mut args: I,
@@ -18729,8 +17710,10 @@ where
         } else {
             None
         };
-    let edit_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let edit_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let edit_local_accept_calibration = if edit_local_accept_calibration_report_path.exists() {
         Some(
             read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
@@ -20156,6 +19139,7 @@ where
         target_verified_cpu_accepts: target_verified_cpu_calls,
         verified_gap_to_80_calls: target_verified_cpu_calls
             .saturating_sub(feedback.verified_cpu_accept_unique_request_fingerprints),
+        token_cost_meter: feedback.token_cost_meter.clone(),
         business_value_gate_passed_rows,
         proven_profile_rows,
         candidate_profile_rows,
@@ -20769,6 +19753,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -21813,6 +20798,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -22195,6 +21181,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -22577,6 +21564,7 @@ where
             exact_cache_key,
             provider_cache_hit: None,
             provider_cost_microusd: None,
+            token_cost: RoleBindingTraceTokenCostFields::default(),
             nando_shadow_request,
             verified_safe_accept: None,
             synthetic_source: Some(false),
@@ -25888,6 +24876,7 @@ fn collect_feedback_unique_accepts<'a>(
             .count(),
         unique_verified_exact_cache_overlap_request_fingerprints:
             unique_exact_cache_overlap_fingerprints.len(),
+        unique_verified_incremental_request_fingerprint_values: unique_incremental_fingerprints,
         duplicate_within_route_verified_hits,
         cross_route_overlap_verified_request_fingerprints: route_unique_sum_request_fingerprints
             .saturating_sub(unique_verified_count),
@@ -25980,6 +24969,13 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_SAFE_POLICY_AUDIT_REPORT));
+    let mixed_safe_policy_audit_report_path_text = mixed_safe_policy_audit_report_path
+        .to_string_lossy()
+        .into_owned();
+    let mixed_safe_policy_audit_report_path = current_window_companion_report_path(
+        &mixed_safe_policy_audit_report_path_text,
+        prefer_current5k_companions,
+    );
     let read_inspect_dry_run_report_path = args
         .next()
         .map(PathBuf::from)
@@ -26049,7 +25045,10 @@ where
     } else {
         None
     };
-    let conditional_dry_run_report_path = PathBuf::from(DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_REPORT);
+    let conditional_dry_run_report_path = current_window_companion_report_path(
+        DEFAULT_CONDITIONAL_PAYLOAD_DRY_RUN_REPORT,
+        prefer_current5k_companions,
+    );
     let conditional_dry_run = if conditional_dry_run_report_path.exists() {
         Some(read_json_file::<RoleBindingConditionalPayloadDryRunReport>(
             &conditional_dry_run_report_path,
@@ -26057,7 +25056,10 @@ where
     } else {
         None
     };
-    let mixed_dry_run_report_path = PathBuf::from(DEFAULT_MIXED_PAYLOAD_DRY_RUN_REPORT);
+    let mixed_dry_run_report_path = current_window_companion_report_path(
+        DEFAULT_MIXED_PAYLOAD_DRY_RUN_REPORT,
+        prefer_current5k_companions,
+    );
     let mixed_dry_run = if mixed_dry_run_report_path.exists() {
         Some(read_json_file::<RoleBindingMixedPayloadDryRunReport>(
             &mixed_dry_run_report_path,
@@ -26175,8 +25177,10 @@ where
     } else {
         None
     };
-    let conditional_audit_report_path =
-        PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let conditional_audit_report_path = current_window_companion_report_path(
+        DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let conditional_verification_audit = if conditional_audit_report_path.exists() {
         Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
             &conditional_audit_report_path,
@@ -26184,8 +25188,10 @@ where
     } else {
         None
     };
-    let conditional_safe_policy_audit_report_path =
-        PathBuf::from(DEFAULT_CONDITIONAL_SAFE_POLICY_AUDIT_REPORT);
+    let conditional_safe_policy_audit_report_path = current_window_companion_report_path(
+        DEFAULT_CONDITIONAL_SAFE_POLICY_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let conditional_safe_policy_verification_audit =
         if conditional_safe_policy_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -26194,8 +25200,10 @@ where
         } else {
             None
         };
-    let conditional_safe_policy_v2_audit_report_path =
-        PathBuf::from(DEFAULT_CONDITIONAL_SAFE_POLICY_V2_AUDIT_REPORT);
+    let conditional_safe_policy_v2_audit_report_path = current_window_companion_report_path(
+        DEFAULT_CONDITIONAL_SAFE_POLICY_V2_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let conditional_safe_policy_v2_verification_audit =
         if conditional_safe_policy_v2_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -26204,8 +25212,10 @@ where
         } else {
             None
         };
-    let conditional_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let conditional_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let conditional_local_accept_calibration =
         if conditional_local_accept_calibration_report_path.exists() {
             Some(
@@ -26216,7 +25226,10 @@ where
         } else {
             None
         };
-    let mixed_audit_report_path = PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let mixed_audit_report_path = current_window_companion_report_path(
+        DEFAULT_MIXED_OUTPUT_EVIDENCE_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let mixed_verification_audit = if mixed_audit_report_path.exists() {
         Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
             &mixed_audit_report_path,
@@ -26231,8 +25244,10 @@ where
     } else {
         None
     };
-    let mixed_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_MIXED_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let mixed_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_MIXED_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let mixed_local_accept_calibration = if mixed_local_accept_calibration_report_path.exists() {
         Some(
             read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
@@ -28822,6 +27837,21 @@ where
         .iter()
         .map(|row| row.scoreable_payload_events)
         .sum();
+    let model_price_config_path = role_binding_model_price_config_path();
+    let model_price_config = read_role_binding_model_price_config(&model_price_config_path)?;
+    let history_token_cost_index = build_history_token_cost_index(
+        Path::new("/home/ubu/.codex/history.jsonl"),
+        forecast.total_llm_calls,
+        &model_price_config,
+    )?;
+    let token_cost_meter = build_token_cost_report_fields(
+        &model_price_config_path,
+        &history_token_cost_index,
+        forecast.total_llm_calls,
+        forecast.exact_cache_hits,
+        unique_accepts.unique_verified_incremental_request_fingerprints,
+        &unique_accepts.unique_verified_incremental_request_fingerprint_values,
+    );
     let report = RoleBindingFeedbackLoopReport {
         schema_version: "nando_role_binding_real_traffic_feedback_loop_v1".to_owned(),
         verdict: "CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW".to_owned(),
@@ -29153,6 +28183,7 @@ where
             .saturating_sub(unique_accepts.unique_verified_request_fingerprints),
         incremental_unique_gap_to_80_calls: target_verified_cpu_calls
             .saturating_sub(unique_accepts.unique_verified_incremental_request_fingerprints),
+        token_cost_meter,
         exact_cache_overlap_verified_cpu_accepts: unique_accepts
             .unique_verified_exact_cache_overlap_request_fingerprints,
         verified_cpu_accept_route_unique_sum_request_fingerprints: unique_accepts
@@ -29454,6 +28485,7 @@ where
                 exact_cache_key: Some(cache_key),
                 provider_cache_hit: Some(false),
                 provider_cost_microusd: Some(100),
+                token_cost: RoleBindingTraceTokenCostFields::default(),
                 nando_shadow_request: Some(request),
                 verified_safe_accept: Some(sequence.expect_local_operator),
                 synthetic_source: Some(true),
@@ -30202,6 +29234,7 @@ fn score_role_binding_profile_request(
     let mut energy_margin = 0i32;
     let mut min_slot_margin = i32::MAX;
     let mut first_slot_margin = 0i32;
+    let mut second_slot_margin = None;
     let mut strict_ordered_pass = true;
     let core_start = Instant::now();
     for (slot_index, slot) in request.slots.iter().enumerate() {
@@ -30210,6 +29243,8 @@ fn score_role_binding_profile_request(
         let slot_margin = positive_score - negative_score;
         if slot_index == 0 {
             first_slot_margin = slot_margin;
+        } else if slot_index == 1 {
+            second_slot_margin = Some(slot_margin);
         }
         energy_margin += slot_margin;
         min_slot_margin = min_slot_margin.min(slot_margin);
@@ -30224,19 +29259,21 @@ fn score_role_binding_profile_request(
         );
     }
     let threshold = profile.runtime.policy().local_margin_threshold;
-    let accepted = profile_accepts_request_score(
+    let accepted = profile_accepts_request_score_with_second_slot(
         &profile.config.acceptance_policy,
         strict_ordered_pass,
         energy_margin,
         first_slot_margin,
+        second_slot_margin,
         request.active_fringe.len(),
         threshold,
     );
-    let fallback_reason = profile_request_fallback_reason(
+    let fallback_reason = profile_request_fallback_reason_with_second_slot(
         &profile.config.acceptance_policy,
         strict_ordered_pass,
         energy_margin,
         first_slot_margin,
+        second_slot_margin,
         request.active_fringe.len(),
         threshold,
     );
@@ -30892,6 +29929,8 @@ struct RoleBindingRealTrafficTraceRow {
     exact_cache_key: Option<String>,
     provider_cache_hit: Option<bool>,
     provider_cost_microusd: Option<u64>,
+    #[serde(default, flatten)]
+    token_cost: RoleBindingTraceTokenCostFields,
     nando_shadow_request: Option<RoleBindingProfileScoreRequest>,
     verified_safe_accept: Option<bool>,
     synthetic_source: Option<bool>,
@@ -30913,10 +29952,70 @@ struct RoleBindingRealTrafficEventRow {
     exact_cache_key: Option<String>,
     provider_cache_hit: Option<bool>,
     provider_cost_microusd: Option<u64>,
+    #[serde(default, flatten)]
+    token_cost: RoleBindingTraceTokenCostFields,
     nando_shadow_request: Option<RoleBindingProfileScoreRequest>,
     verified_safe_accept: Option<bool>,
     synthetic_source: Option<bool>,
     notes: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct RoleBindingTraceTokenCostFields {
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+    cached_input_tokens: Option<u64>,
+    model_id: Option<String>,
+    provider: Option<String>,
+    estimated_input_cost_microusd: Option<u64>,
+    estimated_output_cost_microusd: Option<u64>,
+    estimated_total_cost_microusd: Option<u64>,
+    token_cost_estimate_used: Option<bool>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct RoleBindingTokenCostReportFields {
+    model_price_config_path: String,
+    token_cost_estimate_used: bool,
+    total_baseline_tokens: u64,
+    total_baseline_cost_microusd: u64,
+    exact_cache_tokens_saved: u64,
+    exact_cache_cost_saved_microusd: u64,
+    nando_cpu_tokens_saved: u64,
+    nando_cpu_cost_saved_microusd: u64,
+    combined_tokens_saved: u64,
+    combined_cost_saved_microusd: u64,
+    nando_calls_saved_pct: f64,
+    nando_tokens_saved_pct: f64,
+    nando_cost_saved_pct: f64,
+    combined_calls_saved_pct: f64,
+    combined_tokens_saved_pct: f64,
+    combined_cost_saved_pct: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingModelPriceConfig {
+    schema_version: String,
+    default_provider: String,
+    default_model_id: String,
+    input_cost_microusd_per_1k_tokens: u64,
+    output_cost_microusd_per_1k_tokens: u64,
+    price_source: String,
+}
+
+impl Default for RoleBindingModelPriceConfig {
+    fn default() -> Self {
+        Self {
+            schema_version: "nando_model_price_config_v1".to_owned(),
+            default_provider: "codex_history_estimated".to_owned(),
+            default_model_id: "codex_history_chars_div4_estimate".to_owned(),
+            input_cost_microusd_per_1k_tokens: 1_000,
+            output_cost_microusd_per_1k_tokens: 5_000,
+            price_source:
+                "user-editable placeholder; replace with real provider billing before market claim"
+                    .to_owned(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -33022,6 +32121,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     exact_cache_overlap_verified_cpu_accepts: usize,
     target_verified_cpu_accepts: usize,
     verified_gap_to_80_calls: usize,
+    #[serde(default, flatten)]
+    token_cost_meter: RoleBindingTokenCostReportFields,
     #[serde(default)]
     business_value_gate_passed_rows: usize,
     #[serde(default)]
@@ -35026,6 +34127,8 @@ struct RoleBindingFeedbackLoopReport {
     unique_verified_gap_to_80_calls: usize,
     #[serde(default)]
     incremental_unique_gap_to_80_calls: usize,
+    #[serde(default, flatten)]
+    token_cost_meter: RoleBindingTokenCostReportFields,
     #[serde(default)]
     exact_cache_overlap_verified_cpu_accepts: usize,
     #[serde(default)]
@@ -35051,6 +34154,7 @@ struct RoleBindingFeedbackUniqueAccepts {
     unique_verified_request_fingerprints: usize,
     unique_verified_incremental_request_fingerprints: usize,
     unique_verified_exact_cache_overlap_request_fingerprints: usize,
+    unique_verified_incremental_request_fingerprint_values: BTreeSet<String>,
     duplicate_within_route_verified_hits: usize,
     cross_route_overlap_verified_request_fingerprints: usize,
     duplicate_verified_route_hits: usize,
@@ -42880,6 +41984,7 @@ fn profile_acceptance_policy_is_supported(policy: &str) -> bool {
             | "energy_threshold_only"
             | PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE
             | "first_slot_threshold"
+            | PROFILE_ACCEPTANCE_POLICY_SECOND_SLOT_THRESHOLD
             | PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114
     )
 }
@@ -42891,10 +41996,31 @@ fn profile_accepts_score(
     first_slot_margin: i32,
     threshold: i32,
 ) -> bool {
+    profile_accepts_score_with_second_slot(
+        acceptance_policy,
+        strict_ordered_pass,
+        energy_margin,
+        first_slot_margin,
+        None,
+        threshold,
+    )
+}
+
+fn profile_accepts_score_with_second_slot(
+    acceptance_policy: &str,
+    strict_ordered_pass: bool,
+    energy_margin: i32,
+    first_slot_margin: i32,
+    second_slot_margin: Option<i32>,
+    threshold: i32,
+) -> bool {
     match acceptance_policy {
         "energy_threshold_only" => energy_margin >= threshold,
         PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE => energy_margin >= 0,
         "first_slot_threshold" => first_slot_margin >= threshold,
+        PROFILE_ACCEPTANCE_POLICY_SECOND_SLOT_THRESHOLD => {
+            second_slot_margin.is_some_and(|margin| margin >= threshold)
+        }
         _ => strict_ordered_pass && energy_margin >= threshold,
     }
 }
@@ -42907,16 +42033,37 @@ fn profile_accepts_request_score(
     active_fringe_len: usize,
     threshold: i32,
 ) -> bool {
+    profile_accepts_request_score_with_second_slot(
+        acceptance_policy,
+        strict_ordered_pass,
+        energy_margin,
+        first_slot_margin,
+        None,
+        active_fringe_len,
+        threshold,
+    )
+}
+
+fn profile_accepts_request_score_with_second_slot(
+    acceptance_policy: &str,
+    strict_ordered_pass: bool,
+    energy_margin: i32,
+    first_slot_margin: i32,
+    second_slot_margin: Option<i32>,
+    active_fringe_len: usize,
+    threshold: i32,
+) -> bool {
     match acceptance_policy {
         PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114 => {
             first_slot_margin >= threshold
                 && active_fringe_len >= REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN
         }
-        _ => profile_accepts_score(
+        _ => profile_accepts_score_with_second_slot(
             acceptance_policy,
             strict_ordered_pass,
             energy_margin,
             first_slot_margin,
+            second_slot_margin,
             threshold,
         ),
     }
@@ -42929,16 +42076,37 @@ fn profile_fallback_reason(
     first_slot_margin: i32,
     threshold: i32,
 ) -> Option<String> {
-    if profile_accepts_score(
+    profile_fallback_reason_with_second_slot(
         acceptance_policy,
         strict_ordered_pass,
         energy_margin,
         first_slot_margin,
+        None,
+        threshold,
+    )
+}
+
+fn profile_fallback_reason_with_second_slot(
+    acceptance_policy: &str,
+    strict_ordered_pass: bool,
+    energy_margin: i32,
+    first_slot_margin: i32,
+    second_slot_margin: Option<i32>,
+    threshold: i32,
+) -> Option<String> {
+    if profile_accepts_score_with_second_slot(
+        acceptance_policy,
+        strict_ordered_pass,
+        energy_margin,
+        first_slot_margin,
+        second_slot_margin,
         threshold,
     ) {
         None
     } else if acceptance_policy == "first_slot_threshold" {
         Some("first_slot_margin_below_threshold".to_owned())
+    } else if acceptance_policy == PROFILE_ACCEPTANCE_POLICY_SECOND_SLOT_THRESHOLD {
+        Some("second_slot_margin_below_threshold".to_owned())
     } else if acceptance_policy == "strict_ordered_energy_threshold" && !strict_ordered_pass {
         Some("strict_slot_check_failed".to_owned())
     } else {
@@ -42946,19 +42114,21 @@ fn profile_fallback_reason(
     }
 }
 
-fn profile_request_fallback_reason(
+fn profile_request_fallback_reason_with_second_slot(
     acceptance_policy: &str,
     strict_ordered_pass: bool,
     energy_margin: i32,
     first_slot_margin: i32,
+    second_slot_margin: Option<i32>,
     active_fringe_len: usize,
     threshold: i32,
 ) -> Option<String> {
-    if profile_accepts_request_score(
+    if profile_accepts_request_score_with_second_slot(
         acceptance_policy,
         strict_ordered_pass,
         energy_margin,
         first_slot_margin,
+        second_slot_margin,
         active_fringe_len,
         threshold,
     ) {
@@ -43488,6 +42658,27 @@ fn select_supported_mixed_safe_policy(
 }
 
 fn select_supported_metrics_report_safe_policy(
+    calibration: &RoleBindingEditLocalAcceptCalibrationReport,
+) -> Option<&RoleBindingEditLocalAcceptPolicyReport> {
+    calibration
+        .policies
+        .iter()
+        .filter(|policy| {
+            policy.safe
+                && policy.false_accepts == 0
+                && policy.true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && policy.threshold.is_some()
+                && policy.policy_name == "best_metric_slot_margin_threshold"
+        })
+        .max_by(|left, right| {
+            left.true_accepts
+                .cmp(&right.true_accepts)
+                .then_with(|| right.accepts.cmp(&left.accepts))
+                .then_with(|| left.policy_name.cmp(&right.policy_name))
+        })
+}
+
+fn select_supported_serving_ops_safe_policy(
     calibration: &RoleBindingEditLocalAcceptCalibrationReport,
 ) -> Option<&RoleBindingEditLocalAcceptPolicyReport> {
     calibration
@@ -44724,6 +43915,84 @@ fn select_mixed_promotion_policy_from_evidence(
     Ok(evaluate_mixed_energy_promotion_threshold(
         &calibration_policy.policy_name,
         "calibration_report_fallback_requires_shadow_audit",
+        calibration_threshold,
+        &scored_rows,
+    ))
+}
+
+fn select_serving_ops_promotion_policy_from_evidence(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+    calibration_policy: &RoleBindingEditLocalAcceptPolicyReport,
+) -> Result<RoleBindingMixedPromotionPolicySelection, String> {
+    let calibration_threshold = calibration_policy
+        .threshold
+        .ok_or_else(|| "selected serving-ops calibration policy has no threshold".to_owned())?;
+    let mut scored_rows = Vec::new();
+    for row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_serving_ops = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY);
+        if !is_serving_ops || request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
+            continue;
+        };
+        scored_rows.push((
+            score.slot_margins.get(1).copied().unwrap_or(i32::MIN),
+            row.verified_safe_accept,
+        ));
+    }
+    if scored_rows.is_empty() {
+        return Err(
+            "serving-ops safe policy selection found no scoreable serving_ops rows".to_owned(),
+        );
+    }
+
+    let mut thresholds = scored_rows
+        .iter()
+        .map(|(metric_slot_margin, _)| *metric_slot_margin)
+        .collect::<Vec<_>>();
+    thresholds.push(calibration_threshold);
+    thresholds.sort_unstable();
+    thresholds.dedup();
+
+    let mut best_market_safe: Option<RoleBindingMixedPromotionPolicySelection> = None;
+    for threshold in thresholds {
+        let selection = evaluate_mixed_energy_promotion_threshold(
+            "market_safe_second_slot_margin_threshold",
+            "evidence_trace_serving_ops_second_slot_safe_threshold",
+            threshold,
+            &scored_rows,
+        );
+        let market_safe = selection.true_accepts
+            >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+            && selection.false_accepts == 0
+            && selection.unverified_accepts == 0;
+        if !market_safe {
+            continue;
+        }
+        let replace = best_market_safe.as_ref().is_none_or(|current| {
+            selection.true_accepts > current.true_accepts
+                || (selection.true_accepts == current.true_accepts
+                    && selection.threshold < current.threshold)
+        });
+        if replace {
+            best_market_safe = Some(selection);
+        }
+    }
+    if let Some(selection) = best_market_safe {
+        return Ok(selection);
+    }
+
+    Ok(evaluate_mixed_energy_promotion_threshold(
+        &calibration_policy.policy_name,
+        "serving_ops_calibration_report_fallback_requires_shadow_audit",
         calibration_threshold,
         &scored_rows,
     ))
@@ -50563,6 +49832,12 @@ fn validate_real_traffic_event_row(row: &RoleBindingRealTrafficEventRow) -> Resu
             row.event_id
         ));
     }
+    if !row.llm_call && row.token_cost.estimated_total_cost_microusd.unwrap_or(0) > 0 {
+        return Err(format!(
+            "event_id={} has estimated_total_cost_microusd but llm_call=false",
+            row.event_id
+        ));
+    }
     if row.verified_safe_accept.is_some() && row.nando_shadow_request.is_none() {
         return Err(format!(
             "event_id={} has verified_safe_accept without nando_shadow_request",
@@ -50597,6 +49872,12 @@ fn validate_real_traffic_trace_row(row: &RoleBindingRealTrafficTraceRow) -> Resu
     if !row.llm_call && row.provider_cost_microusd.unwrap_or(0) > 0 {
         return Err(format!(
             "trace_id={} has provider_cost_microusd but llm_call=false",
+            row.trace_id
+        ));
+    }
+    if !row.llm_call && row.token_cost.estimated_total_cost_microusd.unwrap_or(0) > 0 {
+        return Err(format!(
+            "trace_id={} has estimated_total_cost_microusd but llm_call=false",
             row.trace_id
         ));
     }
@@ -54183,6 +53464,224 @@ where
         .map_err(|error| format!("failed to open JSONL {}: {error}", path.display()))?;
     file.write_all(line.as_bytes())
         .map_err(|error| format!("failed to append JSONL {}: {error}", path.display()))
+}
+
+#[derive(Clone, Debug)]
+struct RoleBindingTokenCostEstimate {
+    input_tokens: u64,
+    output_tokens: u64,
+    cached_input_tokens: u64,
+    estimated_input_cost_microusd: u64,
+    estimated_output_cost_microusd: u64,
+    estimated_total_cost_microusd: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RoleBindingHistoryTokenCostIndex {
+    by_request_fingerprint: BTreeMap<String, RoleBindingTokenCostEstimate>,
+    total_baseline_tokens: u128,
+    total_baseline_cost_microusd: u128,
+    exact_cache_tokens_saved: u128,
+    exact_cache_cost_saved_microusd: u128,
+    token_cost_estimate_used: bool,
+}
+
+fn role_binding_model_price_config_path() -> PathBuf {
+    std::env::var("NANDO_MODEL_PRICE_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(DEFAULT_REAL_TRAFFIC_MODEL_PRICE_CONFIG))
+}
+
+fn read_role_binding_model_price_config(
+    config_path: &Path,
+) -> Result<RoleBindingModelPriceConfig, String> {
+    match fs::read_to_string(config_path) {
+        Ok(text) => serde_json::from_str::<RoleBindingModelPriceConfig>(&text).map_err(|error| {
+            format!(
+                "failed to parse model price config {}: {error}",
+                config_path.display()
+            )
+        }),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            Ok(RoleBindingModelPriceConfig::default())
+        }
+        Err(error) => Err(format!(
+            "failed to read model price config {}: {error}",
+            config_path.display()
+        )),
+    }
+}
+
+fn estimate_token_count_from_chars(text: &str) -> u64 {
+    let chars = text.chars().count() as u64;
+    chars.saturating_add(3).saturating_div(4).max(1)
+}
+
+fn cost_microusd_for_tokens(tokens: u64, microusd_per_1k_tokens: u64) -> u64 {
+    u128_to_u64_saturating(
+        u128::from(tokens)
+            .saturating_mul(u128::from(microusd_per_1k_tokens))
+            .saturating_add(999)
+            / 1_000,
+    )
+}
+
+fn estimate_role_binding_token_cost_from_text(
+    text: &str,
+    price_config: &RoleBindingModelPriceConfig,
+) -> RoleBindingTokenCostEstimate {
+    let input_tokens = estimate_token_count_from_chars(text);
+    let output_tokens = estimate_token_count_from_chars(text);
+    let estimated_input_cost_microusd =
+        cost_microusd_for_tokens(input_tokens, price_config.input_cost_microusd_per_1k_tokens);
+    let estimated_output_cost_microusd = cost_microusd_for_tokens(
+        output_tokens,
+        price_config.output_cost_microusd_per_1k_tokens,
+    );
+    let estimated_total_cost_microusd =
+        estimated_input_cost_microusd.saturating_add(estimated_output_cost_microusd);
+    RoleBindingTokenCostEstimate {
+        input_tokens,
+        output_tokens,
+        cached_input_tokens: 0,
+        estimated_input_cost_microusd,
+        estimated_output_cost_microusd,
+        estimated_total_cost_microusd,
+    }
+}
+
+fn trace_token_cost_from_text(
+    text: &str,
+    price_config: &RoleBindingModelPriceConfig,
+) -> RoleBindingTraceTokenCostFields {
+    let estimate = estimate_role_binding_token_cost_from_text(text, price_config);
+    RoleBindingTraceTokenCostFields {
+        input_tokens: Some(estimate.input_tokens),
+        output_tokens: Some(estimate.output_tokens),
+        cached_input_tokens: Some(estimate.cached_input_tokens),
+        model_id: Some(price_config.default_model_id.clone()),
+        provider: Some(price_config.default_provider.clone()),
+        estimated_input_cost_microusd: Some(estimate.estimated_input_cost_microusd),
+        estimated_output_cost_microusd: Some(estimate.estimated_output_cost_microusd),
+        estimated_total_cost_microusd: Some(estimate.estimated_total_cost_microusd),
+        token_cost_estimate_used: Some(true),
+    }
+}
+
+fn build_history_token_cost_index(
+    history_path: &Path,
+    max_events: usize,
+    price_config: &RoleBindingModelPriceConfig,
+) -> Result<RoleBindingHistoryTokenCostIndex, String> {
+    let history_rows = read_codex_history_jsonl(history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut index = RoleBindingHistoryTokenCostIndex::default();
+    let mut seen_exact_cache_keys = BTreeSet::new();
+    for row in history_rows.iter().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let estimate = estimate_role_binding_token_cost_from_text(&row.text, price_config);
+        let row_tokens = u128::from(estimate.input_tokens) + u128::from(estimate.output_tokens);
+        index.total_baseline_tokens = index.total_baseline_tokens.saturating_add(row_tokens);
+        index.total_baseline_cost_microusd = index
+            .total_baseline_cost_microusd
+            .saturating_add(u128::from(estimate.estimated_total_cost_microusd));
+        if !seen_exact_cache_keys.insert(request_fingerprint.clone()) {
+            index.exact_cache_tokens_saved =
+                index.exact_cache_tokens_saved.saturating_add(row_tokens);
+            index.exact_cache_cost_saved_microusd = index
+                .exact_cache_cost_saved_microusd
+                .saturating_add(u128::from(estimate.estimated_total_cost_microusd));
+        }
+        index
+            .by_request_fingerprint
+            .insert(request_fingerprint, estimate);
+    }
+    index.token_cost_estimate_used = true;
+    Ok(index)
+}
+
+fn token_cost_for_request_fingerprints(
+    index: &RoleBindingHistoryTokenCostIndex,
+    request_fingerprints: &BTreeSet<String>,
+) -> (u128, u128) {
+    let mut tokens = 0u128;
+    let mut cost_microusd = 0u128;
+    for request_fingerprint in request_fingerprints {
+        if let Some(estimate) = index.by_request_fingerprint.get(request_fingerprint) {
+            tokens = tokens.saturating_add(
+                u128::from(estimate.input_tokens)
+                    .saturating_add(u128::from(estimate.output_tokens)),
+            );
+            cost_microusd =
+                cost_microusd.saturating_add(u128::from(estimate.estimated_total_cost_microusd));
+        }
+    }
+    (tokens, cost_microusd)
+}
+
+fn percent(numerator: u128, denominator: u128) -> f64 {
+    if denominator == 0 {
+        0.0
+    } else {
+        (numerator as f64) * 100.0 / (denominator as f64)
+    }
+}
+
+fn build_token_cost_report_fields(
+    model_price_config_path: &Path,
+    index: &RoleBindingHistoryTokenCostIndex,
+    total_llm_calls: usize,
+    exact_cache_hits: usize,
+    nando_incremental_calls: usize,
+    nando_incremental_request_fingerprints: &BTreeSet<String>,
+) -> RoleBindingTokenCostReportFields {
+    let (nando_cpu_tokens_saved, nando_cpu_cost_saved_microusd) =
+        token_cost_for_request_fingerprints(index, nando_incremental_request_fingerprints);
+    let combined_tokens_saved = index
+        .exact_cache_tokens_saved
+        .saturating_add(nando_cpu_tokens_saved);
+    let combined_cost_saved_microusd = index
+        .exact_cache_cost_saved_microusd
+        .saturating_add(nando_cpu_cost_saved_microusd);
+    let total_calls = total_llm_calls as u128;
+    RoleBindingTokenCostReportFields {
+        model_price_config_path: model_price_config_path.display().to_string(),
+        token_cost_estimate_used: index.token_cost_estimate_used,
+        total_baseline_tokens: u128_to_u64_saturating(index.total_baseline_tokens),
+        total_baseline_cost_microusd: u128_to_u64_saturating(index.total_baseline_cost_microusd),
+        exact_cache_tokens_saved: u128_to_u64_saturating(index.exact_cache_tokens_saved),
+        exact_cache_cost_saved_microusd: u128_to_u64_saturating(
+            index.exact_cache_cost_saved_microusd,
+        ),
+        nando_cpu_tokens_saved: u128_to_u64_saturating(nando_cpu_tokens_saved),
+        nando_cpu_cost_saved_microusd: u128_to_u64_saturating(nando_cpu_cost_saved_microusd),
+        combined_tokens_saved: u128_to_u64_saturating(combined_tokens_saved),
+        combined_cost_saved_microusd: u128_to_u64_saturating(combined_cost_saved_microusd),
+        nando_calls_saved_pct: percent(nando_incremental_calls as u128, total_calls),
+        nando_tokens_saved_pct: percent(nando_cpu_tokens_saved, index.total_baseline_tokens),
+        nando_cost_saved_pct: percent(
+            nando_cpu_cost_saved_microusd,
+            index.total_baseline_cost_microusd,
+        ),
+        combined_calls_saved_pct: percent(
+            exact_cache_hits.saturating_add(nando_incremental_calls) as u128,
+            total_calls,
+        ),
+        combined_tokens_saved_pct: percent(combined_tokens_saved, index.total_baseline_tokens),
+        combined_cost_saved_pct: percent(
+            combined_cost_saved_microusd,
+            index.total_baseline_cost_microusd,
+        ),
+    }
+}
+
+fn u128_to_u64_saturating(value: u128) -> u64 {
+    if value > u128::from(u64::MAX) {
+        u64::MAX
+    } else {
+        value as u64
+    }
 }
 
 fn stable_real_traffic_fingerprint64(bytes: &[u8]) -> u64 {
