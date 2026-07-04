@@ -1,0 +1,206 @@
+{
+  "task_id": "agent-control-current5k-admission-gate-v1",
+  "domain": "code",
+  "query": "Verify that current5k agent_control catalog rows use current5k admission calibration evidence, not stale 1000-window v2 support, and that no CPU80 claim or agent_control promotion is allowed.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "old_agent_control_v2_admission_audit",
+      "relation": "best_robust_true_accepts",
+      "object": "11",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.report.json",
+      "confidence": 1.0,
+      "subject_role": "old_audit_report",
+      "object_role": "metric",
+      "route": "agent_control_old_v2"
+    },
+    {
+      "id": "t2",
+      "subject": "old_agent_control_v2_admission_audit",
+      "relation": "current_policy_event_support_exhausted",
+      "object": "true",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.report.json",
+      "confidence": 1.0,
+      "subject_role": "old_audit_report",
+      "object_role": "old_window_status",
+      "route": "agent_control_old_v2"
+    },
+    {
+      "id": "t3",
+      "subject": "current5k_agent_control_admission_calibration",
+      "relation": "hook_ready_rows",
+      "object": "476",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "current_calibration_report",
+      "object_role": "metric",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t4",
+      "subject": "current5k_agent_control_admission_calibration",
+      "relation": "label_true_rows",
+      "object": "35",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "current_calibration_report",
+      "object_role": "metric",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t5",
+      "subject": "current5k_agent_control_admission_calibration",
+      "relation": "label_false_rows",
+      "object": "441",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "current_calibration_report",
+      "object_role": "risk_metric",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t6",
+      "subject": "current5k_agent_control_admission_calibration",
+      "relation": "robust_safe_policy_found",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "current_calibration_report",
+      "object_role": "safety_status",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t7",
+      "subject": "current5k_agent_control_admission_calibration",
+      "relation": "best_robust_true_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "current_calibration_report",
+      "object_role": "metric",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t8",
+      "subject": "current5k_feedback_loop",
+      "relation": "uses_agent_control_admission_calibration",
+      "object": "agent-control-admission-calibration-v1-5k.report.json",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "current_artifact",
+      "route": "current5k"
+    },
+    {
+      "id": "t9",
+      "subject": "current5k_feedback_loop",
+      "relation": "incremental_cpu_accept_unique_request_fingerprints",
+      "object": "107",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t10",
+      "subject": "current5k_catalog_agent_control_row",
+      "relation": "current_status",
+      "object": "WATCH",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_agent_control_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_row",
+      "object_role": "status",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t11",
+      "subject": "current5k_catalog_agent_control_row",
+      "relation": "agent_control_admission_best_robust_true_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_agent_control_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_row",
+      "object_role": "metric",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t12",
+      "subject": "current5k_catalog_agent_control_row",
+      "relation": "agent_control_current_policy_event_support_exhausted",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_agent_control_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_row",
+      "object_role": "status",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t13",
+      "subject": "current5k_catalog_agent_control_row",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_agent_control_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_row",
+      "object_role": "metric",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t14",
+      "subject": "current5k_catalog_agent_control_row",
+      "relation": "forbids_old_v2_authority",
+      "object": "stale_v2_support_not_current5k_evidence",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "claim_boundary",
+      "route": "agent_control_current5k"
+    },
+    {
+      "id": "t15",
+      "subject": "current5k_catalog_agent_control_row",
+      "relation": "forbids_cpu80_claim",
+      "object": "cpu80_not_achieved",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "claim_boundary",
+      "route": "current5k"
+    },
+    {
+      "id": "t16",
+      "subject": "current5k_catalog_agent_control_stop_row",
+      "relation": "current_status",
+      "object": "WATCH",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=agent_control_stop",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_stop_row",
+      "object_role": "status",
+      "route": "agent_control_stop"
+    },
+    {
+      "id": "t17",
+      "subject": "current5k_catalog_agent_control_stop_row",
+      "relation": "agent_control_admission_best_robust_true_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=agent_control_stop",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_stop_row",
+      "object_role": "metric",
+      "route": "agent_control_stop"
+    },
+    {
+      "id": "t18",
+      "subject": "current5k_catalog_agent_control_stop_row",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=agent_control_stop",
+      "confidence": 1.0,
+      "subject_role": "catalog_agent_control_stop_row",
+      "object_role": "metric",
+      "route": "agent_control_stop"
+    }
+  ],
+  "candidate_triads": []
+}

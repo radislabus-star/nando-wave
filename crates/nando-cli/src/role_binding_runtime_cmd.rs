@@ -388,6 +388,8 @@ const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json";
+const DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_5K_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-5k.report.json";
 const DEFAULT_AGENT_CONTROL_ADMISSION_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.report.json";
 const DEFAULT_AGENT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
@@ -20282,7 +20284,10 @@ where
         None
     };
     let agent_control_admission_calibration_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT);
+        current_window_agent_control_admission_calibration_report_path(
+            PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT),
+            prefer_current5k_companions,
+        );
     let agent_control_admission_calibration = if agent_control_admission_calibration_report_path
         .exists()
     {
@@ -20404,6 +20409,37 @@ where
         .as_ref()
         .map(|audit| audit.unique_contribution_constrained)
         .unwrap_or(false);
+    let agent_control_gap_current_support = feedback
+        .routes
+        .iter()
+        .find(|route| route.route_key.contains("agent_control"))
+        .map(|route| {
+            route
+                .unique_accepts
+                .incremental_verified_request_fingerprints
+        })
+        .unwrap_or_default();
+    let agent_control_gap_best_robust_true_accepts = agent_control_admission_calibration
+        .as_ref()
+        .map(|audit| audit.best_robust_true_accepts)
+        .unwrap_or(agent_control_audit_best_robust_true_accepts);
+    let agent_control_gap_no_safe_policy = agent_control_admission_calibration
+        .as_ref()
+        .is_some_and(|audit| !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found);
+    let agent_control_gap_current_policy_event_support_exhausted =
+        if let Some(audit) = agent_control_admission_calibration.as_ref() {
+            audit.robust_safe_policy_found
+                && audit.best_robust_true_accepts > 0
+                && audit.best_robust_true_accepts <= agent_control_gap_current_support
+        } else {
+            agent_control_audit_current_policy_event_support_exhausted
+        };
+    let agent_control_gap_unique_contribution_constrained =
+        if agent_control_admission_calibration.is_some() {
+            agent_control_gap_current_policy_event_support_exhausted
+        } else {
+            agent_control_audit_unique_contribution_constrained
+        };
     let metrics_report_gap_best_robust_true_accepts = metrics_report_admission_calibration
         .as_ref()
         .map(|audit| audit.best_robust_true_accepts)
@@ -20484,24 +20520,62 @@ where
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
-        let agent_control_admission_best_robust_true_accepts = agent_control_admission_audit
-            .as_ref()
-            .filter(|_| route.route_key.contains("agent_control"))
-            .map(|audit| audit.best_robust_true_accepts)
-            .unwrap_or_default();
-        let agent_control_current_policy_event_support_exhausted = agent_control_admission_audit
-            .as_ref()
-            .filter(|_| route.route_key.contains("agent_control"))
-            .map(|audit| audit.current_policy_event_support_exhausted)
-            .unwrap_or(false);
-        let agent_control_unique_contribution_constrained = agent_control_admission_audit
-            .as_ref()
-            .filter(|_| route.route_key.contains("agent_control"))
-            .map(|audit| audit.unique_contribution_constrained)
-            .unwrap_or(false);
+        let route_is_agent_control = route.route_key.contains("agent_control");
+        let agent_control_admission_best_robust_true_accepts = if route_is_agent_control {
+            agent_control_admission_calibration
+                .as_ref()
+                .map(|audit| audit.best_robust_true_accepts)
+                .unwrap_or_else(|| {
+                    agent_control_admission_audit
+                        .as_ref()
+                        .map(|audit| audit.best_robust_true_accepts)
+                        .unwrap_or_default()
+                })
+        } else {
+            0
+        };
+        let agent_control_admission_no_safe_policy = route_is_agent_control
+            && agent_control_admission_calibration
+                .as_ref()
+                .is_some_and(|audit| {
+                    !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
+                });
+        let agent_control_current_policy_event_support_exhausted = if route_is_agent_control {
+            if let Some(audit) = agent_control_admission_calibration.as_ref() {
+                audit.robust_safe_policy_found
+                    && audit.best_robust_true_accepts > 0
+                    && audit.best_robust_true_accepts
+                        <= route
+                            .unique_accepts
+                            .incremental_verified_request_fingerprints
+            } else {
+                agent_control_admission_audit
+                    .as_ref()
+                    .map(|audit| audit.current_policy_event_support_exhausted)
+                    .unwrap_or(false)
+            }
+        } else {
+            false
+        };
+        let agent_control_unique_contribution_constrained = if route_is_agent_control {
+            if agent_control_admission_calibration.is_some() {
+                agent_control_current_policy_event_support_exhausted
+            } else {
+                agent_control_admission_audit
+                    .as_ref()
+                    .map(|audit| audit.unique_contribution_constrained)
+                    .unwrap_or(false)
+            }
+        } else {
+            false
+        };
         if agent_control_current_policy_event_support_exhausted {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
+        }
+        if agent_control_admission_no_safe_policy {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
         }
         let git_control_admission_best_safe_true_accepts = git_control_admission_audit
             .as_ref()
@@ -20699,6 +20773,10 @@ where
         if conditional_admission_current_support_exhausted {
             next_action = format!(
                 "Conditional admission audit found only {conditional_admission_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve conditional payload geometry or split a stronger subfamily before another promote."
+            );
+        } else if agent_control_admission_no_safe_policy {
+            next_action = format!(
+                "Agent-control current-window admission calibration found no safe request-side policy (robust true accepts {agent_control_admission_best_robust_true_accepts}); do not repeat the old stop/control promotion. Split a narrower tool-state/control subfamily with deterministic verifier evidence before another promote."
             );
         } else if agent_control_current_policy_event_support_exhausted {
             next_action = format!(
@@ -20973,8 +21051,10 @@ where
                         && !report.market_claim_allowed
                 });
         let mut priority_score;
+        let agent_control_stop_no_safe_policy =
+            family.family_key == "agent_control_stop" && agent_control_gap_no_safe_policy;
         let agent_control_stop_support_exhausted = family.family_key == "agent_control_stop"
-            && agent_control_audit_current_policy_event_support_exhausted;
+            && agent_control_gap_current_policy_event_support_exhausted;
         let metrics_report_support_exhausted = family.family_key
             == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY
             && metrics_report_gap_support_exhausted;
@@ -21118,7 +21198,8 @@ where
         {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
-        } else if agent_continue_gap_no_safe_policy
+        } else if agent_control_stop_no_safe_policy
+            || agent_continue_gap_no_safe_policy
             || agent_continue_state_gap_no_safe_policy
             || short_decision_ack_prior_blocked
         {
@@ -21130,7 +21211,11 @@ where
         }
         let next_action = if agent_control_stop_support_exhausted {
             format!(
-                "Agent-control stop gap is payload-ready, but the current strict stop policy support is exhausted at {agent_control_audit_best_robust_true_accepts} robust true accepts and unique contribution is constrained. Do not repeat stop promotion; add stronger tool-state/no-mutation evidence or split a new control subfamily."
+                "Agent-control stop gap is payload-ready, but the current strict stop policy support is exhausted at {agent_control_gap_best_robust_true_accepts} robust true accepts and unique contribution is constrained. Do not repeat stop promotion; add stronger tool-state/no-mutation evidence or split a new control subfamily."
+            )
+        } else if agent_control_stop_no_safe_policy {
+            format!(
+                "Agent-control stop gap is payload-ready, but current-window admission calibration found no safe stop/control policy. Do not reuse the old 1000-window support; split a narrower tool-state/no-mutation subfamily with deterministic verifier evidence."
             )
         } else if metrics_report_support_exhausted {
             format!(
@@ -21364,7 +21449,7 @@ where
             agent_control_admission_best_robust_true_accepts: if family.family_key
                 == "agent_control_stop"
             {
-                agent_control_audit_best_robust_true_accepts
+                agent_control_gap_best_robust_true_accepts
             } else {
                 0
             },
@@ -21372,7 +21457,7 @@ where
                 agent_control_stop_support_exhausted,
             agent_control_unique_contribution_constrained: family.family_key
                 == "agent_control_stop"
-                && agent_control_audit_unique_contribution_constrained,
+                && agent_control_gap_unique_contribution_constrained,
             git_control_admission_best_safe_true_accepts: if family.family_key
                 == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
             {
@@ -27879,6 +27964,11 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT));
+    let agent_control_admission_calibration_report_path =
+        current_window_agent_control_admission_calibration_report_path(
+            agent_control_admission_calibration_report_path,
+            prefer_current5k_companions,
+        );
     let agent_control_safe_policy_audit_report_path = args
         .next()
         .map(PathBuf::from)
@@ -45222,6 +45312,23 @@ fn current_window_companion_report_path(
         }
     }
     PathBuf::from(default_report_path)
+}
+
+fn current_window_agent_control_admission_calibration_report_path(
+    requested_path: PathBuf,
+    prefer_current5k: bool,
+) -> PathBuf {
+    if !prefer_current5k {
+        return requested_path;
+    }
+    let default_path = PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT);
+    let current5k_path = PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_5K_REPORT);
+    if requested_path == default_path && current5k_path.exists() {
+        return current5k_path;
+    }
+
+    let requested = requested_path.to_string_lossy().into_owned();
+    current_window_companion_report_path(&requested, true)
 }
 
 type RoleBindingCalibrationMarginAccessor = fn(&RoleBindingEditLocalAcceptCalibrationRow) -> i32;

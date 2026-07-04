@@ -260,11 +260,18 @@ Current examples:
 ```text
 role_binding_agent_control_seed0:
   business_value_gate_failure_reason:
-    missing_deterministic_verifier_hook,current_support_exhausted
+    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
+  agent_control_admission_best_robust_true_accepts: 0
+  agent_control_current_policy_event_support_exhausted: false
+  decision: current5k calibration overrides stale 1000-window v2 support;
+    do not repeat the old stop/control promotion.
 
 agent_control_stop:
   business_value_gate_failure_reason:
-    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,current_support_exhausted,false_accept_risk_unknown
+    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,false_accept_risk_unknown
+  agent_control_admission_best_robust_true_accepts: 0
+  agent_control_current_policy_event_support_exhausted: false
+  decision: WATCH / NO_SAFE_CURRENT_WINDOW_POLICY
 
 git_control:
   business_value_gate_failure_reason:
@@ -357,6 +364,10 @@ agent_control current5k audit:
   verified_true_events: 35
   verified_false_events: 441
   robust_safe_policy_found: false
+  best_robust_true_accepts: 0
+  current catalog status: WATCH
+  current catalog decision: no safe request-side policy; old v2 support is not
+    current5k authority
   decision: WATCH / NO_SAFE_POLICY
 
 metrics_report current5k:

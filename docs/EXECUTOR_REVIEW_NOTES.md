@@ -1,5 +1,109 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Agent-Control Current5k Admission Evidence Replaces Stale V2 Support
+
+Verdict:
+
+```text
+AGENT_CONTROL_CURRENT5K_NO_SAFE_POLICY_RECORDED
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+The current5k feedback loop was already reportable, but agent_control catalog
+diagnostics still read the older default 1000-window v2 admission/audit path.
+That path showed 11 robust stop/control true accepts and made the catalog look
+like it should keep chasing the exhausted old stop policy.
+
+The real current5k calibration says the opposite:
+  hook_ready_rows: 476
+  label_true_rows: 35
+  label_false_rows: 441
+  robust_safe_policy_found: false
+  best_robust_true_accepts: 0
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+What changed:
+
+```text
+role-binding-real-traffic-feedback-loop-v1 and
+role-binding-real-traffic-cpu-operator-catalog-v1 now resolve the
+agent_control admission calibration through the current-window companion when
+running current5k reports.
+
+For current5k, the active source is now:
+  agent-control-admission-calibration-v1-5k.report.json
+
+If current5k calibration exists, it overrides stale v2 audit authority for
+agent_control catalog rows. Old v2 support can no longer surface as
+best_robust_true_accepts=11 in the current5k catalog.
+```
+
+Measured full current5k feedback/catalog after the fix:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+scoreable_candidate_calls: 549
+verification_hook_ready_events: 297
+verified_cpu_accept_eligible_events: 111
+verified_cpu_accept_unique_request_fingerprints: 109
+incremental_cpu_accept_unique_request_fingerprints: 107
+exact_cache_overlap_verified_cpu_accepts: 2
+
+catalog business_value_gate_passed_rows: 6
+catalog proven_profile_rows: 6
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 17
+catalog rejected_profile_rows: 5
+```
+
+Measured agent_control catalog rows:
+
+```text
+role_binding_agent_control_seed0:
+  current_status: WATCH
+  business_value_gate_failure_reason:
+    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
+  agent_control_admission_best_robust_true_accepts: 0
+  agent_control_current_policy_event_support_exhausted: false
+  expected_unique_cpu_accepts_over_exact_cache: 0
+
+agent_control_stop:
+  current_status: WATCH
+  agent_control_admission_best_robust_true_accepts: 0
+  agent_control_current_policy_event_support_exhausted: false
+  expected_unique_cpu_accepts_over_exact_cache: 0
+```
+
+Decision:
+
+```text
+Do not promote or repair the old broad agent_control stop route.
+Do not reuse the old 1000-window v2 support as current5k evidence.
+Next valid work is a narrower tool-state/control subfamily with deterministic
+verifier evidence, and only after BUSINESS_VALUE_GATE shows expected unique CPU
+accepts over exact cache.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/agent-control-current5k-admission-gate-v1.md
+triads: docs/structural_gates/agent-control-current5k-admission-gate-v1.triads.json
+verdict: PASS
+complexity_score: 55
+trace_path: /tmp/nanda-structural-gate/agent-control-current5k-admission-gate-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Metrics-Report Safe Policy Loaded Into Current5k Feedback
 
 Verdict:
