@@ -145,13 +145,21 @@ read_inspect route/profile rung:
   verifier_false_events: 8
   output_evidence_audit:
     target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json
+  local_accept_calibration_report:
+    target/nando-wave/real-traffic-shadow/read-inspect-local-accept-calibration-v1.report.json
   verification_hook_ready_events: 9
   candidates_missing_output_evidence: 3
+  local_accept_safe_policy_found: false
+  local_accept_best_safe_true_accepts: 0
+  local_accept_minimum_true_support: 3
+  local_accept_support_qualified: false
+  route_stage: local_accept_calibration_failed
   local_accepts_enabled: false
   verified_cpu_accept_eligible_events: 0
   false_accepts: 0
-  claim_boundary: verifier labels exist, but local accept is still disabled and
-    read_inspect contributes 0 verified CPU accepts
+  claim_boundary: verifier labels exist and calibration has run, but current
+    score/readout geometry does not separate true from false; read_inspect
+    contributes 0 verified CPU accepts
 
 metrics_report route/profile rung:
   dry_run_report:
@@ -187,7 +195,7 @@ metrics_report route/profile rung:
     metrics_report contributes 0 verified CPU accepts because safe support is
     below the 3-true minimum
 
-fresh default feedback after metrics_report output evidence:
+fresh default feedback after read_inspect + metrics_report calibration:
   feedback:
     target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
   operator_candidate_calls:            384
@@ -225,6 +233,7 @@ edit_output_evidence_command: role-binding-real-traffic-edit-output-evidence-v1
 conditional_output_evidence_command: role-binding-real-traffic-conditional-output-evidence-v1
 mixed_output_evidence_command: role-binding-real-traffic-mixed-output-evidence-v1
 read_inspect_output_evidence_command: role-binding-real-traffic-read-inspect-output-evidence-v1
+read_inspect_local_accept_calibration_command: role-binding-real-traffic-read-inspect-local-accept-calibration-v1
 metrics_report_payload_dry_run_command: role-binding-real-traffic-metrics-report-payload-dry-run-v1
 metrics_report_profile_command: role-binding-real-traffic-metrics-report-profile-v1
 metrics_report_output_evidence_command: role-binding-real-traffic-metrics-report-output-evidence-v1

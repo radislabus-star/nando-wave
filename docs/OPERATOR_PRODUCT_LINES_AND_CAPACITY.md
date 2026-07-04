@@ -221,8 +221,13 @@ Read-inspect route/profile rung:
   verifier_true_events: 1
   verifier_false_events: 8
   verification_hook_ready_events: 9
+  local_accept_calibration_report: read-inspect-local-accept-calibration-v1.report.json
+  safe_policy_found: false
+  best_safe_true_accepts: 0
+  minimum_true_support: 3
+  support_qualified: false
   verified_cpu_accepts: 0
-  blocker: local_accept_policy_not_calibrated; singleton true support is not promotable
+  blocker: local_accept_calibration_failed; no safe readout policy
 
 Metrics-report route/profile rung:
   registry: profile-registry-metrics-report-v1.json
@@ -243,7 +248,7 @@ Metrics-report route/profile rung:
   verified_cpu_accepts: 0
   blocker: local_accept_support_insufficient
 
-Fresh default feedback after metrics_report output evidence:
+Fresh default feedback after read_inspect + metrics_report calibration:
   operator_candidate_calls: 384 / 1000
   scoreable_candidate_calls: 147 / 1000
   verification_hook_ready_events: 113

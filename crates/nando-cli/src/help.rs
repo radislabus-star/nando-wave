@@ -316,6 +316,12 @@ pub(crate) fn print_help() {
         "            Attach Codex final-answer fingerprints plus conservative read-only path/evidence verifier results; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-read-inspect-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate read-inspect score/readout thresholds against deterministic verifier labels; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

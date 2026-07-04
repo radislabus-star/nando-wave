@@ -1,5 +1,89 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Read-Inspect Local Accept Calibration
+
+Verdict:
+
+```text
+READ_INSPECT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-read-inspect-local-accept-calibration-v1
+```
+
+Read-inspect local accept calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/read-inspect-local-accept-calibration-v1.report.json
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl
+
+hook_ready_rows:                      9
+scored_rows:                          9
+label_true_rows:                      1
+label_false_rows:                     8
+no_score_rows:                        0
+safe_policy_found:                    false
+best_safe_true_accepts:               0
+minimum_true_support:                 3
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Feedback loop after read-inspect calibration:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             384 / 1000
+scoreable_candidate_calls:            147 / 1000
+verification_hook_ready_events:       113
+verified_cpu_accept_eligible_events:  8
+verified_cpu_routability_milli:       8
+verified_gap_to_80_calls:             792
+market_claim_allowed:                 false
+
+read_inspect route row:
+  candidate_events:                   27
+  scoreable_payload_events:           12
+  verification_hook_ready_events:     9
+  local_accept_calibration_ran:       true
+  local_accept_safe_policy_found:     false
+  local_accept_minimum_true_support:  3
+  local_accept_support_qualified:     false
+  local_accept_best_safe_true_accepts: 0
+  verified_cpu_accept_eligible_events: 0
+  stage:                              local_accept_calibration_failed
+  next_action:                        Improve request-side admission or payload geometry before enabling local accepts.
+```
+
+Claim boundary:
+
+```text
+This closes the read_inspect calibration integration debt, but it is a red
+route gate. The current read_inspect score/readout geometry does not separate
+the single verifier-true row from eight verifier-false rows. Do not enable local
+accepts for this route and do not count read_inspect as savings.
+
+Verified CPU accepts remain 8/1000 on the fresh default artifact base. Red gate
+stays red.
+```
+
 ## 2026-07-04 - Executor Integration: Metrics-Report Route Payload/Profile/Evidence
 
 Verdict:
