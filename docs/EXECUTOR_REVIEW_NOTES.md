@@ -20,6 +20,7 @@ Added commands:
   role-binding-real-traffic-metrics-report-payload-dry-run-v1
   role-binding-real-traffic-metrics-report-profile-v1
   role-binding-real-traffic-metrics-report-output-evidence-v1
+  role-binding-real-traffic-metrics-report-local-accept-calibration-v1
 
 Added route/profile:
   route_key: metrics_report_readout
@@ -97,6 +98,33 @@ local_accepts_enabled:                false
 market_claim_allowed:                 false
 ```
 
+Metrics-report local accept calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/metrics-report-local-accept-calibration-v1.report.json
+
+hook_ready_rows:                      32
+scored_rows:                          32
+label_true_rows:                      18
+label_false_rows:                     14
+safe_policy_found:                    true
+best_safe_true_accepts:               2
+minimum_true_support:                 3
+local_accept_support_qualified:       false
+
+best policy:
+  policy_name:                        best_metric_slot_margin_threshold
+  threshold:                          393216
+  accepts:                            2
+  true_accepts:                       2
+  false_accepts:                      0
+
+interpretation:
+  Real safe score separation exists, but support is too small for promotion.
+  Do not enable local accepts from this route yet.
+```
+
 Feedback loop after metrics-report evidence:
 
 ```text
@@ -115,8 +143,13 @@ metrics_report_readout route row:
   candidate_events:                   55
   scoreable_payload_events:           42
   verification_hook_ready_events:     32
+  local_accept_calibration_ran:       true
+  local_accept_safe_policy_found:     true
+  local_accept_minimum_true_support:  3
+  local_accept_support_qualified:     false
+  local_accept_best_safe_true_accepts: 2
   verified_cpu_accept_eligible_events: 0
-  stage:                              verification_hook_ready_waiting_local_accept
+  stage:                              local_accept_calibration_support_insufficient
 ```
 
 Catalog default refresh:
@@ -155,9 +188,10 @@ This moves metrics_report_readout from route-gap into a scoreable registered
 profile with deterministic output evidence labels. It does not enable local
 accepts and does not prove savings.
 
-The route has 18 verifier-true rows and 14 verifier-false rows, but all 42
-scoreable rows still run under a disabled threshold. Verified CPU accepts remain
-8/1000 on the fresh default artifact base. Red gate stays red.
+The route has 18 verifier-true rows and 14 verifier-false rows. Calibration found
+a 2-row safe score pocket, but the minimum promotion support is 3 true rows.
+All 42 scoreable rows still run under disabled/REVIEW policy. Verified CPU
+accepts remain 8/1000 on the fresh default artifact base. Red gate stays red.
 ```
 
 ## 2026-07-04 - Executor Integration: Read-Inspect Output Evidence Verifier

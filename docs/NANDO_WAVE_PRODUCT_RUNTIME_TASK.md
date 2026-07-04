@@ -164,6 +164,8 @@ metrics_report route/profile rung:
     target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.report.json
   output_evidence_audit:
     target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json
+  local_accept_calibration_report:
+    target/nando-wave/real-traffic-shadow/metrics-report-local-accept-calibration-v1.report.json
   metrics_report_candidate_events: 55
   metrics_report_payload_ready_events: 42
   metrics_report_scoreable_payload_events: 42
@@ -175,10 +177,15 @@ metrics_report route/profile rung:
   verifier_false_events: 14
   verification_hook_ready_events: 32
   candidates_missing_output_evidence: 10
+  local_accept_safe_policy_found: true
+  local_accept_best_safe_true_accepts: 2
+  local_accept_minimum_true_support: 3
+  local_accept_support_qualified: false
   local_accepts_enabled: false
   verified_cpu_accept_eligible_events: 0
   claim_boundary: verifier labels exist, but local accept is still disabled and
-    metrics_report contributes 0 verified CPU accepts
+    metrics_report contributes 0 verified CPU accepts because safe support is
+    below the 3-true minimum
 
 fresh default feedback after metrics_report output evidence:
   feedback:

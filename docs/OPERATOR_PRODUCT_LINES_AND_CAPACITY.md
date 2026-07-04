@@ -235,8 +235,13 @@ Metrics-report route/profile rung:
   verifier_true_events: 18
   verifier_false_events: 14
   verification_hook_ready_events: 32
+  local_accept_calibration_report: metrics-report-local-accept-calibration-v1.report.json
+  safe_policy_found: true
+  best_safe_true_accepts: 2
+  minimum_true_support: 3
+  support_qualified: false
   verified_cpu_accepts: 0
-  blocker: local_accept_policy_disabled_for_metrics_report
+  blocker: local_accept_support_insufficient
 
 Fresh default feedback after metrics_report output evidence:
   operator_candidate_calls: 384 / 1000

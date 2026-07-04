@@ -334,6 +334,12 @@ pub(crate) fn print_help() {
         "            Attach Codex final-answer fingerprints plus conservative numeric report-field verifier results; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-metrics-report-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate metrics-report score/readout thresholds against deterministic verifier labels; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(
@@ -502,7 +508,7 @@ pub(crate) fn print_help() {
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / mixed route reports from default artifact paths when present; planning, agent-control, and mixed reports default to v1 unless supplied"
+        "            Auto-loads conditional / mixed / metrics-report route reports from default artifact paths when present; planning, agent-control, mixed, and metrics reports default to v1 unless supplied"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"
