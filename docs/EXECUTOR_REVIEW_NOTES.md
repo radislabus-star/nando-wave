@@ -1,5 +1,152 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_V1_REVIEW_FULL_WINDOW_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FORECAST_V1_REVIEW
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added:
+  docs/structural_gates/test-output-parse-5k-window-v1.md
+```
+
+Why:
+
+```text
+The 1000-call feedback denominator had only 10 matching `test_output_parse`
+rows, while the route-specific proof had 97/104 accepts. The 5k Codex
+route-candidate window already existed as events-jsonl, so this stage makes the
+trace reader accept event rows as trace input, normalizes the schema only inside
+the reader, and builds a separate 5k attribution path without replacing the
+canonical 1000-window catalog.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-safe-policy-window-v1 \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.events.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-cpu-route-forecast-v1 \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.report.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json \
+  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1-5k.test-output-window.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.events.jsonl \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.shadow-report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.events.jsonl \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.shadow-report.json \
+  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1-5k.route-candidates.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 \
+  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1-5k.test-output-window.report.json \
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json \
+  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1-5k.route-candidates.report.json \
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-5k.test-output-window.report.json \
+  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.report.json \
+  target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json \
+  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json \
+  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json \
+  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.verification-hook-audit.report.json \
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.verification-hook-audit.report.json \
+  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.report.json \
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json \
+  target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json \
+  target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
+```
+
+Measured result:
+
+```text
+window base_window_rows: 5000
+window promoted_route_rows: 104
+window promoted_rows_inserted: 97
+window forced_fallback_rows: 4903
+window missing_base_match_rows: 0
+window exact_cache_overlap_promoted_rows: 2
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 459
+shadow operator_candidate_calls: 97
+shadow nando_shadow_accepts: 97
+shadow verified_safe_accepts: 97
+shadow false_accepts: 0
+shadow incremental_savings_over_exact_cache: 95
+shadow incremental_reduction_vs_exact_cache_milli: 20
+
+audit operator_candidate_calls: 97
+audit scoreable_candidate_calls: 97
+audit verification_hook_ready_events: 97
+audit verified_cpu_accept_eligible_events: 97
+audit verified_true_events: 97
+audit verified_false_events: 0
+audit market_claim_allowed: true
+
+feedback total_llm_calls: 5000
+feedback exact_cache_hits: 459
+feedback operator_candidate_calls: 2312
+feedback scoreable_candidate_calls: 345
+feedback verification_hook_ready_events: 122
+feedback verified_cpu_accept_eligible_events: 97
+feedback verified_cpu_accept_unique_request_fingerprints: 95
+feedback incremental_cpu_accept_unique_request_fingerprints: 93
+feedback exact_cache_overlap_verified_cpu_accepts: 2
+feedback incremental_cpu_accept_unique_reduction_milli: 18
+feedback incremental_unique_gap_to_80_calls: 3907
+```
+
+Decision:
+
+```text
+The larger 5k window confirms `test_output_parse` is a real value profile:
+97 verified accepts, 95 unique request fingerprints, 93 incremental over exact
+cache, and false_accepts=0. This is still not CPU80: verified unique coverage is
+19 milli and incremental unique reduction is 18 milli. The canonical 1000-window
+catalog remains the current operator catalog; the 5k path is recorded as
+sidecar evidence until a full 5k catalog/report sync is promoted.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-5k-window-v1.md
+verdict: PASS
+complexity_score: 64
+```
+
 ## 2026-07-04 - Executor Integration: CPU Operator Catalog Refresh After Test Output Parse
 
 Verdict:

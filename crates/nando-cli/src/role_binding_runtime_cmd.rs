@@ -27446,7 +27446,9 @@ where
     let resource_pressure_verification_audit_report_path =
         PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let test_output_parse_safe_policy_window_audit_report_path =
-        PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_AUDIT_REPORT);
+        args.next().map(PathBuf::from).unwrap_or_else(|| {
+            PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_AUDIT_REPORT)
+        });
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -32241,6 +32243,7 @@ struct RoleBindingProfileReplayRow {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingRealTrafficTraceRow {
     schema_version: String,
+    #[serde(alias = "event_id")]
     trace_id: String,
     traffic_source: Option<String>,
     time_ms: Option<u64>,
@@ -54993,7 +54996,7 @@ fn read_real_traffic_trace_jsonl(
         if trimmed.is_empty() {
             continue;
         }
-        let row =
+        let mut row =
             serde_json::from_str::<RoleBindingRealTrafficTraceRow>(trimmed).map_err(|error| {
                 format!(
                     "failed to parse real-traffic trace JSONL {} line {}: {error}",
@@ -55001,6 +55004,9 @@ fn read_real_traffic_trace_jsonl(
                     line_index + 1
                 )
             })?;
+        if row.schema_version == "nando_role_binding_real_traffic_event_v1" {
+            row.schema_version = "nando_role_binding_real_traffic_trace_v1".to_owned();
+        }
         validate_real_traffic_trace_row(&row)?;
         rows.push(row);
     }

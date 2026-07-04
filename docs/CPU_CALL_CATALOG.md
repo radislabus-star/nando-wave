@@ -69,6 +69,45 @@ PROVEN rows:
 | 7 | `serving_ops` | 25 | 25 | 3 | Current serving support is exhausted; split stronger daemon/health subfamily. |
 | 8 | `role_binding_edit_marker_length_seed0` | 92 | 92 | 1 | Low support; improve edit evidence before another promote. |
 
+## Sidecar: Test Output Parse 5k Window
+
+This is not the canonical catalog snapshot. It is a larger-window attribution
+check for the same narrow `test_output_parse` profile.
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
+target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-5k.test-output-window.report.json
+```
+
+Measured on the 5k Codex route-candidate window:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 459
+test_output_parse promoted_route_rows: 104
+test_output_parse promoted_rows_inserted: 97
+missing_base_match_rows: 0
+exact_cache_overlap_promoted_rows: 2
+verified_safe_accepts: 97
+false_accepts: 0
+verified_cpu_accept_unique_request_fingerprints: 95
+incremental_cpu_accept_unique_request_fingerprints: 93
+incremental_cpu_accept_unique_reduction_milli: 18
+incremental_unique_gap_to_80_calls: 3907
+```
+
+Decision:
+
+```text
+`test_output_parse` remains PROVEN and more valuable than the 1000-window count
+showed, but this sidecar does not replace the canonical catalog until the full
+5k catalog/report sync is promoted. CPU80 is still not proven.
+```
+
 CANDIDATE rows:
 
 ```text
