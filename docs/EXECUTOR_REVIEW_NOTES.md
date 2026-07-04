@@ -1,5 +1,128 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: File Path Evidence Disabled Profile V1
+
+Verdict:
+
+```text
+FILE_PATH_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added CLI route:
+  role-binding-real-traffic-file-path-evidence-profile-v1
+```
+
+Why:
+
+```text
+The previous stage produced 44 scoreable request-side payloads for the narrow
+file_path_evidence_answer split, but shadow could not score them because no
+profile existed. This stage compiles a dedicated disabled-threshold .nwrb
+package and registry overlay for that split only.
+
+This is not a local accept promotion and not a market claim.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-profile-v1 \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb \
+  target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-shadow-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-shadow-v1.report.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.verification-hook-audit.report.json
+```
+
+Measured profile result:
+
+```text
+profile_id: split_file_path_evidence_answer_profile_v1
+package_bytes: 128
+edge_count: 7
+runtime_bytes_estimate: 32972
+threshold: 2147483647
+trace_rows_read: 5000
+scoreable_payload_events: 44
+package_training_requests: 44
+positive_updates: 3096
+negative_updates: 3168
+changed_edges: 277
+positive_margin_rows: 44
+strict_ordered_pass_rows: 44
+unexpected_local_accepts_under_disabled_threshold: 0
+median_energy_margin: 1123328
+p10_energy_margin: 1011712
+min_energy_margin: 992256
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed: false
+```
+
+Measured shadow/audit result:
+
+```text
+total_requests: 5000
+total_llm_calls: 5000
+operator_candidate_calls: 44
+exact_cache_hits: 456
+nando_shadow_accepts: 0
+nando_shadow_fallbacks: 44
+verified_safe_accepts: 0
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 259065
+
+verification_hook_ready_events: 0
+verified_cpu_accept_eligible_events: 0
+candidates_missing_explicit_verification: 44
+candidates_missing_output_evidence: 44
+provider_cost_events: 0
+```
+
+Decision:
+
+```text
+file_path_evidence_answer now has a scoreable disabled profile and shadow path.
+It still does not count toward CPU80 savings because all rows fallback and no
+source_path_or_url_presence verifier evidence exists.
+```
+
+Next route debt:
+
+```text
+attach source_path_or_url_presence_verifier_v1 output evidence
+calibrate request-side admission on verifier labels
+only then consider a safe-policy promote
+feed verified unique accepts back into CPU_CALL_CATALOG
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/file-path-evidence-profile-v1.md
+verdict: PASS
+```
+
 ## 2026-07-04 - Executor Integration: File Path Evidence Payload Dry-Run V1
 
 Verdict:

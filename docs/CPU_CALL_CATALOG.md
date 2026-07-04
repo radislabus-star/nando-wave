@@ -232,6 +232,64 @@ source/path verifier, admission audit, shadow, feedback, and CPU catalog prove
 unique accepts over exact cache with false_accepts=0.
 ```
 
+### Disabled Profile V1
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.report.json
+target/nando-wave/real-traffic-shadow/file-path-evidence-profile-shadow-v1.report.json
+target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.verification-hook-audit.report.json
+```
+
+Measured profile:
+
+```text
+profile_id: split_file_path_evidence_answer_profile_v1
+package_bytes: 128
+edge_count: 7
+runtime_bytes_estimate: 32972
+threshold: 2147483647
+scoreable_payload_events: 44
+package_training_requests: 44
+positive_margin_rows: 44
+strict_ordered_pass_rows: 44
+unexpected_local_accepts_under_disabled_threshold: 0
+median_energy_margin: 1123328
+```
+
+Measured shadow/audit:
+
+```text
+operator_candidate_calls: 44
+nando_shadow_accepts: 0
+nando_shadow_fallbacks: 44
+verified_safe_accepts: 0
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 259065
+verification_hook_ready_events: 0
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 44
+market_claim_allowed: false
+```
+
+Catalog status remains:
+
+```text
+CANDIDATE
+```
+
+Decision:
+
+```text
+The profile/scoring path is connected, but the route still adds zero CPU80
+savings. The blocking item is verifier evidence, not score geometry. Do not
+lower threshold or promote until source_path_or_url_presence_verifier_v1 proves
+safe accepts and the feedback/catalog path reports unique value over exact cache.
+```
+
 Blocked for now:
 
 ```text

@@ -96,6 +96,12 @@ const DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.report.json";
+const DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH: &str =
+    "target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb";
+const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json";
+const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-seed0.nwrb";
 const DEFAULT_ANSWER_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -497,6 +503,7 @@ const REAL_TRAFFIC_FILE_PATH_EVIDENCE_SPLIT_KEY: &str = "file_path_evidence_answ
 const REAL_TRAFFIC_FILE_PATH_EVIDENCE_ROUTE_KEY: &str = "file_path_evidence_answer";
 const REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID: &str =
     "split_file_path_evidence_answer_profile_v1";
+const REAL_TRAFFIC_FILE_PATH_EVIDENCE_DISABLED_THRESHOLD: i32 = i32::MAX;
 const REAL_TRAFFIC_PLANNING_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_PLANNING_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_PLANNING_OPERATOR_PAIR_BASE: u32 = 37 << 12;
@@ -6550,6 +6557,209 @@ where
     );
     println!("  local_accepts_enabled_on_real_traffic: false");
     Err("ime-input-state profile is review-only; admission stays disabled".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_file_path_evidence_profile_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let dry_run_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let package_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH));
+    let registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REPORT));
+
+    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
+    validate_registry_config(&registry)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&dry_run_trace_path)?;
+    let build = build_file_path_evidence_role_binding_package_from_trace(&trace_rows)?;
+    if let Some(parent) = package_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create file-path-evidence package directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(&package_path, &build.package_bytes).map_err(|error| {
+        format!(
+            "failed to write file-path-evidence package {}: {error}",
+            package_path.display()
+        )
+    })?;
+    let package_info =
+        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&build.package_bytes)
+            .map_err(|error| format!("failed to inspect file-path-evidence package: {error:?}"))?;
+    let policy = WavePredictorRoleBindingOffloadPolicy::new(
+        REAL_TRAFFIC_FILE_PATH_EVIDENCE_DISABLED_THRESHOLD,
+    )
+    .map_err(|error| format!("invalid file-path-evidence disabled policy: {error:?}"))?;
+    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
+        &build.package_bytes,
+        policy,
+    )
+    .map_err(|error| format!("failed to load file-path-evidence package: {error:?}"))?;
+
+    let requests = file_path_evidence_scoreable_requests(&trace_rows);
+    let mut energy_margins = Vec::with_capacity(requests.len());
+    let mut min_slot_margins = Vec::with_capacity(requests.len());
+    let mut positive_margin_rows = 0usize;
+    let mut strict_ordered_pass_rows = 0usize;
+    let mut unexpected_local_accepts_under_disabled_threshold = 0usize;
+    for request in &requests {
+        let prepared = sdk.prepare_active_fringe_from_iter(
+            request
+                .active_fringe
+                .iter()
+                .map(|active| (active.center_id, active.strength)),
+        );
+        let mut energy_margin = 0i32;
+        let mut min_slot_margin = i32::MAX;
+        let mut first_slot_margin = 0i32;
+        let mut strict_ordered_pass = true;
+        for (slot_index, slot) in request.slots.iter().enumerate() {
+            let (positive_score, negative_score) =
+                score_role_binding_profile_slot(&sdk, &prepared, slot);
+            let slot_margin = positive_score - negative_score;
+            if slot_index == 0 {
+                first_slot_margin = slot_margin;
+            }
+            energy_margin = energy_margin.saturating_add(slot_margin);
+            min_slot_margin = min_slot_margin.min(slot_margin);
+            strict_ordered_pass &= slot_margin > 0;
+        }
+        if min_slot_margin == i32::MAX {
+            continue;
+        }
+        positive_margin_rows += usize::from(energy_margin > 0);
+        strict_ordered_pass_rows += usize::from(strict_ordered_pass);
+        unexpected_local_accepts_under_disabled_threshold += usize::from(profile_accepts_score(
+            &default_profile_acceptance_policy(),
+            strict_ordered_pass,
+            energy_margin,
+            first_slot_margin,
+            REAL_TRAFFIC_FILE_PATH_EVIDENCE_DISABLED_THRESHOLD,
+        ));
+        energy_margins.push(energy_margin);
+        min_slot_margins.push(min_slot_margin);
+    }
+
+    let profile = RoleBindingProfileConfig {
+        profile_id: REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID.to_owned(),
+        profile_kind: "role_binding_nwrb".to_owned(),
+        operator_classes: vec![
+            "file_path_evidence_answer".to_owned(),
+            "grounded_source_path".to_owned(),
+            "artifact_backed_answer".to_owned(),
+        ],
+        package_path: package_path.clone(),
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        edge_count: package_info.edge_count,
+        slot_count: 3,
+        threshold: REAL_TRAFFIC_FILE_PATH_EVIDENCE_DISABLED_THRESHOLD,
+        acceptance_policy: default_profile_acceptance_policy(),
+        accepted_route_keys: vec![
+            REAL_TRAFFIC_FILE_PATH_EVIDENCE_ROUTE_KEY.to_owned(),
+            REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID.to_owned(),
+            "file_path_evidence_payload_builder_v1".to_owned(),
+        ],
+    };
+    registry
+        .profiles
+        .retain(|existing| existing.profile_id != profile.profile_id);
+    registry.profiles.push(profile);
+    registry.claim_boundary = "serving registry overlay for file_path_evidence_answer .nwrb profile; generated from request-side broad-route split payloads with threshold=i32::MAX so scoring telemetry is available but local accepts remain disabled until source_path_or_url_presence_verifier_v1 and admission policy are proven".to_owned();
+    validate_registry_config(&registry)?;
+    write_json_file(&registry_path, &registry)?;
+
+    let mut sorted_energy = energy_margins.clone();
+    let mut sorted_min_slot = min_slot_margins.clone();
+    sorted_energy.sort_unstable();
+    sorted_min_slot.sort_unstable();
+    let report = RoleBindingAnswerEvidenceProfileReport {
+        schema_version: "nando_role_binding_file_path_evidence_profile_v1".to_owned(),
+        verdict: if unexpected_local_accepts_under_disabled_threshold == 0
+            && build.package_training_requests > 0
+            && package_info.edge_count > 0
+        {
+            "FILE_PATH_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED"
+        } else {
+            "FILE_PATH_EVIDENCE_PROFILE_V1_REVIEW_REPAIR_REQUIRED"
+        }
+        .to_owned(),
+        base_registry_path: base_registry_path.display().to_string(),
+        dry_run_trace_path: dry_run_trace_path.display().to_string(),
+        package_path: package_path.display().to_string(),
+        registry_path: registry_path.display().to_string(),
+        profile_id: REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID.to_owned(),
+        package_fingerprint64: package_info.fingerprint64,
+        package_bytes: build.package_bytes.len(),
+        edge_count: package_info.edge_count,
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        threshold: REAL_TRAFFIC_FILE_PATH_EVIDENCE_DISABLED_THRESHOLD,
+        trace_rows_read: trace_rows.len(),
+        scoreable_payload_events: requests.len(),
+        package_training_requests: build.package_training_requests,
+        positive_updates: build.positive_updates,
+        negative_updates: build.negative_updates,
+        changed_edges: build.changed_edges,
+        positive_margin_rows,
+        strict_ordered_pass_rows,
+        unexpected_local_accepts_under_disabled_threshold,
+        median_energy_margin: percentile_i32_sorted(&sorted_energy, 50),
+        p10_energy_margin: percentile_i32_sorted(&sorted_energy, 10),
+        min_energy_margin: sorted_energy.first().copied().unwrap_or(0),
+        median_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 50),
+        p10_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 10),
+        min_slot_margin: sorted_min_slot.first().copied().unwrap_or(0),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled_on_real_traffic: false,
+        market_claim_allowed: false,
+        claim_boundary: "Profile generator only. It compiles request-side file_path_evidence_answer payload geometry into a .nwrb package and registry overlay with threshold=i32::MAX, so shadow can measure real score/margins but cannot local-accept. Verified CPU savings require source/path output evidence, admission calibration, shadow/audit pass, provider cost, and false_accepts=0 over exact cache.".to_owned(),
+        next_engineering_debt: "Run file_path_evidence shadow with this overlay registry, attach source_path_or_url_presence_verifier_v1 output evidence, then admission audit. Do not lower thresholds or count savings from profile scoring alone.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-file-path-evidence-profile-v1: {}",
+        report.verdict
+    );
+    println!("  base_registry: {}", base_registry_path.display());
+    println!("  dry_run_trace: {}", dry_run_trace_path.display());
+    println!("  package: {}", package_path.display());
+    println!("  registry: {}", registry_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  edge_count: {}", report.edge_count);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  median_energy_margin: {}", report.median_energy_margin);
+    println!(
+        "  unexpected_local_accepts_under_disabled_threshold: {}",
+        report.unexpected_local_accepts_under_disabled_threshold
+    );
+    println!("  local_accepts_enabled_on_real_traffic: false");
+    Err("file-path evidence profile is review-only; attach verifier before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_ime_input_state_admission_audit_v1<I>(
@@ -35130,6 +35340,25 @@ fn project_context_scoreable_requests(
 fn build_answer_evidence_role_binding_package_from_trace(
     trace_rows: &[RoleBindingRealTrafficTraceRow],
 ) -> Result<AnswerEvidencePackageBuild, String> {
+    build_evidence_role_binding_package_from_requests(
+        answer_evidence_scoreable_requests(trace_rows),
+        "answer-evidence",
+    )
+}
+
+fn build_file_path_evidence_role_binding_package_from_trace(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Result<AnswerEvidencePackageBuild, String> {
+    build_evidence_role_binding_package_from_requests(
+        file_path_evidence_scoreable_requests(trace_rows),
+        "file-path-evidence",
+    )
+}
+
+fn build_evidence_role_binding_package_from_requests(
+    requests: Vec<RoleBindingProfileScoreRequest>,
+    package_label: &str,
+) -> Result<AnswerEvidencePackageBuild, String> {
     let config = WavePredictorHebbianConfig {
         state_delta_binding_action_base: Some(REAL_TRAFFIC_ANSWER_EVIDENCE_OPERATOR_PAIR_BASE),
         state_delta_binding_action_count: REAL_TRAFFIC_ANSWER_EVIDENCE_PAGE_SIZE,
@@ -35155,7 +35384,7 @@ fn build_answer_evidence_role_binding_package_from_trace(
     let mut negative_updates = 0usize;
     let mut changed_edges = 0usize;
 
-    for request in answer_evidence_scoreable_requests(trace_rows) {
+    for request in requests {
         let active_fringe = request
             .active_fringe
             .iter()
@@ -35195,17 +35424,19 @@ fn build_answer_evidence_role_binding_package_from_trace(
     }
 
     if package_training_requests == 0 {
-        return Err(
-            "answer-evidence package builder found no scoreable dry-run requests".to_owned(),
-        );
+        return Err(format!(
+            "{package_label} package builder found no scoreable dry-run requests"
+        ));
     }
     if changed_edges == 0 {
-        return Err("answer-evidence package builder produced no role-binding edges".to_owned());
+        return Err(format!(
+            "{package_label} package builder produced no role-binding edges"
+        ));
     }
     let package_bytes = field
         .compile_flat_role_binding_table()
         .to_bytes()
-        .map_err(|error| format!("failed to serialize answer-evidence .nwrb package: {error:?}"))?;
+        .map_err(|error| format!("failed to serialize {package_label} .nwrb package: {error:?}"))?;
     Ok(AnswerEvidencePackageBuild {
         package_bytes,
         package_training_requests,
@@ -35223,6 +35454,20 @@ fn answer_evidence_scoreable_requests(
         .filter_map(|row| row.nando_shadow_request.clone())
         .filter(|request| {
             request.profile_id.as_deref() == Some(REAL_TRAFFIC_ANSWER_EVIDENCE_PROFILE_ID)
+                && !request.active_fringe.is_empty()
+                && !request.slots.is_empty()
+        })
+        .collect()
+}
+
+fn file_path_evidence_scoreable_requests(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Vec<RoleBindingProfileScoreRequest> {
+    trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.clone())
+        .filter(|request| {
+            request.profile_id.as_deref() == Some(REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID)
                 && !request.active_fringe.is_empty()
                 && !request.slots.is_empty()
         })
