@@ -111,6 +111,11 @@ const DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json";
 const DEFAULT_GIT_CONTROL_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/git-control-profile-v1.report.json";
+const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl";
+const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json";
+const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_REPORT: &str =
@@ -6316,6 +6321,162 @@ where
     Err("git-control profile is review-only; attach verifier before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_git_control_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_GIT_CONTROL_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_git_control_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_GIT_CONTROL_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "git-control output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_git_status_and_command_outcome_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "git-control output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_git_control_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "GIT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "GIT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Git-control output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and conservative command-outcome verification results, writes no raw prompt/response text, executes no git command, mutates no workspace, and does not enable local accepts or market savings claims.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the git-control evidence trace, then build a real tool-output/status verifier before any threshold calibration, local accept, or workspace mutation path.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-git-control-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    println!("  workspace_mutation_enabled: false");
+    Err("git-control output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_output_evidence_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -11751,6 +11912,15 @@ where
     } else {
         None
     };
+    let git_control_audit_report_path =
+        PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let git_control_verification_audit = if git_control_audit_report_path.exists() {
+        Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+            &git_control_audit_report_path,
+        )?)
+    } else {
+        None
+    };
     let metrics_report_verification_audit =
         if metrics_report_verification_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -11826,6 +11996,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(git_control_audit) = &git_control_verification_audit {
+        for row in &git_control_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     let effective_mixed_verification_audit = mixed_safe_policy_verification_audit
         .as_ref()
         .or(mixed_verification_audit.as_ref());
@@ -11842,6 +12017,7 @@ where
         planning_next_step_verification_audit.as_ref();
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
     let effective_metrics_report_verification_audit = metrics_report_verification_audit.as_ref();
+    let effective_git_control_verification_audit = git_control_verification_audit.as_ref();
     let forecast_has_planning_next_step = forecast
         .routes
         .iter()
@@ -11881,6 +12057,9 @@ where
             .unwrap_or_default()
         + effective_metrics_report_verification_audit
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + effective_git_control_verification_audit
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
         .verified_cpu_accept_eligible_events
@@ -11900,6 +12079,9 @@ where
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
         + effective_metrics_report_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + effective_git_control_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
     let planning_next_step_candidate_calls = effective_planning_next_step_verification_audit
@@ -12462,7 +12644,12 @@ where
         });
     }
 
-    if !forecast_has_git_control && git_control_dry_run.is_some() {
+    if !forecast_has_git_control
+        && (git_control_dry_run.is_some() || git_control_verification_audit.is_some())
+    {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
+            .copied();
         let payload_ready_events = git_control_dry_run
             .as_ref()
             .map(|report| report.payload_ready_events)
@@ -12471,16 +12658,27 @@ where
             .as_ref()
             .map(|report| report.payload_built_events)
             .unwrap_or_default();
-        let scoreable_payload_events = git_control_dry_run
-            .as_ref()
-            .map(|report| report.scoreable_payload_events)
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                git_control_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
             .unwrap_or_default();
-        let verification_hook_ready_events = 0;
-        let verified_cpu_accept_eligible_events = 0;
-        let false_accepts = 0;
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
         let candidate_events = git_control_dry_run
             .as_ref()
             .map(|report| report.git_control_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
             .unwrap_or_default();
         let local_accept_calibration_ran = false;
         let local_accept_safe_policy_found = false;
@@ -12599,6 +12797,9 @@ where
         git_control_dry_run_report_path: git_control_dry_run
             .as_ref()
             .map(|_| git_control_dry_run_report_path.display().to_string()),
+        git_control_verification_audit_report_path: git_control_verification_audit
+            .as_ref()
+            .map(|_| git_control_audit_report_path.display().to_string()),
         agent_control_dry_run_report_path: agent_control_dry_run
             .as_ref()
             .map(|_| agent_control_dry_run_report_path.display().to_string()),
@@ -12731,6 +12932,9 @@ where
     }
     if let Some(path) = &report.git_control_dry_run_report_path {
         println!("  git_control_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.git_control_verification_audit_report_path {
+        println!("  git_control_verification_audit_report: {path}");
     }
     if let Some(path) = &report.conditional_dry_run_report_path {
         println!("  conditional_dry_run_report: {path}");
@@ -16133,6 +16337,7 @@ struct RoleBindingFeedbackLoopReport {
     metrics_report_local_accept_calibration_report_path: Option<String>,
     metrics_report_verification_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,
+    git_control_verification_audit_report_path: Option<String>,
     agent_control_dry_run_report_path: Option<String>,
     agent_control_verification_audit_report_path: Option<String>,
     agent_control_safe_policy_verification_audit_report_path: Option<String>,
@@ -23129,6 +23334,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_planning_next_step_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_read_inspect_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_metrics_report_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_git_control_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_agent_control_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
@@ -24224,6 +24430,240 @@ fn deterministic_metrics_report_output_verification(
         "rejected_readout_signal_absent_from_response"
     };
     (verified, true, status.to_owned())
+}
+
+fn deterministic_git_control_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(tokens) = extract_git_control_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_git_control_tokens".to_owned(),
+        );
+    };
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "недостаточно",
+            "ошибка",
+            "провал",
+            "не выполн",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+
+    let prompt_lower = prompt_text.to_lowercase();
+    let command_kind = git_control_command_kind(&prompt_lower, &tokens.command_token);
+    let (verified, status) = match command_kind {
+        "commit" => {
+            let commit_signal = contains_any(
+                &response_lower,
+                &[
+                    "commit",
+                    "committed",
+                    "закоммит",
+                    "коммит",
+                    "cоздан коммит",
+                    "создан коммит",
+                ],
+            );
+            let outcome_signal = contains_any(
+                &response_lower,
+                &[
+                    "hash",
+                    "commit ",
+                    "коммит ",
+                    "created",
+                    "готов",
+                    "done",
+                    "зафикс",
+                    "history",
+                ],
+            ) || response_contains_git_hash(response_text);
+            (
+                commit_signal && outcome_signal,
+                if !commit_signal {
+                    "rejected_commit_signal_absent"
+                } else if !outcome_signal {
+                    "rejected_commit_outcome_absent"
+                } else {
+                    "verified_commit_final_answer_outcome_signal"
+                },
+            )
+        }
+        "push" => {
+            let push_signal = contains_any(&response_lower, &["push", "pushed", "пуш", "запуш"]);
+            let outcome_signal = contains_any(
+                &response_lower,
+                &[
+                    "origin",
+                    "remote",
+                    "upstream",
+                    "отправ",
+                    "запуш",
+                    "готов",
+                    "done",
+                    "успеш",
+                ],
+            );
+            (
+                push_signal && outcome_signal,
+                if !push_signal {
+                    "rejected_push_signal_absent"
+                } else if !outcome_signal {
+                    "rejected_push_outcome_absent"
+                } else {
+                    "verified_push_final_answer_outcome_signal"
+                },
+            )
+        }
+        "status" => {
+            let status_signal = contains_any(&response_lower, &["status", "статус", "git"]);
+            let outcome_signal = contains_any(
+                &response_lower,
+                &[
+                    "clean",
+                    "dirty",
+                    "modified",
+                    "untracked",
+                    "changes",
+                    "working tree",
+                    "рабоч",
+                    "дерев",
+                    "чист",
+                    "измен",
+                    "нет изменений",
+                ],
+            );
+            (
+                status_signal && outcome_signal,
+                if !status_signal {
+                    "rejected_status_signal_absent"
+                } else if !outcome_signal {
+                    "rejected_status_outcome_absent"
+                } else {
+                    "verified_status_final_answer_outcome_signal"
+                },
+            )
+        }
+        "diff" => {
+            let diff_signal = contains_any(&response_lower, &["diff", "патч", "измен", "patch"]);
+            let outcome_signal = contains_any(
+                &response_lower,
+                &[
+                    "file",
+                    "файл",
+                    "changed",
+                    "измен",
+                    "lines",
+                    "строк",
+                    "no diff",
+                    "нет diff",
+                    "нет изменений",
+                ],
+            ) || response_text.contains("```");
+            (
+                diff_signal && outcome_signal,
+                if !diff_signal {
+                    "rejected_diff_signal_absent"
+                } else if !outcome_signal {
+                    "rejected_diff_outcome_absent"
+                } else {
+                    "verified_diff_final_answer_outcome_signal"
+                },
+            )
+        }
+        "branch" => {
+            let branch_signal = contains_any(&response_lower, &["branch", "ветк"]);
+            let outcome_signal = contains_any(
+                &response_lower,
+                &["current", "main", "master", "ветк", "branch", "*"],
+            );
+            (
+                branch_signal && outcome_signal,
+                if !branch_signal {
+                    "rejected_branch_signal_absent"
+                } else if !outcome_signal {
+                    "rejected_branch_outcome_absent"
+                } else {
+                    "verified_branch_final_answer_outcome_signal"
+                },
+            )
+        }
+        "log_or_show" => {
+            let command_signal =
+                contains_any(&response_lower, &["log", "show", "commit", "коммит"]);
+            let outcome_signal = response_contains_git_hash(response_text)
+                || contains_any(&response_lower, &["hash", "diff"]);
+            (
+                command_signal && outcome_signal,
+                if !command_signal {
+                    "rejected_log_show_signal_absent"
+                } else if !outcome_signal {
+                    "rejected_log_show_outcome_absent"
+                } else {
+                    "verified_log_show_final_answer_outcome_signal"
+                },
+            )
+        }
+        _ => (
+            false,
+            "rejected_unknown_git_command_kind_requires_tool_output_verifier",
+        ),
+    };
+
+    (verified, true, status.to_owned())
+}
+
+fn git_control_command_kind(prompt_lower: &str, command_token: &str) -> &'static str {
+    let command_lower = command_token.to_lowercase();
+    let combined = format!("{prompt_lower} {command_lower}");
+    if contains_any(&combined, &["commit", "коммит"]) {
+        "commit"
+    } else if contains_any(&combined, &["push", "пуш"]) {
+        "push"
+    } else if contains_any(&combined, &["status", "статус"]) {
+        "status"
+    } else if contains_any(&combined, &["diff"]) {
+        "diff"
+    } else if contains_any(&combined, &["branch", "ветк"]) {
+        "branch"
+    } else if contains_any(&combined, &["log", "show"]) {
+        "log_or_show"
+    } else {
+        "unknown"
+    }
+}
+
+fn response_contains_git_hash(text: &str) -> bool {
+    text.split(|ch: char| !ch.is_ascii_hexdigit())
+        .any(|part| (7..=40).contains(&part.len()) && part.chars().all(|ch| ch.is_ascii_hexdigit()))
 }
 
 fn deterministic_agent_control_output_verification(

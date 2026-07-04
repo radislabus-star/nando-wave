@@ -334,6 +334,12 @@ pub(crate) fn print_help() {
         "            Compile git-control dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
     );
     println!(
+        "  role-binding-real-traffic-git-control-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach Codex final-answer fingerprints plus conservative git command-outcome verifier results; workspace mutations and local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(
@@ -526,7 +532,7 @@ pub(crate) fn print_help() {
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / mixed / metrics-report route reports from default artifact paths when present; planning, agent-control, mixed, and metrics reports default to v1 unless supplied"
+        "            Auto-loads conditional / mixed / metrics-report / git-control route reports from default artifact paths when present; planning, agent-control, mixed, metrics, and git-control reports default to v1 unless supplied"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"

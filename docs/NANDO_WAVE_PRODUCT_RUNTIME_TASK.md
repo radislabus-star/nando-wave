@@ -202,6 +202,12 @@ git_control route/profile rung:
     target/nando-wave/real-traffic-shadow/git-control-profile-v1.report.json
   profile_registry:
     target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json
+  output_evidence_report:
+    target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json
+  output_evidence_trace:
+    target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl
+  output_evidence_audit:
+    target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json
   git_control_candidate_events: 18
   git_control_payload_ready_events: 12
   git_control_scoreable_payload_events: 12
@@ -209,24 +215,33 @@ git_control route/profile rung:
   git_control_runtime_bytes_estimate: 33000
   median_energy_margin: 1240064
   p10_energy_margin: 906240
+  output_evidence_matched_events: 10
+  no_session_output_match_events: 2
+  deterministic_verification_events: 10
+  verifier_true_events: 4
+  verifier_false_events: 6
+  verification_hook_ready_events: 10
+  candidates_missing_output_evidence: 2
+  shadow_accepts: 0
   workspace_mutation_enabled: false
   local_accepts_enabled: false
   verified_cpu_accept_eligible_events: 0
-  route_stage: scoreable_payload_missing_verification_hook
-  claim_boundary: scoreable workspace-command profile exists, but it does not
-    run git and cannot accept until git_status_and_command_outcome_verifier_v1
-    attaches command/outcome evidence
+  false_accepts: 0
+  route_stage: verification_hook_ready_waiting_local_accept
+  claim_boundary: conservative final-answer command/outcome evidence exists, but
+    it does not run git and cannot accept until a real tool-output/status
+    verifier plus local-accept calibration proves safety
 
-fresh default feedback after read_inspect + metrics_report calibration + git_control profile:
+fresh default feedback after read_inspect + metrics_report calibration + git_control evidence:
   feedback:
     target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
   operator_candidate_calls:            402
   scoreable_candidate_calls:           159
-  verification_hook_ready_events:      113
+  verification_hook_ready_events:      123
   verified_cpu_accept_eligible_events: 8
   verified_cpu_routability_milli:      8
   verified_gap_to_80_calls:            792
-  git_control_stage:                   scoreable_payload_missing_verification_hook
+  git_control_stage:                   verification_hook_ready_waiting_local_accept
 
 historical/current-number warning:
   The mixed-v2 bundle above remains the stronger historical 17/1000 verified
@@ -259,6 +274,8 @@ read_inspect_output_evidence_command: role-binding-real-traffic-read-inspect-out
 read_inspect_local_accept_calibration_command: role-binding-real-traffic-read-inspect-local-accept-calibration-v1
 git_control_payload_dry_run_command: role-binding-real-traffic-git-control-payload-dry-run-v1
 git_control_profile_command: role-binding-real-traffic-git-control-profile-v1
+git_control_output_evidence_command: role-binding-real-traffic-git-control-output-evidence-v1
+verification_hook_audit_command: role-binding-real-traffic-verification-hook-audit-v1
 metrics_report_payload_dry_run_command: role-binding-real-traffic-metrics-report-payload-dry-run-v1
 metrics_report_profile_command: role-binding-real-traffic-metrics-report-profile-v1
 metrics_report_output_evidence_command: role-binding-real-traffic-metrics-report-output-evidence-v1

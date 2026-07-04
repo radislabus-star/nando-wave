@@ -248,7 +248,7 @@ Metrics-report route/profile rung:
   verified_cpu_accepts: 0
   blocker: local_accept_support_insufficient
 
-Git-control route/profile rung:
+Git-control route/profile/evidence rung:
   registry: profile-registry-git-control-v1.json
   git_control_candidates: 18 / 1000
   git_control_scoreable_payloads: 12
@@ -256,15 +256,20 @@ Git-control route/profile rung:
   git_control_runtime_bytes_estimate: 33000
   median_energy_margin: 1240064
   p10_energy_margin: 906240
+  output_evidence_report: git-control-output-evidence-v1.report.json
+  output_evidence_matched_events: 10
+  verifier_true_events: 4
+  verifier_false_events: 6
+  verification_hook_ready_events: 10
   workspace_mutation_enabled: false
   local_accepts_enabled: false
   verified_cpu_accepts: 0
-  blocker: scoreable_payload_missing_verification_hook
+  blocker: verification_hook_ready_waiting_local_accept; needs real tool-output/status verifier and calibration
 
-Fresh default feedback after read_inspect + metrics_report calibration + git_control profile:
+Fresh default feedback after read_inspect + metrics_report calibration + git_control evidence:
   operator_candidate_calls: 402 / 1000
   scoreable_candidate_calls: 159 / 1000
-  verification_hook_ready_events: 113
+  verification_hook_ready_events: 123
   verified_cpu_accepts: 8 / 1000
   verified_gap_to_80_calls: 792
   market_claim_allowed: false

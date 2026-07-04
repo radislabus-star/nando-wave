@@ -1,5 +1,119 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Git-Control Output Evidence Verifier
+
+Verdict:
+
+```text
+GIT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-git-control-output-evidence-v1
+```
+
+Git-control output evidence:
+
+```text
+input_trace:
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.trace.jsonl
+
+output_trace:
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json
+
+total_trace_rows:                    1000
+operator_candidate_calls:            12
+scoreable_candidate_calls:           12
+session_ids_requested:               4
+session_files_scanned:               4
+output_evidence_matched_events:      10
+no_session_output_match_events:      2
+deterministic_verification_events:   10
+verifier_not_applicable_events:      0
+verified_true_events:                4
+verified_false_events:               6
+raw_prompt_text_written:             false
+raw_response_text_written:           false
+response_text_used_for_verification: true
+target_labels_used:                  false
+proof_labels_used:                   false
+workspace_mutation_enabled:          false
+local_accepts_enabled:               false
+market_claim_allowed:                false
+```
+
+Git-control shadow/audit:
+
+```text
+shadow:
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.shadow-report.json
+
+audit:
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json
+
+shadow_total_llm_calls:              1000
+shadow_exact_cache_hits:             53
+nando_shadow_accepts:                0
+verified_safe_accepts:               0
+false_accepts:                       0
+incremental_savings_over_exact_cache: 0
+p99_shadow_score_latency_ns:         217673
+synthetic_trace_used:                false
+
+audit_operator_candidate_calls:       12
+audit_scoreable_candidate_calls:      12
+verification_hook_ready_events:       10
+verified_cpu_accept_eligible_events:  0
+audit_market_claim_allowed:           false
+```
+
+Feedback loop after git-control output evidence:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             402 / 1000
+scoreable_candidate_calls:            159 / 1000
+verification_hook_ready_events:       123
+verified_cpu_accept_eligible_events:  8
+verified_cpu_routability_milli:       8
+verified_gap_to_80_calls:             792
+market_claim_allowed:                 false
+
+git_control route row:
+  candidate_events:                   18
+  scoreable_payload_events:           12
+  verification_hook_ready_events:     10
+  verified_cpu_accept_eligible_events: 0
+  false_accepts:                      0
+  stage:                              verification_hook_ready_waiting_local_accept
+  next_action:                        Run local-accept calibration; if no safe policy exists, improve request-side admission or payload features.
+```
+
+Claim boundary:
+
+```text
+This attaches conservative final-answer command-outcome evidence to the
+git_control route and moves it out of missing_verification_hook. It does not
+execute git, does not read raw prompt/response into reports, does not mutate
+the workspace, does not enable local accepts, and does not prove savings.
+
+The next required debt is a real tool-output/status verifier plus local-accept
+calibration. Until then git_control remains REVIEW with 0 verified CPU accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Git-Control Route Payload/Profile
 
 Verdict:
