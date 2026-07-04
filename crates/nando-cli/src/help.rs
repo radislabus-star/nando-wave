@@ -679,6 +679,12 @@ pub(crate) fn print_help() {
         "            Build request-side style-brevity score payloads from real Codex prompts; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-style-brevity-profile-v1 [base-registry-json] [dry-run-trace-jsonl] [package-nwrb] [registry-json] [report-json]"
+    );
+    println!(
+        "            Compile a disabled-threshold style-brevity .nwrb profile and registry overlay; review-only, local accepts disabled"
+    );
+    println!(
         "            Feedback-loop auto-loads the default style-brevity dry-run report when present"
     );
     println!(

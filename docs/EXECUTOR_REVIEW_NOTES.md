@@ -1,5 +1,173 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Style-Brevity Disabled Profile V1
+
+Verdict:
+
+```text
+STYLE_BREVITY_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+STYLE_BREVITY_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-style-brevity-profile-v1
+
+The command compiles the existing request-side style_brevity dry-run payloads
+into a disabled-threshold .nwrb profile and writes a profile-registry overlay.
+The threshold is i32::MAX, so serving/shadow can measure score/margins but
+cannot local-accept real traffic.
+```
+
+Fresh profile:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.report.json
+
+package:
+  target/nando-wave/real-traffic-shadow/style-brevity-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-style-brevity-v1.json
+
+scoreable_payload_events: 3
+package_training_requests: 3
+edge_count: 6
+package_bytes: 116
+runtime_bytes_estimate: 32944
+threshold: 2147483647
+positive_margin_rows: 3
+strict_ordered_pass_rows: 3
+median_energy_margin: 1196032
+unexpected_local_accepts_under_disabled_threshold: 0
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed: false
+```
+
+Dry-run after registry overlay:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/style-brevity-payload-dry-run-v1.report.json
+
+style_brevity_candidate_events: 3
+payload_ready_events: 3
+payload_built_events: 3
+scoreable_payload_events: 3
+profile_registered: true
+shadow_score_ready: true
+local_accepts_enabled: false
+market_claim_allowed: false
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+```
+
+Shadow/audit:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.verification-hook-audit.report.json
+
+operator_candidate_calls: 3
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+p99_shadow_score_latency_ns: 319154
+verification_hook_ready_events: 0
+market_claim_allowed: false
+```
+
+Feedback/catalog:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+style_brevity:
+  priority_rank:                       7
+  stage:                               scoreable_payload_missing_verification_hook
+  candidate_events:                    3
+  scoreable_payload_events:            3
+  verification_hook_ready_events:      0
+  verified_cpu_accept_eligible_events: 0
+  false_accepts:                       0
+  next_action:                         Attach response/tool-call evidence and
+                                       deterministic output verification.
+
+overall:
+  unique_verified_cpu_accepts:      26
+  unique_verified_gap_to_80_calls: 774
+```
+
+Catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+style_brevity existing_profile_route:
+  priority_rank:              5
+  candidate_events:           3
+  scoreable_payload_events:   3
+  verification_hook_ready:    0
+  verified_cpu_accepts:       0
+  recommended_verifier:       route_specific_deterministic_verifier_required
+
+style_brevity route_gap_family:
+  priority_rank: 15
+  next_action:   style_brevity already has 3 scoreable dry-run payloads in
+                 feedback-loop; continue with
+                 response_length_and_format_verifier_v1.
+```
+
+Decision:
+
+```text
+This closes the profile-missing gap for style_brevity without creating fake
+savings. The route now has scoreable payloads, a package, registry overlay,
+shadow-score readiness, and a missing-hook audit. It still cannot count toward
+CPU Routability until response_length_and_format_verifier_v1, calibration,
+provider-cost evidence, and false_accepts=0 are all present.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created. CPU Routability 80 remains open:
+26/1000 unique verified accepts, gap 774.
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/style-brevity-disabled-profile-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/style-brevity-disabled-profile-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 31
+note: first broader packet was VETO because it mixed profile, shadow, audit,
+      catalog, and CPU80 summary too widely; repaired to the narrow role-swap
+      check: disabled profile / scoreable path != verified CPU accept.
+```
+
 ## 2026-07-04 - Executor Integration: Style-Brevity Payload Dry-Run V1
 
 Verdict:
