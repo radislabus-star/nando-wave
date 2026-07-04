@@ -274,6 +274,12 @@ pub(crate) fn print_help() {
         "            Compile agent-continue-execute payload geometry into a disabled-threshold .nwrb profile"
     );
     println!(
+        "  role-binding-real-traffic-agent-continue-execute-local-accept-calibration-v1 [registry-config-json] [artifact-progress-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Review request-side score policies for agent-continue-execute against artifact-progress verifier labels; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-agent-continue-execute-output-evidence-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(

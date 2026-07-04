@@ -1,5 +1,150 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Continue Execute Local-Accept Calibration V1
+
+Verdict:
+
+```text
+AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SINGLETON_OR_WEAK_SAFE_POLICY_CANDIDATE
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-agent-continue-execute-local-accept-calibration-v1
+
+The agent_continue_execute route now has a review-only local-accept calibration
+report against the tool-backed artifact-progress/no-drift verifier labels.
+The feedback-loop report also records the calibration artifact path.
+```
+
+Calibration result:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-local-accept-calibration-v1.report.json
+
+hook_ready_rows:              25
+scored_rows:                  25
+label_true_rows:               6
+label_false_rows:             19
+safe_policy_found:          true
+best_safe_true_accepts:        1
+local_accepts_enabled:     false
+market_claim_allowed:      false
+```
+
+Policy audit:
+
+```text
+current_disabled_profile_policy:
+  accepts: 0
+  false_accepts: 0
+
+energy_positive_no_slot_order:
+  accepts: 25
+  true_accepts: 6
+  false_accepts: 19
+
+strict_positive_slots_and_energy_positive:
+  accepts: 25
+  true_accepts: 6
+  false_accepts: 19
+
+next_action_slot_positive_only:
+  accepts: 25
+  true_accepts: 6
+  false_accepts: 19
+
+evidence_slot_positive_only:
+  accepts: 25
+  true_accepts: 6
+  false_accepts: 19
+
+best_energy_margin_threshold_request_side_only:
+  threshold: 1114112
+  accepts: 1
+  true_accepts: 1
+  false_accepts: 0
+
+best_evidence_slot_margin_threshold_request_side_only:
+  threshold: 720896
+  accepts: 1
+  true_accepts: 1
+  false_accepts: 0
+```
+
+Feedback/catalog after regeneration:
+
+```text
+feedback:
+  total_llm_calls:                       1000
+  scoreable_candidate_calls:              173
+  verification_hook_ready_events:         142
+  verified_cpu_accept_eligible_events:     32
+  verified_cpu_routability_milli:          32
+  verified_gap_to_80_calls:               768
+
+agent_continue_execute route row:
+  stage: local_accept_calibration_support_insufficient
+  local_accept_calibration_ran: true
+  local_accept_safe_policy_found: true
+  local_accept_support_qualified: false
+  local_accept_best_safe_true_accepts: 1
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 0
+
+catalog:
+  agent_continue_execute existing-profile row is now deprioritized as
+  local_accept_support_insufficient, not treated as a promotion candidate.
+```
+
+Decision:
+
+```text
+Do not promote this route.
+Do not lower the disabled threshold.
+Do not count the singleton safe policy as savings.
+
+The weak safe candidate proves the scoring path is measurable, but support is
+below the minimum true-support gate. The route needs more verifier-true rows or
+better request-side admission/payload geometry before promotion.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created.
+CPU Routability 80 remains open:
+
+  verified_cpu_accept_eligible_events: 32 / 1000
+  verified_gap_to_80_calls: 768
+
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/agent-continue-execute-local-accept-calibration-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-local-accept-calibration-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 43
+note: narrow claim-boundary check only: agent_continue_execute has weak
+      request-side local-accept calibration, but support is insufficient,
+      local accepts remain disabled, and verified CPU savings stay unchanged.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Continue Execute Payload/Profile V1
 
 Verdict:
