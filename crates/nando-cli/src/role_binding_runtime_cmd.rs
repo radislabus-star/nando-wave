@@ -321,6 +321,8 @@ const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT: usize = 3;
 const CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY: i64 = 200_000;
+const CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY: i64 = 160_000;
+const CPU_OPERATOR_LOW_SUPPORT_LOCAL_ACCEPT_PRIORITY_PENALTY: i64 = 120_000;
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -11608,6 +11610,18 @@ where
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
+        let local_accept_calibration_failed =
+            route.local_accept_calibration_ran && !route.local_accept_safe_policy_found;
+        let local_accept_support_insufficient =
+            route.local_accept_safe_policy_found && !route.local_accept_support_qualified;
+        if local_accept_support_insufficient {
+            priority_score = priority_score
+                .saturating_sub(CPU_OPERATOR_LOW_SUPPORT_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
+        if local_accept_calibration_failed {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
         let mut next_action = route.next_action.clone();
         if conditional_admission_current_support_exhausted {
             next_action = format!(
@@ -11637,6 +11651,16 @@ where
             next_action = format!(
                 "Serving-ops local calibration found only {serving_ops_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve serving-ops payload/evidence geometry or split a stronger subfamily before another promote."
             );
+        } else if local_accept_support_insufficient {
+            next_action = format!(
+                "{} local-accept calibration found a safe policy, but support is below the minimum true-support gate; collect more verifier-true rows or improve admission before promotion.",
+                route.route_key
+            );
+        } else if local_accept_calibration_failed {
+            next_action = format!(
+                "{} local-accept calibration found no safe policy; do not lower thresholds. Improve request-side admission, verifier evidence, or payload geometry before another promote.",
+                route.route_key
+            );
         }
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
@@ -11662,6 +11686,8 @@ where
                 .unique_accepts
                 .cross_route_overlap_verified_request_fingerprints,
             priority_verified_accept_events,
+            local_accept_calibration_failed,
+            local_accept_support_insufficient,
             conditional_admission_best_safe_true_accepts,
             conditional_admission_current_support_exhausted,
             agent_control_admission_best_robust_true_accepts,
@@ -11759,6 +11785,8 @@ where
             duplicate_verified_route_hits: 0,
             cross_route_overlap_verified_request_fingerprints: 0,
             priority_verified_accept_events: 0,
+            local_accept_calibration_failed: false,
+            local_accept_support_insufficient: false,
             conditional_admission_best_safe_true_accepts: 0,
             conditional_admission_current_support_exhausted: false,
             agent_control_admission_best_robust_true_accepts: if family.family_key
@@ -22776,6 +22804,10 @@ struct RoleBindingCpuOperatorCatalogRow {
     cross_route_overlap_verified_request_fingerprints: usize,
     #[serde(default)]
     priority_verified_accept_events: usize,
+    #[serde(default)]
+    local_accept_calibration_failed: bool,
+    #[serde(default)]
+    local_accept_support_insufficient: bool,
     #[serde(default)]
     conditional_admission_best_safe_true_accepts: usize,
     #[serde(default)]

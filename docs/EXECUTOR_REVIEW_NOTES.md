@@ -1,5 +1,121 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Local-Accept Calibration Anti-Loop V1
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_REVIEW_LOCAL_ACCEPT_FAILURES_AND_LOW_SUPPORT_DOWNRANKED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The CPU operator catalog now distinguishes two non-promotable local-accept
+states:
+
+  local_accept_calibration_failed:
+    calibration ran, but no zero-false safe policy exists.
+
+  local_accept_support_insufficient:
+    a zero-false policy exists, but true support is below the minimum support
+    gate and must stay review-only.
+
+Both states now receive priority penalties. This prevents the catalog from
+looping on routes whose current score geometry cannot produce robust verified
+CPU savings.
+```
+
+Fresh read-inspect calibration:
+
+```text
+calibration_report:
+  target/nando-wave/real-traffic-shadow/read-inspect-local-accept-calibration-v1.report.json
+
+hook_ready_rows:       9
+label_true_rows:      1
+label_false_rows:     8
+safe_policy_found: false
+best_safe_true_accepts: 0
+
+margin collision:
+  energy_margin false rows at/above true row:      7
+  min_slot_margin false rows at/above true row:    7
+  path_slot_margin false rows at/above true row:   7
+  request_slot_margin false rows at/above true row: 8
+```
+
+Fresh catalog:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls:    774
+
+penalized rows:
+  read_inspect:
+    rank: 15
+    local_accept_calibration_failed: true
+    next_action: improve request-side admission, verifier evidence, or payload
+                 geometry before another promote.
+
+  planning_next_step:
+    rank: 11
+    local_accept_support_insufficient: true
+    best safe support: 1 true row
+
+  retrieval_lookup:
+    rank: 13
+    local_accept_support_insufficient: true
+```
+
+Decision:
+
+```text
+Do not lower thresholds for read_inspect. Current margins do not separate
+verifier-true from verifier-false rows.
+
+Do not promote singleton/low-support planning_next_step or retrieval_lookup
+policies as product savings. They need more verifier-true support or better
+request-side admission before promotion.
+
+The next actionable work shifts to route-gap families that need real builders
+and deterministic verifiers instead of more threshold passes:
+  agent_continue_execute
+  retrieval_lookup route-gap
+  short_decision_ack
+  style_brevity
+```
+
+Claim boundary:
+
+```text
+This is route-selection instrumentation only. It adds no verified CPU accepts.
+CPU Routability 80 remains at 26/1000 unique verified accepts, with
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/local-accept-calibration-anti-loop-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/local-accept-calibration-anti-loop-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 39
+note: first packet was VETO because a generic catalog evidence label was reused
+      across unrelated metric fillers; repaired with route-specific evidence
+      labels.
+```
+
 ## 2026-07-04 - Executor Integration: Route-Gap Exhaustion Alignment V1
 
 Verdict:
