@@ -659,6 +659,86 @@ verdict: PASS
 complexity_score: 48
 ```
 
+## 2026-07-04 - Executor Integration: Project Context Current5k Singleton Watch
+
+Verdict:
+
+```text
+PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_REVIEW_ACTIONABLE_SUBSET_FOUND
+PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+PROJECT_CONTEXT_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_WORKSPACE_EVIDENCE_TRUE_LABELS_FOUND
+PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+The broad project_context_dialogue route is rejected as a whole, but the
+subfamily audit found a narrow artifact_backed_project_state subset. This stage
+tests that subset without enabling local accepts.
+```
+
+Measured result:
+
+```text
+project_context_candidate_events: 1313
+subfamily artifact_backed_project_state candidate_events: 14
+subfamily artifact_backed_project_state payload_ready_events: 14
+
+payload_ready_events: 14
+payload_built_events: 7
+scoreable_payload_events: 7
+profile_registered: false
+local_accepts_enabled: false
+
+profile edge_count: 8
+profile median_energy_margin: 1138688
+profile unexpected_local_accepts_under_disabled_threshold: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 453
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 498287
+
+artifact_evidence_matched_events: 7
+verified_true_events: 1
+verified_false_events: 6
+tool_call_fingerprint_events: 1
+
+local_accept_calibration hook_ready_rows: 7
+local_accept_calibration label_true_rows: 1
+local_accept_calibration label_false_rows: 6
+local_accept_calibration safe_policy_found: true
+local_accept_calibration best_safe_true_accepts: 1
+
+verification_hook_ready_events: 7
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Keep project_context artifact_backed_project_state on WATCH /
+SINGLETON_ONLY_BELOW_MIN_SUPPORT. The split is correct in shape, but current
+evidence has only 1 true row and 6 false rows. Do not promote broad
+project_context_dialogue or the singleton safe policy. Collect more
+workspace-artifact verifier-true rows or split again before any accept path.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/project-context-current5k-singleton-watch-v1.md
+verdict: PASS
+complexity_score: 50
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
 
 Verdict:

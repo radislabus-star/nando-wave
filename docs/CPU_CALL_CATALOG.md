@@ -155,6 +155,17 @@ file_path_evidence_answer current5k split:
   robust_safe_policy_found: false
   singleton_safe_policy_found: true, best_singleton_true_accepts: 1
   decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
+
+project_context artifact_backed_project_state current5k split:
+  project_context candidate events: 1313
+  payload_ready_events: 14
+  scoreable_payload_events: 7
+  artifact_evidence_matched_events: 7
+  verified_true_events: 1
+  verified_false_events: 6
+  safe_policy_found: true, best_safe_true_accepts: 1
+  verified_cpu_accept_eligible_events: 0
+  decision: WATCH / SINGLETON_ONLY_BELOW_MIN_SUPPORT
 ```
 
 Current5k BUSINESS_VALUE_GATE shelves:
