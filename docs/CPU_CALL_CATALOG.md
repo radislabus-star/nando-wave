@@ -217,6 +217,43 @@ The next valid step is a separate promoted shadow trace/registry for that exact
 policy, followed by shadow/audit/feedback with provider cost and false_accepts=0.
 ```
 
+Edit marker-length request-side admission refresh:
+
+```text
+edit_marker_length admission calibration:
+  hook_ready_rows: 42
+  label_true_rows: 14
+  label_false_rows: 28
+  robust_safe_policy_found: true
+  best_robust_true_accepts: 4
+  best policy:
+    code_diff_and_question_mark
+    true_accepts: 4
+    false_accepts: 0
+    missed_true: 10
+
+catalog role_binding_edit_marker_length_seed0:
+  current_status: WATCH
+  edit_admission_best_robust_true_accepts: 4
+  edit_admission_no_safe_policy: false
+  expected_unique_cpu_accepts_over_exact_cache: 0
+  false_accept_risk: UNKNOWN_NO_DETERMINISTIC_VERIFIER_YET
+  business_value_gate_failure_reason:
+    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
+```
+
+Boundary:
+
+```text
+This is not a market savings claim and not a local-accept promotion.
+It only means the request-side admission calibration found a narrow edit
+candidate using prompt-side features only:
+  has_code_diff_lines && has_question_mark
+
+The next valid step is a separate promoted shadow trace/registry for this exact
+policy, followed by shadow/audit/feedback with provider cost and false_accepts=0.
+```
+
 Latest guardrail refresh:
 
 ```text
@@ -279,7 +316,11 @@ git_control:
 
 role_binding_edit_marker_length_seed0:
   business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,no_safe_request_side_policy,safe_policy_missing
+    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
+  edit_admission_best_robust_true_accepts: 4
+  edit_admission_no_safe_policy: false
+  decision: WATCH / request-side candidate exists, but no promoted shadow/audit
+    has proven unique CPU accepts yet.
 ```
 
 Git/serving feedback-loop current5k refresh:

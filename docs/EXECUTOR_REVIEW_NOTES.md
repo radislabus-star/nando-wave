@@ -1,5 +1,117 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Edit Marker-Length Request-Side Admission Candidate Found
+
+Verdict:
+
+```text
+EDIT_ADMISSION_CODE_DIFF_QUESTION_MARK_POLICY_FOUND
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+The current5k edit_marker_length route had real traffic but no safe request-side
+admission policy in the catalog, so it stayed WATCH with expected_unique=0.
+
+A current5k calibration over the existing verifier-labeled edit evidence found
+a narrow request-side policy:
+  code_diff_and_question_mark
+
+This policy uses only prompt-side features:
+  has_code_diff_lines && has_question_mark
+
+It does not read response text, target labels, proof labels, or expected
+answers. It is a candidate for a future promoted shadow/audit, not a local
+accept authority.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+What changed:
+
+```text
+role-binding-real-traffic-edit-admission-calibration-v1 now evaluates the
+code_diff_and_question_mark policy for edit_marker_length admission.
+
+role-binding-real-traffic-cpu-operator-catalog-v1 now records the correct
+next_action when current5k edit admission has a robust candidate:
+  build a separate promoted shadow trace/registry,
+  rerun shadow/audit/feedback with provider cost,
+  keep local accepts disabled until false_accepts=0 is verified.
+```
+
+Measured current5k edit admission calibration:
+
+```text
+verdict: EDIT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
+hook_ready_rows: 42
+label_true_rows: 14
+label_false_rows: 28
+robust_safe_policy_found: true
+best_robust_true_accepts: 4
+
+policy code_diff_and_question_mark:
+  accepts: 4
+  true_accepts: 4
+  false_accepts: 0
+  missed_true: 10
+  robust_safe: true
+
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_features: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Measured current5k feedback/catalog after the refresh:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+scoreable_candidate_calls: 549
+verification_hook_ready_events: 297
+verified_cpu_accept_eligible_events: 111
+incremental_cpu_accept_unique_request_fingerprints: 107
+incremental_unique_gap_to_80_calls: 3893
+
+role_binding_edit_marker_length_seed0:
+  current_status: WATCH
+  edit_admission_best_robust_true_accepts: 4
+  edit_admission_no_safe_policy: false
+  expected_unique_cpu_accepts_over_exact_cache: 0
+  false_accept_risk: UNKNOWN_NO_DETERMINISTIC_VERIFIER_YET
+  next_action: build separate promoted shadow/audit before counting savings
+```
+
+Decision:
+
+```text
+Do not count the 4 robust admission rows as CPU savings yet.
+Do not enable edit local accepts from calibration alone.
+Next valid work is a separate promoted shadow trace/registry for exactly this
+request-side policy, followed by shadow/audit/feedback with provider cost,
+false_accepts=0, and catalog refresh.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/edit-admission-code-diff-question-mark-current5k-v1.md
+triads: docs/structural_gates/edit-admission-code-diff-question-mark-current5k-v1.triads.json
+verdict: PASS
+complexity_score: 41
+trace_path: /tmp/nanda-structural-gate/edit-admission-code-diff-question-mark-current5k-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Agent-Control Current5k Admission Evidence Replaces Stale V2 Support
 
 Verdict:

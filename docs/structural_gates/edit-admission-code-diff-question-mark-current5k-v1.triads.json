@@ -1,0 +1,194 @@
+{
+  "task_id": "edit-admission-code-diff-question-mark-current5k-v1",
+  "domain": "code",
+  "query": "Verify that the current5k edit_marker_length code_diff_and_question_mark admission policy is only a request-side candidate, not a CPU savings claim or local-accept promotion.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "verdict",
+      "object": "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "review_status",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t2",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "hook_ready_rows",
+      "object": "42",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t3",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "label_true_rows",
+      "object": "14",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t4",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "label_false_rows",
+      "object": "28",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "risk_metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t5",
+      "subject": "code_diff_and_question_mark_policy",
+      "relation": "true_accepts",
+      "object": "4",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json#policy=code_diff_and_question_mark",
+      "confidence": 1.0,
+      "subject_role": "request_side_policy",
+      "object_role": "metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t6",
+      "subject": "code_diff_and_question_mark_policy",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json#policy=code_diff_and_question_mark",
+      "confidence": 1.0,
+      "subject_role": "request_side_policy",
+      "object_role": "safety_metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t7",
+      "subject": "code_diff_and_question_mark_policy",
+      "relation": "uses_prompt_side_feature_pair",
+      "object": "has_code_diff_lines_and_has_question_mark",
+      "evidence": "crates/nando-cli/src/role_binding_runtime_cmd.rs",
+      "confidence": 1.0,
+      "subject_role": "request_side_policy",
+      "object_role": "feature_pair",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t9",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "response_text_used_for_features",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "leak_guard",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t10",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "target_labels_used_for_runtime",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "leak_guard",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t11",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "proof_labels_used_for_runtime",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "leak_guard",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t12",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "local_accepts_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "promotion_guard",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t13",
+      "subject": "current5k_edit_admission_calibration",
+      "relation": "market_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "calibration_report",
+      "object_role": "market_claim_guard",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t14",
+      "subject": "current5k_catalog_edit_marker_row",
+      "relation": "current_status",
+      "object": "WATCH",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_edit_marker_length_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "catalog_status",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t15",
+      "subject": "current5k_catalog_edit_marker_row",
+      "relation": "edit_admission_best_robust_true_accepts",
+      "object": "4",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_edit_marker_length_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t16",
+      "subject": "current5k_catalog_edit_marker_row",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json#row=role_binding_edit_marker_length_seed0",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "savings_metric",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t17",
+      "subject": "current5k_catalog_edit_marker_row",
+      "relation": "next_valid_step",
+      "object": "separate_promoted_shadow_audit",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "required_next_step",
+      "route": "edit_marker_length"
+    },
+    {
+      "id": "t18",
+      "subject": "cpu80_status",
+      "relation": "achieved",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "goal_status",
+      "object_role": "claim_guard",
+      "route": "cpu80"
+    }
+  ]
+}

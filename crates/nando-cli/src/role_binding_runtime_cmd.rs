@@ -20829,6 +20829,12 @@ where
             next_action = format!(
                 "Edit local calibration found only {edit_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve edit payload/evidence geometry before another promote."
             );
+        } else if route.route_key.contains("edit_marker_length")
+            && edit_admission_best_robust_true_accepts > 0
+        {
+            next_action = format!(
+                "Edit admission calibration found a request-side robust candidate ({edit_admission_best_robust_true_accepts} true accepts, 0 false). Do not count savings yet; build a separate promoted shadow trace/registry for this policy, rerun shadow/audit/feedback with provider cost, and keep local accepts disabled until false_accepts=0 is verified."
+            );
         } else if edit_admission_no_safe_policy {
             next_action = format!(
                 "Edit admission calibration found no safe request-side policy (robust true accepts {edit_admission_best_robust_true_accepts}, singleton true accepts {edit_admission_best_singleton_true_accepts}). Do not lower thresholds; split edit_marker_length into a narrower artifact-backed subfamily or collect stronger verifier evidence."
@@ -48068,6 +48074,9 @@ fn edit_admission_policy_reports(
         }),
         ("question_mark_and_runtime", |features| {
             features.has_question_mark && features.has_runtime_terms
+        }),
+        ("code_diff_and_question_mark", |features| {
+            features.has_code_diff_lines && features.has_question_mark
         }),
     ];
     policy_defs
