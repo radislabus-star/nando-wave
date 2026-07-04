@@ -88,6 +88,10 @@ const DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json";
+const DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json";
 const DEFAULT_METRICS_REPORT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb";
 const DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG: &str =
@@ -378,6 +382,19 @@ const REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY: &str = "serving_ops";
 const REAL_TRAFFIC_SERVING_OPS_PROFILE_ID: &str = "route_gap_serving_ops_profile_v1";
 const REAL_TRAFFIC_SERVING_OPS_WRONG_TOKEN: &str = "__SERVING_OPS_WRONG__";
 const REAL_TRAFFIC_SERVING_OPS_DISABLED_THRESHOLD: i32 = i32::MAX;
+const REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_PROJECT_CONTEXT_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_BASE: u32 = 42 << 12;
+const REAL_TRAFFIC_PROJECT_CONTEXT_PROJECT_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_PROJECT_CONTEXT_STATE_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_PROJECT_CONTEXT_ARTIFACT_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_PROJECT_CONTEXT_NEXT_ACTION_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_PROJECT_CONTEXT_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_PROJECT_CONTEXT_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY: &str = "project_context_dialogue";
+const REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID: &str = "route_gap_project_context_profile_v1";
+const REAL_TRAFFIC_PROJECT_CONTEXT_WRONG_TOKEN: &str = "__PROJECT_CONTEXT_WRONG__";
 const REAL_TRAFFIC_AGENT_CONTROL_ACTION_BASE: u32 = 0;
 const REAL_TRAFFIC_AGENT_CONTROL_ACTION_COUNT: u32 = 4096;
 const REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE: u32 = 4096;
@@ -4127,6 +4144,268 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "planning-next-step payload dry-run is review-only; build profile+verifier before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_project_context_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID);
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut project_context_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_project_context_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "not project_context_dialogue route-gap candidate".to_owned();
+
+        if route_catalog.classify_request_text(&row.text).is_none()
+            && route_gap_family_key(&row.text) == REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY
+        {
+            project_context_candidate_events += 1;
+            let readiness = analyze_route_gap_payload_readiness(
+                REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY,
+                &row.text,
+            );
+            if readiness.payload_ready {
+                payload_ready_events += 1;
+                let built =
+                    build_project_context_dry_run_request(&event_id, &fingerprint, &row.text);
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable && profile_registered {
+                            "scoreable_payload_built_profile_registered"
+                        } else if scoreable {
+                            "scoreable_payload_built_profile_missing"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingProjectContextPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side project-context payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingProjectContextPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "readiness_rejected".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = format!(
+                    "project_context_dialogue route-gap candidate rejected by readiness gate: {}",
+                    readiness.missing_reasons.join(",")
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_local_project_context_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side project-context payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingProjectContextPayloadDryRunReport {
+        schema_version: "nando_role_binding_project_context_payload_dry_run_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        project_context_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for project_context_dialogue route-gap rows from prompt text only, keeps verified_safe_accept=None and expect_local_operator=false, writes no raw prompt text, and cannot prove savings. A workspace artifact / goal-state verifier plus disabled-threshold profile are required before any local accept.".to_owned(),
+        next_engineering_debt: "Compile a project_context .nwrb scoring profile with accepts disabled, rerun shadow, then attach workspace_artifact_or_goal_state_verifier_v1 before threshold calibration or market claim.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-project-context-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  project_context_candidate_events: {}",
+        report.project_context_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  profile_registered: {}", report.profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "project-context payload dry-run is review-only; build profile+verifier before claims"
             .to_owned(),
     )
 }
@@ -17440,6 +17719,57 @@ struct RoleBindingPlanningNextStepPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    project_context_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingProjectContextPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextPayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    profile_registered: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingPlanningNextStepProfileReport {
     schema_version: String,
     verdict: String,
@@ -20597,6 +20927,277 @@ struct PlanningNextStepTokens {
     state_token: String,
     evidence_token: String,
     next_action_token: String,
+}
+
+#[derive(Clone, Debug)]
+struct ProjectContextTokens {
+    project_token: String,
+    state_token: String,
+    artifact_token: String,
+    next_action_token: String,
+}
+
+fn build_project_context_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let tokens = extract_project_context_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(project_context_operator_centers());
+    active_fringe.extend(project_context_role_surface_centers(
+        REAL_TRAFFIC_PROJECT_CONTEXT_PROJECT_ROLE_SLOT,
+        &tokens.project_token,
+    ));
+    active_fringe.extend(project_context_role_surface_centers(
+        REAL_TRAFFIC_PROJECT_CONTEXT_STATE_ROLE_SLOT,
+        &tokens.state_token,
+    ));
+    active_fringe.extend(project_context_role_surface_centers(
+        REAL_TRAFFIC_PROJECT_CONTEXT_ARTIFACT_ROLE_SLOT,
+        &tokens.artifact_token,
+    ));
+    active_fringe.extend(project_context_role_surface_centers(
+        REAL_TRAFFIC_PROJECT_CONTEXT_NEXT_ACTION_ROLE_SLOT,
+        &tokens.next_action_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = project_context_request_score_slot(
+        0,
+        &tokens.next_action_token,
+        REAL_TRAFFIC_PROJECT_CONTEXT_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = project_context_request_score_slot(
+        1,
+        &tokens.artifact_token,
+        REAL_TRAFFIC_PROJECT_CONTEXT_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = project_context_request_score_slot(
+        2,
+        &tokens.state_token,
+        REAL_TRAFFIC_PROJECT_CONTEXT_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY.to_owned()),
+        profile_id: Some(REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: project-state verifier and profile are not attached yet.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn project_context_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_PROJECT_CONTEXT_NEXT_ACTION_ROLE_SLOT),
+        (1, REAL_TRAFFIC_PROJECT_CONTEXT_ARTIFACT_ROLE_SLOT),
+        (2, REAL_TRAFFIC_PROJECT_CONTEXT_STATE_ROLE_SLOT),
+        (2, REAL_TRAFFIC_PROJECT_CONTEXT_PROJECT_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_BASE
+                + project_context_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn project_context_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_SHIFT)
+        | u32::from(role_slot)
+}
+
+fn project_context_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_PROJECT_CONTEXT_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE,
+        REAL_TRAFFIC_PROJECT_CONTEXT_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn project_context_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_PROJECT_CONTEXT_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_PROJECT_CONTEXT_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_project_context_tokens(text: &str) -> Option<ProjectContextTokens> {
+    let tokens = extract_request_side_edit_tokens(text, 32);
+    if tokens.len() < 3 {
+        return None;
+    }
+    let lower = text.to_lowercase();
+    let project_token = first_token_matching_any(
+        &tokens,
+        &[
+            "nando",
+            "wave",
+            "llmwave",
+            "routability",
+            "operator",
+            "runtime",
+            "codex",
+            "проект",
+            "модель",
+        ],
+    )
+    .or_else(|| tokens.first().cloned())?;
+    let artifact_token = tokens
+        .iter()
+        .find(|token| has_project_context_artifact_token(token))
+        .cloned()
+        .or_else(|| {
+            first_token_matching_any(
+                &tokens,
+                &[
+                    "docs/", "target/", "crates/", "src/", "report", "trace", "json", "jsonl",
+                    "md", "rs",
+                ],
+            )
+        })?;
+    let state_token = first_token_matching_any(
+        &tokens,
+        &[
+            "status",
+            "статус",
+            "result",
+            "результат",
+            "goal",
+            "цель",
+            "report",
+            "commit",
+            "коммит",
+            "scoreboard",
+            "feedback",
+            "catalog",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| token.as_str() != project_token && token.as_str() != artifact_token)
+            .cloned()
+    })?;
+    let next_action_token = first_matching_branch_token(
+        &lower,
+        &[
+            "дальше",
+            "следующий",
+            "делай",
+            "продолж",
+            "build",
+            "builder",
+            "payload",
+            "verifier",
+            "shadow",
+            "audit",
+            "route",
+            "feedback",
+            "commit",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| {
+                let token_lower = token.to_lowercase();
+                contains_any(
+                    &token_lower,
+                    &[
+                        "next",
+                        "route",
+                        "payload",
+                        "builder",
+                        "verifier",
+                        "audit",
+                        "shadow",
+                        "feedback",
+                        "commit",
+                        "дальше",
+                        "след",
+                        "делай",
+                    ],
+                )
+            })
+            .cloned()
+    })
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| {
+                token.as_str() != project_token
+                    && token.as_str() != state_token
+                    && token.as_str() != artifact_token
+            })
+            .cloned()
+    })?;
+    Some(ProjectContextTokens {
+        project_token,
+        state_token,
+        artifact_token,
+        next_action_token,
+    })
+}
+
+fn has_project_context_artifact_token(token: &str) -> bool {
+    token.contains('/')
+        || token.ends_with(".md")
+        || token.ends_with(".rs")
+        || token.ends_with(".json")
+        || token.ends_with(".jsonl")
+        || token.ends_with(".nwrb")
+        || token.contains("report")
+        || token.contains("trace")
 }
 
 fn build_read_inspect_dry_run_request(
@@ -26518,6 +27119,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_planning_next_step_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_project_context_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_read_inspect_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_metrics_report_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_git_control_payload_dry_run::"))

@@ -292,6 +292,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run planning-next-step payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-project-context-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run project-context payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

@@ -1,5 +1,70 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Project-Context Payload Dry-Run V1
+
+Verdict:
+
+```text
+PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-project-context-payload-dry-run-v1
+```
+
+Fresh dry-run:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.trace.jsonl
+
+project_context_candidate_events:  211 / 1000
+payload_ready_events:                2
+payload_built_events:                2
+scoreable_payload_events:            2
+active_fringe_centers_total:       231
+slots_total:                         6
+positive_impulses_total:           133
+negative_impulses_total:           144
+profile_registered:              false
+shadow_score_ready:              false
+raw_text_written:                false
+response_text_used:              false
+target_labels_used:              false
+proof_labels_used:               false
+local_accepts_enabled:           false
+market_claim_allowed:            false
+```
+
+Claim boundary:
+
+```text
+This is a request-side dry-run only. It proves that the top route-gap family can
+emit scoreable active_fringe/slot payloads for the strict artifact-backed subset,
+but it does not prove savings and must not change the current 16/1000 CPU
+Routability scoreboard.
+```
+
+Next engineering debt:
+
+```text
+Build a disabled-threshold project_context .nwrb profile and workspace
+artifact / goal-state verifier before any calibration. If the route remains
+2/211 under strict evidence, split project_context into safer subfamilies
+instead of lowering verifier requirements.
+```
+
 ## 2026-07-04 - Executor Integration: Post-16 Route Triage
 
 Verdict:
