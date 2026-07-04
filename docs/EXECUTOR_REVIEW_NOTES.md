@@ -1,5 +1,150 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Answer-Evidence Payload Dry-Run V1
+
+Verdict:
+
+```text
+ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND
+ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-answer-evidence-payload-dry-run-v1
+
+The answer_or_explain route-gap family now has a request-side grounded-evidence
+payload dry-run. It builds active_fringe/slot/impulse payloads only from local
+Codex prompt-side signals and writes fingerprints/counters only. It does not
+use response text, target labels, proof labels, or raw prompt text as runtime
+authority. Local accepts remain disabled.
+```
+
+Route-gap readiness:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
+
+sampled_llm_calls: 1000
+existing_route_candidate_events: 334
+no_candidate_events: 666
+payload_ready_events: 122
+top_payload_ready_family: metrics_report_readout
+
+answer_or_explain:
+  candidate_events: 216
+  payload_ready_events: 17
+  payload_ready_rate_milli: 78
+  request_signal_events: 198
+  context_signal_events: 19
+  evidence_signal_events: 22
+  verifier_signal_events: 22
+  readiness: low_needs_knowledge_evidence
+```
+
+Answer-evidence dry-run:
+
+```text
+trace:
+  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.report.json
+
+answer_evidence_candidate_events: 216
+payload_ready_events: 17
+payload_built_events: 9
+scoreable_payload_events: 9
+builder_rejected_events: 8
+readiness_rejected_events: 199
+profile_registered: false
+shadow_score_ready: false
+active_fringe_centers_total: 1130
+slots_total: 27
+positive_impulses_total: 648
+negative_impulses_total: 648
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Feedback/catalog:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+total_llm_calls: 1000
+operator_candidate_calls: 809
+scoreable_candidate_calls: 136
+verification_hook_ready_events: 108
+verified_cpu_routability_milli: 32
+unique_verified_cpu_accepts: 26
+unique_verified_gap_to_80_calls: 774
+incremental_unique_cpu_accepts: 25
+incremental_unique_gap_to_80_calls: 775
+
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+answer_or_explain catalog row:
+  priority_rank: 1
+  candidate_events: 216
+  payload_ready_events: 17
+  scoreable_payload_events: 9
+  recommended_payload_builder: answer_evidence_payload_builder_v1
+  recommended_verifier: grounded_answer_evidence_verifier_v1
+  next_action: compile disabled-threshold answer-evidence .nwrb profile,
+               then attach grounded verifier; broad answer_or_explain stays
+               fallback-only.
+```
+
+Decision:
+
+```text
+This closes the "payload missing" gap for a narrow grounded-evidence subset of
+answer_or_explain. It does not create local accepts, verified CPU accepts, or
+market savings. The next engineering step is an answer-evidence disabled
+profile plus grounded_answer_evidence_verifier_v1.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created. CPU Routability 80 remains open:
+26/1000 unique verified accepts, gap 774.
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/answer-evidence-payload-dry-run-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 28
+note: narrow role-swap check only: scoreable answer-evidence payloads are not a
+      registered profile, verification hook, local accept, verified CPU saving,
+      or market claim.
+```
+
 ## 2026-07-04 - Executor Integration: Project-Context Workspace Evidence Hook V1
 
 Verdict:
