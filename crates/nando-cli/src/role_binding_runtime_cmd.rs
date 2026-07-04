@@ -11120,11 +11120,14 @@ where
 
     for route in &feedback.routes {
         let recommended_verifier = existing_route_verifier(route.route_key.as_str());
+        let priority_verified_accept_events = route
+            .unique_accepts
+            .incremental_verified_request_fingerprints;
         let priority_score = cpu_operator_priority_score(
             route.candidate_events,
             route.scoreable_payload_events,
             route.verification_hook_ready_events,
-            route.verified_cpu_accept_eligible_events,
+            priority_verified_accept_events,
             route.false_accepts,
             "existing_profile",
         );
@@ -11138,6 +11141,20 @@ where
             scoreable_payload_events: route.scoreable_payload_events,
             verification_hook_ready_events: route.verification_hook_ready_events,
             verified_cpu_accept_eligible_events: route.verified_cpu_accept_eligible_events,
+            verified_cpu_accept_unique_request_fingerprints: route
+                .unique_accepts
+                .unique_verified_request_fingerprints,
+            incremental_cpu_accept_unique_request_fingerprints: route
+                .unique_accepts
+                .incremental_verified_request_fingerprints,
+            exact_cache_overlap_verified_cpu_accepts: route
+                .unique_accepts
+                .exact_cache_overlap_verified_request_fingerprints,
+            duplicate_verified_route_hits: route.unique_accepts.duplicate_verified_route_hits,
+            cross_route_overlap_verified_request_fingerprints: route
+                .unique_accepts
+                .cross_route_overlap_verified_request_fingerprints,
+            priority_verified_accept_events,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
@@ -11175,6 +11192,12 @@ where
             scoreable_payload_events: 0,
             verification_hook_ready_events: 0,
             verified_cpu_accept_eligible_events: 0,
+            verified_cpu_accept_unique_request_fingerprints: 0,
+            incremental_cpu_accept_unique_request_fingerprints: 0,
+            exact_cache_overlap_verified_cpu_accepts: 0,
+            duplicate_verified_route_hits: 0,
+            cross_route_overlap_verified_request_fingerprints: 0,
+            priority_verified_accept_events: 0,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -11248,8 +11271,8 @@ where
         raw_text_written: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
-        claim_boundary: "CPU operator catalog only. It ranks existing profile routes and no-candidate route-gap families from non-synthetic Codex traffic reports, writes no raw prompt/response text, enables no local accepts, and cannot prove market savings. Rows become savings only after request-side payload, deterministic verifier evidence, shadow accept, provider-cost evidence, and false_accepts=0.".to_owned(),
-        next_engineering_debt: "Pick the highest-volume row whose verifier can be deterministic. Build its request-side payload builder and verifier as a separate route, then rerun shadow/audit/feedback-loop. Do not promote answer_or_explain or project_context_dialogue without grounded evidence.".to_owned(),
+        claim_boundary: "CPU operator catalog only. It ranks existing profile routes and no-candidate route-gap families from non-synthetic Codex traffic reports, writes no raw prompt/response text, enables no local accepts, and cannot prove market savings. Existing routes are prioritized by incremental unique verified accepts, not route-sum duplicates. Rows become savings only after request-side payload, deterministic verifier evidence, shadow accept, provider-cost evidence, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Pick the highest-volume row whose verifier can be deterministic and whose unique/incremental contribution is not already exhausted by duplicates or exact-cache overlap. Build its request-side payload builder and verifier as a separate route, then rerun shadow/audit/feedback-loop. Do not promote answer_or_explain or project_context_dialogue without grounded evidence.".to_owned(),
     };
 
     write_json_file(&report_path, &report)?;
@@ -21159,6 +21182,18 @@ struct RoleBindingCpuOperatorCatalogRow {
     scoreable_payload_events: usize,
     verification_hook_ready_events: usize,
     verified_cpu_accept_eligible_events: usize,
+    #[serde(default)]
+    verified_cpu_accept_unique_request_fingerprints: usize,
+    #[serde(default)]
+    incremental_cpu_accept_unique_request_fingerprints: usize,
+    #[serde(default)]
+    exact_cache_overlap_verified_cpu_accepts: usize,
+    #[serde(default)]
+    duplicate_verified_route_hits: usize,
+    #[serde(default)]
+    cross_route_overlap_verified_request_fingerprints: usize,
+    #[serde(default)]
+    priority_verified_accept_events: usize,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,

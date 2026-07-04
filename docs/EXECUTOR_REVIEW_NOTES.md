@@ -1,5 +1,99 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: CPU Operator Catalog Unique Priority V1
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_REVIEW_UNIQUE_PRIORITY_INSTRUMENTED
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The CPU operator catalog row now exposes:
+  verified_cpu_accept_eligible_events          (route-sum diagnostic)
+  verified_cpu_accept_unique_request_fingerprints
+  incremental_cpu_accept_unique_request_fingerprints
+  exact_cache_overlap_verified_cpu_accepts
+  duplicate_verified_route_hits
+  cross_route_overlap_verified_request_fingerprints
+  priority_verified_accept_events
+
+Existing profile rows are prioritized by incremental unique verified accepts,
+not by route-sum duplicate accepts.
+```
+
+Fresh catalog after unique-priority rerank:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+total_llm_calls:                         1000
+current_verified_cpu_accepts:              22
+incremental_unique_cpu_accepts:            21
+verified_gap_to_80_calls:                 778
+top_catalog_row: role_binding_conditional_branch_seed0
+
+top rows:
+  role_binding_conditional_branch_seed0:
+    route_sum: 3
+    unique:    3
+    incremental_unique: 3
+    priority_verified_accept_events: 3
+
+  role_binding_agent_control_seed0:
+    route_sum: 11
+    unique:     6
+    incremental_unique: 5
+    exact_cache_overlap: 1
+    duplicate_route_hits: 5
+    priority_verified_accept_events: 5
+
+  git_control:
+    route_sum: 4
+    unique:    4
+    incremental_unique: 4
+    cross_route_overlap: 1
+    priority_verified_accept_events: 4
+```
+
+Decision:
+
+```text
+Do not rank the next CPU80 route by route-sum accepts. Route-sum is diagnostic
+only. Operator ranking must prefer unique/incremental contribution and must
+surface exact-cache overlap and duplicate route hits.
+```
+
+Claim boundary:
+
+```text
+This improves route accounting and next-route selection only. It does not add
+new verified CPU accepts and does not change market_claim_allowed=false.
+CPU Routability 80 is still not achieved.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/cpu-operator-catalog-unique-priority-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-unique-priority-v1.nanda.json
+
+verdict: PASS
+complexity_score: 35
+note: compact metric-value packet form used after the first larger packet VETOed
+      weak composite numeric bindings
+```
+
 ## 2026-07-04 - Executor Integration: CPU Route Feedback Unique Contribution V1
 
 Verdict:
