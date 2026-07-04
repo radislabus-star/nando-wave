@@ -1,5 +1,78 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Project-Context Subfamily Audit V1
+
+Verdict:
+
+```text
+PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_REVIEW_ACTIONABLE_SUBSET_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-project-context-subfamily-audit-v1
+```
+
+Fresh audit:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/project-context-subfamily-audit-v1.report.json
+
+project_context_candidate_events: 211 / 1000
+payload_ready_events:             2
+payload_ready_rate_milli:         9
+request_signal_events:            20
+context_signal_events:            11
+evidence_signal_events:           10
+verifier_signal_events:           12
+raw_text_written:                 false
+response_text_used:               false
+target_labels_used:               false
+proof_labels_used:                false
+local_accepts_enabled:            false
+market_claim_allowed:             false
+```
+
+Subfamily split:
+
+```text
+artifact_backed_project_state:                 2 candidates, 2 ready
+short_context_chatter:                       180 candidates, 0 ready
+request_only_project_dialogue:                17 candidates, 0 ready
+context_evidence_missing_request_or_verifier:  8 candidates, 0 ready
+broad_project_context_dialogue:                3 candidates, 0 ready
+request_context_missing_evidence_or_verifier:  1 candidate,  0 ready
+```
+
+Decision:
+
+```text
+Do not treat all project_context_dialogue rows as CPU routability surface.
+Most of this family is short context/chatter without request/context/evidence
+structure. The only safe project-state branch right now is the 2-row
+artifact_backed_project_state subset.
+```
+
+Next engineering debt:
+
+```text
+Either:
+  1. build the small artifact_backed_project_state branch into a disabled
+     project_context profile + workspace_artifact_or_goal_state_verifier; or
+  2. move to the next route-gap family with clearer verifier economics
+     (retrieval_lookup / answer_or_explain with grounded evidence).
+
+Do not lower evidence requirements to inflate project_context coverage.
+```
+
 ## 2026-07-04 - Executor Integration: Project-Context Payload Dry-Run V1
 
 Verdict:

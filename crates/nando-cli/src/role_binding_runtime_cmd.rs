@@ -92,6 +92,8 @@ const DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json";
+const DEFAULT_PROJECT_CONTEXT_SUBFAMILY_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-subfamily-audit-v1.report.json";
 const DEFAULT_METRICS_REPORT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb";
 const DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG: &str =
@@ -4408,6 +4410,205 @@ where
         "project-context payload dry-run is review-only; build profile+verifier before claims"
             .to_owned(),
     )
+}
+
+pub(crate) fn run_role_binding_real_traffic_project_context_subfamily_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_SUBFAMILY_AUDIT_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let sampled_llm_calls = history_rows.len().saturating_sub(skip);
+    let mut existing_route_candidate_events = 0usize;
+    let mut project_context_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut request_signal_events = 0usize;
+    let mut context_signal_events = 0usize;
+    let mut evidence_signal_events = 0usize;
+    let mut verifier_signal_events = 0usize;
+    let mut subfamily_accumulators = BTreeMap::<String, ProjectContextSubfamilyAccumulator>::new();
+    let mut rows = Vec::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        if route_catalog.classify_request_text(&row.text).is_some() {
+            existing_route_candidate_events += 1;
+            continue;
+        }
+        if route_gap_family_key(&row.text) != REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY {
+            continue;
+        }
+
+        project_context_candidate_events += 1;
+        let readiness =
+            analyze_route_gap_payload_readiness(REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY, &row.text);
+        payload_ready_events += usize::from(readiness.payload_ready);
+        request_signal_events += usize::from(readiness.has_request_signal);
+        context_signal_events += usize::from(readiness.has_context_signal);
+        evidence_signal_events += usize::from(readiness.has_evidence_signal);
+        verifier_signal_events += usize::from(readiness.has_verifier_signal);
+        let subfamily_key = project_context_subfamily_key(&row.text, &readiness);
+        let next_action = project_context_subfamily_next_action(subfamily_key);
+        let accumulator = subfamily_accumulators
+            .entry(subfamily_key.to_owned())
+            .or_default();
+        accumulator.candidate_events += 1;
+        accumulator.payload_ready_events += usize::from(readiness.payload_ready);
+        accumulator.request_signal_events += usize::from(readiness.has_request_signal);
+        accumulator.context_signal_events += usize::from(readiness.has_context_signal);
+        accumulator.evidence_signal_events += usize::from(readiness.has_evidence_signal);
+        accumulator.verifier_signal_events += usize::from(readiness.has_verifier_signal);
+        for reason in &readiness.missing_reasons {
+            accumulator
+                .missing_reason_counts
+                .entry(reason.clone())
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
+        }
+
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        rows.push(RoleBindingProjectContextSubfamilyAuditEventRow {
+            event_id: format!(
+                "codex_history_project_context_subfamily_audit::{}::{}::{}",
+                row.session_id, row.ts, index
+            ),
+            request_fingerprint: format!("fnv1a64:{fingerprint:016x}"),
+            subfamily_key: subfamily_key.to_owned(),
+            has_request_signal: readiness.has_request_signal,
+            has_context_signal: readiness.has_context_signal,
+            has_evidence_signal: readiness.has_evidence_signal,
+            has_verifier_signal: readiness.has_verifier_signal,
+            payload_ready: readiness.payload_ready,
+            recommended_builder_kind: readiness.recommended_builder_kind,
+            missing_reasons: readiness.missing_reasons,
+            next_action: next_action.to_owned(),
+        });
+    }
+
+    let mut subfamilies = subfamily_accumulators
+        .into_iter()
+        .map(|(subfamily_key, accumulator)| {
+            let mut missing_reason_counts = accumulator
+                .missing_reason_counts
+                .into_iter()
+                .map(|(name, count)| RoleBindingNamedCount { name, count })
+                .collect::<Vec<_>>();
+            missing_reason_counts.sort_by(|left, right| {
+                right
+                    .count
+                    .cmp(&left.count)
+                    .then_with(|| left.name.cmp(&right.name))
+            });
+            RoleBindingProjectContextSubfamilyAuditRow {
+                priority_rank: 0,
+                subfamily_key: subfamily_key.clone(),
+                candidate_events: accumulator.candidate_events,
+                coverage_milli_of_project_context: ratio_milli(
+                    accumulator.candidate_events,
+                    project_context_candidate_events,
+                ),
+                payload_ready_events: accumulator.payload_ready_events,
+                payload_ready_rate_milli: ratio_milli(
+                    accumulator.payload_ready_events,
+                    accumulator.candidate_events,
+                ),
+                request_signal_events: accumulator.request_signal_events,
+                context_signal_events: accumulator.context_signal_events,
+                evidence_signal_events: accumulator.evidence_signal_events,
+                verifier_signal_events: accumulator.verifier_signal_events,
+                missing_reason_counts,
+                next_action: project_context_subfamily_next_action(&subfamily_key).to_owned(),
+            }
+        })
+        .collect::<Vec<_>>();
+    subfamilies.sort_by(|left, right| {
+        right
+            .payload_ready_events
+            .cmp(&left.payload_ready_events)
+            .then_with(|| right.candidate_events.cmp(&left.candidate_events))
+            .then_with(|| left.subfamily_key.cmp(&right.subfamily_key))
+    });
+    for (index, subfamily) in subfamilies.iter_mut().enumerate() {
+        subfamily.priority_rank = index + 1;
+    }
+
+    let report = RoleBindingProjectContextSubfamilyAuditReport {
+        schema_version: "nando_role_binding_project_context_subfamily_audit_v1".to_owned(),
+        verdict: if payload_ready_events > 0 {
+            "PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_REVIEW_ACTIONABLE_SUBSET_FOUND"
+        } else if project_context_candidate_events > 0 {
+            "PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_REVIEW_NO_ACTIONABLE_SUBSET"
+        } else {
+            "PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_NO_PROJECT_CONTEXT_ROWS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        max_events,
+        sampled_llm_calls,
+        existing_route_candidate_events,
+        project_context_candidate_events,
+        payload_ready_events,
+        payload_ready_rate_milli: ratio_milli(payload_ready_events, project_context_candidate_events),
+        request_signal_events,
+        context_signal_events,
+        evidence_signal_events,
+        verifier_signal_events,
+        subfamilies,
+        rows,
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Project-context subfamily audit only. It writes fingerprints/features/subfamily counts but no raw prompt text, uses no response/target/proof labels, enables no local accepts, and cannot prove savings. It exists to split broad project dialogue away from artifact-backed CPU operator candidates.".to_owned(),
+        next_engineering_debt: "Build only the artifact_backed_project_state branch into a disabled-threshold profile/verifier first. Keep request-only, context-only, and short chatter rows as fallback until workspace artifact / active-goal evidence is present.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-project-context-subfamily-audit-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  project_context_candidate_events: {}",
+        report.project_context_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  subfamilies: {}", report.subfamilies.len());
+    println!("  local_accepts_enabled: false");
+    println!("  market_claim_allowed: false");
+    Ok(())
 }
 
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_profile_v1<I>(
@@ -17770,6 +17971,65 @@ struct RoleBindingProjectContextPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextSubfamilyAuditReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    max_events: usize,
+    sampled_llm_calls: usize,
+    existing_route_candidate_events: usize,
+    project_context_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    subfamilies: Vec<RoleBindingProjectContextSubfamilyAuditRow>,
+    rows: Vec<RoleBindingProjectContextSubfamilyAuditEventRow>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextSubfamilyAuditRow {
+    priority_rank: usize,
+    subfamily_key: String,
+    candidate_events: usize,
+    coverage_milli_of_project_context: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    missing_reason_counts: Vec<RoleBindingNamedCount>,
+    next_action: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextSubfamilyAuditEventRow {
+    event_id: String,
+    request_fingerprint: String,
+    subfamily_key: String,
+    has_request_signal: bool,
+    has_context_signal: bool,
+    has_evidence_signal: bool,
+    has_verifier_signal: bool,
+    payload_ready: bool,
+    recommended_builder_kind: String,
+    missing_reasons: Vec<String>,
+    next_action: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingPlanningNextStepProfileReport {
     schema_version: String,
     verdict: String,
@@ -18226,6 +18486,17 @@ struct RouteGapPayloadFamilyAccumulator {
     evidence_signal_events: usize,
     verifier_signal_events: usize,
     builder_kind_counts: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ProjectContextSubfamilyAccumulator {
+    candidate_events: usize,
+    payload_ready_events: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    missing_reason_counts: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -21187,6 +21458,54 @@ fn extract_project_context_tokens(text: &str) -> Option<ProjectContextTokens> {
         artifact_token,
         next_action_token,
     })
+}
+
+fn project_context_subfamily_key(text: &str, readiness: &RouteGapPayloadReadiness) -> &'static str {
+    if readiness.payload_ready {
+        return "artifact_backed_project_state";
+    }
+    if readiness.has_request_signal && readiness.has_context_signal {
+        return "request_context_missing_evidence_or_verifier";
+    }
+    if readiness.has_request_signal {
+        return "request_only_project_dialogue";
+    }
+    if readiness.has_context_signal && readiness.has_evidence_signal {
+        return "context_evidence_missing_request_or_verifier";
+    }
+    if readiness.has_context_signal {
+        return "context_only_project_reference";
+    }
+    if normalized_token_count(&text.to_lowercase()) <= 12 {
+        return "short_context_chatter";
+    }
+    "broad_project_context_dialogue"
+}
+
+fn project_context_subfamily_next_action(subfamily_key: &str) -> &'static str {
+    match subfamily_key {
+        "artifact_backed_project_state" => {
+            "Compile a disabled-threshold project_context profile and attach workspace_artifact_or_goal_state_verifier_v1 before calibration."
+        }
+        "request_context_missing_evidence_or_verifier" => {
+            "Add request-side workspace artifact / active-goal evidence extraction; do not accept without deterministic evidence."
+        }
+        "request_only_project_dialogue" => {
+            "Fallback unless active goal/artifact context is available from a separate serving-state channel."
+        }
+        "context_evidence_missing_request_or_verifier" => {
+            "Keep as audit-only until the request intent and deterministic verifier are explicit."
+        }
+        "context_only_project_reference" => {
+            "Do not route as CPU operator; split only if a concrete action/evidence pair appears."
+        }
+        "short_context_chatter" => {
+            "Keep fallback or route to a separate control/affect policy; not a project-state operator."
+        }
+        _ => {
+            "Keep fallback; broad project dialogue is not a CPU routability claim without explicit state/action/evidence."
+        }
+    }
 }
 
 fn has_project_context_artifact_token(token: &str) -> bool {

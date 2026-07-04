@@ -298,6 +298,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run project-context payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-project-context-subfamily-audit-v1 [history-jsonl] [registry-config-json] [audit-report-json] [max-events]"
+    );
+    println!(
+        "            Split broad project-context route-gap rows into privacy-safe actionable/fallback subfamilies"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
