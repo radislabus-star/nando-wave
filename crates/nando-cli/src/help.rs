@@ -304,6 +304,18 @@ pub(crate) fn print_help() {
         "            Attach final-answer fingerprints plus grounded answer-evidence verifier status; no local accepts or market claims"
     );
     println!(
+        "  role-binding-real-traffic-answer-evidence-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate answer-evidence score thresholds against deterministic verifier labels; review-only, no local accepts"
+    );
+    println!(
+        "  role-binding-real-traffic-answer-evidence-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
+    );
+    println!(
+        "            Write a promoted answer-evidence shadow trace with provider cost only if robust false_accept=0 support exists; still requires shadow/audit"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

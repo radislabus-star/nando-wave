@@ -1,5 +1,83 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Answer-Evidence Local Accept Calibration V1
+
+Verdict:
+
+```text
+ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+ANSWER_EVIDENCE_SAFE_POLICY_PROMOTE_V1_REJECTED_NO_SUPPORTED_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-answer-evidence-local-accept-calibration-v1
+  role-binding-real-traffic-answer-evidence-safe-policy-promote-v1
+  docs/structural_gates/answer-evidence-local-accept-calibration-v1.md
+
+The answer_or_explain route now has a review-only local-accept calibration
+surface and a guarded safe-policy promotion command. The promotion command
+requires robust support and refuses to write a promoted accept path when the
+calibration is not separable.
+```
+
+Calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.report.json
+
+hook_ready_rows: 9
+label_true_rows: 3
+label_false_rows: 6
+safe_policy_found: false
+best_safe_true_accepts: 0
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Promotion guard:
+
+```text
+command:
+  role-binding-real-traffic-answer-evidence-safe-policy-promote-v1
+
+result:
+  rejected: answer-evidence calibration report has no supported robust
+  energy-threshold policy
+```
+
+Decision:
+
+```text
+Do not enable answer_or_explain local accepts from the current grounded-answer
+profile. The verifier hook is present, but the score geometry accepts true and
+false rows together. This route stays at verification-hook-ready only until
+request-side admission or payload geometry creates false_accept=0 separation.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/answer-evidence-local-accept-calibration-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 30
+note: narrow route-swap check only: calibration/promotion review artifacts are
+      not local accept, verified CPU saving, or market claim.
+```
+
 ## 2026-07-04 - Executor Integration: Answer-Evidence Output Evidence Hook V1
 
 Verdict:
