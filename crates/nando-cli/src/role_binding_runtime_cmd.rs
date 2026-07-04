@@ -22226,6 +22226,10 @@ where
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_SAFE_POLICY_AUDIT_REPORT);
     let answer_evidence_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let resource_pressure_payload_dry_run_report_path =
+        PathBuf::from(DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_REPORT);
+    let resource_pressure_verification_audit_report_path =
+        PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_AUDIT_REPORT);
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -22302,6 +22306,23 @@ where
                     &answer_evidence_local_accept_calibration_report_path,
                 )?,
             )
+        } else {
+            None
+        };
+    let resource_pressure_payload_dry_run = if resource_pressure_payload_dry_run_report_path
+        .exists()
+    {
+        Some(read_json_file::<
+            RoleBindingResourcePressurePayloadDryRunReport,
+        >(&resource_pressure_payload_dry_run_report_path)?)
+    } else {
+        None
+    };
+    let resource_pressure_verification_audit =
+        if resource_pressure_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &resource_pressure_verification_audit_report_path,
+            )?)
         } else {
             None
         };
@@ -22830,6 +22851,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let resource_pressure_verification_audit = keep_feedback_window_matched_audit(
+        resource_pressure_verification_audit,
+        &resource_pressure_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let mut verification_by_route = verification_audit
         .routes
         .iter()
@@ -22951,6 +22978,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(resource_pressure_audit) = &resource_pressure_verification_audit {
+        for row in &resource_pressure_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     let effective_mixed_verification_audit = mixed_safe_policy_verification_audit
         .as_ref()
         .or(mixed_verification_audit.as_ref());
@@ -22990,6 +23022,8 @@ where
     let effective_serving_ops_verification_audit = serving_ops_safe_policy_verification_audit
         .as_ref()
         .or(serving_ops_verification_audit.as_ref());
+    let effective_resource_pressure_verification_audit =
+        resource_pressure_verification_audit.as_ref();
     let unique_accepts = collect_feedback_unique_accepts(
         [
             Some(effective_edit_verification_audit),
@@ -23006,6 +23040,7 @@ where
             effective_answer_evidence_verification_audit,
             effective_git_control_verification_audit,
             effective_serving_ops_verification_audit,
+            effective_resource_pressure_verification_audit,
         ]
         .into_iter()
         .flatten(),
@@ -23054,6 +23089,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY);
+    let forecast_has_resource_pressure = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY);
 
     let target_routability_milli = 800usize;
     let target_verified_cpu_calls =
@@ -23095,6 +23134,9 @@ where
             .unwrap_or_default()
         + effective_serving_ops_verification_audit
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + effective_resource_pressure_verification_audit
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
         .verified_cpu_accept_eligible_events
@@ -23132,6 +23174,9 @@ where
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
         + effective_serving_ops_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + effective_resource_pressure_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
     let planning_next_step_candidate_calls = effective_planning_next_step_verification_audit
@@ -23246,6 +23291,18 @@ where
             })
             .unwrap_or_default()
     };
+    let resource_pressure_candidate_calls = if forecast_has_resource_pressure {
+        0
+    } else {
+        resource_pressure_payload_dry_run
+            .as_ref()
+            .map(|report| report.resource_pressure_candidate_events)
+            .or_else(|| {
+                effective_resource_pressure_verification_audit
+                    .map(|report| report.operator_candidate_calls)
+            })
+            .unwrap_or_default()
+    };
     let operator_candidate_route_sum_events = forecast.operator_candidate_calls
         + planning_next_step_candidate_calls
         + agent_continue_execute_candidate_calls
@@ -23257,7 +23314,8 @@ where
         + answer_evidence_candidate_calls
         + agent_control_candidate_calls
         + git_control_candidate_calls
-        + serving_ops_candidate_calls;
+        + serving_ops_candidate_calls
+        + resource_pressure_candidate_calls;
     let operator_candidate_calls =
         operator_candidate_route_sum_events.min(forecast.total_llm_calls);
     let routing_gap_to_80_calls =
@@ -24622,6 +24680,98 @@ where
         });
     }
 
+    if !forecast_has_resource_pressure
+        && (resource_pressure_payload_dry_run.is_some()
+            || resource_pressure_verification_audit.is_some())
+    {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY)
+            .copied();
+        let payload_ready_events = resource_pressure_payload_dry_run
+            .as_ref()
+            .map(|report| report.payload_ready_events)
+            .unwrap_or_default();
+        let payload_built_events = resource_pressure_payload_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                resource_pressure_payload_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
+            .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let candidate_events = resource_pressure_payload_dry_run
+            .as_ref()
+            .map(|report| report.resource_pressure_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
+            .unwrap_or_default();
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran: false,
+            local_accept_safe_policy_found: false,
+            local_accept_support_qualified: false,
+            local_accept_calibration_authoritative: true,
+        });
+        let mut next_action = feedback_route_next_action(&stage);
+        if verification_hook_ready_events > 0 && verified_cpu_accept_eligible_events == 0 {
+            next_action = "Compile only a disabled-threshold resource_pressure .nwrb profile after verifier-true/provider-cost evidence exists; keep local accepts disabled.".to_owned();
+        }
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "resource_pressure_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            local_accept_calibration_ran: false,
+            local_accept_safe_policy_found: false,
+            local_accept_minimum_true_support: DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT,
+            local_accept_support_qualified: false,
+            local_accept_best_safe_true_accepts: 0,
+            verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY,
+            ),
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
     let scoreable_candidate_calls = route_rows
         .iter()
         .map(|row| row.scoreable_payload_events)
@@ -24750,6 +24900,16 @@ where
         answer_evidence_verification_audit_report_path: answer_evidence_verification_audit
             .as_ref()
             .map(|_| answer_evidence_verification_audit_report_path.display().to_string()),
+        resource_pressure_payload_dry_run_report_path: resource_pressure_payload_dry_run
+            .as_ref()
+            .map(|_| resource_pressure_payload_dry_run_report_path.display().to_string()),
+        resource_pressure_verification_audit_report_path: resource_pressure_verification_audit
+            .as_ref()
+            .map(|_| {
+                resource_pressure_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         git_control_dry_run_report_path: git_control_dry_run
             .as_ref()
             .map(|_| git_control_dry_run_report_path.display().to_string()),
@@ -24898,7 +25058,8 @@ where
             .saturating_sub(answer_evidence_candidate_calls)
             .saturating_sub(agent_control_candidate_calls)
             .saturating_sub(git_control_candidate_calls)
-            .saturating_sub(serving_ops_candidate_calls),
+            .saturating_sub(serving_ops_candidate_calls)
+            .saturating_sub(resource_pressure_candidate_calls),
         audit_window_mismatches,
         verified_cpu_accept_route_sum_events: unique_accepts.route_sum_verified_accepts,
         verified_cpu_accept_unique_request_fingerprints: unique_accepts
@@ -25015,6 +25176,12 @@ where
     }
     if let Some(path) = &report.answer_evidence_verification_audit_report_path {
         println!("  answer_evidence_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.resource_pressure_payload_dry_run_report_path {
+        println!("  resource_pressure_payload_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.resource_pressure_verification_audit_report_path {
+        println!("  resource_pressure_verification_audit_report: {path}");
     }
     if let Some(path) = &report.git_control_dry_run_report_path {
         println!("  git_control_dry_run_report: {path}");
@@ -29703,6 +29870,10 @@ struct RoleBindingFeedbackLoopReport {
     answer_evidence_local_accept_calibration_report_path: Option<String>,
     #[serde(default)]
     answer_evidence_verification_audit_report_path: Option<String>,
+    #[serde(default)]
+    resource_pressure_payload_dry_run_report_path: Option<String>,
+    #[serde(default)]
+    resource_pressure_verification_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,
     git_control_verification_audit_report_path: Option<String>,
     git_control_safe_policy_verification_audit_report_path: Option<String>,

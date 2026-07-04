@@ -1,5 +1,95 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Resource Pressure Feedback Loop V1
+
+Verdict:
+
+```text
+RESOURCE_PRESSURE_FEEDBACK_LOOP_V1_REVIEW_ROUTE_VISIBLE_NO_ACCEPTS
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The feedback-loop report now auto-loads:
+  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.report.json
+  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.verification-hook-audit.report.json
+
+and emits a separate route row:
+  route_key: resource_pressure_budget
+  profile_id: route_gap_resource_pressure_budget_profile_v1
+```
+
+Why:
+
+```text
+Resource Pressure Output Evidence V1 made one scoreable resource-pressure row
+verification-hook-ready, but the CPU feedback loop did not expose it as a
+route. That hid the stage transition from scoreable-only to hook-ready.
+```
+
+Feedback-loop result:
+
+```text
+route_count: 15
+operator_candidate_route_sum_events: 1019
+operator_candidate_calls: 1000
+scoreable_candidate_calls: 174
+verification_hook_ready_events: 143
+verified_cpu_accept_eligible_events: 32
+verified_gap_to_80_calls: 768
+unique_verified_cpu_accepts: 26
+unique_verified_gap_to_80_calls: 774
+market_claim_allowed: false
+
+resource_pressure_budget row:
+  candidate_events: 3
+  payload_ready_events: 1
+  payload_built_events: 1
+  scoreable_payload_events: 1
+  verification_hook_ready_events: 1
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 0
+  stage: verification_hook_ready_waiting_local_accept
+```
+
+Catalog after regeneration:
+
+```text
+existing_operator_candidate_calls: 1000
+existing_operator_candidate_route_sum_events: 1019
+no_candidate_calls: 0
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls: 774
+```
+
+Decision:
+
+```text
+Do not count resource_pressure_budget as CPU savings.
+Do not enable local accepts.
+Do not promote a normal accepting profile from verifier-false / provider-cost
+missing evidence.
+
+This step is report integration only: resource_pressure_budget is now visible
+in the feedback loop, but it contributes 0 verified CPU accepts.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+CPU Routability 80 remains open:
+
+  current unique verified CPU accepts: 26
+  unique verified gap to 80: 774
+
+market_claim_allowed=false.
+```
+
 ## 2026-07-04 - Executor Integration: Resource Pressure Output Evidence V1
 
 Verdict:
