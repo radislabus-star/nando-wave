@@ -1,5 +1,123 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: IME Input-State Disabled Profile V1
+
+Verdict:
+
+```text
+IME_INPUT_STATE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-ime-input-state-profile-v1
+```
+
+Why:
+
+```text
+The previous IME stage produced real request-side payloads and verifier
+evidence, but shadow still saw profile_registered=false. This stage compiles a
+dedicated ime_input_state_debug .nwrb package and overlay registry with
+threshold=i32::MAX, so the profile can be scored in shadow while local accepts
+remain disabled.
+
+This is not a broad answer route and not a market claim. It is one narrow
+deterministic profile rung for agent-loop coverage.
+```
+
+Run artifacts:
+
+```text
+Profile:
+  target/nando-wave/real-traffic-shadow/ime-input-state-seed0.nwrb
+  target/nando-wave/real-traffic-shadow/profile-registry-ime-input-state-v1.json
+  target/nando-wave/real-traffic-shadow/ime-input-state-profile-v1.report.json
+
+Shadow/audit:
+  target/nando-wave/real-traffic-shadow/ime-input-state-profile-shadow-v1.report.json
+  target/nando-wave/real-traffic-shadow/ime-input-state-profile-v1.verification-hook-audit.report.json
+```
+
+Measured result:
+
+```text
+profile:
+  edge_count: 8
+  scoreable_payload_events: 6
+  package_training_requests: 6
+  positive_updates: 419
+  negative_updates: 432
+  changed_edges: 154
+  package_bytes: 140
+  runtime_bytes_estimate: 33000
+  threshold: 2147483647
+  median_energy_margin: 1447936
+  p10_energy_margin: 1120256
+  min_energy_margin: 1120256
+  median_min_slot_margin: 365568
+  unexpected_local_accepts_under_disabled_threshold: 0
+  local_accepts_enabled_on_real_traffic: false
+
+shadow:
+  total_llm_calls: 5000
+  exact_cache_hits: 459
+  operator_candidate_calls: 6
+  nando_shadow_accepts: 0
+  nando_shadow_fallbacks: 6
+  verified_safe_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  p99_shadow_score_latency_ns: 311500
+
+verification_audit:
+  operator_candidate_calls: 6
+  scoreable_candidate_calls: 6
+  verification_hook_ready_events: 5
+  verified_cpu_accept_eligible_events: 0
+  market_claim_allowed: false
+```
+
+Decision:
+
+```text
+IME input-state now has a real profile package and registry overlay:
+  profile_registered path is available
+  scoring telemetry is available
+  false_accepts remain 0
+
+But this is still not CPU savings:
+  nando_shadow_accepts=0
+  verified_cpu_accept_eligible_events=0
+  threshold remains i32::MAX
+
+The next step for this route is admission audit / safe policy only if verifier
+support can add verified unique CPU accepts over exact cache with false_accepts=0.
+Otherwise move to the next narrow profile, not a broad answer route.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+No raw prompt text is written.
+No raw response text is written.
+No target labels are used.
+No proof labels are used.
+Local accepts remain disabled.
+```
+
 ## 2026-07-04 - Executor Integration: IME Input-State Payload + Evidence V1
 
 Verdict:

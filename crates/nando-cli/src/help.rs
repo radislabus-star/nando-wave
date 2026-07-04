@@ -352,6 +352,12 @@ pub(crate) fn print_help() {
         "            Build request-side IME/input-state score payloads from manual-discovery rows; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-ime-input-state-profile-v1 [base-registry-json] [dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile disabled IME/input-state .nwrb profile overlay; scoring enabled, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-ime-input-state-output-evidence-v1 [dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [report-json]"
     );
     println!(
