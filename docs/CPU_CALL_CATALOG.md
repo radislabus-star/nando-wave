@@ -241,6 +241,49 @@ then compile a disabled-threshold profile and calibrate admission. Do not local
 accept without verifier evidence.
 ```
 
+### Test Output Parse Output Evidence V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.report.json
+```
+
+Measured on the 3 scoreable payload rows:
+
+```text
+operator_candidate_calls: 3
+scoreable_candidate_calls: 3
+output_evidence_matched_events: 3
+deterministic_verification_events: 3
+verified_true_events: 3
+verified_false_events: 0
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Catalog status after evidence:
+
+```text
+CANDIDATE / LOW_SUPPORT_REVIEW
+```
+
+Decision:
+
+```text
+Verifier labels exist for the scoreable subset and are currently clean, but the
+support is only 3 rows. This is not enough to count savings or promote local
+accepts. For CPU80, the larger debt is agent-loop tool-output state capture:
+many test_output_parse candidates refer to command/test results, but the current
+request-side payload builder sees explicit status evidence in only 3 of 104
+candidate rows.
+```
+
 ## File Path Evidence Payload Dry-Run V1
 
 Source report:

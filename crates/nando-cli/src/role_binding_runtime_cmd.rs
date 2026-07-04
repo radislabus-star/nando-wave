@@ -100,6 +100,10 @@ const DEFAULT_TEST_OUTPUT_PARSE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_TEST_OUTPUT_PARSE_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.report.json";
+const DEFAULT_TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.trace.jsonl";
+const DEFAULT_TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.report.json";
 const DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb";
 const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -6686,6 +6690,165 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "test-output-parse payload dry-run is review-only; build profile+verifier before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_test_output_parse_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_test_output_parse_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "test-output-parse output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.tool_call_fingerprints = evidence.tool_call_fingerprints.clone();
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_test_status_and_error_excerpt_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "test-output-parse output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_test_output_parse_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Test-output-parse output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and conservative pass/fail/error verifier status, writes no raw prompt/response text, and does not enable local accepts or market savings claims. It is not a substitute for live tool-output state in the request.".to_owned(),
+        next_engineering_debt: "If verifier-true support is sufficient, compile a disabled-threshold test_output_parse .nwrb profile and run shadow/audit. If support remains tiny, add agent-loop tool-output state capture before attempting local accepts.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-test-output-parse-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err(
+        "test-output-parse output evidence is review-only; run profile/shadow/audit before claims"
             .to_owned(),
     )
 }
@@ -52072,6 +52235,142 @@ fn response_contains_retrieval_lookup_evidence_token(response_lower: &str, token
         .map(str::trim)
         .filter(|name| name.len() >= 3)
         .is_some_and(|name| response_lower.contains(name))
+}
+
+fn deterministic_test_output_parse_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let Some(tokens) = extract_test_output_parse_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_test_output_parse_tokens".to_owned(),
+        );
+    };
+    if tokens.status_token == "test_status_unknown_requires_output" {
+        return (
+            false,
+            false,
+            "not_applicable_request_has_no_explicit_status_evidence".to_owned(),
+        );
+    }
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "недостаточно",
+            "нет вывода",
+            "без вывода",
+        ],
+    ) {
+        return (
+            false,
+            true,
+            "rejected_response_reports_no_evidence".to_owned(),
+        );
+    }
+
+    let command_present = response_contains_branch_token(&response_lower, &tokens.command_token)
+        || contains_any(
+            &response_lower,
+            &[
+                "cargo",
+                "clippy",
+                "fmt",
+                "pytest",
+                "test",
+                "check",
+                "build",
+                "тест",
+                "проверк",
+                "сборк",
+            ],
+        );
+    let pass_present = contains_any(
+        &response_lower,
+        &[
+            "passed",
+            "pass",
+            "ok",
+            "finished",
+            "exit code 0",
+            "code 0",
+            "0 failed",
+            "чисто",
+            "успеш",
+            "прош",
+        ],
+    );
+    let fail_present = contains_any(
+        &response_lower,
+        &[
+            "failed",
+            "fail",
+            "error",
+            "exit code 1",
+            "code 1",
+            "panic",
+            "compile error",
+            "ошибка",
+            "упало",
+            "провал",
+        ],
+    );
+    let warning_present = contains_any(&response_lower, &["warning", "warn", "предупреж"]);
+    let output_evidence_present = contains_any(
+        &response_lower,
+        &[
+            "process exited",
+            "exit code",
+            "finished",
+            "compiling",
+            "checking",
+            "running",
+            "test result",
+            "stderr",
+            "stdout",
+            ".rs",
+            ".py",
+            "line",
+            "строк",
+            "вывод",
+            "результат",
+        ],
+    ) || pass_present
+        || fail_present
+        || warning_present;
+
+    let expected_pass = tokens.status_token == "test_status_pass";
+    let expected_fail = tokens.status_token == "test_status_fail";
+    let expected_warning = tokens.status_token == "test_status_warning";
+    let status_consistent = (expected_pass && pass_present && !fail_present)
+        || (expected_fail && fail_present)
+        || (expected_warning && warning_present && !fail_present);
+    let verified = command_present && output_evidence_present && status_consistent;
+    let status = if verified {
+        "verified_test_status_and_output_evidence".to_owned()
+    } else if !command_present {
+        "rejected_missing_command_signal_in_response".to_owned()
+    } else if !output_evidence_present {
+        "rejected_missing_output_evidence_signal".to_owned()
+    } else if expected_pass && fail_present {
+        "rejected_response_contradicts_pass_status".to_owned()
+    } else if expected_fail && pass_present && !fail_present {
+        "rejected_response_contradicts_fail_status".to_owned()
+    } else if expected_warning && fail_present {
+        "rejected_warning_response_reports_failure".to_owned()
+    } else {
+        "rejected_status_not_confirmed".to_owned()
+    };
+    (verified, true, status)
 }
 
 fn deterministic_metrics_report_output_verification(

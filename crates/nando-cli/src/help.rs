@@ -394,6 +394,12 @@ pub(crate) fn print_help() {
         "            Build narrow test_output_parse payloads from broad-route split discovery; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-test-output-parse-output-evidence-v1 [dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach conservative test/check output verifier labels; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-file-path-evidence-profile-v1 [base-registry-json] [file-path-evidence-dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

@@ -1,5 +1,86 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Output Evidence V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-output-evidence-v1
+```
+
+Why:
+
+```text
+The test_output_parse payload dry-run found only 3 scoreable rows. This stage
+joins those scoreable rows back to local Codex session final-answer evidence
+and attaches conservative test-status verifier labels, without writing raw
+prompt/response text and without enabling local accepts.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-output-evidence-v1 \
+  target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.trace.jsonl \
+  /home/ubu/.codex/sessions \
+  target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.report.json
+```
+
+Measured result:
+
+```text
+operator_candidate_calls: 3
+scoreable_candidate_calls: 3
+session_ids_requested: 2
+session_files_scanned: 2
+codex_turns_indexed: 3
+output_evidence_matched_events: 3
+no_session_output_match_events: 0
+deterministic_verification_events: 3
+verifier_not_applicable_events: 0
+verified_true_events: 3
+verified_false_events: 0
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+The verifier works on the current scoreable subset: 3/3 rows are true and
+false=0. This is still not a CPU savings claim. The limiting factor is support:
+only 3 scoreable rows out of 104 candidates. Next step is either a
+disabled-threshold test_output_parse profile plus shadow/audit for these rows,
+or, preferably for CPU80, agent-loop tool-output state capture so many more
+test_output_parse candidates become scoreable from real command-output context.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-output-evidence-v1.md
+verdict: PASS
+complexity_score: 44
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Payload Dry-Run V1
 
 Verdict:
