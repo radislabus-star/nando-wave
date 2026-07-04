@@ -88,21 +88,21 @@ route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
 feedback operator_candidate_calls: 2490
-feedback scoreable_candidate_calls: 474
-feedback verification_hook_ready_events: 278
-feedback verified_cpu_accept_eligible_events: 99
-feedback verified_cpu_accept_unique_request_fingerprints: 97
-feedback incremental_cpu_accept_unique_request_fingerprints: 95
+feedback scoreable_candidate_calls: 485
+feedback verification_hook_ready_events: 289
+feedback verified_cpu_accept_eligible_events: 105
+feedback verified_cpu_accept_unique_request_fingerprints: 103
+feedback incremental_cpu_accept_unique_request_fingerprints: 101
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 19
-feedback incremental_unique_gap_to_80_calls: 3905
+feedback incremental_cpu_accept_unique_reduction_milli: 20
+feedback incremental_unique_gap_to_80_calls: 3899
 
-catalog current_verified_cpu_accepts: 97
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 95
-catalog business_value_gate_passed_rows: 3
-catalog proven_profile_rows: 3
+catalog current_verified_cpu_accepts: 103
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 101
+catalog business_value_gate_passed_rows: 4
+catalog proven_profile_rows: 4
 catalog candidate_profile_rows: 2
-catalog watch_profile_rows: 19
+catalog watch_profile_rows: 18
 catalog rejected_profile_rows: 5
 ```
 
@@ -111,6 +111,7 @@ PROVEN rows on current5k:
 | rank | call class | candidates | scoreable | hooks | verified eligible | incremental unique | expected savings milli | status note |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | 18 | Keep as narrow previous-tool-output status parser; do not treat it as broad answer parsing. |
+| 3 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | 1 | Safe request-side admission policy; useful but still small. |
 | 4 | `metrics_report_readout` | 99 | 63 | 51 | 3 | 3 | 0 | Small proven sidecar only; support is exhausted and p99 shadow score was WATCH in the promote run. |
 | 5 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
 
@@ -134,15 +135,19 @@ serving_ops current5k:
   score/readout safe policy: 1 true accept, 0 false accepts
   server mutations: disabled
   decision: PROVEN, but tiny; split or improve daemon health evidence before more work
+
+mixed_map current5k:
+  request-side admission safe policy: 6 true accepts, 0 false accepts
+  decision: PROVEN, but still small; split or improve map evidence before more work
 ```
 
 Current5k BUSINESS_VALUE_GATE shelves:
 
 | shelf | count | meaning |
 | --- | ---: | --- |
-| `PROVEN` | 3 | Unique verified CPU accepts exist on this 5k window. |
+| `PROVEN` | 4 | Unique verified CPU accepts exist on this 5k window. |
 | `CANDIDATE` | 2 | Evidence exists, but no unique verified accepts yet. |
-| `WATCH` | 19 | Low support, exhausted policy, singleton-only, or missing verifier. |
+| `WATCH` | 18 | Low support, exhausted policy, singleton-only, or missing verifier. |
 | `REJECT_FOR_NOW` | 5 | Broad route or unsafe route; split before work. |
 
 Decision:
@@ -379,6 +384,61 @@ current5k. It exposes 50 dry-run payloads and 42 verifier-hook-ready rows, but
 the verifier split is 14 true / 28 false and no safe readout or admission policy
 exists. Keep it WATCH / NO_SAFE_POLICY_CURRENT5K. Do not lower thresholds; split
 the edit family by concrete external edit evidence before another promote.
+```
+
+### Mixed Map Current5k Probe
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/mixed-admission-audit-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3-current5k.report.json
+target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3-current5k.shadow-report.json
+target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3-current5k.verification-hook-audit.report.json
+```
+
+Measured on current5k:
+
+```text
+mixed_route_candidate_events: 478
+payload_ready_events: 37
+payload_built_events: 37
+scoreable_payload_events: 37
+output_evidence_matched_events: 34
+verified_true_events: 25
+verified_false_events: 9
+
+local_accept_calibration safe_policy_found: true
+local_accept_calibration best_safe_true_accepts: 7
+admission_audit safe_policy_found: true
+admission_audit best_safe_true_accepts: 6
+
+promoted request_side_policy_name: no_question_mark AND has_map_terms AND energy >= 237568
+promoted request_side_policy_accept_rows: 11
+promoted policy_accept_rows: 6
+promoted policy_accept_verified_true_rows: 6
+promoted policy_accept_verified_false_rows: 0
+promoted policy_accept_unverified_rows: 0
+
+shadow nando_shadow_accepts: 6
+shadow verified_safe_accepts: 6
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 448249
+verification_hook_ready_events: 11
+verified_cpu_accept_eligible_events: 6
+market_claim_allowed: true
+```
+
+Decision:
+
+```text
+`mixed_map` is PROVEN on current5k as a small but real value row:
+6 incremental unique CPU accepts, false_accepts=0. The safe policy is
+request-side constrained and should not be widened. The next mixed work should
+split or improve map evidence geometry rather than lower thresholds.
 ```
 
 ### Serving Ops Current5k Probe

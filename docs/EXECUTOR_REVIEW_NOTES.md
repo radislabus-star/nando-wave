@@ -69,21 +69,21 @@ route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
 feedback operator_candidate_calls: 2490
-feedback scoreable_candidate_calls: 474
-feedback verification_hook_ready_events: 278
-feedback verified_cpu_accept_eligible_events: 99
-feedback verified_cpu_accept_unique_request_fingerprints: 97
-feedback incremental_cpu_accept_unique_request_fingerprints: 95
+feedback scoreable_candidate_calls: 485
+feedback verification_hook_ready_events: 289
+feedback verified_cpu_accept_eligible_events: 105
+feedback verified_cpu_accept_unique_request_fingerprints: 103
+feedback incremental_cpu_accept_unique_request_fingerprints: 101
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 19
-feedback incremental_unique_gap_to_80_calls: 3905
+feedback incremental_cpu_accept_unique_reduction_milli: 20
+feedback incremental_unique_gap_to_80_calls: 3899
 
-catalog current_verified_cpu_accepts: 97
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 95
-catalog business_value_gate_passed_rows: 3
-catalog proven_profile_rows: 3
+catalog current_verified_cpu_accepts: 103
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 101
+catalog business_value_gate_passed_rows: 4
+catalog proven_profile_rows: 4
 catalog candidate_profile_rows: 2
-catalog watch_profile_rows: 19
+catalog watch_profile_rows: 18
 catalog rejected_profile_rows: 5
 ```
 
@@ -115,6 +115,15 @@ serving_ops:
   incremental_unique_accepts: 1
   false_accepts: 0
 
+mixed_map:
+  status: PROVEN, small support
+  candidate_events: 477
+  scoreable_payload_events: 11
+  verification_hook_ready_events: 11
+  verified_cpu_accept_eligible_events: 6
+  incremental_unique_accepts: 6
+  false_accepts: 0
+
 agent_control:
   status: WATCH / NO_SAFE_POLICY
   scoreable_payload_events: 540
@@ -128,7 +137,7 @@ Decision:
 
 ```text
 Current5k is now the active commercial filter. CPU80 is still not proven:
-incremental unique reduction is 19 milli and the gap to 80% is 3905 calls.
+incremental unique reduction is 20 milli and the gap to 80% is 3899 calls.
 The next profile must be chosen by BUSINESS_VALUE_GATE, not by architecture
 interest. Broad routes remain blocked as whole routes; only narrow,
 artifact-backed splits may move forward.
@@ -243,6 +252,14 @@ workspace mutation routes. The next git work must split to a narrower
 command-outcome subfamily before any new safe-policy attempt.
 ```
 
+Structural gate:
+
+```text
+docs/structural_gates/git-control-current5k-no-safe-policy-v1.md
+verdict: PASS
+complexity_score: 30
+```
+
 ## 2026-07-04 - Executor Integration: Serving Ops Current5k Tiny Safe Policy
 
 Verdict:
@@ -304,6 +321,14 @@ serving_ops is now PROVEN on current5k, but only as a tiny support row. It adds
 one verified CPU accept and keeps false_accepts=0. This is useful as a proof of
 the BUSINESS_VALUE_GATE path, not as CPU80 progress. Keep daemon/server actions
 disabled and split a stronger service-health subfamily before another promote.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/serving-ops-current5k-tiny-safe-policy-v1.md
+verdict: PASS
+complexity_score: 33
 ```
 
 ## 2026-07-04 - Executor Integration: Edit Marker Length Current5k No Safe Policy
@@ -369,9 +394,85 @@ Next edit work must split by concrete external edit evidence before promotion.
 Structural gate:
 
 ```text
-docs/structural_gates/git-control-current5k-no-safe-policy-v1.md
+docs/structural_gates/edit-marker-current5k-no-safe-policy-v1.md
 verdict: PASS
 complexity_score: 30
+```
+
+## 2026-07-04 - Executor Integration: Mixed Map Current5k Safe Policy
+
+Verdict:
+
+```text
+MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+MIXED_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND
+MIXED_SAFE_POLICY_PROMOTE_V3_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+mixed_map was the next high-frequency non-broad profile after edit_marker_length.
+Unlike edit, it produced a request-side safe subfamily: the promoted v3 policy
+accepts only rows matching a prompt-side conjunction plus runtime energy
+threshold, and it keeps false_accepts=0.
+```
+
+Measured result:
+
+```text
+mixed_route_candidate_events: 478
+payload_ready_events: 37
+payload_built_events: 37
+scoreable_payload_events: 37
+output_evidence_matched_events: 34
+verified_true_events: 25
+verified_false_events: 9
+
+local_accept_calibration safe_policy_found: true
+local_accept_calibration best_safe_true_accepts: 7
+admission_audit safe_policy_found: true
+admission_audit best_safe_true_accepts: 6
+
+promoted request_side_policy_name: no_question_mark AND has_map_terms AND energy >= 237568
+promoted request_side_policy_accept_rows: 11
+promoted policy_accept_rows: 6
+promoted policy_accept_verified_true_rows: 6
+promoted policy_accept_verified_false_rows: 0
+promoted policy_accept_unverified_rows: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 453
+shadow nando_shadow_accepts: 6
+shadow verified_safe_accepts: 6
+shadow false_accepts: 0
+shadow incremental_reduction_vs_exact_cache_milli: 1
+shadow p99_shadow_score_latency_ns: 448249
+
+verification_hook_ready_events: 11
+verified_cpu_accept_eligible_events: 6
+market_claim_allowed: true
+```
+
+Decision:
+
+```text
+mixed_map is now PROVEN on current5k with 6 incremental unique CPU accepts and
+false_accepts=0. This is real progress but still small: total current5k
+incremental unique coverage is 101/5000, or 20 milli. Do not widen thresholds;
+improve by splitting stronger map subfamilies or better verifier geometry.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/mixed-map-current5k-safe-policy-v1.md
+verdict: PASS
+complexity_score: 33
 ```
 
 ## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
