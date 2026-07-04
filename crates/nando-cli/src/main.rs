@@ -161,6 +161,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_read_inspect_payload_dry_run_v1,
     run_role_binding_real_traffic_read_inspect_profile_v1,
     run_role_binding_real_traffic_record_serve_v1, run_role_binding_real_traffic_record_v1,
+    run_role_binding_real_traffic_resource_pressure_output_evidence_v1,
     run_role_binding_real_traffic_resource_pressure_payload_dry_run_v1,
     run_role_binding_real_traffic_retrieval_lookup_local_accept_calibration_v1,
     run_role_binding_real_traffic_retrieval_lookup_output_evidence_v1,
@@ -696,6 +697,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-resource-pressure-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_resource_pressure_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-resource-pressure-payload-dry-run-v1 [history-jsonl] [registry-config-json] [manual-discovery-report-json] [trace-jsonl] [report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-resource-pressure-output-evidence-v1") => exit_for_result(
+            run_role_binding_real_traffic_resource_pressure_output_evidence_v1(args),
+            "try: nando-cli role-binding-real-traffic-resource-pressure-output-evidence-v1 [resource-pressure-dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]",
         ),
         Some("role-binding-real-traffic-answer-evidence-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_answer_evidence_payload_dry_run_v1(args),

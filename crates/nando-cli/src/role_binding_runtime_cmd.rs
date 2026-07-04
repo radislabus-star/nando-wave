@@ -63,6 +63,11 @@ const DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.report.json";
+const DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.trace.jsonl";
+const DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.report.json";
+const DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -4541,6 +4546,165 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "resource-pressure payload dry-run is review-only; attach verifier/profile before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_resource_pressure_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_resource_pressure_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "resource-pressure output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_write_rate_or_resource_budget_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "resource-pressure output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_resource_pressure_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "RESOURCE_PRESSURE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "RESOURCE_PRESSURE_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Resource-pressure output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and conservative write-rate/resource-budget verifier status, writes no raw prompt/response text, and cannot prove CPU savings without profile shadow accept, provider cost, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the resource-pressure evidence trace. Keep local accepts disabled until a resource_pressure .nwrb profile, provider-cost evidence, false_accepts=0, and a calibrated safe policy exist.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-resource-pressure-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    println!("  local_accepts_enabled: false");
+    Err(
+        "resource-pressure output evidence is review-only; run shadow/audit before claims"
             .to_owned(),
     )
 }
@@ -15136,6 +15300,16 @@ where
     } else {
         None
     };
+    let resource_pressure_verification_audit_report_path =
+        PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let resource_pressure_verification_audit =
+        if resource_pressure_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &resource_pressure_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let answer_evidence_payload_dry_run_report_path =
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT);
     let answer_evidence_payload_dry_run = if answer_evidence_payload_dry_run_report_path.exists() {
@@ -15658,13 +15832,13 @@ where
             .iter()
             .find(|route| route.route_key == family.family_key)
             .filter(|route| route.scoreable_payload_events > 0);
-        let family_verification_hook_ready_events = existing_scoreable_feedback_row
+        let mut family_verification_hook_ready_events = existing_scoreable_feedback_row
             .map(|route| route.verification_hook_ready_events)
             .unwrap_or_default();
-        let family_verified_cpu_accept_eligible_events = existing_scoreable_feedback_row
+        let mut family_verified_cpu_accept_eligible_events = existing_scoreable_feedback_row
             .map(|route| route.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
-        let family_false_accepts = existing_scoreable_feedback_row
+        let mut family_false_accepts = existing_scoreable_feedback_row
             .map(|route| route.false_accepts)
             .unwrap_or_default();
         priority_score = cpu_operator_priority_score(
@@ -15704,11 +15878,27 @@ where
                 .map(|report| report.scoreable_payload_events)
                 .unwrap_or_default(),
         );
+        let resource_pressure_audit =
+            if manual_route_discovery_top_subfamily == REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY {
+                resource_pressure_verification_audit.as_ref()
+            } else {
+                None
+            };
+        if let Some(resource_audit) = resource_pressure_audit {
+            family_verification_hook_ready_events = family_verification_hook_ready_events
+                .max(resource_audit.verification_hook_ready_events);
+            family_verified_cpu_accept_eligible_events = family_verified_cpu_accept_eligible_events
+                .max(resource_audit.verified_cpu_accept_eligible_events);
+            family_false_accepts = family_false_accepts.max(resource_audit.shadow_false_accepts);
+        }
         if manual_top_subfamily.is_some() {
             priority_score += manual_route_discovery_payload_ready_events as i64 * 120;
         }
         if let Some(resource_report) = resource_pressure_dry_run {
             priority_score += resource_report.scoreable_payload_events as i64 * 250;
+        }
+        if let Some(resource_audit) = resource_pressure_audit {
+            priority_score += resource_audit.verification_hook_ready_events as i64 * 500;
         }
         if agent_control_stop_support_exhausted
             || metrics_report_support_exhausted
@@ -15774,6 +15964,15 @@ where
             } else {
                 "answer_or_explain still lacks scoreable grounded-evidence payloads; improve request-side evidence extraction before profile work.".to_owned()
             }
+        } else if let Some(resource_audit) =
+            resource_pressure_audit.filter(|audit| audit.verification_hook_ready_events > 0)
+        {
+            format!(
+                "resource_pressure_budget has {} verifier-hook-ready rows and {} verifier-true rows, but {} verified CPU accepts. Compile only a disabled-threshold resource_pressure .nwrb profile and rerun shadow/audit with provider cost; keep local accepts disabled until false_accepts=0 and calibrated safe policy exist.",
+                resource_audit.verification_hook_ready_events,
+                resource_audit.verified_true_events,
+                resource_audit.verified_cpu_accept_eligible_events
+            )
         } else if let Some(feedback_row) = existing_scoreable_feedback_row {
             format!(
                 "{} already has {} scoreable dry-run payloads in feedback-loop; continue with {} and keep local accepts disabled until deterministic verification exists.",
@@ -15952,6 +16151,13 @@ where
         resource_pressure_payload_dry_run_report_path: resource_pressure_payload_dry_run
             .as_ref()
             .map(|_| resource_pressure_payload_dry_run_report_path.display().to_string()),
+        resource_pressure_verification_audit_report_path: resource_pressure_verification_audit
+            .as_ref()
+            .map(|_| {
+                resource_pressure_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         answer_evidence_payload_dry_run_report_path: answer_evidence_payload_dry_run
             .as_ref()
             .map(|_| answer_evidence_payload_dry_run_report_path.display().to_string()),
@@ -16053,6 +16259,12 @@ where
         println!(
             "  resource_pressure_payload_dry_run_report: {}",
             resource_pressure_payload_dry_run_report_path.display()
+        );
+    }
+    if resource_pressure_verification_audit.is_some() {
+        println!(
+            "  resource_pressure_verification_audit_report: {}",
+            resource_pressure_verification_audit_report_path.display()
         );
     }
     if answer_evidence_payload_dry_run.is_some() {
@@ -27983,6 +28195,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     manual_route_discovery_report_path: Option<String>,
     #[serde(default)]
     resource_pressure_payload_dry_run_report_path: Option<String>,
+    #[serde(default)]
+    resource_pressure_verification_audit_report_path: Option<String>,
     #[serde(default)]
     answer_evidence_payload_dry_run_report_path: Option<String>,
     #[serde(default)]
@@ -40768,7 +40982,8 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_metrics_report_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_git_control_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_serving_ops_payload_dry_run::"))
-        .or_else(|| trace_id.strip_prefix("codex_history_agent_control_payload_dry_run::"))?;
+        .or_else(|| trace_id.strip_prefix("codex_history_agent_control_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_resource_pressure_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
     Some(session_id.to_owned())
@@ -42241,6 +42456,144 @@ fn deterministic_style_brevity_output_verification(
         format!("rejected_too_many_bullets(bullets={bullet_like_line_count},max={max_bullets})")
     };
     (verified, true, status)
+}
+
+fn deterministic_resource_pressure_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let Some(tokens) = extract_resource_pressure_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_resource_pressure_tokens".to_owned(),
+        );
+    };
+    let trimmed = response_text.trim();
+    if trimmed.is_empty() {
+        return (false, true, "rejected_empty_response".to_owned());
+    }
+    let response_lower = trimmed.to_lowercase();
+    let resource_signal = contains_any(
+        &response_lower,
+        &[
+            "disk",
+            "ssd",
+            "ram",
+            "memory",
+            "rss",
+            "bytes",
+            "mb",
+            "gb",
+            "mib",
+            "gib",
+            "json",
+            "log",
+            "token",
+            "cache",
+            "worker",
+            "runtime",
+            "диск",
+            "памят",
+            "байт",
+            "мб",
+            "гб",
+            "лог",
+            "токен",
+            "кэш",
+            "воркер",
+        ],
+    ) || response_lower.contains(&tokens.resource_token.to_lowercase())
+        || response_lower.contains(&tokens.limit_token.to_lowercase());
+    let measurement_signal = trimmed.chars().any(|ch| ch.is_ascii_digit())
+        && contains_any(
+            &response_lower,
+            &[
+                "ns",
+                "us",
+                "µs",
+                "ms",
+                "p50",
+                "p90",
+                "p99",
+                "rss",
+                "bytes",
+                "kb",
+                "mb",
+                "gb",
+                "mib",
+                "gib",
+                "calls",
+                "events",
+                "rows",
+                "%",
+                "байт",
+                "мб",
+                "гб",
+                "строк",
+                "событ",
+                "вызов",
+            ],
+        );
+    let budget_signal = contains_any(
+        &response_lower,
+        &[
+            "budget",
+            "limit",
+            "capacity",
+            "estimate",
+            "metric",
+            "measure",
+            "reported",
+            "latency",
+            "memory footprint",
+            "runtime_bytes",
+            "provider_cost",
+            "false_accepts",
+            "market_claim_allowed",
+            "fallback",
+            "лимит",
+            "бюджет",
+            "ёмк",
+            "емк",
+            "оцен",
+            "метрик",
+            "измер",
+            "помер",
+            "потреб",
+            "памят",
+            "нельзя засчит",
+            "не засчит",
+            "не доказ",
+            "границ",
+        ],
+    );
+    let unsupported_claim = contains_any(
+        &response_lower,
+        &[
+            "market claim allowed",
+            "можно продавать",
+            "экономия доказана",
+            "savings proven",
+            "verified savings",
+        ],
+    ) && !contains_any(
+        &response_lower,
+        &["false", "not", "нельзя", "не ", "review", "disabled"],
+    );
+    let verified = resource_signal && budget_signal && measurement_signal && !unsupported_claim;
+    let status = if verified {
+        "verified_resource_or_budget_measurement_with_boundary_signal"
+    } else if unsupported_claim {
+        "rejected_unsupported_savings_or_market_claim"
+    } else if !resource_signal {
+        "rejected_missing_resource_signal"
+    } else if !budget_signal {
+        "rejected_missing_budget_or_measurement_boundary_signal"
+    } else {
+        "rejected_missing_numeric_metric_or_capacity_evidence"
+    };
+    (verified, true, status.to_owned())
 }
 
 fn deterministic_conditional_output_verification(

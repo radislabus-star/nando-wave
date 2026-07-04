@@ -1,5 +1,127 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Resource Pressure Output Evidence V1
+
+Verdict:
+
+```text
+RESOURCE_PRESSURE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-resource-pressure-output-evidence-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.trace.jsonl
+  /home/ubu/.codex/sessions
+
+and writes:
+  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.report.json
+```
+
+Why:
+
+```text
+Resource Pressure Payload Dry Run V1 proved one request-side scoreable payload,
+but it still had no response/tool evidence and no deterministic verifier hook.
+This step attaches conservative final-answer evidence through
+write_rate_or_resource_budget_verifier_v1 without enabling local accepts.
+```
+
+Output evidence result:
+
+```text
+operator_candidate_calls: 1
+scoreable_candidate_calls: 1
+output_evidence_matched_events: 1
+deterministic_verification_events: 1
+verified_true_events: 0
+verified_false_events: 1
+
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow/audit result:
+
+```text
+shadow report:
+  total_llm_calls: 1000
+  exact_cache_hits: 53
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  p99_shadow_score_latency_ns: 6893
+
+verification-hook audit:
+  operator_candidate_calls: 1
+  scoreable_candidate_calls: 1
+  verification_hook_ready_events: 1
+  verified_cpu_accept_eligible_events: 0
+  candidates_missing_provider_cost: 1
+  market_claim_allowed: false
+```
+
+Catalog after regeneration:
+
+```text
+top row:
+  route_or_family_key: uncatalogued
+  manual_route_discovery_top_subfamily: resource_pressure_budget
+  candidate_events: 13
+  payload_ready_events: 3
+  scoreable_payload_events: 1
+  verification_hook_ready_events: 1
+  verified_cpu_accept_eligible_events: 0
+
+next_action:
+  resource_pressure_budget has 1 verifier-hook-ready rows and 0 verifier-true
+  rows, but 0 verified CPU accepts. Compile only a disabled-threshold
+  resource_pressure .nwrb profile and rerun shadow/audit with provider cost;
+  keep local accepts disabled until false_accepts=0 and calibrated safe policy
+  exist.
+```
+
+Decision:
+
+```text
+Do not count this route as CPU savings.
+Do not enable local accepts.
+Do not compile a normal accepting profile from one verifier-false row.
+
+The hook is valuable because it closes the previous "no verifier hook" gap:
+resource_pressure_budget moved from scoreable-only to hook-ready-but-not-safe.
+The next concrete debt is disabled-threshold resource_pressure .nwrb scoring
+profile only if more verifier-true evidence appears, plus provider-cost
+evidence before any market claim.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+CPU Routability 80 remains open:
+
+  current_verified_cpu_accepts: 26
+  verified_gap_to_80_calls: 774
+
+market_claim_allowed=false.
+```
+
 ## 2026-07-04 - Executor Integration: Resource Pressure Payload Dry Run V1
 
 Verdict:
