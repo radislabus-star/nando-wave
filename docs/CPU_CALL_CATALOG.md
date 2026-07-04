@@ -153,21 +153,21 @@ route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
 feedback operator_candidate_calls: 3549
-feedback scoreable_candidate_calls: 549
-feedback verification_hook_ready_events: 297
-feedback verified_cpu_accept_eligible_events: 111
-feedback verified_cpu_accept_unique_request_fingerprints: 109
-feedback incremental_cpu_accept_unique_request_fingerprints: 107
+feedback scoreable_candidate_calls: 554
+feedback verification_hook_ready_events: 301
+feedback verified_cpu_accept_eligible_events: 114
+feedback verified_cpu_accept_unique_request_fingerprints: 112
+feedback incremental_cpu_accept_unique_request_fingerprints: 110
 feedback exact_cache_overlap_verified_cpu_accepts: 2
 feedback incremental_cpu_accept_unique_reduction_milli: 21
-feedback incremental_unique_gap_to_80_calls: 3893
+feedback incremental_unique_gap_to_80_calls: 3890
 
-catalog current_verified_cpu_accepts: 109
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 107
-catalog business_value_gate_passed_rows: 6
-catalog proven_profile_rows: 6
+catalog current_verified_cpu_accepts: 112
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 110
+catalog business_value_gate_passed_rows: 7
+catalog proven_profile_rows: 7
 catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 17
+catalog watch_profile_rows: 16
 catalog rejected_profile_rows: 5
 ```
 
@@ -181,6 +181,7 @@ Latest current5k proven rows:
 | 4 | `git_control` | 123 | 90 | 74 | 3 | 3 | Request-side v3 policy proven, but support exhausted. |
 | 5 | `metrics_report_readout` | 55 | 63 | 51 | 3 | 3 | Safe-policy sidecar proven, but still tiny. |
 | 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | Tiny server-ops proof; daemon mutations remain disabled. |
+| 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | Edit safe-policy v2: request-side `code_diff_and_question_mark` plus energy threshold, false_accepts=0. |
 
 Git-control request-side admission refresh:
 
@@ -232,26 +233,40 @@ edit_marker_length admission calibration:
     false_accepts: 0
     missed_true: 10
 
+edit safe-policy v2 promoted shadow/audit:
+  request_side_policy_name: code_diff_and_question_mark
+  selected_policy_threshold: 7680
+  request_side_policy_accept_rows: 5
+  policy_accept_rows: 3
+  policy_accept_verified_true_rows: 3
+  policy_accept_verified_false_rows: 0
+  policy_accept_unverified_rows: 0
+  shadow total_requests: 5000
+  shadow verified_safe_accepts: 3
+  shadow false_accepts: 0
+  shadow p99_shadow_score_latency_ns: 863057
+  audit verified_cpu_accept_eligible_events: 3
+
 catalog role_binding_edit_marker_length_seed0:
-  current_status: WATCH
+  current_status: PROVEN
   edit_admission_best_robust_true_accepts: 4
   edit_admission_no_safe_policy: false
-  expected_unique_cpu_accepts_over_exact_cache: 0
-  false_accept_risk: UNKNOWN_NO_DETERMINISTIC_VERIFIER_YET
-  business_value_gate_failure_reason:
-    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
+  expected_unique_cpu_accepts_over_exact_cache: 3
+  false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS
+  business_value_gate_failure_reason: PASSED
 ```
 
 Boundary:
 
 ```text
-This is not a market savings claim and not a local-accept promotion.
-It only means the request-side admission calibration found a narrow edit
-candidate using prompt-side features only:
+This is still not a global CPU80 or broad market savings claim.
+It means the request-side admission calibration plus promoted shadow/audit
+proved a tiny edit subfamily using prompt-side features only:
   has_code_diff_lines && has_question_mark
 
-The next valid step is a separate promoted shadow trace/registry for this exact
-policy, followed by shadow/audit/feedback with provider cost and false_accepts=0.
+Count only the 3 incremental unique verified accepts over exact cache. The next
+valid edit work is improving evidence/payload coverage or splitting a higher
+value artifact-backed edit subfamily, not widening the broad edit route.
 ```
 
 Latest guardrail refresh:
@@ -315,12 +330,13 @@ git_control:
     expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
 
 role_binding_edit_marker_length_seed0:
-  business_value_gate_failure_reason:
-    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
+  business_value_gate_failure_reason: PASSED
   edit_admission_best_robust_true_accepts: 4
   edit_admission_no_safe_policy: false
-  decision: WATCH / request-side candidate exists, but no promoted shadow/audit
-    has proven unique CPU accepts yet.
+  expected_unique_cpu_accepts_over_exact_cache: 3
+  false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS
+  decision: PROVEN tiny / promoted v2 shadow-audit adds 3 incremental unique
+    verified accepts over exact cache with false_accepts=0.
 ```
 
 Git/serving feedback-loop current5k refresh:
@@ -395,6 +411,7 @@ PROVEN rows on current5k:
 | 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | 0 | Tiny request-side v2 safe policy; broad conditional calibration is still unsafe. |
 | 4 | `metrics_report_readout` | 99 | 63 | 51 | 3 | 3 | 0 | Small proven sidecar only; support is exhausted and p99 shadow score was WATCH in the promote run. |
 | 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
+| 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | 0 | Edit safe-policy v2 tiny proof; do not widen broad edit. |
 
 Important non-promotions:
 
@@ -437,12 +454,14 @@ edit_marker_length current5k:
   admission hook_ready_rows: 42
   admission label_true_rows: 14
   admission label_false_rows: 28
-  robust_safe_policy_found: false
-  singleton_safe_policy_found: false
-  best_robust_true_accepts: 0
-  best_singleton_true_accepts: 0
-  decision: CANDIDATE / NO_SAFE_REQUEST_SIDE_POLICY
-  next_action: split into a narrower artifact-backed edit subfamily or collect stronger verifier evidence; do not lower thresholds
+  robust_safe_policy_found: true
+  singleton_safe_policy_found: true
+  best_robust_true_accepts: 4
+  promoted v2 verified_cpu_accept_eligible_events: 3
+  promoted v2 false_accepts: 0
+  decision: PROVEN tiny / code_diff_and_question_mark plus energy threshold
+  next_action: improve edit evidence/payload coverage or split a higher-value
+    artifact-backed edit subfamily; do not lower thresholds or widen broad edit
 
 file_path_evidence_answer current5k split:
   broad_split candidate events: 146
@@ -474,8 +493,8 @@ Current5k BUSINESS_VALUE_GATE shelves:
 
 | shelf | count | meaning |
 | --- | ---: | --- |
-| `PROVEN` | 5 | Unique verified CPU accepts exist on this 5k window. |
-| `CANDIDATE` | 3 | Evidence exists, but no unique verified accepts yet. |
+| `PROVEN` | 7 | Unique verified CPU accepts exist on this 5k window. |
+| `CANDIDATE` | 1 | Evidence exists, but no unique verified accepts yet. |
 | `WATCH` | 16 | Low support, exhausted policy, singleton-only, or missing verifier. |
 | `REJECT_FOR_NOW` | 5 | Broad route or unsafe route; split before work. |
 

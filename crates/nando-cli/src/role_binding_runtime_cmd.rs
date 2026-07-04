@@ -477,8 +477,15 @@ const DEFAULT_EDIT_SAFE_POLICY_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.trace.jsonl";
 const DEFAULT_EDIT_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.report.json";
-const DEFAULT_EDIT_SAFE_POLICY_AUDIT_REPORT: &str =
-    "target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.verification-hook-audit.report.json";
+const DEFAULT_EDIT_SAFE_POLICY_V2_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-edit-safe-policy-v2.json";
+const DEFAULT_EDIT_SAFE_POLICY_V2_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/edit-safe-policy-v2.trace.jsonl";
+const DEFAULT_EDIT_SAFE_POLICY_V2_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-safe-policy-v2.report.json";
+const DEFAULT_EDIT_SAFE_POLICY_V2_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/edit-safe-policy-v2.verification-hook-audit.report.json";
+const DEFAULT_EDIT_SAFE_POLICY_AUDIT_REPORT: &str = DEFAULT_EDIT_SAFE_POLICY_V2_AUDIT_REPORT;
 const DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/conditional-local-accept-calibration-v1.report.json";
 const DEFAULT_CONDITIONAL_ADMISSION_AUDIT_REPORT: &str =
@@ -20830,6 +20837,19 @@ where
                 "Edit local calibration found only {edit_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve edit payload/evidence geometry before another promote."
             );
         } else if route.route_key.contains("edit_marker_length")
+            && route
+                .unique_accepts
+                .incremental_verified_request_fingerprints
+                > 0
+            && route.false_accepts == 0
+        {
+            next_action = format!(
+                "Edit safe-policy v2 is now a tiny PROVEN current-window row: {} incremental unique verified accepts over exact cache with false_accepts=0. Do not widen the broad edit route; next work must improve edit evidence/payload coverage or split a higher-value artifact-backed edit subfamily.",
+                route
+                    .unique_accepts
+                    .incremental_verified_request_fingerprints
+            );
+        } else if route.route_key.contains("edit_marker_length")
             && edit_admission_best_robust_true_accepts > 0
         {
             next_action = format!(
@@ -20907,6 +20927,11 @@ where
         {
             false_accept_risk =
                 "LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED".to_owned();
+        } else if route.route_key.contains("edit_marker_length")
+            && expected_unique_cpu_accepts_over_exact_cache > 0
+            && route.false_accepts == 0
+        {
+            false_accept_risk = "LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS".to_owned();
         }
         let business_value_gate_passed = cpu_catalog_business_value_gate_passed(
             route.candidate_events,
@@ -21220,9 +21245,7 @@ where
                 "Agent-control stop gap is payload-ready, but the current strict stop policy support is exhausted at {agent_control_gap_best_robust_true_accepts} robust true accepts and unique contribution is constrained. Do not repeat stop promotion; add stronger tool-state/no-mutation evidence or split a new control subfamily."
             )
         } else if agent_control_stop_no_safe_policy {
-            format!(
-                "Agent-control stop gap is payload-ready, but current-window admission calibration found no safe stop/control policy. Do not reuse the old 1000-window support; split a narrower tool-state/no-mutation subfamily with deterministic verifier evidence."
-            )
+            "Agent-control stop gap is payload-ready, but current-window admission calibration found no safe stop/control policy. Do not reuse the old 1000-window support; split a narrower tool-state/no-mutation subfamily with deterministic verifier evidence.".to_owned()
         } else if metrics_report_support_exhausted {
             format!(
                 "Metrics-report gap is payload-ready, but current robust metrics support is exhausted at {metrics_report_gap_best_robust_true_accepts} true accepts already covered by incremental unique support. Improve numeric evidence geometry or split a new report subfamily before another promote."
@@ -27090,402 +27113,7 @@ where
     Err("mixed safe policy v3 promotion is review-only; run shadow/audit before claims".to_owned())
 }
 
-pub(crate) fn run_role_binding_real_traffic_edit_safe_policy_promote_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let base_registry_config_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
-    let evidence_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL));
-    let calibration_report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT));
-    let promoted_registry_config_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_SAFE_POLICY_REGISTRY_CONFIG));
-    let promoted_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_SAFE_POLICY_TRACE_JSONL));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_SAFE_POLICY_REPORT));
-    let provider_cost_microusd = args
-        .next()
-        .map(|value| {
-            value
-                .parse::<u64>()
-                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
-        })
-        .transpose()?
-        .unwrap_or(100);
-
-    let mut promoted_config =
-        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
-    validate_registry_config(&promoted_config)?;
-    let calibration =
-        read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(&calibration_report_path)?;
-    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
-    let Some(calibration_policy) = select_supported_mixed_safe_policy(&calibration) else {
-        return Err(
-            "edit calibration report has no supported safe policy candidate for runtime promotion"
-                .to_owned(),
-        );
-    };
-    let base_registry =
-        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
-    let policy = select_mixed_promotion_policy_from_evidence(
-        &base_registry,
-        &trace_rows,
-        calibration_policy,
-        "edit_marker_length",
-    )?;
-    let threshold = policy.threshold;
-    let acceptance_policy = "energy_threshold_only".to_owned();
-    let edit_profile_ids = trace_rows
-        .iter()
-        .filter_map(|row| row.nando_shadow_request.as_ref())
-        .filter(|request| {
-            request
-                .route_key
-                .as_deref()
-                .is_some_and(|route| route.contains("edit_marker_length"))
-        })
-        .filter_map(|request| request.profile_id.clone())
-        .collect::<BTreeSet<_>>();
-    if edit_profile_ids.is_empty() {
-        return Err("edit safe policy promotion found no edit profile ids in trace".to_owned());
-    }
-    let mut promoted_profile_ids = Vec::new();
-    for profile in &mut promoted_config.profiles {
-        if edit_profile_ids.contains(&profile.profile_id) {
-            profile.threshold = threshold;
-            profile.acceptance_policy = acceptance_policy.clone();
-            promoted_profile_ids.push(profile.profile_id.clone());
-        }
-    }
-    if promoted_profile_ids.is_empty() {
-        return Err(format!(
-            "edit safe policy promotion found no matching profiles in registry for {:?}",
-            edit_profile_ids
-        ));
-    }
-    validate_registry_config(&promoted_config)?;
-    write_json_file(&promoted_registry_config_path, &promoted_config)?;
-    let promoted_registry =
-        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
-
-    let mut scoreable_candidate_calls = 0usize;
-    let mut policy_accept_rows = 0usize;
-    let mut policy_accept_verified_true_rows = 0usize;
-    let mut policy_accept_verified_false_rows = 0usize;
-    let mut policy_accept_unverified_rows = 0usize;
-    let mut provider_cost_events_written = 0usize;
-    let mut runtime_acceptance_mismatches = 0usize;
-    let mut no_score_rows = 0usize;
-
-    for row in &mut trace_rows {
-        let Some(request) = &mut row.nando_shadow_request else {
-            continue;
-        };
-        let is_edit = request
-            .route_key
-            .as_deref()
-            .is_some_and(|route| route.contains("edit_marker_length"));
-        if !is_edit {
-            continue;
-        }
-        scoreable_candidate_calls +=
-            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
-        row.provider_cost_microusd = Some(provider_cost_microusd);
-        provider_cost_events_written += 1;
-
-        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
-        else {
-            no_score_rows += 1;
-            request.expect_local_operator = Some(false);
-            continue;
-        };
-        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
-        let policy_accept = profile_accepts_score(
-            &acceptance_policy,
-            strict_ordered_pass,
-            score.energy_margin,
-            score.slot_margins.first().copied().unwrap_or(0),
-            threshold,
-        );
-        request.expect_local_operator = Some(policy_accept);
-        if policy_accept {
-            policy_accept_rows += 1;
-            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
-            policy_accept_verified_false_rows +=
-                usize::from(row.verified_safe_accept == Some(false));
-            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
-        }
-        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
-        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
-        row.notes = Some(format!(
-            "{}; edit_safe_policy_promote_v1 policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
-            row.notes
-                .clone()
-                .unwrap_or_else(|| "real_codex_trace".to_owned()),
-            acceptance_policy,
-            threshold,
-            provider_cost_microusd,
-            policy_accept
-        ));
-    }
-
-    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
-    let report = RoleBindingMixedSafePolicyPromoteReport {
-        schema_version: "nando_role_binding_edit_safe_policy_promote_v1".to_owned(),
-        verdict: if policy_accept_rows > 0
-            && policy_accept_verified_false_rows == 0
-            && policy_accept_unverified_rows == 0
-            && runtime_acceptance_mismatches == 0
-        {
-            "EDIT_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
-        } else {
-            "EDIT_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
-        }
-        .to_owned(),
-        base_registry_config_path: base_registry_config_path.display().to_string(),
-        evidence_trace_path: evidence_trace_path.display().to_string(),
-        calibration_report_path: calibration_report_path.display().to_string(),
-        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
-        promoted_trace_path: promoted_trace_path.display().to_string(),
-        history_path: None,
-        request_side_policy_name: None,
-        calibration_policy_name: calibration_policy.policy_name.clone(),
-        calibration_policy_threshold: calibration_policy.threshold,
-        selected_policy_name: policy.policy_name.clone(),
-        selected_policy_source: policy.selection_source.clone(),
-        selected_policy_threshold: threshold,
-        selected_acceptance_policy: acceptance_policy,
-        selected_policy_accepts: policy.accepts,
-        selected_policy_true_accepts: policy.true_accepts,
-        selected_policy_false_accepts: policy.false_accepts,
-        selected_policy_unverified_accepts: policy.unverified_accepts,
-        promoted_profile_ids,
-        provider_cost_microusd,
-        trace_rows_written: trace_rows.len(),
-        scoreable_candidate_calls,
-        request_side_policy_evaluated_rows: 0,
-        request_side_policy_accept_rows: 0,
-        request_side_policy_reject_rows: 0,
-        history_prompt_missing_rows: 0,
-        policy_accept_rows,
-        policy_accept_verified_true_rows,
-        policy_accept_verified_false_rows,
-        policy_accept_unverified_rows,
-        provider_cost_events_written,
-        no_score_rows,
-        runtime_acceptance_mismatches,
-        raw_prompt_text_written: false,
-        raw_response_text_written: false,
-        target_labels_used_for_runtime: false,
-        proof_labels_used_for_runtime: false,
-        market_claim_allowed: false,
-        claim_boundary: "Promotion artifact only. It creates a promoted serving registry with an explicit edit-route acceptance policy and rewrites a shadow trace with provider-cost estimates. Offline labels/evidence may choose the threshold, but serving uses only request-side score >= threshold. It does not prove market savings until role-binding-real-traffic-shadow-v1 and verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
-        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted edit registry/trace. Only a shadow PASS with provider cost, non-synthetic rows, and false_accepts=0 can advance verified CPU routability.".to_owned(),
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-edit-safe-policy-promote-v1: {}",
-        report.verdict
-    );
-    println!(
-        "  promoted_registry: {}",
-        promoted_registry_config_path.display()
-    );
-    println!("  promoted_trace: {}", promoted_trace_path.display());
-    println!("  report: {}", report_path.display());
-    println!("  selected_policy_name: {}", report.selected_policy_name);
-    println!(
-        "  selected_policy_source: {}",
-        report.selected_policy_source
-    );
-    println!(
-        "  selected_policy_threshold: {}",
-        report.selected_policy_threshold
-    );
-    println!("  policy_accept_rows: {}", report.policy_accept_rows);
-    println!(
-        "  policy_accept_verified_true_rows: {}",
-        report.policy_accept_verified_true_rows
-    );
-    println!(
-        "  policy_accept_verified_false_rows: {}",
-        report.policy_accept_verified_false_rows
-    );
-    println!(
-        "  policy_accept_unverified_rows: {}",
-        report.policy_accept_unverified_rows
-    );
-    Err("edit safe policy promotion is review-only; run shadow/audit before claims".to_owned())
-}
-
-pub(crate) fn run_role_binding_real_traffic_edit_admission_calibration_v1<I>(
-    mut args: I,
-) -> Result<(), String>
-where
-    I: Iterator<Item = String>,
-{
-    let evidence_trace_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_OUTPUT_EVIDENCE_TRACE_JSONL));
-    let history_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
-    let report_path = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT));
-
-    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
-    let history_rows = read_codex_history_jsonl(&history_path)?;
-    let history_by_fingerprint = history_rows
-        .iter()
-        .map(|row| {
-            (
-                format!(
-                    "fnv1a64:{:016x}",
-                    stable_real_traffic_fingerprint64(row.text.as_bytes())
-                ),
-                row.text.as_str(),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-
-    let mut rows = Vec::new();
-    let mut hook_ready_rows = 0usize;
-    let mut label_true_rows = 0usize;
-    let mut label_false_rows = 0usize;
-    let mut history_prompt_missing_rows = 0usize;
-
-    for trace in &trace_rows {
-        let Some(label) = trace.verified_safe_accept else {
-            continue;
-        };
-        if trace.nando_shadow_request.is_none() {
-            continue;
-        }
-        hook_ready_rows += 1;
-        label_true_rows += usize::from(label);
-        label_false_rows += usize::from(!label);
-        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
-        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
-            history_prompt_missing_rows += 1;
-            continue;
-        };
-        let features = extract_edit_admission_features(prompt_text);
-        rows.push(RoleBindingEditAdmissionCalibrationRow {
-            trace_id: trace.trace_id.clone(),
-            request_fingerprint: trace.request_fingerprint.clone(),
-            response_fingerprint: trace.response_fingerprint.clone(),
-            verifier_label: label,
-            features,
-        });
-    }
-
-    let minimum_true_support = 2usize;
-    let policies = edit_admission_policy_reports(&rows, minimum_true_support);
-    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
-    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
-    let best_robust_true_accepts = policies
-        .iter()
-        .filter(|policy| policy.robust_safe)
-        .map(|policy| policy.true_accepts)
-        .max()
-        .unwrap_or(0);
-    let best_singleton_true_accepts = policies
-        .iter()
-        .filter(|policy| policy.singleton_safe)
-        .map(|policy| policy.true_accepts)
-        .max()
-        .unwrap_or(0);
-    let feature_counts = edit_admission_feature_counts(&rows);
-    let report = RoleBindingEditAdmissionCalibrationReport {
-        schema_version: "nando_role_binding_edit_admission_calibration_v1".to_owned(),
-        verdict: if robust_safe_policy_found {
-            "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND"
-        } else if singleton_safe_policy_found {
-            "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
-        } else {
-            "EDIT_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY"
-        }
-        .to_owned(),
-        evidence_trace_path: evidence_trace_path.display().to_string(),
-        history_path: history_path.display().to_string(),
-        hook_ready_rows,
-        rows_with_prompt_features: rows.len(),
-        history_prompt_missing_rows,
-        label_true_rows,
-        label_false_rows,
-        minimum_true_support,
-        robust_safe_policy_found,
-        singleton_safe_policy_found,
-        best_robust_true_accepts,
-        best_singleton_true_accepts,
-        feature_counts,
-        policies,
-        rows,
-        raw_prompt_text_written: false,
-        raw_response_text_written: false,
-        response_text_used_for_features: false,
-        target_labels_used_for_runtime: false,
-        proof_labels_used_for_runtime: false,
-        local_accepts_enabled: false,
-        market_claim_allowed: false,
-        claim_boundary: "Admission calibration only. It reads real request text at analysis time, writes only fingerprints/features/counts, uses verification labels only to evaluate candidate request-side gates, enables no local accepts, and cannot be used as market savings claim.".to_owned(),
-        next_engineering_debt: if robust_safe_policy_found {
-            "Promote the robust admission candidate only through a separate shadow trace rewrite and false_accepts=0 gate; do not count singleton policies as product proof.".to_owned()
-        } else {
-            "Current real edit request-side features do not provide a robust safe admission gate. Leave edit local accepts disabled and either improve edit features with more real evidence or build the conditional/mixed payload builders.".to_owned()
-        },
-    };
-    write_json_file(&report_path, &report)?;
-    println!(
-        "role-binding-real-traffic-edit-admission-calibration-v1: {}",
-        report.verdict
-    );
-    println!("  evidence_trace: {}", evidence_trace_path.display());
-    println!("  history: {}", history_path.display());
-    println!("  report: {}", report_path.display());
-    println!("  hook_ready_rows: {}", report.hook_ready_rows);
-    println!(
-        "  rows_with_prompt_features: {}",
-        report.rows_with_prompt_features
-    );
-    println!("  label_true_rows: {}", report.label_true_rows);
-    println!("  label_false_rows: {}", report.label_false_rows);
-    println!(
-        "  robust_safe_policy_found: {}",
-        report.robust_safe_policy_found
-    );
-    println!(
-        "  singleton_safe_policy_found: {}",
-        report.singleton_safe_policy_found
-    );
-    println!(
-        "  best_robust_true_accepts: {}",
-        report.best_robust_true_accepts
-    );
-    Err("edit admission calibration is review-only".to_owned())
-}
-
+include!("role_binding_runtime_cmd/edit_safe_policy.rs");
 pub(crate) fn run_role_binding_real_traffic_verification_hook_audit_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -28167,7 +27795,10 @@ where
     } else {
         None
     };
-    let edit_safe_policy_audit_report_path = PathBuf::from(DEFAULT_EDIT_SAFE_POLICY_AUDIT_REPORT);
+    let edit_safe_policy_audit_report_path = current_window_companion_report_path(
+        DEFAULT_EDIT_SAFE_POLICY_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let edit_safe_policy_verification_audit = if edit_safe_policy_audit_report_path.exists() {
         Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
             &edit_safe_policy_audit_report_path,
@@ -46909,6 +46540,130 @@ fn select_metrics_report_admission_promotion_policy_from_evidence(
     })
 }
 
+fn select_supported_edit_admission_policy(
+    admission: &RoleBindingEditAdmissionCalibrationReport,
+) -> Option<&RoleBindingEditAdmissionPolicyReport> {
+    admission
+        .policies
+        .iter()
+        .filter(|policy| policy.robust_safe && policy.false_accepts == 0)
+        .max_by_key(|policy| (policy.true_accepts, policy.accepts))
+}
+
+fn edit_admission_policy_accepts(
+    policy_name: &str,
+    features: &RoleBindingEditAdmissionFeatures,
+) -> Option<bool> {
+    let accepts = match policy_name {
+        "all_hook_ready_rows" => true,
+        "length_lt_1000" => features.request_len < 1000,
+        "length_lt_1800" => features.request_len < 1800,
+        "starts_goal" => features.starts_goal,
+        "starts_what" => features.starts_what,
+        "starts_yes" => features.starts_yes,
+        "runtime_and_length_lt_1000" => features.has_runtime_terms && features.request_len < 1000,
+        "runtime_and_length_lt_1800" => features.has_runtime_terms && features.request_len < 1800,
+        "starts_goal_and_length_lt_1000" => features.starts_goal && features.request_len < 1000,
+        "starts_goal_or_starts_what_length_lt_1800" => {
+            (features.starts_goal || features.starts_what) && features.request_len < 1800
+        }
+        "starts_what_and_runtime" => features.starts_what && features.has_runtime_terms,
+        "direct_edit_command_and_length_lt_1000" => {
+            features.has_direct_edit_command && features.request_len < 1000
+        }
+        "not_report_marker_and_length_lt_1800" => {
+            !features.has_report_markers && features.request_len < 1800
+        }
+        "not_code_diff_and_length_lt_1800" => {
+            !features.has_code_diff_lines && features.request_len < 1800
+        }
+        "marker_len_at_least_3_and_length_lt_1800" => {
+            features.marker_len >= 3 && features.request_len < 1800
+        }
+        "question_mark_and_runtime" => features.has_question_mark && features.has_runtime_terms,
+        "code_diff_and_question_mark" => features.has_code_diff_lines && features.has_question_mark,
+        _ => return None,
+    };
+    Some(accepts)
+}
+
+fn select_edit_admission_promotion_policy_from_evidence(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+    history_by_fingerprint: &BTreeMap<String, &str>,
+    admission_policy: &RoleBindingEditAdmissionPolicyReport,
+) -> Result<RoleBindingMixedPromotionPolicySelection, String> {
+    let mut scored_rows = Vec::new();
+    for row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_edit = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route.contains("edit_marker_length"));
+        if !is_edit || request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            continue;
+        };
+        let features = extract_edit_admission_features(prompt_text);
+        if !edit_admission_policy_accepts(&admission_policy.policy_name, &features).unwrap_or(false)
+        {
+            continue;
+        }
+        let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
+            continue;
+        };
+        scored_rows.push((score.energy_margin, row.verified_safe_accept));
+    }
+    if scored_rows.is_empty() {
+        return Err(
+            "edit admission safe policy selection found no scoreable admitted rows".to_owned(),
+        );
+    }
+
+    let mut thresholds = scored_rows
+        .iter()
+        .map(|(energy_margin, _)| *energy_margin)
+        .collect::<Vec<_>>();
+    thresholds.sort_unstable();
+    thresholds.dedup();
+
+    let mut best_market_safe: Option<RoleBindingMixedPromotionPolicySelection> = None;
+    for threshold in thresholds {
+        let selection = evaluate_mixed_energy_promotion_threshold(
+            "edit_admission_energy_margin_threshold",
+            &format!(
+                "request_side_{}_plus_energy_threshold",
+                admission_policy.policy_name
+            ),
+            threshold,
+            &scored_rows,
+        );
+        let market_safe = selection.true_accepts
+            >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+            && selection.false_accepts == 0
+            && selection.unverified_accepts == 0;
+        if !market_safe {
+            continue;
+        }
+        let replace = best_market_safe.as_ref().is_none_or(|current| {
+            selection.true_accepts > current.true_accepts
+                || (selection.true_accepts == current.true_accepts
+                    && selection.threshold < current.threshold)
+        });
+        if replace {
+            best_market_safe = Some(selection);
+        }
+    }
+    best_market_safe.ok_or_else(|| {
+        "edit admission safe policy found no energy threshold with true support >= 3, false=0, and unverified=0".to_owned()
+    })
+}
+
 fn select_mixed_promotion_policy_from_request_side_evidence(
     registry: &RoleBindingProfileRuntimeRegistry,
     trace_rows: &[RoleBindingRealTrafficTraceRow],
@@ -49793,6 +49548,7 @@ fn cpu_catalog_business_value_gate_passed(
         && false_accepts == 0
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cpu_catalog_business_value_gate_failure_reason(
     route_key: &str,
     candidate_events: usize,

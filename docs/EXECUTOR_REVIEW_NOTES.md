@@ -1,5 +1,157 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Edit Safe-Policy V2 Promoted On Current5k And Runtime Command Split
+
+Verdict:
+
+```text
+EDIT_SAFE_POLICY_V2_CURRENT5K_TINY_PROVEN
+ROLE_BINDING_RUNTIME_CMD_EDIT_ROUTE_SPLIT
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+The current5k edit_marker_length route had a robust request-side admission
+candidate, but it could not count as savings until a promoted registry/trace,
+shadow run, verification audit, feedback loop, and catalog refresh all agreed.
+
+That chain now exists for the narrow prompt-side policy:
+  code_diff_and_question_mark
+
+The policy uses only request-side features:
+  has_code_diff_lines && has_question_mark
+
+It does not read response text, target labels, proof labels, expected answers,
+or proof_rule_id authority. Local accepts remain shadow/audit gated.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+crates/nando-cli/src/role_binding_runtime_cmd/edit_safe_policy.rs
+crates/nando-cli/src/main.rs
+crates/nando-cli/src/help.rs
+```
+
+What changed:
+
+```text
+role-binding-real-traffic-edit-safe-policy-promote-v2 writes a full-window
+promoted edit trace and registry from a robust request-side admission policy.
+
+role-binding-real-traffic-feedback-loop-v1 now resolves the current-window
+edit safe-policy audit report, so current5k feedback counts the promoted v2
+edit route instead of stale/default edit evidence.
+
+role-binding-real-traffic-cpu-operator-catalog-v1 now reports
+role_binding_edit_marker_length_seed0 as a tiny PROVEN row when current-window
+shadow/audit evidence shows incremental unique verified accepts over exact
+cache with false_accepts=0.
+
+The monolithic role_binding_runtime_cmd.rs was cut by route: the edit
+safe-policy/admission command block now lives in
+role_binding_runtime_cmd/edit_safe_policy.rs and is included from the original
+module. This is a preparatory boundary cut only; private runtime types remain
+in one Rust module and CLI behavior is unchanged.
+```
+
+Measured edit safe-policy v2 promote:
+
+```text
+verdict: EDIT_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
+request_side_policy_name: code_diff_and_question_mark
+selected_policy_threshold: 7680
+request_side_policy_accept_rows: 5
+policy_accept_rows: 3
+policy_accept_verified_true_rows: 3
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+raw_prompt_text_written: false
+raw_response_text_written: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+```
+
+Measured promoted shadow/audit:
+
+```text
+shadow verdict: REAL_TRAFFIC_SHADOW_V1_PASS
+total_requests: 5000
+total_llm_calls: 5000
+exact_cache_hits: 453
+nando_shadow_accepts: 3
+verified_safe_accepts: 3
+false_accepts: 0
+incremental_savings_over_exact_cache: 3
+p99_shadow_score_latency_ns: 863057
+
+audit verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+operator_candidate_calls: 5
+scoreable_candidate_calls: 5
+verification_hook_ready_events: 4
+verified_cpu_accept_eligible_events: 3
+market_claim_allowed: true
+```
+
+Measured current5k feedback/catalog after the refresh:
+
+```text
+total_llm_calls: 5000
+operator_candidate_calls: 3549
+scoreable_candidate_calls: 554
+verification_hook_ready_events: 301
+verified_cpu_routability_milli: 22
+verified_gap_to_80_calls: 3886
+unique_verified_cpu_accepts: 112
+unique_verified_gap_to_80_calls: 3888
+incremental_unique_cpu_accepts: 110
+incremental_unique_gap_to_80_calls: 3890
+
+catalog current_verified_cpu_accepts: 112
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 110
+catalog business_value_gate_passed_rows: 7
+catalog proven_profile_rows: 7
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 16
+catalog rejected_profile_rows: 5
+```
+
+Measured edit catalog row:
+
+```text
+role_binding_edit_marker_length_seed0:
+  current_status: PROVEN
+  verified_cpu_accept_eligible_events: 3
+  incremental_cpu_accept_unique_request_fingerprints: 3
+  expected_unique_cpu_accepts_over_exact_cache: 3
+  false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS
+  next_action: improve edit evidence/payload coverage or split a higher-value
+    artifact-backed edit subfamily; do not widen broad edit.
+```
+
+Decision:
+
+```text
+Count only 3 incremental unique current5k edit accepts. Do not widen the broad
+edit route, do not claim CPU80, and do not turn the isolated edit v2 market
+claim flag into a global sales claim. The next valid CPU80 work must still
+follow BUSINESS_VALUE_GATE and maximize incremental verified accepts over exact
+cache at false_accepts=0.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/edit-safe-policy-v2-current5k-and-split-v1.md
+triads: docs/structural_gates/edit-safe-policy-v2-current5k-and-split-v1.triads.json
+verdict: PASS
+complexity_score: 59
+trace_path: /tmp/nanda-structural-gate/edit-safe-policy-v2-current5k-and-split-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Edit Marker-Length Request-Side Admission Candidate Found
 
 Verdict:
