@@ -77,6 +77,7 @@ check for the same narrow `test_output_parse` profile.
 Source reports:
 
 ```text
+target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-5k.test-output-window.report.json
 target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.report.json
 target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json
 target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
@@ -98,14 +99,21 @@ verified_cpu_accept_unique_request_fingerprints: 95
 incremental_cpu_accept_unique_request_fingerprints: 93
 incremental_cpu_accept_unique_reduction_milli: 18
 incremental_unique_gap_to_80_calls: 3907
+business_value_gate_passed_rows: 1
+proven_profile_rows: 1
+candidate_profile_rows: 1
+watch_profile_rows: 22
+rejected_profile_rows: 5
 ```
 
 Decision:
 
 ```text
 `test_output_parse` remains PROVEN and more valuable than the 1000-window count
-showed, but this sidecar does not replace the canonical catalog until the full
-5k catalog/report sync is promoted. CPU80 is still not proven.
+showed, but this sidecar does not replace the canonical 1000-window catalog.
+The separate 5k catalog has only one PROVEN row, so the next BUSINESS_VALUE_GATE
+target is the best narrow artifact-backed split that can add new verified
+unique CPU accepts over exact cache. CPU80 is still not proven.
 ```
 
 CANDIDATE rows:

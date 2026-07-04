@@ -86,6 +86,12 @@ cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 \
   target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json \
   target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json \
   target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1 \
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-5k.test-output-window.report.json \
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-5k.report.json \
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-5k.test-output-window.report.json \
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-5k.report.json
 ```
 
 Measured result:
@@ -126,6 +132,16 @@ feedback incremental_cpu_accept_unique_request_fingerprints: 93
 feedback exact_cache_overlap_verified_cpu_accepts: 2
 feedback incremental_cpu_accept_unique_reduction_milli: 18
 feedback incremental_unique_gap_to_80_calls: 3907
+
+catalog total_llm_calls: 5000
+catalog exact_cache_hits: 459
+catalog current_verified_cpu_accepts: 95
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 93
+catalog business_value_gate_passed_rows: 1
+catalog proven_profile_rows: 1
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 22
+catalog rejected_profile_rows: 5
 ```
 
 Decision:
@@ -133,10 +149,12 @@ Decision:
 ```text
 The larger 5k window confirms `test_output_parse` is a real value profile:
 97 verified accepts, 95 unique request fingerprints, 93 incremental over exact
-cache, and false_accepts=0. This is still not CPU80: verified unique coverage is
+cache, and false_accepts=0. The 5k catalog has only one PROVEN row, so the next
+growth target must add a new narrow artifact-backed verified profile rather
+than polish broad routes. This is still not CPU80: verified unique coverage is
 19 milli and incremental unique reduction is 18 milli. The canonical 1000-window
-catalog remains the current operator catalog; the 5k path is recorded as
-sidecar evidence until a full 5k catalog/report sync is promoted.
+catalog remains the current operator catalog; the 5k catalog is recorded as
+sidecar evidence for larger-window priority planning.
 ```
 
 Structural gate:
@@ -144,7 +162,7 @@ Structural gate:
 ```text
 docs/structural_gates/test-output-parse-5k-window-v1.md
 verdict: PASS
-complexity_score: 64
+complexity_score: 77
 ```
 
 ## 2026-07-04 - Executor Integration: CPU Operator Catalog Refresh After Test Output Parse

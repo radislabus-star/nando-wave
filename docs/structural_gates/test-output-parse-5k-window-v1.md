@@ -34,6 +34,12 @@ canonical 1000-window catalog.
 | feedback_report | exact_cache_overlap_verified_cpu_accepts | 2 | cpu-route-feedback-loop-v1-5k.test-output-window.report.json |
 | feedback_report | incremental_cpu_accept_unique_reduction_milli | 18 | cpu-route-feedback-loop-v1-5k.test-output-window.report.json |
 | feedback_report | incremental_unique_gap_to_80_calls | 3907 | cpu-route-feedback-loop-v1-5k.test-output-window.report.json |
+| catalog_5k | source_report | cpu_operator_catalog_v1_5k_test_output_window | cpu-operator-catalog-v1-5k.test-output-window.report.json |
+| catalog_5k | business_value_gate_passed_rows | 1 | cpu-operator-catalog-v1-5k.test-output-window.report.json |
+| catalog_5k | proven_profile_rows | 1 | cpu-operator-catalog-v1-5k.test-output-window.report.json |
+| catalog_5k | candidate_profile_rows | 1 | cpu-operator-catalog-v1-5k.test-output-window.report.json |
+| catalog_5k | watch_profile_rows | 22 | cpu-operator-catalog-v1-5k.test-output-window.report.json |
+| catalog_5k | rejected_profile_rows | 5 | cpu-operator-catalog-v1-5k.test-output-window.report.json |
 | canonical_catalog | remains | 1000_window_current_snapshot | CPU_CALL_CATALOG.md |
 | sidecar_5k | status | evidence_not_catalog_replacement | CPU_CALL_CATALOG.md |
 | cpu80_claim | remains | not_proven | EXECUTOR_REVIEW_NOTES.md |
