@@ -1,5 +1,115 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: CPU Call Catalog Business Value Gate V1
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Added:
+  docs/CPU_CALL_CATALOG.md
+
+Generated:
+  target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.report.json
+  target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.nanda.txt
+```
+
+Why:
+
+```text
+CPU80 cannot be reached by building many attractive but low-value profiles.
+Every operator profile now has to pass BUSINESS_VALUE_GATE before more work:
+real trace count, non-exact candidate calls, deterministic verifier evidence,
+expected unique CPU accepts over exact cache, expected savings, and
+false_accepts=0.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1 \
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v5.post-ime-current.report.json \
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-5k.report.json \
+  target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.report.json \
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-5k.report.json
+```
+
+Measured result:
+
+```text
+total_llm_calls: 1000
+exact_cache_hits: 53
+current_verified_cpu_accepts: 26
+current_incremental_unique_cpu_accepts_over_exact_cache: 25
+business_value_gate_passed_rows: 7
+proven_profile_rows: 7
+candidate_profile_rows: 4
+watch_profile_rows: 12
+rejected_profile_rows: 6
+```
+
+PROVEN rows:
+
+```text
+role_binding_mixed_map_seed0: expected_unique=7
+role_binding_agent_control_seed0: expected_unique=5
+git_control: expected_unique=4
+role_binding_conditional_branch_seed0: expected_unique=3
+metrics_report_readout: expected_unique=3
+serving_ops: expected_unique=3
+role_binding_edit_marker_length_seed0: expected_unique=1
+```
+
+CANDIDATE rows:
+
+```text
+uncatalogued / resource_pressure_budget
+read_inspect
+style_brevity
+resource_pressure_budget
+```
+
+REJECT_FOR_NOW rows:
+
+```text
+answer_or_explain
+project_context_dialogue
+agent_continue_execute
+```
+
+Decision:
+
+```text
+Do not build the next profile because it is interesting.
+Build only when a row can show expected unique CPU accepts over exact cache,
+or when a deterministic verifier/split can plausibly raise that number.
+
+Broad routes stay blocked as full routes. Work only narrow artifact-backed
+subfamilies.
+
+The next safe directions are:
+  metrics_report_readout split
+  git_control split
+  serving_ops split
+  read_inspect verifier/evidence
+  test_output_parse if found in real trace
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/cpu-call-catalog-business-value-v1.md
+verdict: PASS
+```
+
 ## 2026-07-04 - Executor Integration: Document Stamp Layout Payload Dry-Run V1
 
 Verdict:

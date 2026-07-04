@@ -847,7 +847,7 @@ pub(crate) fn print_help() {
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"
     );
     println!(
-        "            Rank existing profile routes and no-candidate route-gap families for the next CPU operator build"
+        "            Rank profile routes with BUSINESS_VALUE_GATE before the next CPU operator build"
     );
     println!(
         "  role-binding-real-traffic-agent-loop-profile-registry-v1 [feedback-report-json] [cpu-operator-catalog-json] [agent-loop-profile-registry-report-json]"

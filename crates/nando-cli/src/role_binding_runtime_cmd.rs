@@ -17557,12 +17557,58 @@ where
                 route.route_key
             );
         }
+        let traffic_share_milli = ratio_milli(route.candidate_events, feedback.total_llm_calls);
+        let exact_cache_overlap_candidate_calls = route
+            .candidate_events
+            .saturating_sub(route.non_exact_candidate_calls);
+        let expected_unique_cpu_accepts_over_exact_cache = cpu_catalog_expected_unique_accepts(
+            route
+                .unique_accepts
+                .incremental_verified_request_fingerprints,
+            route.non_exact_candidate_calls,
+            route.local_accept_best_safe_true_accepts,
+            route.local_accept_support_qualified,
+            route.false_accepts,
+            route.route_key.as_str(),
+        );
+        let expected_savings_milli = ratio_milli(
+            expected_unique_cpu_accepts_over_exact_cache,
+            feedback.total_llm_calls,
+        );
+        let current_status = cpu_catalog_current_status(
+            route.route_key.as_str(),
+            route.false_accepts,
+            route
+                .unique_accepts
+                .incremental_verified_request_fingerprints,
+            route.scoreable_payload_events,
+            route.verification_hook_ready_events,
+            route.local_accept_safe_policy_found,
+            route.local_accept_support_qualified,
+        );
+        let false_accept_risk = cpu_catalog_false_accept_risk(
+            route.false_accepts,
+            route.verification_hook_ready_events,
+            route.local_accept_safe_policy_found,
+            route.local_accept_support_qualified,
+            route.route_key.as_str(),
+        );
+        let business_value_gate_passed = cpu_catalog_business_value_gate_passed(
+            route.candidate_events,
+            route.non_exact_candidate_calls,
+            route.verification_hook_ready_events,
+            expected_unique_cpu_accepts_over_exact_cache,
+            route.false_accepts,
+        );
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
             source_kind: "existing_profile_route".to_owned(),
             route_or_family_key: route.route_key.clone(),
             profile_id: Some(route.profile_id.clone()),
             candidate_events: route.candidate_events,
+            traffic_share_milli,
+            non_exact_candidate_calls: route.non_exact_candidate_calls,
+            exact_cache_overlap_candidate_calls,
             payload_ready_events: route.payload_ready_events,
             scoreable_payload_events: route.scoreable_payload_events,
             verification_hook_ready_events: route.verification_hook_ready_events,
@@ -17617,6 +17663,11 @@ where
             short_decision_ack_prior_false_accepts: 0,
             short_decision_ack_prior_blocked: false,
             false_accepts: route.false_accepts,
+            false_accept_risk,
+            current_status,
+            business_value_gate_passed,
+            expected_unique_cpu_accepts_over_exact_cache,
+            expected_savings_milli,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
             recommended_payload_builder: route.payload_builder.clone(),
@@ -17941,12 +17992,52 @@ where
                 family.recommended_payload_builder, family.recommended_verifier
             )
         };
+        let non_exact_candidate_calls = family.candidate_events;
+        let exact_cache_overlap_candidate_calls = 0usize;
+        let incremental_unique_accepts = 0usize;
+        let local_accept_safe_policy_found = existing_scoreable_feedback_row
+            .map(|route| route.local_accept_safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_support_qualified = existing_scoreable_feedback_row
+            .map(|route| route.local_accept_support_qualified)
+            .unwrap_or(false);
+        let expected_unique_cpu_accepts_over_exact_cache = 0usize;
+        let expected_savings_milli = ratio_milli(
+            expected_unique_cpu_accepts_over_exact_cache,
+            feedback.total_llm_calls,
+        );
+        let current_status = cpu_catalog_current_status(
+            family.family_key.as_str(),
+            family_false_accepts,
+            incremental_unique_accepts,
+            scoreable_payload_events,
+            family_verification_hook_ready_events,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
+        );
+        let false_accept_risk = cpu_catalog_false_accept_risk(
+            family_false_accepts,
+            family_verification_hook_ready_events,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
+            family.family_key.as_str(),
+        );
+        let business_value_gate_passed = cpu_catalog_business_value_gate_passed(
+            family.candidate_events,
+            non_exact_candidate_calls,
+            family_verification_hook_ready_events,
+            expected_unique_cpu_accepts_over_exact_cache,
+            family_false_accepts,
+        );
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
             source_kind: "route_gap_family".to_owned(),
             route_or_family_key: family.family_key.clone(),
             profile_id: None,
             candidate_events: family.candidate_events,
+            traffic_share_milli: ratio_milli(family.candidate_events, feedback.total_llm_calls),
+            non_exact_candidate_calls,
+            exact_cache_overlap_candidate_calls,
             payload_ready_events,
             scoreable_payload_events,
             verification_hook_ready_events: family_verification_hook_ready_events,
@@ -18080,6 +18171,11 @@ where
             short_decision_ack_prior_false_accepts,
             short_decision_ack_prior_blocked,
             false_accepts: family_false_accepts,
+            false_accept_risk,
+            current_status,
+            business_value_gate_passed,
+            expected_unique_cpu_accepts_over_exact_cache,
+            expected_savings_milli,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
             recommended_payload_builder: if answer_evidence_dry_run.is_some() {
@@ -18103,8 +18199,34 @@ where
 
     rows.sort_by(|left, right| {
         right
-            .priority_score
-            .cmp(&left.priority_score)
+            .expected_unique_cpu_accepts_over_exact_cache
+            .cmp(&left.expected_unique_cpu_accepts_over_exact_cache)
+            .then_with(|| {
+                right
+                    .business_value_gate_passed
+                    .cmp(&left.business_value_gate_passed)
+            })
+            .then_with(|| {
+                right
+                    .expected_savings_milli
+                    .cmp(&left.expected_savings_milli)
+            })
+            .then_with(|| {
+                right
+                    .non_exact_candidate_calls
+                    .cmp(&left.non_exact_candidate_calls)
+            })
+            .then_with(|| {
+                right
+                    .verification_hook_ready_events
+                    .cmp(&left.verification_hook_ready_events)
+            })
+            .then_with(|| {
+                right
+                    .scoreable_payload_events
+                    .cmp(&left.scoreable_payload_events)
+            })
+            .then_with(|| right.priority_score.cmp(&left.priority_score))
             .then_with(|| right.candidate_events.cmp(&left.candidate_events))
             .then_with(|| left.route_or_family_key.cmp(&right.route_or_family_key))
     });
@@ -18112,12 +18234,34 @@ where
         row.priority_rank = index + 1;
     }
 
+    let business_value_gate_passed_rows = rows
+        .iter()
+        .filter(|row| row.business_value_gate_passed)
+        .count();
+    let proven_profile_rows = rows
+        .iter()
+        .filter(|row| row.current_status == "PROVEN")
+        .count();
+    let candidate_profile_rows = rows
+        .iter()
+        .filter(|row| row.current_status == "CANDIDATE")
+        .count();
+    let watch_profile_rows = rows
+        .iter()
+        .filter(|row| row.current_status == "WATCH")
+        .count();
+    let rejected_profile_rows = rows
+        .iter()
+        .filter(|row| row.current_status == "REJECT_FOR_NOW")
+        .count();
+
     let top_actionable_rows = rows
         .iter()
         .filter(|row| {
-            row.cpu_operator_readiness.starts_with("medium")
-                || row.cpu_operator_readiness.starts_with("high")
-                || row.cpu_operator_readiness == "existing_profile"
+            row.current_status != "REJECT_FOR_NOW"
+                && (row.business_value_gate_passed
+                    || row.current_status == "CANDIDATE"
+                    || row.current_status == "PROVEN")
         })
         .take(8)
         .cloned()
@@ -18125,7 +18269,7 @@ where
     let top_gap_family = route_gap.top_gap_family.clone();
     let report = RoleBindingCpuOperatorCatalogReport {
         schema_version: "nando_role_binding_cpu_operator_catalog_v1".to_owned(),
-        verdict: "CPU_OPERATOR_CATALOG_V1_REVIEW".to_owned(),
+        verdict: "CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW".to_owned(),
         feedback_report_path: feedback_report_path.display().to_string(),
         route_gap_report_path: route_gap_report_path.display().to_string(),
         route_gap_payload_readiness_report_path: route_gap_payload_readiness.as_ref().map(|_| {
@@ -18225,6 +18369,8 @@ where
             .map(|report| report.payload_ready_events)
             .unwrap_or_default(),
         current_verified_cpu_accepts: feedback.verified_cpu_accept_unique_request_fingerprints,
+        current_incremental_unique_cpu_accepts_over_exact_cache: feedback
+            .incremental_cpu_accept_unique_request_fingerprints,
         verified_cpu_accept_route_sum_events: feedback.verified_cpu_accept_route_sum_events,
         incremental_cpu_accept_unique_request_fingerprints: feedback
             .incremental_cpu_accept_unique_request_fingerprints,
@@ -18233,14 +18379,19 @@ where
         target_verified_cpu_accepts: target_verified_cpu_calls,
         verified_gap_to_80_calls: target_verified_cpu_calls
             .saturating_sub(feedback.verified_cpu_accept_unique_request_fingerprints),
+        business_value_gate_passed_rows,
+        proven_profile_rows,
+        candidate_profile_rows,
+        watch_profile_rows,
+        rejected_profile_rows,
         top_gap_family,
         top_actionable_rows,
         rows,
         raw_text_written: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
-        claim_boundary: "CPU operator catalog only. It ranks existing profile routes and no-candidate route-gap families from non-synthetic Codex traffic reports, writes no raw prompt/response text, enables no local accepts, and cannot prove market savings. Existing routes are prioritized by incremental unique verified accepts, not route-sum duplicates. If a route-specific admission audit shows current safe support is exhausted, the row is deprioritized until payload geometry or subfamily admission improves. Rows become savings only after request-side payload, deterministic verifier evidence, shadow accept, provider-cost evidence, and false_accepts=0.".to_owned(),
-        next_engineering_debt: "Pick the highest-volume row whose verifier can be deterministic and whose unique/incremental contribution is not already exhausted by duplicates or exact-cache overlap. Build its request-side payload builder and verifier as a separate route, then rerun shadow/audit/feedback-loop. Do not promote answer_or_explain or project_context_dialogue without grounded evidence.".to_owned(),
+        claim_boundary: "CPU call catalog with BUSINESS_VALUE_GATE. It ranks only non-synthetic Codex traffic evidence and separates PROVEN / CANDIDATE / WATCH / REJECT_FOR_NOW. A row passes business value only when real traffic exists, non-exact candidates exist, deterministic verification is ready, expected unique CPU accepts over exact cache are nonzero, and false_accepts=0. Candidate, scoreable, or broad route rows alone are not market savings.".to_owned(),
+        next_engineering_debt: "Work only the highest expected_unique_cpu_accepts_over_exact_cache row whose verifier is deterministic and whose false_accept_risk is not HIGH. If expected unique accepts are zero, collect trace or split the route before building another profile.".to_owned(),
     };
 
     write_json_file(&report_path, &report)?;
@@ -18366,34 +18517,32 @@ where
     }
     println!("  report: {}", report_path.display());
     println!("  total_llm_calls: {}", report.total_llm_calls);
-    println!(
-        "  existing_operator_candidate_calls: {}",
-        report.existing_operator_candidate_calls
-    );
-    println!(
-        "  existing_operator_candidate_route_sum_events: {}",
-        report.existing_operator_candidate_route_sum_events
-    );
-    println!("  no_candidate_calls: {}", report.no_candidate_calls);
-    println!(
-        "  route_gap_payload_ready_events: {}",
-        report.route_gap_payload_ready_events
-    );
+    println!("  exact_cache_hits: {}", report.exact_cache_hits);
     println!(
         "  current_verified_cpu_accepts: {}",
         report.current_verified_cpu_accepts
     );
     println!(
-        "  verified_gap_to_80_calls: {}",
-        report.verified_gap_to_80_calls
+        "  current_incremental_unique_cpu_accepts_over_exact_cache: {}",
+        report.current_incremental_unique_cpu_accepts_over_exact_cache
     );
-    if let Some(row) = report.rows.first() {
-        println!(
-            "  top_catalog_row: {} ({})",
-            row.route_or_family_key, row.source_kind
-        );
-    }
-    Err("CPU operator catalog is review-only; it is not verified savings".to_owned())
+    println!(
+        "  business_value_gate_passed_rows: {}",
+        report.business_value_gate_passed_rows
+    );
+    println!("  proven_profile_rows: {}", report.proven_profile_rows);
+    println!(
+        "  candidate_profile_rows: {}",
+        report.candidate_profile_rows
+    );
+    println!("  watch_profile_rows: {}", report.watch_profile_rows);
+    println!("  rejected_profile_rows: {}", report.rejected_profile_rows);
+    println!(
+        "  top_actionable_rows: {}",
+        report.top_actionable_rows.len()
+    );
+    println!("  rows: {}", report.rows.len());
+    Err("CPU operator catalog is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_agent_loop_profile_registry_v1<I>(
@@ -30902,6 +31051,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     route_gap_payload_ready_events: usize,
     current_verified_cpu_accepts: usize,
     #[serde(default)]
+    current_incremental_unique_cpu_accepts_over_exact_cache: usize,
+    #[serde(default)]
     verified_cpu_accept_route_sum_events: usize,
     #[serde(default)]
     incremental_cpu_accept_unique_request_fingerprints: usize,
@@ -30911,6 +31062,16 @@ struct RoleBindingCpuOperatorCatalogReport {
     exact_cache_overlap_verified_cpu_accepts: usize,
     target_verified_cpu_accepts: usize,
     verified_gap_to_80_calls: usize,
+    #[serde(default)]
+    business_value_gate_passed_rows: usize,
+    #[serde(default)]
+    proven_profile_rows: usize,
+    #[serde(default)]
+    candidate_profile_rows: usize,
+    #[serde(default)]
+    watch_profile_rows: usize,
+    #[serde(default)]
+    rejected_profile_rows: usize,
     top_gap_family: Option<String>,
     top_actionable_rows: Vec<RoleBindingCpuOperatorCatalogRow>,
     rows: Vec<RoleBindingCpuOperatorCatalogRow>,
@@ -30928,6 +31089,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     route_or_family_key: String,
     profile_id: Option<String>,
     candidate_events: usize,
+    #[serde(default)]
+    traffic_share_milli: usize,
+    #[serde(default)]
+    non_exact_candidate_calls: usize,
+    #[serde(default)]
+    exact_cache_overlap_candidate_calls: usize,
     payload_ready_events: usize,
     scoreable_payload_events: usize,
     verification_hook_ready_events: usize,
@@ -31015,6 +31182,16 @@ struct RoleBindingCpuOperatorCatalogRow {
     #[serde(default)]
     short_decision_ack_prior_blocked: bool,
     false_accepts: usize,
+    #[serde(default)]
+    false_accept_risk: String,
+    #[serde(default)]
+    current_status: String,
+    #[serde(default)]
+    business_value_gate_passed: bool,
+    #[serde(default)]
+    expected_unique_cpu_accepts_over_exact_cache: usize,
+    #[serde(default)]
+    expected_savings_milli: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
     recommended_payload_builder: String,
@@ -44671,6 +44848,93 @@ fn cpu_operator_priority_score(
         + (verification_hook_ready_events as i64 * 500)
         + (verified_cpu_accept_eligible_events as i64 * 10_000)
         - (false_accepts as i64 * 100_000)
+}
+
+fn cpu_catalog_broad_route_reject(route_key: &str) -> bool {
+    matches!(
+        route_key,
+        REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY
+            | REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY
+            | REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+    )
+}
+
+fn cpu_catalog_false_accept_risk(
+    false_accepts: usize,
+    verifier_hook_ready_events: usize,
+    local_accept_safe_policy_found: bool,
+    local_accept_support_qualified: bool,
+    route_key: &str,
+) -> String {
+    if false_accepts > 0 {
+        "HIGH_FALSE_ACCEPTS_OBSERVED".to_owned()
+    } else if cpu_catalog_broad_route_reject(route_key) {
+        "HIGH_BROAD_ROUTE_REQUIRES_SPLIT".to_owned()
+    } else if local_accept_safe_policy_found && local_accept_support_qualified {
+        "LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS".to_owned()
+    } else if local_accept_safe_policy_found {
+        "MEDIUM_LOW_SUPPORT_POLICY".to_owned()
+    } else if verifier_hook_ready_events > 0 {
+        "MEDIUM_VERIFIER_READY_POLICY_MISSING".to_owned()
+    } else {
+        "UNKNOWN_NO_DETERMINISTIC_VERIFIER_YET".to_owned()
+    }
+}
+
+fn cpu_catalog_current_status(
+    route_key: &str,
+    false_accepts: usize,
+    incremental_unique_accepts: usize,
+    scoreable_payload_events: usize,
+    verifier_hook_ready_events: usize,
+    local_accept_safe_policy_found: bool,
+    local_accept_support_qualified: bool,
+) -> String {
+    if false_accepts > 0 || cpu_catalog_broad_route_reject(route_key) {
+        "REJECT_FOR_NOW".to_owned()
+    } else if incremental_unique_accepts > 0 {
+        "PROVEN".to_owned()
+    } else if local_accept_safe_policy_found && !local_accept_support_qualified {
+        "WATCH".to_owned()
+    } else if verifier_hook_ready_events > 0 && scoreable_payload_events > 0 {
+        "CANDIDATE".to_owned()
+    } else {
+        "WATCH".to_owned()
+    }
+}
+
+fn cpu_catalog_expected_unique_accepts(
+    incremental_unique_accepts: usize,
+    non_exact_candidate_calls: usize,
+    local_accept_best_safe_true_accepts: usize,
+    local_accept_support_qualified: bool,
+    false_accepts: usize,
+    route_key: &str,
+) -> usize {
+    if false_accepts > 0 || cpu_catalog_broad_route_reject(route_key) {
+        return 0;
+    }
+    if incremental_unique_accepts > 0 {
+        return incremental_unique_accepts;
+    }
+    if local_accept_support_qualified {
+        return local_accept_best_safe_true_accepts.min(non_exact_candidate_calls);
+    }
+    0
+}
+
+fn cpu_catalog_business_value_gate_passed(
+    candidate_events: usize,
+    non_exact_candidate_calls: usize,
+    verifier_hook_ready_events: usize,
+    expected_unique_accepts: usize,
+    false_accepts: usize,
+) -> bool {
+    candidate_events > 0
+        && non_exact_candidate_calls > 0
+        && verifier_hook_ready_events > 0
+        && expected_unique_accepts > 0
+        && false_accepts == 0
 }
 
 fn route_gap_payload_readiness_history_index(event_id: &str) -> Option<usize> {
