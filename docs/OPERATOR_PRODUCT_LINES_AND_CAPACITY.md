@@ -274,12 +274,33 @@ Metrics-report 5000-row safe-policy soak:
 Feedback-loop window guard:
   default_feedback_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
   default_total_llm_calls: 1000
+  default_operator_candidate_calls: 570
+  default_no_candidate_calls: 430
+  default_scoreable_candidate_calls: 170
+  default_verification_hook_ready_events: 130
   default_verified_cpu_accepts: 12
+  default_unique_verified_cpu_accepts: 12
+  default_incremental_unique_cpu_accepts: 12
+  default_unique_verified_gap_to_80_calls: 788
+  default_duplicate_verified_route_hits: 0
   default_audit_window_mismatches: []
   negative_test_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-metrics-soak-window-guard-v1.report.json
   negative_test_input: 1000-row forecast + 5000-row metrics-report audit
   negative_test_result: metrics_report_readout audit excluded_from_feedback=true
   interpretation: route-specific audits with mismatched total_llm_calls cannot inflate CPU Routability
+
+Feedback-loop unique accept dedupe:
+  current_default_route_sum_accepts: 12
+  current_default_unique_accepts: 12
+  current_default_agent_control_route_visible: true
+  current_default_agent_control_candidates: 143
+  current_default_agent_control_verified_accepts: 3
+  historical_v3_route_sum_accepts: 21
+  historical_v3_unique_accepts: 16
+  historical_v3_duplicate_route_hits: 5
+  historical_v3_exact_cache_overlap_unique_accepts: 1
+  diagnostic_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.dedup-check.report.json
+  interpretation: CPU Routability scoreboard must use unique request-fingerprint accepts, not raw route-sum route hits
 
 Git-control route/profile/evidence rung:
   base_registry: profile-registry-git-control-v1.json
@@ -329,19 +350,26 @@ Serving-ops promoted safe-policy rung:
   server_mutation_enabled: false
   market_claim_boundary: narrow route shadow PASS, not CPU Routability 80
 
-Fresh default feedback after read_inspect + metrics_report calibration + git_control safe-policy + serving_ops safe-policy:
-  operator_candidate_calls: 427 / 1000
-  scoreable_candidate_calls: 167 / 1000
+Fresh default feedback after read_inspect + metrics_report calibration + agent-control safe-policy + git_control safe-policy + serving_ops safe-policy:
+  operator_candidate_calls: 570 / 1000
+  no_candidate_calls: 430 / 1000
+  scoreable_candidate_calls: 170 / 1000
   verification_hook_ready_events: 130
   verified_cpu_accepts: 12 / 1000
+  unique_verified_cpu_accepts: 12 / 1000
+  incremental_unique_cpu_accepts: 12 / 1000
+  duplicate_verified_route_hits: 0
   verified_gap_to_80_calls: 788
   market_claim_allowed: false
+  agent_control_stage: verified_cpu_accept_eligible
   git_control_stage: verified_cpu_accept_eligible
   serving_ops_stage: verified_cpu_accept_eligible
 
 Route-gap after serving_ops registry:
   existing_route_candidate_events: 520 / 1000
-  no_candidate_events: 480 / 1000
+  feedback_loop_current_candidate_events: 570 / 1000
+  feedback_loop_current_no_candidate_events: 430 / 1000
+  note: feedback loop now also exposes agent-control when the base forecast is missing that route row
   payload_ready_events: 10
   top_payload_ready_family: uncatalogued
 ```

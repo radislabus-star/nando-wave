@@ -387,6 +387,8 @@ const REAL_TRAFFIC_AGENT_CONTROL_ACTION_CENTER: u32 = REAL_TRAFFIC_AGENT_CONTROL
 const REAL_TRAFFIC_AGENT_CONTROL_INTENT_SLOT: u8 = 0;
 const REAL_TRAFFIC_AGENT_CONTROL_OUTPUT_SLOT: u8 = 0;
 const REAL_TRAFFIC_AGENT_CONTROL_THRESHOLD: i32 = 32_768;
+const REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY: &str = "role_binding_agent_control_seed0";
+const REAL_TRAFFIC_AGENT_CONTROL_PROFILE_ID: &str = "role_binding_agent_control_seed0";
 
 pub(crate) fn run_role_binding_profile_registry_from_release_v1<I>(
     mut args: I,
@@ -9213,7 +9215,7 @@ where
     }
 
     let profile = RoleBindingProfileConfig {
-        profile_id: "role_binding_agent_control_seed0".to_owned(),
+        profile_id: REAL_TRAFFIC_AGENT_CONTROL_PROFILE_ID.to_owned(),
         profile_kind: "role_binding_nwrb".to_owned(),
         operator_classes: vec!["agent_control".to_owned(), "dialogue_state".to_owned()],
         package_path: package_path.clone(),
@@ -9223,7 +9225,7 @@ where
         threshold: REAL_TRAFFIC_AGENT_CONTROL_THRESHOLD,
         acceptance_policy: default_profile_acceptance_policy(),
         accepted_route_keys: vec![
-            "role_binding_agent_control_seed0".to_owned(),
+            REAL_TRAFFIC_AGENT_CONTROL_PROFILE_ID.to_owned(),
             "agent_control_stop".to_owned(),
             "agent_control_continue".to_owned(),
             "agent_control_ack".to_owned(),
@@ -9242,7 +9244,7 @@ where
         base_registry_path: base_registry_path.display().to_string(),
         package_path: package_path.display().to_string(),
         registry_path: registry_path.display().to_string(),
-        profile_id: "role_binding_agent_control_seed0".to_owned(),
+        profile_id: REAL_TRAFFIC_AGENT_CONTROL_PROFILE_ID.to_owned(),
         package_fingerprint64: package_info.fingerprint64,
         package_bytes: package_bytes.len(),
         edge_count: package_info.edge_count,
@@ -13493,6 +13495,94 @@ fn keep_feedback_window_matched_audit(
     None
 }
 
+fn collect_feedback_unique_accepts<'a>(
+    audits: impl IntoIterator<Item = &'a RoleBindingVerificationHookAuditReport>,
+) -> Result<RoleBindingFeedbackUniqueAccepts, String> {
+    let mut seen_shadow_reports = BTreeSet::new();
+    let mut unique_verified_fingerprints = BTreeSet::new();
+    let mut unique_incremental_fingerprints = BTreeSet::new();
+    let mut unique_exact_cache_overlap_fingerprints = BTreeSet::new();
+    let mut route_sum_verified_accepts = 0usize;
+    let mut missing_request_fingerprint_rows = 0usize;
+    let mut shadow_reports = Vec::new();
+
+    for audit in audits {
+        route_sum_verified_accepts += audit.verified_cpu_accept_eligible_events;
+        if !seen_shadow_reports.insert(audit.shadow_report_path.clone()) {
+            continue;
+        }
+
+        let shadow_report_path = PathBuf::from(&audit.shadow_report_path);
+        let shadow_report =
+            read_json_file::<RoleBindingRealTrafficShadowReport>(&shadow_report_path)?;
+        let mut accepted_rows = 0usize;
+        let mut exact_cache_overlap_rows = 0usize;
+        let mut incremental_rows = 0usize;
+        let mut report_unique_verified = BTreeSet::new();
+        let mut report_missing_request_fingerprint_rows = 0usize;
+
+        for row in &shadow_report.rows {
+            let accepted_verified = row.llm_call
+                && row.nando_shadow_accepted
+                && row.verified_safe_accept
+                && !row.unverified_shadow_accept
+                && !row.false_local_accept;
+            if !accepted_verified {
+                continue;
+            }
+
+            accepted_rows += 1;
+            if row.exact_cache_hit {
+                exact_cache_overlap_rows += 1;
+            } else {
+                incremental_rows += 1;
+            }
+
+            let Some(request_fingerprint) = row.request_fingerprint.as_ref() else {
+                missing_request_fingerprint_rows += 1;
+                report_missing_request_fingerprint_rows += 1;
+                continue;
+            };
+
+            report_unique_verified.insert(request_fingerprint.clone());
+            unique_verified_fingerprints.insert(request_fingerprint.clone());
+            if row.exact_cache_hit {
+                unique_exact_cache_overlap_fingerprints.insert(request_fingerprint.clone());
+            } else {
+                unique_incremental_fingerprints.insert(request_fingerprint.clone());
+            }
+        }
+
+        shadow_reports.push(RoleBindingFeedbackUniqueAcceptShadowReport {
+            shadow_report_path: audit.shadow_report_path.clone(),
+            route_keys: audit
+                .routes
+                .iter()
+                .map(|route| route.route_key.clone())
+                .collect(),
+            total_llm_calls: shadow_report.total_llm_calls,
+            accepted_verified_rows: accepted_rows,
+            unique_verified_request_fingerprints: report_unique_verified.len(),
+            incremental_verified_rows: incremental_rows,
+            exact_cache_overlap_rows,
+            missing_request_fingerprint_rows: report_missing_request_fingerprint_rows,
+        });
+    }
+
+    let unique_verified_count = unique_verified_fingerprints.len();
+    Ok(RoleBindingFeedbackUniqueAccepts {
+        route_sum_verified_accepts,
+        unique_verified_request_fingerprints: unique_verified_count,
+        unique_verified_incremental_request_fingerprints: unique_incremental_fingerprints.len(),
+        unique_verified_exact_cache_overlap_request_fingerprints:
+            unique_exact_cache_overlap_fingerprints.len(),
+        duplicate_verified_route_hits: route_sum_verified_accepts
+            .saturating_sub(unique_verified_count),
+        missing_request_fingerprint_rows,
+        shadow_reports,
+    })
+}
+
 pub(crate) fn run_role_binding_real_traffic_feedback_loop_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -14039,6 +14129,21 @@ where
     let effective_serving_ops_verification_audit = serving_ops_safe_policy_verification_audit
         .as_ref()
         .or(serving_ops_verification_audit.as_ref());
+    let unique_accepts = collect_feedback_unique_accepts(
+        [
+            Some(effective_edit_verification_audit),
+            effective_conditional_verification_audit,
+            effective_mixed_verification_audit,
+            effective_agent_control_verification_audit,
+            effective_planning_next_step_verification_audit,
+            effective_read_inspect_verification_audit,
+            effective_metrics_report_verification_audit,
+            effective_git_control_verification_audit,
+            effective_serving_ops_verification_audit,
+        ]
+        .into_iter()
+        .flatten(),
+    )?;
     let forecast_has_planning_next_step = forecast
         .routes
         .iter()
@@ -14051,6 +14156,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY);
+    let forecast_has_agent_control = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY);
     let forecast_has_git_control = forecast
         .routes
         .iter()
@@ -14143,6 +14252,18 @@ where
             })
             .unwrap_or_default()
     };
+    let agent_control_candidate_calls = if forecast_has_agent_control {
+        0
+    } else {
+        agent_control_dry_run
+            .as_ref()
+            .map(|report| report.agent_control_candidate_events)
+            .or_else(|| {
+                effective_agent_control_verification_audit
+                    .map(|report| report.operator_candidate_calls)
+            })
+            .unwrap_or_default()
+    };
     let git_control_candidate_calls = if forecast_has_git_control {
         0
     } else {
@@ -14167,6 +14288,7 @@ where
         + planning_next_step_candidate_calls
         + read_inspect_candidate_calls
         + metrics_report_candidate_calls
+        + agent_control_candidate_calls
         + git_control_candidate_calls
         + serving_ops_candidate_calls;
     let routing_gap_to_80_calls =
@@ -14713,6 +14835,105 @@ where
         });
     }
 
+    if !forecast_has_agent_control
+        && (agent_control_dry_run.is_some()
+            || agent_control_verification_audit.is_some()
+            || agent_control_safe_policy_verification_audit.is_some()
+            || agent_control_admission_calibration.is_some())
+    {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY)
+            .copied();
+        let payload_ready_events = agent_control_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let payload_built_events = agent_control_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                agent_control_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
+            .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let candidate_events = agent_control_dry_run
+            .as_ref()
+            .map(|report| report.agent_control_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
+            .unwrap_or_default();
+        let local_accept_calibration_ran = agent_control_admission_calibration.is_some();
+        let local_accept_safe_policy_found = agent_control_admission_calibration
+            .as_ref()
+            .map(|report| report.robust_safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = agent_control_admission_calibration
+            .as_ref()
+            .map(|report| report.best_robust_true_accepts)
+            .unwrap_or_default();
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
+            local_accept_calibration_authoritative: true,
+        });
+        let next_action = feedback_route_next_action(&stage);
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_AGENT_CONTROL_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "generic_request_side_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
+            local_accept_best_safe_true_accepts,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
     if !forecast_has_git_control
         && (git_control_dry_run.is_some()
             || git_control_verification_audit.is_some()
@@ -15092,12 +15313,36 @@ where
             .saturating_sub(planning_next_step_candidate_calls)
             .saturating_sub(read_inspect_candidate_calls)
             .saturating_sub(metrics_report_candidate_calls)
+            .saturating_sub(agent_control_candidate_calls)
             .saturating_sub(git_control_candidate_calls)
             .saturating_sub(serving_ops_candidate_calls),
         audit_window_mismatches,
+        verified_cpu_accept_route_sum_events: unique_accepts.route_sum_verified_accepts,
+        verified_cpu_accept_unique_request_fingerprints: unique_accepts
+            .unique_verified_request_fingerprints,
+        verified_cpu_accept_unique_routability_milli: ratio_milli(
+            unique_accepts.unique_verified_request_fingerprints,
+            forecast.total_llm_calls,
+        ),
+        incremental_cpu_accept_unique_request_fingerprints: unique_accepts
+            .unique_verified_incremental_request_fingerprints,
+        incremental_cpu_accept_unique_reduction_milli: ratio_milli(
+            unique_accepts.unique_verified_incremental_request_fingerprints,
+            forecast.total_llm_calls,
+        ),
+        unique_verified_gap_to_80_calls: target_verified_cpu_calls
+            .saturating_sub(unique_accepts.unique_verified_request_fingerprints),
+        incremental_unique_gap_to_80_calls: target_verified_cpu_calls
+            .saturating_sub(unique_accepts.unique_verified_incremental_request_fingerprints),
+        exact_cache_overlap_verified_cpu_accepts: unique_accepts
+            .unique_verified_exact_cache_overlap_request_fingerprints,
+        verified_cpu_accept_duplicate_route_hits: unique_accepts.duplicate_verified_route_hits,
+        verified_cpu_accept_missing_request_fingerprint_rows: unique_accepts
+            .missing_request_fingerprint_rows,
+        unique_accept_shadow_reports: unique_accepts.shadow_reports,
         market_claim_allowed: false,
         routes: route_rows,
-        claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. Route-specific audits whose total_llm_calls differ from the forecast window are excluded instead of being mixed. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
+        claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, route-sum verified CPU accepts, unique request-fingerprint accepts, and incremental non-exact-cache accepts are separate stages. Route-specific audits whose total_llm_calls differ from the forecast window are excluded instead of being mixed. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0 and unique-event dedupe audited.".to_owned(),
         next_engineering_debt: "Promote any local-accept candidate only through a separate request-side-admitted shadow trace with false_accepts=0; improve red route payload geometry; attach serving-ops service-health evidence and provider cost before any savings claim.".to_owned(),
     };
     write_json_file(&feedback_report_path, &report)?;
@@ -18719,10 +18964,55 @@ struct RoleBindingFeedbackLoopReport {
     no_candidate_calls: usize,
     #[serde(default)]
     audit_window_mismatches: Vec<RoleBindingFeedbackAuditWindowMismatchReport>,
+    #[serde(default)]
+    verified_cpu_accept_route_sum_events: usize,
+    #[serde(default)]
+    verified_cpu_accept_unique_request_fingerprints: usize,
+    #[serde(default)]
+    verified_cpu_accept_unique_routability_milli: usize,
+    #[serde(default)]
+    incremental_cpu_accept_unique_request_fingerprints: usize,
+    #[serde(default)]
+    incremental_cpu_accept_unique_reduction_milli: usize,
+    #[serde(default)]
+    unique_verified_gap_to_80_calls: usize,
+    #[serde(default)]
+    incremental_unique_gap_to_80_calls: usize,
+    #[serde(default)]
+    exact_cache_overlap_verified_cpu_accepts: usize,
+    #[serde(default)]
+    verified_cpu_accept_duplicate_route_hits: usize,
+    #[serde(default)]
+    verified_cpu_accept_missing_request_fingerprint_rows: usize,
+    #[serde(default)]
+    unique_accept_shadow_reports: Vec<RoleBindingFeedbackUniqueAcceptShadowReport>,
     market_claim_allowed: bool,
     routes: Vec<RoleBindingFeedbackLoopRouteRow>,
     claim_boundary: String,
     next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RoleBindingFeedbackUniqueAccepts {
+    route_sum_verified_accepts: usize,
+    unique_verified_request_fingerprints: usize,
+    unique_verified_incremental_request_fingerprints: usize,
+    unique_verified_exact_cache_overlap_request_fingerprints: usize,
+    duplicate_verified_route_hits: usize,
+    missing_request_fingerprint_rows: usize,
+    shadow_reports: Vec<RoleBindingFeedbackUniqueAcceptShadowReport>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingFeedbackUniqueAcceptShadowReport {
+    shadow_report_path: String,
+    route_keys: Vec<String>,
+    total_llm_calls: usize,
+    accepted_verified_rows: usize,
+    unique_verified_request_fingerprints: usize,
+    incremental_verified_rows: usize,
+    exact_cache_overlap_rows: usize,
+    missing_request_fingerprint_rows: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

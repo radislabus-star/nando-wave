@@ -1,5 +1,104 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Feedback-Loop Unique Accept Dedupe
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_UNIQUE_ACCEPT_DEDUPE_ACTIVE
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Also fixed:
+  agent-control route is now exposed as its own feedback-loop route row when
+  the forecast did not already contain it. Previously agent-control accepts
+  could contribute to totals while the route row/candidate coverage stayed
+  hidden.
+
+Added feedback-loop report fields:
+  verified_cpu_accept_route_sum_events
+  verified_cpu_accept_unique_request_fingerprints
+  verified_cpu_accept_unique_routability_milli
+  incremental_cpu_accept_unique_request_fingerprints
+  incremental_cpu_accept_unique_reduction_milli
+  unique_verified_gap_to_80_calls
+  incremental_unique_gap_to_80_calls
+  exact_cache_overlap_verified_cpu_accepts
+  verified_cpu_accept_duplicate_route_hits
+  verified_cpu_accept_missing_request_fingerprint_rows
+  unique_accept_shadow_reports
+```
+
+Default 1000-row feedback after dedupe:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:                         570 / 1000
+no_candidate_calls:                               430 / 1000
+scoreable_candidate_calls:                        170 / 1000
+verification_hook_ready_events:                   130 / 1000
+verified_cpu_accept_eligible_events:              12
+verified_cpu_accept_route_sum_events:             12
+verified_cpu_accept_unique_request_fingerprints:  12
+incremental_cpu_accept_unique_request_fingerprints: 12
+unique_verified_gap_to_80_calls:                  788
+incremental_unique_gap_to_80_calls:               788
+verified_cpu_accept_duplicate_route_hits:         0
+audit_window_mismatches:                          []
+
+newly visible route row:
+  route_key:                                      role_binding_agent_control_seed0
+  candidate_events:                              143
+  scoreable_payload_events:                       3
+  verification_hook_ready_events:                 3
+  verified_cpu_accept_eligible_events:            3
+  false_accepts:                                  0
+```
+
+Historical v3 same-window dedupe check:
+
+```text
+diagnostic_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.dedup-check.report.json
+
+route_sum_verified_accepts:                       21
+unique_verified_request_fingerprints:             16
+incremental_unique_request_fingerprints:          16
+exact_cache_overlap_verified_cpu_accepts:         1
+duplicate_verified_route_hits:                    5
+unique_verified_gap_to_80_calls:                  784
+incremental_unique_gap_to_80_calls:               784
+
+excluded_mismatch:
+  planning-next-step-artifact-progress-v3 audit has 12000 total_llm_calls
+  while the forecast window has 1000 total_llm_calls.
+```
+
+Claim boundary:
+
+```text
+Feedback-loop totals now expose route-sum and unique request-fingerprint counts
+separately. CPU Routability progress must be read from unique accepted real
+requests, not from a raw route-sum. The current default 12/1000 is not
+duplicated; the historical v3 21 route-sum collapses to 16 unique accepted
+requests. CPU Routability 80 is still not achieved.
+```
+
+Next engineering debt:
+
+```text
+Use unique request-fingerprint accepts as the scoreboard for all future route
+promotions. The next route work should increase incremental unique accepts,
+not merely add overlapping route hits.
+```
+
 ## 2026-07-04 - Executor Integration: Feedback-Loop Window Guard
 
 Verdict:
