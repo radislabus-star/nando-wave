@@ -15560,6 +15560,18 @@ where
     } else {
         None
     };
+    let agent_continue_execute_admission_calibration_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT);
+    let agent_continue_execute_admission_calibration =
+        if agent_continue_execute_admission_calibration_report_path.exists() {
+            Some(read_json_file::<
+                RoleBindingPlanningNextStepAdmissionCalibrationReport,
+            >(
+                &agent_continue_execute_admission_calibration_report_path
+            )?)
+        } else {
+            None
+        };
     let edit_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let edit_local_accept_calibration = if edit_local_accept_calibration_report_path.exists() {
@@ -15749,6 +15761,28 @@ where
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
+        let agent_continue_admission_best_robust_true_accepts =
+            agent_continue_execute_admission_calibration
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY)
+                .map(|audit| audit.best_robust_true_accepts)
+                .unwrap_or_default();
+        let agent_continue_admission_best_singleton_true_accepts =
+            agent_continue_execute_admission_calibration
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY)
+                .map(|audit| audit.best_singleton_true_accepts)
+                .unwrap_or_default();
+        let agent_continue_admission_no_safe_policy = agent_continue_execute_admission_calibration
+            .as_ref()
+            .filter(|_| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY)
+            .is_some_and(|audit| {
+                !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
+            });
+        if agent_continue_admission_no_safe_policy {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
         let edit_local_accept_best_safe_true_accepts = edit_local_accept_calibration
             .as_ref()
             .filter(|_| route.route_key.contains("edit_marker_length"))
@@ -15830,6 +15864,10 @@ where
             next_action = format!(
                 "Metrics-report admission calibration found only {metrics_report_admission_best_robust_true_accepts} robust safe true accepts, already covered by current incremental unique support; improve metrics payload/evidence geometry or split a stronger report subfamily before another promote."
             );
+        } else if agent_continue_admission_no_safe_policy {
+            next_action = format!(
+                "Agent-continue admission calibration found no safe prompt-side policy (robust true accepts {agent_continue_admission_best_robust_true_accepts}, singleton true accepts {agent_continue_admission_best_singleton_true_accepts}); split agent_continue_execute or capture richer request-side state before promotion."
+            );
         } else if edit_current_support_exhausted {
             next_action = format!(
                 "Edit local calibration found only {edit_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve edit payload/evidence geometry before another promote."
@@ -15890,6 +15928,9 @@ where
             mixed_current_support_exhausted,
             metrics_report_admission_best_robust_true_accepts,
             metrics_report_current_support_exhausted,
+            agent_continue_admission_best_robust_true_accepts,
+            agent_continue_admission_best_singleton_true_accepts,
+            agent_continue_admission_no_safe_policy,
             edit_local_accept_best_safe_true_accepts,
             edit_current_support_exhausted,
             serving_ops_local_accept_best_safe_true_accepts,
@@ -15962,6 +16003,13 @@ where
             && git_control_gap_support_exhausted;
         let serving_ops_support_exhausted = family.family_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
             && serving_ops_gap_support_exhausted;
+        let agent_continue_gap_no_safe_policy = family.family_key
+            == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            && agent_continue_execute_admission_calibration
+                .as_ref()
+                .is_some_and(|audit| {
+                    !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
+                });
         let short_decision_ack_prior_policy = agent_control_admission_calibration
             .as_ref()
             .filter(|_| family.family_key == "short_decision_ack")
@@ -16059,7 +16107,7 @@ where
         {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
-        } else if short_decision_ack_prior_blocked {
+        } else if agent_continue_gap_no_safe_policy || short_decision_ack_prior_blocked {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
         } else if existing_scoreable_feedback_row.is_some() {
@@ -16081,6 +16129,18 @@ where
         } else if serving_ops_support_exhausted {
             format!(
                 "Serving-ops gap is payload-ready, but current safe serving support is exhausted at {serving_ops_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve daemon health evidence or split a new ops subfamily before another promote."
+            )
+        } else if agent_continue_gap_no_safe_policy {
+            let best_robust = agent_continue_execute_admission_calibration
+                .as_ref()
+                .map(|audit| audit.best_robust_true_accepts)
+                .unwrap_or_default();
+            let best_singleton = agent_continue_execute_admission_calibration
+                .as_ref()
+                .map(|audit| audit.best_singleton_true_accepts)
+                .unwrap_or_default();
+            format!(
+                "Agent-continue route-gap has verifier rows, but admission calibration found no safe prompt-side policy (robust true accepts {best_robust}, singleton true accepts {best_singleton}). Do not promote this route-gap row; split agent_continue_execute or capture richer request-side state."
             )
         } else if short_decision_ack_prior_blocked {
             format!(
@@ -16224,6 +16284,27 @@ where
                 0
             },
             metrics_report_current_support_exhausted: metrics_report_support_exhausted,
+            agent_continue_admission_best_robust_true_accepts: if family.family_key
+                == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            {
+                agent_continue_execute_admission_calibration
+                    .as_ref()
+                    .map(|audit| audit.best_robust_true_accepts)
+                    .unwrap_or_default()
+            } else {
+                0
+            },
+            agent_continue_admission_best_singleton_true_accepts: if family.family_key
+                == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            {
+                agent_continue_execute_admission_calibration
+                    .as_ref()
+                    .map(|audit| audit.best_singleton_true_accepts)
+                    .unwrap_or_default()
+            } else {
+                0
+            },
+            agent_continue_admission_no_safe_policy: agent_continue_gap_no_safe_policy,
             edit_local_accept_best_safe_true_accepts: 0,
             edit_current_support_exhausted: false,
             serving_ops_local_accept_best_safe_true_accepts: if family.family_key
@@ -16344,6 +16425,12 @@ where
         metrics_report_admission_calibration_report_path:
             metrics_report_admission_calibration.as_ref().map(|_| {
                 metrics_report_admission_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
+        agent_continue_execute_admission_calibration_report_path:
+            agent_continue_execute_admission_calibration.as_ref().map(|_| {
+                agent_continue_execute_admission_calibration_report_path
                     .display()
                     .to_string()
             }),
@@ -16477,6 +16564,12 @@ where
         println!(
             "  metrics_report_admission_calibration_report: {}",
             metrics_report_admission_calibration_report_path.display()
+        );
+    }
+    if agent_continue_execute_admission_calibration.is_some() {
+        println!(
+            "  agent_continue_execute_admission_calibration_report: {}",
+            agent_continue_execute_admission_calibration_report_path.display()
         );
     }
     if edit_local_accept_calibration.is_some() {
@@ -22330,6 +22423,8 @@ where
         PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT);
     let agent_continue_execute_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let agent_continue_execute_admission_calibration_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT);
     let agent_control_admission_calibration_report_path = args
         .next()
         .map(PathBuf::from)
@@ -22626,6 +22721,16 @@ where
                     &agent_continue_execute_local_accept_calibration_report_path,
                 )?,
             )
+        } else {
+            None
+        };
+    let agent_continue_execute_admission_calibration =
+        if agent_continue_execute_admission_calibration_report_path.exists() {
+            Some(read_json_file::<
+                RoleBindingPlanningNextStepAdmissionCalibrationReport,
+            >(
+                &agent_continue_execute_admission_calibration_report_path
+            )?)
         } else {
             None
         };
@@ -23524,7 +23629,9 @@ where
         };
         let local_accept_calibration_ran = local_accept_calibration.is_some()
             || (is_agent_control_route && agent_control_admission_calibration.is_some())
-            || (is_metrics_report_route && metrics_report_admission_calibration.is_some());
+            || (is_metrics_report_route && metrics_report_admission_calibration.is_some())
+            || (is_agent_continue_execute_route
+                && agent_continue_execute_admission_calibration.is_some());
         let local_accept_safe_policy_found = if is_agent_control_route {
             agent_control_admission_calibration
                 .as_ref()
@@ -23538,6 +23645,13 @@ where
                     .as_ref()
                     .map(|report| report.robust_safe_policy_found)
                     .unwrap_or(false)
+        } else if is_agent_continue_execute_route
+            && agent_continue_execute_admission_calibration.is_some()
+        {
+            agent_continue_execute_admission_calibration
+                .as_ref()
+                .map(|report| report.robust_safe_policy_found)
+                .unwrap_or(false)
         } else {
             local_accept_calibration
                 .map(|report| report.safe_policy_found)
@@ -23558,6 +23672,13 @@ where
                         .map(|report| report.best_robust_true_accepts)
                         .unwrap_or_default(),
                 )
+        } else if is_agent_continue_execute_route
+            && agent_continue_execute_admission_calibration.is_some()
+        {
+            agent_continue_execute_admission_calibration
+                .as_ref()
+                .map(|report| report.best_robust_true_accepts)
+                .unwrap_or_default()
         } else {
             local_accept_calibration
                 .map(|report| report.best_safe_true_accepts)
@@ -23568,6 +23689,12 @@ where
             && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
         let local_accept_calibration_authoritative =
             !is_git_control_route || git_control_tool_output_authoritative;
+        let agent_continue_admission_no_safe_policy = is_agent_continue_execute_route
+            && agent_continue_execute_admission_calibration
+                .as_ref()
+                .is_some_and(|report| {
+                    !report.robust_safe_policy_found && !report.singleton_safe_policy_found
+                });
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
         } else if is_conditional_route {
@@ -23789,7 +23916,12 @@ where
             local_accept_support_qualified,
             local_accept_calibration_authoritative,
         });
-        let next_action = feedback_route_next_action(&stage);
+        let next_action = if agent_continue_admission_no_safe_policy {
+            "Agent-continue admission calibration found no safe prompt-side policy; split agent_continue_execute or capture richer request-side state before enabling local accepts."
+                .to_owned()
+        } else {
+            feedback_route_next_action(&stage)
+        };
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
             priority_rank: route.priority_rank,
             route_key: route.route_key.clone(),
@@ -25135,6 +25267,12 @@ where
                     .display()
                     .to_string()
             }),
+        agent_continue_execute_admission_calibration_report_path:
+            agent_continue_execute_admission_calibration.as_ref().map(|_| {
+                agent_continue_execute_admission_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         conditional_dry_run_report_path: conditional_dry_run
             .as_ref()
             .map(|_| conditional_dry_run_report_path.display().to_string()),
@@ -25397,6 +25535,9 @@ where
     }
     if let Some(path) = &report.agent_continue_execute_local_accept_calibration_report_path {
         println!("  agent_continue_execute_local_accept_calibration_report: {path}");
+    }
+    if let Some(path) = &report.agent_continue_execute_admission_calibration_report_path {
+        println!("  agent_continue_execute_admission_calibration_report: {path}");
     }
     println!(
         "  verification_audit_report: {}",
@@ -28537,6 +28678,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     metrics_report_admission_calibration_report_path: Option<String>,
     #[serde(default)]
+    agent_continue_execute_admission_calibration_report_path: Option<String>,
+    #[serde(default)]
     edit_local_accept_calibration_report_path: Option<String>,
     #[serde(default)]
     serving_ops_local_accept_calibration_report_path: Option<String>,
@@ -28621,6 +28764,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     metrics_report_admission_best_robust_true_accepts: usize,
     #[serde(default)]
     metrics_report_current_support_exhausted: bool,
+    #[serde(default)]
+    agent_continue_admission_best_robust_true_accepts: usize,
+    #[serde(default)]
+    agent_continue_admission_best_singleton_true_accepts: usize,
+    #[serde(default)]
+    agent_continue_admission_no_safe_policy: bool,
     #[serde(default)]
     edit_local_accept_best_safe_true_accepts: usize,
     #[serde(default)]
@@ -30041,6 +30190,8 @@ struct RoleBindingFeedbackLoopReport {
     agent_control_admission_calibration_report_path: Option<String>,
     #[serde(default)]
     agent_continue_execute_local_accept_calibration_report_path: Option<String>,
+    #[serde(default)]
+    agent_continue_execute_admission_calibration_report_path: Option<String>,
     conditional_dry_run_report_path: Option<String>,
     conditional_local_accept_calibration_report_path: Option<String>,
     conditional_verification_audit_report_path: Option<String>,

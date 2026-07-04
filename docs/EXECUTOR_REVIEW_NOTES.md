@@ -1,5 +1,67 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Continue Admission Feedback/Catalog V1
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The feedback-loop and CPU-operator catalog now auto-load:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-admission-calibration-v1.report.json
+
+The admission result is now authoritative for agent_continue_execute route
+promotion:
+  robust_safe_policy_found: false
+  singleton_safe_policy_found: false
+  best_robust_true_accepts: 0
+  best_singleton_true_accepts: 0
+```
+
+Result:
+
+```text
+feedback agent_continue_execute:
+  stage: local_accept_calibration_failed
+  local_accept_safe_policy_found: false
+  local_accept_best_safe_true_accepts: 0
+  verification_hook_ready_events: 25
+  verified_cpu_accept_eligible_events: 0
+
+catalog existing_profile_route agent_continue_execute:
+  agent_continue_admission_no_safe_policy: true
+  next_action: split agent_continue_execute or capture richer request-side state
+
+catalog route_gap_family agent_continue_execute:
+  agent_continue_admission_no_safe_policy: true
+  next_action: do not promote this route-gap row
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+unique_verified_cpu_accepts remains 26.
+incremental_unique_cpu_accepts remains 25.
+market_claim_allowed remains false.
+```
+
+Decision:
+
+```text
+Do not keep chasing the old agent_continue_execute singleton/local-margin hint.
+The current prompt-side features are inseparable. The next safe work is route
+split or richer request-side state capture before any promotion attempt.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Continue Admission Calibration V1
 
 Verdict:
