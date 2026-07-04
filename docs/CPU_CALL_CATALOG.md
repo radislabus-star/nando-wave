@@ -152,24 +152,35 @@ route_candidate_events: 1439
 route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
-feedback operator_candidate_calls: 3593
-feedback scoreable_candidate_calls: 599
-feedback verification_hook_ready_events: 392
-feedback verified_cpu_accept_eligible_events: 108
-feedback verified_cpu_accept_unique_request_fingerprints: 106
-feedback incremental_cpu_accept_unique_request_fingerprints: 104
+feedback operator_candidate_calls: 3549
+feedback scoreable_candidate_calls: 549
+feedback verification_hook_ready_events: 297
+feedback verified_cpu_accept_eligible_events: 111
+feedback verified_cpu_accept_unique_request_fingerprints: 109
+feedback incremental_cpu_accept_unique_request_fingerprints: 107
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 20
-feedback incremental_unique_gap_to_80_calls: 3896
+feedback incremental_cpu_accept_unique_reduction_milli: 21
+feedback incremental_unique_gap_to_80_calls: 3893
 
-catalog current_verified_cpu_accepts: 106
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 104
-catalog business_value_gate_passed_rows: 5
-catalog proven_profile_rows: 5
-catalog candidate_profile_rows: 3
-catalog watch_profile_rows: 16
+catalog current_verified_cpu_accepts: 109
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 107
+catalog business_value_gate_passed_rows: 6
+catalog proven_profile_rows: 6
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 17
 catalog rejected_profile_rows: 5
 ```
+
+Latest current5k proven rows:
+
+| rank | call class | candidates | scoreable | hooks | verified eligible | incremental unique | status note |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | Narrow previous-tool-output status parser. |
+| 2 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | Small safe request-side policy. |
+| 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | Tiny safe policy; broad conditional remains unsafe. |
+| 4 | `git_control` | 123 | 90 | 74 | 3 | 3 | Request-side v3 policy proven, but support exhausted. |
+| 5 | `metrics_report_readout` | 55 | 63 | 51 | 3 | 3 | Safe-policy sidecar proven, but still tiny. |
+| 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | Tiny server-ops proof; daemon mutations remain disabled. |
 
 Git-control request-side admission refresh:
 
@@ -218,12 +229,14 @@ current5k companion reports used by catalog:
   edit-admission-calibration-v1-current5k.report.json
 
 feedback-loop current5k companion reports now used for artifact-backed
-project_context, git_control, and serving_ops:
+project_context, metrics_report, git_control, and serving_ops:
   project-context-payload-dry-run-v1-current5k.report.json
   project-context-output-evidence-v1-current5k.verification-hook-audit.report.json
   project-context-local-accept-calibration-v1-current5k.report.json
+  metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json
   git-control-payload-dry-run-v1-current5k.report.json
   git-control-output-evidence-v1-current5k.verification-hook-audit.report.json
+  git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
   git-control-local-accept-calibration-v1-current5k.report.json
   serving-ops-payload-dry-run-v1-current5k.report.json
   serving-ops-output-evidence-v1-current5k.verification-hook-audit.report.json
@@ -264,6 +277,8 @@ role_binding_edit_marker_length_seed0:
 Git/serving feedback-loop current5k refresh:
 
 ```text
+SUPERSEDED by the current 5k combined working snapshot above for git_control.
+
 git_control:
   feedback candidate_events: 123
   feedback scoreable_payload_events: 90

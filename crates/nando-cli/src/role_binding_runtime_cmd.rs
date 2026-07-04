@@ -27923,8 +27923,10 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_AUDIT_REPORT));
-    let metrics_report_safe_policy_audit_report_path =
-        PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_AUDIT_REPORT);
+    let metrics_report_safe_policy_audit_report_path = current_window_companion_report_path(
+        DEFAULT_METRICS_REPORT_SAFE_POLICY_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let answer_evidence_verification_audit_report_path =
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let answer_evidence_safe_policy_audit_report_path =

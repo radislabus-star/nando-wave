@@ -1,0 +1,162 @@
+{
+  "task_id": "metrics-report-safe-policy-current5k-catalog-v1",
+  "domain": "code",
+  "query": "Verify metrics_report safe-policy is counted only as a tiny proven current5k CPU support row, not as broad report interpretation or CPU80.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "metrics_report_safe_policy_promote",
+      "relation": "request_side_policy_accept_rows",
+      "object": "11",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "metric",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t2",
+      "subject": "metrics_report_safe_policy_promote",
+      "relation": "policy_accept_verified_true_rows",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "metric",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t3",
+      "subject": "metrics_report_safe_policy_promote",
+      "relation": "excludes_false_accept_rows",
+      "object": "zero_false_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "safety_boundary",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t4",
+      "subject": "metrics_report_safe_policy_promote",
+      "relation": "excludes_unverified_accept_rows",
+      "object": "zero_unverified_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "safety_boundary",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t5",
+      "subject": "metrics_report_shadow_report",
+      "relation": "verified_safe_accepts",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.shadow-report.json",
+      "confidence": 1.0,
+      "subject_role": "shadow_report",
+      "object_role": "metric",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t6",
+      "subject": "metrics_report_shadow_report",
+      "relation": "excludes_false_accepts",
+      "object": "zero_false_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.shadow-report.json",
+      "confidence": 1.0,
+      "subject_role": "shadow_report",
+      "object_role": "safety_boundary",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t7",
+      "subject": "metrics_report_audit_report",
+      "relation": "verified_cpu_accept_eligible_events",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit_report",
+      "object_role": "metric",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t8",
+      "subject": "current5k_feedback_loop",
+      "relation": "uses_metrics_report_safe_policy_audit",
+      "object": "metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "audit_artifact",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t9",
+      "subject": "current5k_feedback_loop",
+      "relation": "incremental_cpu_accept_unique_request_fingerprints",
+      "object": "107",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t10",
+      "subject": "current5k_catalog_metrics_report_row",
+      "relation": "current_status",
+      "object": "PROVEN",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "status",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t11",
+      "subject": "current5k_catalog_metrics_report_row",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "metric",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t12",
+      "subject": "current5k_catalog_metrics_report_row",
+      "relation": "false_accept_risk",
+      "object": "LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "risk_status",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t13",
+      "subject": "current5k_catalog_metrics_report_row",
+      "relation": "forbids_broad_report_interpretation",
+      "object": "narrow_metrics_sidecar_only",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "claim_boundary",
+      "route": "metrics_report"
+    },
+    {
+      "id": "t14",
+      "subject": "current5k_catalog_metrics_report_row",
+      "relation": "forbids_cpu80_claim",
+      "object": "cpu80_not_achieved",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "claim_boundary",
+      "route": "current5k"
+    }
+  ],
+  "candidate_triads": []
+}

@@ -1,5 +1,121 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Metrics-Report Safe Policy Loaded Into Current5k Feedback
+
+Verdict:
+
+```text
+METRICS_REPORT_SAFE_POLICY_CURRENT5K_INTEGRATED
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+metrics_report_readout already had a 5k promoted safe-policy shadow/audit with
+3 verified accepts and 0 false accepts. The feedback loop still loaded the
+default metrics safe-policy audit path, so the current5k catalog did not count
+the existing 5k safe-policy sidecar.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+What changed:
+
+```text
+role-binding-real-traffic-feedback-loop-v1 now resolves
+DEFAULT_METRICS_REPORT_SAFE_POLICY_AUDIT_REPORT through
+current_window_companion_report_path when running a current5k window.
+
+This makes the feedback loop load:
+  metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json
+instead of the default 1000-call audit.
+```
+
+Measured metrics-report safe-policy artifacts:
+
+```text
+promote request_side_policy_accept_rows: 11
+promote policy_accept_rows: 3
+promote policy_accept_verified_true_rows: 3
+promote policy_accept_verified_false_rows: 0
+promote policy_accept_unverified_rows: 0
+promote runtime_acceptance_mismatches: 0
+
+shadow verdict: REAL_TRAFFIC_SHADOW_V1_PASS
+shadow total_llm_calls: 5000
+shadow operator_candidate_calls: 63
+shadow nando_shadow_accepts: 3
+shadow verified_safe_accepts: 3
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 5009784
+
+audit verification_hook_ready_events: 51
+audit verified_cpu_accept_eligible_events: 3
+audit provider_cost_events: 63
+audit market_claim_allowed: true
+```
+
+Measured full current5k feedback/catalog after integration:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+scoreable_candidate_calls: 549
+verification_hook_ready_events: 297
+verified_cpu_accept_eligible_events: 111
+verified_cpu_accept_unique_request_fingerprints: 109
+incremental_cpu_accept_unique_request_fingerprints: 107
+exact_cache_overlap_verified_cpu_accepts: 2
+incremental_unique_gap_to_80_calls: 3893
+
+catalog business_value_gate_passed_rows: 6
+catalog proven_profile_rows: 6
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 17
+catalog rejected_profile_rows: 5
+```
+
+Measured metrics_report catalog row:
+
+```text
+current_status: PROVEN
+business_value_gate_passed: true
+business_value_gate_failure_reason: PASSED
+false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS
+verified_cpu_accept_unique_request_fingerprints: 3
+incremental_cpu_accept_unique_request_fingerprints: 3
+expected_unique_cpu_accepts_over_exact_cache: 3
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Count metrics_report_readout as a tiny PROVEN current5k CPU support row.
+Do not widen it into broad report interpretation.
+Do not claim market savings from the isolated route; only the full current5k
+catalog number is the active product metric.
+
+Next valid metrics work:
+  improve numeric report evidence or split a stronger metrics subfamily before
+  another promotion attempt.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.md
+triads: docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.triads.json
+verdict: PASS
+complexity_score: 43
+trace_path: /tmp/nanda-structural-gate/metrics-report-safe-policy-current5k-catalog-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Git-Control V3 Promoted Safe Policy Counted In Current5k Catalog
 
 Verdict:
