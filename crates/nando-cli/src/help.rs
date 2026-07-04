@@ -814,6 +814,12 @@ pub(crate) fn print_help() {
         "            Rank existing profile routes and no-candidate route-gap families for the next CPU operator build"
     );
     println!(
+        "  role-binding-real-traffic-agent-loop-profile-registry-v1 [feedback-report-json] [cpu-operator-catalog-json] [agent-loop-profile-registry-report-json]"
+    );
+    println!(
+        "            Convert feedback/catalog evidence into narrow verified agent-loop CPU microprofile work items; review-only"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-smoke-v1 [binary-suite-report-json] [trace-jsonl] [max-unique-sequences-per-profile]"
     );
     println!(

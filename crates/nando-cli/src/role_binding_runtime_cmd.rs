@@ -287,6 +287,8 @@ const DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT: &str = "tar
 const DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-state-admission-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_AGENT_LOOP_PROFILE_REGISTRY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-loop-profile-registry-v1.report.json";
 const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-seed0.nwrb";
 const DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG: &str =
@@ -17130,6 +17132,156 @@ where
     Err("CPU operator catalog is review-only; it is not verified savings".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_agent_loop_profile_registry_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let feedback_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT));
+    let catalog_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_AGENT_LOOP_PROFILE_REGISTRY_REPORT));
+
+    let feedback = read_json_file::<RoleBindingFeedbackLoopReport>(&feedback_report_path)?;
+    let catalog = read_json_file::<RoleBindingCpuOperatorCatalogReport>(&catalog_report_path)?;
+    let routes_by_key = feedback
+        .routes
+        .iter()
+        .map(|row| (row.route_key.as_str(), row))
+        .collect::<BTreeMap<_, _>>();
+    let catalog_rows_by_profile = catalog
+        .rows
+        .iter()
+        .filter_map(|row| row.profile_id.as_deref().map(|profile| (profile, row)))
+        .collect::<BTreeMap<_, _>>();
+    let catalog_rows_by_key = catalog
+        .rows
+        .iter()
+        .map(|row| (row.route_or_family_key.as_str(), row))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = agent_loop_microprofile_specs()
+        .iter()
+        .map(|spec| {
+            let route = routes_by_key.get(spec.source_route_key).copied();
+            let catalog_row = catalog_rows_by_profile
+                .get(spec.recommended_profile_id)
+                .copied()
+                .or_else(|| catalog_rows_by_key.get(spec.source_route_key).copied());
+            build_agent_loop_profile_registry_row(spec, route, catalog_row)
+        })
+        .collect::<Vec<_>>();
+
+    rows.sort_by(|left, right| {
+        right
+            .priority_score
+            .cmp(&left.priority_score)
+            .then_with(|| right.candidate_events.cmp(&left.candidate_events))
+            .then_with(|| left.profile_key.cmp(&right.profile_key))
+    });
+    for (index, row) in rows.iter_mut().enumerate() {
+        row.priority_rank = index + 1;
+    }
+
+    let microprofiles_observed = rows
+        .iter()
+        .filter(|row| row.candidate_events > 0 || row.scoreable_payload_events > 0)
+        .count();
+    let verified_current_profiles = rows
+        .iter()
+        .filter(|row| row.unique_verified_request_fingerprints > 0)
+        .count();
+    let hook_ready_profiles = rows
+        .iter()
+        .filter(|row| row.verification_hook_ready_events > 0)
+        .count();
+    let scoreable_profiles = rows
+        .iter()
+        .filter(|row| row.scoreable_payload_events > 0)
+        .count();
+    let blocked_wide_route_profiles = rows.iter().filter(|row| row.wide_route_quarantine).count();
+    let exhausted_current_support_profiles = rows
+        .iter()
+        .filter(|row| row.current_support_exhausted)
+        .count();
+    let top_next_profile_key = rows
+        .iter()
+        .find(|row| {
+            row.unique_verified_request_fingerprints == 0
+                && !row.current_support_exhausted
+                && !row.wide_route_quarantine
+                && row.candidate_events > 0
+        })
+        .map(|row| row.profile_key.clone());
+
+    let report = RoleBindingAgentLoopProfileRegistryReport {
+        schema_version: "nando_role_binding_agent_loop_profile_registry_v1".to_owned(),
+        verdict: "AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW".to_owned(),
+        feedback_report_path: feedback_report_path.display().to_string(),
+        catalog_report_path: catalog_report_path.display().to_string(),
+        total_llm_calls: feedback.total_llm_calls,
+        exact_cache_hits: feedback.exact_cache_hits,
+        target_verified_cpu_accepts: feedback.target_verified_cpu_calls,
+        current_verified_cpu_accepts: feedback.verified_cpu_accept_unique_request_fingerprints,
+        verified_gap_to_80_calls: feedback.unique_verified_gap_to_80_calls,
+        incremental_unique_cpu_accepts: feedback.incremental_cpu_accept_unique_request_fingerprints,
+        microprofile_count: rows.len(),
+        microprofiles_observed,
+        verified_current_profiles,
+        hook_ready_profiles,
+        scoreable_profiles,
+        blocked_wide_route_profiles,
+        exhausted_current_support_profiles,
+        top_next_profile_key,
+        rows,
+        raw_text_written: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-loop profile registry only. It converts the current real-traffic feedback/catalog evidence into narrow CPU profile work items. It writes no raw prompts or responses, enables no local accepts, does not re-count existing verified accepts, and cannot be used as market savings. A profile counts only after request-side payload, deterministic verifier, shadow audit with false_accepts=0, provider-cost evidence, and unique incremental accept attribution over exact cache.".to_owned(),
+        next_engineering_debt: "Build the next narrow deterministic profile from this registry. Do not promote broad answer_or_explain, project_context_dialogue, or agent_continue_execute as one route; split them into file/metric/test/git/artifact microprofiles first.".to_owned(),
+    };
+
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-loop-profile-registry-v1: {}",
+        report.verdict
+    );
+    println!("  feedback_report: {}", feedback_report_path.display());
+    println!("  catalog_report: {}", catalog_report_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  total_llm_calls: {}", report.total_llm_calls);
+    println!(
+        "  current_verified_cpu_accepts: {}",
+        report.current_verified_cpu_accepts
+    );
+    println!(
+        "  verified_gap_to_80_calls: {}",
+        report.verified_gap_to_80_calls
+    );
+    println!("  microprofile_count: {}", report.microprofile_count);
+    println!(
+        "  microprofiles_observed: {}",
+        report.microprofiles_observed
+    );
+    println!(
+        "  verified_current_profiles: {}",
+        report.verified_current_profiles
+    );
+    if let Some(profile_key) = &report.top_next_profile_key {
+        println!("  top_next_profile_key: {profile_key}");
+    }
+    Err("agent loop profile registry is review-only; it is not verified savings".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_agent_control_profile_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -29392,6 +29544,92 @@ struct RoleBindingCpuOperatorCatalogRow {
     claim_boundary: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentLoopProfileRegistryReport {
+    schema_version: String,
+    verdict: String,
+    feedback_report_path: String,
+    catalog_report_path: String,
+    total_llm_calls: usize,
+    exact_cache_hits: usize,
+    target_verified_cpu_accepts: usize,
+    current_verified_cpu_accepts: usize,
+    verified_gap_to_80_calls: usize,
+    incremental_unique_cpu_accepts: usize,
+    microprofile_count: usize,
+    microprofiles_observed: usize,
+    verified_current_profiles: usize,
+    hook_ready_profiles: usize,
+    scoreable_profiles: usize,
+    blocked_wide_route_profiles: usize,
+    exhausted_current_support_profiles: usize,
+    top_next_profile_key: Option<String>,
+    rows: Vec<RoleBindingAgentLoopProfileRegistryRow>,
+    raw_text_written: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentLoopProfileRegistryRow {
+    priority_rank: usize,
+    profile_key: String,
+    agent_loop_stage: String,
+    source_route_key: String,
+    recommended_profile_id: String,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    deterministic_verifier_required: bool,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    unique_verified_request_fingerprints: usize,
+    incremental_unique_request_fingerprints: usize,
+    exact_cache_overlap_verified_cpu_accepts: usize,
+    duplicate_verified_route_hits: usize,
+    false_accepts: usize,
+    current_support_exhausted: bool,
+    wide_route_quarantine: bool,
+    readiness_state: String,
+    next_action: String,
+    priority_score: i64,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AgentLoopMicroProfileSpec {
+    profile_key: &'static str,
+    agent_loop_stage: &'static str,
+    source_route_key: &'static str,
+    recommended_profile_id: &'static str,
+    recommended_profile_line: &'static str,
+    recommended_payload_builder: &'static str,
+    recommended_verifier: &'static str,
+    wide_route_quarantine: bool,
+    claim_boundary: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AgentLoopMicroProfileEvidence {
+    candidate_events: usize,
+    payload_ready_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    verified_cpu_accept_eligible_events: usize,
+    unique_verified_request_fingerprints: usize,
+    incremental_unique_request_fingerprints: usize,
+    exact_cache_overlap_verified_cpu_accepts: usize,
+    duplicate_verified_route_hits: usize,
+    false_accepts: usize,
+    current_support_exhausted: bool,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct RouteGapFamilyMetadata {
     cpu_operator_readiness: &'static str,
@@ -31699,6 +31937,395 @@ fn route_gap_family_metadata(family_key: &str) -> RouteGapFamilyMetadata {
             recommended_verifier: "manual_route_claim_boundary_verifier_v1",
             claim_boundary: "Uncatalogued prompts require manual route discovery before any CPU accept path exists.",
         },
+    }
+}
+
+fn agent_loop_microprofile_specs() -> Vec<AgentLoopMicroProfileSpec> {
+    vec![
+        AgentLoopMicroProfileSpec {
+            profile_key: "metric_from_report",
+            agent_loop_stage: "parse_report_metric",
+            source_route_key: REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID,
+            recommended_profile_line: "metrics_summary_operator",
+            recommended_payload_builder: "metrics_report_payload_builder_v1",
+            recommended_verifier: "numeric_report_field_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May read numeric fields from existing reports only; missing metrics fallback.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "git_status_summary",
+            agent_loop_stage: "summarize_workspace_state",
+            source_route_key: REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_GIT_CONTROL_PROFILE_ID,
+            recommended_profile_line: "workspace_command_operator",
+            recommended_payload_builder: "git_command_intent_payload_builder_v1",
+            recommended_verifier: "git_status_and_command_outcome_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May summarize verified git/tool state; no mutation without explicit command evidence.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "serving_health_summary",
+            agent_loop_stage: "summarize_serving_health",
+            source_route_key: REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_SERVING_OPS_PROFILE_ID,
+            recommended_profile_line: "serving_ops_operator",
+            recommended_payload_builder: "serving_ops_metric_payload_builder_v1",
+            recommended_verifier: "service_health_metric_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May summarize daemon/LB/worker metrics; no server mutation claim.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "agent_control_stop",
+            agent_loop_stage: "control_stop_or_pause",
+            source_route_key: REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_AGENT_CONTROL_PROFILE_ID,
+            recommended_profile_line: "agent_control_operator",
+            recommended_payload_builder: "agent_control_intent_payload_builder_v1",
+            recommended_verifier: "no_mutating_tool_after_stop_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May route explicit stop/pause/control decisions; must not answer task content.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "conditional_branch_decision",
+            agent_loop_stage: "choose_safe_branch",
+            source_route_key: "role_binding_conditional_branch_seed0",
+            recommended_profile_id: "role_binding_conditional_branch_seed0",
+            recommended_profile_line: "conditional_branch_operator",
+            recommended_payload_builder: "conditional_branch_payload_builder_v1",
+            recommended_verifier: "conditional_safe_policy_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May choose a constrained branch only when condition/evidence lanes are present.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "mixed_map_decision",
+            agent_loop_stage: "map_source_to_destination",
+            source_route_key: "role_binding_mixed_map_seed0",
+            recommended_profile_id: "role_binding_mixed_map_seed0",
+            recommended_profile_line: "mixed_map_operator",
+            recommended_payload_builder: "mixed_map_payload_builder_v1",
+            recommended_verifier: "mixed_safe_policy_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May apply a constrained source/destination mapping; no broad planning authority.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "edit_patch_small",
+            agent_loop_stage: "prepare_small_edit",
+            source_route_key: "role_binding_edit_marker_length_seed0",
+            recommended_profile_id: "role_binding_edit_marker_length_seed0",
+            recommended_profile_line: "edit_patch_operator",
+            recommended_payload_builder: "edit_marker_length_payload_builder_v1",
+            recommended_verifier: "diff_shape_and_marker_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May accept only tiny marker/shape edits whose diff is deterministically verified.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "test_output_parse",
+            agent_loop_stage: "parse_test_output",
+            source_route_key: "test_output_parse",
+            recommended_profile_id: "route_gap_test_output_parse_profile_v1",
+            recommended_profile_line: "test_result_operator",
+            recommended_payload_builder: "test_output_payload_builder_v1",
+            recommended_verifier: "test_status_and_error_excerpt_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May classify test/check output only from actual command output artifacts.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "report_sync",
+            agent_loop_stage: "sync_report_artifact",
+            source_route_key: REAL_TRAFFIC_PLANNING_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_PLANNING_PROFILE_ID,
+            recommended_profile_line: "report_sync_operator",
+            recommended_payload_builder: "report_sync_payload_builder_v1",
+            recommended_verifier: "report_contains_fresh_metric_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May sync report status only when source report paths and fresh metrics are explicit.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "artifact_progress",
+            agent_loop_stage: "continue_after_artifact_progress",
+            source_route_key: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID,
+            recommended_profile_line: "agent_continuation_operator",
+            recommended_payload_builder: "active_goal_next_step_payload_builder_v1",
+            recommended_verifier: "artifact_progress_and_no_drift_verifier_v1",
+            wide_route_quarantine: true,
+            claim_boundary: "Broad continuation is quarantined; split into explicit artifact-progress subprofiles.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "read_context_path",
+            agent_loop_stage: "read_context",
+            source_route_key: REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_READ_INSPECT_PROFILE_ID,
+            recommended_profile_line: "read_inspect_operator",
+            recommended_payload_builder: "read_inspect_request_payload_builder_v1",
+            recommended_verifier: "read_only_path_and_excerpt_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May route read-only path inspection; answer still needs path/excerpt evidence.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "source_lookup",
+            agent_loop_stage: "lookup_known_source",
+            source_route_key: REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID,
+            recommended_profile_line: "local_evidence_lookup_operator",
+            recommended_payload_builder: "local_path_or_link_lookup_payload_builder_v1",
+            recommended_verifier: "source_path_or_url_presence_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May route local/source lookup; external freshness still needs retrieval.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "answer_with_file_path_evidence",
+            agent_loop_stage: "answer_from_grounded_evidence",
+            source_route_key: REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_ANSWER_EVIDENCE_PROFILE_ID,
+            recommended_profile_line: "short_answer_evidence_operator",
+            recommended_payload_builder: "question_shape_payload_builder_v1",
+            recommended_verifier: "grounded_answer_evidence_verifier_v1",
+            wide_route_quarantine: true,
+            claim_boundary: "Broad answer route is quarantined; only grounded file/metric subprofiles can promote.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "project_state_summary",
+            agent_loop_stage: "summarize_project_context",
+            source_route_key: REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID,
+            recommended_profile_line: "project_context_dialogue_operator",
+            recommended_payload_builder: "active_project_state_payload_builder_v1",
+            recommended_verifier: "workspace_artifact_or_goal_state_verifier_v1",
+            wide_route_quarantine: true,
+            claim_boundary: "Broad project-context dialogue is quarantined; require explicit workspace artifact evidence.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "response_shape_brevity",
+            agent_loop_stage: "enforce_response_shape",
+            source_route_key: REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_STYLE_BREVITY_PROFILE_ID,
+            recommended_profile_line: "response_style_operator",
+            recommended_payload_builder: "style_constraint_payload_builder_v1",
+            recommended_verifier: "response_length_and_format_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May enforce response shape only; it is not semantic task completion.",
+        },
+        AgentLoopMicroProfileSpec {
+            profile_key: "resource_budget_extract",
+            agent_loop_stage: "extract_resource_budget",
+            source_route_key: REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY,
+            recommended_profile_id: REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID,
+            recommended_profile_line: "resource_pressure_operator",
+            recommended_payload_builder: "resource_pressure_payload_builder_v1",
+            recommended_verifier: "write_rate_or_resource_budget_verifier_v1",
+            wide_route_quarantine: false,
+            claim_boundary: "May extract explicit budget/resource constraints only; no accept without provider-cost evidence.",
+        },
+    ]
+}
+
+fn build_agent_loop_profile_registry_row(
+    spec: &AgentLoopMicroProfileSpec,
+    route: Option<&RoleBindingFeedbackLoopRouteRow>,
+    catalog_row: Option<&RoleBindingCpuOperatorCatalogRow>,
+) -> RoleBindingAgentLoopProfileRegistryRow {
+    let candidate_events = route
+        .map(|row| row.candidate_events)
+        .or_else(|| catalog_row.map(|row| row.candidate_events))
+        .unwrap_or_default();
+    let payload_ready_events = route
+        .map(|row| row.payload_ready_events)
+        .or_else(|| catalog_row.map(|row| row.payload_ready_events))
+        .unwrap_or_default();
+    let scoreable_payload_events = route
+        .map(|row| row.scoreable_payload_events)
+        .or_else(|| catalog_row.map(|row| row.scoreable_payload_events))
+        .unwrap_or_default();
+    let verification_hook_ready_events = route
+        .map(|row| row.verification_hook_ready_events)
+        .or_else(|| catalog_row.map(|row| row.verification_hook_ready_events))
+        .unwrap_or_default();
+    let verified_cpu_accept_eligible_events = route
+        .map(|row| row.verified_cpu_accept_eligible_events)
+        .or_else(|| catalog_row.map(|row| row.verified_cpu_accept_eligible_events))
+        .unwrap_or_default();
+    let unique_verified_request_fingerprints = route
+        .map(|row| row.unique_accepts.unique_verified_request_fingerprints)
+        .or_else(|| catalog_row.map(|row| row.verified_cpu_accept_unique_request_fingerprints))
+        .unwrap_or_default();
+    let incremental_unique_request_fingerprints = route
+        .map(|row| row.unique_accepts.incremental_verified_request_fingerprints)
+        .or_else(|| catalog_row.map(|row| row.incremental_cpu_accept_unique_request_fingerprints))
+        .unwrap_or_default();
+    let exact_cache_overlap_verified_cpu_accepts = route
+        .map(|row| {
+            row.unique_accepts
+                .exact_cache_overlap_verified_request_fingerprints
+        })
+        .or_else(|| catalog_row.map(|row| row.exact_cache_overlap_verified_cpu_accepts))
+        .unwrap_or_default();
+    let duplicate_verified_route_hits = route
+        .map(|row| row.unique_accepts.duplicate_verified_route_hits)
+        .or_else(|| catalog_row.map(|row| row.duplicate_verified_route_hits))
+        .unwrap_or_default();
+    let false_accepts = route
+        .map(|row| row.false_accepts)
+        .or_else(|| catalog_row.map(|row| row.false_accepts))
+        .unwrap_or_default();
+    let current_support_exhausted = catalog_row.is_some_and(agent_loop_catalog_support_exhausted);
+    let evidence = AgentLoopMicroProfileEvidence {
+        candidate_events,
+        payload_ready_events,
+        scoreable_payload_events,
+        verification_hook_ready_events,
+        verified_cpu_accept_eligible_events,
+        unique_verified_request_fingerprints,
+        incremental_unique_request_fingerprints,
+        exact_cache_overlap_verified_cpu_accepts,
+        duplicate_verified_route_hits,
+        false_accepts,
+        current_support_exhausted,
+    };
+    let readiness_state = agent_loop_profile_readiness_state(spec, &evidence);
+    let next_action = agent_loop_profile_next_action(spec, &readiness_state, &evidence);
+    let mut priority_score = (candidate_events as i64 * 6)
+        + (payload_ready_events as i64 * 14)
+        + (scoreable_payload_events as i64 * 22)
+        + (verification_hook_ready_events as i64 * 35);
+    if unique_verified_request_fingerprints > 0 {
+        priority_score -= unique_verified_request_fingerprints as i64 * 2_000;
+    }
+    if current_support_exhausted {
+        priority_score -= 80_000;
+    }
+    if spec.wide_route_quarantine {
+        priority_score -= 120_000;
+    }
+    if false_accepts > 0 {
+        priority_score -= 200_000;
+    }
+    RoleBindingAgentLoopProfileRegistryRow {
+        priority_rank: 0,
+        profile_key: spec.profile_key.to_owned(),
+        agent_loop_stage: spec.agent_loop_stage.to_owned(),
+        source_route_key: spec.source_route_key.to_owned(),
+        recommended_profile_id: spec.recommended_profile_id.to_owned(),
+        recommended_profile_line: spec.recommended_profile_line.to_owned(),
+        recommended_payload_builder: spec.recommended_payload_builder.to_owned(),
+        recommended_verifier: spec.recommended_verifier.to_owned(),
+        deterministic_verifier_required: true,
+        candidate_events: evidence.candidate_events,
+        payload_ready_events: evidence.payload_ready_events,
+        scoreable_payload_events: evidence.scoreable_payload_events,
+        verification_hook_ready_events: evidence.verification_hook_ready_events,
+        verified_cpu_accept_eligible_events: evidence.verified_cpu_accept_eligible_events,
+        unique_verified_request_fingerprints: evidence.unique_verified_request_fingerprints,
+        incremental_unique_request_fingerprints: evidence.incremental_unique_request_fingerprints,
+        exact_cache_overlap_verified_cpu_accepts: evidence.exact_cache_overlap_verified_cpu_accepts,
+        duplicate_verified_route_hits: evidence.duplicate_verified_route_hits,
+        false_accepts: evidence.false_accepts,
+        current_support_exhausted: evidence.current_support_exhausted,
+        wide_route_quarantine: spec.wide_route_quarantine,
+        readiness_state,
+        next_action,
+        priority_score,
+        market_claim_allowed: false,
+        claim_boundary: spec.claim_boundary.to_owned(),
+    }
+}
+
+fn agent_loop_catalog_support_exhausted(row: &RoleBindingCpuOperatorCatalogRow) -> bool {
+    row.conditional_admission_current_support_exhausted
+        || row.agent_control_current_policy_event_support_exhausted
+        || row.agent_control_unique_contribution_constrained
+        || row.git_control_current_support_exhausted
+        || row.mixed_current_support_exhausted
+        || row.metrics_report_current_support_exhausted
+        || row.edit_current_support_exhausted
+        || row.serving_ops_current_support_exhausted
+        || row.answer_evidence_admission_singleton_only
+        || row.agent_continue_admission_no_safe_policy
+        || row.agent_continue_state_admission_best_singleton_true_accepts > 0
+        || row.local_accept_support_insufficient
+        || row.next_action.contains("already covered")
+        || row.next_action.contains("exhausted")
+        || row.next_action.contains("singleton")
+}
+
+fn agent_loop_profile_readiness_state(
+    spec: &AgentLoopMicroProfileSpec,
+    evidence: &AgentLoopMicroProfileEvidence,
+) -> String {
+    if evidence.false_accepts > 0 {
+        "blocked_false_accepts".to_owned()
+    } else if spec.wide_route_quarantine {
+        "wide_route_quarantined_split_required".to_owned()
+    } else if evidence.unique_verified_request_fingerprints > 0
+        && evidence.current_support_exhausted
+    {
+        "verified_current_support_exhausted".to_owned()
+    } else if evidence.unique_verified_request_fingerprints > 0 {
+        "verified_current_microprofile".to_owned()
+    } else if evidence.verified_cpu_accept_eligible_events > 0 {
+        "verified_route_sum_waiting_unique_attribution".to_owned()
+    } else if evidence.current_support_exhausted {
+        "support_exhausted_or_singleton_only".to_owned()
+    } else if evidence.verification_hook_ready_events > 0 {
+        "verifier_hook_ready_needs_safe_admission".to_owned()
+    } else if evidence.scoreable_payload_events > 0 {
+        "scoreable_payload_needs_verifier".to_owned()
+    } else if evidence.candidate_events > 0 {
+        "candidate_needs_payload_builder".to_owned()
+    } else {
+        "not_observed_in_current_trace".to_owned()
+    }
+}
+
+fn agent_loop_profile_next_action(
+    spec: &AgentLoopMicroProfileSpec,
+    readiness_state: &str,
+    evidence: &AgentLoopMicroProfileEvidence,
+) -> String {
+    match readiness_state {
+        "verified_current_microprofile" => format!(
+            "{} already contributes {} unique verified accepts ({} incremental over exact cache). Keep it as current CPU support; next growth requires a sibling subprofile, not double counting.",
+            spec.profile_key,
+            evidence.unique_verified_request_fingerprints,
+            evidence.incremental_unique_request_fingerprints
+        ),
+        "verified_current_support_exhausted" => format!(
+            "{} has current verified support, but catalog marks support exhausted/covered. Split a stronger sibling profile before another promotion.",
+            spec.profile_key
+        ),
+        "wide_route_quarantined_split_required" => format!(
+            "{} is a broad route. Do not promote it whole; split into a narrower deterministic profile with {} and {}.",
+            spec.profile_key, spec.recommended_payload_builder, spec.recommended_verifier
+        ),
+        "verifier_hook_ready_needs_safe_admission" => format!(
+            "{} has {} verifier-hook-ready rows. Run or improve safe admission; require false_accepts=0, provider-cost evidence, and unique attribution before local accept.",
+            spec.profile_key, evidence.verification_hook_ready_events
+        ),
+        "scoreable_payload_needs_verifier" => format!(
+            "{} has {} scoreable payloads. Attach {} and keep accepts disabled until verifier labels and safe policy exist.",
+            spec.profile_key, evidence.scoreable_payload_events, spec.recommended_verifier
+        ),
+        "candidate_needs_payload_builder" => format!(
+            "{} has {} route candidates. Build {} first, then verifier/shadow audit.",
+            spec.profile_key, evidence.candidate_events, spec.recommended_payload_builder
+        ),
+        "blocked_false_accepts" => format!(
+            "{} is blocked by false accepts. Tighten verifier/admission before any CPU accept path.",
+            spec.profile_key
+        ),
+        "support_exhausted_or_singleton_only" => format!(
+            "{} support is exhausted or singleton-only. Collect more verifier-true rows or split the profile.",
+            spec.profile_key
+        ),
+        "verified_route_sum_waiting_unique_attribution" => format!(
+            "{} has route-sum verified hits, but unique attribution is not proven. Inspect duplicates/exact-cache overlap before claiming savings.",
+            spec.profile_key
+        ),
+        _ => format!(
+            "{} is not visible in the current 1000-call trace. Keep it in backlog until real traffic produces candidates.",
+            spec.profile_key
+        ),
     }
 }
 

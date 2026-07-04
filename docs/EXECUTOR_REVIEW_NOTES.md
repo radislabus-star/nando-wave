@@ -1,5 +1,100 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Loop Profile Registry V1
+
+Verdict:
+
+```text
+AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-agent-loop-profile-registry-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+and writes:
+  target/nando-wave/real-traffic-shadow/agent-loop-profile-registry-v1.report.json
+```
+
+Why:
+
+```text
+CPU Routability 80 will not be reached by promoting one broad route.
+The agent loop has to be split into narrow deterministic CPU profiles:
+  metric_from_report
+  git_status_summary
+  test_output_parse
+  report_sync
+  edit_patch_small
+  artifact_progress
+  failure_triage-style branch profiles
+
+This report converts the current feedback/catalog evidence into that
+microprofile worklist without enabling accepts or re-counting old support.
+```
+
+Registry result:
+
+```text
+total_llm_calls: 1000
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls: 774
+microprofile_count: 16
+microprofiles_observed: 15
+verified_current_profiles: 7
+hook_ready_profiles: 15
+scoreable_profiles: 15
+blocked_wide_route_profiles: 3
+exhausted_current_support_profiles: 12
+top_next_profile_key: read_context_path
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Do not improve answer_or_explain, project_context_dialogue, or
+agent_continue_execute as broad routes.
+
+The next narrow route is read_context_path:
+  source_route_key: read_inspect
+  candidate_events: 27
+  scoreable_payload_events: 12
+  verification_hook_ready_events: 9
+  unique_verified_request_fingerprints: 0
+  readiness_state: verifier_hook_ready_needs_safe_admission
+
+Next safe work:
+  improve read_context_path admission/verifier geometry,
+  require false_accepts=0,
+  provider-cost evidence,
+  and unique attribution before any local accept.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+The registry writes no raw prompt text, no raw response text, no target labels,
+no proof labels, and enables no local accepts. It is a worklist, not a market
+savings claim.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Continue State Admission Audit V1
 
 Verdict:
