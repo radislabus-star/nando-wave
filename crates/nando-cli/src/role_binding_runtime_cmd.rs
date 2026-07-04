@@ -91,6 +91,16 @@ const DEFAULT_PLANNING_NEXT_STEP_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v1.json";
 const DEFAULT_PLANNING_NEXT_STEP_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-payload-dry-run-v1.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_PACKAGE_PATH: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-seed0.nwrb";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_PROFILE_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-agent-continue-execute-v1.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_PROFILE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-profile-v1.report.json";
 const DEFAULT_READ_INSPECT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_READ_INSPECT_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -246,6 +256,16 @@ const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-output-evidence-v1.trace.jsonl";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-output-evidence-v1.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.trace.jsonl";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-local-accept-calibration-v1.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.verification-hook-audit.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
 const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
@@ -437,6 +457,21 @@ const REAL_TRAFFIC_PLANNING_ROUTE_KEY: &str = "planning_next_step";
 const REAL_TRAFFIC_PLANNING_PROFILE_ID: &str = "route_gap_planning_next_step_profile_v1";
 const REAL_TRAFFIC_PLANNING_WRONG_TOKEN: &str = "__PLANNING_WRONG_STEP__";
 const REAL_TRAFFIC_PLANNING_DISABLED_THRESHOLD: i32 = i32::MAX;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_BASE: u32 = 46 << 12;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_GOAL_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_STATE_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_EVIDENCE_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_NEXT_ACTION_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY: &str = "agent_continue_execute";
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID: &str =
+    "route_gap_agent_continue_execute_profile_v1";
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_WRONG_TOKEN: &str = "__AGENT_CONTINUE_WRONG_STEP__";
+const REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_DISABLED_THRESHOLD: i32 = i32::MAX;
 const REAL_TRAFFIC_READ_INSPECT_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_READ_INSPECT_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_READ_INSPECT_OPERATOR_PAIR_BASE: u32 = 38 << 12;
@@ -5348,6 +5383,277 @@ where
     )
 }
 
+pub(crate) fn run_role_binding_real_traffic_agent_continue_execute_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_TRACE_JSONL)
+    });
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID);
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut agent_continue_execute_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_agent_continue_execute_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "not agent_continue_execute route-gap candidate".to_owned();
+
+        let classified_route = route_catalog.classify_request_text(&row.text);
+        let classified_as_agent_continue = classified_route.as_ref().is_some_and(|candidate| {
+            candidate.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+                || candidate.profile_id == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID
+        });
+        if route_gap_family_key(&row.text) == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            && (classified_route.is_none() || classified_as_agent_continue)
+        {
+            agent_continue_execute_candidate_events += 1;
+            let readiness = analyze_route_gap_payload_readiness(
+                REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY,
+                &row.text,
+            );
+            if readiness.payload_ready {
+                payload_ready_events += 1;
+                let built = build_agent_continue_execute_dry_run_request(
+                    &event_id,
+                    &fingerprint,
+                    &row.text,
+                );
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable && profile_registered {
+                            "scoreable_payload_built_profile_registered"
+                        } else if scoreable {
+                            "scoreable_payload_built_profile_missing"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingPlanningNextStepPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side agent-continue-execute payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingPlanningNextStepPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "readiness_rejected".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = format!(
+                    "agent_continue_execute route-gap candidate rejected by readiness gate: {}",
+                    readiness.missing_reasons.join(",")
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some(
+                "codex_history_local_agent_continue_execute_payload_dry_run".to_owned(),
+            ),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side agent-continue-execute payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingAgentContinueExecutePayloadDryRunReport {
+        schema_version: "nando_role_binding_agent_continue_execute_payload_dry_run_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        agent_continue_execute_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for agent_continue_execute route-gap rows from prompt text only, keeps verified_safe_accept=None and expect_local_operator=false, and cannot prove savings. A registered .nwrb profile plus tool-backed artifact-progress/no-drift verifier are required before any local accept.".to_owned(),
+        next_engineering_debt: "Build an agent-continue-execute .nwrb profile package, rerun shadow so profile_missing fallback becomes real score, then attach artifact_progress_and_no_drift_verifier_v1 before any safe-policy promotion or market claim.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-continue-execute-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  agent_continue_execute_candidate_events: {}",
+        report.agent_continue_execute_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  profile_registered: {}", report.profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "agent-continue-execute payload dry-run is review-only; build profile+verifier before claims"
+            .to_owned(),
+    )
+}
+
 pub(crate) fn run_role_binding_real_traffic_project_context_payload_dry_run_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -6546,6 +6852,210 @@ where
     );
     println!("  local_accepts_enabled_on_real_traffic: false");
     Err("planning-next-step profile is review-only; attach verifier before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_continue_execute_profile_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let dry_run_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_TRACE_JSONL)
+    });
+    let package_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PACKAGE_PATH));
+    let registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PROFILE_REPORT));
+
+    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
+    validate_registry_config(&registry)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&dry_run_trace_path)?;
+    let build = build_agent_continue_execute_role_binding_package_from_trace(&trace_rows)?;
+    if let Some(parent) = package_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create agent-continue-execute package directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(&package_path, &build.package_bytes).map_err(|error| {
+        format!(
+            "failed to write agent-continue-execute package {}: {error}",
+            package_path.display()
+        )
+    })?;
+    let package_info =
+        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&build.package_bytes)
+            .map_err(|error| {
+                format!("failed to inspect agent-continue-execute package: {error:?}")
+            })?;
+    let policy = WavePredictorRoleBindingOffloadPolicy::new(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_DISABLED_THRESHOLD,
+    )
+    .map_err(|error| format!("invalid agent-continue-execute disabled policy: {error:?}"))?;
+    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
+        &build.package_bytes,
+        policy,
+    )
+    .map_err(|error| format!("failed to load agent-continue-execute package: {error:?}"))?;
+
+    let requests = agent_continue_execute_scoreable_requests(&trace_rows);
+    let mut energy_margins = Vec::with_capacity(requests.len());
+    let mut min_slot_margins = Vec::with_capacity(requests.len());
+    let mut positive_margin_rows = 0usize;
+    let mut strict_ordered_pass_rows = 0usize;
+    let mut unexpected_local_accepts_under_disabled_threshold = 0usize;
+    for request in &requests {
+        let prepared = sdk.prepare_active_fringe_from_iter(
+            request
+                .active_fringe
+                .iter()
+                .map(|active| (active.center_id, active.strength)),
+        );
+        let mut energy_margin = 0i32;
+        let mut min_slot_margin = i32::MAX;
+        let mut first_slot_margin = 0i32;
+        let mut strict_ordered_pass = true;
+        for (slot_index, slot) in request.slots.iter().enumerate() {
+            let (positive_score, negative_score) =
+                score_role_binding_profile_slot(&sdk, &prepared, slot);
+            let slot_margin = positive_score - negative_score;
+            if slot_index == 0 {
+                first_slot_margin = slot_margin;
+            }
+            energy_margin = energy_margin.saturating_add(slot_margin);
+            min_slot_margin = min_slot_margin.min(slot_margin);
+            strict_ordered_pass &= slot_margin > 0;
+        }
+        if min_slot_margin == i32::MAX {
+            continue;
+        }
+        positive_margin_rows += usize::from(energy_margin > 0);
+        strict_ordered_pass_rows += usize::from(strict_ordered_pass);
+        unexpected_local_accepts_under_disabled_threshold += usize::from(profile_accepts_score(
+            &default_profile_acceptance_policy(),
+            strict_ordered_pass,
+            energy_margin,
+            first_slot_margin,
+            REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_DISABLED_THRESHOLD,
+        ));
+        energy_margins.push(energy_margin);
+        min_slot_margins.push(min_slot_margin);
+    }
+
+    let profile = RoleBindingProfileConfig {
+        profile_id: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID.to_owned(),
+        profile_kind: "role_binding_nwrb".to_owned(),
+        operator_classes: vec![
+            "agent_continuation_operator".to_owned(),
+            "state_transition".to_owned(),
+            "route_gap".to_owned(),
+        ],
+        package_path: package_path.clone(),
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        edge_count: package_info.edge_count,
+        slot_count: 2,
+        threshold: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_DISABLED_THRESHOLD,
+        acceptance_policy: default_profile_acceptance_policy(),
+        accepted_route_keys: vec![
+            REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY.to_owned(),
+            REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID.to_owned(),
+            "active_goal_next_step_payload_builder_v1".to_owned(),
+        ],
+    };
+    registry
+        .profiles
+        .retain(|existing| existing.profile_id != profile.profile_id);
+    registry.profiles.push(profile);
+    registry.claim_boundary = "serving registry overlay for agent-continue-execute .nwrb profile; generated from request-side dry-run payloads with threshold=i32::MAX so scoring telemetry is available but local accepts remain disabled until artifact-progress/no-drift verification exists".to_owned();
+    validate_registry_config(&registry)?;
+    write_json_file(&registry_path, &registry)?;
+
+    let mut sorted_energy = energy_margins.clone();
+    let mut sorted_min_slot = min_slot_margins.clone();
+    sorted_energy.sort_unstable();
+    sorted_min_slot.sort_unstable();
+    let report = RoleBindingPlanningNextStepProfileReport {
+        schema_version: "nando_role_binding_agent_continue_execute_profile_v1".to_owned(),
+        verdict: if unexpected_local_accepts_under_disabled_threshold == 0
+            && build.package_training_requests > 0
+            && package_info.edge_count > 0
+        {
+            "AGENT_CONTINUE_EXECUTE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED"
+        } else {
+            "AGENT_CONTINUE_EXECUTE_PROFILE_V1_REVIEW_REPAIR_REQUIRED"
+        }
+        .to_owned(),
+        base_registry_path: base_registry_path.display().to_string(),
+        dry_run_trace_path: dry_run_trace_path.display().to_string(),
+        package_path: package_path.display().to_string(),
+        registry_path: registry_path.display().to_string(),
+        profile_id: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID.to_owned(),
+        package_fingerprint64: package_info.fingerprint64,
+        package_bytes: build.package_bytes.len(),
+        edge_count: package_info.edge_count,
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        threshold: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_DISABLED_THRESHOLD,
+        trace_rows_read: trace_rows.len(),
+        scoreable_payload_events: requests.len(),
+        package_training_requests: build.package_training_requests,
+        positive_updates: build.positive_updates,
+        negative_updates: build.negative_updates,
+        changed_edges: build.changed_edges,
+        positive_margin_rows,
+        strict_ordered_pass_rows,
+        unexpected_local_accepts_under_disabled_threshold,
+        median_energy_margin: percentile_i32_sorted(&sorted_energy, 50),
+        p10_energy_margin: percentile_i32_sorted(&sorted_energy, 10),
+        min_energy_margin: sorted_energy.first().copied().unwrap_or(0),
+        median_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 50),
+        p10_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 10),
+        min_slot_margin: sorted_min_slot.first().copied().unwrap_or(0),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled_on_real_traffic: false,
+        market_claim_allowed: false,
+        claim_boundary: "Profile generator only. It compiles request-side agent-continue-execute payload geometry into a .nwrb package and registry overlay with threshold=i32::MAX, so shadow can measure real score/margins but cannot local-accept. Verified CPU savings require deterministic artifact-progress/no-drift evidence, safe-policy calibration, provider cost, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Run agent-continue-execute dry-run shadow with this overlay registry, then attach artifact_progress_and_no_drift_verifier_v1 before lowering thresholds or promoting any local accept path.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-continue-execute-profile-v1: {}",
+        report.verdict
+    );
+    println!("  base_registry: {}", base_registry_path.display());
+    println!("  dry_run_trace: {}", dry_run_trace_path.display());
+    println!("  package: {}", package_path.display());
+    println!("  registry: {}", registry_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  edge_count: {}", report.edge_count);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  median_energy_margin: {}", report.median_energy_margin);
+    println!(
+        "  unexpected_local_accepts_under_disabled_threshold: {}",
+        report.unexpected_local_accepts_under_disabled_threshold
+    );
+    println!("  local_accepts_enabled_on_real_traffic: false");
+    Err("agent-continue-execute profile is review-only; attach verifier before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_metrics_report_payload_dry_run_v1<I>(
@@ -13000,6 +13510,7 @@ where
         &sessions_root,
         &session_ids,
         &wanted_request_fingerprints,
+        deterministic_planning_artifact_progress_verification,
     )?;
 
     let mut operator_candidate_calls = 0usize;
@@ -13113,6 +13624,319 @@ where
         report.tool_call_fingerprint_events
     );
     Err("planning artifact-progress verification is review-only; run shadow/audit".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_continue_execute_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_TRACE_JSONL)
+    });
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_TRACE_JSONL)
+    });
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref()
+                    == Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_agent_continue_execute_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "agent-continue output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_agent_continue_execute_output_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "agent-continue output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_agent_continue_execute_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-continue output evidence join only. It writes response fingerprints and explicit deterministic verification results, writes no raw prompt/response text, and intentionally refuses true verification until artifact-progress/no-drift verifier proves the continuation changed project state.".to_owned(),
+        next_engineering_debt: "Run agent-continue artifact-progress verifier over tool calls, then shadow/audit before any threshold can be lowered.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-continue-execute-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("agent-continue output evidence is review-only; artifact verifier required".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_continue_execute_artifact_progress_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_OUTPUT_EVIDENCE_TRACE_JSONL)
+    });
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_TRACE_JSONL)
+    });
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_REPORT));
+
+    let mut trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref()
+                    == Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let artifact_index = build_codex_session_planning_artifact_progress_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_agent_continue_execute_artifact_progress_verification,
+    )?;
+
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut artifact_evidence_matched_events = 0usize;
+    let mut no_session_artifact_match_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+    let mut tool_call_fingerprint_events = 0usize;
+
+    for row in &mut trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID) {
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = artifact_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_artifact_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "agent-continue artifact-progress evidence missing: no matching Codex turn found",
+            ));
+            continue;
+        };
+        artifact_evidence_matched_events += 1;
+        if row.response_fingerprint.is_none() {
+            row.response_fingerprint = evidence.response_fingerprint.clone();
+        }
+        row.tool_call_fingerprints = evidence.tool_call_fingerprints.clone();
+        tool_call_fingerprint_events += usize::from(!row.tool_call_fingerprints.is_empty());
+        row.verification_source = Some(
+            "codex_session_tool_call_fingerprints_plus_agent_continue_artifact_progress_no_drift_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "agent-continue artifact-progress evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &trace_rows)?;
+    let report = RoleBindingPlanningNextStepArtifactProgressReport {
+        schema_version: "nando_role_binding_agent_continue_execute_artifact_progress_v1"
+            .to_owned(),
+        verdict: if verified_true_events > 0 {
+            "AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_V1_REVIEW_TOOL_BACKED_TRUE_LABELS_FOUND"
+        } else if artifact_evidence_matched_events > 0 {
+            "AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_V1_REVIEW_ARTIFACT_EVIDENCE_ATTACHED"
+        } else {
+            "AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_V1_REVIEW_NO_ARTIFACT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: artifact_index.session_files_scanned,
+        codex_turns_indexed: artifact_index.codex_turns_indexed,
+        tool_events_indexed: artifact_index.tool_events_indexed,
+        artifact_evidence_matched_events,
+        no_session_artifact_match_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        tool_call_fingerprint_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        tool_outputs_written: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-continue artifact-progress verification only. It scans local Codex session tool events, writes tool-call fingerprints instead of raw tool output, and marks true only for successful nando-wave project-progress tools. It does not enable local accepts or prove market savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow/audit over the artifact-progress trace, then calibrate an agent-continue safe policy only if true labels exist, provider cost is attached, and false accepts remain zero.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-continue-execute-artifact-progress-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  artifact_evidence_matched_events: {}",
+        report.artifact_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!(
+        "  tool_call_fingerprint_events: {}",
+        report.tool_call_fingerprint_events
+    );
+    Err("agent-continue artifact-progress verification is review-only; run shadow/audit".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_local_accept_calibration_v1<I>(
@@ -20117,6 +20941,12 @@ where
         args.next().map(PathBuf::from).unwrap_or_else(|| {
             PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT)
         });
+    let agent_continue_execute_dry_run_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_REPORT);
+    let agent_continue_execute_verification_audit_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT);
+    let agent_continue_execute_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let agent_control_admission_calibration_report_path = args
         .next()
         .map(PathBuf::from)
@@ -20351,6 +21181,31 @@ where
             Some(
                 read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
                     &planning_next_step_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
+    let agent_continue_execute_dry_run = if agent_continue_execute_dry_run_report_path.exists() {
+        Some(read_json_file::<
+            RoleBindingAgentContinueExecutePayloadDryRunReport,
+        >(&agent_continue_execute_dry_run_report_path)?)
+    } else {
+        None
+    };
+    let agent_continue_execute_verification_audit =
+        if agent_continue_execute_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &agent_continue_execute_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
+    let agent_continue_execute_local_accept_calibration =
+        if agent_continue_execute_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &agent_continue_execute_local_accept_calibration_report_path,
                 )?,
             )
         } else {
@@ -20766,6 +21621,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(agent_continue_execute_audit) = &agent_continue_execute_verification_audit {
+        for row in &agent_continue_execute_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(read_inspect_audit) = &read_inspect_verification_audit {
         for row in &read_inspect_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -20842,6 +21702,8 @@ where
         .or(agent_control_verification_audit.as_ref());
     let effective_planning_next_step_verification_audit =
         planning_next_step_verification_audit.as_ref();
+    let effective_agent_continue_execute_verification_audit =
+        agent_continue_execute_verification_audit.as_ref();
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
     let effective_retrieval_lookup_verification_audit =
         retrieval_lookup_verification_audit.as_ref();
@@ -20870,6 +21732,7 @@ where
             effective_mixed_verification_audit,
             effective_agent_control_verification_audit,
             effective_planning_next_step_verification_audit,
+            effective_agent_continue_execute_verification_audit,
             effective_read_inspect_verification_audit,
             effective_retrieval_lookup_verification_audit,
             effective_project_context_verification_audit,
@@ -20885,6 +21748,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_PLANNING_ROUTE_KEY);
+    let forecast_has_agent_continue_execute = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY);
     let forecast_has_read_inspect = forecast
         .routes
         .iter()
@@ -20939,6 +21806,9 @@ where
         + effective_planning_next_step_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
+        + effective_agent_continue_execute_verification_audit
+            .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
         + effective_read_inspect_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
@@ -20974,6 +21844,9 @@ where
         + effective_planning_next_step_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
+        + effective_agent_continue_execute_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
         + effective_read_inspect_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
@@ -20999,6 +21872,18 @@ where
         .filter(|_| !forecast_has_planning_next_step)
         .map(|report| report.operator_candidate_calls)
         .unwrap_or_default();
+    let agent_continue_execute_candidate_calls = if forecast_has_agent_continue_execute {
+        0
+    } else {
+        agent_continue_execute_dry_run
+            .as_ref()
+            .map(|report| report.agent_continue_execute_candidate_events)
+            .or_else(|| {
+                effective_agent_continue_execute_verification_audit
+                    .map(|report| report.operator_candidate_calls)
+            })
+            .unwrap_or_default()
+    };
     let read_inspect_candidate_calls = if forecast_has_read_inspect {
         0
     } else {
@@ -21097,6 +21982,7 @@ where
     };
     let operator_candidate_route_sum_events = forecast.operator_candidate_calls
         + planning_next_step_candidate_calls
+        + agent_continue_execute_candidate_calls
         + read_inspect_candidate_calls
         + retrieval_lookup_candidate_calls
         + project_context_candidate_calls
@@ -21121,6 +22007,8 @@ where
         let is_mixed_route = route.route_key.contains("mixed_map");
         let is_agent_control_route = route.route_key.contains("agent_control");
         let is_planning_route = route.route_key == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
+        let is_agent_continue_execute_route =
+            route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY;
         let is_read_inspect_route = route.route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY;
         let is_retrieval_lookup_route = route.route_key == REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY;
         let is_project_context_route = route.route_key == REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY;
@@ -21136,6 +22024,8 @@ where
             mixed_local_accept_calibration.as_ref()
         } else if is_planning_route {
             planning_next_step_local_accept_calibration.as_ref()
+        } else if is_agent_continue_execute_route {
+            agent_continue_execute_local_accept_calibration.as_ref()
         } else if is_read_inspect_route {
             read_inspect_local_accept_calibration.as_ref()
         } else if is_retrieval_lookup_route {
@@ -21221,6 +22111,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_agent_continue_execute_route {
+            agent_continue_execute_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else if is_read_inspect_route {
             read_inspect_dry_run
                 .as_ref()
@@ -21281,6 +22176,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
+        } else if is_agent_continue_execute_route {
+            agent_continue_execute_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else if is_read_inspect_route {
             read_inspect_dry_run
                 .as_ref()
@@ -21336,6 +22236,10 @@ where
                         .map(|report| report.scoreable_payload_events)
                 } else if is_planning_route {
                     planning_next_step_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else if is_agent_continue_execute_route {
+                    agent_continue_execute_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
                 } else if is_read_inspect_route {
@@ -24850,6 +25754,40 @@ struct RoleBindingPlanningNextStepPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentContinueExecutePayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    agent_continue_execute_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingPlanningNextStepPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingAnswerEvidencePayloadDryRunReport {
     schema_version: String,
     verdict: String,
@@ -27493,6 +28431,7 @@ struct CodexHistoryRouteCatalog {
     conditional: Option<CodexHistoryRouteCandidate>,
     mixed: Option<CodexHistoryRouteCandidate>,
     planning: Option<CodexHistoryRouteCandidate>,
+    agent_continue_execute: Option<CodexHistoryRouteCandidate>,
     read_inspect: Option<CodexHistoryRouteCandidate>,
     metrics_report: Option<CodexHistoryRouteCandidate>,
     git_control: Option<CodexHistoryRouteCandidate>,
@@ -27507,6 +28446,7 @@ impl CodexHistoryRouteCatalog {
             conditional: None,
             mixed: None,
             planning: None,
+            agent_continue_execute: None,
             read_inspect: None,
             metrics_report: None,
             git_control: None,
@@ -27561,6 +28501,10 @@ impl CodexHistoryRouteCatalog {
             }) {
                 catalog.serving_ops.get_or_insert(candidate);
             } else if profile.operator_classes.iter().any(|class| {
+                class == "agent_continuation_operator" || class == "agent_continue_execute"
+            }) {
+                catalog.agent_continue_execute.get_or_insert(candidate);
+            } else if profile.operator_classes.iter().any(|class| {
                 class == "project_planning" || class == "state_transition" || class == "route_gap"
             }) {
                 catalog.planning.get_or_insert(candidate);
@@ -27572,9 +28516,7 @@ impl CodexHistoryRouteCatalog {
     fn classify_request_text(&self, text: &str) -> Option<CodexHistoryRouteCandidate> {
         let lower = text.to_lowercase();
         if self.control.is_some()
-            && (has_agent_control_stop_intent(&lower)
-                || has_agent_control_continue_intent(&lower)
-                || has_short_decision_ack_intent(&lower))
+            && (has_agent_control_stop_intent(&lower) || has_short_decision_ack_intent(&lower))
         {
             return self.control.clone();
         }
@@ -27616,6 +28558,8 @@ impl CodexHistoryRouteCatalog {
         );
         let has_planning_next_step_intent =
             route_gap_family_key(text) == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
+        let has_agent_continue_execute_intent =
+            route_gap_family_key(text) == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY;
         let has_read_inspect_intent =
             route_gap_family_key(text) == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY;
         let has_metrics_report_intent =
@@ -27636,6 +28580,12 @@ impl CodexHistoryRouteCatalog {
         }
         if has_read_inspect_intent {
             return self.read_inspect.clone().or_else(|| self.edit.clone());
+        }
+        if has_agent_continue_execute_intent {
+            return self
+                .agent_continue_execute
+                .clone()
+                .or_else(|| self.planning.clone());
         }
         if has_direct_edit_intent {
             return self.edit.clone().or_else(|| self.mixed.clone());
@@ -28350,6 +29300,115 @@ fn planning_next_step_scoreable_requests(
         .filter_map(|row| row.nando_shadow_request.clone())
         .filter(|request| {
             request.profile_id.as_deref() == Some(REAL_TRAFFIC_PLANNING_PROFILE_ID)
+                && !request.active_fringe.is_empty()
+                && !request.slots.is_empty()
+        })
+        .collect()
+}
+
+fn build_agent_continue_execute_role_binding_package_from_trace(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Result<PlanningNextStepPackageBuild, String> {
+    let config = WavePredictorHebbianConfig {
+        state_delta_binding_action_base: Some(
+            REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_BASE,
+        ),
+        state_delta_binding_action_count: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE,
+        state_delta_binding_role_base: Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROLE_BASE),
+        state_delta_binding_role_stride: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE,
+        state_delta_binding_role_count: 4,
+        state_delta_binding_slot_scoped_action_page_bits: 12,
+        state_delta_binding_slot_scoped_action_page_mask: 1_u64
+            << (REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_BASE >> 12),
+        state_delta_binding_slot_scoped_action_source_bits:
+            REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_SHIFT as u8,
+        weight_limit: 2_048,
+        ..WavePredictorHebbianConfig::default()
+    };
+    let role_end = REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROLE_BASE
+        + REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE
+            * u32::from(config.state_delta_binding_role_count);
+    let action_end = REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_BASE
+        + REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE;
+    let center_count = role_end.max(action_end) as usize;
+    let mut field = WavePredictorHebbianField::new(center_count, config);
+    let mut package_training_requests = 0usize;
+    let mut positive_updates = 0usize;
+    let mut negative_updates = 0usize;
+    let mut changed_edges = 0usize;
+
+    for request in agent_continue_execute_scoreable_requests(trace_rows) {
+        let active_fringe = request
+            .active_fringe
+            .iter()
+            .map(|active| WavePredictorActiveCenter {
+                center_id: active.center_id,
+                strength: active.strength,
+            })
+            .collect::<Vec<_>>();
+        if active_fringe.is_empty() {
+            continue;
+        }
+        package_training_requests += 1;
+        for slot in &request.slots {
+            for impulse in &slot.positive_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    16,
+                );
+                positive_updates += 1;
+                changed_edges += changed;
+            }
+            for impulse in &slot.negative_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    -16,
+                );
+                negative_updates += 1;
+                changed_edges += changed;
+            }
+        }
+    }
+
+    if package_training_requests == 0 {
+        return Err(
+            "agent-continue-execute package builder found no scoreable dry-run requests".to_owned(),
+        );
+    }
+    if changed_edges == 0 {
+        return Err(
+            "agent-continue-execute package builder produced no role-binding edges".to_owned(),
+        );
+    }
+    let package_bytes = field
+        .compile_flat_role_binding_table()
+        .to_bytes()
+        .map_err(|error| {
+            format!("failed to serialize agent-continue-execute .nwrb package: {error:?}")
+        })?;
+    Ok(PlanningNextStepPackageBuild {
+        package_bytes,
+        package_training_requests,
+        positive_updates,
+        negative_updates,
+        changed_edges,
+    })
+}
+
+fn agent_continue_execute_scoreable_requests(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Vec<RoleBindingProfileScoreRequest> {
+    trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.clone())
+        .filter(|request| {
+            request.profile_id.as_deref() == Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID)
                 && !request.active_fringe.is_empty()
                 && !request.slots.is_empty()
         })
@@ -29365,6 +30424,252 @@ struct PlanningNextStepTokens {
     state_token: String,
     evidence_token: String,
     next_action_token: String,
+}
+
+fn build_agent_continue_execute_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let tokens = extract_agent_continue_execute_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(agent_continue_execute_operator_centers());
+    active_fringe.extend(agent_continue_execute_role_surface_centers(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_GOAL_ROLE_SLOT,
+        &tokens.goal_token,
+    ));
+    active_fringe.extend(agent_continue_execute_role_surface_centers(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_STATE_ROLE_SLOT,
+        &tokens.state_token,
+    ));
+    active_fringe.extend(agent_continue_execute_role_surface_centers(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_EVIDENCE_ROLE_SLOT,
+        &tokens.evidence_token,
+    ));
+    active_fringe.extend(agent_continue_execute_role_surface_centers(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_NEXT_ACTION_ROLE_SLOT,
+        &tokens.next_action_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = agent_continue_execute_score_slot(
+        0,
+        &tokens.next_action_token,
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = agent_continue_execute_score_slot(
+        1,
+        &tokens.evidence_token,
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY.to_owned()),
+        profile_id: Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID.to_owned()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: a continue/execute score is not a safe local action
+        // until tool-backed artifact progress proves no drift.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn agent_continue_execute_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_NEXT_ACTION_ROLE_SLOT),
+        (1, REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_EVIDENCE_ROLE_SLOT),
+        (0, REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_GOAL_ROLE_SLOT),
+        (1, REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_STATE_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_BASE
+                + agent_continue_execute_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn agent_continue_execute_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_OPERATOR_PAIR_SHIFT)
+        | u32::from(role_slot)
+}
+
+fn agent_continue_execute_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PAGE_SIZE,
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn agent_continue_execute_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_agent_continue_execute_tokens(text: &str) -> Option<PlanningNextStepTokens> {
+    let tokens = extract_request_side_edit_tokens(text, 24);
+    let lower = text.to_lowercase();
+    if !has_agent_control_continue_intent(&lower) {
+        return None;
+    }
+    let goal_token = first_token_matching_any(
+        &tokens,
+        &[
+            "goal",
+            "цель",
+            "roadmap",
+            "routability",
+            "operator",
+            "runtime",
+            "nando",
+            "wave",
+            "llmwave",
+            "проект",
+        ],
+    )
+    .or_else(|| tokens.first().cloned())
+    .unwrap_or_else(|| "active_goal".to_owned());
+    let state_token = first_token_matching_any(
+        &tokens,
+        &[
+            "report",
+            "отчет",
+            "отчёт",
+            "trace",
+            "artifact",
+            "commit",
+            "git",
+            "status",
+            "target/",
+            "docs/",
+            "crates/",
+            "код",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| token.as_str() != goal_token)
+            .cloned()
+    })
+    .unwrap_or_else(|| "current_artifact_state".to_owned());
+    let evidence_token = first_token_matching_any(
+        &tokens,
+        &[
+            "gate",
+            "audit",
+            "report",
+            "metrics",
+            "p99",
+            "false_accept",
+            "latency",
+            "результат",
+            "провер",
+            "коммит",
+            "artifact",
+        ],
+    )
+    .unwrap_or_else(|| "artifact_progress".to_owned());
+    let next_action_token = first_matching_branch_token(
+        &lower,
+        &[
+            "делай",
+            "дальше",
+            "продолж",
+            "поехали",
+            "execute",
+            "continue",
+            "go",
+            "next",
+            "build",
+            "payload",
+            "verifier",
+            "shadow",
+            "commit",
+            "route",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| {
+                let token_lower = token.to_lowercase();
+                contains_any(
+                    &token_lower,
+                    &[
+                        "next",
+                        "plan",
+                        "route",
+                        "payload",
+                        "builder",
+                        "verifier",
+                        "audit",
+                        "shadow",
+                        "commit",
+                        "план",
+                        "дальше",
+                        "след",
+                        "делай",
+                    ],
+                )
+            })
+            .cloned()
+    })
+    .unwrap_or_else(|| "execute_next_step".to_owned());
+    Some(PlanningNextStepTokens {
+        goal_token,
+        state_token,
+        evidence_token,
+        next_action_token,
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -35812,6 +37117,11 @@ fn cpu_route_builder_recommendation(route_key: &str) -> (String, String) {
             "CPU-process planning-next-step requests: extract goal/state/evidence/next-action slots from request text only, then require artifact-progress verification before local accept.".to_owned(),
             "planning_next_step_payload_builder_v1".to_owned(),
         )
+    } else if route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY {
+        (
+            "CPU-process agent continuation requests: extract active-goal/state/evidence/next-action slots from request text only, then require tool-backed artifact-progress/no-drift verification before local accept.".to_owned(),
+            "active_goal_next_step_payload_builder_v1".to_owned(),
+        )
     } else if route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY {
         (
             "CPU-process read-only inspection requests: extract path/request/evidence/check slots from request text only, then require read-only path/excerpt verification before local accept.".to_owned(),
@@ -36040,6 +37350,42 @@ fn analyze_route_gap_payload_readiness(family_key: &str, text: &str) -> RouteGap
                 let evidence =
                     artifact_signal || contains_any(&lower, &["сделал", "готово", "чек", "check"]);
                 (request, context, evidence, verification_signal)
+            }
+            "agent_continue_execute" => {
+                let request = has_agent_control_continue_intent(&lower);
+                let context = request
+                    && (goal_signal
+                        || artifact_signal
+                        || contains_any(
+                            &lower,
+                            &[
+                                "делай",
+                                "дальше",
+                                "продолж",
+                                "поехали",
+                                "go",
+                                "continue",
+                                "execute",
+                            ],
+                        ));
+                let evidence = artifact_signal
+                    || contains_any(
+                        &lower,
+                        &[
+                            "готово",
+                            "сделал",
+                            "чек",
+                            "check",
+                            "report",
+                            "отчет",
+                            "отчёт",
+                            "артефакт",
+                            "artifact",
+                        ],
+                    )
+                    || context;
+                let verifier = verification_signal || context;
+                (request, context, evidence, verifier)
             }
             "read_inspect" => {
                 let request = contains_any(
@@ -37552,6 +38898,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_answer_evidence_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_planning_next_step_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_agent_continue_execute_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_project_context_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_read_inspect_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_retrieval_lookup_payload_dry_run::"))
@@ -38002,6 +39349,7 @@ fn build_codex_session_planning_artifact_progress_index(
     sessions_root: &Path,
     session_ids: &HashSet<String>,
     wanted_request_fingerprints: &HashSet<String>,
+    verifier: fn(&str, &str, &PlanningArtifactTurnEvidence) -> (bool, bool, String),
 ) -> Result<CodexSessionPlanningArtifactProgressIndex, String> {
     let mut session_files = Vec::new();
     collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
@@ -38067,6 +39415,7 @@ fn build_codex_session_planning_artifact_progress_index(
                                 pending_prompt_text.take(),
                                 Some(response_text),
                                 std::mem::take(&mut pending_artifacts),
+                                verifier,
                             ) {
                                 codex_turns_indexed += 1;
                             }
@@ -38082,6 +39431,7 @@ fn build_codex_session_planning_artifact_progress_index(
                                 pending_prompt_text.take(),
                                 response_text,
                                 std::mem::take(&mut pending_artifacts),
+                                verifier,
                             ) {
                                 codex_turns_indexed += 1;
                             }
@@ -38246,6 +39596,7 @@ fn finalize_planning_artifact_turn(
     prompt_text: Option<String>,
     response_text: Option<&str>,
     artifact_evidence: PlanningArtifactTurnEvidence,
+    verifier: fn(&str, &str, &PlanningArtifactTurnEvidence) -> (bool, bool, String),
 ) -> bool {
     let Some(request_fingerprint) = request_fingerprint else {
         return false;
@@ -38262,12 +39613,11 @@ fn finalize_planning_artifact_turn(
             stable_real_traffic_fingerprint64(text.as_bytes())
         )
     });
-    let (verified_safe_accept, verifier_applicable, verifier_status) =
-        deterministic_planning_artifact_progress_verification(
-            &prompt_text,
-            response_text.unwrap_or(""),
-            &artifact_evidence,
-        );
+    let (verified_safe_accept, verifier_applicable, verifier_status) = verifier(
+        &prompt_text,
+        response_text.unwrap_or(""),
+        &artifact_evidence,
+    );
     let tool_call_fingerprints = artifact_evidence
         .progress_tool_fingerprints
         .into_iter()
@@ -38761,6 +40111,88 @@ fn deterministic_planning_artifact_progress_verification(
     )
 }
 
+fn deterministic_agent_continue_execute_artifact_progress_verification(
+    prompt_text: &str,
+    response_text: &str,
+    artifact_evidence: &PlanningArtifactTurnEvidence,
+) -> (bool, bool, String) {
+    let readiness = analyze_route_gap_payload_readiness(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY,
+        prompt_text,
+    );
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    if extract_agent_continue_execute_tokens(prompt_text).is_none() {
+        return (
+            false,
+            false,
+            "not_applicable_missing_agent_continue_tokens".to_owned(),
+        );
+    }
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+    if !artifact_evidence.successful_progress_kinds.is_empty() {
+        return (
+            true,
+            true,
+            format!(
+                "verified_tool_backed_agent_continuation_progress:{}",
+                artifact_evidence
+                    .successful_progress_kinds
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("+")
+            ),
+        );
+    }
+    if !artifact_evidence.successful_validation_kinds.is_empty() {
+        return (
+            false,
+            true,
+            format!(
+                "rejected_validation_only_without_agent_continuation_progress:{}",
+                artifact_evidence
+                    .successful_validation_kinds
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("+")
+            ),
+        );
+    }
+    (
+        false,
+        true,
+        "rejected_no_successful_agent_continuation_progress_tool".to_owned(),
+    )
+}
+
 fn collect_codex_session_jsonl_files(
     root: &Path,
     session_ids: &HashSet<String>,
@@ -39122,6 +40554,59 @@ fn deterministic_planning_next_step_output_verification(
         false,
         true,
         "rejected_requires_artifact_progress_verifier".to_owned(),
+    )
+}
+
+fn deterministic_agent_continue_execute_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness = analyze_route_gap_payload_readiness(
+        REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY,
+        prompt_text,
+    );
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    if extract_agent_continue_execute_tokens(prompt_text).is_none() {
+        return (
+            false,
+            false,
+            "not_applicable_missing_agent_continue_tokens".to_owned(),
+        );
+    }
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+
+    (
+        false,
+        true,
+        "rejected_final_answer_only_requires_tool_backed_artifact_progress_verifier".to_owned(),
     )
 }
 

@@ -262,6 +262,30 @@ pub(crate) fn print_help() {
         "            Build route-only Nando shadow candidates from local Codex history; payload remains empty so scoring must fallback"
     );
     println!(
+        "  role-binding-real-traffic-agent-continue-execute-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build request-side active-goal continuation payloads from Codex history; local accepts stay disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-agent-continue-execute-profile-v1 [base-registry-json] [dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile agent-continue-execute payload geometry into a disabled-threshold .nwrb profile"
+    );
+    println!(
+        "  role-binding-real-traffic-agent-continue-execute-output-evidence-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach final-answer fingerprints for agent continuation review; true accept requires artifact progress"
+    );
+    println!(
+        "  role-binding-real-traffic-agent-continue-execute-artifact-progress-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [artifact-report-json]"
+    );
+    println!(
+        "            Attach tool-call fingerprints and deterministic artifact-progress labels for agent continuation"
+    );
+    println!(
         "  role-binding-real-traffic-shadow-v1 [registry-config-json] [trace-jsonl] [shadow-report-json]"
     );
     println!(

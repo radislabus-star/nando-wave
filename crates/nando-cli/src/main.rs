@@ -87,6 +87,10 @@ use role_binding_runtime_cmd::{
     run_role_binding_profile_registry_from_release_v1, run_role_binding_profile_replay_suite_v1,
     run_role_binding_profile_runtime_smoke_v1, run_role_binding_profile_serve_v1,
     run_role_binding_profile_worker_replay_v1, run_role_binding_profile_worker_scaling_v1,
+    run_role_binding_real_traffic_agent_continue_execute_artifact_progress_v1,
+    run_role_binding_real_traffic_agent_continue_execute_output_evidence_v1,
+    run_role_binding_real_traffic_agent_continue_execute_payload_dry_run_v1,
+    run_role_binding_real_traffic_agent_continue_execute_profile_v1,
     run_role_binding_real_traffic_agent_control_admission_audit_v1,
     run_role_binding_real_traffic_agent_control_admission_calibration_v1,
     run_role_binding_real_traffic_agent_control_output_evidence_v1,
@@ -709,6 +713,12 @@ fn main() -> ExitCode {
             run_role_binding_real_traffic_planning_next_step_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-planning-next-step-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
         ),
+        Some("role-binding-real-traffic-agent-continue-execute-payload-dry-run-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_agent_continue_execute_payload_dry_run_v1(args),
+                "try: nando-cli role-binding-real-traffic-agent-continue-execute-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
+            )
+        }
         Some("role-binding-real-traffic-project-context-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_project_context_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-project-context-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
@@ -734,6 +744,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-planning-next-step-profile-v1") => exit_for_result(
             run_role_binding_real_traffic_planning_next_step_profile_v1(args),
             "try: nando-cli role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]",
+        ),
+        Some("role-binding-real-traffic-agent-continue-execute-profile-v1") => exit_for_result(
+            run_role_binding_real_traffic_agent_continue_execute_profile_v1(args),
+            "try: nando-cli role-binding-real-traffic-agent-continue-execute-profile-v1 [base-registry-json] [agent-continue-dry-run-trace-jsonl] [agent-continue-package-nwrb] [overlay-registry-json] [profile-report-json]",
         ),
         Some("role-binding-real-traffic-read-inspect-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_read_inspect_payload_dry_run_v1(args),
@@ -865,6 +879,18 @@ fn main() -> ExitCode {
             exit_for_result(
                 run_role_binding_real_traffic_planning_next_step_artifact_progress_v1(args),
                 "try: nando-cli role-binding-real-traffic-planning-next-step-artifact-progress-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [artifact-report-json]",
+            )
+        }
+        Some("role-binding-real-traffic-agent-continue-execute-output-evidence-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_agent_continue_execute_output_evidence_v1(args),
+                "try: nando-cli role-binding-real-traffic-agent-continue-execute-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]",
+            )
+        }
+        Some("role-binding-real-traffic-agent-continue-execute-artifact-progress-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_agent_continue_execute_artifact_progress_v1(args),
+                "try: nando-cli role-binding-real-traffic-agent-continue-execute-artifact-progress-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [artifact-report-json]",
             )
         }
         Some("role-binding-real-traffic-planning-next-step-local-accept-calibration-v1") => {

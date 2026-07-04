@@ -1,5 +1,135 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Continue Execute Payload/Profile V1
+
+Verdict:
+
+```text
+AGENT_CONTINUE_EXECUTE_ROUTE_V1_REVIEW_SCOREABLE_AND_HOOK_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI routes:
+  role-binding-real-traffic-agent-continue-execute-payload-dry-run-v1
+  role-binding-real-traffic-agent-continue-execute-profile-v1
+  role-binding-real-traffic-agent-continue-execute-output-evidence-v1
+  role-binding-real-traffic-agent-continue-execute-artifact-progress-v1
+
+The agent_continue_execute route now has a request-side payload builder,
+a disabled-threshold .nwrb profile, final-answer fingerprint attachment, and
+tool-backed artifact-progress/no-drift verification surface.
+```
+
+Real Codex window:
+
+```text
+total_llm_calls:                         1000
+exact_cache_hits:                          53
+route-only operator candidates:           422
+agent_continue_execute candidates:         32
+agent_continue_execute payload_ready:      28
+agent_continue_execute scoreable:          28
+agent_continue_execute hook_ready:         25
+artifact verifier true rows:                6
+artifact verifier false rows:              19
+tool_call_fingerprint_events:              20
+```
+
+Profile/shadow:
+
+```text
+profile_id: route_gap_agent_continue_execute_profile_v1
+package: target/nando-wave/real-traffic-shadow/agent-continue-execute-seed0.nwrb
+edge_count: 8
+threshold: 2147483647
+median_energy_margin: 835584
+unexpected_local_accepts_under_disabled_threshold: 0
+
+agent route shadow:
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  incremental_reduction_vs_exact_cache_milli: 0
+  p99_shadow_score_latency_ns: 240540
+```
+
+Feedback-loop after regeneration:
+
+```text
+scoreable_candidate_calls:              173
+verification_hook_ready_events:         142
+verified_cpu_accept_eligible_events:     32
+verified_cpu_routability_milli:          32
+verified_gap_to_80_calls:               768
+
+agent_continue_execute route row:
+  candidate_events:                       32
+  non_exact_candidate_calls:              22
+  scoreable_payload_events:               28
+  verification_hook_ready_events:         25
+  verified_cpu_accept_eligible_events:     0
+  false_accepts:                           0
+```
+
+Decision:
+
+```text
+This route is now measurable and verifier-hook-ready, but it is not a CPU
+savings route yet. The profile intentionally uses threshold=i32::MAX and keeps
+local accepts disabled.
+
+Do not count:
+  agent_continue_execute candidates,
+  scoreable payloads,
+  hook-ready rows,
+  artifact verifier true rows,
+  or disabled-profile margins
+
+as verified CPU savings.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created. CPU Routability 80 remains open:
+
+  verified_cpu_accept_eligible_events: 32 / 1000
+  verified_gap_to_80_calls: 768
+
+market_claim_allowed=false.
+```
+
+Next debt:
+
+```text
+Run local-accept calibration only after there is enough verifier-true support.
+If no safe policy exists, improve request-side admission or payload features.
+Never lower the disabled threshold just to create savings.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/agent-continue-execute-payload-profile-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-payload-profile-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 38
+note: narrow claim-boundary check only: agent_continue_execute is scoreable
+      and hook-ready, but local accepts remain disabled and verified CPU
+      accept eligible count stays 0 for this route.
+```
+
 ## 2026-07-04 - Executor Integration: CPU Route Feedback Loop Integration Audit
 
 Verdict:
