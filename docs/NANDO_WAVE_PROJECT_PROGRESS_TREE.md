@@ -326,6 +326,8 @@ Nando Wave / Operator Layer
 |   |   +-- verification_hook_ready_events           [130]
 |   |   +-- verified_cpu_accept_eligible_events      [12]
 |   |   +-- verified_gap_to_80_calls                 [788]
+|   |   +-- audit_window_mismatches                  [[]]
+|   |   +-- window_guard_negative_test               [cpu-route-feedback-loop-metrics-soak-window-guard-v1.report.json excludes 5000-row metrics audit from 1000-row forecast]
 |   |   +-- git_control_stage                        [verified_cpu_accept_eligible]
 |   |   +-- serving_ops_stage                        [verified_cpu_accept_eligible]
 |   |   +-- boundary                                 [different artifact base from historical 17/1000]

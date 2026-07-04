@@ -580,7 +580,7 @@ pub(crate) fn print_help() {
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / mixed / metrics-report / git-control / serving-ops route reports from default artifact paths when present; planning, agent-control, mixed, metrics, git-control, and serving-ops reports default to v1 unless supplied"
+        "            Auto-loads conditional / mixed / metrics-report / git-control / serving-ops route reports from default artifact paths when present; mismatched total_llm_calls audit windows are excluded and reported"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"

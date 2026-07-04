@@ -1,5 +1,60 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Feedback-Loop Window Guard
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_WINDOW_GUARD_ACTIVE
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added report field:
+  audit_window_mismatches
+```
+
+Window-guard proof:
+
+```text
+negative_test_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-metrics-soak-window-guard-v1.report.json
+
+forecast_total_llm_calls:             1000
+metrics_soak_audit_total_llm_calls:   5000
+excluded_route_keys:                  [metrics_report_readout]
+excluded_from_feedback:               true
+verified_cpu_accept_eligible_events:  12
+verified_cpu_routability_milli:       12
+verified_gap_to_80_calls:             788
+```
+
+Default feedback after guard:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+total_llm_calls:                      1000
+verified_cpu_accept_eligible_events:  12
+audit_window_mismatches:              []
+```
+
+Claim boundary:
+
+```text
+Feedback-loop aggregation now excludes route-specific verification audits whose
+total_llm_calls differ from the forecast window. The 5000-row metrics-report
+soak PASS can no longer be accidentally counted into the default 1000-row CPU
+Routability report. CPU Routability 80 is still not achieved.
+```
+
 ## 2026-07-04 - Executor Integration: Metrics-Report 5000-Row Safe-Policy Soak
 
 Verdict:

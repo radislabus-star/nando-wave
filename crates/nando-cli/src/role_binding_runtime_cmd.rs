@@ -13469,6 +13469,30 @@ where
     Err("verification hook audit is review-only; it is not market savings".to_owned())
 }
 
+fn keep_feedback_window_matched_audit(
+    audit: Option<RoleBindingVerificationHookAuditReport>,
+    audit_path: &Path,
+    forecast_total_llm_calls: usize,
+    audit_window_mismatches: &mut Vec<RoleBindingFeedbackAuditWindowMismatchReport>,
+) -> Option<RoleBindingVerificationHookAuditReport> {
+    let audit = audit?;
+    if audit.total_llm_calls == forecast_total_llm_calls {
+        return Some(audit);
+    }
+    audit_window_mismatches.push(RoleBindingFeedbackAuditWindowMismatchReport {
+        report_path: audit_path.display().to_string(),
+        route_keys: audit
+            .routes
+            .iter()
+            .map(|route| route.route_key.clone())
+            .collect(),
+        forecast_total_llm_calls,
+        audit_total_llm_calls: audit.total_llm_calls,
+        excluded_from_feedback: true,
+    });
+    None
+}
+
 pub(crate) fn run_role_binding_real_traffic_feedback_loop_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -13822,6 +13846,99 @@ where
         } else {
             None
         };
+    if verification_audit.total_llm_calls != forecast.total_llm_calls {
+        return Err(format!(
+            "base verification audit window mismatch: forecast_total_llm_calls={} audit_total_llm_calls={} audit_path={}",
+            forecast.total_llm_calls,
+            verification_audit.total_llm_calls,
+            verification_audit_report_path.display()
+        ));
+    }
+    let mut audit_window_mismatches = Vec::new();
+    let agent_control_verification_audit = keep_feedback_window_matched_audit(
+        agent_control_verification_audit,
+        &agent_control_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let agent_control_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        agent_control_safe_policy_verification_audit,
+        &agent_control_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let edit_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        edit_safe_policy_verification_audit,
+        &edit_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let conditional_verification_audit = keep_feedback_window_matched_audit(
+        conditional_verification_audit,
+        &conditional_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let conditional_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        conditional_safe_policy_verification_audit,
+        &conditional_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let mixed_verification_audit = keep_feedback_window_matched_audit(
+        mixed_verification_audit,
+        &mixed_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let mixed_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        mixed_safe_policy_verification_audit,
+        &mixed_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let planning_next_step_verification_audit = keep_feedback_window_matched_audit(
+        planning_next_step_verification_audit,
+        &planning_next_step_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let read_inspect_verification_audit = keep_feedback_window_matched_audit(
+        read_inspect_verification_audit,
+        &read_inspect_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let metrics_report_verification_audit = keep_feedback_window_matched_audit(
+        metrics_report_verification_audit,
+        &metrics_report_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let git_control_verification_audit = keep_feedback_window_matched_audit(
+        git_control_verification_audit,
+        &git_control_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let git_control_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        git_control_safe_policy_verification_audit,
+        &git_control_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let serving_ops_verification_audit = keep_feedback_window_matched_audit(
+        serving_ops_verification_audit,
+        &serving_ops_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
+    let serving_ops_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        serving_ops_safe_policy_verification_audit,
+        &serving_ops_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let mut verification_by_route = verification_audit
         .routes
         .iter()
@@ -14977,9 +15094,10 @@ where
             .saturating_sub(metrics_report_candidate_calls)
             .saturating_sub(git_control_candidate_calls)
             .saturating_sub(serving_ops_candidate_calls),
+        audit_window_mismatches,
         market_claim_allowed: false,
         routes: route_rows,
-        claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
+        claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. Route-specific audits whose total_llm_calls differ from the forecast window are excluded instead of being mixed. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
         next_engineering_debt: "Promote any local-accept candidate only through a separate request-side-admitted shadow trace with false_accepts=0; improve red route payload geometry; attach serving-ops service-health evidence and provider cost before any savings claim.".to_owned(),
     };
     write_json_file(&feedback_report_path, &report)?;
@@ -18599,10 +18717,21 @@ struct RoleBindingFeedbackLoopReport {
     routing_gap_to_80_calls: usize,
     verified_gap_to_80_calls: usize,
     no_candidate_calls: usize,
+    #[serde(default)]
+    audit_window_mismatches: Vec<RoleBindingFeedbackAuditWindowMismatchReport>,
     market_claim_allowed: bool,
     routes: Vec<RoleBindingFeedbackLoopRouteRow>,
     claim_boundary: String,
     next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingFeedbackAuditWindowMismatchReport {
+    report_path: String,
+    route_keys: Vec<String>,
+    forecast_total_llm_calls: usize,
+    audit_total_llm_calls: usize,
+    excluded_from_feedback: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

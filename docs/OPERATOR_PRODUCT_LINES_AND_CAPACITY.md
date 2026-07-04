@@ -271,6 +271,16 @@ Metrics-report 5000-row safe-policy soak:
   market_claim_allowed: true
   interpretation: narrow route PASS for the separate 5000-row soak; do not add to default 1000-row CPU Routability total until the overall feedback window is regenerated with the same denominator
 
+Feedback-loop window guard:
+  default_feedback_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+  default_total_llm_calls: 1000
+  default_verified_cpu_accepts: 12
+  default_audit_window_mismatches: []
+  negative_test_report: target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-metrics-soak-window-guard-v1.report.json
+  negative_test_input: 1000-row forecast + 5000-row metrics-report audit
+  negative_test_result: metrics_report_readout audit excluded_from_feedback=true
+  interpretation: route-specific audits with mismatched total_llm_calls cannot inflate CPU Routability
+
 Git-control route/profile/evidence rung:
   base_registry: profile-registry-git-control-v1.json
   promoted_registry: profile-registry-git-control-safe-policy-v1.json
