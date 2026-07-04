@@ -1,5 +1,87 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Payload Dry-Run V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-payload-dry-run-v1
+```
+
+Why:
+
+```text
+The broad-route split report shows `test_output_parse` as a real narrow
+candidate inside blocked broad routes. This stage builds request-side
+active_fringe/slots for that split only, without reading raw responses, target
+labels, proof labels, or enabling local accepts.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-payload-dry-run-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.report.json \
+  5000
+```
+
+Measured result:
+
+```text
+test_output_parse_candidate_events: 104
+non_exact_candidate_events: 102
+exact_cache_overlap_events: 2
+payload_ready_events: 3
+payload_built_events: 3
+scoreable_payload_events: 3
+profile_registered: false
+shadow_score_ready: false
+expected_unique_cpu_accepts_over_exact_cache: 0
+expected_savings_milli: 0
+false_accepts: 0
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+`test_output_parse` has real traffic density, but current request-side payload
+readiness is too narrow: only 3 scoreable rows out of 104 candidates. Do not
+compile/promote accepts yet. Next debt is tool-output evidence and a deterministic
+test_status_and_error_excerpt verifier; only after verifier labels exist should
+we build the disabled-threshold profile and calibrate admission.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-payload-dry-run-v1.md
+verdict: PASS
+complexity_score: 60
+```
+
 ## 2026-07-04 - Executor Integration: File Path Evidence Admission Calibration V1
 
 Verdict:

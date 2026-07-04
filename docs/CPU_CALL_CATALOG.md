@@ -178,6 +178,69 @@ expected_unique_cpu_accepts_over_exact_cache = 0 until output evidence,
 admission audit, shadow, feedback, and CPU catalog prove false_accepts=0.
 ```
 
+## Test Output Parse Payload Dry-Run V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.report.json
+```
+
+Purpose:
+
+```text
+Turn the narrow broad-route split `test_output_parse` into request-side
+payloads, without promoting the blocked `answer_or_explain` or
+`project_context_dialogue` routes as a whole.
+```
+
+Measured on the same 5k Codex history window:
+
+```text
+test_output_parse_candidate_events: 104
+non_exact_candidate_events: 102
+exact_cache_overlap_events: 2
+payload_ready_events: 3
+payload_built_events: 3
+scoreable_payload_events: 3
+profile_registered: false
+shadow_score_ready: false
+expected_unique_cpu_accepts_over_exact_cache: 0
+expected_savings_milli: 0
+false_accepts: 0
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Parent-route provenance:
+
+```text
+answer_or_explain: 57
+project_context_dialogue: 47
+```
+
+Catalog status:
+
+```text
+CANDIDATE / REVIEW
+```
+
+Decision:
+
+```text
+`test_output_parse` is a real CPU-call candidate zone: 102 non-exact calls are
+visible in the current trace window. It is not a savings claim yet. The request
+payload builder only found 3 scoreable rows because the split needs actual
+command-output/tool-output evidence. Next work should attach
+test_status_and_error_excerpt/tool_output_validation_result verifier labels,
+then compile a disabled-threshold profile and calibrate admission. Do not local
+accept without verifier evidence.
+```
+
 ## File Path Evidence Payload Dry-Run V1
 
 Source report:

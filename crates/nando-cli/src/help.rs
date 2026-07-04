@@ -388,6 +388,12 @@ pub(crate) fn print_help() {
         "            Build narrow file_path_evidence_answer payloads from broad-route split discovery; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-test-output-parse-payload-dry-run-v1 [history-jsonl] [registry-config-json] [broad-split-report-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build narrow test_output_parse payloads from broad-route split discovery; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-file-path-evidence-profile-v1 [base-registry-json] [file-path-evidence-dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
