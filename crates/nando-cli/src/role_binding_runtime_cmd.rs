@@ -20441,6 +20441,26 @@ where
             expected_unique_cpu_accepts_over_exact_cache,
             route.false_accepts,
         );
+        let support_exhausted = conditional_admission_current_support_exhausted
+            || agent_control_current_policy_event_support_exhausted
+            || git_control_current_support_exhausted
+            || mixed_current_support_exhausted
+            || metrics_report_current_support_exhausted
+            || edit_current_support_exhausted
+            || serving_ops_current_support_exhausted;
+        let business_value_gate_failure_reason = cpu_catalog_business_value_gate_failure_reason(
+            route.route_key.as_str(),
+            route.candidate_events,
+            route.non_exact_candidate_calls,
+            route.verification_hook_ready_events,
+            expected_unique_cpu_accepts_over_exact_cache,
+            route.false_accepts,
+            business_value_gate_passed,
+            local_accept_calibration_failed,
+            local_accept_support_insufficient,
+            support_exhausted,
+            false_accept_risk.as_str(),
+        );
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
             source_kind: "existing_profile_route".to_owned(),
@@ -20507,6 +20527,7 @@ where
             false_accept_risk,
             current_status,
             business_value_gate_passed,
+            business_value_gate_failure_reason,
             expected_unique_cpu_accepts_over_exact_cache,
             expected_savings_milli,
             cpu_operator_readiness: "existing_profile".to_owned(),
@@ -20870,6 +20891,23 @@ where
             expected_unique_cpu_accepts_over_exact_cache,
             family_false_accepts,
         );
+        let support_exhausted = agent_control_stop_support_exhausted
+            || metrics_report_support_exhausted
+            || git_control_support_exhausted
+            || serving_ops_support_exhausted;
+        let business_value_gate_failure_reason = cpu_catalog_business_value_gate_failure_reason(
+            family.family_key.as_str(),
+            family.candidate_events,
+            non_exact_candidate_calls,
+            family_verification_hook_ready_events,
+            expected_unique_cpu_accepts_over_exact_cache,
+            family_false_accepts,
+            business_value_gate_passed,
+            false,
+            false,
+            support_exhausted,
+            false_accept_risk.as_str(),
+        );
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
             source_kind: "route_gap_family".to_owned(),
@@ -21015,6 +21053,7 @@ where
             false_accept_risk,
             current_status,
             business_value_gate_passed,
+            business_value_gate_failure_reason,
             expected_unique_cpu_accepts_over_exact_cache,
             expected_savings_milli,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
@@ -34525,6 +34564,8 @@ struct RoleBindingCpuOperatorCatalogRow {
     current_status: String,
     #[serde(default)]
     business_value_gate_passed: bool,
+    #[serde(default)]
+    business_value_gate_failure_reason: String,
     #[serde(default)]
     expected_unique_cpu_accepts_over_exact_cache: usize,
     #[serde(default)]
@@ -48949,6 +48990,62 @@ fn cpu_catalog_business_value_gate_passed(
         && verifier_hook_ready_events > 0
         && expected_unique_accepts > 0
         && false_accepts == 0
+}
+
+fn cpu_catalog_business_value_gate_failure_reason(
+    route_key: &str,
+    candidate_events: usize,
+    non_exact_candidate_calls: usize,
+    verifier_hook_ready_events: usize,
+    expected_unique_accepts: usize,
+    false_accepts: usize,
+    business_value_gate_passed: bool,
+    local_accept_calibration_failed: bool,
+    local_accept_support_insufficient: bool,
+    support_exhausted: bool,
+    false_accept_risk: &str,
+) -> String {
+    if business_value_gate_passed {
+        return "PASSED".to_owned();
+    }
+
+    let mut reasons = Vec::new();
+    if candidate_events == 0 {
+        reasons.push("no_real_trace_calls");
+    }
+    if non_exact_candidate_calls == 0 {
+        reasons.push("no_unique_calls_over_exact_cache");
+    }
+    if verifier_hook_ready_events == 0 {
+        reasons.push("missing_deterministic_verifier_hook");
+    }
+    if expected_unique_accepts == 0 {
+        reasons.push("expected_unique_cpu_accepts_zero");
+    }
+    if false_accepts > 0 {
+        reasons.push("false_accepts_present");
+    }
+    if cpu_catalog_broad_route_reject(route_key) {
+        reasons.push("broad_route_requires_split");
+    }
+    if local_accept_calibration_failed {
+        reasons.push("no_safe_local_accept_policy");
+    }
+    if local_accept_support_insufficient {
+        reasons.push("safe_policy_support_insufficient");
+    }
+    if support_exhausted {
+        reasons.push("current_support_exhausted");
+    }
+    if false_accept_risk.contains("UNKNOWN") {
+        reasons.push("false_accept_risk_unknown");
+    } else if false_accept_risk.contains("POLICY_MISSING") {
+        reasons.push("safe_policy_missing");
+    } else if false_accept_risk.contains("LOW_SUPPORT") {
+        reasons.push("low_support_policy");
+    }
+
+    reasons.join(",")
 }
 
 fn route_gap_payload_readiness_history_index(event_id: &str) -> Option<usize> {

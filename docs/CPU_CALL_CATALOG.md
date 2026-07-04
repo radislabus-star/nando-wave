@@ -182,6 +182,45 @@ current5k companion reports used by catalog:
   metrics-report-admission-calibration-v1-5k.report.json
 ```
 
+Business Value Gate reason refresh:
+
+```text
+cpu_operator_catalog rows now include:
+  business_value_gate_failure_reason
+
+This field is diagnostic only. It does not grant local accept authority and
+does not change current verified CPU savings. It exists to prevent repeated
+work on attractive but blocked routes.
+```
+
+Current examples:
+
+```text
+role_binding_agent_control_seed0:
+  business_value_gate_failure_reason:
+    missing_deterministic_verifier_hook,current_support_exhausted
+
+agent_control_stop:
+  business_value_gate_failure_reason:
+    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,current_support_exhausted,false_accept_risk_unknown
+
+git_control:
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+
+role_binding_edit_marker_length_seed0:
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+```
+
+Decision:
+
+```text
+Do not re-promote exhausted or no-safe-policy routes by lowering thresholds.
+Next profile work must add new verifier evidence, split a narrower
+artifact-backed subfamily, or move to a higher-value route.
+```
+
 Metrics-report p99 split finding:
 
 ```text

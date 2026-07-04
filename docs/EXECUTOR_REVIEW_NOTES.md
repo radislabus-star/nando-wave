@@ -1,5 +1,87 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Business Value Gate Failure Reasons
+
+Verdict:
+
+```text
+CPU_CALL_CATALOG_BVG_FAILURE_REASONS_RECORDED
+NO_NEW_CPU_ACCEPTS_PROMOTED
+```
+
+Why:
+
+```text
+The current catalog had enough numeric evidence to rank routes, but not enough
+machine-readable explanation for why attractive routes should not be worked
+again. This made routes such as agent_control_stop and git_control look
+tempting despite exhausted support or no safe request-side policy.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/cpu-call-catalog-bvg-failure-reasons-v1.md
+first attempt: VETO
+reason: one broad report-file evidence pointer supported too many role fillers
+
+repair: use field/row-specific evidence pointers for each triad
+
+final verdict: PASS
+complexity_score: 37
+trace_path: /tmp/nanda-structural-gate/cpu-call-catalog-bvg-failure-reasons-v1.trace.json
+```
+
+What changed:
+
+```text
+RoleBindingCpuOperatorCatalogRow now includes:
+  business_value_gate_failure_reason
+
+The field is diagnostic only. It does not change admission, does not enable
+local accepts, and does not count savings.
+```
+
+Measured current5k examples:
+
+```text
+role_binding_agent_control_seed0:
+  missing_deterministic_verifier_hook,current_support_exhausted
+
+agent_control_stop:
+  missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,current_support_exhausted,false_accept_risk_unknown
+
+git_control:
+  expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+
+role_binding_edit_marker_length_seed0:
+  expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+```
+
+CPU80 counter after refresh:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+current_verified_cpu_accepts: 106
+current_incremental_unique_cpu_accepts_over_exact_cache: 104
+business_value_gate_passed_rows: 5
+```
+
+Decision:
+
+```text
+Do not keep cycling on high-candidate routes unless the next step adds new
+verifier evidence, a narrower artifact-backed split, or a real expected unique
+accept path over exact cache.
+```
+
 ## 2026-07-04 - Executor Integration: Metrics Report Admission Unverified Guard
 
 Verdict:
