@@ -1,5 +1,147 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Git-Control Safe-Policy Promote V2
+
+Verdict:
+
+```text
+GIT_CONTROL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-git-control-safe-policy-promote-v2
+
+Added feedback wiring:
+  git_control_safe_policy_v2_verification_audit_report_path
+```
+
+Implementation note:
+
+```text
+The current code diff also contains a conditional-safe-policy-promote-v2 command
+and optional feedback wiring from the open working set. It is not counted in
+this promoted result because no conditional v2 default audit artifact exists in
+the feedback window. The current PASS claim is git_control v2 only.
+```
+
+Fresh promotion artifact:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.report.json
+
+promoted_registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v2.json
+
+promoted_trace:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.trace.jsonl
+
+request_side_policy_name:
+  git_control_digit_count_ge_1
+
+selected_acceptance_policy:          energy_threshold_only
+selected_policy_threshold:           1190912
+request_side_policy_accept_rows:          9
+policy_accept_rows:                       4
+policy_accept_verified_true_rows:         4
+policy_accept_verified_false_rows:        0
+policy_accept_unverified_rows:            0
+provider_cost_events_written:             9
+market_claim_allowed:                 false
+```
+
+Fresh git_control shadow:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.shadow-report.json
+
+total_llm_calls:                        1000
+exact_cache_hits:                         53
+nando_shadow_accepts:                      4
+verified_safe_accepts:                     4
+false_accepts:                             0
+unverified_shadow_accepts:                 0
+incremental_savings_over_exact_cache:      4
+p99_shadow_score_latency_ns:          207390
+synthetic_trace_used:                  false
+```
+
+Fresh git_control verification audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.verification-hook-audit.report.json
+
+operator_candidate_calls:                  9
+scoreable_candidate_calls:                 9
+verification_hook_ready_events:            9
+verified_cpu_accept_eligible_events:       4
+shadow_false_accepts:                      0
+market_claim_allowed:                   true
+```
+
+Fresh default feedback after safe-policy v2 audit wiring:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+route_sum_verified_cpu_eligible_hits:      27
+unique_verified_cpu_accepts:               22 / 1000
+verified_cpu_accept_unique_routability_milli: 22
+unique_verified_gap_to_80_calls:          778
+incremental_cpu_accept_unique_request_fingerprints: 22
+
+git_control route row:
+  stage: verified_cpu_accept_eligible
+  candidate_events:                         18
+  payload_ready_events:                     12
+  payload_built_events:                     12
+  scoreable_payload_events:                  9
+  verification_hook_ready_events:            9
+  verified_cpu_accept_eligible_events:       4
+  false_accepts:                             0
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/git-control-safe-policy-promote-v2.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-promote-v2.nanda.json
+
+verdict: PASS
+complexity_score: 39
+agent_action: SAFE_TO_EDIT
+```
+
+Claim boundary:
+
+```text
+This is a narrow non-synthetic git_control promoted trace PASS: 4 verified
+safe accepts, 0 false accepts, 0 unverified accepts, and 4 incremental accepts
+over exact cache inside the current 1000-call trace window.
+
+This is not CPU Routability 80. The full feedback loop is now 22/1000 unique
+verified CPU accepts, with 778 unique calls still missing to reach the 80%
+target. Workspace mutation execution remains disabled; this route only scores
+and audits shadow local accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Metrics-Report Admission Safe-Policy Promote V1
 
 Verdict:

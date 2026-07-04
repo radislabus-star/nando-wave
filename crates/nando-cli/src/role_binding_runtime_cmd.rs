@@ -156,6 +156,13 @@ const DEFAULT_GIT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
 const DEFAULT_GIT_CONTROL_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.report.json";
 const DEFAULT_GIT_CONTROL_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.verification-hook-audit.report.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v2.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.trace.jsonl";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.report.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.verification-hook-audit.report.json";
 const DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -244,6 +251,13 @@ const DEFAULT_CONDITIONAL_SAFE_POLICY_TRACE_JSONL: &str =
 const DEFAULT_CONDITIONAL_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.report.json";
 const DEFAULT_CONDITIONAL_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.verification-hook-audit.report.json";
+const DEFAULT_CONDITIONAL_SAFE_POLICY_V2_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-conditional-safe-policy-v2.json";
+const DEFAULT_CONDITIONAL_SAFE_POLICY_V2_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.trace.jsonl";
+const DEFAULT_CONDITIONAL_SAFE_POLICY_V2_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.report.json";
+const DEFAULT_CONDITIONAL_SAFE_POLICY_V2_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.verification-hook-audit.report.json";
 const DEFAULT_MIXED_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/mixed-payload-readiness-v1.report.json";
 const DEFAULT_MIXED_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -9058,6 +9072,321 @@ where
     )
 }
 
+pub(crate) fn run_role_binding_real_traffic_git_control_safe_policy_promote_v2<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let calibration =
+        read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(&calibration_report_path)?;
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let Some(calibration_policy) = select_supported_mixed_safe_policy(&calibration) else {
+        return Err(
+            "git-control calibration report has no supported safe energy-threshold policy"
+                .to_owned(),
+        );
+    };
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let request_side_policy_name = "git_control_digit_count_ge_1";
+    let policy = select_mixed_promotion_policy_from_request_side_evidence(
+        &base_registry,
+        &trace_rows,
+        &history_by_fingerprint,
+        calibration_policy,
+        REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY,
+        request_side_policy_name,
+    )?;
+    let threshold = policy.threshold;
+    let acceptance_policy = "energy_threshold_only".to_owned();
+    let git_control_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if git_control_profile_ids.is_empty() {
+        return Err(
+            "git-control safe policy v2 promotion found no git_control profile ids in trace"
+                .to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if git_control_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "git-control safe policy v2 promotion found no matching profiles in registry for {:?}",
+            git_control_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut scoreable_candidate_calls = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let is_git_control = row
+            .nando_shadow_request
+            .as_ref()
+            .and_then(|request| request.route_key.as_deref())
+            .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY);
+        if !is_git_control {
+            continue;
+        }
+        let scoreable = row
+            .nando_shadow_request
+            .as_ref()
+            .is_some_and(|request| !request.active_fringe.is_empty() && !request.slots.is_empty());
+        scoreable_candidate_calls += usize::from(scoreable);
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; git_control_safe_policy_promote_v2 request_policy={} policy_accept=false reason=history_prompt_missing",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                request_side_policy_name
+            ));
+            continue;
+        };
+        request_side_policy_evaluated_rows += 1;
+        let request_policy_accept =
+            mixed_safe_policy_accepts(request_side_policy_name, prompt_text).unwrap_or(false);
+        if !request_policy_accept {
+            request_side_policy_reject_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; git_control_safe_policy_promote_v2 request_policy={} provider_cost_estimate_microusd={} policy_accept=false",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                request_side_policy_name,
+                provider_cost_microusd
+            ));
+            continue;
+        }
+        request_side_policy_accept_rows += 1;
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+
+        let Some(request) = &mut row.nando_shadow_request else {
+            no_score_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(policy_accept);
+        if policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
+        row.notes = Some(format!(
+            "{}; git_control_safe_policy_promote_v2 request_policy={} runtime_policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            request_side_policy_name,
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_git_control_safe_policy_promote_v2".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "GIT_CONTROL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "GIT_CONTROL_SAFE_POLICY_PROMOTE_V2_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: calibration_report_path.display().to_string(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: Some(history_path.display().to_string()),
+        request_side_policy_name: Some(request_side_policy_name.to_owned()),
+        calibration_policy_name: calibration_policy.policy_name.clone(),
+        calibration_policy_threshold: calibration_policy.threshold,
+        selected_policy_name: policy.policy_name.clone(),
+        selected_policy_source: policy.selection_source.clone(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: policy.accepts,
+        selected_policy_true_accepts: policy.true_accepts,
+        selected_policy_false_accepts: policy.false_accepts,
+        selected_policy_unverified_accepts: policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
+        history_prompt_missing_rows,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a promoted git-control registry with request-side digit-count admission plus energy threshold. Offline output labels choose the threshold, but serving uses only request text admission plus score >= threshold. It executes no git command, mutates no workspace, and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the v2 promoted git-control registry/trace, then feed that audit into CPU route feedback. Workspace mutation execution remains blocked until a separate action executor gate exists.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-git-control-safe-policy-promote-v2: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  request_side_policy_name: {}", request_side_policy_name);
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!(
+        "  request_side_policy_accept_rows: {}",
+        report.request_side_policy_accept_rows
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    Err(
+        "git-control safe-policy v2 promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
 pub(crate) fn run_role_binding_real_traffic_serving_ops_payload_dry_run_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -13979,6 +14308,320 @@ where
     )
 }
 
+pub(crate) fn run_role_binding_real_traffic_conditional_safe_policy_promote_v2<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_SAFE_POLICY_V2_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_SAFE_POLICY_V2_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_SAFE_POLICY_V2_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let policy = select_conditional_safe_policy_v2_from_evidence(
+        &base_registry,
+        &trace_rows,
+        &history_by_fingerprint,
+    )?;
+    let request_side_policy_name = policy.request_side_policy_name.clone();
+    let threshold = policy.policy.threshold;
+    let acceptance_policy = "energy_threshold_only".to_owned();
+
+    let conditional_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route.contains("conditional_branch"))
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if conditional_profile_ids.is_empty() {
+        return Err(
+            "conditional safe policy v2 promotion found no conditional profile ids in trace"
+                .to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if conditional_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "conditional safe policy v2 promotion found no matching profiles in registry for {:?}",
+            conditional_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut conditional_candidate_rows = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut runtime_policy_accept_rows = 0usize;
+    let mut runtime_policy_verified_true_rows = 0usize;
+    let mut runtime_policy_verified_false_rows = 0usize;
+    let mut runtime_policy_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let is_conditional = row
+            .nando_shadow_request
+            .as_ref()
+            .and_then(|request| request.route_key.as_deref())
+            .is_some_and(|route| route.contains("conditional_branch"));
+        if !is_conditional {
+            continue;
+        }
+        conditional_candidate_rows += 1;
+        let scoreable = row
+            .nando_shadow_request
+            .as_ref()
+            .is_some_and(|request| !request.active_fringe.is_empty() && !request.slots.is_empty());
+        scoreable_candidate_calls += usize::from(scoreable);
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; conditional_safe_policy_promote_v2 request_policy={} policy_accept=false reason=history_prompt_missing",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                request_side_policy_name
+            ));
+            continue;
+        };
+        request_side_policy_evaluated_rows += 1;
+        let request_policy_accept =
+            conditional_safe_policy_accepts(&request_side_policy_name, prompt_text)
+                .unwrap_or(false);
+        if !request_policy_accept {
+            request_side_policy_reject_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; conditional_safe_policy_promote_v2 request_policy={} provider_cost_estimate_microusd={} policy_accept=false",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                request_side_policy_name,
+                provider_cost_microusd
+            ));
+            continue;
+        }
+
+        request_side_policy_accept_rows += 1;
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+        let Some(request) = &mut row.nando_shadow_request else {
+            no_score_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let runtime_policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(runtime_policy_accept);
+        if runtime_policy_accept {
+            runtime_policy_accept_rows += 1;
+            runtime_policy_verified_true_rows +=
+                usize::from(row.verified_safe_accept == Some(true));
+            runtime_policy_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            runtime_policy_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches +=
+            usize::from(runtime_response.accepted != runtime_policy_accept);
+        row.notes = Some(format!(
+            "{}; conditional_safe_policy_promote_v2 request_policy={} runtime_policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            request_side_policy_name,
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            runtime_policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingConditionalSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_conditional_safe_policy_promote_v2".to_owned(),
+        verdict: if runtime_policy_accept_rows > 0
+            && runtime_policy_verified_false_rows == 0
+            && runtime_policy_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "CONDITIONAL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "CONDITIONAL_SAFE_POLICY_PROMOTE_V2_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: "request_side_v2_selection_from_evidence".to_owned(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        calibration_verdict: "CONDITIONAL_SAFE_POLICY_V2_REQUEST_SIDE_SELECTION".to_owned(),
+        request_side_policy_name,
+        selected_policy_name: policy.policy.policy_name,
+        selected_policy_source: policy.policy.selection_source,
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: policy.policy.accepts,
+        selected_policy_true_accepts: policy.policy.true_accepts,
+        selected_policy_false_accepts: policy.policy.false_accepts,
+        selected_policy_unverified_accepts: policy.policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        conditional_candidate_rows,
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
+        history_prompt_missing_rows,
+        runtime_policy_accept_rows,
+        runtime_policy_verified_true_rows,
+        runtime_policy_verified_false_rows,
+        runtime_policy_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled_by_request_side_policy_and_score: true,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a v2 promoted conditional registry/trace using request-side no-goal/no-json/length admission plus energy score. Offline verifier labels choose thresholds, but serving uses only request text features plus .nwrb score. It writes no raw prompt/response text and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the v2 promoted conditional registry/trace, then feed that audit into CPU route feedback. The broad conditional route remains blocked by calibration false accepts.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-conditional-safe-policy-promote-v2: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  request_side_policy_name: {}",
+        report.request_side_policy_name
+    );
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!(
+        "  request_side_policy_accept_rows: {}",
+        report.request_side_policy_accept_rows
+    );
+    println!(
+        "  runtime_policy_accept_rows: {}",
+        report.runtime_policy_accept_rows
+    );
+    println!(
+        "  runtime_policy_verified_true_rows: {}",
+        report.runtime_policy_verified_true_rows
+    );
+    println!(
+        "  runtime_policy_verified_false_rows: {}",
+        report.runtime_policy_verified_false_rows
+    );
+    println!(
+        "  runtime_policy_unverified_rows: {}",
+        report.runtime_policy_unverified_rows
+    );
+    Err(
+        "conditional safe-policy v2 promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
 pub(crate) fn run_role_binding_real_traffic_mixed_local_accept_calibration_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -15557,6 +16200,16 @@ where
         } else {
             None
         };
+    let conditional_safe_policy_v2_audit_report_path =
+        PathBuf::from(DEFAULT_CONDITIONAL_SAFE_POLICY_V2_AUDIT_REPORT);
+    let conditional_safe_policy_v2_verification_audit =
+        if conditional_safe_policy_v2_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &conditional_safe_policy_v2_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let conditional_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let conditional_local_accept_calibration =
@@ -15709,6 +16362,16 @@ where
         } else {
             None
         };
+    let git_control_safe_policy_v2_audit_report_path =
+        PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_AUDIT_REPORT);
+    let git_control_safe_policy_v2_verification_audit =
+        if git_control_safe_policy_v2_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &git_control_safe_policy_v2_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let git_control_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let git_control_local_accept_calibration =
@@ -15838,6 +16501,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let conditional_safe_policy_v2_verification_audit = keep_feedback_window_matched_audit(
+        conditional_safe_policy_v2_verification_audit,
+        &conditional_safe_policy_v2_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let mixed_verification_audit = keep_feedback_window_matched_audit(
         mixed_verification_audit,
         &mixed_audit_report_path,
@@ -15892,6 +16561,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let git_control_safe_policy_v2_verification_audit = keep_feedback_window_matched_audit(
+        git_control_safe_policy_v2_verification_audit,
+        &git_control_safe_policy_v2_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let serving_ops_verification_audit = keep_feedback_window_matched_audit(
         serving_ops_verification_audit,
         &serving_ops_audit_report_path,
@@ -15931,6 +16606,11 @@ where
     }
     if let Some(conditional_safe_policy_audit) = &conditional_safe_policy_verification_audit {
         for row in &conditional_safe_policy_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
+    if let Some(conditional_safe_policy_v2_audit) = &conditional_safe_policy_v2_verification_audit {
+        for row in &conditional_safe_policy_v2_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
@@ -15979,6 +16659,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(git_control_safe_policy_v2_audit) = &git_control_safe_policy_v2_verification_audit {
+        for row in &git_control_safe_policy_v2_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(serving_ops_audit) = &serving_ops_verification_audit {
         for row in &serving_ops_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -15995,8 +16680,9 @@ where
     let effective_edit_verification_audit = edit_safe_policy_verification_audit
         .as_ref()
         .unwrap_or(&verification_audit);
-    let effective_conditional_verification_audit = conditional_safe_policy_verification_audit
+    let effective_conditional_verification_audit = conditional_safe_policy_v2_verification_audit
         .as_ref()
+        .or(conditional_safe_policy_verification_audit.as_ref())
         .or(conditional_verification_audit.as_ref());
     let effective_agent_control_verification_audit = agent_control_safe_policy_verification_audit
         .as_ref()
@@ -16009,8 +16695,9 @@ where
     let effective_metrics_report_verification_audit = metrics_report_safe_policy_verification_audit
         .as_ref()
         .or(metrics_report_verification_audit.as_ref());
-    let effective_git_control_verification_audit = git_control_safe_policy_verification_audit
+    let effective_git_control_verification_audit = git_control_safe_policy_v2_verification_audit
         .as_ref()
+        .or(git_control_safe_policy_verification_audit.as_ref())
         .or(git_control_verification_audit.as_ref());
     let git_control_tool_output_authoritative = effective_git_control_verification_audit
         .map(|report| report.tool_call_fingerprint_events > 0)
@@ -17293,6 +17980,14 @@ where
                     .display()
                     .to_string()
             }),
+        git_control_safe_policy_v2_verification_audit_report_path:
+            git_control_safe_policy_v2_verification_audit
+                .as_ref()
+                .map(|_| {
+                    git_control_safe_policy_v2_audit_report_path
+                        .display()
+                        .to_string()
+                }),
         git_control_local_accept_calibration_report_path: git_control_local_accept_calibration
             .as_ref()
             .map(|_| {
@@ -17358,6 +18053,14 @@ where
                 .as_ref()
                 .map(|_| {
                     conditional_safe_policy_audit_report_path
+                        .display()
+                        .to_string()
+                }),
+        conditional_safe_policy_v2_verification_audit_report_path:
+            conditional_safe_policy_v2_verification_audit
+                .as_ref()
+                .map(|_| {
+                    conditional_safe_policy_v2_audit_report_path
                         .display()
                         .to_string()
                 }),
@@ -17500,6 +18203,9 @@ where
     if let Some(path) = &report.git_control_safe_policy_verification_audit_report_path {
         println!("  git_control_safe_policy_verification_audit_report: {path}");
     }
+    if let Some(path) = &report.git_control_safe_policy_v2_verification_audit_report_path {
+        println!("  git_control_safe_policy_v2_verification_audit_report: {path}");
+    }
     if let Some(path) = &report.git_control_local_accept_calibration_report_path {
         println!("  git_control_local_accept_calibration_report: {path}");
     }
@@ -17526,6 +18232,9 @@ where
     }
     if let Some(path) = &report.conditional_safe_policy_verification_audit_report_path {
         println!("  conditional_safe_policy_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.conditional_safe_policy_v2_verification_audit_report_path {
+        println!("  conditional_safe_policy_v2_verification_audit_report: {path}");
     }
     if let Some(path) = &report.mixed_dry_run_report_path {
         println!("  mixed_dry_run_report: {path}");
@@ -20875,6 +21584,12 @@ struct RoleBindingMetricsReportAdmissionPromotionSelection {
     active_fringe_min: usize,
 }
 
+#[derive(Clone, Debug)]
+struct RoleBindingConditionalPromotionPolicySelection {
+    request_side_policy_name: String,
+    policy: RoleBindingMixedPromotionPolicySelection,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditLocalAcceptCalibrationRow {
     trace_id: String,
@@ -21333,6 +22048,7 @@ struct RoleBindingFeedbackLoopReport {
     git_control_dry_run_report_path: Option<String>,
     git_control_verification_audit_report_path: Option<String>,
     git_control_safe_policy_verification_audit_report_path: Option<String>,
+    git_control_safe_policy_v2_verification_audit_report_path: Option<String>,
     git_control_local_accept_calibration_report_path: Option<String>,
     serving_ops_dry_run_report_path: Option<String>,
     serving_ops_verification_audit_report_path: Option<String>,
@@ -21346,6 +22062,7 @@ struct RoleBindingFeedbackLoopReport {
     conditional_local_accept_calibration_report_path: Option<String>,
     conditional_verification_audit_report_path: Option<String>,
     conditional_safe_policy_verification_audit_report_path: Option<String>,
+    conditional_safe_policy_v2_verification_audit_report_path: Option<String>,
     mixed_dry_run_report_path: Option<String>,
     mixed_local_accept_calibration_report_path: Option<String>,
     mixed_verification_audit_report_path: Option<String>,
@@ -26632,6 +27349,23 @@ fn conditional_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool
             "отчёт",
         ],
     );
+    let has_goal_terms = contains_any(
+        &lower,
+        &[
+            "goal",
+            "objective",
+            "цель",
+            "подцель",
+            "stop",
+            "стоп",
+            "останов",
+        ],
+    );
+    let has_json_terms = contains_any(&lower, &["json", ".json", "jsonl", ".jsonl"]);
+    if let Some(threshold) = policy_name.strip_prefix("conditional_no_goal_no_json_len_ge_") {
+        let len_threshold = threshold.parse::<usize>().ok()?;
+        return Some(!has_goal_terms && !has_json_terms && text.len() >= len_threshold);
+    }
     let accepts = match policy_name {
         "conditional_gate_terms_prompt_len_ge_300" => has_gate_terms && text.len() >= 300,
         _ => return None,
@@ -26642,6 +27376,7 @@ fn conditional_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool
 fn mixed_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool> {
     let lower = text.to_lowercase();
     let trimmed = lower.trim_start();
+    let digit_count_ge_1 = text.chars().any(|ch| ch.is_ascii_digit());
     let has_goal_control_terms = contains_any(
         &lower,
         &[
@@ -26657,6 +27392,7 @@ fn mixed_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool> {
         || trimmed.starts_with("цель:");
     let accepts = match policy_name {
         "mixed_no_goal_control_prompt" => !has_goal_control_terms,
+        "git_control_digit_count_ge_1" => digit_count_ge_1,
         _ => return None,
     };
     Some(accepts)
@@ -26732,6 +27468,131 @@ fn select_conditional_safe_policy_from_evidence(
     best_market_safe.ok_or_else(|| {
         "conditional safe policy selection found no positive threshold with true_accepts>0, false_accepts=0, and unverified_accepts=0".to_owned()
     })
+}
+
+fn select_conditional_safe_policy_v2_from_evidence(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+    history_by_fingerprint: &BTreeMap<String, &str>,
+) -> Result<RoleBindingConditionalPromotionPolicySelection, String> {
+    let mut rows = Vec::new();
+    for row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_conditional = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route.contains("conditional_branch"));
+        if !is_conditional || request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            continue;
+        };
+        let lower = prompt_text.to_lowercase();
+        let has_goal_terms = contains_any(
+            &lower,
+            &[
+                "goal",
+                "objective",
+                "цель",
+                "подцель",
+                "stop",
+                "стоп",
+                "останов",
+            ],
+        );
+        let has_json_terms = contains_any(&lower, &["json", ".json", "jsonl", ".jsonl"]);
+        if has_goal_terms || has_json_terms {
+            continue;
+        }
+        let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
+            continue;
+        };
+        rows.push((
+            prompt_text.len(),
+            score.energy_margin,
+            row.verified_safe_accept,
+        ));
+    }
+    if rows.is_empty() {
+        return Err(
+            "conditional safe policy v2 selection found no no-goal/no-json scoreable rows"
+                .to_owned(),
+        );
+    }
+
+    let mut len_thresholds = rows.iter().map(|(len, _, _)| *len).collect::<Vec<_>>();
+    len_thresholds.sort_unstable();
+    len_thresholds.dedup();
+    let mut best: Option<RoleBindingConditionalPromotionPolicySelection> = None;
+    for len_threshold in len_thresholds {
+        let scored_rows = rows
+            .iter()
+            .filter(|(len, _, _)| *len >= len_threshold)
+            .map(|(_, energy_margin, label)| (*energy_margin, *label))
+            .collect::<Vec<_>>();
+        if scored_rows.is_empty() {
+            continue;
+        }
+        let mut energy_thresholds = scored_rows
+            .iter()
+            .map(|(energy_margin, _)| *energy_margin)
+            .collect::<Vec<_>>();
+        energy_thresholds.sort_unstable();
+        energy_thresholds.dedup();
+        for energy_threshold in energy_thresholds {
+            let policy = evaluate_mixed_energy_promotion_threshold(
+                "conditional_no_goal_no_json_len_energy_threshold",
+                &format!(
+                    "request_side_no_goal_no_json_len_ge_{}_plus_energy_threshold",
+                    len_threshold
+                ),
+                energy_threshold,
+                &scored_rows,
+            );
+            let market_safe = policy.true_accepts
+                >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && policy.false_accepts == 0
+                && policy.unverified_accepts == 0;
+            if !market_safe {
+                continue;
+            }
+            let replace = best.as_ref().is_none_or(|current| {
+                policy.true_accepts > current.policy.true_accepts
+                    || (policy.true_accepts == current.policy.true_accepts
+                        && policy.accepts < current.policy.accepts)
+                    || (policy.true_accepts == current.policy.true_accepts
+                        && policy.accepts == current.policy.accepts
+                        && len_threshold
+                            < conditional_v2_policy_len_threshold(
+                                &current.request_side_policy_name,
+                            )
+                            .unwrap_or(usize::MAX))
+            });
+            if replace {
+                best = Some(RoleBindingConditionalPromotionPolicySelection {
+                    request_side_policy_name: format!(
+                        "conditional_no_goal_no_json_len_ge_{}",
+                        len_threshold
+                    ),
+                    policy,
+                });
+            }
+        }
+    }
+    best.ok_or_else(|| {
+        "conditional safe policy v2 found no no-goal/no-json length and energy threshold with true support >= 3, false=0, and unverified=0".to_owned()
+    })
+}
+
+fn conditional_v2_policy_len_threshold(policy_name: &str) -> Option<usize> {
+    policy_name
+        .strip_prefix("conditional_no_goal_no_json_len_ge_")?
+        .parse()
+        .ok()
 }
 
 fn select_mixed_promotion_policy_from_evidence(

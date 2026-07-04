@@ -388,6 +388,12 @@ pub(crate) fn print_help() {
         "            Create a promoted git-control shadow registry/trace from tool-output-backed safe calibration; executes no git command and still requires shadow/audit before claims"
     );
     println!(
+        "  role-binding-real-traffic-git-control-safe-policy-promote-v2 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Create a v2 git-control promoted trace using request-side digit admission plus energy threshold; executes no git command and still requires shadow/audit before claims"
+    );
+    println!(
         "  role-binding-real-traffic-serving-ops-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(
@@ -584,6 +590,12 @@ pub(crate) fn print_help() {
     );
     println!(
         "            Create a request-side admitted conditional registry/trace from safe evidence; still requires shadow/audit before claims"
+    );
+    println!(
+        "  role-binding-real-traffic-conditional-safe-policy-promote-v2 [base-registry-json] [evidence-trace-jsonl] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Create a v2 conditional promoted trace using no-goal/no-json/length admission plus energy threshold"
     );
     println!(
         "  role-binding-real-traffic-mixed-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
