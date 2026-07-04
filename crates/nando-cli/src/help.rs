@@ -673,6 +673,15 @@ pub(crate) fn print_help() {
         "            Auto-loads conditional / mixed / retrieval-lookup / metrics-report / git-control / serving-ops route reports from default artifact paths when present; mismatched total_llm_calls audit windows are excluded and reported"
     );
     println!(
+        "  role-binding-real-traffic-style-brevity-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [report-json] [max-events]"
+    );
+    println!(
+        "            Build request-side style-brevity score payloads from real Codex prompts; review-only, local accepts disabled"
+    );
+    println!(
+        "            Feedback-loop auto-loads the default style-brevity dry-run report when present"
+    );
+    println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"
     );
     println!(

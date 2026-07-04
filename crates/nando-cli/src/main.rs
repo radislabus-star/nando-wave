@@ -159,6 +159,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_serving_ops_profile_v1,
     run_role_binding_real_traffic_serving_ops_safe_policy_promote_v1,
     run_role_binding_real_traffic_shadow_smoke_v1, run_role_binding_real_traffic_shadow_v1,
+    run_role_binding_real_traffic_style_brevity_payload_dry_run_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
 };
 use snapshot_io::{read_snapshot, save_snapshot};
@@ -949,11 +950,15 @@ fn main() -> ExitCode {
         ),
         Some("role-binding-real-traffic-feedback-loop-v1") => exit_for_result(
             run_role_binding_real_traffic_feedback_loop_v1(args),
-            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json] [read-inspect-dry-run-report-json] [read-inspect-verification-audit-report-json]\n     note: route-specific conditional/mixed/retrieval-lookup/metrics-report/git-control/serving-ops reports are auto-loaded from default artifact paths when present; audits whose total_llm_calls differ from the forecast window are excluded and reported",
+            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json] [read-inspect-dry-run-report-json] [read-inspect-verification-audit-report-json]\n     note: route-specific conditional/mixed/retrieval-lookup/style-brevity/metrics-report/git-control/serving-ops reports are auto-loaded from default artifact paths when present; audits whose total_llm_calls differ from the forecast window are excluded and reported",
         ),
         Some("role-binding-real-traffic-cpu-operator-catalog-v1") => exit_for_result(
             run_role_binding_real_traffic_cpu_operator_catalog_v1(args),
             "try: nando-cli role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]",
+        ),
+        Some("role-binding-real-traffic-style-brevity-payload-dry-run-v1") => exit_for_result(
+            run_role_binding_real_traffic_style_brevity_payload_dry_run_v1(args),
+            "try: nando-cli role-binding-real-traffic-style-brevity-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [report-json] [max-events]",
         ),
         Some("role-binding-real-traffic-shadow-smoke-v1") => exit_for_result(
             run_role_binding_real_traffic_shadow_smoke_v1(args),
