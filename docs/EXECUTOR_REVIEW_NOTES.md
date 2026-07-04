@@ -1,5 +1,119 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Retrieval-Lookup Profile + Evidence V1
+
+Verdict:
+
+```text
+RETRIEVAL_LOOKUP_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added commands:
+  role-binding-real-traffic-retrieval-lookup-profile-v1
+  role-binding-real-traffic-retrieval-lookup-output-evidence-v1
+```
+
+Fresh profile:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-retrieval-lookup-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-profile-v1.report.json
+
+scoreable_payload_events:                       2
+package_training_requests:                      2
+edge_count:                                     7
+runtime_bytes_estimate:                     32972
+threshold:                             2147483647
+positive_margin_rows:                           2
+strict_ordered_pass_rows:                       2
+unexpected_local_accepts_under_disabled_threshold: 0
+median_energy_margin:                     1181696
+local_accepts_enabled_on_real_traffic:      false
+market_claim_allowed:                       false
+```
+
+Fresh output evidence:
+
+```text
+trace:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.report.json
+
+total_trace_rows:                         1000
+operator_candidate_calls:                    2
+scoreable_candidate_calls:                   2
+output_evidence_matched_events:              2
+deterministic_verification_events:           2
+verifier_not_applicable_events:              0
+verified_true_events:                        2
+verified_false_events:                       0
+raw_response_text_written:               false
+response_text_used_for_verification:      true
+local_accepts_enabled:                   false
+market_claim_allowed:                    false
+```
+
+Fresh shadow + audit:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.shadow-report.json
+
+audit_report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.verification-hook-audit.report.json
+
+shadow total_llm_calls:                    1000
+shadow exact_cache_hits:                     53
+shadow nando_shadow_accepts:                  0
+shadow verified_safe_accepts:                 0
+shadow false_accepts:                         0
+shadow incremental_reduction_vs_exact_cache_milli: 0
+shadow p99_shadow_score_latency_ns:      250185
+
+audit operator_candidate_calls:               2
+audit scoreable_candidate_calls:              2
+audit verification_hook_ready_events:         2
+audit verified_cpu_accept_eligible_events:    0
+audit market_claim_allowed:               false
+```
+
+Decision:
+
+```text
+retrieval_lookup now has a complete disabled route rung:
+request-side payload -> .nwrb profile -> source/path/URL evidence hook -> shadow/audit.
+It still does not affect the current CPU scoreboard because the profile threshold is
+i32::MAX and local accepts remain disabled. This is the correct side of the line:
+verified evidence exists for 2 rows, but verified CPU savings are still 0.
+```
+
+Next engineering debt:
+
+```text
+Do not promote retrieval_lookup to local accept yet. First run calibration with
+enough verifier-true and verifier-false support, or broaden the request-side
+payload builder to more real retrieval rows without answer leaks. External
+freshness/free-form lookup still requires concrete source/path/URL verification.
+```
+
 ## 2026-07-04 - Executor Integration: Retrieval-Lookup Payload Dry-Run V1
 
 Verdict:

@@ -322,6 +322,18 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run retrieval-lookup payloads from request text only; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-retrieval-lookup-profile-v1 [base-registry-json] [retrieval-lookup-dry-run-trace-jsonl] [retrieval-lookup-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile retrieval-lookup dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
+    );
+    println!(
+        "  role-binding-real-traffic-retrieval-lookup-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach deterministic source/path/URL output evidence to retrieval-lookup payload traces; no raw response text is written"
+    );
+    println!(
         "  role-binding-real-traffic-read-inspect-profile-v1 [base-registry-json] [read-inspect-dry-run-trace-jsonl] [read-inspect-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

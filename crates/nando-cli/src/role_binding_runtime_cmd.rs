@@ -75,6 +75,16 @@ const DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/retrieval-lookup-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/retrieval-lookup-payload-dry-run-v1.report.json";
+const DEFAULT_RETRIEVAL_LOOKUP_PACKAGE_PATH: &str =
+    "target/nando-wave/real-traffic-shadow/retrieval-lookup-seed0.nwrb";
+const DEFAULT_RETRIEVAL_LOOKUP_PROFILE_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-retrieval-lookup-v1.json";
+const DEFAULT_RETRIEVAL_LOOKUP_PROFILE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/retrieval-lookup-profile-v1.report.json";
+const DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.trace.jsonl";
+const DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.report.json";
 const DEFAULT_READ_INSPECT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-seed0.nwrb";
 const DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG: &str =
@@ -356,6 +366,7 @@ const REAL_TRAFFIC_RETRIEVAL_LOOKUP_STATE_DELTA_LANES_PER_SIDE: usize = 24;
 const REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY: &str = "retrieval_lookup";
 const REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID: &str = "route_gap_retrieval_lookup_profile_v1";
 const REAL_TRAFFIC_RETRIEVAL_LOOKUP_WRONG_TOKEN: &str = "__RETRIEVAL_LOOKUP_WRONG__";
+const REAL_TRAFFIC_RETRIEVAL_LOOKUP_DISABLED_THRESHOLD: i32 = i32::MAX;
 const REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_METRICS_REPORT_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_BASE: u32 = 39 << 12;
@@ -6410,6 +6421,367 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "retrieval-lookup payload dry-run is review-only; build profile+verifier before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_retrieval_lookup_profile_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let dry_run_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let package_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PACKAGE_PATH));
+    let registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PROFILE_REPORT));
+
+    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
+    validate_registry_config(&registry)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&dry_run_trace_path)?;
+    let build = build_retrieval_lookup_role_binding_package_from_trace(&trace_rows)?;
+    if let Some(parent) = package_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create retrieval-lookup package directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(&package_path, &build.package_bytes).map_err(|error| {
+        format!(
+            "failed to write retrieval-lookup package {}: {error}",
+            package_path.display()
+        )
+    })?;
+    let package_info =
+        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&build.package_bytes)
+            .map_err(|error| format!("failed to inspect retrieval-lookup package: {error:?}"))?;
+    let policy = WavePredictorRoleBindingOffloadPolicy::new(
+        REAL_TRAFFIC_RETRIEVAL_LOOKUP_DISABLED_THRESHOLD,
+    )
+    .map_err(|error| format!("invalid retrieval-lookup disabled policy: {error:?}"))?;
+    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
+        &build.package_bytes,
+        policy,
+    )
+    .map_err(|error| format!("failed to load retrieval-lookup package: {error:?}"))?;
+
+    let requests = retrieval_lookup_scoreable_requests(&trace_rows);
+    let mut energy_margins = Vec::with_capacity(requests.len());
+    let mut min_slot_margins = Vec::with_capacity(requests.len());
+    let mut positive_margin_rows = 0usize;
+    let mut strict_ordered_pass_rows = 0usize;
+    let mut unexpected_local_accepts_under_disabled_threshold = 0usize;
+    for request in &requests {
+        let prepared = sdk.prepare_active_fringe_from_iter(
+            request
+                .active_fringe
+                .iter()
+                .map(|active| (active.center_id, active.strength)),
+        );
+        let mut energy_margin = 0i32;
+        let mut min_slot_margin = i32::MAX;
+        let mut first_slot_margin = 0i32;
+        let mut strict_ordered_pass = true;
+        for (slot_index, slot) in request.slots.iter().enumerate() {
+            let (positive_score, negative_score) =
+                score_role_binding_profile_slot(&sdk, &prepared, slot);
+            let slot_margin = positive_score - negative_score;
+            if slot_index == 0 {
+                first_slot_margin = slot_margin;
+            }
+            energy_margin = energy_margin.saturating_add(slot_margin);
+            min_slot_margin = min_slot_margin.min(slot_margin);
+            strict_ordered_pass &= slot_margin > 0;
+        }
+        if min_slot_margin == i32::MAX {
+            continue;
+        }
+        positive_margin_rows += usize::from(energy_margin > 0);
+        strict_ordered_pass_rows += usize::from(strict_ordered_pass);
+        unexpected_local_accepts_under_disabled_threshold += usize::from(profile_accepts_score(
+            &default_profile_acceptance_policy(),
+            strict_ordered_pass,
+            energy_margin,
+            first_slot_margin,
+            REAL_TRAFFIC_RETRIEVAL_LOOKUP_DISABLED_THRESHOLD,
+        ));
+        energy_margins.push(energy_margin);
+        min_slot_margins.push(min_slot_margin);
+    }
+
+    let profile = RoleBindingProfileConfig {
+        profile_id: REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID.to_owned(),
+        profile_kind: "role_binding_nwrb".to_owned(),
+        operator_classes: vec![
+            "retrieval_lookup".to_owned(),
+            "source_path_or_url_presence".to_owned(),
+            "route_gap".to_owned(),
+        ],
+        package_path: package_path.clone(),
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        edge_count: package_info.edge_count,
+        slot_count: 3,
+        threshold: REAL_TRAFFIC_RETRIEVAL_LOOKUP_DISABLED_THRESHOLD,
+        acceptance_policy: default_profile_acceptance_policy(),
+        accepted_route_keys: vec![
+            REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY.to_owned(),
+            REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID.to_owned(),
+            "retrieval_lookup_request_payload_builder_v1".to_owned(),
+        ],
+    };
+    registry
+        .profiles
+        .retain(|existing| existing.profile_id != profile.profile_id);
+    registry.profiles.push(profile);
+    registry.claim_boundary = "serving registry overlay for retrieval_lookup .nwrb profile; generated from request-side dry-run payloads with threshold=i32::MAX so scoring telemetry is available but local accepts remain disabled until source/path/URL evidence verification exists".to_owned();
+    validate_registry_config(&registry)?;
+    write_json_file(&registry_path, &registry)?;
+
+    let mut sorted_energy = energy_margins.clone();
+    let mut sorted_min_slot = min_slot_margins.clone();
+    sorted_energy.sort_unstable();
+    sorted_min_slot.sort_unstable();
+    let report = RoleBindingRetrievalLookupProfileReport {
+        schema_version: "nando_role_binding_retrieval_lookup_profile_v1".to_owned(),
+        verdict: if unexpected_local_accepts_under_disabled_threshold == 0
+            && build.package_training_requests > 0
+            && package_info.edge_count > 0
+        {
+            "RETRIEVAL_LOOKUP_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED"
+        } else {
+            "RETRIEVAL_LOOKUP_PROFILE_V1_REVIEW_REPAIR_REQUIRED"
+        }
+        .to_owned(),
+        base_registry_path: base_registry_path.display().to_string(),
+        dry_run_trace_path: dry_run_trace_path.display().to_string(),
+        package_path: package_path.display().to_string(),
+        registry_path: registry_path.display().to_string(),
+        profile_id: REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID.to_owned(),
+        package_fingerprint64: package_info.fingerprint64,
+        package_bytes: build.package_bytes.len(),
+        edge_count: package_info.edge_count,
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        threshold: REAL_TRAFFIC_RETRIEVAL_LOOKUP_DISABLED_THRESHOLD,
+        trace_rows_read: trace_rows.len(),
+        scoreable_payload_events: requests.len(),
+        package_training_requests: build.package_training_requests,
+        positive_updates: build.positive_updates,
+        negative_updates: build.negative_updates,
+        changed_edges: build.changed_edges,
+        positive_margin_rows,
+        strict_ordered_pass_rows,
+        unexpected_local_accepts_under_disabled_threshold,
+        median_energy_margin: percentile_i32_sorted(&sorted_energy, 50),
+        p10_energy_margin: percentile_i32_sorted(&sorted_energy, 10),
+        min_energy_margin: sorted_energy.first().copied().unwrap_or(0),
+        median_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 50),
+        p10_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 10),
+        min_slot_margin: sorted_min_slot.first().copied().unwrap_or(0),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled_on_real_traffic: false,
+        market_claim_allowed: false,
+        claim_boundary: "Profile generator only. It compiles request-side retrieval_lookup payload geometry into a .nwrb package and registry overlay with threshold=i32::MAX, so shadow can measure real score/margins but cannot local-accept. Verified CPU savings require source/path/URL evidence, safe-policy calibration, shadow/audit pass, provider cost, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Run retrieval_lookup dry-run shadow with this overlay registry, then attach source_path_or_url_presence_verifier_v1 before lowering thresholds or promoting any local accept path.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-retrieval-lookup-profile-v1: {}",
+        report.verdict
+    );
+    println!("  base_registry: {}", base_registry_path.display());
+    println!("  dry_run_trace: {}", dry_run_trace_path.display());
+    println!("  package: {}", package_path.display());
+    println!("  registry: {}", registry_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  edge_count: {}", report.edge_count);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  median_energy_margin: {}", report.median_energy_margin);
+    println!(
+        "  unexpected_local_accepts_under_disabled_threshold: {}",
+        report.unexpected_local_accepts_under_disabled_threshold
+    );
+    println!("  local_accepts_enabled_on_real_traffic: false");
+    Err("retrieval-lookup profile is review-only; attach verifier before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_retrieval_lookup_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_retrieval_lookup_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "retrieval-lookup output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_source_path_or_url_presence_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "retrieval-lookup output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_retrieval_lookup_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Retrieval-lookup output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and deterministic source/path/URL verification results, writes no raw prompt/response text, and does not enable local accepts or market savings claims.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the retrieval_lookup evidence trace, then calibrate local accept only if verifier-true support is sufficient and false_accepts remain 0.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-retrieval-lookup-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err(
+        "retrieval-lookup output evidence is review-only; run shadow/audit before claims"
             .to_owned(),
     )
 }
@@ -18489,6 +18861,45 @@ struct RoleBindingReadInspectProfileReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingRetrievalLookupProfileReport {
+    schema_version: String,
+    verdict: String,
+    base_registry_path: String,
+    dry_run_trace_path: String,
+    package_path: String,
+    registry_path: String,
+    profile_id: String,
+    package_fingerprint64: u64,
+    package_bytes: usize,
+    edge_count: usize,
+    runtime_bytes_estimate: usize,
+    threshold: i32,
+    trace_rows_read: usize,
+    scoreable_payload_events: usize,
+    package_training_requests: usize,
+    positive_updates: usize,
+    negative_updates: usize,
+    changed_edges: usize,
+    positive_margin_rows: usize,
+    strict_ordered_pass_rows: usize,
+    unexpected_local_accepts_under_disabled_threshold: usize,
+    median_energy_margin: i32,
+    p10_energy_margin: i32,
+    min_energy_margin: i32,
+    median_min_slot_margin: i32,
+    p10_min_slot_margin: i32,
+    min_slot_margin: i32,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled_on_real_traffic: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingMetricsReportPayloadDryRunReport {
     schema_version: String,
     verdict: String,
@@ -18773,6 +19184,15 @@ struct PlanningNextStepPackageBuild {
 
 #[derive(Clone, Debug)]
 struct ReadInspectPackageBuild {
+    package_bytes: Vec<u8>,
+    package_training_requests: usize,
+    positive_updates: usize,
+    negative_updates: usize,
+    changed_edges: usize,
+}
+
+#[derive(Clone, Debug)]
+struct RetrievalLookupPackageBuild {
     package_bytes: Vec<u8>,
     package_training_requests: usize,
     positive_updates: usize,
@@ -20920,6 +21340,111 @@ fn read_inspect_scoreable_requests(
         .filter_map(|row| row.nando_shadow_request.clone())
         .filter(|request| {
             request.profile_id.as_deref() == Some(REAL_TRAFFIC_READ_INSPECT_PROFILE_ID)
+                && !request.active_fringe.is_empty()
+                && !request.slots.is_empty()
+        })
+        .collect()
+}
+
+fn build_retrieval_lookup_role_binding_package_from_trace(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Result<RetrievalLookupPackageBuild, String> {
+    let config = WavePredictorHebbianConfig {
+        state_delta_binding_action_base: Some(REAL_TRAFFIC_RETRIEVAL_LOOKUP_OPERATOR_PAIR_BASE),
+        state_delta_binding_action_count: REAL_TRAFFIC_RETRIEVAL_LOOKUP_PAGE_SIZE,
+        state_delta_binding_role_base: Some(REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROLE_BASE),
+        state_delta_binding_role_stride: REAL_TRAFFIC_RETRIEVAL_LOOKUP_PAGE_SIZE,
+        state_delta_binding_role_count: 4,
+        state_delta_binding_slot_scoped_action_page_bits: 12,
+        state_delta_binding_slot_scoped_action_page_mask: 1_u64
+            << (REAL_TRAFFIC_RETRIEVAL_LOOKUP_OPERATOR_PAIR_BASE >> 12),
+        state_delta_binding_slot_scoped_action_source_bits:
+            REAL_TRAFFIC_RETRIEVAL_LOOKUP_OPERATOR_PAIR_SHIFT as u8,
+        weight_limit: 2_048,
+        ..WavePredictorHebbianConfig::default()
+    };
+    let role_end = REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROLE_BASE
+        + REAL_TRAFFIC_RETRIEVAL_LOOKUP_PAGE_SIZE
+            * u32::from(config.state_delta_binding_role_count);
+    let action_end =
+        REAL_TRAFFIC_RETRIEVAL_LOOKUP_OPERATOR_PAIR_BASE + REAL_TRAFFIC_RETRIEVAL_LOOKUP_PAGE_SIZE;
+    let center_count = role_end.max(action_end) as usize;
+    let mut field = WavePredictorHebbianField::new(center_count, config);
+    let mut package_training_requests = 0usize;
+    let mut positive_updates = 0usize;
+    let mut negative_updates = 0usize;
+    let mut changed_edges = 0usize;
+
+    for request in retrieval_lookup_scoreable_requests(trace_rows) {
+        let active_fringe = request
+            .active_fringe
+            .iter()
+            .map(|active| WavePredictorActiveCenter {
+                center_id: active.center_id,
+                strength: active.strength,
+            })
+            .collect::<Vec<_>>();
+        if active_fringe.is_empty() {
+            continue;
+        }
+        package_training_requests += 1;
+        for slot in &request.slots {
+            for impulse in &slot.positive_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    16,
+                );
+                positive_updates += 1;
+                changed_edges += changed;
+            }
+            for impulse in &slot.negative_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    -16,
+                );
+                negative_updates += 1;
+                changed_edges += changed;
+            }
+        }
+    }
+
+    if package_training_requests == 0 {
+        return Err(
+            "retrieval-lookup package builder found no scoreable dry-run requests".to_owned(),
+        );
+    }
+    if changed_edges == 0 {
+        return Err("retrieval-lookup package builder produced no role-binding edges".to_owned());
+    }
+    let package_bytes = field
+        .compile_flat_role_binding_table()
+        .to_bytes()
+        .map_err(|error| {
+            format!("failed to serialize retrieval-lookup .nwrb package: {error:?}")
+        })?;
+    Ok(RetrievalLookupPackageBuild {
+        package_bytes,
+        package_training_requests,
+        positive_updates,
+        negative_updates,
+        changed_edges,
+    })
+}
+
+fn retrieval_lookup_scoreable_requests(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Vec<RoleBindingProfileScoreRequest> {
+    trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.clone())
+        .filter(|request| {
+            request.profile_id.as_deref() == Some(REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID)
                 && !request.active_fringe.is_empty()
                 && !request.slots.is_empty()
         })
@@ -29294,6 +29819,126 @@ fn response_contains_read_inspect_path(response_lower: &str, path_token: &str) -
         return true;
     }
     path_lower
+        .rsplit(['/', '\\'])
+        .next()
+        .map(str::trim)
+        .filter(|name| name.len() >= 3)
+        .is_some_and(|name| response_lower.contains(name))
+}
+
+fn deterministic_retrieval_lookup_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(tokens) = extract_retrieval_lookup_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_retrieval_lookup_tokens".to_owned(),
+        );
+    };
+    if tokens.artifact_token.chars().count() < 3 {
+        return (
+            false,
+            false,
+            "not_applicable_artifact_token_too_short".to_owned(),
+        );
+    }
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "no source",
+            "no link",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "недостаточно",
+            "не нашёл",
+            "не нашел",
+            "нет источника",
+            "нет ссылки",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+
+    let artifact_present =
+        response_contains_retrieval_lookup_evidence_token(&response_lower, &tokens.artifact_token);
+    let source_present = looks_like_retrieval_lookup_source_token(&tokens.source_token)
+        && response_contains_retrieval_lookup_evidence_token(&response_lower, &tokens.source_token);
+    let evidence_signal = contains_any(
+        &response_lower,
+        &[
+            "http://",
+            "https://",
+            "://",
+            ".md",
+            ".rs",
+            ".json",
+            ".jsonl",
+            ".pdf",
+            "/home/",
+            "docs/",
+            "target/",
+            "source",
+            "url",
+            "link",
+            "path",
+            "file",
+            "source:",
+            "ссыл",
+            "url",
+            "путь",
+            "файл",
+            "источник",
+            "документ",
+        ],
+    );
+    let query_anchor_ok = tokens.query_token.chars().count() < 3
+        || response_contains_retrieval_lookup_evidence_token(&response_lower, &tokens.query_token)
+        || artifact_present
+        || source_present;
+    let verified = evidence_signal && query_anchor_ok && (artifact_present || source_present);
+    let status = if verified {
+        "verified_source_path_or_url_presence"
+    } else if !evidence_signal {
+        "rejected_missing_source_path_or_url_signal"
+    } else if !query_anchor_ok {
+        "rejected_missing_query_anchor"
+    } else {
+        "rejected_source_or_artifact_absent_from_response"
+    };
+    (verified, true, status.to_owned())
+}
+
+fn response_contains_retrieval_lookup_evidence_token(response_lower: &str, token: &str) -> bool {
+    let token_lower = token.to_lowercase();
+    if token_lower.len() >= 3 && response_lower.contains(&token_lower) {
+        return true;
+    }
+    token_lower
         .rsplit(['/', '\\'])
         .next()
         .map(str::trim)
