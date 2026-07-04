@@ -1,5 +1,178 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Project-Context Disabled Profile V1
+
+Verdict:
+
+```text
+PROJECT_CONTEXT_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-project-context-profile-v1
+
+The command compiles the artifact-backed project_context dry-run payloads into
+a disabled-threshold .nwrb profile and writes a profile-registry overlay. The
+threshold is i32::MAX, so shadow scoring is measurable but local accepts remain
+impossible until workspace_artifact_or_goal_state_verifier_v1 exists.
+```
+
+Fresh profile:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/project-context-profile-v1.report.json
+
+package:
+  target/nando-wave/real-traffic-shadow/project-context-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-project-context-v1.json
+
+scoreable_payload_events: 2
+package_training_requests: 2
+edge_count: 7
+package_bytes: 128
+runtime_bytes_estimate: 32972
+threshold: 2147483647
+positive_margin_rows: 2
+strict_ordered_pass_rows: 2
+median_energy_margin: 1155072
+unexpected_local_accepts_under_disabled_threshold: 0
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed: false
+```
+
+Dry-run after registry overlay:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json
+
+project_context_candidate_events: 211
+payload_ready_events: 2
+payload_built_events: 2
+scoreable_payload_events: 2
+profile_registered: true
+shadow_score_ready: true
+local_accepts_enabled: false
+market_claim_allowed: false
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+```
+
+Shadow/audit:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/project-context-profile-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/project-context-profile-v1.verification-hook-audit.report.json
+
+operator_candidate_calls: 2
+scoreable_candidate_calls: 2
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+p99_shadow_score_latency_ns: 195244
+verification_hook_ready_events: 0
+market_claim_allowed: false
+```
+
+Feedback/catalog:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+project_context_dialogue:
+  priority_rank:                       7
+  stage:                               scoreable_payload_missing_verification_hook
+  candidate_events:                    211
+  payload_ready_events:                2
+  scoreable_payload_events:            2
+  verification_hook_ready_events:      0
+  verified_cpu_accept_eligible_events: 0
+  false_accepts:                       0
+  next_action:                         Attach response/tool-call evidence and
+                                       deterministic output verification.
+
+overall:
+  operator_candidate_calls:         809
+  scoreable_candidate_calls:        136
+  unique_verified_cpu_accepts:       26
+  unique_verified_gap_to_80_calls:  774
+```
+
+Catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+project_context_dialogue existing_profile_route:
+  priority_rank:              1
+  candidate_events:           211
+  payload_ready_events:       2
+  scoreable_payload_events:   2
+  verification_hook_ready:    0
+  verified_cpu_accepts:       0
+  recommended_verifier:       workspace_artifact_or_goal_state_verifier_v1
+
+project_context_dialogue route_gap_family:
+  priority_rank: 12
+  next_action:   project_context_dialogue already has 2 scoreable dry-run
+                 payloads in feedback-loop; continue with
+                 workspace_artifact_or_goal_state_verifier_v1 and keep local
+                 accepts disabled until deterministic verification exists.
+```
+
+Decision:
+
+```text
+This closes the profile-missing gap for the narrow artifact-backed subset of
+project_context. It deliberately does not promote broad project dialogue:
+209 of 211 candidates remain fallback-only until explicit workspace artifact
+or goal-state evidence exists. The current result is a route-prioritization
+instrument, not a market savings claim.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created. CPU Routability 80 remains open:
+26/1000 unique verified accepts, gap 774.
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/project-context-disabled-profile-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/project-context-disabled-profile-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 42
+note: narrow role-swap check only: disabled project-context profile /
+      artifact-backed scoreable path != verified CPU accept.
+```
+
 ## 2026-07-04 - Executor Integration: Style-Brevity Disabled Profile V1
 
 Verdict:

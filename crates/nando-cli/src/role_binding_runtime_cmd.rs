@@ -120,6 +120,12 @@ const DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json";
 const DEFAULT_PROJECT_CONTEXT_SUBFAMILY_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/project-context-subfamily-audit-v1.report.json";
+const DEFAULT_PROJECT_CONTEXT_PACKAGE_PATH: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-seed0.nwrb";
+const DEFAULT_PROJECT_CONTEXT_PROFILE_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-project-context-v1.json";
+const DEFAULT_PROJECT_CONTEXT_PROFILE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-profile-v1.report.json";
 const DEFAULT_METRICS_REPORT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb";
 const DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG: &str =
@@ -487,6 +493,7 @@ const REAL_TRAFFIC_PROJECT_CONTEXT_STATE_DELTA_LANES_PER_SIDE: usize = 24;
 const REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY: &str = "project_context_dialogue";
 const REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID: &str = "route_gap_project_context_profile_v1";
 const REAL_TRAFFIC_PROJECT_CONTEXT_WRONG_TOKEN: &str = "__PROJECT_CONTEXT_WRONG__";
+const REAL_TRAFFIC_PROJECT_CONTEXT_DISABLED_THRESHOLD: i32 = i32::MAX;
 const REAL_TRAFFIC_AGENT_CONTROL_ACTION_BASE: u32 = 0;
 const REAL_TRAFFIC_AGENT_CONTROL_ACTION_COUNT: u32 = 4096;
 const REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE: u32 = 4096;
@@ -4699,6 +4706,208 @@ where
     println!("  local_accepts_enabled: false");
     println!("  market_claim_allowed: false");
     Ok(())
+}
+
+pub(crate) fn run_role_binding_real_traffic_project_context_profile_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let dry_run_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let package_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PACKAGE_PATH));
+    let registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PROFILE_REPORT));
+
+    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
+    validate_registry_config(&registry)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&dry_run_trace_path)?;
+    let build = build_project_context_role_binding_package_from_trace(&trace_rows)?;
+    if let Some(parent) = package_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create project-context package directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(&package_path, &build.package_bytes).map_err(|error| {
+        format!(
+            "failed to write project-context package {}: {error}",
+            package_path.display()
+        )
+    })?;
+    let package_info =
+        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&build.package_bytes)
+            .map_err(|error| format!("failed to inspect project-context package: {error:?}"))?;
+    let policy =
+        WavePredictorRoleBindingOffloadPolicy::new(REAL_TRAFFIC_PROJECT_CONTEXT_DISABLED_THRESHOLD)
+            .map_err(|error| format!("invalid project-context disabled policy: {error:?}"))?;
+    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
+        &build.package_bytes,
+        policy,
+    )
+    .map_err(|error| format!("failed to load project-context package: {error:?}"))?;
+
+    let requests = project_context_scoreable_requests(&trace_rows);
+    let mut energy_margins = Vec::with_capacity(requests.len());
+    let mut min_slot_margins = Vec::with_capacity(requests.len());
+    let mut positive_margin_rows = 0usize;
+    let mut strict_ordered_pass_rows = 0usize;
+    let mut unexpected_local_accepts_under_disabled_threshold = 0usize;
+    for request in &requests {
+        let prepared = sdk.prepare_active_fringe_from_iter(
+            request
+                .active_fringe
+                .iter()
+                .map(|active| (active.center_id, active.strength)),
+        );
+        let mut energy_margin = 0i32;
+        let mut min_slot_margin = i32::MAX;
+        let mut first_slot_margin = 0i32;
+        let mut strict_ordered_pass = true;
+        for (slot_index, slot) in request.slots.iter().enumerate() {
+            let (positive_score, negative_score) =
+                score_role_binding_profile_slot(&sdk, &prepared, slot);
+            let slot_margin = positive_score - negative_score;
+            if slot_index == 0 {
+                first_slot_margin = slot_margin;
+            }
+            energy_margin = energy_margin.saturating_add(slot_margin);
+            min_slot_margin = min_slot_margin.min(slot_margin);
+            strict_ordered_pass &= slot_margin > 0;
+        }
+        if min_slot_margin == i32::MAX {
+            continue;
+        }
+        positive_margin_rows += usize::from(energy_margin > 0);
+        strict_ordered_pass_rows += usize::from(strict_ordered_pass);
+        unexpected_local_accepts_under_disabled_threshold += usize::from(profile_accepts_score(
+            &default_profile_acceptance_policy(),
+            strict_ordered_pass,
+            energy_margin,
+            first_slot_margin,
+            REAL_TRAFFIC_PROJECT_CONTEXT_DISABLED_THRESHOLD,
+        ));
+        energy_margins.push(energy_margin);
+        min_slot_margins.push(min_slot_margin);
+    }
+
+    let profile = RoleBindingProfileConfig {
+        profile_id: REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned(),
+        profile_kind: "role_binding_nwrb".to_owned(),
+        operator_classes: vec![
+            "project_context".to_owned(),
+            "active_project_state".to_owned(),
+            "workspace_artifact_evidence".to_owned(),
+        ],
+        package_path: package_path.clone(),
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        edge_count: package_info.edge_count,
+        slot_count: 3,
+        threshold: REAL_TRAFFIC_PROJECT_CONTEXT_DISABLED_THRESHOLD,
+        acceptance_policy: default_profile_acceptance_policy(),
+        accepted_route_keys: vec![
+            REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY.to_owned(),
+            REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned(),
+            "active_project_state_payload_builder_v1".to_owned(),
+        ],
+    };
+    registry
+        .profiles
+        .retain(|existing| existing.profile_id != profile.profile_id);
+    registry.profiles.push(profile);
+    registry.claim_boundary = "serving registry overlay for artifact-backed project_context .nwrb profile; generated from request-side dry-run payloads with threshold=i32::MAX so scoring telemetry is available but local accepts remain disabled until workspace_artifact_or_goal_state_verifier_v1 exists".to_owned();
+    validate_registry_config(&registry)?;
+    write_json_file(&registry_path, &registry)?;
+
+    let mut sorted_energy = energy_margins.clone();
+    let mut sorted_min_slot = min_slot_margins.clone();
+    sorted_energy.sort_unstable();
+    sorted_min_slot.sort_unstable();
+    let report = RoleBindingProjectContextProfileReport {
+        schema_version: "nando_role_binding_project_context_profile_v1".to_owned(),
+        verdict: if unexpected_local_accepts_under_disabled_threshold == 0
+            && build.package_training_requests > 0
+            && package_info.edge_count > 0
+        {
+            "PROJECT_CONTEXT_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED"
+        } else {
+            "PROJECT_CONTEXT_PROFILE_V1_REVIEW_REPAIR_REQUIRED"
+        }
+        .to_owned(),
+        base_registry_path: base_registry_path.display().to_string(),
+        dry_run_trace_path: dry_run_trace_path.display().to_string(),
+        package_path: package_path.display().to_string(),
+        registry_path: registry_path.display().to_string(),
+        profile_id: REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned(),
+        package_fingerprint64: package_info.fingerprint64,
+        package_bytes: build.package_bytes.len(),
+        edge_count: package_info.edge_count,
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        threshold: REAL_TRAFFIC_PROJECT_CONTEXT_DISABLED_THRESHOLD,
+        trace_rows_read: trace_rows.len(),
+        scoreable_payload_events: requests.len(),
+        package_training_requests: build.package_training_requests,
+        positive_updates: build.positive_updates,
+        negative_updates: build.negative_updates,
+        changed_edges: build.changed_edges,
+        positive_margin_rows,
+        strict_ordered_pass_rows,
+        unexpected_local_accepts_under_disabled_threshold,
+        median_energy_margin: percentile_i32_sorted(&sorted_energy, 50),
+        p10_energy_margin: percentile_i32_sorted(&sorted_energy, 10),
+        min_energy_margin: sorted_energy.first().copied().unwrap_or(0),
+        median_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 50),
+        p10_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 10),
+        min_slot_margin: sorted_min_slot.first().copied().unwrap_or(0),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled_on_real_traffic: false,
+        market_claim_allowed: false,
+        claim_boundary: "Profile generator only. It compiles request-side artifact-backed project_context payload geometry into a .nwrb package and registry overlay with threshold=i32::MAX, so shadow can measure real score/margins but cannot local-accept. Verified CPU savings require workspace_artifact_or_goal_state_verifier_v1, safe-policy calibration, shadow/audit pass, provider cost, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Run project_context dry-run shadow with this overlay registry, then attach workspace_artifact_or_goal_state_verifier_v1 before lowering thresholds or promoting any local accept path. Keep request-only project dialogue fallback-only.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-project-context-profile-v1: {}",
+        report.verdict
+    );
+    println!("  base_registry: {}", base_registry_path.display());
+    println!("  dry_run_trace: {}", dry_run_trace_path.display());
+    println!("  package: {}", package_path.display());
+    println!("  registry: {}", registry_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  edge_count: {}", report.edge_count);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  median_energy_margin: {}", report.median_energy_margin);
+    println!(
+        "  unexpected_local_accepts_under_disabled_threshold: {}",
+        report.unexpected_local_accepts_under_disabled_threshold
+    );
+    println!("  local_accepts_enabled_on_real_traffic: false");
+    Err("project-context profile is review-only; attach verifier before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_profile_v1<I>(
@@ -18341,6 +18550,8 @@ where
         PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_REPORT);
     let retrieval_lookup_verification_audit_report_path =
         PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let project_context_dry_run_report_path =
+        PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT);
     let style_brevity_dry_run_report_path =
         PathBuf::from(DEFAULT_STYLE_BREVITY_PAYLOAD_DRY_RUN_REPORT);
     let metrics_report_dry_run_report_path = args
@@ -18576,6 +18787,13 @@ where
         } else {
             None
         };
+    let project_context_dry_run = if project_context_dry_run_report_path.exists() {
+        Some(read_json_file::<
+            RoleBindingProjectContextPayloadDryRunReport,
+        >(&project_context_dry_run_report_path)?)
+    } else {
+        None
+    };
     let style_brevity_dry_run = if style_brevity_dry_run_report_path.exists() {
         Some(
             read_json_file::<RoleBindingStyleBrevityPayloadDryRunReport>(
@@ -18992,6 +19210,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY);
+    let forecast_has_project_context = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY);
     let forecast_has_style_brevity = forecast
         .routes
         .iter()
@@ -19102,6 +19324,14 @@ where
             })
             .unwrap_or_default()
     };
+    let project_context_candidate_calls = if forecast_has_project_context {
+        0
+    } else {
+        project_context_dry_run
+            .as_ref()
+            .map(|report| report.project_context_candidate_events)
+            .unwrap_or_default()
+    };
     let style_brevity_candidate_calls = if forecast_has_style_brevity {
         0
     } else {
@@ -19158,6 +19388,7 @@ where
         + planning_next_step_candidate_calls
         + read_inspect_candidate_calls
         + retrieval_lookup_candidate_calls
+        + project_context_candidate_calls
         + style_brevity_candidate_calls
         + metrics_report_candidate_calls
         + agent_control_candidate_calls
@@ -19178,6 +19409,7 @@ where
         let is_planning_route = route.route_key == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
         let is_read_inspect_route = route.route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY;
         let is_retrieval_lookup_route = route.route_key == REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY;
+        let is_project_context_route = route.route_key == REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY;
         let is_style_brevity_route = route.route_key == REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY;
         let is_metrics_report_route = route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY;
         let is_git_control_route = route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY;
@@ -19194,7 +19426,7 @@ where
             read_inspect_local_accept_calibration.as_ref()
         } else if is_retrieval_lookup_route {
             retrieval_lookup_local_accept_calibration.as_ref()
-        } else if is_style_brevity_route {
+        } else if is_project_context_route || is_style_brevity_route {
             None
         } else if is_metrics_report_route {
             metrics_report_local_accept_calibration.as_ref()
@@ -19283,6 +19515,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_project_context_route {
+            project_context_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else if is_style_brevity_route {
             style_brevity_dry_run
                 .as_ref()
@@ -19338,6 +19575,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
+        } else if is_project_context_route {
+            project_context_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else if is_style_brevity_route {
             style_brevity_dry_run
                 .as_ref()
@@ -19386,6 +19628,10 @@ where
                         .map(|report| report.scoreable_payload_events)
                 } else if is_retrieval_lookup_route {
                     retrieval_lookup_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else if is_project_context_route {
+                    project_context_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
                 } else if is_style_brevity_route {
@@ -19770,6 +20016,72 @@ where
                 verified_cpu_accept_eligible_events,
                 forecast.total_llm_calls,
             ),
+        });
+    }
+
+    if !forecast_has_project_context && project_context_dry_run.is_some() {
+        let payload_ready_events = project_context_dry_run
+            .as_ref()
+            .map(|report| report.payload_ready_events)
+            .unwrap_or_default();
+        let payload_built_events = project_context_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let scoreable_payload_events = project_context_dry_run
+            .as_ref()
+            .map(|report| report.scoreable_payload_events)
+            .unwrap_or_default();
+        let candidate_events = project_context_dry_run
+            .as_ref()
+            .map(|report| report.project_context_candidate_events)
+            .unwrap_or_default();
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events: 0,
+            verified_cpu_accept_eligible_events: 0,
+            false_accepts: 0,
+            local_accept_calibration_ran: false,
+            local_accept_safe_policy_found: false,
+            local_accept_support_qualified: false,
+            local_accept_calibration_authoritative: true,
+        });
+        let next_action = feedback_route_next_action(&stage);
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "active_project_state_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events: 0,
+            local_accept_calibration_ran: false,
+            local_accept_safe_policy_found: false,
+            local_accept_minimum_true_support: DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT,
+            local_accept_support_qualified: false,
+            local_accept_best_safe_true_accepts: 0,
+            verified_cpu_accept_eligible_events: 0,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY,
+            ),
+            false_accepts: 0,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: 0,
         });
     }
 
@@ -20324,6 +20636,9 @@ where
                     .display()
                     .to_string()
             }),
+        project_context_dry_run_report_path: project_context_dry_run
+            .as_ref()
+            .map(|_| project_context_dry_run_report_path.display().to_string()),
         style_brevity_dry_run_report_path: style_brevity_dry_run
             .as_ref()
             .map(|_| style_brevity_dry_run_report_path.display().to_string()),
@@ -20490,6 +20805,7 @@ where
             .saturating_sub(planning_next_step_candidate_calls)
             .saturating_sub(read_inspect_candidate_calls)
             .saturating_sub(retrieval_lookup_candidate_calls)
+            .saturating_sub(project_context_candidate_calls)
             .saturating_sub(style_brevity_candidate_calls)
             .saturating_sub(metrics_report_candidate_calls)
             .saturating_sub(agent_control_candidate_calls)
@@ -20572,6 +20888,9 @@ where
     }
     if let Some(path) = &report.retrieval_lookup_verification_audit_report_path {
         println!("  retrieval_lookup_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.project_context_dry_run_report_path {
+        println!("  project_context_dry_run_report: {path}");
     }
     if let Some(path) = &report.style_brevity_dry_run_report_path {
         println!("  style_brevity_dry_run_report: {path}");
@@ -22708,6 +23027,45 @@ struct RoleBindingProjectContextPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextProfileReport {
+    schema_version: String,
+    verdict: String,
+    base_registry_path: String,
+    dry_run_trace_path: String,
+    package_path: String,
+    registry_path: String,
+    profile_id: String,
+    package_fingerprint64: u64,
+    package_bytes: usize,
+    edge_count: usize,
+    runtime_bytes_estimate: usize,
+    threshold: i32,
+    trace_rows_read: usize,
+    scoreable_payload_events: usize,
+    package_training_requests: usize,
+    positive_updates: usize,
+    negative_updates: usize,
+    changed_edges: usize,
+    positive_margin_rows: usize,
+    strict_ordered_pass_rows: usize,
+    unexpected_local_accepts_under_disabled_threshold: usize,
+    median_energy_margin: i32,
+    p10_energy_margin: i32,
+    min_energy_margin: i32,
+    median_min_slot_margin: i32,
+    p10_min_slot_margin: i32,
+    min_slot_margin: i32,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled_on_real_traffic: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingProjectContextSubfamilyAuditReport {
     schema_version: String,
     verdict: String,
@@ -23360,6 +23718,15 @@ struct PlanningNextStepPackageBuild {
 
 #[derive(Clone, Debug)]
 struct ReadInspectPackageBuild {
+    package_bytes: Vec<u8>,
+    package_training_requests: usize,
+    positive_updates: usize,
+    negative_updates: usize,
+    changed_edges: usize,
+}
+
+#[derive(Clone, Debug)]
+struct ProjectContextPackageBuild {
     package_bytes: Vec<u8>,
     package_training_requests: usize,
     positive_updates: usize,
@@ -24871,6 +25238,7 @@ struct RoleBindingFeedbackLoopReport {
     retrieval_lookup_dry_run_report_path: Option<String>,
     retrieval_lookup_local_accept_calibration_report_path: Option<String>,
     retrieval_lookup_verification_audit_report_path: Option<String>,
+    project_context_dry_run_report_path: Option<String>,
     style_brevity_dry_run_report_path: Option<String>,
     metrics_report_dry_run_report_path: Option<String>,
     metrics_report_local_accept_calibration_report_path: Option<String>,
@@ -25659,6 +26027,108 @@ fn route_gap_family_metadata(family_key: &str) -> RouteGapFamilyMetadata {
             claim_boundary: "Uncatalogued prompts require manual route discovery before any CPU accept path exists.",
         },
     }
+}
+
+fn build_project_context_role_binding_package_from_trace(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Result<ProjectContextPackageBuild, String> {
+    let config = WavePredictorHebbianConfig {
+        state_delta_binding_action_base: Some(REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_BASE),
+        state_delta_binding_action_count: REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE,
+        state_delta_binding_role_base: Some(REAL_TRAFFIC_PROJECT_CONTEXT_ROLE_BASE),
+        state_delta_binding_role_stride: REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE,
+        state_delta_binding_role_count: 4,
+        state_delta_binding_slot_scoped_action_page_bits: 12,
+        state_delta_binding_slot_scoped_action_page_mask: 1_u64
+            << (REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_BASE >> 12),
+        state_delta_binding_slot_scoped_action_source_bits:
+            REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_SHIFT as u8,
+        weight_limit: 2_048,
+        ..WavePredictorHebbianConfig::default()
+    };
+    let role_end = REAL_TRAFFIC_PROJECT_CONTEXT_ROLE_BASE
+        + REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE * u32::from(config.state_delta_binding_role_count);
+    let action_end =
+        REAL_TRAFFIC_PROJECT_CONTEXT_OPERATOR_PAIR_BASE + REAL_TRAFFIC_PROJECT_CONTEXT_PAGE_SIZE;
+    let center_count = role_end.max(action_end) as usize;
+    let mut field = WavePredictorHebbianField::new(center_count, config);
+    let mut package_training_requests = 0usize;
+    let mut positive_updates = 0usize;
+    let mut negative_updates = 0usize;
+    let mut changed_edges = 0usize;
+
+    for request in project_context_scoreable_requests(trace_rows) {
+        let active_fringe = request
+            .active_fringe
+            .iter()
+            .map(|active| WavePredictorActiveCenter {
+                center_id: active.center_id,
+                strength: active.strength,
+            })
+            .collect::<Vec<_>>();
+        if active_fringe.is_empty() {
+            continue;
+        }
+        package_training_requests += 1;
+        for slot in &request.slots {
+            for impulse in &slot.positive_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    16,
+                );
+                positive_updates += 1;
+                changed_edges += changed;
+            }
+            for impulse in &slot.negative_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    -16,
+                );
+                negative_updates += 1;
+                changed_edges += changed;
+            }
+        }
+    }
+
+    if package_training_requests == 0 {
+        return Err(
+            "project-context package builder found no scoreable dry-run requests".to_owned(),
+        );
+    }
+    if changed_edges == 0 {
+        return Err("project-context package builder produced no role-binding edges".to_owned());
+    }
+    let package_bytes = field
+        .compile_flat_role_binding_table()
+        .to_bytes()
+        .map_err(|error| format!("failed to serialize project-context .nwrb package: {error:?}"))?;
+    Ok(ProjectContextPackageBuild {
+        package_bytes,
+        package_training_requests,
+        positive_updates,
+        negative_updates,
+        changed_edges,
+    })
+}
+
+fn project_context_scoreable_requests(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Vec<RoleBindingProfileScoreRequest> {
+    trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.clone())
+        .filter(|request| {
+            request.profile_id.as_deref() == Some(REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID)
+                && !request.active_fringe.is_empty()
+                && !request.slots.is_empty()
+        })
+        .collect()
 }
 
 fn build_planning_next_step_role_binding_package_from_trace(
@@ -32957,6 +33427,8 @@ fn existing_route_verifier(route_key: &str) -> String {
         "deterministic_edit_output_verifier_v1".to_owned()
     } else if route_key.contains("mixed_map") {
         "deterministic_mixed_output_verifier_v1".to_owned()
+    } else if route_key == REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY {
+        "workspace_artifact_or_goal_state_verifier_v1".to_owned()
     } else {
         "route_specific_deterministic_verifier_required".to_owned()
     }

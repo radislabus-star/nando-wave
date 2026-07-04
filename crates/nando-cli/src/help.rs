@@ -304,6 +304,12 @@ pub(crate) fn print_help() {
         "            Split broad project-context route-gap rows into privacy-safe actionable/fallback subfamilies"
     );
     println!(
+        "  role-binding-real-traffic-project-context-profile-v1 [base-registry-json] [dry-run-trace-jsonl] [package-nwrb] [registry-json] [report-json]"
+    );
+    println!(
+        "            Compile a disabled-threshold artifact-backed project-context .nwrb profile; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
