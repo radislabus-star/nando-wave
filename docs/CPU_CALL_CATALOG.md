@@ -150,8 +150,8 @@ Top candidate splits:
 
 | rank | parent route | split | candidates | non-exact | payload-ready | verifier-signal | status |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | --- |
-| 1 | `answer_or_explain` | `file_path_evidence_answer` | 79 | 79 | 70 | 70 | `CANDIDATE` |
-| 2 | `project_context_dialogue` | `file_path_evidence_answer` | 65 | 63 | 51 | 52 | `CANDIDATE` |
+| 1 | `answer_or_explain` | `file_path_evidence_answer` | 79 | 79 | 70 | 70 | `WATCH` |
+| 2 | `project_context_dialogue` | `file_path_evidence_answer` | 65 | 63 | 51 | 52 | `WATCH` |
 | 3 | `answer_or_explain` | `test_output_parse` | 57 | 57 | 3 | 35 | `CANDIDATE` |
 | 4 | `answer_or_explain` | `metric_from_report` | 27 | 27 | 14 | 14 | `CANDIDATE` |
 | 5 | `answer_or_explain` | `git_status_summary` | 10 | 10 | 5 | 10 | `CANDIDATE` |
@@ -169,11 +169,13 @@ Decision:
 
 ```text
 The broad routes remain blocked as full routes.
-The next high-value narrow work should start from file_path_evidence_answer
-or test_output_parse, because they have real traffic and deterministic verifier
-shapes. They still have expected_unique_cpu_accepts_over_exact_cache = 0 until
-output evidence, admission audit, shadow, feedback, and CPU catalog prove
-false_accepts=0.
+The next high-value narrow work should not promote file_path_evidence_answer
+as-is: its output verifier exists, but request-side admission is only
+singleton-safe. Work should either collect more verifier-true non-synthetic
+rows, split file_path_evidence_answer into a narrower artifact-backed family, or
+move to test_output_parse / metric_from_report. All rows still have
+expected_unique_cpu_accepts_over_exact_cache = 0 until output evidence,
+admission audit, shadow, feedback, and CPU catalog prove false_accepts=0.
 ```
 
 ## File Path Evidence Payload Dry-Run V1
@@ -331,10 +333,10 @@ candidates_missing_output_evidence: 5
 provider_cost_events: 0
 ```
 
-Catalog status remains:
+Catalog status becomes:
 
 ```text
-CANDIDATE
+WATCH
 ```
 
 Decision:
@@ -344,6 +346,52 @@ Verifier evidence exists now, but the disabled profile still accepts zero rows.
 The route remains non-savings until request-side admission calibration finds a
 robust safe policy and a promoted shadow run proves unique verified accepts over
 exact cache with false_accepts=0.
+```
+
+### Admission Calibration V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/file-path-evidence-admission-calibration-v1.report.json
+```
+
+Measured request-side admission:
+
+```text
+hook_ready_rows: 39
+rows_with_prompt_features: 39
+history_prompt_missing_rows: 0
+label_true_rows: 15
+label_false_rows: 24
+minimum_true_support: 3
+robust_safe_policy_found: false
+singleton_safe_policy_found: true
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 1
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_features: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Catalog status:
+
+```text
+WATCH
+```
+
+Decision:
+
+```text
+This split has verifier labels, but no robust request-side admission policy.
+The strongest zero-false policy accepts only one verifier-true row, below the
+minimum robust support of 3. Do not promote. Either collect more verifier-true
+non-synthetic rows, split the family more narrowly, or choose the next
+higher-value artifact-backed profile.
 ```
 
 Blocked for now:

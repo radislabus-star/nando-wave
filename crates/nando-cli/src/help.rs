@@ -400,6 +400,12 @@ pub(crate) fn print_help() {
         "            Attach final-answer fingerprints plus source/path presence verifier status; no local accepts or market claims"
     );
     println!(
+        "  role-binding-real-traffic-file-path-evidence-admission-calibration-v1 [file-path-evidence-output-evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Calibrate request-side file-path evidence admission features against verifier labels; review-only, no local accepts"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-profile-v1 [base-registry-json] [answer-evidence-dry-run-trace-jsonl] [answer-evidence-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

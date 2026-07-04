@@ -1,5 +1,83 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: File Path Evidence Admission Calibration V1
+
+Verdict:
+
+```text
+FILE_PATH_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added CLI route:
+  role-binding-real-traffic-file-path-evidence-admission-calibration-v1
+```
+
+Why:
+
+```text
+The file_path_evidence_answer split now has verifier labels, but enabling local
+accepts would still be unsafe unless request-side features separate verifier-true
+rows from verifier-false rows without reading the answer. This stage calibrates
+that admission boundary and remains review-only.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-admission-calibration-v1 \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-admission-calibration-v1.report.json
+```
+
+Measured admission result:
+
+```text
+hook_ready_rows: 39
+rows_with_prompt_features: 39
+history_prompt_missing_rows: 0
+label_true_rows: 15
+label_false_rows: 24
+minimum_true_support: 3
+robust_safe_policy_found: false
+singleton_safe_policy_found: true
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 1
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_features: false
+target_labels_used_for_runtime: false
+proof_labels_used_for_runtime: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+file_path_evidence_answer is not ready for promotion. The best zero-false policy
+has only singleton support, so it is not a robust admission rule. Keep local
+accepts disabled and move this split to WATCH until more verifier-true
+non-synthetic rows or a narrower artifact-backed split exists.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/file-path-evidence-admission-calibration-v1.md
+verdict: PASS
+complexity_score: 73
+```
+
 ## 2026-07-04 - Executor Integration: File Path Evidence Output Evidence V1
 
 Verdict:
