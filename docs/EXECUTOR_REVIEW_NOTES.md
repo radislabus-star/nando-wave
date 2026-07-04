@@ -1,5 +1,110 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Metrics-Report Admission Calibration + Feedback Wiring V1
+
+Verdict:
+
+```text
+METRICS_REPORT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-metrics-report-admission-calibration-v1
+```
+
+Fresh metrics_report admission calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/metrics-report-admission-calibration-v1.report.json
+
+hook_ready_rows:                         32
+rows_with_prompt_features:               32
+history_prompt_missing_rows:              0
+label_true_rows:                         18
+label_false_rows:                        14
+minimum true-support gate:                3
+robust_safe_policy_found:              true
+best_robust_true_accepts:                 3
+
+best robust policy:
+  false_accept_terms_no_failure
+  true_accepts:                            3
+  false_accepts:                           0
+
+raw_prompt_text_written:              false
+raw_response_text_written:            false
+response_text_used_for_features:      false
+target_labels_used_for_runtime:       false
+proof_labels_used_for_runtime:        false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Fresh default feedback after wiring metrics_report admission:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:                 595 / 1000
+scoreable_candidate_calls:                177 / 1000
+verification_hook_ready_events:           138
+verified_cpu_accept_eligible_events:       21 route-sum
+unique_verified_cpu_accepts:               16
+unique_verified_gap_to_80_calls:          784
+
+metrics_report route row:
+  candidate_events:                        55
+  payload_ready_events:                    42
+  payload_built_events:                    42
+  scoreable_payload_events:                42
+  verification_hook_ready_events:          32
+  local_accept_calibration_ran:          true
+  local_accept_safe_policy_found:        true
+  local_accept_support_qualified:        true
+  local_accept_best_safe_true_accepts:      3
+  verified_cpu_accept_eligible_events:      0
+  false_accepts:                            0
+  stage: local_accept_calibration_safe_policy_candidate
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/metrics-report-admission-calibration-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-admission-calibration-v1.nanda.json
+
+verdict: PASS
+complexity_score: 36
+agent_action: SAFE_TO_EDIT
+```
+
+Claim boundary:
+
+```text
+metrics_report now has a request-side admission candidate with enough support
+for the minimum 3-row safe-policy gate, but it adds zero verified CPU accepts.
+This is not promoted runtime savings and not a market claim. Current CPU
+Routability remains 16/1000 unique requests, not 80%.
+
+Next step: promote only through a separate shadow trace rewrite with provider
+cost, rollback, unverified_shadow_accepts=0, false_accepts=0, and no answer or
+label leak.
+```
+
 ## 2026-07-04 - Executor Integration: Retrieval-Lookup Calibration + Feedback Wiring V1
 
 Verdict:

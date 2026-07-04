@@ -442,6 +442,12 @@ pub(crate) fn print_help() {
         "            Calibrate metrics-report score/readout thresholds against deterministic verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-metrics-report-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Calibrate request-side metrics-report admission features against verifier labels; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
     );
     println!(
