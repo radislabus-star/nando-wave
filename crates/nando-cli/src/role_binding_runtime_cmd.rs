@@ -131,6 +131,7 @@ const DEFAULT_METRICS_REPORT_SAFE_POLICY_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.trace.jsonl";
 const DEFAULT_METRICS_REPORT_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.report.json";
+const DEFAULT_METRICS_REPORT_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.verification-hook-audit.report.json";
 const DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -6054,6 +6055,338 @@ where
     );
     Err(
         "metrics-report safe-policy promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_metrics_report_admission_safe_policy_promote_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let admission_calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_ADMISSION_CALIBRATION_REPORT));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let admission_calibration = read_json_file::<RoleBindingMetricsReportAdmissionCalibrationReport>(
+        &admission_calibration_report_path,
+    )?;
+    let Some(admission_policy) =
+        select_supported_metrics_report_admission_policy(&admission_calibration)
+    else {
+        return Err(
+            "metrics-report admission calibration report has no supported robust policy candidate"
+                .to_owned(),
+        );
+    };
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let promotion_selection = select_metrics_report_admission_promotion_policy_from_evidence(
+        &base_registry,
+        &trace_rows,
+        &history_by_fingerprint,
+        admission_policy,
+    )?;
+    let promotion_policy = &promotion_selection.policy;
+    let active_fringe_min = promotion_selection.active_fringe_min;
+    let threshold = promotion_policy.threshold;
+    let acceptance_policy = "first_slot_threshold".to_owned();
+    let request_side_policy_name = format!(
+        "{}_active_fringe_min_{}",
+        admission_policy.policy_name, active_fringe_min
+    );
+    let metrics_report_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY)
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if metrics_report_profile_ids.is_empty() {
+        return Err(
+            "metrics-report admission safe-policy promotion found no metrics_report profile ids in trace"
+                .to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if metrics_report_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "metrics-report admission safe-policy promotion found no matching profiles in registry for {:?}",
+            metrics_report_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut scoreable_candidate_calls = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let is_metrics_report = row
+            .nando_shadow_request
+            .as_ref()
+            .and_then(|request| request.route_key.as_deref())
+            .is_some_and(|route| route == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY);
+        if !is_metrics_report {
+            continue;
+        }
+        let scoreable = row
+            .nando_shadow_request
+            .as_ref()
+            .is_some_and(|request| !request.active_fringe.is_empty() && !request.slots.is_empty());
+        scoreable_candidate_calls += usize::from(scoreable);
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; metrics_report_admission_safe_policy_promote_v1 request_policy={} policy_accept=false reason=history_prompt_missing",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                admission_policy.policy_name
+            ));
+            continue;
+        };
+        request_side_policy_evaluated_rows += 1;
+        let features = extract_metrics_report_admission_features(prompt_text);
+        let prompt_policy_accept =
+            metrics_report_admission_policy_accepts(&admission_policy.policy_name, &features)
+                .unwrap_or(false);
+        let active_fringe_len = row
+            .nando_shadow_request
+            .as_ref()
+            .map(|request| request.active_fringe.len())
+            .unwrap_or_default();
+        let request_policy_accept = prompt_policy_accept && active_fringe_len >= active_fringe_min;
+        if !request_policy_accept {
+            request_side_policy_reject_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; metrics_report_admission_safe_policy_promote_v1 request_policy={} provider_cost_estimate_microusd={} policy_accept=false",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                request_side_policy_name,
+                provider_cost_microusd
+            ));
+            continue;
+        }
+
+        request_side_policy_accept_rows += 1;
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+        let Some(request) = &mut row.nando_shadow_request else {
+            no_score_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let runtime_policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(runtime_policy_accept);
+        if runtime_policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches +=
+            usize::from(runtime_response.accepted != runtime_policy_accept);
+        row.notes = Some(format!(
+            "{}; metrics_report_admission_safe_policy_promote_v1 request_policy={} runtime_policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            request_side_policy_name,
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            runtime_policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_metrics_report_admission_safe_policy_promote_v1"
+            .to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "METRICS_REPORT_ADMISSION_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "METRICS_REPORT_ADMISSION_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: admission_calibration_report_path.display().to_string(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: Some(history_path.display().to_string()),
+        request_side_policy_name: Some(request_side_policy_name.clone()),
+        calibration_policy_name: admission_policy.policy_name.clone(),
+        calibration_policy_threshold: None,
+        selected_policy_name: promotion_policy.policy_name.clone(),
+        selected_policy_source: promotion_policy.selection_source.clone(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: promotion_policy.accepts,
+        selected_policy_true_accepts: promotion_policy.true_accepts,
+        selected_policy_false_accepts: promotion_policy.false_accepts,
+        selected_policy_unverified_accepts: promotion_policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
+        history_prompt_missing_rows,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a promoted metrics-report registry and rewrites an evidence-backed trace using prompt-side admission, active-fringe size, and first-slot score threshold. Offline verifier labels choose the thresholds, but serving uses only request-side features plus .nwrb score. It writes no raw prompt/response text and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted metrics-report registry/trace, then feed that safe-policy audit into CPU route feedback. Keep market claims disabled until the default CPU80 window reports verified non-synthetic accepts.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-metrics-report-admission-safe-policy-promote-v1: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  request_side_policy_name: {}", request_side_policy_name);
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    println!(
+        "  provider_cost_events_written: {}",
+        report.provider_cost_events_written
+    );
+    Err(
+        "metrics-report admission safe-policy promotion is review-only; run shadow/audit before claims"
             .to_owned(),
     )
 }
@@ -15125,6 +15458,8 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_AUDIT_REPORT));
+    let metrics_report_safe_policy_audit_report_path =
+        PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_AUDIT_REPORT);
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -15394,6 +15729,14 @@ where
         } else {
             None
         };
+    let metrics_report_safe_policy_verification_audit =
+        if metrics_report_safe_policy_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &metrics_report_safe_policy_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let metrics_report_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_METRICS_REPORT_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let metrics_report_local_accept_calibration =
@@ -15531,6 +15874,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let metrics_report_safe_policy_verification_audit = keep_feedback_window_matched_audit(
+        metrics_report_safe_policy_verification_audit,
+        &metrics_report_safe_policy_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let git_control_verification_audit = keep_feedback_window_matched_audit(
         git_control_verification_audit,
         &git_control_audit_report_path,
@@ -15615,6 +15964,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(metrics_report_safe_policy_audit) = &metrics_report_safe_policy_verification_audit {
+        for row in &metrics_report_safe_policy_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(git_control_audit) = &git_control_verification_audit {
         for row in &git_control_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -15652,7 +16006,9 @@ where
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
     let effective_retrieval_lookup_verification_audit =
         retrieval_lookup_verification_audit.as_ref();
-    let effective_metrics_report_verification_audit = metrics_report_verification_audit.as_ref();
+    let effective_metrics_report_verification_audit = metrics_report_safe_policy_verification_audit
+        .as_ref()
+        .or(metrics_report_verification_audit.as_ref());
     let effective_git_control_verification_audit = git_control_safe_policy_verification_audit
         .as_ref()
         .or(git_control_verification_audit.as_ref());
@@ -16919,6 +17275,12 @@ where
                     .display()
                     .to_string()
             }),
+        metrics_report_safe_policy_verification_audit_report_path:
+            metrics_report_safe_policy_verification_audit.as_ref().map(|_| {
+                metrics_report_safe_policy_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         git_control_dry_run_report_path: git_control_dry_run
             .as_ref()
             .map(|_| git_control_dry_run_report_path.display().to_string()),
@@ -17125,6 +17487,9 @@ where
     }
     if let Some(path) = &report.metrics_report_verification_audit_report_path {
         println!("  metrics_report_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.metrics_report_safe_policy_verification_audit_report_path {
+        println!("  metrics_report_safe_policy_verification_audit_report: {path}");
     }
     if let Some(path) = &report.git_control_dry_run_report_path {
         println!("  git_control_dry_run_report: {path}");
@@ -20504,6 +20869,12 @@ struct RoleBindingMixedPromotionPolicySelection {
     unverified_accepts: usize,
 }
 
+#[derive(Clone, Debug)]
+struct RoleBindingMetricsReportAdmissionPromotionSelection {
+    policy: RoleBindingMixedPromotionPolicySelection,
+    active_fringe_min: usize,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditLocalAcceptCalibrationRow {
     trace_id: String,
@@ -20958,6 +21329,7 @@ struct RoleBindingFeedbackLoopReport {
     metrics_report_local_accept_calibration_report_path: Option<String>,
     metrics_report_admission_calibration_report_path: Option<String>,
     metrics_report_verification_audit_report_path: Option<String>,
+    metrics_report_safe_policy_verification_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,
     git_control_verification_audit_report_path: Option<String>,
     git_control_safe_policy_verification_audit_report_path: Option<String>,
@@ -26129,6 +26501,20 @@ fn select_supported_metrics_report_safe_policy(
         })
 }
 
+fn select_supported_metrics_report_admission_policy(
+    calibration: &RoleBindingMetricsReportAdmissionCalibrationReport,
+) -> Option<&RoleBindingEditAdmissionPolicyReport> {
+    const PREFERRED_POLICIES: &[&str] = &["false_accept_terms_no_failure"];
+    PREFERRED_POLICIES.iter().find_map(|policy_name| {
+        calibration.policies.iter().find(|policy| {
+            policy.policy_name == *policy_name
+                && policy.robust_safe
+                && policy.false_accepts == 0
+                && policy.true_accepts >= calibration.minimum_true_support
+        })
+    })
+}
+
 fn select_supported_agent_control_admission_policy(
     calibration: &RoleBindingAgentControlAdmissionCalibrationReport,
 ) -> Option<&RoleBindingEditAdmissionPolicyReport> {
@@ -26505,6 +26891,104 @@ fn select_metrics_report_promotion_policy_from_evidence(
     ))
 }
 
+fn select_metrics_report_admission_promotion_policy_from_evidence(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+    history_by_fingerprint: &BTreeMap<String, &str>,
+    admission_policy: &RoleBindingEditAdmissionPolicyReport,
+) -> Result<RoleBindingMetricsReportAdmissionPromotionSelection, String> {
+    let mut scored_rows = Vec::new();
+    for row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_metrics_report = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY);
+        if !is_metrics_report || request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            continue;
+        };
+        let features = extract_metrics_report_admission_features(prompt_text);
+        if !metrics_report_admission_policy_accepts(&admission_policy.policy_name, &features)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
+            continue;
+        };
+        scored_rows.push((
+            score.slot_margins.first().copied().unwrap_or(0),
+            row.verified_safe_accept,
+            request.active_fringe.len(),
+        ));
+    }
+    if scored_rows.is_empty() {
+        return Err(
+            "metrics-report admission safe policy selection found no scoreable admitted rows"
+                .to_owned(),
+        );
+    }
+
+    let mut first_slot_thresholds = scored_rows
+        .iter()
+        .map(|(first_slot_margin, _, _)| *first_slot_margin)
+        .collect::<Vec<_>>();
+    first_slot_thresholds.sort_unstable();
+    first_slot_thresholds.dedup();
+    let mut active_fringe_thresholds = scored_rows
+        .iter()
+        .map(|(_, _, active_fringe_len)| *active_fringe_len)
+        .collect::<Vec<_>>();
+    active_fringe_thresholds.sort_unstable();
+    active_fringe_thresholds.dedup();
+
+    let mut best_market_safe: Option<RoleBindingMetricsReportAdmissionPromotionSelection> = None;
+    for active_fringe_min in active_fringe_thresholds {
+        for threshold in &first_slot_thresholds {
+            let selection = evaluate_metrics_report_admission_promotion_threshold(
+                "metrics_report_admission_active_fringe_first_slot_threshold",
+                &format!(
+                    "request_side_false_accept_terms_no_failure_active_fringe_min_{}_plus_first_slot_threshold",
+                    active_fringe_min
+                ),
+                *threshold,
+                active_fringe_min,
+                &scored_rows,
+            );
+            let market_safe = selection.true_accepts
+                >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && selection.false_accepts == 0
+                && selection.unverified_accepts == 0;
+            if !market_safe {
+                continue;
+            }
+            let replace = best_market_safe.as_ref().is_none_or(|current| {
+                selection.true_accepts > current.policy.true_accepts
+                    || (selection.true_accepts == current.policy.true_accepts
+                        && active_fringe_min < current.active_fringe_min)
+                    || (selection.true_accepts == current.policy.true_accepts
+                        && active_fringe_min == current.active_fringe_min
+                        && selection.threshold < current.policy.threshold)
+            });
+            if replace {
+                best_market_safe = Some(RoleBindingMetricsReportAdmissionPromotionSelection {
+                    policy: selection,
+                    active_fringe_min,
+                });
+            }
+        }
+    }
+    best_market_safe.ok_or_else(|| {
+        "metrics-report admission safe policy found no active-fringe/first-slot threshold pair with true support >= 3, false=0, and unverified=0".to_owned()
+    })
+}
+
 fn select_mixed_promotion_policy_from_request_side_evidence(
     registry: &RoleBindingProfileRuntimeRegistry,
     trace_rows: &[RoleBindingRealTrafficTraceRow],
@@ -26614,6 +27098,39 @@ fn evaluate_mixed_energy_promotion_threshold(
         policy_name: policy_name.to_owned(),
         selection_source: selection_source.to_owned(),
         threshold,
+        accepts,
+        true_accepts,
+        false_accepts,
+        unverified_accepts,
+    }
+}
+
+fn evaluate_metrics_report_admission_promotion_threshold(
+    policy_name: &str,
+    selection_source: &str,
+    first_slot_threshold: i32,
+    active_fringe_min: usize,
+    scored_rows: &[(i32, Option<bool>, usize)],
+) -> RoleBindingMixedPromotionPolicySelection {
+    let mut accepts = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut unverified_accepts = 0usize;
+    for (first_slot_margin, verified_safe_accept, active_fringe_len) in scored_rows {
+        if *first_slot_margin < first_slot_threshold || *active_fringe_len < active_fringe_min {
+            continue;
+        }
+        accepts += 1;
+        match verified_safe_accept {
+            Some(true) => true_accepts += 1,
+            Some(false) => false_accepts += 1,
+            None => unverified_accepts += 1,
+        }
+    }
+    RoleBindingMixedPromotionPolicySelection {
+        policy_name: policy_name.to_owned(),
+        selection_source: selection_source.to_owned(),
+        threshold: first_slot_threshold,
         accepts,
         true_accepts,
         false_accepts,
@@ -27069,6 +27586,35 @@ fn metrics_report_admission_policy_reports(
             })
         })
         .collect()
+}
+
+fn metrics_report_admission_policy_accepts(
+    policy_name: &str,
+    features: &RoleBindingMetricsReportAdmissionFeatures,
+) -> Option<bool> {
+    Some(match policy_name {
+        "all_hook_ready_rows" => true,
+        "false_accept_terms" => features.has_false_accept_terms,
+        "false_accept_terms_no_failure" => {
+            features.has_false_accept_terms && !features.has_failure_terms
+        }
+        "p99_terms" => features.has_p99_terms,
+        "metric_terms" => features.has_metric_terms,
+        "metric_and_report_terms" => features.has_metric_terms && features.has_report_terms,
+        "metric_and_json_terms" => features.has_metric_terms && features.has_json_terms,
+        "verdict_and_digit_dense" => features.has_verdict_terms && features.digit_count_ge_4,
+        "false_accept_or_p99_no_failure" => {
+            (features.has_false_accept_terms || features.has_p99_terms)
+                && !features.has_failure_terms
+        }
+        "long_metric_report_context" => {
+            features.long_report_context && features.has_metric_terms && features.has_report_terms
+        }
+        "concise_metric_question" => {
+            features.concise_request && features.has_question_mark && features.has_metric_terms
+        }
+        _ => return None,
+    })
 }
 
 fn planning_next_step_admission_policy_reports(

@@ -448,6 +448,12 @@ pub(crate) fn print_help() {
         "            Calibrate request-side metrics-report admission features against verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-metrics-report-admission-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [admission-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Build a review-only metrics-report promoted trace using prompt-side admission plus first-slot score; run shadow/audit before claims"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
     );
     println!(

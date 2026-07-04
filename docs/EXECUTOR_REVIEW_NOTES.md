@@ -1,5 +1,146 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Metrics-Report Admission Safe-Policy Promote V1
+
+Verdict:
+
+```text
+METRICS_REPORT_ADMISSION_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-metrics-report-admission-safe-policy-promote-v1
+
+Added feedback wiring:
+  metrics_report_safe_policy_verification_audit_report_path
+```
+
+Fresh promotion artifact:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.report.json
+
+promoted_registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-safe-policy-v1.json
+
+promoted_trace:
+  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.trace.jsonl
+
+request_side_policy_name:
+  false_accept_terms_no_failure_active_fringe_min_99
+
+selected_acceptance_policy:          first_slot_threshold
+selected_policy_threshold:           278528
+policy_accept_rows:                       3
+policy_accept_verified_true_rows:         3
+policy_accept_verified_false_rows:        0
+policy_accept_unverified_rows:            0
+provider_cost_events_written:             3
+market_claim_allowed:                 false
+```
+
+Fresh metrics_report shadow:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.shadow-report.json
+
+total_llm_calls:                        1000
+nando_shadow_accepts:                      3
+verified_safe_accepts:                     3
+unverified_shadow_accepts:                 0
+false_accepts:                             0
+incremental_savings_over_exact_cache:      3
+p99_shadow_score_latency_ns:          260899
+synthetic_trace_used:                  false
+```
+
+Fresh metrics_report verification audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.verification-hook-audit.report.json
+
+operator_candidate_calls:                  3
+scoreable_candidate_calls:                 3
+verification_hook_ready_events:            3
+verified_cpu_accept_eligible_events:       3
+shadow_false_accepts:                      0
+market_claim_allowed:                   true
+```
+
+Fresh default feedback after safe-policy audit wiring:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+verified_cpu_accept_unique_request_fingerprints: 19
+verified_cpu_accept_unique_routability_milli:    19
+unique_verified_gap_to_80_calls:                781
+incremental_cpu_accept_unique_request_fingerprints: 19
+
+metrics_report route row:
+  stage: verified_cpu_accept_eligible
+  candidate_events:                         55
+  payload_ready_events:                     42
+  payload_built_events:                     42
+  scoreable_payload_events:                  3
+  verification_hook_ready_events:            3
+  verified_cpu_accept_eligible_events:       3
+  false_accepts:                             0
+```
+
+Fresh operator catalog:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+existing_operator_candidate_calls:        595
+no_candidate_calls:                       405
+current_verified_cpu_accepts:              19
+verified_gap_to_80_calls:                 781
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/metrics-report-admission-safe-policy-promote-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-admission-safe-policy-promote-v1.nanda.json
+
+verdict: PASS
+complexity_score: 33
+agent_action: SAFE_TO_EDIT
+```
+
+Claim boundary:
+
+```text
+This is a narrow non-synthetic metrics_report promoted trace PASS: 3 verified
+safe accepts, 0 false accepts, 0 unverified accepts, and 3 incremental accepts
+over exact cache inside the current 1000-call trace window.
+
+This is not CPU Routability 80. The full feedback loop is now 19/1000 unique
+verified CPU accepts, with 781 calls still missing to reach the 80% target.
+```
+
 ## 2026-07-04 - Executor Integration: Metrics-Report Admission Calibration + Feedback Wiring V1
 
 Verdict:
