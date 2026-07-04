@@ -1,5 +1,112 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: File Path Evidence Output Evidence V1
+
+Verdict:
+
+```text
+FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added CLI route:
+  role-binding-real-traffic-file-path-evidence-output-evidence-v1
+```
+
+Why:
+
+```text
+The file_path_evidence profile could score request-side payloads, but it had
+no deterministic verifier labels. This stage attaches final-answer fingerprints
+and source_path_or_url_presence verifier status from local Codex session
+evidence, without writing raw prompts or raw responses.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-output-evidence-v1 \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
+  /home/ubu/.codex/sessions \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-shadow-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-shadow-v1.report.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.verification-hook-audit.report.json
+```
+
+Measured output evidence:
+
+```text
+operator_candidate_calls: 44
+scoreable_candidate_calls: 44
+session_ids_requested: 9
+session_files_scanned: 9
+codex_turns_indexed: 39
+output_evidence_matched_events: 39
+no_session_output_match_events: 5
+deterministic_verification_events: 39
+verifier_not_applicable_events: 0
+verified_true_events: 15
+verified_false_events: 24
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Measured shadow/audit:
+
+```text
+operator_candidate_calls: 44
+nando_shadow_accepts: 0
+nando_shadow_fallbacks: 44
+verified_safe_accepts: 0
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 320643
+
+verification_hook_ready_events: 39
+verified_cpu_accept_eligible_events: 0
+candidates_missing_explicit_verification: 5
+candidates_missing_output_evidence: 5
+provider_cost_events: 0
+```
+
+Decision:
+
+```text
+file_path_evidence_answer now has verifier labels: 15 true, 24 false, 5 missing.
+It still adds zero CPU80 savings because the disabled profile accepts nothing.
+The next step is request-side admission calibration against these labels.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/file-path-evidence-output-evidence-v1.md
+verdict: PASS
+```
+
 ## 2026-07-04 - Executor Integration: File Path Evidence Disabled Profile V1
 
 Verdict:

@@ -102,6 +102,10 @@ const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json";
 const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.report.json";
+const DEFAULT_FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl";
+const DEFAULT_FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-seed0.nwrb";
 const DEFAULT_ANSWER_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -7269,6 +7273,165 @@ where
     println!("  verified_false_events: {}", report.verified_false_events);
     println!("  raw_response_text_written: false");
     Err("answer-evidence output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_file_path_evidence_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_file_path_evidence_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "file-path-evidence output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.tool_call_fingerprints = evidence.tool_call_fingerprints.clone();
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_source_path_or_url_presence_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "file-path-evidence output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_file_path_evidence_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "File-path evidence output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and deterministic source_path_or_url_presence verifier status, writes no raw prompt/response text, and does not enable local accepts or market savings claims.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the file-path evidence trace, then calibrate request-side admission. Keep local accepts disabled until provider cost, shadow accept, unique attribution, and false_accepts=0 are all proven.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-file-path-evidence-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err(
+        "file-path evidence output evidence is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
 }
 
 pub(crate) fn run_role_binding_real_traffic_answer_evidence_local_accept_calibration_v1<I>(
@@ -37393,6 +37556,98 @@ fn deterministic_answer_evidence_output_verification(
     (verified, true, status.to_owned())
 }
 
+fn deterministic_file_path_evidence_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let lower = prompt_text.to_lowercase();
+    if !broad_split_has_file_evidence_terms(prompt_text, &lower) {
+        return (
+            false,
+            false,
+            "not_applicable_missing_file_path_evidence_terms".to_owned(),
+        );
+    }
+    let Some(tokens) = extract_answer_evidence_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_file_path_evidence_tokens".to_owned(),
+        );
+    };
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "no source",
+            "no path",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "недостаточно",
+            "не нашёл",
+            "не нашел",
+            "нет источника",
+            "нет пути",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+
+    let evidence_token_present =
+        response_contains_retrieval_lookup_evidence_token(&response_lower, &tokens.evidence_token);
+    let source_or_path_signal = contains_any(
+        &response_lower,
+        &[
+            "http://",
+            "https://",
+            "://",
+            ".md",
+            ".rs",
+            ".json",
+            ".jsonl",
+            ".toml",
+            ".log",
+            "/home/",
+            "docs/",
+            "target/",
+            "crates/",
+            "source",
+            "path",
+            "file",
+            "line",
+            "source:",
+            "путь",
+            "файл",
+            "строк",
+            "источник",
+            "документ",
+        ],
+    );
+    let boundary_ok = response_contains_branch_token(&response_lower, &tokens.boundary_token)
+        || source_or_path_signal;
+    let verified = evidence_token_present && source_or_path_signal && boundary_ok;
+    let status = if verified {
+        "verified_source_path_or_url_presence"
+    } else if !evidence_token_present {
+        "rejected_evidence_path_token_absent_from_response"
+    } else if !source_or_path_signal {
+        "rejected_source_path_signal_absent_from_response"
+    } else {
+        "rejected_boundary_signal_absent_from_response"
+    };
+    (verified, true, status.to_owned())
+}
+
 #[derive(Clone, Debug)]
 struct ProjectContextTokens {
     project_token: String,
@@ -48627,6 +48882,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_conditional_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_answer_evidence_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_file_path_evidence_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_planning_next_step_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_agent_continue_execute_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_project_context_payload_dry_run::"))

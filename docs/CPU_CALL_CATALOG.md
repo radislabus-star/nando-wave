@@ -290,6 +290,62 @@ lower threshold or promote until source_path_or_url_presence_verifier_v1 proves
 safe accepts and the feedback/catalog path reports unique value over exact cache.
 ```
 
+### Output Evidence V1
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.report.json
+target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-shadow-v1.report.json
+target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.verification-hook-audit.report.json
+```
+
+Measured verifier labels:
+
+```text
+operator_candidate_calls: 44
+scoreable_candidate_calls: 44
+output_evidence_matched_events: 39
+no_session_output_match_events: 5
+deterministic_verification_events: 39
+verified_true_events: 15
+verified_false_events: 24
+raw_prompt_text_written: false
+raw_response_text_written: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Measured shadow/audit:
+
+```text
+nando_shadow_accepts: 0
+nando_shadow_fallbacks: 44
+verified_safe_accepts: 0
+unverified_shadow_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+verification_hook_ready_events: 39
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 5
+provider_cost_events: 0
+```
+
+Catalog status remains:
+
+```text
+CANDIDATE
+```
+
+Decision:
+
+```text
+Verifier evidence exists now, but the disabled profile still accepts zero rows.
+The route remains non-savings until request-side admission calibration finds a
+robust safe policy and a promoted shadow run proves unique verified accepts over
+exact cache with false_accepts=0.
+```
+
 Blocked for now:
 
 ```text

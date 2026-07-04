@@ -394,6 +394,12 @@ pub(crate) fn print_help() {
         "            Compile disabled-threshold file_path_evidence_answer .nwrb profile overlay; scoring enabled, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-file-path-evidence-output-evidence-v1 [file-path-evidence-dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach final-answer fingerprints plus source/path presence verifier status; no local accepts or market claims"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-profile-v1 [base-registry-json] [answer-evidence-dry-run-trace-jsonl] [answer-evidence-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
