@@ -1,5 +1,85 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: CPU Operator Catalog Refresh After Test Output Parse
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW
+AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  docs/CPU_CALL_CATALOG.md
+
+Regenerated:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+  target/nando-wave/real-traffic-shadow/agent-loop-profile-registry-v1.report.json
+```
+
+Why:
+
+```text
+The full-window `test_output_parse` route was integrated into feedback, but the
+old business-value report path still showed 7 proven rows and did not rank
+`test_output_parse`. The canonical catalog command already consumes
+`cpu-route-feedback-loop-v1.report.json`; rerunning it refreshes the business
+gate without adding code or changing local-accept policy.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1
+cargo run -p nando-cli -- role-binding-real-traffic-agent-loop-profile-registry-v1
+```
+
+Measured result:
+
+```text
+cpu_operator_catalog total_llm_calls: 1000
+cpu_operator_catalog exact_cache_hits: 53
+cpu_operator_catalog current_verified_cpu_accepts: 36
+cpu_operator_catalog current_incremental_unique_cpu_accepts_over_exact_cache: 35
+cpu_operator_catalog business_value_gate_passed_rows: 8
+cpu_operator_catalog proven_profile_rows: 8
+cpu_operator_catalog candidate_profile_rows: 4
+cpu_operator_catalog watch_profile_rows: 12
+cpu_operator_catalog rejected_profile_rows: 6
+
+test_output_parse priority_rank: 1
+test_output_parse candidate_events: 10
+test_output_parse non_exact_candidate_calls: 10
+test_output_parse expected_unique_cpu_accepts_over_exact_cache: 10
+test_output_parse false_accepts: 0
+test_output_parse current_status: PROVEN
+test_output_parse business_value_gate_passed: true
+
+agent_loop_profile_registry top_next_profile_key: null
+agent_loop_profile_registry verified_current_profiles: 8
+agent_loop_profile_registry admission_blocked_profiles: 2
+```
+
+Decision:
+
+```text
+The navigation instrument is now synchronized with feedback: `test_output_parse`
+is the top PROVEN row, but it is already counted and must not be double-counted.
+The next growth step remains a sibling split/profile with new verified unique
+accepts; current registry does not expose a safe top_next_profile_key.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/cpu-operator-catalog-refresh-after-test-output-parse.md
+verdict: PASS
+complexity_score: 38
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Full-Window Attribution V1
 
 Verdict:

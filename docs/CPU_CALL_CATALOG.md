@@ -5,7 +5,7 @@ Status: review-only working catalog for CPU80.
 Source report:
 
 ```text
-target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.report.json
+target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
 ```
 
 The catalog is a product filter before building another operator profile. It
@@ -49,7 +49,7 @@ exact_cache_hits: 53
 current_verified_cpu_accepts_route_sum: 42
 current_unique_verified_cpu_accepts: 36
 current_incremental_unique_cpu_accepts_over_exact_cache: 35
-business_value_gate_passed_rows: 7
+business_value_gate_passed_rows: 8
 proven_profile_rows: 8
 candidate_profile_rows: 4
 watch_profile_rows: 12
