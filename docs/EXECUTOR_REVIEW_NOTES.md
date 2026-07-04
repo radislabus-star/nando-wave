@@ -1,5 +1,185 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Project-Context Workspace Evidence Hook V1
+
+Verdict:
+
+```text
+PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_WORKSPACE_EVIDENCE_TRUE_LABELS_FOUND
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-project-context-output-evidence-v1
+  role-binding-real-traffic-project-context-local-accept-calibration-v1
+
+The project_context scoreable rows now have a deterministic workspace artifact
+or goal-state evidence hook. The hook reads Codex session tool-call evidence and
+writes only fingerprints/counters. It does not write raw prompt text, raw
+response text, or raw tool outputs. Local accepts stay disabled unless a later
+request-side admission path has enough verifier-true support.
+```
+
+Output evidence:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.trace.jsonl
+
+artifact_evidence_matched_events: 2
+verified_true_events: 1
+verified_false_events: 1
+tool_call_fingerprint_events: 1
+raw_prompt_text_written: false
+raw_response_text_written: false
+tool_outputs_written: false
+market_claim_allowed: false
+```
+
+Shadow/audit:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.shadow-report.json
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.verification-hook-audit.report.json
+
+total_llm_calls: 1000
+operator_candidate_calls: 2
+scoreable_candidate_calls: 2
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+p99_shadow_score_latency_ns: 204714
+verification_hook_ready_events: 2
+verified_cpu_accept_eligible_events: 0
+candidates_missing_output_evidence: 0
+candidates_missing_provider_cost: 2
+market_claim_allowed: false
+```
+
+Local-accept calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/project-context-local-accept-calibration-v1.report.json
+
+hook_ready_rows: 2
+label_true_rows: 1
+label_false_rows: 1
+no_score_rows: 0
+safe_policy_found: true
+best_safe_true_accepts: 1
+minimum_true_support_required_by_feedback: 3
+support_qualified: false
+market_claim_allowed: false
+```
+
+Feedback/catalog:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+overall:
+  total_llm_calls:                 1000
+  operator_candidate_calls:         809
+  scoreable_candidate_calls:        136
+  verification_hook_ready_events:   108
+  verified_cpu_accept_eligible_events: 32
+  verified_cpu_routability_milli:    32
+  unique_verified_cpu_accepts:       26
+  unique_verified_gap_to_80_calls:  774
+  incremental_unique_cpu_accepts:    25
+  incremental_unique_gap_to_80_calls: 775
+
+project_context_dialogue:
+  candidate_events:                    211
+  payload_ready_events:                  2
+  scoreable_payload_events:              2
+  verification_hook_ready_events:        2
+  local_accept_calibration_ran:       true
+  local_accept_safe_policy_found:     true
+  local_accept_minimum_true_support:     3
+  local_accept_support_qualified:    false
+  local_accept_best_safe_true_accepts:   1
+  verified_cpu_accept_eligible_events:   0
+  false_accepts:                         0
+  stage: local_accept_calibration_support_insufficient
+  next_action: Collect more verifier-true rows or raise admission quality
+               before promotion; low-support safe policies stay review-only.
+```
+
+Catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+top_catalog_row:
+  answer_or_explain (route_gap_family)
+
+project_context_dialogue existing_profile_route:
+  priority_rank:                 9
+  verification_hook_ready:       2
+  local_accept_support_insufficient: true
+  verified_cpu_accepts:          0
+  recommended_verifier:          workspace_artifact_or_goal_state_verifier_v1
+  market_claim_allowed:          false
+```
+
+Decision:
+
+```text
+This closes the verification-hook-missing gap for the narrow project_context
+scoreable subset. It does not create verified CPU accepts because shadow accepts
+remain zero and the calibration has only one verifier-true support row.
+
+project_context now moves from:
+  scoreable_payload_missing_verification_hook
+
+to:
+  local_accept_calibration_support_insufficient
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created. CPU Routability 80 remains open:
+26/1000 unique verified accepts, gap 774.
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/project-context-workspace-evidence-hook-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/project-context-workspace-evidence-hook-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 36
+note: narrow role-swap check only: project-context workspace evidence hook
+      ready != local accept, verified CPU savings, or market claim.
+```
+
 ## 2026-07-04 - Executor Integration: Project-Context Disabled Profile V1
 
 Verdict:

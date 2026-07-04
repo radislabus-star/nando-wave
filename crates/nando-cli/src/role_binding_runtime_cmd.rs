@@ -126,6 +126,13 @@ const DEFAULT_PROJECT_CONTEXT_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-project-context-v1.json";
 const DEFAULT_PROJECT_CONTEXT_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/project-context-profile-v1.report.json";
+const DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.trace.jsonl";
+const DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.report.json";
+const DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.verification-hook-audit.report.json";
+const DEFAULT_PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/project-context-local-accept-calibration-v1.report.json";
 const DEFAULT_METRICS_REPORT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb";
 const DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG: &str =
@@ -4908,6 +4915,341 @@ where
     );
     println!("  local_accepts_enabled_on_real_traffic: false");
     Err("project-context profile is review-only; attach verifier before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_project_context_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_REPORT));
+
+    let mut trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let artifact_index = build_codex_session_project_context_artifact_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+    )?;
+
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut artifact_evidence_matched_events = 0usize;
+    let mut no_session_artifact_match_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+    let mut tool_call_fingerprint_events = 0usize;
+
+    for row in &mut trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID) {
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = artifact_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_artifact_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "project-context workspace evidence missing: no matching Codex turn found",
+            ));
+            continue;
+        };
+        artifact_evidence_matched_events += 1;
+        if row.response_fingerprint.is_none() {
+            row.response_fingerprint = evidence.response_fingerprint.clone();
+        }
+        row.tool_call_fingerprints = evidence.tool_call_fingerprints.clone();
+        tool_call_fingerprint_events += usize::from(!row.tool_call_fingerprints.is_empty());
+        row.verification_source = Some(
+            "codex_session_tool_call_fingerprints_plus_workspace_artifact_or_goal_state_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "project-context workspace evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &trace_rows)?;
+    let report = RoleBindingProjectContextArtifactEvidenceReport {
+        schema_version: "nando_role_binding_project_context_output_evidence_v1".to_owned(),
+        verdict: if verified_true_events > 0 {
+            "PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_WORKSPACE_EVIDENCE_TRUE_LABELS_FOUND"
+        } else if artifact_evidence_matched_events > 0 {
+            "PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_WORKSPACE_EVIDENCE_ATTACHED"
+        } else {
+            "PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_NO_WORKSPACE_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: artifact_index.session_files_scanned,
+        codex_turns_indexed: artifact_index.codex_turns_indexed,
+        tool_events_indexed: artifact_index.tool_events_indexed,
+        artifact_evidence_matched_events,
+        no_session_artifact_match_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        tool_call_fingerprint_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        tool_outputs_written: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Project-context workspace evidence join only. It scans local Codex session tool events, writes response/tool-call fingerprints instead of raw output, and marks true only when request-side project_context rows have successful workspace artifact or goal-state evidence. It does not enable local accepts or prove market savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow/audit over the project-context evidence trace, then calibrate only if hook-ready true labels have provider cost, shadow local accepts, false_accepts=0, and enough support. Keep broad project dialogue fallback-only.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-project-context-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  artifact_evidence_matched_events: {}",
+        report.artifact_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!(
+        "  tool_call_fingerprint_events: {}",
+        report.tool_call_fingerprint_events
+    );
+    Err("project-context output evidence is review-only; run shadow/audit".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_project_context_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_PROJECT_CONTEXT_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let artifact_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let goal_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin: artifact_slot_margin,
+            end_slot_margin: goal_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_disabled_profile_policy", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_positive_policy =
+        evaluate_edit_calibration_policy("energy_positive_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let strict_positive_policy = evaluate_edit_calibration_policy(
+        "strict_positive_slots_and_energy_positive",
+        &scored_rows,
+        |row| row.min_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let artifact_slot_policy =
+        evaluate_edit_calibration_policy("artifact_slot_positive_only", &scored_rows, |row| {
+            row.marker_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let goal_slot_policy =
+        evaluate_edit_calibration_policy("goal_slot_positive_only", &scored_rows, |row| {
+            row.end_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let best_energy_threshold_policy = best_single_threshold_policy(
+        "best_energy_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.energy_margin,
+    );
+    let best_min_slot_threshold_policy = best_single_threshold_policy(
+        "best_min_slot_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.min_slot_margin,
+    );
+    let best_artifact_slot_threshold_policy = best_single_threshold_policy(
+        "best_artifact_slot_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.marker_slot_margin,
+    );
+    let best_goal_slot_threshold_policy = best_single_threshold_policy(
+        "best_goal_slot_margin_threshold_request_side_only",
+        &scored_rows,
+        |row| row.end_slot_margin,
+    );
+    let margin_collision_diagnostics = planning_margin_collision_diagnostics(&scored_rows);
+    let request_side_margin_only_accepts_all_true_without_false = margin_collision_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.safe_accepts_all_true_rows);
+    let policies = vec![
+        current_policy,
+        energy_positive_policy,
+        strict_positive_policy,
+        artifact_slot_policy,
+        goal_slot_policy,
+        best_energy_threshold_policy,
+        best_min_slot_threshold_policy,
+        best_artifact_slot_threshold_policy,
+        best_goal_slot_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_project_context_local_accept_calibration_v1"
+            .to_owned(),
+        verdict: if safe_policy_found {
+            "PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
+        } else {
+            "PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_REQUEST_SIDE_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        margin_collision_diagnostics,
+        request_side_margin_only_accepts_all_true_without_false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Project-context calibration only. It evaluates request-side score/readout policies against workspace-artifact labels, writes only fingerprints and margins, enables no local accepts, and cannot be used as a market savings claim. Tool-call fingerprints are verifier evidence, not runtime admission features.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Do not promote from the current tiny support set. Require more non-synthetic true labels, provider cost, shadow/audit with false_accepts=0, and a separate promoted registry/trace before counting CPU savings.".to_owned()
+        } else {
+            "Do not lower the project-context threshold. Current score geometry does not separate artifact-backed true rows from false/unverified project-context rows; improve request-side admission or payload features before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-project-context-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("project-context local accept calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_profile_v1<I>(
@@ -18552,6 +18894,8 @@ where
         PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let project_context_dry_run_report_path =
         PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT);
+    let project_context_verification_audit_report_path =
+        PathBuf::from(DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let style_brevity_dry_run_report_path =
         PathBuf::from(DEFAULT_STYLE_BREVITY_PAYLOAD_DRY_RUN_REPORT);
     let metrics_report_dry_run_report_path = args
@@ -18794,6 +19138,26 @@ where
     } else {
         None
     };
+    let project_context_verification_audit =
+        if project_context_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &project_context_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
+    let project_context_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let project_context_local_accept_calibration =
+        if project_context_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &project_context_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
     let style_brevity_dry_run = if style_brevity_dry_run_report_path.exists() {
         Some(
             read_json_file::<RoleBindingStyleBrevityPayloadDryRunReport>(
@@ -19014,6 +19378,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let project_context_verification_audit = keep_feedback_window_matched_audit(
+        project_context_verification_audit,
+        &project_context_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let metrics_report_verification_audit = keep_feedback_window_matched_audit(
         metrics_report_verification_audit,
         &metrics_report_verification_audit_report_path,
@@ -19116,6 +19486,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(project_context_audit) = &project_context_verification_audit {
+        for row in &project_context_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(metrics_report_audit) = &metrics_report_verification_audit {
         for row in &metrics_report_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -19169,6 +19544,7 @@ where
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
     let effective_retrieval_lookup_verification_audit =
         retrieval_lookup_verification_audit.as_ref();
+    let effective_project_context_verification_audit = project_context_verification_audit.as_ref();
     let effective_metrics_report_verification_audit = metrics_report_safe_policy_verification_audit
         .as_ref()
         .or(metrics_report_verification_audit.as_ref());
@@ -19191,6 +19567,7 @@ where
             effective_planning_next_step_verification_audit,
             effective_read_inspect_verification_audit,
             effective_retrieval_lookup_verification_audit,
+            effective_project_context_verification_audit,
             effective_metrics_report_verification_audit,
             effective_git_control_verification_audit,
             effective_serving_ops_verification_audit,
@@ -19258,6 +19635,9 @@ where
         + effective_retrieval_lookup_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
+        + effective_project_context_verification_audit
+            .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
         + effective_metrics_report_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
@@ -19285,6 +19665,9 @@ where
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
         + effective_retrieval_lookup_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + effective_project_context_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
         + effective_metrics_report_verification_audit
@@ -19426,7 +19809,9 @@ where
             read_inspect_local_accept_calibration.as_ref()
         } else if is_retrieval_lookup_route {
             retrieval_lookup_local_accept_calibration.as_ref()
-        } else if is_project_context_route || is_style_brevity_route {
+        } else if is_project_context_route {
+            project_context_local_accept_calibration.as_ref()
+        } else if is_style_brevity_route {
             None
         } else if is_metrics_report_route {
             metrics_report_local_accept_calibration.as_ref()
@@ -20020,6 +20405,9 @@ where
     }
 
     if !forecast_has_project_context && project_context_dry_run.is_some() {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY)
+            .copied();
         let payload_ready_events = project_context_dry_run
             .as_ref()
             .map(|report| report.payload_ready_events)
@@ -20028,24 +20416,50 @@ where
             .as_ref()
             .map(|report| report.payload_built_events)
             .unwrap_or_default();
-        let scoreable_payload_events = project_context_dry_run
-            .as_ref()
-            .map(|report| report.scoreable_payload_events)
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                project_context_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
             .unwrap_or_default();
         let candidate_events = project_context_dry_run
             .as_ref()
             .map(|report| report.project_context_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
             .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let local_accept_calibration_ran = project_context_local_accept_calibration.is_some();
+        let local_accept_safe_policy_found = project_context_local_accept_calibration
+            .as_ref()
+            .map(|report| report.safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = project_context_local_accept_calibration
+            .as_ref()
+            .map(|report| report.best_safe_true_accepts)
+            .unwrap_or_default();
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
         let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
             payload_built_events,
             scoreable_payload_events,
-            verification_hook_ready_events: 0,
-            verified_cpu_accept_eligible_events: 0,
-            false_accepts: 0,
-            local_accept_calibration_ran: false,
-            local_accept_safe_policy_found: false,
-            local_accept_support_qualified: false,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
             local_accept_calibration_authoritative: true,
         });
         let next_action = feedback_route_next_action(&stage);
@@ -20061,18 +20475,18 @@ where
             payload_ready_events,
             payload_built_events,
             scoreable_payload_events,
-            verification_hook_ready_events: 0,
-            local_accept_calibration_ran: false,
-            local_accept_safe_policy_found: false,
-            local_accept_minimum_true_support: DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT,
-            local_accept_support_qualified: false,
-            local_accept_best_safe_true_accepts: 0,
-            verified_cpu_accept_eligible_events: 0,
+            verification_hook_ready_events,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
+            local_accept_best_safe_true_accepts,
+            verified_cpu_accept_eligible_events,
             unique_accepts: feedback_route_unique_accept_report(
                 &unique_accepts,
                 REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY,
             ),
-            false_accepts: 0,
+            false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
                 forecast.total_llm_calls,
@@ -20081,7 +20495,10 @@ where
                 scoreable_payload_events,
                 forecast.total_llm_calls,
             ),
-            verified_share_milli_of_all_llm_calls: 0,
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
         });
     }
 
@@ -20639,6 +21056,19 @@ where
         project_context_dry_run_report_path: project_context_dry_run
             .as_ref()
             .map(|_| project_context_dry_run_report_path.display().to_string()),
+        project_context_verification_audit_report_path: project_context_verification_audit
+            .as_ref()
+            .map(|_| {
+                project_context_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
+        project_context_local_accept_calibration_report_path:
+            project_context_local_accept_calibration.as_ref().map(|_| {
+                project_context_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         style_brevity_dry_run_report_path: style_brevity_dry_run
             .as_ref()
             .map(|_| style_brevity_dry_run_report_path.display().to_string()),
@@ -20891,6 +21321,12 @@ where
     }
     if let Some(path) = &report.project_context_dry_run_report_path {
         println!("  project_context_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.project_context_verification_audit_report_path {
+        println!("  project_context_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.project_context_local_accept_calibration_report_path {
+        println!("  project_context_local_accept_calibration_report: {path}");
     }
     if let Some(path) = &report.style_brevity_dry_run_report_path {
         println!("  style_brevity_dry_run_report: {path}");
@@ -24325,6 +24761,37 @@ struct RoleBindingPlanningNextStepArtifactProgressReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingProjectContextArtifactEvidenceReport {
+    schema_version: String,
+    verdict: String,
+    input_trace_path: String,
+    sessions_root: String,
+    output_trace_path: String,
+    total_trace_rows: usize,
+    operator_candidate_calls: usize,
+    scoreable_candidate_calls: usize,
+    session_ids_requested: usize,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    tool_events_indexed: usize,
+    artifact_evidence_matched_events: usize,
+    no_session_artifact_match_events: usize,
+    verifier_not_applicable_events: usize,
+    verified_true_events: usize,
+    verified_false_events: usize,
+    tool_call_fingerprint_events: usize,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    tool_outputs_written: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingEditLocalAcceptCalibrationReport {
     schema_version: String,
     verdict: String,
@@ -25239,6 +25706,8 @@ struct RoleBindingFeedbackLoopReport {
     retrieval_lookup_local_accept_calibration_report_path: Option<String>,
     retrieval_lookup_verification_audit_report_path: Option<String>,
     project_context_dry_run_report_path: Option<String>,
+    project_context_verification_audit_report_path: Option<String>,
+    project_context_local_accept_calibration_report_path: Option<String>,
     style_brevity_dry_run_report_path: Option<String>,
     metrics_report_dry_run_report_path: Option<String>,
     metrics_report_local_accept_calibration_report_path: Option<String>,
@@ -35600,6 +36069,127 @@ fn build_codex_session_planning_artifact_progress_index(
     })
 }
 
+fn build_codex_session_project_context_artifact_index(
+    sessions_root: &Path,
+    session_ids: &HashSet<String>,
+    wanted_request_fingerprints: &HashSet<String>,
+) -> Result<CodexSessionPlanningArtifactProgressIndex, String> {
+    let mut session_files = Vec::new();
+    collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
+    let mut by_request_fingerprint = BTreeMap::new();
+    let mut codex_turns_indexed = 0usize;
+    let mut tool_events_indexed = 0usize;
+
+    for session_file in &session_files {
+        let text = fs::read_to_string(session_file).map_err(|error| {
+            format!(
+                "failed to read Codex session JSONL {}: {error}",
+                session_file.display()
+            )
+        })?;
+        let mut pending_request_fingerprint: Option<String> = None;
+        let mut pending_prompt_text: Option<String> = None;
+        let mut pending_artifacts = PlanningArtifactTurnEvidence::default();
+
+        for (line_index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(trimmed).map_err(|error| {
+                format!(
+                    "failed to parse Codex session JSONL {} line {}: {error}",
+                    session_file.display(),
+                    line_index + 1
+                )
+            })?;
+            match value.get("type").and_then(serde_json::Value::as_str) {
+                Some("event_msg") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    match payload.get("type").and_then(serde_json::Value::as_str) {
+                        Some("user_message") => {
+                            if let Some(message) =
+                                payload.get("message").and_then(serde_json::Value::as_str)
+                            {
+                                let fingerprint = format!(
+                                    "fnv1a64:{:016x}",
+                                    stable_real_traffic_fingerprint64(message.as_bytes())
+                                );
+                                pending_prompt_text = Some(message.to_owned());
+                                pending_request_fingerprint = Some(fingerprint);
+                                pending_artifacts = PlanningArtifactTurnEvidence::default();
+                            }
+                        }
+                        Some("agent_message")
+                            if payload.get("phase").and_then(serde_json::Value::as_str)
+                                == Some("final_answer") =>
+                        {
+                            let Some(response_text) =
+                                payload.get("message").and_then(serde_json::Value::as_str)
+                            else {
+                                continue;
+                            };
+                            if finalize_project_context_artifact_turn(
+                                &mut by_request_fingerprint,
+                                wanted_request_fingerprints,
+                                pending_request_fingerprint.take(),
+                                pending_prompt_text.take(),
+                                Some(response_text),
+                                std::mem::take(&mut pending_artifacts),
+                            ) {
+                                codex_turns_indexed += 1;
+                            }
+                        }
+                        Some("task_complete") => {
+                            let response_text = payload
+                                .get("last_agent_message")
+                                .and_then(serde_json::Value::as_str);
+                            if finalize_project_context_artifact_turn(
+                                &mut by_request_fingerprint,
+                                wanted_request_fingerprints,
+                                pending_request_fingerprint.take(),
+                                pending_prompt_text.take(),
+                                response_text,
+                                std::mem::take(&mut pending_artifacts),
+                            ) {
+                                codex_turns_indexed += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Some("response_item") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    if pending_request_fingerprint
+                        .as_ref()
+                        .is_some_and(|fingerprint| {
+                            wanted_request_fingerprints.contains(fingerprint)
+                        })
+                    {
+                        tool_events_indexed +=
+                            usize::from(track_project_context_artifact_tool_event(
+                                payload,
+                                &mut pending_artifacts,
+                            ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(CodexSessionPlanningArtifactProgressIndex {
+        by_request_fingerprint,
+        session_files_scanned: session_files.len(),
+        codex_turns_indexed,
+        tool_events_indexed,
+    })
+}
+
 fn finalize_planning_artifact_turn(
     by_request_fingerprint: &mut BTreeMap<String, CodexSessionPlanningArtifactProgressEvidence>,
     wanted_request_fingerprints: &HashSet<String>,
@@ -35646,6 +36236,52 @@ fn finalize_planning_artifact_turn(
     true
 }
 
+fn finalize_project_context_artifact_turn(
+    by_request_fingerprint: &mut BTreeMap<String, CodexSessionPlanningArtifactProgressEvidence>,
+    wanted_request_fingerprints: &HashSet<String>,
+    request_fingerprint: Option<String>,
+    prompt_text: Option<String>,
+    response_text: Option<&str>,
+    artifact_evidence: PlanningArtifactTurnEvidence,
+) -> bool {
+    let Some(request_fingerprint) = request_fingerprint else {
+        return false;
+    };
+    if !wanted_request_fingerprints.contains(&request_fingerprint) {
+        return false;
+    }
+    let Some(prompt_text) = prompt_text else {
+        return false;
+    };
+    let response_fingerprint = response_text.map(|text| {
+        format!(
+            "fnv1a64:{:016x}",
+            stable_real_traffic_fingerprint64(text.as_bytes())
+        )
+    });
+    let (verified_safe_accept, verifier_applicable, verifier_status) =
+        deterministic_project_context_artifact_verification(
+            &prompt_text,
+            response_text.unwrap_or(""),
+            &artifact_evidence,
+        );
+    let tool_call_fingerprints = artifact_evidence
+        .progress_tool_fingerprints
+        .into_iter()
+        .chain(artifact_evidence.validation_tool_fingerprints)
+        .collect::<Vec<_>>();
+    by_request_fingerprint.entry(request_fingerprint).or_insert(
+        CodexSessionPlanningArtifactProgressEvidence {
+            response_fingerprint,
+            tool_call_fingerprints,
+            verified_safe_accept,
+            verifier_applicable,
+            verifier_status,
+        },
+    );
+    true
+}
+
 fn track_planning_artifact_tool_event(
     payload: &serde_json::Value,
     artifact_evidence: &mut PlanningArtifactTurnEvidence,
@@ -35669,6 +36305,71 @@ fn track_planning_artifact_tool_event(
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
             if let Some(kind) = planning_artifact_tool_kind(name, detail) {
+                artifact_evidence
+                    .pending_tool_kinds
+                    .insert(call_id.to_owned(), kind);
+            }
+            false
+        }
+        Some("function_call_output") | Some("custom_tool_call_output") => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let Some(kind) = artifact_evidence.pending_tool_kinds.remove(call_id) else {
+                return false;
+            };
+            let output = payload
+                .get("output")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if !planning_artifact_tool_output_success(output) {
+                return false;
+            }
+            let fingerprint = format!(
+                "toolfnv1a64:{:016x}",
+                stable_real_traffic_fingerprint64(format!("{kind}:{call_id}:{output}").as_bytes())
+            );
+            if kind.starts_with("validation_") {
+                artifact_evidence.successful_validation_kinds.insert(kind);
+                artifact_evidence
+                    .validation_tool_fingerprints
+                    .push(fingerprint);
+            } else {
+                artifact_evidence.successful_progress_kinds.insert(kind);
+                artifact_evidence
+                    .progress_tool_fingerprints
+                    .push(fingerprint);
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+fn track_project_context_artifact_tool_event(
+    payload: &serde_json::Value,
+    artifact_evidence: &mut PlanningArtifactTurnEvidence,
+) -> bool {
+    match payload.get("type").and_then(serde_json::Value::as_str) {
+        Some("function_call") | Some("custom_tool_call") => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if call_id.is_empty() {
+                return false;
+            }
+            let name = payload
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let detail = payload
+                .get("arguments")
+                .or_else(|| payload.get("input"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if let Some(kind) = project_context_artifact_tool_kind(name, detail) {
                 artifact_evidence
                     .pending_tool_kinds
                     .insert(call_id.to_owned(), kind);
@@ -35763,6 +36464,92 @@ fn planning_artifact_tool_kind(name: &str, detail: &str) -> Option<String> {
     None
 }
 
+fn project_context_artifact_tool_kind(name: &str, detail: &str) -> Option<String> {
+    let name = name.trim();
+    let lower = detail.to_lowercase();
+    let touches_nando_wave = contains_any(
+        &lower,
+        &[
+            "/home/ubu/projects/nando-wave",
+            "projects/nando-wave",
+            "target/nando-wave",
+            "docs/executor_review_notes.md",
+            "docs/structural_gates",
+            "docs/operator_product_lines_and_capacity.md",
+            "docs/nando_wave_development_roadmap.md",
+            "crates/nando-cli",
+            "crates/nando-core",
+        ],
+    );
+    let touches_goal_or_state = contains_any(
+        &lower,
+        &[
+            ".codex/goals",
+            "thread_goal",
+            "goal",
+            "cpu-route-feedback-loop",
+            "cpu-operator-catalog",
+            "profile-registry",
+            "real-traffic-shadow",
+            "project-context",
+        ],
+    );
+
+    if name == "apply_patch" && (touches_nando_wave || touches_goal_or_state) {
+        return Some("workspace_write_project_artifact".to_owned());
+    }
+    if name != "exec_command" {
+        return None;
+    }
+    if !touches_nando_wave && !touches_goal_or_state {
+        return None;
+    }
+    if contains_any(
+        &lower,
+        &[
+            "cargo check",
+            "cargo clippy",
+            "cargo fmt",
+            "git diff --check",
+        ],
+    ) {
+        return Some("validation_project_state_check".to_owned());
+    }
+    if contains_any(&lower, &["nanda-gate", "nanda-check"]) {
+        return Some("validation_structural_gate_artifact".to_owned());
+    }
+    if lower.contains("git commit") {
+        return Some("workspace_commit_project_state".to_owned());
+    }
+    if contains_any(
+        &lower,
+        &[
+            "git status",
+            "git log",
+            "git show",
+            "git diff",
+            "git ls-files",
+        ],
+    ) {
+        return Some("workspace_git_state_read".to_owned());
+    }
+    if lower.contains("cargo run -p nando-cli") && lower.contains("role-binding-real-traffic") {
+        return Some("workspace_real_traffic_report_generation".to_owned());
+    }
+    if contains_any(&lower, &["> target/nando-wave", "write_json_file"]) {
+        return Some("workspace_generated_target_artifact".to_owned());
+    }
+    if contains_any(
+        &lower,
+        &[
+            "cat ", "sed ", "rg ", "jq ", "ls ", "find ", "wc ", "nl ", "head ", "tail ",
+        ],
+    ) {
+        return Some("workspace_artifact_read".to_owned());
+    }
+    None
+}
+
 fn planning_artifact_tool_output_success(output: &str) -> bool {
     let lower = output.to_lowercase();
     contains_any(
@@ -35773,6 +36560,75 @@ fn planning_artifact_tool_output_success(output: &str) -> bool {
             "success. updated",
             "success. added",
         ],
+    )
+}
+
+fn deterministic_project_context_artifact_verification(
+    prompt_text: &str,
+    response_text: &str,
+    artifact_evidence: &PlanningArtifactTurnEvidence,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    if extract_project_context_tokens(prompt_text).is_none() {
+        return (
+            false,
+            false,
+            "not_applicable_missing_project_context_tokens".to_owned(),
+        );
+    }
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+    if !artifact_evidence.successful_progress_kinds.is_empty()
+        || !artifact_evidence.successful_validation_kinds.is_empty()
+    {
+        let mut kinds = artifact_evidence
+            .successful_progress_kinds
+            .iter()
+            .chain(artifact_evidence.successful_validation_kinds.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        kinds.sort();
+        return (
+            true,
+            true,
+            format!(
+                "verified_workspace_artifact_or_goal_state_evidence:{}",
+                kinds.join("+")
+            ),
+        );
+    }
+    (
+        false,
+        true,
+        "rejected_no_successful_workspace_artifact_or_goal_state_tool".to_owned(),
     )
 }
 

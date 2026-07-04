@@ -140,6 +140,8 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_planning_next_step_output_evidence_v1,
     run_role_binding_real_traffic_planning_next_step_payload_dry_run_v1,
     run_role_binding_real_traffic_planning_next_step_profile_v1,
+    run_role_binding_real_traffic_project_context_local_accept_calibration_v1,
+    run_role_binding_real_traffic_project_context_output_evidence_v1,
     run_role_binding_real_traffic_project_context_payload_dry_run_v1,
     run_role_binding_real_traffic_project_context_profile_v1,
     run_role_binding_real_traffic_project_context_subfamily_audit_v1,
@@ -690,6 +692,16 @@ fn main() -> ExitCode {
             run_role_binding_real_traffic_project_context_profile_v1(args),
             "try: nando-cli role-binding-real-traffic-project-context-profile-v1 [base-registry-json] [dry-run-trace-jsonl] [package-nwrb] [registry-json] [report-json]",
         ),
+        Some("role-binding-real-traffic-project-context-output-evidence-v1") => exit_for_result(
+            run_role_binding_real_traffic_project_context_output_evidence_v1(args),
+            "try: nando-cli role-binding-real-traffic-project-context-output-evidence-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]",
+        ),
+        Some("role-binding-real-traffic-project-context-local-accept-calibration-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_project_context_local_accept_calibration_v1(args),
+                "try: nando-cli role-binding-real-traffic-project-context-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]",
+            )
+        }
         Some("role-binding-real-traffic-planning-next-step-profile-v1") => exit_for_result(
             run_role_binding_real_traffic_planning_next_step_profile_v1(args),
             "try: nando-cli role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]",

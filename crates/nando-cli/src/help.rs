@@ -310,6 +310,18 @@ pub(crate) fn print_help() {
         "            Compile a disabled-threshold artifact-backed project-context .nwrb profile; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-project-context-output-evidence-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach workspace artifact / goal-state fingerprints for project-context rows; review-only, no raw output"
+    );
+    println!(
+        "  role-binding-real-traffic-project-context-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate project-context margins against workspace-evidence labels; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-profile-v1 [base-registry-json] [planning-dry-run-trace-jsonl] [planning-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
