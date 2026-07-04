@@ -1,5 +1,156 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: CPU Route Feedback Loop Integration Audit
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_INTEGRATION_AUDIT_V1_REVIEW_NEXT_ROUTE_HITLIST_READY
+```
+
+What was checked:
+
+```text
+The earlier review note that the feedback loop was unfinished is stale in the
+current tree.
+
+Confirmed current code:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+    feedback_route_stage(...)
+    feedback_route_next_action(...)
+
+  crates/nando-cli/src/main.rs
+    role-binding-real-traffic-feedback-loop-v1 dispatch is present
+
+  crates/nando-cli/src/help.rs
+    role-binding-real-traffic-feedback-loop-v1 help text is present
+
+Confirmed current artifact:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+```
+
+Current feedback loop:
+
+```text
+total_llm_calls:                       1000
+operator_candidate_calls:              1000
+scoreable_candidate_calls:              145
+verification_hook_ready_events:         117
+verified_cpu_accept_eligible_events:     32
+verified_cpu_routability_milli:          32
+verified_gap_to_80_calls:               768
+false_accepts:                            0
+```
+
+CPU route hitlist:
+
+```text
+answer_or_explain:
+  candidates: 216
+  scoreable: 9
+  hook_ready: 9
+  verified_cpu_accept_eligible: 0
+  status: profile + hook exist, but local-accept calibration found no safe
+          readout policy. Do not lower threshold.
+  next: improve request-side admission or payload geometry.
+
+project_context_dialogue:
+  candidates: 211
+  scoreable: 2
+  hook_ready: 2
+  verified_cpu_accept_eligible: 0
+  status: only the artifact-backed subset is real; 180/211 are short context
+          chatter and must not be promoted as project-state operators.
+  next: keep broad dialogue fallback-only; expand only when an active
+        goal/artifact state channel exists.
+
+role_binding_agent_control_seed0:
+  candidates: 143
+  scoreable: 11
+  hook_ready: 11
+  verified_cpu_accept_eligible: 11
+  status: current robust stop/control support is exhausted.
+  next: split broader agent-state/tool-state subfamilies; do not repeat the
+        same stop promotion.
+
+role_binding_conditional_branch_seed0:
+  candidates: 166
+  scoreable: 53
+  hook_ready: 40
+  verified_cpu_accept_eligible: 3
+  status: payload path exists but support is exhausted by current admission.
+  next: split a stronger conditional subfamily or improve payload geometry.
+
+metrics_report_readout:
+  candidates: 55
+  scoreable: 3
+  hook_ready: 3
+  verified_cpu_accept_eligible: 3
+  status: numeric report path has safe support but it is already exhausted.
+  next: split a stronger numeric-evidence report subfamily.
+
+agent_continue_execute:
+  candidates: 31
+  scoreable: 0
+  hook_ready: 0
+  verified_cpu_accept_eligible: 0
+  status: next new route-gap family worth building because it is a real
+          state-transition operator, not broad chat.
+  next: build active_goal_next_step_payload_builder_v1 plus
+        artifact_progress_and_no_drift_verifier_v1; accepts disabled until
+        deterministic verification exists.
+```
+
+Decision:
+
+```text
+The feedback-loop integration debt is closed in the current source tree. The
+remaining CPU Routability 80 debt is not command wiring; it is route quality:
+request-side payload builders, deterministic verifier hooks, and safe local
+accept calibration on non-synthetic traffic.
+
+Do not count:
+  route candidates,
+  payload-ready rows,
+  scoreable rows,
+  verification-hook-ready rows,
+  disabled-profile scores,
+  or final-answer labels
+
+as verified CPU savings.
+
+Only hook-backed local accepts with false_accepts=0, provider cost evidence,
+and non-synthetic trace evidence can count toward market savings.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created by this audit. CPU Routability 80
+remains open:
+
+  verified_cpu_accept_eligible_events: 32 / 1000
+  verified_gap_to_80_calls: 768
+
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/cpu-route-feedback-loop-integration-audit-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-integration-audit-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 35
+note: narrow claim-boundary check only: command wiring present and current
+      32/1000 verified CPU eligible telemetry is not market savings or CPU
+      Routability 80 completion.
+```
+
 ## 2026-07-04 - Executor Integration: Answer-Evidence Local Accept Calibration V1
 
 Verdict:
