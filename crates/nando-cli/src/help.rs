@@ -286,6 +286,12 @@ pub(crate) fn print_help() {
         "            Review request-side prompt-feature admission gates for agent-continue-execute without writing raw prompts"
     );
     println!(
+        "  role-binding-real-traffic-agent-continue-execute-state-admission-audit-v1 [artifact-progress-trace-jsonl] [codex-sessions-root] [audit-report-json]"
+    );
+    println!(
+        "            Review previous-assistant-state admission gates for agent-continue-execute without writing raw prompts or responses"
+    );
+    println!(
         "  role-binding-real-traffic-agent-continue-execute-output-evidence-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(

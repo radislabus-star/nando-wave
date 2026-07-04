@@ -93,6 +93,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_agent_continue_execute_output_evidence_v1,
     run_role_binding_real_traffic_agent_continue_execute_payload_dry_run_v1,
     run_role_binding_real_traffic_agent_continue_execute_profile_v1,
+    run_role_binding_real_traffic_agent_continue_execute_state_admission_audit_v1,
     run_role_binding_real_traffic_agent_control_admission_audit_v1,
     run_role_binding_real_traffic_agent_control_admission_calibration_v1,
     run_role_binding_real_traffic_agent_control_output_evidence_v1,
@@ -786,6 +787,12 @@ fn main() -> ExitCode {
             exit_for_result(
                 run_role_binding_real_traffic_agent_continue_execute_admission_calibration_v1(args),
                 "try: nando-cli role-binding-real-traffic-agent-continue-execute-admission-calibration-v1 [artifact-progress-trace-jsonl] [history-jsonl] [admission-report-json]",
+            )
+        }
+        Some("role-binding-real-traffic-agent-continue-execute-state-admission-audit-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_agent_continue_execute_state_admission_audit_v1(args),
+                "try: nando-cli role-binding-real-traffic-agent-continue-execute-state-admission-audit-v1 [artifact-progress-trace-jsonl] [codex-sessions-root] [audit-report-json]",
             )
         }
         Some("role-binding-real-traffic-read-inspect-payload-dry-run-v1") => exit_for_result(

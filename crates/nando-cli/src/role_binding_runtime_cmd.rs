@@ -284,6 +284,7 @@ const DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.report.json";
 const DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-local-accept-calibration-v1.report.json";
 const DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.verification-hook-audit.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-state-admission-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
 const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
@@ -8192,6 +8193,161 @@ where
     Err("agent-continue-execute admission calibration is review-only".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_agent_continue_execute_state_admission_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let evidence_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_TRACE_JSONL)
+    });
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT)
+    });
+
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let session_ids = trace_rows
+        .iter()
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter_map(|row| row.request_fingerprint.clone())
+        .collect::<HashSet<_>>();
+    let state_index = build_codex_session_previous_agent_state_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+    )?;
+
+    let mut rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut previous_state_missing_rows = 0usize;
+
+    for trace in &trace_rows {
+        let Some(label) = trace.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &trace.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
+        let Some(state) = state_index.by_request_fingerprint.get(&request_fingerprint) else {
+            previous_state_missing_rows += 1;
+            continue;
+        };
+        rows.push(RoleBindingAgentContinueExecuteStateAdmissionAuditRow {
+            trace_id: trace.trace_id.clone(),
+            request_fingerprint: trace.request_fingerprint.clone(),
+            response_fingerprint: trace.response_fingerprint.clone(),
+            previous_response_fingerprint: state.previous_response_fingerprint.clone(),
+            verifier_label: label,
+            features: state.features.clone(),
+        });
+    }
+
+    let minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+    let policies =
+        agent_continue_execute_state_admission_policy_reports(&rows, minimum_true_support);
+    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
+    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
+    let best_robust_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.robust_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let best_singleton_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.singleton_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let feature_counts = agent_continue_execute_state_admission_feature_counts(&rows);
+    let report = RoleBindingAgentContinueExecuteStateAdmissionAuditReport {
+        schema_version:
+            "nando_role_binding_agent_continue_execute_state_admission_audit_v1".to_owned(),
+        verdict: if robust_safe_policy_found {
+            "AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_V1_REVIEW_ROBUST_STATE_POLICY_CANDIDATE_FOUND"
+        } else if singleton_safe_policy_found {
+            "AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
+        } else {
+            "AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_STATE_POLICY"
+        }
+        .to_owned(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: state_index.session_files_scanned,
+        codex_turns_indexed: state_index.codex_turns_indexed,
+        hook_ready_rows,
+        rows_with_state_features: rows.len(),
+        previous_state_missing_rows,
+        label_true_rows,
+        label_false_rows,
+        minimum_true_support,
+        robust_safe_policy_found,
+        singleton_safe_policy_found,
+        best_robust_true_accepts,
+        best_singleton_true_accepts,
+        feature_counts,
+        policies,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: true,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-continue-execute state admission audit only. It reads previous Codex assistant state at analysis time to derive privacy-safe boolean features, writes only fingerprints/features/counts, uses verifier labels only to evaluate candidate gates, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if robust_safe_policy_found {
+            "Do not count this as CPU savings. Promote only through a separate stateful shadow/admission artifact with provider cost, false_accepts=0, unverified_shadow_accepts=0, explicit rollback, and feedback/catalog refresh.".to_owned()
+        } else if singleton_safe_policy_found {
+            "State features expose only weak singleton separation. Collect more verifier-true continuation rows or split the route before promotion.".to_owned()
+        } else {
+            "Previous assistant-state features do not safely separate artifact-progress rows from false continuation rows. Capture richer structured turn state or split agent_continue_execute before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-continue-execute-state-admission-audit-v1: {}",
+        report.verdict
+    );
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!(
+        "  rows_with_state_features: {}",
+        report.rows_with_state_features
+    );
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!(
+        "  robust_safe_policy_found: {}",
+        report.robust_safe_policy_found
+    );
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    Err("agent-continue-execute state admission audit is review-only".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_metrics_report_payload_dry_run_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -15728,12 +15884,24 @@ where
     };
     let agent_continue_execute_admission_calibration_report_path =
         PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT);
+    let agent_continue_execute_state_admission_audit_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT);
     let agent_continue_execute_admission_calibration =
         if agent_continue_execute_admission_calibration_report_path.exists() {
             Some(read_json_file::<
                 RoleBindingPlanningNextStepAdmissionCalibrationReport,
             >(
                 &agent_continue_execute_admission_calibration_report_path
+            )?)
+        } else {
+            None
+        };
+    let agent_continue_execute_state_admission_audit =
+        if agent_continue_execute_state_admission_audit_report_path.exists() {
+            Some(read_json_file::<
+                RoleBindingAgentContinueExecuteStateAdmissionAuditReport,
+            >(
+                &agent_continue_execute_state_admission_audit_report_path
             )?)
         } else {
             None
@@ -15967,7 +16135,30 @@ where
             .is_some_and(|audit| {
                 !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
             });
+        let agent_continue_state_admission_best_robust_true_accepts =
+            agent_continue_execute_state_admission_audit
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY)
+                .map(|audit| audit.best_robust_true_accepts)
+                .unwrap_or_default();
+        let agent_continue_state_admission_best_singleton_true_accepts =
+            agent_continue_execute_state_admission_audit
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY)
+                .map(|audit| audit.best_singleton_true_accepts)
+                .unwrap_or_default();
+        let agent_continue_state_admission_no_safe_policy =
+            agent_continue_execute_state_admission_audit
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY)
+                .is_some_and(|audit| {
+                    !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
+                });
         if agent_continue_admission_no_safe_policy {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
+        if agent_continue_state_admission_no_safe_policy {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
         }
@@ -16056,6 +16247,23 @@ where
             next_action = format!(
                 "Answer-evidence admission calibration found only singleton support ({answer_evidence_admission_best_singleton_true_accepts} safe true, robust {answer_evidence_admission_best_robust_true_accepts}); collect more verifier-true grounded evidence rows or split the subfamily before promotion."
             );
+        } else if route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            && agent_continue_state_admission_best_robust_true_accepts > 0
+        {
+            next_action = format!(
+                "Agent-continue state admission audit found a robust state-policy candidate ({agent_continue_state_admission_best_robust_true_accepts} true accepts). Do not count savings yet; run a separate stateful promoted shadow/audit with provider cost, false_accepts=0, and rollback before promotion."
+            );
+        } else if route.route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            && agent_continue_state_admission_best_singleton_true_accepts > 0
+            && agent_continue_state_admission_best_robust_true_accepts == 0
+        {
+            next_action = format!(
+                "Agent-continue state admission audit found only singleton previous-state support ({agent_continue_state_admission_best_singleton_true_accepts} safe true, robust {agent_continue_state_admission_best_robust_true_accepts}); collect more verifier-true continuation rows or split agent_continue_execute before promotion."
+            );
+        } else if agent_continue_state_admission_no_safe_policy {
+            next_action = format!(
+                "Agent-continue state admission audit found no safe previous-state policy (robust true accepts {agent_continue_state_admission_best_robust_true_accepts}, singleton true accepts {agent_continue_state_admission_best_singleton_true_accepts}); capture richer structured serving state or split agent_continue_execute before promotion."
+            );
         } else if agent_continue_admission_no_safe_policy {
             next_action = format!(
                 "Agent-continue admission calibration found no safe prompt-side policy (robust true accepts {agent_continue_admission_best_robust_true_accepts}, singleton true accepts {agent_continue_admission_best_singleton_true_accepts}); split agent_continue_execute or capture richer request-side state before promotion."
@@ -16126,6 +16334,9 @@ where
             agent_continue_admission_best_robust_true_accepts,
             agent_continue_admission_best_singleton_true_accepts,
             agent_continue_admission_no_safe_policy,
+            agent_continue_state_admission_best_robust_true_accepts,
+            agent_continue_state_admission_best_singleton_true_accepts,
+            agent_continue_state_admission_no_safe_policy,
             edit_local_accept_best_safe_true_accepts,
             edit_current_support_exhausted,
             serving_ops_local_accept_best_safe_true_accepts,
@@ -16208,6 +16419,31 @@ where
         let agent_continue_gap_no_safe_policy = family.family_key
             == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
             && agent_continue_execute_admission_calibration
+                .as_ref()
+                .is_some_and(|audit| {
+                    !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
+                });
+        let agent_continue_state_gap_best_robust_true_accepts =
+            if family.family_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY {
+                agent_continue_execute_state_admission_audit
+                    .as_ref()
+                    .map(|audit| audit.best_robust_true_accepts)
+                    .unwrap_or_default()
+            } else {
+                0
+            };
+        let agent_continue_state_gap_best_singleton_true_accepts =
+            if family.family_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY {
+                agent_continue_execute_state_admission_audit
+                    .as_ref()
+                    .map(|audit| audit.best_singleton_true_accepts)
+                    .unwrap_or_default()
+            } else {
+                0
+            };
+        let agent_continue_state_gap_no_safe_policy = family.family_key
+            == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+            && agent_continue_execute_state_admission_audit
                 .as_ref()
                 .is_some_and(|audit| {
                     !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
@@ -16309,7 +16545,10 @@ where
         {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
-        } else if agent_continue_gap_no_safe_policy || short_decision_ack_prior_blocked {
+        } else if agent_continue_gap_no_safe_policy
+            || agent_continue_state_gap_no_safe_policy
+            || short_decision_ack_prior_blocked
+        {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
         } else if answer_evidence_gap_singleton_only || existing_scoreable_feedback_row.is_some() {
@@ -16339,6 +16578,20 @@ where
                 .unwrap_or_default();
             format!(
                 "answer_or_explain has grounded-evidence hooks, but admission calibration found only singleton support ({best_singleton} safe true). Collect more verifier-true grounded rows or split the route before any promotion."
+            )
+        } else if agent_continue_state_gap_best_robust_true_accepts > 0 {
+            format!(
+                "Agent-continue route-gap has a robust previous-state admission candidate ({agent_continue_state_gap_best_robust_true_accepts} true accepts). Do not promote this route-gap row directly; run a separate stateful promoted shadow/audit with provider cost, false_accepts=0, and rollback."
+            )
+        } else if agent_continue_state_gap_best_singleton_true_accepts > 0
+            && agent_continue_state_gap_best_robust_true_accepts == 0
+        {
+            format!(
+                "Agent-continue route-gap has only singleton previous-state support ({agent_continue_state_gap_best_singleton_true_accepts} safe true, robust {agent_continue_state_gap_best_robust_true_accepts}). Do not promote; collect more verifier-true continuation rows or split agent_continue_execute."
+            )
+        } else if agent_continue_state_gap_no_safe_policy {
+            format!(
+                "Agent-continue route-gap has verifier rows, but state admission audit found no safe previous-state policy (robust true accepts {agent_continue_state_gap_best_robust_true_accepts}, singleton true accepts {agent_continue_state_gap_best_singleton_true_accepts}). Capture richer structured serving state or split agent_continue_execute."
             )
         } else if agent_continue_gap_no_safe_policy {
             let best_robust = agent_continue_execute_admission_calibration
@@ -16536,6 +16789,11 @@ where
                 0
             },
             agent_continue_admission_no_safe_policy: agent_continue_gap_no_safe_policy,
+            agent_continue_state_admission_best_robust_true_accepts:
+                agent_continue_state_gap_best_robust_true_accepts,
+            agent_continue_state_admission_best_singleton_true_accepts:
+                agent_continue_state_gap_best_singleton_true_accepts,
+            agent_continue_state_admission_no_safe_policy: agent_continue_state_gap_no_safe_policy,
             edit_local_accept_best_safe_true_accepts: 0,
             edit_current_support_exhausted: false,
             serving_ops_local_accept_best_safe_true_accepts: if family.family_key
@@ -16669,6 +16927,12 @@ where
         agent_continue_execute_admission_calibration_report_path:
             agent_continue_execute_admission_calibration.as_ref().map(|_| {
                 agent_continue_execute_admission_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
+        agent_continue_execute_state_admission_audit_report_path:
+            agent_continue_execute_state_admission_audit.as_ref().map(|_| {
+                agent_continue_execute_state_admission_audit_report_path
                     .display()
                     .to_string()
             }),
@@ -16814,6 +17078,12 @@ where
         println!(
             "  agent_continue_execute_admission_calibration_report: {}",
             agent_continue_execute_admission_calibration_report_path.display()
+        );
+    }
+    if agent_continue_execute_state_admission_audit.is_some() {
+        println!(
+            "  agent_continue_execute_state_admission_audit_report: {}",
+            agent_continue_execute_state_admission_audit_report_path.display()
         );
     }
     if edit_local_accept_calibration.is_some() {
@@ -22669,6 +22939,8 @@ where
         PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let agent_continue_execute_admission_calibration_report_path =
         PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT);
+    let agent_continue_execute_state_admission_audit_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT);
     let agent_control_admission_calibration_report_path = args
         .next()
         .map(PathBuf::from)
@@ -22974,6 +23246,16 @@ where
                 RoleBindingPlanningNextStepAdmissionCalibrationReport,
             >(
                 &agent_continue_execute_admission_calibration_report_path
+            )?)
+        } else {
+            None
+        };
+    let agent_continue_execute_state_admission_audit =
+        if agent_continue_execute_state_admission_audit_report_path.exists() {
+            Some(read_json_file::<
+                RoleBindingAgentContinueExecuteStateAdmissionAuditReport,
+            >(
+                &agent_continue_execute_state_admission_audit_report_path
             )?)
         } else {
             None
@@ -23875,7 +24157,8 @@ where
             || (is_agent_control_route && agent_control_admission_calibration.is_some())
             || (is_metrics_report_route && metrics_report_admission_calibration.is_some())
             || (is_agent_continue_execute_route
-                && agent_continue_execute_admission_calibration.is_some());
+                && (agent_continue_execute_admission_calibration.is_some()
+                    || agent_continue_execute_state_admission_audit.is_some()));
         let local_accept_safe_policy_found = if is_agent_control_route {
             agent_control_admission_calibration
                 .as_ref()
@@ -23890,12 +24173,17 @@ where
                     .map(|report| report.robust_safe_policy_found)
                     .unwrap_or(false)
         } else if is_agent_continue_execute_route
-            && agent_continue_execute_admission_calibration.is_some()
+            && (agent_continue_execute_admission_calibration.is_some()
+                || agent_continue_execute_state_admission_audit.is_some())
         {
             agent_continue_execute_admission_calibration
                 .as_ref()
                 .map(|report| report.robust_safe_policy_found)
                 .unwrap_or(false)
+                || agent_continue_execute_state_admission_audit
+                    .as_ref()
+                    .map(|report| report.robust_safe_policy_found)
+                    .unwrap_or(false)
         } else {
             local_accept_calibration
                 .map(|report| report.safe_policy_found)
@@ -23917,12 +24205,19 @@ where
                         .unwrap_or_default(),
                 )
         } else if is_agent_continue_execute_route
-            && agent_continue_execute_admission_calibration.is_some()
+            && (agent_continue_execute_admission_calibration.is_some()
+                || agent_continue_execute_state_admission_audit.is_some())
         {
             agent_continue_execute_admission_calibration
                 .as_ref()
                 .map(|report| report.best_robust_true_accepts)
                 .unwrap_or_default()
+                .max(
+                    agent_continue_execute_state_admission_audit
+                        .as_ref()
+                        .map(|report| report.best_robust_true_accepts)
+                        .unwrap_or_default(),
+                )
         } else {
             local_accept_calibration
                 .map(|report| report.best_safe_true_accepts)
@@ -23934,11 +24229,16 @@ where
         let local_accept_calibration_authoritative =
             !is_git_control_route || git_control_tool_output_authoritative;
         let agent_continue_admission_no_safe_policy = is_agent_continue_execute_route
-            && agent_continue_execute_admission_calibration
+            && (agent_continue_execute_admission_calibration
                 .as_ref()
                 .is_some_and(|report| {
                     !report.robust_safe_policy_found && !report.singleton_safe_policy_found
-                });
+                })
+                || agent_continue_execute_state_admission_audit
+                    .as_ref()
+                    .is_some_and(|report| {
+                        !report.robust_safe_policy_found && !report.singleton_safe_policy_found
+                    }));
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
         } else if is_conditional_route {
@@ -24160,7 +24460,23 @@ where
             local_accept_support_qualified,
             local_accept_calibration_authoritative,
         });
-        let next_action = if agent_continue_admission_no_safe_policy {
+        let next_action = if is_agent_continue_execute_route
+            && agent_continue_execute_state_admission_audit
+                .as_ref()
+                .is_some_and(|report| report.robust_safe_policy_found)
+        {
+            "Agent-continue state admission audit found a robust candidate; do not count savings yet. Run a separate stateful promoted shadow/audit with provider cost, false_accepts=0, and rollback before promotion."
+                .to_owned()
+        } else if is_agent_continue_execute_route
+            && agent_continue_execute_state_admission_audit
+                .as_ref()
+                .is_some_and(|report| {
+                    !report.robust_safe_policy_found && report.singleton_safe_policy_found
+                })
+        {
+            "Agent-continue state admission audit found only singleton previous-state support; collect more verifier-true continuation rows or split the route before enabling local accepts."
+                .to_owned()
+        } else if agent_continue_admission_no_safe_policy {
             "Agent-continue admission calibration found no safe prompt-side policy; split agent_continue_execute or capture richer request-side state before enabling local accepts."
                 .to_owned()
         } else {
@@ -25517,6 +25833,12 @@ where
                     .display()
                     .to_string()
             }),
+        agent_continue_execute_state_admission_audit_report_path:
+            agent_continue_execute_state_admission_audit.as_ref().map(|_| {
+                agent_continue_execute_state_admission_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         conditional_dry_run_report_path: conditional_dry_run
             .as_ref()
             .map(|_| conditional_dry_run_report_path.display().to_string()),
@@ -25782,6 +26104,9 @@ where
     }
     if let Some(path) = &report.agent_continue_execute_admission_calibration_report_path {
         println!("  agent_continue_execute_admission_calibration_report: {path}");
+    }
+    if let Some(path) = &report.agent_continue_execute_state_admission_audit_report_path {
+        println!("  agent_continue_execute_state_admission_audit_report: {path}");
     }
     println!(
         "  verification_audit_report: {}",
@@ -28926,6 +29251,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     agent_continue_execute_admission_calibration_report_path: Option<String>,
     #[serde(default)]
+    agent_continue_execute_state_admission_audit_report_path: Option<String>,
+    #[serde(default)]
     edit_local_accept_calibration_report_path: Option<String>,
     #[serde(default)]
     serving_ops_local_accept_calibration_report_path: Option<String>,
@@ -29022,6 +29349,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     agent_continue_admission_best_singleton_true_accepts: usize,
     #[serde(default)]
     agent_continue_admission_no_safe_policy: bool,
+    #[serde(default)]
+    agent_continue_state_admission_best_robust_true_accepts: usize,
+    #[serde(default)]
+    agent_continue_state_admission_best_singleton_true_accepts: usize,
+    #[serde(default)]
+    agent_continue_state_admission_no_safe_policy: bool,
     #[serde(default)]
     edit_local_accept_best_safe_true_accepts: usize,
     #[serde(default)]
@@ -30107,6 +30440,49 @@ struct RoleBindingPlanningNextStepAdmissionCalibrationRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentContinueExecuteStateAdmissionAuditReport {
+    schema_version: String,
+    verdict: String,
+    evidence_trace_path: String,
+    sessions_root: String,
+    session_ids_requested: usize,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    hook_ready_rows: usize,
+    rows_with_state_features: usize,
+    previous_state_missing_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    minimum_true_support: usize,
+    robust_safe_policy_found: bool,
+    singleton_safe_policy_found: bool,
+    best_robust_true_accepts: usize,
+    best_singleton_true_accepts: usize,
+    feature_counts: Vec<RoleBindingEditAdmissionFeatureCount>,
+    policies: Vec<RoleBindingEditAdmissionPolicyReport>,
+    rows: Vec<RoleBindingAgentContinueExecuteStateAdmissionAuditRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentContinueExecuteStateAdmissionAuditRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    response_fingerprint: Option<String>,
+    previous_response_fingerprint: Option<String>,
+    verifier_label: bool,
+    features: RoleBindingAgentContinueExecuteStateAdmissionFeatures,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingAnswerEvidenceAdmissionCalibrationReport {
     schema_version: String,
     verdict: String,
@@ -30251,6 +30627,24 @@ struct RoleBindingPlanningNextStepAdmissionFeatures {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentContinueExecuteStateAdmissionFeatures {
+    request: RoleBindingPlanningNextStepAdmissionFeatures,
+    previous_agent_state_available: bool,
+    previous_agent_len: usize,
+    previous_agent_token_count: usize,
+    previous_agent_has_next_action_signal: bool,
+    previous_agent_has_pending_work_signal: bool,
+    previous_agent_has_artifact_or_tool_signal: bool,
+    previous_agent_has_report_or_gate_signal: bool,
+    previous_agent_has_failure_or_blocker: bool,
+    previous_agent_asks_user_decision: bool,
+    previous_agent_has_market_claim_block: bool,
+    previous_agent_has_verification_signal: bool,
+    previous_agent_has_completion_signal: bool,
+    previous_agent_mentions_nando_wave: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingAgentControlAdmissionFeatures {
     request_len: usize,
     token_count: usize,
@@ -30337,6 +30731,19 @@ struct CodexSessionPlanningArtifactProgressEvidence {
     verified_safe_accept: bool,
     verifier_applicable: bool,
     verifier_status: String,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionPreviousAgentStateIndex {
+    by_request_fingerprint: BTreeMap<String, CodexSessionPreviousAgentStateEvidence>,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionPreviousAgentStateEvidence {
+    previous_response_fingerprint: Option<String>,
+    features: RoleBindingAgentContinueExecuteStateAdmissionFeatures,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -30508,6 +30915,8 @@ struct RoleBindingFeedbackLoopReport {
     agent_continue_execute_local_accept_calibration_report_path: Option<String>,
     #[serde(default)]
     agent_continue_execute_admission_calibration_report_path: Option<String>,
+    #[serde(default)]
+    agent_continue_execute_state_admission_audit_report_path: Option<String>,
     conditional_dry_run_report_path: Option<String>,
     conditional_local_accept_calibration_report_path: Option<String>,
     conditional_verification_audit_report_path: Option<String>,
@@ -39021,6 +39430,168 @@ fn extract_agent_continue_execute_admission_features(
     extract_planning_next_step_admission_features(text)
 }
 
+fn extract_agent_continue_execute_state_admission_features(
+    current_request_text: &str,
+    previous_agent_text: Option<&str>,
+) -> RoleBindingAgentContinueExecuteStateAdmissionFeatures {
+    let request = extract_agent_continue_execute_admission_features(current_request_text);
+    let previous = previous_agent_text.unwrap_or_default();
+    let lower = previous.to_lowercase();
+    RoleBindingAgentContinueExecuteStateAdmissionFeatures {
+        request,
+        previous_agent_state_available: previous_agent_text.is_some(),
+        previous_agent_len: previous.trim().len(),
+        previous_agent_token_count: normalized_token_count(&lower),
+        previous_agent_has_next_action_signal: contains_any(
+            &lower,
+            &[
+                "next_action",
+                "next action",
+                "next step",
+                "следующ",
+                "дальше",
+                "осталось",
+                "remaining",
+                "debt",
+                "долг",
+                "continue",
+                "продолж",
+            ],
+        ),
+        previous_agent_has_pending_work_signal: contains_any(
+            &lower,
+            &[
+                "надо",
+                "нужно",
+                "need",
+                "todo",
+                "pending",
+                "in_progress",
+                "осталось",
+                "додел",
+                "следующий",
+                "next",
+            ],
+        ),
+        previous_agent_has_artifact_or_tool_signal: contains_any(
+            &lower,
+            &[
+                "apply_patch",
+                "cargo ",
+                "clippy",
+                "git ",
+                "commit",
+                "nanda-gate",
+                "nanda-check",
+                "report",
+                "trace",
+                "artifact",
+                "target/nando-wave",
+                "docs/",
+                "crates/",
+                ".rs",
+                ".md",
+                ".json",
+                ".jsonl",
+            ],
+        ) || contains_file_like_token(previous),
+        previous_agent_has_report_or_gate_signal: contains_any(
+            &lower,
+            &[
+                "verdict",
+                "report",
+                "audit",
+                "gate",
+                "pass",
+                "review",
+                "watch",
+                "false_accept",
+                "market_claim",
+            ],
+        ),
+        previous_agent_has_failure_or_blocker: contains_any(
+            &lower,
+            &[
+                "blocked",
+                "blocker",
+                "failed",
+                "failure",
+                "false_accept",
+                "не проходит",
+                "не прошло",
+                "провал",
+                "ошибка",
+                "watch",
+                "veto",
+            ],
+        ),
+        previous_agent_asks_user_decision: previous.contains('?')
+            || contains_any(
+                &lower,
+                &[
+                    "дайте знать",
+                    "как действуем",
+                    "выберите",
+                    "если готовы",
+                    "which",
+                    "what next",
+                    "should we",
+                ],
+            ),
+        previous_agent_has_market_claim_block: contains_any(
+            &lower,
+            &[
+                "market_claim_allowed: false",
+                "market claim",
+                "no market",
+                "нельзя заявлять",
+                "не считать экономией",
+                "not count",
+            ],
+        ),
+        previous_agent_has_verification_signal: contains_any(
+            &lower,
+            &[
+                "verified",
+                "verification",
+                "verifier",
+                "провер",
+                "cargo check",
+                "cargo fmt",
+                "cargo clippy",
+                "git diff --check",
+                "false_accepts=0",
+                "false_accepts = 0",
+            ],
+        ),
+        previous_agent_has_completion_signal: contains_any(
+            &lower,
+            &[
+                "готово",
+                "сделал",
+                "закоммит",
+                "commit",
+                "completed",
+                "done",
+                "записал",
+                "зафиксировал",
+            ],
+        ),
+        previous_agent_mentions_nando_wave: contains_any(
+            &lower,
+            &[
+                "nando",
+                "wave",
+                "llmwave",
+                "нандо",
+                "волн",
+                "real-traffic",
+                "role-binding",
+            ],
+        ),
+    }
+}
+
 fn extract_metrics_report_admission_features(
     text: &str,
 ) -> RoleBindingMetricsReportAdmissionFeatures {
@@ -39352,6 +39923,106 @@ fn planning_next_step_admission_policy_reports(
         .collect()
 }
 
+fn agent_continue_execute_state_admission_policy_reports(
+    rows: &[RoleBindingAgentContinueExecuteStateAdmissionAuditRow],
+    minimum_true_support: usize,
+) -> Vec<RoleBindingEditAdmissionPolicyReport> {
+    type StateAdmissionPredicate =
+        fn(&RoleBindingAgentContinueExecuteStateAdmissionFeatures) -> bool;
+    let policy_defs: Vec<(&str, StateAdmissionPredicate)> = vec![
+        ("all_state_rows", |_| true),
+        ("direct_action_with_previous_state", |features| {
+            features.request.has_direct_action_words && features.previous_agent_state_available
+        }),
+        ("direct_action_after_next_action", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_next_action_signal
+        }),
+        ("direct_action_after_pending_work", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_pending_work_signal
+        }),
+        ("direct_action_after_artifact_or_tool", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_artifact_or_tool_signal
+        }),
+        ("direct_action_after_next_action_and_artifact", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_next_action_signal
+                && features.previous_agent_has_artifact_or_tool_signal
+        }),
+        (
+            "direct_action_after_pending_work_and_artifact",
+            |features| {
+                features.request.has_direct_action_words
+                    && features.previous_agent_has_pending_work_signal
+                    && features.previous_agent_has_artifact_or_tool_signal
+            },
+        ),
+        (
+            "direct_action_after_artifact_no_user_decision_question",
+            |features| {
+                features.request.has_direct_action_words
+                    && features.previous_agent_has_artifact_or_tool_signal
+                    && !features.previous_agent_asks_user_decision
+            },
+        ),
+        ("direct_action_after_artifact_no_failure", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_artifact_or_tool_signal
+                && !features.previous_agent_has_failure_or_blocker
+        }),
+        ("direct_action_after_next_artifact_no_failure", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_next_action_signal
+                && features.previous_agent_has_artifact_or_tool_signal
+                && !features.previous_agent_has_failure_or_blocker
+        }),
+        ("direct_action_after_verification_signal", |features| {
+            features.request.has_direct_action_words
+                && features.previous_agent_has_verification_signal
+        }),
+        (
+            "direct_action_after_completion_and_pending_work",
+            |features| {
+                features.request.has_direct_action_words
+                    && features.previous_agent_has_completion_signal
+                    && features.previous_agent_has_pending_work_signal
+            },
+        ),
+        (
+            "concise_direct_action_after_next_artifact_no_failure",
+            |features| {
+                features.request.has_direct_action_words
+                    && features.request.request_len < 1800
+                    && features.previous_agent_has_next_action_signal
+                    && features.previous_agent_has_artifact_or_tool_signal
+                    && !features.previous_agent_has_failure_or_blocker
+            },
+        ),
+        (
+            "nando_direct_action_after_artifact_verification",
+            |features| {
+                features.request.has_direct_action_words
+                    && features.previous_agent_mentions_nando_wave
+                    && features.previous_agent_has_artifact_or_tool_signal
+                    && features.previous_agent_has_verification_signal
+            },
+        ),
+    ];
+    policy_defs
+        .into_iter()
+        .map(|(name, predicate)| {
+            evaluate_agent_continue_execute_state_admission_policy(
+                name,
+                rows,
+                minimum_true_support,
+                |row| predicate(&row.features),
+            )
+        })
+        .collect()
+}
+
 fn evaluate_metrics_report_admission_policy<F>(
     policy_name: &str,
     rows: &[RoleBindingMetricsReportAdmissionCalibrationRow],
@@ -39581,6 +40252,37 @@ where
     }
 }
 
+fn evaluate_agent_continue_execute_state_admission_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingAgentContinueExecuteStateAdmissionAuditRow],
+    minimum_true_support: usize,
+    accepts: F,
+) -> RoleBindingEditAdmissionPolicyReport
+where
+    F: Fn(&RoleBindingAgentContinueExecuteStateAdmissionAuditRow) -> bool,
+{
+    let mut accepted = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut missed_true = 0usize;
+    for row in rows {
+        let accept = accepts(row);
+        accepted += usize::from(accept);
+        true_accepts += usize::from(accept && row.verifier_label);
+        false_accepts += usize::from(accept && !row.verifier_label);
+        missed_true += usize::from(!accept && row.verifier_label);
+    }
+    RoleBindingEditAdmissionPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: accepted,
+        true_accepts,
+        false_accepts,
+        missed_true,
+        singleton_safe: false_accepts == 0 && true_accepts == 1,
+        robust_safe: false_accepts == 0 && true_accepts >= minimum_true_support,
+    }
+}
+
 fn edit_admission_feature_counts(
     rows: &[RoleBindingEditAdmissionCalibrationRow],
 ) -> Vec<RoleBindingEditAdmissionFeatureCount> {
@@ -39613,6 +40315,32 @@ fn planning_next_step_admission_feature_counts(
     let mut counts = BTreeMap::<String, (usize, usize)>::new();
     for row in rows {
         for feature in planning_next_step_admission_feature_names(&row.features) {
+            let entry = counts.entry(feature).or_default();
+            if row.verifier_label {
+                entry.0 += 1;
+            } else {
+                entry.1 += 1;
+            }
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(feature, (label_true_count, label_false_count))| {
+            RoleBindingEditAdmissionFeatureCount {
+                feature,
+                label_true_count,
+                label_false_count,
+            }
+        })
+        .collect()
+}
+
+fn agent_continue_execute_state_admission_feature_counts(
+    rows: &[RoleBindingAgentContinueExecuteStateAdmissionAuditRow],
+) -> Vec<RoleBindingEditAdmissionFeatureCount> {
+    let mut counts = BTreeMap::<String, (usize, usize)>::new();
+    for row in rows {
+        for feature in agent_continue_execute_state_admission_feature_names(&row.features) {
             let entry = counts.entry(feature).or_default();
             if row.verifier_label {
                 entry.0 += 1;
@@ -39951,6 +40679,58 @@ fn planning_next_step_admission_feature_names(
     }
     if features.has_file_like_token {
         names.push("has_file_like_token".to_owned());
+    }
+    names
+}
+
+fn agent_continue_execute_state_admission_feature_names(
+    features: &RoleBindingAgentContinueExecuteStateAdmissionFeatures,
+) -> Vec<String> {
+    let mut names = planning_next_step_admission_feature_names(&features.request)
+        .into_iter()
+        .map(|name| format!("request_{name}"))
+        .collect::<Vec<_>>();
+    if features.previous_agent_state_available {
+        names.push("previous_agent_state_available".to_owned());
+    }
+    if features.previous_agent_len < 1000 {
+        names.push("previous_agent_length_lt_1000".to_owned());
+    }
+    if features.previous_agent_len < 1800 {
+        names.push("previous_agent_length_lt_1800".to_owned());
+    }
+    if features.previous_agent_token_count <= 80 {
+        names.push("previous_agent_token_count_le_80".to_owned());
+    }
+    if features.previous_agent_has_next_action_signal {
+        names.push("previous_agent_has_next_action_signal".to_owned());
+    }
+    if features.previous_agent_has_pending_work_signal {
+        names.push("previous_agent_has_pending_work_signal".to_owned());
+    }
+    if features.previous_agent_has_artifact_or_tool_signal {
+        names.push("previous_agent_has_artifact_or_tool_signal".to_owned());
+    }
+    if features.previous_agent_has_report_or_gate_signal {
+        names.push("previous_agent_has_report_or_gate_signal".to_owned());
+    }
+    if features.previous_agent_has_failure_or_blocker {
+        names.push("previous_agent_has_failure_or_blocker".to_owned());
+    }
+    if features.previous_agent_asks_user_decision {
+        names.push("previous_agent_asks_user_decision".to_owned());
+    }
+    if features.previous_agent_has_market_claim_block {
+        names.push("previous_agent_has_market_claim_block".to_owned());
+    }
+    if features.previous_agent_has_verification_signal {
+        names.push("previous_agent_has_verification_signal".to_owned());
+    }
+    if features.previous_agent_has_completion_signal {
+        names.push("previous_agent_has_completion_signal".to_owned());
+    }
+    if features.previous_agent_mentions_nando_wave {
+        names.push("previous_agent_mentions_nando_wave".to_owned());
     }
     names
 }
@@ -42227,6 +43007,107 @@ fn build_codex_session_output_evidence_index(
         }
     }
     Ok(CodexSessionOutputEvidenceIndex {
+        by_request_fingerprint,
+        session_files_scanned: session_files.len(),
+        codex_turns_indexed,
+    })
+}
+
+fn build_codex_session_previous_agent_state_index(
+    sessions_root: &Path,
+    session_ids: &HashSet<String>,
+    wanted_request_fingerprints: &HashSet<String>,
+) -> Result<CodexSessionPreviousAgentStateIndex, String> {
+    let mut session_files = Vec::new();
+    collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
+    let mut by_request_fingerprint = BTreeMap::new();
+    let mut codex_turns_indexed = 0usize;
+
+    for session_file in &session_files {
+        let text = fs::read_to_string(session_file).map_err(|error| {
+            format!(
+                "failed to read Codex session JSONL {}: {error}",
+                session_file.display()
+            )
+        })?;
+        let mut previous_agent_text: Option<String> = None;
+        let mut previous_response_fingerprint: Option<String> = None;
+
+        for (line_index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(trimmed).map_err(|error| {
+                format!(
+                    "failed to parse Codex session JSONL {} line {}: {error}",
+                    session_file.display(),
+                    line_index + 1
+                )
+            })?;
+            if value.get("type").and_then(serde_json::Value::as_str) != Some("event_msg") {
+                continue;
+            }
+            let Some(payload) = value.get("payload") else {
+                continue;
+            };
+            match payload.get("type").and_then(serde_json::Value::as_str) {
+                Some("user_message") => {
+                    if let Some(message) =
+                        payload.get("message").and_then(serde_json::Value::as_str)
+                    {
+                        let request_fingerprint = format!(
+                            "fnv1a64:{:016x}",
+                            stable_real_traffic_fingerprint64(message.as_bytes())
+                        );
+                        if wanted_request_fingerprints.contains(&request_fingerprint) {
+                            by_request_fingerprint
+                                .entry(request_fingerprint)
+                                .or_insert_with(|| CodexSessionPreviousAgentStateEvidence {
+                                    previous_response_fingerprint: previous_response_fingerprint
+                                        .clone(),
+                                    features:
+                                        extract_agent_continue_execute_state_admission_features(
+                                            message,
+                                            previous_agent_text.as_deref(),
+                                        ),
+                                });
+                            codex_turns_indexed += 1;
+                        }
+                    }
+                }
+                Some("agent_message")
+                    if payload.get("phase").and_then(serde_json::Value::as_str)
+                        == Some("final_answer") =>
+                {
+                    if let Some(message) =
+                        payload.get("message").and_then(serde_json::Value::as_str)
+                    {
+                        previous_response_fingerprint = Some(format!(
+                            "fnv1a64:{:016x}",
+                            stable_real_traffic_fingerprint64(message.as_bytes())
+                        ));
+                        previous_agent_text = Some(message.to_owned());
+                    }
+                }
+                Some("task_complete") => {
+                    if let Some(message) = payload
+                        .get("last_agent_message")
+                        .and_then(serde_json::Value::as_str)
+                    {
+                        previous_response_fingerprint = Some(format!(
+                            "fnv1a64:{:016x}",
+                            stable_real_traffic_fingerprint64(message.as_bytes())
+                        ));
+                        previous_agent_text = Some(message.to_owned());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(CodexSessionPreviousAgentStateIndex {
         by_request_fingerprint,
         session_files_scanned: session_files.len(),
         codex_turns_indexed,

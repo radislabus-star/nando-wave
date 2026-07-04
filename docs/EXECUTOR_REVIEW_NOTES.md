@@ -1,5 +1,105 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Continue State Admission Audit V1
+
+Verdict:
+
+```text
+AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-agent-continue-execute-state-admission-audit-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.trace.jsonl
+  /home/ubu/.codex/sessions
+
+and writes:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-state-admission-audit-v1.report.json
+```
+
+Why:
+
+```text
+agent_continue_execute prompt-only admission was inseparable:
+  25 hook-ready rows
+  6 verifier-true rows
+  19 verifier-false rows
+  robust_safe_policy_found=false
+
+This audit checks whether the previous assistant state before the user prompt
+can safely separate real artifact-progress continuation from false continuation
+rows. It writes only fingerprints/features/counts.
+```
+
+State admission result:
+
+```text
+hook_ready_rows: 25
+rows_with_state_features: 25
+previous_state_missing_rows: 0
+label_true_rows: 6
+label_false_rows: 19
+minimum_true_support: 3
+robust_safe_policy_found: false
+singleton_safe_policy_found: true
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 1
+```
+
+Feedback/catalog result:
+
+```text
+feedback agent_continue_execute:
+  stage: local_accept_calibration_failed
+  verification_hook_ready_events: 25
+  verified_cpu_accept_eligible_events: 0
+  next_action: state admission singleton-only; collect more verifier-true rows or split
+
+catalog existing_profile_route agent_continue_execute:
+  agent_continue_state_admission_best_robust_true_accepts: 0
+  agent_continue_state_admission_best_singleton_true_accepts: 1
+  next_action: do not promote; singleton-only support
+```
+
+Decision:
+
+```text
+Do not enable local accepts for agent_continue_execute.
+Do not count the singleton as CPU savings.
+Do not lower thresholds.
+
+The previous-state signal is useful as diagnostics, but still not robust.
+The next safe work is either:
+  1. collect more verifier-true continuation rows; or
+  2. split agent_continue_execute into a narrower stateful subroute; or
+  3. capture richer structured serving state instead of mining free-form text.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+The command uses previous assistant text only to derive privacy-safe boolean
+features at analysis time. It writes no raw prompt text, no raw response text,
+no target labels, no proof labels, and enables no local accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Answer Evidence Admission Calibration V1
 
 Verdict:
