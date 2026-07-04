@@ -364,6 +364,12 @@ pub(crate) fn print_help() {
         "            Calibrate answer-evidence score thresholds against deterministic verifier labels; review-only, no local accepts"
     );
     println!(
+        "  role-binding-real-traffic-answer-evidence-admission-calibration-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Calibrate request-side answer-evidence admission features against verifier labels; review-only, no local accepts"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
     );
     println!(

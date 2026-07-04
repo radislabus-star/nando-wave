@@ -85,6 +85,8 @@ const DEFAULT_ANSWER_EVIDENCE_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_ANSWER_EVIDENCE_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.report.json";
+const DEFAULT_ANSWER_EVIDENCE_ADMISSION_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/answer-evidence-admission-calibration-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_SAFE_POLICY_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-answer-evidence-safe-policy-v1.json";
 const DEFAULT_ANSWER_EVIDENCE_SAFE_POLICY_TRACE_JSONL: &str =
@@ -5506,6 +5508,158 @@ where
         report.best_safe_true_accepts
     );
     Err("answer-evidence local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_answer_evidence_admission_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ANSWER_EVIDENCE_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ANSWER_EVIDENCE_ADMISSION_CALIBRATION_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+
+    for trace in &trace_rows {
+        let Some(label) = trace.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &trace.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_ANSWER_EVIDENCE_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let features = extract_answer_evidence_admission_features(prompt_text);
+        rows.push(RoleBindingAnswerEvidenceAdmissionCalibrationRow {
+            trace_id: trace.trace_id.clone(),
+            request_fingerprint: trace.request_fingerprint.clone(),
+            response_fingerprint: trace.response_fingerprint.clone(),
+            verifier_label: label,
+            features,
+        });
+    }
+
+    let minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+    let policies = answer_evidence_admission_policy_reports(&rows, minimum_true_support);
+    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
+    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
+    let best_robust_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.robust_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let best_singleton_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.singleton_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let feature_counts = answer_evidence_admission_feature_counts(&rows);
+    let report = RoleBindingAnswerEvidenceAdmissionCalibrationReport {
+        schema_version: "nando_role_binding_answer_evidence_admission_calibration_v1".to_owned(),
+        verdict: if robust_safe_policy_found {
+            "ANSWER_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND"
+        } else if singleton_safe_policy_found {
+            "ANSWER_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
+        } else {
+            "ANSWER_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY"
+        }
+        .to_owned(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        hook_ready_rows,
+        rows_with_prompt_features: rows.len(),
+        history_prompt_missing_rows,
+        label_true_rows,
+        label_false_rows,
+        minimum_true_support,
+        robust_safe_policy_found,
+        singleton_safe_policy_found,
+        best_robust_true_accepts,
+        best_singleton_true_accepts,
+        feature_counts,
+        policies,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Answer-evidence admission calibration only. It reads real request text at analysis time, writes only fingerprints/features/counts, uses verification labels only to evaluate request-side gates, enables no local accepts, and cannot be used as a market savings claim. Broad answer_or_explain without explicit grounding remains fallback-only.".to_owned(),
+        next_engineering_debt: if robust_safe_policy_found {
+            "Use the robust answer-evidence request-side admission candidate only in a separate promoted shadow trace with provider cost, false_accepts=0, unverified_shadow_accepts=0, and explicit rollback. It still needs shadow/audit before counting CPU savings.".to_owned()
+        } else if singleton_safe_policy_found {
+            "Current answer-evidence prompt-side features expose only weak singleton separation. Collect more verifier-true non-synthetic rows or split the grounded-evidence subfamily before enabling local accepts.".to_owned()
+        } else {
+            "Current answer-evidence prompt-side features do not safely separate grounded true answers from verifier-false rows. Improve evidence extraction or split the answer_or_explain route before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-answer-evidence-admission-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!(
+        "  rows_with_prompt_features: {}",
+        report.rows_with_prompt_features
+    );
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!(
+        "  robust_safe_policy_found: {}",
+        report.robust_safe_policy_found
+    );
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    Err("answer-evidence admission calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_answer_evidence_safe_policy_promote_v1<I>(
@@ -15489,6 +15643,18 @@ where
         } else {
             None
         };
+    let answer_evidence_admission_calibration_report_path =
+        PathBuf::from(DEFAULT_ANSWER_EVIDENCE_ADMISSION_CALIBRATION_REPORT);
+    let answer_evidence_admission_calibration =
+        if answer_evidence_admission_calibration_report_path.exists() {
+            Some(read_json_file::<
+                RoleBindingAnswerEvidenceAdmissionCalibrationReport,
+            >(
+                &answer_evidence_admission_calibration_report_path
+            )?)
+        } else {
+            None
+        };
     let style_brevity_verification_audit_report_path =
         PathBuf::from(DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let style_brevity_verification_audit = if style_brevity_verification_audit_report_path.exists()
@@ -15761,6 +15927,28 @@ where
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
+        let answer_evidence_admission_best_robust_true_accepts =
+            answer_evidence_admission_calibration
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY)
+                .map(|audit| audit.best_robust_true_accepts)
+                .unwrap_or_default();
+        let answer_evidence_admission_best_singleton_true_accepts =
+            answer_evidence_admission_calibration
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY)
+                .map(|audit| audit.best_singleton_true_accepts)
+                .unwrap_or_default();
+        let answer_evidence_admission_singleton_only = answer_evidence_admission_calibration
+            .as_ref()
+            .filter(|_| route.route_key == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY)
+            .is_some_and(|audit| {
+                !audit.robust_safe_policy_found && audit.singleton_safe_policy_found
+            });
+        if answer_evidence_admission_singleton_only {
+            priority_score = priority_score
+                .saturating_sub(CPU_OPERATOR_LOW_SUPPORT_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
         let agent_continue_admission_best_robust_true_accepts =
             agent_continue_execute_admission_calibration
                 .as_ref()
@@ -15864,6 +16052,10 @@ where
             next_action = format!(
                 "Metrics-report admission calibration found only {metrics_report_admission_best_robust_true_accepts} robust safe true accepts, already covered by current incremental unique support; improve metrics payload/evidence geometry or split a stronger report subfamily before another promote."
             );
+        } else if answer_evidence_admission_singleton_only {
+            next_action = format!(
+                "Answer-evidence admission calibration found only singleton support ({answer_evidence_admission_best_singleton_true_accepts} safe true, robust {answer_evidence_admission_best_robust_true_accepts}); collect more verifier-true grounded evidence rows or split the subfamily before promotion."
+            );
         } else if agent_continue_admission_no_safe_policy {
             next_action = format!(
                 "Agent-continue admission calibration found no safe prompt-side policy (robust true accepts {agent_continue_admission_best_robust_true_accepts}, singleton true accepts {agent_continue_admission_best_singleton_true_accepts}); split agent_continue_execute or capture richer request-side state before promotion."
@@ -15928,6 +16120,9 @@ where
             mixed_current_support_exhausted,
             metrics_report_admission_best_robust_true_accepts,
             metrics_report_current_support_exhausted,
+            answer_evidence_admission_best_robust_true_accepts,
+            answer_evidence_admission_best_singleton_true_accepts,
+            answer_evidence_admission_singleton_only,
             agent_continue_admission_best_robust_true_accepts,
             agent_continue_admission_best_singleton_true_accepts,
             agent_continue_admission_no_safe_policy,
@@ -15999,6 +16194,13 @@ where
         let metrics_report_support_exhausted = family.family_key
             == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY
             && metrics_report_gap_support_exhausted;
+        let answer_evidence_gap_singleton_only = family.family_key
+            == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY
+            && answer_evidence_admission_calibration
+                .as_ref()
+                .is_some_and(|audit| {
+                    !audit.robust_safe_policy_found && audit.singleton_safe_policy_found
+                });
         let git_control_support_exhausted = family.family_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
             && git_control_gap_support_exhausted;
         let serving_ops_support_exhausted = family.family_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
@@ -16110,7 +16312,7 @@ where
         } else if agent_continue_gap_no_safe_policy || short_decision_ack_prior_blocked {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
-        } else if existing_scoreable_feedback_row.is_some() {
+        } else if answer_evidence_gap_singleton_only || existing_scoreable_feedback_row.is_some() {
             priority_score = priority_score
                 .saturating_sub(CPU_OPERATOR_LOW_SUPPORT_LOCAL_ACCEPT_PRIORITY_PENALTY);
         }
@@ -16129,6 +16331,14 @@ where
         } else if serving_ops_support_exhausted {
             format!(
                 "Serving-ops gap is payload-ready, but current safe serving support is exhausted at {serving_ops_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve daemon health evidence or split a new ops subfamily before another promote."
+            )
+        } else if answer_evidence_gap_singleton_only {
+            let best_singleton = answer_evidence_admission_calibration
+                .as_ref()
+                .map(|audit| audit.best_singleton_true_accepts)
+                .unwrap_or_default();
+            format!(
+                "answer_or_explain has grounded-evidence hooks, but admission calibration found only singleton support ({best_singleton} safe true). Collect more verifier-true grounded rows or split the route before any promotion."
             )
         } else if agent_continue_gap_no_safe_policy {
             let best_robust = agent_continue_execute_admission_calibration
@@ -16284,6 +16494,27 @@ where
                 0
             },
             metrics_report_current_support_exhausted: metrics_report_support_exhausted,
+            answer_evidence_admission_best_robust_true_accepts: if family.family_key
+                == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY
+            {
+                answer_evidence_admission_calibration
+                    .as_ref()
+                    .map(|audit| audit.best_robust_true_accepts)
+                    .unwrap_or_default()
+            } else {
+                0
+            },
+            answer_evidence_admission_best_singleton_true_accepts: if family.family_key
+                == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY
+            {
+                answer_evidence_admission_calibration
+                    .as_ref()
+                    .map(|audit| audit.best_singleton_true_accepts)
+                    .unwrap_or_default()
+            } else {
+                0
+            },
+            answer_evidence_admission_singleton_only: answer_evidence_gap_singleton_only,
             agent_continue_admission_best_robust_true_accepts: if family.family_key
                 == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
             {
@@ -16400,6 +16631,13 @@ where
         answer_evidence_verification_audit_report_path: answer_evidence_verification_audit
             .as_ref()
             .map(|_| answer_evidence_verification_audit_report_path.display().to_string()),
+        answer_evidence_admission_calibration_report_path: answer_evidence_admission_calibration
+            .as_ref()
+            .map(|_| {
+                answer_evidence_admission_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         style_brevity_verification_audit_report_path: style_brevity_verification_audit
             .as_ref()
             .map(|_| style_brevity_verification_audit_report_path.display().to_string()),
@@ -16522,6 +16760,12 @@ where
         println!(
             "  answer_evidence_verification_audit_report: {}",
             answer_evidence_verification_audit_report_path.display()
+        );
+    }
+    if answer_evidence_admission_calibration.is_some() {
+        println!(
+            "  answer_evidence_admission_calibration_report: {}",
+            answer_evidence_admission_calibration_report_path.display()
         );
     }
     if style_brevity_verification_audit.is_some() {
@@ -28664,6 +28908,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     answer_evidence_verification_audit_report_path: Option<String>,
     #[serde(default)]
+    answer_evidence_admission_calibration_report_path: Option<String>,
+    #[serde(default)]
     style_brevity_verification_audit_report_path: Option<String>,
     #[serde(default)]
     conditional_admission_audit_report_path: Option<String>,
@@ -28764,6 +29010,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     metrics_report_admission_best_robust_true_accepts: usize,
     #[serde(default)]
     metrics_report_current_support_exhausted: bool,
+    #[serde(default)]
+    answer_evidence_admission_best_robust_true_accepts: usize,
+    #[serde(default)]
+    answer_evidence_admission_best_singleton_true_accepts: usize,
+    #[serde(default)]
+    answer_evidence_admission_singleton_only: bool,
     #[serde(default)]
     agent_continue_admission_best_robust_true_accepts: usize,
     #[serde(default)]
@@ -29855,6 +30107,45 @@ struct RoleBindingPlanningNextStepAdmissionCalibrationRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAnswerEvidenceAdmissionCalibrationReport {
+    schema_version: String,
+    verdict: String,
+    evidence_trace_path: String,
+    history_path: String,
+    hook_ready_rows: usize,
+    rows_with_prompt_features: usize,
+    history_prompt_missing_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    minimum_true_support: usize,
+    robust_safe_policy_found: bool,
+    singleton_safe_policy_found: bool,
+    best_robust_true_accepts: usize,
+    best_singleton_true_accepts: usize,
+    feature_counts: Vec<RoleBindingEditAdmissionFeatureCount>,
+    policies: Vec<RoleBindingEditAdmissionPolicyReport>,
+    rows: Vec<RoleBindingAnswerEvidenceAdmissionCalibrationRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAnswerEvidenceAdmissionCalibrationRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    response_fingerprint: Option<String>,
+    verifier_label: bool,
+    features: RoleBindingAnswerEvidenceAdmissionFeatures,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingMetricsReportAdmissionCalibrationReport {
     schema_version: String,
     verdict: String,
@@ -29911,6 +30202,31 @@ struct RoleBindingMetricsReportAdmissionFeatures {
     colon_count_ge_3: bool,
     concise_request: bool,
     long_report_context: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAnswerEvidenceAdmissionFeatures {
+    request_len: usize,
+    line_count: usize,
+    token_count: usize,
+    starts_question: bool,
+    starts_direct_question_word: bool,
+    has_question_mark: bool,
+    has_answer_terms: bool,
+    has_explain_terms: bool,
+    has_evidence_terms: bool,
+    has_grounding_terms: bool,
+    has_source_terms: bool,
+    has_file_like_token: bool,
+    has_path_or_url_terms: bool,
+    has_quote_or_code_fence: bool,
+    has_broad_knowledge_terms: bool,
+    has_failure_terms: bool,
+    has_nando_wave_terms: bool,
+    digit_count_ge_4: bool,
+    colon_count_ge_3: bool,
+    concise_request: bool,
+    long_context: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -38344,6 +38660,140 @@ fn extract_edit_admission_features(text: &str) -> RoleBindingEditAdmissionFeatur
     }
 }
 
+fn extract_answer_evidence_admission_features(
+    text: &str,
+) -> RoleBindingAnswerEvidenceAdmissionFeatures {
+    let lower = text.to_lowercase();
+    let trimmed = text.trim_start();
+    let token_count = normalized_token_count(&lower);
+    RoleBindingAnswerEvidenceAdmissionFeatures {
+        request_len: text.trim().len(),
+        line_count: text.lines().count().max(1),
+        token_count,
+        starts_question: text.trim_end().ends_with('?') || text.trim_end().ends_with('؟'),
+        starts_direct_question_word: contains_any(
+            &trimmed.to_lowercase(),
+            &[
+                "что ",
+                "как ",
+                "почему ",
+                "зачем ",
+                "где ",
+                "what ",
+                "how ",
+                "why ",
+                "where ",
+            ],
+        ),
+        has_question_mark: text.contains('?') || text.contains('؟'),
+        has_answer_terms: contains_any(
+            &lower,
+            &["ответ", "answer", "скажи", "объясни", "поясни", "explain"],
+        ),
+        has_explain_terms: contains_any(
+            &lower,
+            &["объясн", "поясн", "разбер", "explain", "why", "почему"],
+        ),
+        has_evidence_terms: contains_any(
+            &lower,
+            &[
+                "evidence",
+                "доказ",
+                "аргумент",
+                "основан",
+                "пруф",
+                "proof",
+                "цитат",
+                "вывод",
+            ],
+        ),
+        has_grounding_terms: contains_any(
+            &lower,
+            &[
+                "по файлу",
+                "по отчет",
+                "по отчёт",
+                "по логу",
+                "из файла",
+                "из отчета",
+                "из отчёта",
+                "смотри",
+                "прочитай",
+                "проверь",
+                "trace",
+                "report",
+                "log",
+            ],
+        ),
+        has_source_terms: contains_any(
+            &lower,
+            &[
+                "источник",
+                "source",
+                "url",
+                "ссылка",
+                "документ",
+                "docs/",
+                "crates/",
+                "target/",
+            ],
+        ),
+        has_file_like_token: contains_file_like_token(text),
+        has_path_or_url_terms: contains_any(
+            &lower,
+            &[
+                "http://", "https://", "file:", "docs/", "crates/", "target/", "/home/",
+            ],
+        ) || contains_file_like_token(text),
+        has_quote_or_code_fence: contains_marker_like_signal(text),
+        has_broad_knowledge_terms: contains_any(
+            &lower,
+            &[
+                "вообще",
+                "в целом",
+                "мнение",
+                "думаешь",
+                "литератур",
+                "статья",
+                "research",
+                "latest",
+                "рынок",
+                "market",
+            ],
+        ),
+        has_failure_terms: contains_any(
+            &lower,
+            &[
+                "failed",
+                "failure",
+                "fail",
+                "ошибка",
+                "провал",
+                "не прошло",
+                "не проходит",
+                "watch",
+                "veto",
+            ],
+        ),
+        has_nando_wave_terms: contains_any(
+            &lower,
+            &[
+                "nando",
+                "wave",
+                "llmwave",
+                "нандо",
+                "волн",
+                "runtime",
+                "рантайм",
+            ],
+        ),
+        digit_count_ge_4: text.chars().filter(|ch| ch.is_ascii_digit()).count() >= 4,
+        colon_count_ge_3: text.matches(':').count() >= 3,
+        concise_request: text.trim().len() <= 280,
+        long_context: text.trim().len() >= 1000,
+    }
+}
+
 fn extract_agent_control_admission_features(
     text: &str,
 ) -> RoleBindingAgentControlAdmissionFeatures {
@@ -38736,6 +39186,66 @@ fn metrics_report_admission_policy_reports(
         .collect()
 }
 
+fn answer_evidence_admission_policy_reports(
+    rows: &[RoleBindingAnswerEvidenceAdmissionCalibrationRow],
+    minimum_true_support: usize,
+) -> Vec<RoleBindingEditAdmissionPolicyReport> {
+    type AnswerEvidenceAdmissionPredicate = fn(&RoleBindingAnswerEvidenceAdmissionFeatures) -> bool;
+    let policy_defs: Vec<(&str, AnswerEvidenceAdmissionPredicate)> = vec![
+        ("all_hook_ready_rows", |_| true),
+        ("explicit_evidence_terms", |features| {
+            features.has_evidence_terms
+        }),
+        ("grounding_terms", |features| features.has_grounding_terms),
+        ("source_or_path_terms", |features| {
+            features.has_source_terms || features.has_path_or_url_terms
+        }),
+        ("quote_or_code_fence", |features| {
+            features.has_quote_or_code_fence
+        }),
+        ("evidence_and_question", |features| {
+            features.has_evidence_terms && features.has_question_mark
+        }),
+        ("grounded_answer_terms", |features| {
+            features.has_answer_terms && features.has_grounding_terms
+        }),
+        ("grounded_explain_terms", |features| {
+            features.has_explain_terms && features.has_grounding_terms
+        }),
+        ("file_grounded_no_broad", |features| {
+            features.has_file_like_token
+                && features.has_grounding_terms
+                && !features.has_broad_knowledge_terms
+        }),
+        ("source_grounded_no_failure", |features| {
+            (features.has_source_terms || features.has_path_or_url_terms)
+                && features.has_grounding_terms
+                && !features.has_failure_terms
+        }),
+        ("concise_grounded_question", |features| {
+            features.concise_request
+                && features.has_question_mark
+                && (features.has_grounding_terms || features.has_source_terms)
+        }),
+        ("long_context_with_evidence", |features| {
+            features.long_context && features.has_evidence_terms
+        }),
+        ("nando_wave_grounded_evidence", |features| {
+            features.has_nando_wave_terms
+                && features.has_evidence_terms
+                && (features.has_file_like_token || features.has_source_terms)
+        }),
+    ];
+    policy_defs
+        .into_iter()
+        .map(|(name, predicate)| {
+            evaluate_answer_evidence_admission_policy(name, rows, minimum_true_support, |row| {
+                predicate(&row.features)
+            })
+        })
+        .collect()
+}
+
 fn metrics_report_admission_policy_accepts(
     policy_name: &str,
     features: &RoleBindingMetricsReportAdmissionFeatures,
@@ -38850,6 +39360,37 @@ fn evaluate_metrics_report_admission_policy<F>(
 ) -> RoleBindingEditAdmissionPolicyReport
 where
     F: Fn(&RoleBindingMetricsReportAdmissionCalibrationRow) -> bool,
+{
+    let mut accepted = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut missed_true = 0usize;
+    for row in rows {
+        let accept = accepts(row);
+        accepted += usize::from(accept);
+        true_accepts += usize::from(accept && row.verifier_label);
+        false_accepts += usize::from(accept && !row.verifier_label);
+        missed_true += usize::from(!accept && row.verifier_label);
+    }
+    RoleBindingEditAdmissionPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: accepted,
+        true_accepts,
+        false_accepts,
+        missed_true,
+        singleton_safe: false_accepts == 0 && true_accepts == 1,
+        robust_safe: false_accepts == 0 && true_accepts >= minimum_true_support,
+    }
+}
+
+fn evaluate_answer_evidence_admission_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingAnswerEvidenceAdmissionCalibrationRow],
+    minimum_true_support: usize,
+    accepts: F,
+) -> RoleBindingEditAdmissionPolicyReport
+where
+    F: Fn(&RoleBindingAnswerEvidenceAdmissionCalibrationRow) -> bool,
 {
     let mut accepted = 0usize;
     let mut true_accepts = 0usize;
@@ -39118,6 +39659,32 @@ fn metrics_report_admission_feature_counts(
         .collect()
 }
 
+fn answer_evidence_admission_feature_counts(
+    rows: &[RoleBindingAnswerEvidenceAdmissionCalibrationRow],
+) -> Vec<RoleBindingEditAdmissionFeatureCount> {
+    let mut counts = BTreeMap::<String, (usize, usize)>::new();
+    for row in rows {
+        for feature in answer_evidence_admission_feature_names(&row.features) {
+            let entry = counts.entry(feature).or_default();
+            if row.verifier_label {
+                entry.0 += 1;
+            } else {
+                entry.1 += 1;
+            }
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(feature, (label_true_count, label_false_count))| {
+            RoleBindingEditAdmissionFeatureCount {
+                feature,
+                label_true_count,
+                label_false_count,
+            }
+        })
+        .collect()
+}
+
 fn agent_control_admission_feature_counts(
     rows: &[RoleBindingAgentControlAdmissionCalibrationRow],
 ) -> Vec<RoleBindingEditAdmissionFeatureCount> {
@@ -39142,6 +39709,67 @@ fn agent_control_admission_feature_counts(
             }
         })
         .collect()
+}
+
+fn answer_evidence_admission_feature_names(
+    features: &RoleBindingAnswerEvidenceAdmissionFeatures,
+) -> Vec<String> {
+    let mut names = Vec::new();
+    if features.starts_question {
+        names.push("starts_question".to_owned());
+    }
+    if features.starts_direct_question_word {
+        names.push("starts_direct_question_word".to_owned());
+    }
+    if features.has_question_mark {
+        names.push("has_question_mark".to_owned());
+    }
+    if features.has_answer_terms {
+        names.push("has_answer_terms".to_owned());
+    }
+    if features.has_explain_terms {
+        names.push("has_explain_terms".to_owned());
+    }
+    if features.has_evidence_terms {
+        names.push("has_evidence_terms".to_owned());
+    }
+    if features.has_grounding_terms {
+        names.push("has_grounding_terms".to_owned());
+    }
+    if features.has_source_terms {
+        names.push("has_source_terms".to_owned());
+    }
+    if features.has_file_like_token {
+        names.push("has_file_like_token".to_owned());
+    }
+    if features.has_path_or_url_terms {
+        names.push("has_path_or_url_terms".to_owned());
+    }
+    if features.has_quote_or_code_fence {
+        names.push("has_quote_or_code_fence".to_owned());
+    }
+    if features.has_broad_knowledge_terms {
+        names.push("has_broad_knowledge_terms".to_owned());
+    }
+    if features.has_failure_terms {
+        names.push("has_failure_terms".to_owned());
+    }
+    if features.has_nando_wave_terms {
+        names.push("has_nando_wave_terms".to_owned());
+    }
+    if features.digit_count_ge_4 {
+        names.push("digit_count_ge_4".to_owned());
+    }
+    if features.colon_count_ge_3 {
+        names.push("colon_count_ge_3".to_owned());
+    }
+    if features.concise_request {
+        names.push("concise_request".to_owned());
+    }
+    if features.long_context {
+        names.push("long_context".to_owned());
+    }
+    names
 }
 
 fn agent_control_admission_feature_names(

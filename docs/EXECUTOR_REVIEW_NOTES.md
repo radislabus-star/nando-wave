@@ -1,5 +1,100 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Answer Evidence Admission Calibration V1
+
+Verdict:
+
+```text
+ANSWER_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-answer-evidence-admission-calibration-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.trace.jsonl
+  /home/ubu/.codex/history.jsonl
+
+and writes:
+  target/nando-wave/real-traffic-shadow/answer-evidence-admission-calibration-v1.report.json
+```
+
+Why:
+
+```text
+answer_or_explain has 216 route candidates, 9 scoreable grounded-evidence
+payloads, and 9 verifier-hook-ready rows. The score/readout calibration did
+not find a safe local accept policy, so this step checks whether request-side
+prompt features can safely split verifier-true grounded evidence from
+verifier-false broad answer rows.
+```
+
+Admission calibration result:
+
+```text
+hook_ready_rows: 9
+rows_with_prompt_features: 9
+label_true_rows: 3
+label_false_rows: 6
+minimum_true_support: 3
+robust_safe_policy_found: false
+singleton_safe_policy_found: true
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 1
+```
+
+Policy finding:
+
+```text
+concise_grounded_question:
+  true_accepts: 1
+  false_accepts: 0
+  robust_safe: false
+```
+
+Catalog result:
+
+```text
+answer_or_explain existing_profile_route:
+  answer_evidence_admission_singleton_only: true
+  answer_evidence_admission_best_singleton_true_accepts: 1
+  next_action: collect more verifier-true grounded evidence rows or split the subfamily
+
+answer_or_explain route_gap_family:
+  answer_evidence_admission_singleton_only: true
+  next_action: collect more verifier-true grounded rows or split the route
+```
+
+Decision:
+
+```text
+Do not promote answer_or_explain from this report.
+Do not lower answer-evidence thresholds.
+The broad route remains fallback-first. The next safe work is collecting more
+verifier-true grounded evidence rows or splitting a narrower grounded-answer
+subfamily with deterministic evidence.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+The command writes fingerprints/features/counts only; no raw prompt text,
+raw response text, target labels, proof labels, or local accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Continue Admission Feedback/Catalog V1
 
 Verdict:
