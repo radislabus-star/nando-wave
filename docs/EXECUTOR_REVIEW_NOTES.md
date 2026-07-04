@@ -1,5 +1,121 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: IME Input-State Payload + Evidence V1
+
+Verdict:
+
+```text
+IME_INPUT_STATE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI routes:
+  role-binding-real-traffic-ime-input-state-payload-dry-run-v1
+  role-binding-real-traffic-ime-input-state-output-evidence-v1
+```
+
+Why:
+
+```text
+The 5k manual route discovery split identified ime_input_state_debug as the top
+narrow, privacy-safe next profile:
+  ime_input_state_debug: 16 events, 6 payload-ready
+
+This stage turns that subfamily into request-side scoreable payloads and joins
+Codex final-answer fingerprints through a conservative deterministic verifier.
+It does not compile a .nwrb profile and does not enable local accepts.
+```
+
+Run artifacts:
+
+```text
+Payload dry-run:
+  target/nando-wave/real-traffic-shadow/ime-input-state-payload-dry-run-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/ime-input-state-payload-dry-run-v1.report.json
+
+Output evidence:
+  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.report.json
+
+Shadow/audit:
+  target/nando-wave/real-traffic-shadow/ime-input-state-shadow-v1.report.json
+  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.verification-hook-audit.report.json
+```
+
+Measured result:
+
+```text
+payload:
+  ime_input_state_candidate_events: 16
+  payload_ready_events: 6
+  payload_built_events: 6
+  scoreable_payload_events: 6
+  profile_registered: false
+
+output_evidence:
+  session_ids_requested: 2
+  session_files_scanned: 2
+  codex_turns_indexed: 5
+  output_evidence_matched_events: 5
+  deterministic_verification_events: 5
+  verified_true_events: 3
+  verified_false_events: 2
+  no_session_output_match_events: 1
+
+shadow:
+  total_llm_calls: 5000
+  exact_cache_hits: 459
+  operator_candidate_calls: 6
+  nando_shadow_accepts: 0
+  nando_shadow_fallbacks: 6
+  false_accepts: 0
+  p99_shadow_score_latency_ns: 3042
+
+verification_audit:
+  verification_hook_ready_events: 5
+  verified_cpu_accept_eligible_events: 0
+  market_claim_allowed: false
+```
+
+Decision:
+
+```text
+IME now has real request-side payload support and real verifier evidence:
+  6 scoreable payloads
+  5 verification-hook-ready rows
+  3 verifier-true rows
+
+But this is not CPU savings yet:
+  profile_registered=false
+  nando_shadow_accepts=0
+  verified_cpu_accept_eligible_events=0
+
+The next step for this route is a disabled-threshold IME .nwrb profile and
+admission audit. Do not promote local accepts from payload/evidence alone.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+No raw prompt text is written.
+No raw response text is written.
+No target labels are used.
+No proof labels are used.
+Local accepts remain disabled.
+```
+
 ## 2026-07-04 - Executor Integration: Manual Route Discovery 5k Taxonomy Split
 
 Verdict:

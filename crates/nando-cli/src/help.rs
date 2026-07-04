@@ -346,6 +346,18 @@ pub(crate) fn print_help() {
         "            Attach conservative write-rate/resource-budget verifier labels; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-ime-input-state-payload-dry-run-v1 [history-jsonl] [registry-config-json] [manual-discovery-report-json] [trace-jsonl] [report-json] [max-events]"
+    );
+    println!(
+        "            Build request-side IME/input-state score payloads from manual-discovery rows; review-only, local accepts disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-ime-input-state-output-evidence-v1 [dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [report-json]"
+    );
+    println!(
+        "            Attach conservative IME symptom/artifact verifier labels; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(
