@@ -1,5 +1,165 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Metrics-Report Route Payload/Profile/Evidence
+
+Verdict:
+
+```text
+METRICS_REPORT_ROUTE_V1_REVIEW_HOOKS_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added commands:
+  role-binding-real-traffic-metrics-report-payload-dry-run-v1
+  role-binding-real-traffic-metrics-report-profile-v1
+  role-binding-real-traffic-metrics-report-output-evidence-v1
+
+Added route/profile:
+  route_key: metrics_report_readout
+  profile_id: route_gap_metrics_report_profile_v1
+
+Added verifier:
+  deterministic_metrics_report_output_verification
+  verification_source:
+    codex_session_final_answer_fingerprint_plus_deterministic_numeric_report_field_verifier_v1
+```
+
+Metrics-report request-side payload dry-run:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.trace.jsonl
+
+metrics_report_candidate_events:      55
+payload_ready_events:                 42
+payload_built_events:                 42
+scoreable_payload_events:             42
+profile_registered:                   false
+raw_text_written:                     false
+response_text_used:                   false
+target_labels_used:                   false
+proof_labels_used:                    false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Metrics-report profile:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/metrics-report-profile-v1.report.json
+
+scoreable_payload_events:             42
+package_training_requests:            42
+edge_count:                           8
+package_bytes:                        140
+runtime_bytes_estimate:               33000
+median_energy_margin:                 1105920
+p10_energy_margin:                    835584
+unexpected_local_accepts_under_disabled_threshold: 0
+local_accepts_enabled_on_real_traffic: false
+```
+
+Metrics-report output evidence:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.report.json
+
+verification audit:
+  target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json
+
+output_evidence_matched_events:       32
+deterministic_verification_events:    32
+verifier_not_applicable_events:       0
+verified_true_events:                 18
+verified_false_events:                14
+candidates_missing_output_evidence:   10
+candidates_missing_explicit_verification: 10
+verified_cpu_accept_eligible_events:  0
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Feedback loop after metrics-report evidence:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             384 / 1000
+scoreable_candidate_calls:            147 / 1000
+verification_hook_ready_events:       113
+verified_cpu_accept_eligible_events:  8
+verified_cpu_routability_milli:       8
+verified_gap_to_80_calls:             792
+market_claim_allowed:                 false
+
+metrics_report_readout route row:
+  candidate_events:                   55
+  scoreable_payload_events:           42
+  verification_hook_ready_events:     32
+  verified_cpu_accept_eligible_events: 0
+  stage:                              verification_hook_ready_waiting_local_accept
+```
+
+Catalog default refresh:
+
+```text
+role-binding-real-traffic-cpu-operator-catalog-v1 now defaults to:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json
+
+It no longer silently prefers older conditional/agent-control feedback or
+route-gap reports when no explicit paths are passed. For a specific current
+route base, pass all report paths explicitly.
+```
+
+Route-gap after registering metrics-report:
+
+```text
+readiness report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-metrics-report-v1.report.json
+
+existing_route_candidate_events:      499
+no_candidate_events:                  501
+payload_ready_events:                 17
+top_payload_ready_family:             git_control
+
+next deterministic route candidates:
+  git_control
+  serving_ops
+  retrieval_lookup
+```
+
+Claim boundary:
+
+```text
+This moves metrics_report_readout from route-gap into a scoreable registered
+profile with deterministic output evidence labels. It does not enable local
+accepts and does not prove savings.
+
+The route has 18 verifier-true rows and 14 verifier-false rows, but all 42
+scoreable rows still run under a disabled threshold. Verified CPU accepts remain
+8/1000 on the fresh default artifact base. Red gate stays red.
+```
+
 ## 2026-07-04 - Executor Integration: Read-Inspect Output Evidence Verifier
 
 Verdict:

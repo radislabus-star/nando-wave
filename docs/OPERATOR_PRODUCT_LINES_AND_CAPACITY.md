@@ -224,10 +224,24 @@ Read-inspect route/profile rung:
   verified_cpu_accepts: 0
   blocker: local_accept_policy_not_calibrated; singleton true support is not promotable
 
-Fresh default feedback after read_inspect output evidence:
-  operator_candidate_calls: 314 / 1000
-  scoreable_candidate_calls: 105 / 1000
-  verification_hook_ready_events: 81
+Metrics-report route/profile rung:
+  registry: profile-registry-metrics-report-v1.json
+  metrics_report_routed_candidates: 55 / 1000
+  metrics_report_scoreable_payloads: 42
+  metrics_report_profile_edges: 8
+  metrics_report_runtime_bytes_estimate: 33000
+  output_evidence_report: metrics-report-output-evidence-v1.report.json
+  output_evidence_matched_events: 32
+  verifier_true_events: 18
+  verifier_false_events: 14
+  verification_hook_ready_events: 32
+  verified_cpu_accepts: 0
+  blocker: local_accept_policy_disabled_for_metrics_report
+
+Fresh default feedback after metrics_report output evidence:
+  operator_candidate_calls: 384 / 1000
+  scoreable_candidate_calls: 147 / 1000
+  verification_hook_ready_events: 113
   verified_cpu_accepts: 8 / 1000
   verified_gap_to_80_calls: 792
   market_claim_allowed: false

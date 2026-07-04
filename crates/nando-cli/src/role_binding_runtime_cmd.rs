@@ -55,8 +55,6 @@ const DEFAULT_REAL_TRAFFIC_CPU_ROUTE_FORECAST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json";
-const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_AGENT_CONTROL_REPORT: &str =
-    "target/nando-wave/real-traffic-shadow/route-gap-catalog-agent-control-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -84,6 +82,21 @@ const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
 const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.report.json";
 const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json";
+const DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json";
+const DEFAULT_METRICS_REPORT_PACKAGE_PATH: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb";
+const DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-v1.json";
+const DEFAULT_METRICS_REPORT_PROFILE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-profile-v1.report.json";
+const DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.trace.jsonl";
+const DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.report.json";
+const DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_REPORT: &str =
@@ -94,7 +107,6 @@ const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json";
-const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT: &str = "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
 const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
@@ -263,6 +275,20 @@ const REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY: &str = "read_inspect";
 const REAL_TRAFFIC_READ_INSPECT_PROFILE_ID: &str = "route_gap_read_inspect_profile_v1";
 const REAL_TRAFFIC_READ_INSPECT_WRONG_TOKEN: &str = "__READ_INSPECT_WRONG__";
 const REAL_TRAFFIC_READ_INSPECT_DISABLED_THRESHOLD: i32 = i32::MAX;
+const REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_METRICS_REPORT_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_BASE: u32 = 39 << 12;
+const REAL_TRAFFIC_METRICS_REPORT_METRIC_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_METRICS_REPORT_REPORT_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_METRICS_REPORT_READOUT_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_METRICS_REPORT_BOUNDARY_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_METRICS_REPORT_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_METRICS_REPORT_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY: &str = "metrics_report_readout";
+const REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID: &str = "route_gap_metrics_report_profile_v1";
+const REAL_TRAFFIC_METRICS_REPORT_WRONG_TOKEN: &str = "__METRICS_REPORT_WRONG__";
+const REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD: i32 = i32::MAX;
 const REAL_TRAFFIC_AGENT_CONTROL_ACTION_BASE: u32 = 0;
 const REAL_TRAFFIC_AGENT_CONTROL_ACTION_COUNT: u32 = 4096;
 const REAL_TRAFFIC_AGENT_CONTROL_ROLE_BASE: u32 = 4096;
@@ -4211,6 +4237,620 @@ where
     Err("planning-next-step profile is review-only; attach verifier before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_metrics_report_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID);
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut metrics_report_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_metrics_report_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "not metrics_report_readout route-gap candidate".to_owned();
+
+        if route_catalog.classify_request_text(&row.text).is_none()
+            && route_gap_family_key(&row.text) == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY
+        {
+            metrics_report_candidate_events += 1;
+            let readiness = analyze_route_gap_payload_readiness(
+                REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY,
+                &row.text,
+            );
+            if readiness.payload_ready {
+                payload_ready_events += 1;
+                let built =
+                    build_metrics_report_dry_run_request(&event_id, &fingerprint, &row.text);
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable && profile_registered {
+                            "scoreable_payload_built_profile_registered"
+                        } else if scoreable {
+                            "scoreable_payload_built_profile_missing"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingMetricsReportPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side metrics-report payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingMetricsReportPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "readiness_rejected".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = format!(
+                    "metrics_report_readout route-gap candidate rejected by readiness gate: {}",
+                    readiness.missing_reasons.join(",")
+                );
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_local_metrics_report_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side metrics-report payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingMetricsReportPayloadDryRunReport {
+        schema_version: "nando_role_binding_metrics_report_payload_dry_run_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "METRICS_REPORT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "METRICS_REPORT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "METRICS_REPORT_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        metrics_report_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for metrics_report_readout route-gap rows from prompt text only, keeps verified_safe_accept=None and expect_local_operator=false, writes no raw prompt text, and cannot prove savings. A numeric report field verifier is required before any local accept.".to_owned(),
+        next_engineering_debt: "Compile a metrics_report .nwrb scoring profile, rerun shadow, then attach numeric_report_field_verifier_v1 before threshold calibration or market claim.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-metrics-report-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  metrics_report_candidate_events: {}",
+        report.metrics_report_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  profile_registered: {}", report.profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "metrics-report payload dry-run is review-only; build profile+verifier before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_metrics_report_profile_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG));
+    let dry_run_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let package_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PACKAGE_PATH));
+    let registry_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PROFILE_REPORT));
+
+    let mut registry = read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_path)?;
+    validate_registry_config(&registry)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&dry_run_trace_path)?;
+    let build = build_metrics_report_role_binding_package_from_trace(&trace_rows)?;
+    if let Some(parent) = package_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "failed to create metrics-report package directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(&package_path, &build.package_bytes).map_err(|error| {
+        format!(
+            "failed to write metrics-report package {}: {error}",
+            package_path.display()
+        )
+    })?;
+    let package_info =
+        WavePredictorRoleBindingOffloadRuntime::inspect_package_bytes(&build.package_bytes)
+            .map_err(|error| format!("failed to inspect metrics-report package: {error:?}"))?;
+    let policy =
+        WavePredictorRoleBindingOffloadPolicy::new(REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD)
+            .map_err(|error| format!("invalid metrics-report disabled policy: {error:?}"))?;
+    let sdk = WavePredictorRoleBindingOffloadRuntime::from_package_bytes_serving_packed_only(
+        &build.package_bytes,
+        policy,
+    )
+    .map_err(|error| format!("failed to load metrics-report package: {error:?}"))?;
+
+    let requests = metrics_report_scoreable_requests(&trace_rows);
+    let mut energy_margins = Vec::with_capacity(requests.len());
+    let mut min_slot_margins = Vec::with_capacity(requests.len());
+    let mut positive_margin_rows = 0usize;
+    let mut strict_ordered_pass_rows = 0usize;
+    let mut unexpected_local_accepts_under_disabled_threshold = 0usize;
+    for request in &requests {
+        let prepared = sdk.prepare_active_fringe_from_iter(
+            request
+                .active_fringe
+                .iter()
+                .map(|active| (active.center_id, active.strength)),
+        );
+        let mut energy_margin = 0i32;
+        let mut min_slot_margin = i32::MAX;
+        let mut strict_ordered_pass = true;
+        for slot in &request.slots {
+            let (positive_score, negative_score) =
+                score_role_binding_profile_slot(&sdk, &prepared, slot);
+            let slot_margin = positive_score - negative_score;
+            energy_margin = energy_margin.saturating_add(slot_margin);
+            min_slot_margin = min_slot_margin.min(slot_margin);
+            strict_ordered_pass &= slot_margin > 0;
+        }
+        if min_slot_margin == i32::MAX {
+            continue;
+        }
+        positive_margin_rows += usize::from(energy_margin > 0);
+        strict_ordered_pass_rows += usize::from(strict_ordered_pass);
+        unexpected_local_accepts_under_disabled_threshold += usize::from(profile_accepts_score(
+            &default_profile_acceptance_policy(),
+            strict_ordered_pass,
+            energy_margin,
+            REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD,
+        ));
+        energy_margins.push(energy_margin);
+        min_slot_margins.push(min_slot_margin);
+    }
+
+    let profile = RoleBindingProfileConfig {
+        profile_id: REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned(),
+        profile_kind: "role_binding_nwrb".to_owned(),
+        operator_classes: vec![
+            "metrics_report".to_owned(),
+            "numeric_report".to_owned(),
+            "route_gap".to_owned(),
+        ],
+        package_path: package_path.clone(),
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        edge_count: package_info.edge_count,
+        slot_count: 3,
+        threshold: REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD,
+        acceptance_policy: default_profile_acceptance_policy(),
+        accepted_route_keys: vec![
+            REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY.to_owned(),
+            REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned(),
+            "metrics_report_payload_builder_v1".to_owned(),
+        ],
+    };
+    registry
+        .profiles
+        .retain(|existing| existing.profile_id != profile.profile_id);
+    registry.profiles.push(profile);
+    registry.claim_boundary = "serving registry overlay for metrics-report .nwrb profile; generated from request-side dry-run payloads with threshold=i32::MAX so scoring telemetry is available but local accepts remain disabled until numeric report field verification exists".to_owned();
+    validate_registry_config(&registry)?;
+    write_json_file(&registry_path, &registry)?;
+
+    let mut sorted_energy = energy_margins.clone();
+    let mut sorted_min_slot = min_slot_margins.clone();
+    sorted_energy.sort_unstable();
+    sorted_min_slot.sort_unstable();
+    let report = RoleBindingMetricsReportProfileReport {
+        schema_version: "nando_role_binding_metrics_report_profile_v1".to_owned(),
+        verdict: if unexpected_local_accepts_under_disabled_threshold == 0
+            && build.package_training_requests > 0
+            && package_info.edge_count > 0
+        {
+            "METRICS_REPORT_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED"
+        } else {
+            "METRICS_REPORT_PROFILE_V1_REVIEW_REPAIR_REQUIRED"
+        }
+        .to_owned(),
+        base_registry_path: base_registry_path.display().to_string(),
+        dry_run_trace_path: dry_run_trace_path.display().to_string(),
+        package_path: package_path.display().to_string(),
+        registry_path: registry_path.display().to_string(),
+        profile_id: REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned(),
+        package_fingerprint64: package_info.fingerprint64,
+        package_bytes: build.package_bytes.len(),
+        edge_count: package_info.edge_count,
+        runtime_bytes_estimate: sdk.bytes_estimate(),
+        threshold: REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD,
+        trace_rows_read: trace_rows.len(),
+        scoreable_payload_events: requests.len(),
+        package_training_requests: build.package_training_requests,
+        positive_updates: build.positive_updates,
+        negative_updates: build.negative_updates,
+        changed_edges: build.changed_edges,
+        positive_margin_rows,
+        strict_ordered_pass_rows,
+        unexpected_local_accepts_under_disabled_threshold,
+        median_energy_margin: percentile_i32_sorted(&sorted_energy, 50),
+        p10_energy_margin: percentile_i32_sorted(&sorted_energy, 10),
+        min_energy_margin: sorted_energy.first().copied().unwrap_or(0),
+        median_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 50),
+        p10_min_slot_margin: percentile_i32_sorted(&sorted_min_slot, 10),
+        min_slot_margin: sorted_min_slot.first().copied().unwrap_or(0),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled_on_real_traffic: false,
+        market_claim_allowed: false,
+        claim_boundary: "Profile generator only. It compiles request-side metrics_report_readout payload geometry into a .nwrb package and registry overlay with threshold=i32::MAX, so shadow can measure real score/margins but cannot local-accept. Verified CPU savings require numeric report field evidence, safe-policy calibration, shadow/audit pass, provider cost, and false_accepts=0.".to_owned(),
+        next_engineering_debt: "Run metrics-report shadow with this overlay registry, then attach numeric_report_field_verifier_v1 before lowering thresholds or promoting any local accept path.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-metrics-report-profile-v1: {}",
+        report.verdict
+    );
+    println!("  base_registry: {}", base_registry_path.display());
+    println!("  dry_run_trace: {}", dry_run_trace_path.display());
+    println!("  package: {}", package_path.display());
+    println!("  registry: {}", registry_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  edge_count: {}", report.edge_count);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  median_energy_margin: {}", report.median_energy_margin);
+    println!(
+        "  unexpected_local_accepts_under_disabled_threshold: {}",
+        report.unexpected_local_accepts_under_disabled_threshold
+    );
+    println!("  local_accepts_enabled_on_real_traffic: false");
+    Err("metrics-report profile is review-only; attach verifier before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_metrics_report_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_metrics_report_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "metrics-report output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_deterministic_numeric_report_field_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "metrics-report output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_metrics_report_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "METRICS_REPORT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "METRICS_REPORT_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Metrics-report output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and deterministic numeric/report verification results, writes no raw prompt/response text, and does not enable local accepts or market savings claims.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the metrics-report evidence trace, then calibrate local accept only if verifier-true support is sufficient and false_accepts remain 0.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-metrics-report-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("metrics-report output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_read_inspect_payload_dry_run_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -5468,23 +6108,14 @@ pub(crate) fn run_role_binding_real_traffic_cpu_operator_catalog_v1<I>(
 where
     I: Iterator<Item = String>,
 {
-    let feedback_report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
-        let extended = PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_EXTENDED_REPORT);
-        if extended.exists() {
-            extended
-        } else {
-            PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT)
-        }
-    });
-    let route_gap_report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
-        let agent_control =
-            PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_AGENT_CONTROL_REPORT);
-        if agent_control.exists() {
-            agent_control
-        } else {
-            PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT)
-        }
-    });
+    let feedback_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT));
+    let route_gap_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_ROUTE_GAP_CATALOG_REPORT));
     let report_path = args
         .next()
         .map(PathBuf::from)
@@ -10051,6 +10682,14 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_AUDIT_REPORT));
+    let metrics_report_dry_run_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_REPORT));
+    let metrics_report_verification_audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_AUDIT_REPORT));
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -10225,6 +10864,23 @@ where
     } else {
         None
     };
+    let metrics_report_dry_run = if metrics_report_dry_run_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingMetricsReportPayloadDryRunReport>(
+                &metrics_report_dry_run_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
+    let metrics_report_verification_audit =
+        if metrics_report_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &metrics_report_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let mut verification_by_route = verification_audit
         .routes
         .iter()
@@ -10275,6 +10931,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(metrics_report_audit) = &metrics_report_verification_audit {
+        for row in &metrics_report_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     let effective_mixed_verification_audit = mixed_safe_policy_verification_audit
         .as_ref()
         .or(mixed_verification_audit.as_ref());
@@ -10290,6 +10951,7 @@ where
     let effective_planning_next_step_verification_audit =
         planning_next_step_verification_audit.as_ref();
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
+    let effective_metrics_report_verification_audit = metrics_report_verification_audit.as_ref();
     let forecast_has_planning_next_step = forecast
         .routes
         .iter()
@@ -10298,6 +10960,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY);
+    let forecast_has_metrics_report = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY);
 
     let target_routability_milli = 800usize;
     let target_verified_cpu_calls =
@@ -10318,6 +10984,9 @@ where
             .unwrap_or_default()
         + effective_read_inspect_verification_audit
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + effective_metrics_report_verification_audit
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
         .verified_cpu_accept_eligible_events
@@ -10335,6 +11004,9 @@ where
             .unwrap_or_default()
         + effective_read_inspect_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + effective_metrics_report_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
     let planning_next_step_candidate_calls = effective_planning_next_step_verification_audit
         .filter(|_| !forecast_has_planning_next_step)
@@ -10343,18 +11015,31 @@ where
     let read_inspect_candidate_calls = if forecast_has_read_inspect {
         0
     } else {
-        effective_read_inspect_verification_audit
-            .map(|report| report.operator_candidate_calls)
+        read_inspect_dry_run
+            .as_ref()
+            .map(|report| report.read_inspect_candidate_events)
             .or_else(|| {
-                read_inspect_dry_run
-                    .as_ref()
-                    .map(|report| report.read_inspect_candidate_events)
+                effective_read_inspect_verification_audit
+                    .map(|report| report.operator_candidate_calls)
+            })
+            .unwrap_or_default()
+    };
+    let metrics_report_candidate_calls = if forecast_has_metrics_report {
+        0
+    } else {
+        metrics_report_dry_run
+            .as_ref()
+            .map(|report| report.metrics_report_candidate_events)
+            .or_else(|| {
+                effective_metrics_report_verification_audit
+                    .map(|report| report.operator_candidate_calls)
             })
             .unwrap_or_default()
     };
     let operator_candidate_calls = forecast.operator_candidate_calls
         + planning_next_step_candidate_calls
-        + read_inspect_candidate_calls;
+        + read_inspect_candidate_calls
+        + metrics_report_candidate_calls;
     let routing_gap_to_80_calls =
         target_verified_cpu_calls.saturating_sub(operator_candidate_calls);
     let verified_gap_to_80_calls =
@@ -10369,6 +11054,7 @@ where
         let is_agent_control_route = route.route_key.contains("agent_control");
         let is_planning_route = route.route_key == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
         let is_read_inspect_route = route.route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY;
+        let is_metrics_report_route = route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY;
         let local_accept_calibration = if is_edit_route {
             edit_local_accept_calibration.as_ref()
         } else if is_conditional_route {
@@ -10432,6 +11118,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_metrics_report_route {
+            metrics_report_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else {
             0
         };
@@ -10462,6 +11153,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
+        } else if is_metrics_report_route {
+            metrics_report_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else {
             0
         };
@@ -10486,6 +11182,10 @@ where
                         .map(|report| report.scoreable_payload_events)
                 } else if is_read_inspect_route {
                     read_inspect_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else if is_metrics_report_route {
+                    metrics_report_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
                 } else {
@@ -10677,13 +11377,10 @@ where
         let false_accepts = verification
             .map(|row| row.false_accepts)
             .unwrap_or_default();
-        let candidate_events = verification
-            .map(|row| row.candidate_calls)
-            .or_else(|| {
-                read_inspect_dry_run
-                    .as_ref()
-                    .map(|report| report.read_inspect_candidate_events)
-            })
+        let candidate_events = read_inspect_dry_run
+            .as_ref()
+            .map(|report| report.read_inspect_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
             .unwrap_or_default();
         let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
@@ -10704,6 +11401,89 @@ where
             candidate_events,
             non_exact_candidate_calls: candidate_events,
             payload_builder: "read_inspect_request_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            local_accept_calibration_ran: false,
+            local_accept_safe_policy_found: false,
+            local_accept_minimum_true_support: DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT,
+            local_accept_support_qualified: false,
+            local_accept_best_safe_true_accepts: 0,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
+    if !forecast_has_metrics_report
+        && (metrics_report_dry_run.is_some() || metrics_report_verification_audit.is_some())
+    {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY)
+            .copied();
+        let payload_ready_events = metrics_report_dry_run
+            .as_ref()
+            .map(|report| report.payload_ready_events)
+            .unwrap_or_default();
+        let payload_built_events = metrics_report_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                metrics_report_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
+            .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let candidate_events = metrics_report_dry_run
+            .as_ref()
+            .map(|report| report.metrics_report_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
+            .unwrap_or_default();
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran: false,
+            local_accept_safe_policy_found: false,
+            local_accept_support_qualified: false,
+        });
+        let next_action = feedback_route_next_action(&stage);
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "metrics_report_payload_builder_v1".to_owned(),
             stage,
             next_action,
             payload_ready_events,
@@ -10769,6 +11549,16 @@ where
             .as_ref()
             .map(|_| {
                 read_inspect_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
+        metrics_report_dry_run_report_path: metrics_report_dry_run
+            .as_ref()
+            .map(|_| metrics_report_dry_run_report_path.display().to_string()),
+        metrics_report_verification_audit_report_path: metrics_report_verification_audit
+            .as_ref()
+            .map(|_| {
+                metrics_report_verification_audit_report_path
                     .display()
                     .to_string()
             }),
@@ -10851,7 +11641,8 @@ where
         no_candidate_calls: forecast
             .no_candidate_calls
             .saturating_sub(planning_next_step_candidate_calls)
-            .saturating_sub(read_inspect_candidate_calls),
+            .saturating_sub(read_inspect_candidate_calls)
+            .saturating_sub(metrics_report_candidate_calls),
         market_claim_allowed: false,
         routes: route_rows,
         claim_boundary: "Feedback loop only. Exact-cache coverage, route candidate coverage, scoreable payloads, verification hooks, and verified CPU accepts are separate stages. CPU Routability 80 is not achieved until verified_cpu_routability_milli >= 800 on non-synthetic real traffic with false_accepts=0.".to_owned(),
@@ -10887,6 +11678,12 @@ where
     }
     if let Some(path) = &report.read_inspect_verification_audit_report_path {
         println!("  read_inspect_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.metrics_report_dry_run_report_path {
+        println!("  metrics_report_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.metrics_report_verification_audit_report_path {
+        println!("  metrics_report_verification_audit_report: {path}");
     }
     if let Some(path) = &report.conditional_dry_run_report_path {
         println!("  conditional_dry_run_report: {path}");
@@ -13028,6 +13825,96 @@ struct RoleBindingReadInspectProfileReport {
     next_engineering_debt: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMetricsReportPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    metrics_report_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingMetricsReportPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMetricsReportPayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    profile_registered: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMetricsReportProfileReport {
+    schema_version: String,
+    verdict: String,
+    base_registry_path: String,
+    dry_run_trace_path: String,
+    package_path: String,
+    registry_path: String,
+    profile_id: String,
+    package_fingerprint64: u64,
+    package_bytes: usize,
+    edge_count: usize,
+    runtime_bytes_estimate: usize,
+    threshold: i32,
+    trace_rows_read: usize,
+    scoreable_payload_events: usize,
+    package_training_requests: usize,
+    positive_updates: usize,
+    negative_updates: usize,
+    changed_edges: usize,
+    positive_margin_rows: usize,
+    strict_ordered_pass_rows: usize,
+    unexpected_local_accepts_under_disabled_threshold: usize,
+    median_energy_margin: i32,
+    p10_energy_margin: i32,
+    min_energy_margin: i32,
+    median_min_slot_margin: i32,
+    p10_min_slot_margin: i32,
+    min_slot_margin: i32,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled_on_real_traffic: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
 #[derive(Clone, Debug)]
 struct PlanningNextStepPackageBuild {
     package_bytes: Vec<u8>,
@@ -13039,6 +13926,15 @@ struct PlanningNextStepPackageBuild {
 
 #[derive(Clone, Debug)]
 struct ReadInspectPackageBuild {
+    package_bytes: Vec<u8>,
+    package_training_requests: usize,
+    positive_updates: usize,
+    negative_updates: usize,
+    changed_edges: usize,
+}
+
+#[derive(Clone, Debug)]
+struct MetricsReportPackageBuild {
     package_bytes: Vec<u8>,
     package_training_requests: usize,
     positive_updates: usize,
@@ -14078,6 +14974,8 @@ struct RoleBindingFeedbackLoopReport {
     planning_next_step_verification_audit_report_path: Option<String>,
     read_inspect_dry_run_report_path: Option<String>,
     read_inspect_verification_audit_report_path: Option<String>,
+    metrics_report_dry_run_report_path: Option<String>,
+    metrics_report_verification_audit_report_path: Option<String>,
     agent_control_dry_run_report_path: Option<String>,
     agent_control_verification_audit_report_path: Option<String>,
     agent_control_safe_policy_verification_audit_report_path: Option<String>,
@@ -14204,6 +15102,7 @@ struct CodexHistoryRouteCatalog {
     mixed: Option<CodexHistoryRouteCandidate>,
     planning: Option<CodexHistoryRouteCandidate>,
     read_inspect: Option<CodexHistoryRouteCandidate>,
+    metrics_report: Option<CodexHistoryRouteCandidate>,
 }
 
 impl CodexHistoryRouteCatalog {
@@ -14215,6 +15114,7 @@ impl CodexHistoryRouteCatalog {
             mixed: None,
             planning: None,
             read_inspect: None,
+            metrics_report: None,
         };
         for profile in &config.profiles {
             let route_key = profile
@@ -14252,6 +15152,10 @@ impl CodexHistoryRouteCatalog {
                 .any(|class| class == "read_only_inspection" || class == "path_evidence")
             {
                 catalog.read_inspect.get_or_insert(candidate);
+            } else if profile.operator_classes.iter().any(|class| {
+                class == "metrics_report" || class == "numeric_report" || class == "metric_readout"
+            }) {
+                catalog.metrics_report.get_or_insert(candidate);
             } else if profile.operator_classes.iter().any(|class| {
                 class == "project_planning" || class == "state_transition" || class == "route_gap"
             }) {
@@ -14310,7 +15214,12 @@ impl CodexHistoryRouteCatalog {
             route_gap_family_key(text) == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
         let has_read_inspect_intent =
             route_gap_family_key(text) == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY;
+        let has_metrics_report_intent =
+            route_gap_family_key(text) == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY;
 
+        if has_metrics_report_intent {
+            return self.metrics_report.clone();
+        }
         if has_read_inspect_intent {
             return self.read_inspect.clone().or_else(|| self.edit.clone());
         }
@@ -14823,6 +15732,108 @@ fn planning_next_step_scoreable_requests(
         .filter_map(|row| row.nando_shadow_request.clone())
         .filter(|request| {
             request.profile_id.as_deref() == Some(REAL_TRAFFIC_PLANNING_PROFILE_ID)
+                && !request.active_fringe.is_empty()
+                && !request.slots.is_empty()
+        })
+        .collect()
+}
+
+fn build_metrics_report_role_binding_package_from_trace(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Result<MetricsReportPackageBuild, String> {
+    let config = WavePredictorHebbianConfig {
+        state_delta_binding_action_base: Some(REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_BASE),
+        state_delta_binding_action_count: REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE,
+        state_delta_binding_role_base: Some(REAL_TRAFFIC_METRICS_REPORT_ROLE_BASE),
+        state_delta_binding_role_stride: REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE,
+        state_delta_binding_role_count: 4,
+        state_delta_binding_slot_scoped_action_page_bits: 12,
+        state_delta_binding_slot_scoped_action_page_mask: 1_u64
+            << (REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_BASE >> 12),
+        state_delta_binding_slot_scoped_action_source_bits:
+            REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_SHIFT as u8,
+        weight_limit: 2_048,
+        ..WavePredictorHebbianConfig::default()
+    };
+    let role_end = REAL_TRAFFIC_METRICS_REPORT_ROLE_BASE
+        + REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE * u32::from(config.state_delta_binding_role_count);
+    let action_end =
+        REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_BASE + REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE;
+    let center_count = role_end.max(action_end) as usize;
+    let mut field = WavePredictorHebbianField::new(center_count, config);
+    let mut package_training_requests = 0usize;
+    let mut positive_updates = 0usize;
+    let mut negative_updates = 0usize;
+    let mut changed_edges = 0usize;
+
+    for request in metrics_report_scoreable_requests(trace_rows) {
+        let active_fringe = request
+            .active_fringe
+            .iter()
+            .map(|active| WavePredictorActiveCenter {
+                center_id: active.center_id,
+                strength: active.strength,
+            })
+            .collect::<Vec<_>>();
+        if active_fringe.is_empty() {
+            continue;
+        }
+        package_training_requests += 1;
+        for slot in &request.slots {
+            for impulse in &slot.positive_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    16,
+                );
+                positive_updates += 1;
+                changed_edges += changed;
+            }
+            for impulse in &slot.negative_impulses {
+                let changed = field.adjust_state_delta_role_binding(
+                    impulse.lane_id,
+                    impulse.signed_strength,
+                    &active_fringe,
+                    slot.binding_output_slot,
+                    -16,
+                );
+                negative_updates += 1;
+                changed_edges += changed;
+            }
+        }
+    }
+
+    if package_training_requests == 0 {
+        return Err(
+            "metrics-report package builder found no scoreable dry-run requests".to_owned(),
+        );
+    }
+    if changed_edges == 0 {
+        return Err("metrics-report package builder produced no role-binding edges".to_owned());
+    }
+    let package_bytes = field
+        .compile_flat_role_binding_table()
+        .to_bytes()
+        .map_err(|error| format!("failed to serialize metrics-report .nwrb package: {error:?}"))?;
+    Ok(MetricsReportPackageBuild {
+        package_bytes,
+        package_training_requests,
+        positive_updates,
+        negative_updates,
+        changed_edges,
+    })
+}
+
+fn metrics_report_scoreable_requests(
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+) -> Vec<RoleBindingProfileScoreRequest> {
+    trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.clone())
+        .filter(|request| {
+            request.profile_id.as_deref() == Some(REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID)
                 && !request.active_fringe.is_empty()
                 && !request.slots.is_empty()
         })
@@ -15576,6 +16587,256 @@ struct ReadInspectTokens {
     request_token: String,
     evidence_token: String,
     check_token: String,
+}
+
+fn build_metrics_report_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let tokens = extract_metrics_report_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(metrics_report_operator_centers());
+    active_fringe.extend(metrics_report_role_surface_centers(
+        REAL_TRAFFIC_METRICS_REPORT_METRIC_ROLE_SLOT,
+        &tokens.metric_token,
+    ));
+    active_fringe.extend(metrics_report_role_surface_centers(
+        REAL_TRAFFIC_METRICS_REPORT_REPORT_ROLE_SLOT,
+        &tokens.report_token,
+    ));
+    active_fringe.extend(metrics_report_role_surface_centers(
+        REAL_TRAFFIC_METRICS_REPORT_READOUT_ROLE_SLOT,
+        &tokens.readout_token,
+    ));
+    active_fringe.extend(metrics_report_role_surface_centers(
+        REAL_TRAFFIC_METRICS_REPORT_BOUNDARY_ROLE_SLOT,
+        &tokens.boundary_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = metrics_report_request_score_slot(
+        0,
+        &tokens.metric_token,
+        REAL_TRAFFIC_METRICS_REPORT_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = metrics_report_request_score_slot(
+        1,
+        &tokens.report_token,
+        REAL_TRAFFIC_METRICS_REPORT_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = metrics_report_request_score_slot(
+        2,
+        &tokens.readout_token,
+        REAL_TRAFFIC_METRICS_REPORT_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY.to_owned()),
+        profile_id: Some(REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID.to_owned()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: numeric report verification is not attached yet.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn metrics_report_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_METRICS_REPORT_METRIC_ROLE_SLOT),
+        (1, REAL_TRAFFIC_METRICS_REPORT_REPORT_ROLE_SLOT),
+        (2, REAL_TRAFFIC_METRICS_REPORT_READOUT_ROLE_SLOT),
+        (2, REAL_TRAFFIC_METRICS_REPORT_BOUNDARY_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_BASE
+                + metrics_report_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn metrics_report_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_METRICS_REPORT_OPERATOR_PAIR_SHIFT)
+        | u32::from(role_slot)
+}
+
+fn metrics_report_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_METRICS_REPORT_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_METRICS_REPORT_PAGE_SIZE,
+        REAL_TRAFFIC_METRICS_REPORT_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn metrics_report_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_METRICS_REPORT_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_METRICS_REPORT_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_metrics_report_tokens(text: &str) -> Option<MetricsReportTokens> {
+    let tokens = extract_request_side_edit_tokens(text, 24);
+    if tokens.is_empty() {
+        return None;
+    }
+    let lower = text.to_lowercase();
+    let metric_token = first_matching_branch_token(
+        &lower,
+        &[
+            "p99",
+            "p90",
+            "latency",
+            "coverage",
+            "false_accept",
+            "false_accepts",
+            "savings",
+            "accuracy",
+            "milli",
+            "verified_cpu",
+            "operator_candidate",
+            "scoreable",
+            "метрик",
+            "латент",
+            "эконом",
+            "точност",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| token.chars().any(|ch| ch.is_ascii_digit()))
+            .cloned()
+    })
+    .unwrap_or_else(|| tokens[0].clone());
+    let report_token = quoted_or_marked_chunks(text)
+        .into_iter()
+        .find_map(|chunk| {
+            extract_request_side_edit_tokens(&chunk, 1)
+                .into_iter()
+                .find(|token| looks_like_metrics_report_artifact_token(token))
+        })
+        .or_else(|| {
+            tokens
+                .iter()
+                .find(|token| looks_like_metrics_report_artifact_token(token))
+                .cloned()
+        })
+        .unwrap_or_else(|| metric_token.clone());
+    let readout_token = first_matching_branch_token(
+        &lower,
+        &[
+            "сколько",
+            "покажи",
+            "выведи",
+            "отчет",
+            "отчёт",
+            "report",
+            "metric",
+            "metrics",
+            "числ",
+            "number",
+            "readout",
+        ],
+    )
+    .unwrap_or_else(|| metric_token.clone());
+    let boundary_token = first_matching_branch_token(
+        &lower,
+        &[
+            "false_accept",
+            "market_claim",
+            "verified",
+            "accept",
+            "fallback",
+            "review",
+            "pass",
+            "claim",
+            "границ",
+            "вериф",
+        ],
+    )
+    .unwrap_or_else(|| readout_token.clone());
+    Some(MetricsReportTokens {
+        metric_token,
+        report_token,
+        readout_token,
+        boundary_token,
+    })
+}
+
+fn looks_like_metrics_report_artifact_token(token: &str) -> bool {
+    token.contains('/')
+        || contains_any(
+            token,
+            &[
+                ".json",
+                ".jsonl",
+                ".md",
+                ".log",
+                "report",
+                "metrics",
+                "target",
+                "diagnostics",
+                "отчет",
+                "отчёт",
+            ],
+        )
+}
+
+#[derive(Clone, Debug)]
+struct MetricsReportTokens {
+    metric_token: String,
+    report_token: String,
+    readout_token: String,
+    boundary_token: String,
 }
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {
@@ -20345,6 +21606,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_mixed_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_planning_next_step_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_read_inspect_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_metrics_report_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_agent_control_payload_dry_run::"))?;
     let (without_index, _) = rest.rsplit_once("::")?;
     let (session_id, _) = without_index.rsplit_once("::")?;
@@ -21337,6 +22599,109 @@ fn response_contains_read_inspect_path(response_lower: &str, path_token: &str) -
         .map(str::trim)
         .filter(|name| name.len() >= 3)
         .is_some_and(|name| response_lower.contains(name))
+}
+
+fn deterministic_metrics_report_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(tokens) = extract_metrics_report_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_metrics_report_tokens".to_owned(),
+        );
+    };
+
+    let response_lower = response_text.to_lowercase();
+    if contains_any(
+        &response_lower,
+        &[
+            "cannot",
+            "can't",
+            "unable",
+            "failed",
+            "failure",
+            "not enough evidence",
+            "не могу",
+            "не смог",
+            "не получилось",
+            "недостаточно",
+            "ошибка",
+            "провал",
+        ],
+    ) {
+        return (false, true, "rejected_response_reports_failure".to_owned());
+    }
+
+    let metric_present = response_contains_branch_token(&response_lower, &tokens.metric_token)
+        || contains_any(
+            &response_lower,
+            &[
+                "p99",
+                "p90",
+                "latency",
+                "coverage",
+                "false_accept",
+                "savings",
+                "accuracy",
+                "verified_cpu",
+                "метрик",
+                "латент",
+                "эконом",
+                "точност",
+            ],
+        );
+    let numeric_present = response_text.chars().any(|ch| ch.is_ascii_digit());
+    let report_evidence_present =
+        response_contains_branch_token(&response_lower, &tokens.report_token)
+            || contains_any(
+                &response_lower,
+                &[
+                    "report",
+                    "json",
+                    "metric",
+                    "metrics",
+                    "verdict",
+                    "field",
+                    "audit",
+                    "отчет",
+                    "отчёт",
+                    "поле",
+                    "аудит",
+                    "вердикт",
+                ],
+            );
+    let readout_present = response_contains_branch_token(&response_lower, &tokens.readout_token)
+        || contains_any(
+            &response_lower,
+            &["=", ":", "%", "milli", "ns", "ms", "events", "calls"],
+        );
+    let verified = metric_present && numeric_present && report_evidence_present && readout_present;
+    let status = if verified {
+        "verified_numeric_metric_readout"
+    } else if !metric_present {
+        "rejected_metric_absent_from_response"
+    } else if !numeric_present {
+        "rejected_numeric_value_absent_from_response"
+    } else if !report_evidence_present {
+        "rejected_report_evidence_absent_from_response"
+    } else {
+        "rejected_readout_signal_absent_from_response"
+    };
+    (verified, true, status.to_owned())
 }
 
 fn deterministic_agent_control_output_verification(

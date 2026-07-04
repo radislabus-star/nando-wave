@@ -153,21 +153,48 @@ read_inspect route/profile rung:
   claim_boundary: verifier labels exist, but local accept is still disabled and
     read_inspect contributes 0 verified CPU accepts
 
-fresh default feedback after read_inspect output evidence:
+metrics_report route/profile rung:
+  dry_run_report:
+    target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json
+  profile_report:
+    target/nando-wave/real-traffic-shadow/metrics-report-profile-v1.report.json
+  profile_registry:
+    target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-v1.json
+  output_evidence_report:
+    target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.report.json
+  output_evidence_audit:
+    target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json
+  metrics_report_candidate_events: 55
+  metrics_report_payload_ready_events: 42
+  metrics_report_scoreable_payload_events: 42
+  metrics_report_edge_count: 8
+  metrics_report_runtime_bytes_estimate: 33000
+  output_evidence_matched_events: 32
+  deterministic_verification_events: 32
+  verifier_true_events: 18
+  verifier_false_events: 14
+  verification_hook_ready_events: 32
+  candidates_missing_output_evidence: 10
+  local_accepts_enabled: false
+  verified_cpu_accept_eligible_events: 0
+  claim_boundary: verifier labels exist, but local accept is still disabled and
+    metrics_report contributes 0 verified CPU accepts
+
+fresh default feedback after metrics_report output evidence:
   feedback:
     target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-  operator_candidate_calls:            314
-  scoreable_candidate_calls:           105
-  verification_hook_ready_events:      81
+  operator_candidate_calls:            384
+  scoreable_candidate_calls:           147
+  verification_hook_ready_events:      113
   verified_cpu_accept_eligible_events: 8
   verified_cpu_routability_milli:      8
   verified_gap_to_80_calls:            792
 
 historical/current-number warning:
   The mixed-v2 bundle above remains the stronger historical 17/1000 verified
-  snapshot. The read_inspect output-evidence bundle is a fresh default rebuild and
-  should not be mixed with that historical number until all promoted/audit
-  artifacts are regenerated on the same route base.
+  snapshot. The read_inspect and metrics_report output-evidence bundles are a
+  fresh default rebuild and should not be mixed with that historical number until
+  all promoted/audit artifacts are regenerated on the same route base.
 ```
 
 Current real-traffic shadow path:
@@ -191,6 +218,9 @@ edit_output_evidence_command: role-binding-real-traffic-edit-output-evidence-v1
 conditional_output_evidence_command: role-binding-real-traffic-conditional-output-evidence-v1
 mixed_output_evidence_command: role-binding-real-traffic-mixed-output-evidence-v1
 read_inspect_output_evidence_command: role-binding-real-traffic-read-inspect-output-evidence-v1
+metrics_report_payload_dry_run_command: role-binding-real-traffic-metrics-report-payload-dry-run-v1
+metrics_report_profile_command: role-binding-real-traffic-metrics-report-profile-v1
+metrics_report_output_evidence_command: role-binding-real-traffic-metrics-report-output-evidence-v1
 edit_local_accept_calibration_command: role-binding-real-traffic-edit-local-accept-calibration-v1
 conditional_local_accept_calibration_command: role-binding-real-traffic-conditional-local-accept-calibration-v1
 mixed_local_accept_calibration_command: role-binding-real-traffic-mixed-local-accept-calibration-v1

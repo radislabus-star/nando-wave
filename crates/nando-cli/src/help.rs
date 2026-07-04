@@ -316,6 +316,24 @@ pub(crate) fn print_help() {
         "            Attach Codex final-answer fingerprints plus conservative read-only path/evidence verifier results; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run metrics-report payloads from request text only; verified accepts remain disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-metrics-report-profile-v1 [base-registry-json] [metrics-report-dry-run-trace-jsonl] [metrics-report-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile metrics-report dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
+    );
+    println!(
+        "  role-binding-real-traffic-metrics-report-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach Codex final-answer fingerprints plus conservative numeric report-field verifier results; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(
