@@ -271,20 +271,38 @@ Git-control route/profile/evidence rung:
   verified_cpu_accepts: 0
   blocker: local_accept_calibration_needs_stronger_verifier; current labels are final-answer evidence, not authoritative tool-output/status
 
-Fresh default feedback after read_inspect + metrics_report calibration + git_control calibration:
-  operator_candidate_calls: 402 / 1000
-  scoreable_candidate_calls: 159 / 1000
-  verification_hook_ready_events: 123
-  verified_cpu_accepts: 8 / 1000
-  verified_gap_to_80_calls: 792
+Serving-ops promoted safe-policy rung:
+  registry: profile-registry-serving-ops-safe-policy-v1.json
+  promoted_trace: serving-ops-safe-policy-v1.trace.jsonl
+  selected_policy: market_safe_energy_margin_threshold
+  selected_policy_threshold: 1392640
+  candidate_events: 25 / 1000
+  scoreable_payloads: 8
+  verification_hook_ready_events: 7
+  nando_shadow_accepts: 3
+  verified_safe_accepts: 3
+  false_accepts: 0
+  unverified_shadow_accepts: 0
+  incremental_savings_over_exact_cache: 3
+  p99_shadow_score_latency_ns: 156653
+  server_mutation_enabled: false
+  market_claim_boundary: narrow route shadow PASS, not CPU Routability 80
+
+Fresh default feedback after read_inspect + metrics_report calibration + git_control calibration + serving_ops safe-policy:
+  operator_candidate_calls: 427 / 1000
+  scoreable_candidate_calls: 167 / 1000
+  verification_hook_ready_events: 130
+  verified_cpu_accepts: 11 / 1000
+  verified_gap_to_80_calls: 789
   market_claim_allowed: false
   git_control_stage: local_accept_calibration_needs_stronger_verifier
+  serving_ops_stage: verified_cpu_accept_eligible
 
-Route-gap after git_control registry:
-  existing_route_candidate_events: 507 / 1000
-  no_candidate_events: 493 / 1000
-  payload_ready_events: 13
-  top_payload_ready_family: serving_ops
+Route-gap after serving_ops registry:
+  existing_route_candidate_events: 520 / 1000
+  no_candidate_events: 480 / 1000
+  payload_ready_events: 10
+  top_payload_ready_family: uncatalogued
 ```
 
 Интерпретация:

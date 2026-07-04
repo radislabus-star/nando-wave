@@ -140,6 +140,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_serving_ops_output_evidence_v1,
     run_role_binding_real_traffic_serving_ops_payload_dry_run_v1,
     run_role_binding_real_traffic_serving_ops_profile_v1,
+    run_role_binding_real_traffic_serving_ops_safe_policy_promote_v1,
     run_role_binding_real_traffic_shadow_smoke_v1, run_role_binding_real_traffic_shadow_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
 };
@@ -715,6 +716,10 @@ fn main() -> ExitCode {
                 "try: nando-cli role-binding-real-traffic-serving-ops-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]",
             )
         }
+        Some("role-binding-real-traffic-serving-ops-safe-policy-promote-v1") => exit_for_result(
+            run_role_binding_real_traffic_serving_ops_safe_policy_promote_v1(args),
+            "try: nando-cli role-binding-real-traffic-serving-ops-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]",
+        ),
         Some("role-binding-real-traffic-metrics-report-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_metrics_report_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
@@ -853,7 +858,7 @@ fn main() -> ExitCode {
         ),
         Some("role-binding-real-traffic-feedback-loop-v1") => exit_for_result(
             run_role_binding_real_traffic_feedback_loop_v1(args),
-            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json] [read-inspect-dry-run-report-json] [read-inspect-verification-audit-report-json]\n     note: route-specific conditional/mixed/metrics-report/git-control reports are auto-loaded from default artifact paths when present; planning, read-inspect, agent-control, mixed, metrics, and git-control paths default to v1 artifacts unless supplied",
+            "try: nando-cli role-binding-real-traffic-feedback-loop-v1 [forecast-report-json] [edit-dry-run-report-json] [verification-audit-report-json] [feedback-report-json] [planning-dry-run-report-json] [planning-local-accept-calibration-report-json] [planning-verification-audit-report-json] [agent-control-admission-calibration-report-json] [agent-control-safe-policy-audit-report-json] [mixed-safe-policy-audit-report-json] [read-inspect-dry-run-report-json] [read-inspect-verification-audit-report-json]\n     note: route-specific conditional/mixed/metrics-report/git-control/serving-ops reports are auto-loaded from default artifact paths when present; planning, read-inspect, agent-control, mixed, metrics, git-control, and serving-ops paths default to v1 artifacts unless supplied",
         ),
         Some("role-binding-real-traffic-cpu-operator-catalog-v1") => exit_for_result(
             run_role_binding_real_traffic_cpu_operator_catalog_v1(args),

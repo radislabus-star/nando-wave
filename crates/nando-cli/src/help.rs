@@ -370,6 +370,12 @@ pub(crate) fn print_help() {
         "            Calibrate serving-ops score/readout thresholds against deterministic health/metric verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-serving-ops-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
+    );
+    println!(
+        "            Create a promoted serving-ops shadow registry/trace from a safe calibration policy; no server mutation and still requires shadow/audit before claims"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

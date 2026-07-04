@@ -1,5 +1,126 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Serving-Ops Safe-Policy Promotion
+
+Verdict:
+
+```text
+REAL_TRAFFIC_SHADOW_V1_PASS
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-serving-ops-safe-policy-promote-v1
+
+Added promoted artifacts:
+  target/nando-wave/real-traffic-shadow/profile-registry-serving-ops-safe-policy-v1.json
+  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.report.json
+  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.shadow-report.json
+  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.verification-hook-audit.report.json
+```
+
+Serving-ops safe-policy promotion:
+
+```text
+selected_policy_name:                 market_safe_energy_margin_threshold
+selected_policy_source:               evidence_trace_market_safe_threshold
+selected_policy_threshold:            1392640
+policy_accept_rows:                   3
+policy_accept_verified_true_rows:     3
+policy_accept_verified_false_rows:    0
+policy_accept_unverified_rows:        0
+provider_cost_events_written:         8
+market_claim_allowed:                 false
+```
+
+Promoted shadow:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.shadow-report.json
+
+verdict:                              REAL_TRAFFIC_SHADOW_V1_PASS
+total_llm_calls:                      1000
+operator_candidate_calls:             8
+nando_shadow_accepts:                 3
+verified_safe_accepts:                3
+unverified_shadow_accepts:            0
+false_accepts:                        0
+incremental_savings_over_exact_cache: 3
+incremental_reduction_vs_exact_cache_milli: 3
+estimated_cost_saved_microusd:        300
+p99_shadow_score_latency_ns:          156653
+synthetic_trace_used:                 false
+```
+
+Verification audit:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.verification-hook-audit.report.json
+
+operator_candidate_calls:             8
+scoreable_candidate_calls:            8
+verification_hook_ready_events:       7
+verified_cpu_accept_eligible_events:  3
+market_claim_allowed:                 true
+```
+
+Feedback loop after promoted serving-ops audit:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             427 / 1000
+scoreable_candidate_calls:            167 / 1000
+verification_hook_ready_events:       130 / 1000
+verified_cpu_accept_eligible_events:  11 / 1000
+verified_cpu_routability_milli:       11
+verified_gap_to_80_calls:             789
+
+serving_ops route row:
+  stage:                              verified_cpu_accept_eligible
+  candidate_events:                   25
+  scoreable_payload_events:           8
+  verification_hook_ready_events:     7
+  verified_cpu_accept_eligible_events: 3
+  false_accepts:                      0
+```
+
+Claim boundary:
+
+```text
+This is the first promoted serving_ops shadow artifact that passes shadow and
+verification audit with provider cost, false_accepts=0, and
+unverified_shadow_accepts=0. It counts as 3 verified CPU accepts in the current
+1000-call non-synthetic Codex trace window.
+
+It still does not prove CPU Routability 80, does not touch a server, does not
+restart daemons, and does not enable any real daemon/server mutation path.
+Routability remains 11/1000, gap to 80% is 789 calls.
+```
+
+Next engineering debt:
+
+```text
+Grow verified routes from isolated safe-policy pockets to broader real-traffic
+coverage. Highest current blockers:
+  planning_next_step: support insufficient
+  read_inspect: calibration failed
+  metrics_report_readout: support insufficient
+  git_control: needs real tool-output/status verifier
+  serving_ops: needs larger non-synthetic soak before external market claim
+```
+
 ## 2026-07-04 - Executor Integration: Serving-Ops Route Payload/Profile/Evidence
 
 Verdict:
