@@ -398,6 +398,7 @@ const DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-admission-calibration-v1.report.json";
+const DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-continue-execute-admission-calibration-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
@@ -7884,6 +7885,157 @@ where
     );
     println!("  local_accepts_enabled: false");
     Err("agent-continue-execute local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_continue_execute_admission_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let evidence_trace_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_TRACE_JSONL)
+    });
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT)
+    });
+
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+
+    for trace in &trace_rows {
+        let Some(label) = trace.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &trace.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let features = extract_agent_continue_execute_admission_features(prompt_text);
+        rows.push(RoleBindingPlanningNextStepAdmissionCalibrationRow {
+            trace_id: trace.trace_id.clone(),
+            request_fingerprint: trace.request_fingerprint.clone(),
+            response_fingerprint: trace.response_fingerprint.clone(),
+            verifier_label: label,
+            features,
+        });
+    }
+
+    let minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+    let policies = planning_next_step_admission_policy_reports(&rows, minimum_true_support);
+    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
+    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
+    let best_robust_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.robust_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let best_singleton_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.singleton_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let feature_counts = planning_next_step_admission_feature_counts(&rows);
+    let report = RoleBindingPlanningNextStepAdmissionCalibrationReport {
+        schema_version: "nando_role_binding_agent_continue_execute_admission_calibration_v1"
+            .to_owned(),
+        verdict: if robust_safe_policy_found {
+            "AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND"
+        } else if singleton_safe_policy_found {
+            "AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
+        } else {
+            "AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY"
+        }
+        .to_owned(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        hook_ready_rows,
+        rows_with_prompt_features: rows.len(),
+        history_prompt_missing_rows,
+        label_true_rows,
+        label_false_rows,
+        minimum_true_support,
+        robust_safe_policy_found,
+        singleton_safe_policy_found,
+        best_robust_true_accepts,
+        best_singleton_true_accepts,
+        feature_counts,
+        policies,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-continue-execute admission calibration only. It reads real request text at analysis time, writes only fingerprints/features/counts, uses verification labels only to evaluate request-side gates, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if robust_safe_policy_found {
+            "Use the robust request-side admission candidate only in a separate promoted shadow trace with provider cost, false_accepts=0, unverified_shadow_accepts=0, and explicit rollback. It still needs shadow/audit before counting CPU savings.".to_owned()
+        } else if singleton_safe_policy_found {
+            "Current agent-continue prompt-side features expose only weak singleton separation. Collect more verifier-true non-synthetic rows or split the route before enabling local accepts.".to_owned()
+        } else {
+            "Current agent-continue prompt-side features do not safely separate tool-backed progress from false continuation rows. Capture richer request-side state or split the route before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-continue-execute-admission-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!(
+        "  rows_with_prompt_features: {}",
+        report.rows_with_prompt_features
+    );
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!(
+        "  robust_safe_policy_found: {}",
+        report.robust_safe_policy_found
+    );
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    Err("agent-continue-execute admission calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_metrics_report_payload_dry_run_v1<I>(
@@ -38260,6 +38412,12 @@ fn extract_planning_next_step_admission_features(
             .any(|line| line.trim_start().starts_with('+') || line.contains(" +fn ")),
         has_file_like_token: contains_file_like_token(text),
     }
+}
+
+fn extract_agent_continue_execute_admission_features(
+    text: &str,
+) -> RoleBindingPlanningNextStepAdmissionFeatures {
+    extract_planning_next_step_admission_features(text)
 }
 
 fn extract_metrics_report_admission_features(

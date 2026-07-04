@@ -280,6 +280,12 @@ pub(crate) fn print_help() {
         "            Review request-side score policies for agent-continue-execute against artifact-progress verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-agent-continue-execute-admission-calibration-v1 [artifact-progress-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Review request-side prompt-feature admission gates for agent-continue-execute without writing raw prompts"
+    );
+    println!(
         "  role-binding-real-traffic-agent-continue-execute-output-evidence-v1 [input-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(

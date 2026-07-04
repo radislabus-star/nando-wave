@@ -1,5 +1,100 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Continue Admission Calibration V1
+
+Verdict:
+
+```text
+AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-agent-continue-execute-admission-calibration-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.trace.jsonl
+  /home/ubu/.codex/history.jsonl
+
+and writes:
+  target/nando-wave/real-traffic-shadow/agent-continue-execute-admission-calibration-v1.report.json
+```
+
+Why:
+
+```text
+agent_continue_execute had 25 verifier-hook-ready rows and a weak margin-only
+local accept candidate, but local score geometry could not safely separate true
+artifact-progress rows from verifier-false continuation rows. This step checks
+whether request-side prompt features can supply a safer admission gate before
+any accept path is promoted.
+```
+
+Admission calibration result:
+
+```text
+hook_ready_rows: 25
+rows_with_prompt_features: 25
+history_prompt_missing_rows: 0
+label_true_rows: 6
+label_false_rows: 19
+minimum_true_support: 3
+robust_safe_policy_found: false
+singleton_safe_policy_found: false
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 0
+```
+
+Policy findings:
+
+```text
+all_hook_ready_rows:
+  true_accepts: 6
+  false_accepts: 19
+
+direct_action_words:
+  true_accepts: 6
+  false_accepts: 19
+
+nando_wave_terms:
+  true_accepts: 0
+  false_accepts: 1
+
+direct_action_project_or_nando_no_failure:
+  true_accepts: 0
+  false_accepts: 1
+```
+
+Decision:
+
+```text
+Do not enable local accepts for agent_continue_execute.
+Do not lower the disabled threshold.
+Do not promote a prompt-feature policy from this report.
+
+The route remains valuable as a candidate zone, but current prompt-side
+features are inseparable: the same direct-action shape covers both real
+artifact progress and false continuation rows. The next route work must either
+split agent_continue_execute into narrower subroutes or capture richer
+request-side state before verification.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+No market savings claim is allowed.
+The command writes fingerprints/features/counts only; no raw prompt text,
+raw response text, target labels, proof labels, or local accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Resource Pressure Feedback Loop V1
 
 Verdict:
