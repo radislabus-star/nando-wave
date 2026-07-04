@@ -586,6 +586,12 @@ pub(crate) fn print_help() {
         "            Attach response fingerprints and deterministic mixed-map verification to scoreable real Codex mixed rows"
     );
     println!(
+        "  role-binding-real-traffic-mixed-admission-audit-v1 [registry-config-json] [evidence-trace-jsonl] [history-jsonl] [audit-report-json]"
+    );
+    println!(
+        "            Audit request-side mixed-map subfamilies plus energy thresholds; unverified rows are unsafe and local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-edit-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
     );
     println!(
@@ -644,6 +650,12 @@ pub(crate) fn print_help() {
     );
     println!(
         "            Promote mixed-map safe policy with request-side goal/control admission before energy threshold"
+    );
+    println!(
+        "  role-binding-real-traffic-mixed-safe-policy-promote-v3 [base-registry-json] [evidence-trace-jsonl] [admission-audit-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
+    );
+    println!(
+        "            Promote the best mixed-map admission-audit safe feature conjunction plus energy threshold"
     );
     println!(
         "  role-binding-real-traffic-verification-hook-audit-v1 [trace-jsonl] [shadow-report-json] [audit-report-json]"

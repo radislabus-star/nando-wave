@@ -275,19 +275,28 @@ const DEFAULT_MIXED_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_MIXED_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_MIXED_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1.report.json";
+const DEFAULT_MIXED_ADMISSION_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-admission-audit-v1.report.json";
 const DEFAULT_MIXED_SAFE_POLICY_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v1.json";
 const DEFAULT_MIXED_SAFE_POLICY_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl";
 const DEFAULT_MIXED_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.report.json";
-const DEFAULT_MIXED_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.verification-hook-audit.report.json";
 const DEFAULT_MIXED_SAFE_POLICY_V2_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v2.json";
 const DEFAULT_MIXED_SAFE_POLICY_V2_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.trace.jsonl";
 const DEFAULT_MIXED_SAFE_POLICY_V2_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.report.json";
+const DEFAULT_MIXED_SAFE_POLICY_V3_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v3.json";
+const DEFAULT_MIXED_SAFE_POLICY_V3_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.trace.jsonl";
+const DEFAULT_MIXED_SAFE_POLICY_V3_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.report.json";
+const DEFAULT_MIXED_SAFE_POLICY_V3_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.verification-hook-audit.report.json";
+const DEFAULT_MIXED_SAFE_POLICY_AUDIT_REPORT: &str = DEFAULT_MIXED_SAFE_POLICY_V3_AUDIT_REPORT;
 const DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json";
 const DEFAULT_EDIT_SAFE_POLICY_REGISTRY_CONFIG: &str =
@@ -11361,6 +11370,14 @@ where
     } else {
         None
     };
+    let mixed_admission_audit_report_path = PathBuf::from(DEFAULT_MIXED_ADMISSION_AUDIT_REPORT);
+    let mixed_admission_audit = if mixed_admission_audit_report_path.exists() {
+        Some(read_json_file::<RoleBindingMixedAdmissionAuditReport>(
+            &mixed_admission_audit_report_path,
+        )?)
+    } else {
+        None
+    };
     let route_gap_readiness_by_family = route_gap_payload_readiness
         .as_ref()
         .map(|report| {
@@ -11434,6 +11451,19 @@ where
         if git_control_current_support_exhausted {
             priority_score = priority_score.saturating_sub(80_000);
         }
+        let mixed_admission_best_safe_true_accepts = mixed_admission_audit
+            .as_ref()
+            .filter(|_| route.route_key.contains("mixed_map"))
+            .map(|audit| audit.best_safe_true_accepts)
+            .unwrap_or_default();
+        let mixed_current_support_exhausted = mixed_admission_best_safe_true_accepts > 0
+            && mixed_admission_best_safe_true_accepts
+                <= route
+                    .unique_accepts
+                    .incremental_verified_request_fingerprints;
+        if mixed_current_support_exhausted {
+            priority_score = priority_score.saturating_sub(80_000);
+        }
         let mut next_action = route.next_action.clone();
         if conditional_admission_current_support_exhausted {
             next_action = format!(
@@ -11446,6 +11476,10 @@ where
         } else if git_control_current_support_exhausted {
             next_action = format!(
                 "Git-control admission audit found only {git_control_admission_best_safe_true_accepts} market-safe request-side accepts, already covered by current incremental unique support; improve git payload/evidence geometry before another promote."
+            );
+        } else if mixed_current_support_exhausted {
+            next_action = format!(
+                "Mixed-map admission audit found only {mixed_admission_best_safe_true_accepts} market-safe request-side accepts, already covered by current incremental unique support; improve mixed payload/evidence geometry before another promote."
             );
         }
         rows.push(RoleBindingCpuOperatorCatalogRow {
@@ -11479,6 +11513,8 @@ where
             agent_control_unique_contribution_constrained,
             git_control_admission_best_safe_true_accepts,
             git_control_current_support_exhausted,
+            mixed_admission_best_safe_true_accepts,
+            mixed_current_support_exhausted,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
@@ -11529,6 +11565,8 @@ where
             agent_control_unique_contribution_constrained: false,
             git_control_admission_best_safe_true_accepts: 0,
             git_control_current_support_exhausted: false,
+            mixed_admission_best_safe_true_accepts: 0,
+            mixed_current_support_exhausted: false,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -11585,6 +11623,9 @@ where
         git_control_admission_audit_report_path: git_control_admission_audit
             .as_ref()
             .map(|_| git_control_admission_audit_report_path.display().to_string()),
+        mixed_admission_audit_report_path: mixed_admission_audit
+            .as_ref()
+            .map(|_| mixed_admission_audit_report_path.display().to_string()),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
@@ -11644,6 +11685,12 @@ where
         println!(
             "  git_control_admission_audit_report: {}",
             git_control_admission_audit_report_path.display()
+        );
+    }
+    if mixed_admission_audit.is_some() {
+        println!(
+            "  mixed_admission_audit_report: {}",
+            mixed_admission_audit_report_path.display()
         );
     }
     println!("  report: {}", report_path.display());
@@ -15521,6 +15568,224 @@ where
     Err("mixed local accept calibration is review-only".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_mixed_admission_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_ADMISSION_AUDIT_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut policy_rows = Vec::new();
+    let mut feature_accumulators = BTreeMap::<String, RoleBindingMixedAdmissionFeatureCount>::new();
+    let mut mixed_candidate_rows = 0usize;
+    let mut scoreable_candidate_rows = 0usize;
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut unverified_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_mixed = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route.contains("mixed_map"));
+        if !is_mixed {
+            continue;
+        }
+        mixed_candidate_rows += 1;
+        if request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        scoreable_candidate_rows += 1;
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let features = mixed_admission_feature_names(prompt_text);
+        for feature in &features {
+            let entry = feature_accumulators
+                .entry(feature.clone())
+                .or_insert_with(|| RoleBindingMixedAdmissionFeatureCount {
+                    feature_name: feature.clone(),
+                    ..RoleBindingMixedAdmissionFeatureCount::default()
+                });
+            entry.rows += 1;
+            match row.verified_safe_accept {
+                Some(true) => entry.true_rows += 1,
+                Some(false) => entry.false_rows += 1,
+                None => entry.unverified_rows += 1,
+            }
+        }
+        hook_ready_rows += usize::from(row.verified_safe_accept.is_some());
+        label_true_rows += usize::from(row.verified_safe_accept == Some(true));
+        label_false_rows += usize::from(row.verified_safe_accept == Some(false));
+        unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        policy_rows.push(RoleBindingMixedAdmissionPolicyInput {
+            features: features.iter().cloned().collect(),
+            energy_margin: score.energy_margin,
+            verifier_label: row.verified_safe_accept,
+        });
+        rows.push(RoleBindingMixedAdmissionAuditRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            verifier_label: row.verified_safe_accept,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            first_slot_margin: score.slot_margins.first().copied().unwrap_or(0),
+            slot_count: score.slot_margins.len(),
+            feature_names: features,
+        });
+    }
+
+    let mut feature_counts = feature_accumulators.into_values().collect::<Vec<_>>();
+    feature_counts.sort_by(|left, right| {
+        right
+            .rows
+            .cmp(&left.rows)
+            .then_with(|| right.true_rows.cmp(&left.true_rows))
+            .then_with(|| left.false_rows.cmp(&right.false_rows))
+            .then_with(|| left.unverified_rows.cmp(&right.unverified_rows))
+            .then_with(|| left.feature_name.cmp(&right.feature_name))
+    });
+    let mut policy_candidates = mixed_admission_policy_candidates(&policy_rows, &feature_counts);
+    policy_candidates.sort_by(|left, right| {
+        right
+            .safe
+            .cmp(&left.safe)
+            .then_with(|| right.true_accepts.cmp(&left.true_accepts))
+            .then_with(|| left.false_accepts.cmp(&right.false_accepts))
+            .then_with(|| left.unverified_accepts.cmp(&right.unverified_accepts))
+            .then_with(|| left.accepts.cmp(&right.accepts))
+            .then_with(|| right.energy_threshold.cmp(&left.energy_threshold))
+            .then_with(|| left.policy_name.cmp(&right.policy_name))
+    });
+    let top_policy_candidates = policy_candidates
+        .iter()
+        .take(24)
+        .cloned()
+        .collect::<Vec<_>>();
+    let safe_policy_candidates = policy_candidates
+        .iter()
+        .filter(|candidate| candidate.safe)
+        .take(12)
+        .cloned()
+        .collect::<Vec<_>>();
+    let best_safe_true_accepts = safe_policy_candidates
+        .iter()
+        .map(|candidate| candidate.true_accepts)
+        .max()
+        .unwrap_or_default();
+    let safe_policy_found =
+        best_safe_true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+
+    let report = RoleBindingMixedAdmissionAuditReport {
+        schema_version: "nando_role_binding_mixed_admission_audit_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "MIXED_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND"
+        } else {
+            "MIXED_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_REQUEST_SUBFAMILY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        mixed_candidate_rows,
+        scoreable_candidate_rows,
+        hook_ready_rows,
+        label_true_rows,
+        label_false_rows,
+        unverified_rows,
+        history_prompt_missing_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        feature_counts,
+        top_policy_candidates,
+        safe_policy_candidates,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Mixed-map admission audit only. It joins request fingerprints back to local prompt text at analysis time, writes no raw prompt/response text, evaluates request-side feature conjunctions plus score thresholds against verifier labels, treats unverified rows as unsafe for promotion, and enables no local accepts. Any safe subfamily still requires a separate promoted trace, shadow, provider cost, and false_accepts=0 audit before savings count.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "If the best safe request subfamily exceeds the current promoted mixed-map support, build a separate promoted trace and rerun shadow/audit/feedback. Otherwise improve mixed payload/evidence geometry before another promote.".to_owned()
+        } else {
+            "Keep current mixed-map policy. Current request-side features plus score thresholds do not expose a larger safe request subfamily.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-mixed-admission-audit-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  scoreable_candidate_rows: {}",
+        report.scoreable_candidate_rows
+    );
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  unverified_rows: {}", report.unverified_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("mixed-map admission audit is review-only".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_mixed_safe_policy_promote_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -16073,6 +16338,330 @@ where
         report.policy_accept_unverified_rows
     );
     Err("mixed safe policy v2 promotion is review-only; run shadow/audit before claims".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_mixed_safe_policy_promote_v3<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let admission_audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_ADMISSION_AUDIT_REPORT));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_SAFE_POLICY_V3_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_SAFE_POLICY_V3_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MIXED_SAFE_POLICY_V3_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let admission_audit =
+        read_json_file::<RoleBindingMixedAdmissionAuditReport>(&admission_audit_report_path)?;
+    let admission_policy = admission_audit
+        .safe_policy_candidates
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            "mixed admission audit has no safe policy candidate for v3 promotion".to_owned()
+        })?;
+    if !admission_policy.safe
+        || admission_policy.true_accepts < DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+        || admission_policy.false_accepts != 0
+        || admission_policy.unverified_accepts != 0
+    {
+        return Err(format!(
+            "mixed admission v3 selected unsafe policy {} true={} false={} unverified={}",
+            admission_policy.policy_name,
+            admission_policy.true_accepts,
+            admission_policy.false_accepts,
+            admission_policy.unverified_accepts
+        ));
+    }
+
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let threshold = admission_policy.energy_threshold;
+    let acceptance_policy = "energy_threshold_only".to_owned();
+    let mixed_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route.contains("mixed_map"))
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if mixed_profile_ids.is_empty() {
+        return Err(
+            "mixed safe policy v3 promotion found no mixed profile ids in trace".to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if mixed_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "mixed safe policy v3 promotion found no matching profiles in registry for {:?}",
+            mixed_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut scoreable_candidate_calls = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let is_mixed = row
+            .nando_shadow_request
+            .as_ref()
+            .and_then(|request| request.route_key.as_deref())
+            .is_some_and(|route| route.contains("mixed_map"));
+        if !is_mixed {
+            continue;
+        }
+        let scoreable = row
+            .nando_shadow_request
+            .as_ref()
+            .is_some_and(|request| !request.active_fringe.is_empty() && !request.slots.is_empty());
+        scoreable_candidate_calls += usize::from(scoreable);
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; mixed_safe_policy_promote_v3 request_policy={} policy_accept=false reason=history_prompt_missing",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                admission_policy.policy_name
+            ));
+            continue;
+        };
+        request_side_policy_evaluated_rows += 1;
+        let prompt_features = mixed_admission_feature_names(prompt_text)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let request_policy_accept = admission_policy
+            .request_feature_conjunction
+            .iter()
+            .all(|feature| prompt_features.contains(feature));
+        if !request_policy_accept {
+            request_side_policy_reject_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; mixed_safe_policy_promote_v3 request_policy={} provider_cost_estimate_microusd={} policy_accept=false",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                admission_policy.policy_name,
+                provider_cost_microusd
+            ));
+            continue;
+        }
+
+        request_side_policy_accept_rows += 1;
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+        let Some(request) = &mut row.nando_shadow_request else {
+            no_score_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(policy_accept);
+        if policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
+        row.notes = Some(format!(
+            "{}; mixed_safe_policy_promote_v3 request_policy={} runtime_policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            admission_policy.policy_name,
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_mixed_safe_policy_promote_v3".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "MIXED_SAFE_POLICY_PROMOTE_V3_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "MIXED_SAFE_POLICY_PROMOTE_V3_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: admission_audit_report_path.display().to_string(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: Some(history_path.display().to_string()),
+        request_side_policy_name: Some(admission_policy.policy_name.clone()),
+        calibration_policy_name: "mixed_admission_audit_safe_policy_candidate".to_owned(),
+        calibration_policy_threshold: Some(admission_policy.energy_threshold),
+        selected_policy_name: admission_policy.policy_name.clone(),
+        selected_policy_source: admission_policy.selection_source.clone(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: admission_policy.accepts,
+        selected_policy_true_accepts: admission_policy.true_accepts,
+        selected_policy_false_accepts: admission_policy.false_accepts,
+        selected_policy_unverified_accepts: admission_policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
+        history_prompt_missing_rows,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a promoted serving registry from the mixed admission audit safe candidate and rewrites the trace so only request-side feature-conjunction rows keep nando_shadow_request. Runtime uses prompt-derived feature admission plus score >= threshold; labels/evidence are not runtime authority. It does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the v3 promoted registry/trace, then feed that audit into CPU route feedback and catalog. Keep market claims disabled unless the full CPU80 window reports verified non-synthetic accepts.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-mixed-safe-policy-promote-v3: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  request_side_policy_name: {}",
+        admission_policy.policy_name
+    );
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!(
+        "  request_side_policy_accept_rows: {}",
+        report.request_side_policy_accept_rows
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    Err("mixed safe policy v3 promotion is review-only; run shadow/audit before claims".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_edit_safe_policy_promote_v1<I>(
@@ -21861,6 +22450,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     agent_control_admission_audit_report_path: Option<String>,
     #[serde(default)]
     git_control_admission_audit_report_path: Option<String>,
+    #[serde(default)]
+    mixed_admission_audit_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
@@ -21928,6 +22519,10 @@ struct RoleBindingCpuOperatorCatalogRow {
     git_control_admission_best_safe_true_accepts: usize,
     #[serde(default)]
     git_control_current_support_exhausted: bool,
+    #[serde(default)]
+    mixed_admission_best_safe_true_accepts: usize,
+    #[serde(default)]
+    mixed_current_support_exhausted: bool,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
@@ -22827,6 +23422,81 @@ struct RoleBindingGitControlAdmissionAuditRow {
 
 #[derive(Clone, Debug)]
 struct RoleBindingGitControlAdmissionPolicyInput {
+    features: BTreeSet<String>,
+    energy_margin: i32,
+    verifier_label: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedAdmissionAuditReport {
+    schema_version: String,
+    verdict: String,
+    registry_config_path: String,
+    evidence_trace_path: String,
+    history_path: String,
+    total_trace_rows: usize,
+    mixed_candidate_rows: usize,
+    scoreable_candidate_rows: usize,
+    hook_ready_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    unverified_rows: usize,
+    history_prompt_missing_rows: usize,
+    no_score_rows: usize,
+    safe_policy_found: bool,
+    best_safe_true_accepts: usize,
+    feature_counts: Vec<RoleBindingMixedAdmissionFeatureCount>,
+    top_policy_candidates: Vec<RoleBindingMixedAdmissionPolicyCandidate>,
+    safe_policy_candidates: Vec<RoleBindingMixedAdmissionPolicyCandidate>,
+    rows: Vec<RoleBindingMixedAdmissionAuditRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct RoleBindingMixedAdmissionFeatureCount {
+    feature_name: String,
+    rows: usize,
+    true_rows: usize,
+    false_rows: usize,
+    unverified_rows: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedAdmissionPolicyCandidate {
+    policy_name: String,
+    request_feature_conjunction: Vec<String>,
+    energy_threshold: i32,
+    accepts: usize,
+    true_accepts: usize,
+    false_accepts: usize,
+    unverified_accepts: usize,
+    missed_true: usize,
+    safe: bool,
+    selection_source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingMixedAdmissionAuditRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    verifier_label: Option<bool>,
+    energy_margin: i32,
+    min_slot_margin: i32,
+    first_slot_margin: i32,
+    slot_count: usize,
+    feature_names: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct RoleBindingMixedAdmissionPolicyInput {
     features: BTreeSet<String>,
     energy_margin: i32,
     verifier_label: Option<bool>,
@@ -28927,6 +29597,188 @@ fn git_control_admission_policy_candidates(
 }
 
 fn git_control_admission_features_contradict(left: &str, right: &str) -> bool {
+    matches!(
+        (left, right),
+        ("has_digit", "no_digit")
+            | ("no_digit", "has_digit")
+            | ("has_goal_terms", "no_goal_terms")
+            | ("no_goal_terms", "has_goal_terms")
+            | ("has_question_mark", "no_question_mark")
+            | ("no_question_mark", "has_question_mark")
+    )
+}
+
+fn mixed_admission_feature_names(text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let mut features = BTreeSet::new();
+    let len = text.len();
+    let token_count = extract_request_side_edit_tokens(text, 96).len();
+    let has_digit = text.chars().any(|ch| ch.is_ascii_digit());
+    let has_goal_terms = contains_any(
+        &lower,
+        &[
+            "goal",
+            "objective",
+            "цель",
+            "подцель",
+            "stop",
+            "стоп",
+            "останов",
+        ],
+    );
+    let has_map_terms = contains_any(
+        &lower,
+        &[
+            "map",
+            "mapping",
+            "route",
+            "маршрут",
+            "сопостав",
+            "перенеси",
+            "перенести",
+            "replace",
+            "update",
+            "обнов",
+        ],
+    );
+    let has_json_terms = contains_any(&lower, &["json", ".json", "jsonl", ".jsonl"]);
+    let has_file_path_terms = contains_any(
+        &lower,
+        &[
+            ".rs", ".py", ".md", ".json", ".jsonl", ".toml", "crates/", "docs/", "target/",
+        ],
+    );
+    let has_arrow_terms = text.contains("->") || text.contains("=>") || text.contains('→');
+    let has_colon = text.contains(':');
+    let has_question_mark = text.contains('?');
+    let has_code_fence = text.contains("```");
+
+    if has_digit {
+        features.insert("has_digit".to_owned());
+    } else {
+        features.insert("no_digit".to_owned());
+    }
+    if has_goal_terms {
+        features.insert("has_goal_terms".to_owned());
+    } else {
+        features.insert("no_goal_terms".to_owned());
+    }
+    if has_map_terms {
+        features.insert("has_map_terms".to_owned());
+    }
+    if has_json_terms {
+        features.insert("has_json_terms".to_owned());
+    }
+    if has_file_path_terms {
+        features.insert("has_file_path_terms".to_owned());
+    }
+    if has_arrow_terms {
+        features.insert("has_arrow_terms".to_owned());
+    }
+    if has_colon {
+        features.insert("has_colon".to_owned());
+    }
+    if has_question_mark {
+        features.insert("has_question_mark".to_owned());
+    } else {
+        features.insert("no_question_mark".to_owned());
+    }
+    if has_code_fence {
+        features.insert("has_code_fence".to_owned());
+    }
+    for threshold in [80usize, 160, 320, 640] {
+        if len >= threshold {
+            features.insert(format!("len_ge_{threshold}"));
+        }
+    }
+    for threshold in [8usize, 16, 32, 64] {
+        if token_count >= threshold {
+            features.insert(format!("tokens_ge_{threshold}"));
+        }
+    }
+    features.into_iter().collect()
+}
+
+fn mixed_admission_policy_candidates(
+    rows: &[RoleBindingMixedAdmissionPolicyInput],
+    feature_counts: &[RoleBindingMixedAdmissionFeatureCount],
+) -> Vec<RoleBindingMixedAdmissionPolicyCandidate> {
+    let mut thresholds = rows.iter().map(|row| row.energy_margin).collect::<Vec<_>>();
+    thresholds.push(0);
+    thresholds.sort_unstable();
+    thresholds.dedup();
+
+    let top_features = feature_counts
+        .iter()
+        .filter(|feature| feature.rows > 0)
+        .take(18)
+        .map(|feature| feature.feature_name.clone())
+        .collect::<Vec<_>>();
+    let mut feature_sets = Vec::<Vec<String>>::new();
+    feature_sets.push(Vec::new());
+    for feature in &top_features {
+        feature_sets.push(vec![feature.clone()]);
+    }
+    for left_index in 0..top_features.len() {
+        for right_index in (left_index + 1)..top_features.len() {
+            let left = &top_features[left_index];
+            let right = &top_features[right_index];
+            if mixed_admission_features_contradict(left, right) {
+                continue;
+            }
+            feature_sets.push(vec![left.clone(), right.clone()]);
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for features in feature_sets {
+        for &threshold in &thresholds {
+            let mut accepts = 0usize;
+            let mut true_accepts = 0usize;
+            let mut false_accepts = 0usize;
+            let mut unverified_accepts = 0usize;
+            let mut missed_true = 0usize;
+            for row in rows {
+                let feature_accepts = features
+                    .iter()
+                    .all(|feature| row.features.contains(feature));
+                let accept = feature_accepts && row.energy_margin >= threshold;
+                accepts += usize::from(accept);
+                match row.verifier_label {
+                    Some(true) => {
+                        true_accepts += usize::from(accept);
+                        missed_true += usize::from(!accept);
+                    }
+                    Some(false) => false_accepts += usize::from(accept),
+                    None => unverified_accepts += usize::from(accept),
+                }
+            }
+            let safe = true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && false_accepts == 0
+                && unverified_accepts == 0;
+            let policy_name = if features.is_empty() {
+                format!("energy_ge_{threshold}")
+            } else {
+                format!("{} AND energy >= {threshold}", features.join(" AND "))
+            };
+            candidates.push(RoleBindingMixedAdmissionPolicyCandidate {
+                policy_name,
+                request_feature_conjunction: features.clone(),
+                energy_threshold: threshold,
+                accepts,
+                true_accepts,
+                false_accepts,
+                unverified_accepts,
+                missed_true,
+                safe,
+                selection_source: "request_feature_conjunction_plus_energy_threshold".to_owned(),
+            });
+        }
+    }
+    candidates
+}
+
+fn mixed_admission_features_contradict(left: &str, right: &str) -> bool {
     matches!(
         (left, right),
         ("has_digit", "no_digit")

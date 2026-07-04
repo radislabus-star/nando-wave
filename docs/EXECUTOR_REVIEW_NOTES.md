@@ -1,5 +1,167 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Mixed Safe Policy V3
+
+Verdict:
+
+```text
+MIXED_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND
+MIXED_SAFE_POLICY_PROMOTE_V3_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-mixed-admission-audit-v1
+  role-binding-real-traffic-mixed-safe-policy-promote-v3
+
+The admission audit scores mixed-map request-side feature conjunctions plus
+energy thresholds against real verification labels. The v3 promoter reads the
+best safe audit candidate, rewrites a promoted trace, and keeps runtime
+authority limited to prompt-side features plus .nwrb score threshold. It writes
+no raw prompt/response text and does not use target/proof labels as serving
+authority.
+```
+
+Fresh mixed admission audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/mixed-admission-audit-v1.report.json
+
+scoreable_candidate_rows: 14
+hook_ready_rows:         13
+label_true_rows:         10
+label_false_rows:         3
+unverified_rows:          1
+safe_policy_found:     true
+best_safe_true_accepts:   7
+
+best safe candidate:
+  no_question_mark AND no_goal_terms AND energy >= 204800
+  accepts:            7
+  true_accepts:       7
+  false_accepts:      0
+  unverified_accepts: 0
+```
+
+Fresh v3 promotion + shadow:
+
+```text
+promote_report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.report.json
+
+promoted_registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v3.json
+
+promoted_trace:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.trace.jsonl
+
+request_side_policy_accept_rows:      9
+policy_accept_rows:                   7
+policy_accept_verified_true_rows:     7
+policy_accept_verified_false_rows:    0
+policy_accept_unverified_rows:        0
+
+shadow_report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.shadow-report.json
+
+total_llm_calls:                       1000
+exact_cache_hits:                        53
+nando_shadow_accepts:                     7
+verified_safe_accepts:                    7
+false_accepts:                            0
+incremental_reduction_vs_exact_cache:     7 milli
+p99_shadow_score_latency_ns:         220096
+
+verification_hook_audit:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.verification-hook-audit.report.json
+
+operator_candidate_calls:        9
+scoreable_candidate_calls:       9
+verification_hook_ready_events:  9
+verified_cpu_accept_eligible:    7
+market_claim_allowed:         true
+```
+
+Fresh global CPU80 feedback:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+total_llm_calls:                                      1000
+operator_candidate_calls:                              595
+scoreable_candidate_calls:                             131
+verification_hook_ready_events:                        106
+verified_cpu_accept_unique_request_fingerprints:        26
+incremental_cpu_accept_unique_request_fingerprints:     25
+unique_verified_gap_to_80_calls:                       774
+market_claim_allowed:                                false
+```
+
+Fresh catalog after mixed v3:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls:    774
+top_catalog_row:             metrics_report_readout
+
+mixed row:
+  rank:                                  15
+  verified_cpu_accept_eligible_events:    7
+  incremental_unique_accepts:             7
+  false_accepts:                          0
+  mixed_admission_best_safe_true_accepts: 7
+  mixed_current_support_exhausted:     true
+```
+
+Decision:
+
+```text
+Mixed v3 is a real improvement over v2 for the mixed-map route:
+  previous promoted mixed accepts: 3
+  v3 promoted mixed accepts:       7
+
+The current request-side mixed support is now exhausted. Another mixed-map
+threshold/policy pass is not the next move; the next mixed work must improve
+payload/evidence geometry or split a new subfamily.
+
+Global CPU Routability 80 is still not achieved:
+  unique verified accepts: 26 / 1000
+  unique gap to 80%:      774 calls
+  market_claim_allowed:   false
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/mixed-safe-policy-v3.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.nanda.txt
+
+verdict: PASS
+complexity_score: 25
+note: route-local metric-value packet used; the broader global market claim
+      boundary stays in the feedback/catalog reports instead of being merged
+      into this structural route
+```
+
 ## 2026-07-04 - Executor Integration: Git-Control Admission Audit V1
 
 Verdict:
