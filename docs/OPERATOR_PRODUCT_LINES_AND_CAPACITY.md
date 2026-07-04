@@ -249,7 +249,8 @@ Metrics-report route/profile rung:
   blocker: local_accept_support_insufficient
 
 Git-control route/profile/evidence rung:
-  registry: profile-registry-git-control-v1.json
+  base_registry: profile-registry-git-control-v1.json
+  promoted_registry: profile-registry-git-control-safe-policy-v1.json
   git_control_candidates: 18 / 1000
   git_control_scoreable_payloads: 12
   git_control_profile_edges: 8
@@ -258,18 +259,25 @@ Git-control route/profile/evidence rung:
   p10_energy_margin: 906240
   output_evidence_report: git-control-output-evidence-v1.report.json
   output_evidence_matched_events: 10
-  verifier_true_events: 4
-  verifier_false_events: 6
+  verifier_true_events: 6
+  verifier_false_events: 4
+  tool_call_fingerprint_events: 5
   verification_hook_ready_events: 10
   local_accept_calibration_report: git-control-local-accept-calibration-v1.report.json
   safe_policy_found: true
-  best_safe_true_accepts: 3
+  best_safe_true_accepts: 5
   minimum_true_support: 3
   support_qualified: true
+  promoted_trace: git-control-safe-policy-v1.trace.jsonl
+  selected_policy_threshold: 1505280
+  nando_shadow_accepts: 1
+  verified_safe_accepts: 1
+  unverified_shadow_accepts: 0
   workspace_mutation_enabled: false
-  local_accepts_enabled: false
-  verified_cpu_accepts: 0
-  blocker: local_accept_calibration_needs_stronger_verifier; current labels are final-answer evidence, not authoritative tool-output/status
+  local_accepts_enabled_in_live_daemon: false
+  verified_cpu_accepts: 1
+  p99_shadow_score_latency_ns: 273719
+  market_claim_boundary: narrow git_control shadow PASS; tool-output fingerprints only; no git execution or workspace mutation; not CPU Routability 80
 
 Serving-ops promoted safe-policy rung:
   registry: profile-registry-serving-ops-safe-policy-v1.json
@@ -288,14 +296,14 @@ Serving-ops promoted safe-policy rung:
   server_mutation_enabled: false
   market_claim_boundary: narrow route shadow PASS, not CPU Routability 80
 
-Fresh default feedback after read_inspect + metrics_report calibration + git_control calibration + serving_ops safe-policy:
+Fresh default feedback after read_inspect + metrics_report calibration + git_control safe-policy + serving_ops safe-policy:
   operator_candidate_calls: 427 / 1000
   scoreable_candidate_calls: 167 / 1000
   verification_hook_ready_events: 130
-  verified_cpu_accepts: 11 / 1000
-  verified_gap_to_80_calls: 789
+  verified_cpu_accepts: 12 / 1000
+  verified_gap_to_80_calls: 788
   market_claim_allowed: false
-  git_control_stage: local_accept_calibration_needs_stronger_verifier
+  git_control_stage: verified_cpu_accept_eligible
   serving_ops_stage: verified_cpu_accept_eligible
 
 Route-gap after serving_ops registry:

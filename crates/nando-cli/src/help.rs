@@ -337,13 +337,19 @@ pub(crate) fn print_help() {
         "  role-binding-real-traffic-git-control-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(
-        "            Attach Codex final-answer fingerprints plus conservative git command-outcome verifier results; workspace mutations and local accepts stay disabled"
+        "            Attach Codex tool-output/final-answer fingerprints plus conservative git command-outcome verifier results; workspace mutations and local accepts stay disabled"
     );
     println!(
         "  role-binding-real-traffic-git-control-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
     );
     println!(
-        "            Calibrate git-control score/readout thresholds against final-answer verifier labels; real tool-output verifier still required before local accept"
+        "            Calibrate git-control score/readout thresholds; tool-output-backed traces may become safe-policy candidates, final-answer-only traces stay review-only"
+    );
+    println!(
+        "  role-binding-real-traffic-git-control-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
+    );
+    println!(
+        "            Create a promoted git-control shadow registry/trace from tool-output-backed safe calibration; executes no git command and still requires shadow/audit before claims"
     );
     println!(
         "  role-binding-real-traffic-serving-ops-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"

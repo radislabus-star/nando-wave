@@ -1,5 +1,147 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Git-Control Tool-Output Safe-Policy Promotion
+
+Verdict:
+
+```text
+REAL_TRAFFIC_SHADOW_V1_PASS
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-git-control-safe-policy-promote-v1
+
+Added promoted artifacts:
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v1.json
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.report.json
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.shadow-report.json
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.verification-hook-audit.report.json
+```
+
+Tool-output evidence:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json
+
+output_evidence_matched_events:       10
+deterministic_verification_events:    10
+verified_true_events:                 6
+verified_false_events:                4
+tool_call_fingerprint_events:         5
+verification_source:
+  codex_session_tool_output_fingerprint_plus_deterministic_git_command_outcome_verifier_v1
+raw_prompt_text_written:              false
+raw_response_text_written:            false
+raw_tool_output_written:              false
+workspace_mutation_enabled:           false
+```
+
+Git-control safe-policy promotion:
+
+```text
+selected_policy_name:                 market_safe_energy_margin_threshold
+selected_policy_source:               evidence_trace_market_safe_threshold
+selected_policy_threshold:            1505280
+policy_accept_rows:                   1
+policy_accept_verified_true_rows:     1
+policy_accept_verified_false_rows:    0
+policy_accept_unverified_rows:        0
+provider_cost_events_written:         12
+market_claim_allowed:                 false
+```
+
+Promoted shadow:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.shadow-report.json
+
+verdict:                              REAL_TRAFFIC_SHADOW_V1_PASS
+total_llm_calls:                      1000
+operator_candidate_calls:             12
+nando_shadow_accepts:                 1
+verified_safe_accepts:                1
+unverified_shadow_accepts:            0
+false_accepts:                        0
+incremental_savings_over_exact_cache: 1
+incremental_reduction_vs_exact_cache_milli: 1
+p99_shadow_score_latency_ns:          273719
+synthetic_trace_used:                 false
+```
+
+Verification audit:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.verification-hook-audit.report.json
+
+operator_candidate_calls:             12
+scoreable_candidate_calls:            12
+verification_hook_ready_events:       10
+tool_call_fingerprint_events:         5
+verified_cpu_accept_eligible_events:  1
+market_claim_allowed:                 true
+false_accepts:                        0
+```
+
+Feedback loop after promoted git-control audit:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             427 / 1000
+scoreable_candidate_calls:            167 / 1000
+verification_hook_ready_events:       130 / 1000
+verified_cpu_accept_eligible_events:  12 / 1000
+verified_cpu_routability_milli:       12
+verified_gap_to_80_calls:             788
+
+git_control route row:
+  stage:                              verified_cpu_accept_eligible
+  candidate_events:                   18
+  scoreable_payload_events:           12
+  verification_hook_ready_events:     10
+  local_accept_best_safe_true_accepts: 5
+  verified_cpu_accept_eligible_events: 1
+  false_accepts:                      0
+```
+
+Claim boundary:
+
+```text
+This is the first promoted git_control shadow artifact backed by tool-output
+fingerprints and deterministic git command outcome verification. It does not
+run git, does not mutate the workspace, does not write raw tool output, and
+does not enable a live daemon mutation path.
+
+It counts as 1 verified CPU accept in the current 1000-call non-synthetic Codex
+trace window. It still does not prove CPU Routability 80. Current default
+routability is 12/1000, gap to 80% is 788 calls.
+```
+
+Next engineering debt:
+
+```text
+Grow verified routes by adding real verifier-backed accepts, not by relaxing
+the safe policy. The next highest-value blockers remain:
+  metrics_report_readout: support insufficient
+  read_inspect: calibration failed
+  planning_next_step: support insufficient
+  serving_ops/git_control: need larger non-synthetic soak before external
+    market claim
+```
+
 ## 2026-07-04 - Executor Integration: Serving-Ops Safe-Policy Promotion
 
 Verdict:

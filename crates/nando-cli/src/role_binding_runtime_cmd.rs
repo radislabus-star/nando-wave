@@ -118,6 +118,13 @@ const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1.report.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v1.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.trace.jsonl";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.report.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.verification-hook-audit.report.json";
 const DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -6400,11 +6407,16 @@ where
         .filter(|row| row.nando_shadow_request.is_some())
         .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
         .collect::<HashSet<_>>();
-    let session_index = build_codex_session_output_evidence_index(
+    let final_answer_session_index = build_codex_session_output_evidence_index(
         &sessions_root,
         &session_ids,
         &wanted_request_fingerprints,
         deterministic_git_control_output_verification,
+    )?;
+    let tool_output_session_index = build_codex_session_git_control_tool_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
     )?;
 
     let mut enriched_rows = Vec::with_capacity(trace_rows.len());
@@ -6430,24 +6442,27 @@ where
             continue;
         }
         let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
-        let Some(evidence) = session_index
+        let evidence = tool_output_session_index
             .by_request_fingerprint
             .get(&request_fingerprint)
-        else {
+            .or_else(|| {
+                final_answer_session_index
+                    .by_request_fingerprint
+                    .get(&request_fingerprint)
+            });
+        let Some(evidence) = evidence else {
             no_session_output_match_events += 1;
             row.notes = Some(append_trace_note(
                 row.notes.as_deref(),
-                "git-control output evidence missing: no matching Codex final answer found",
+                "git-control output evidence missing: no matching Codex tool output or final answer found",
             ));
             enriched_rows.push(row);
             continue;
         };
         output_evidence_matched_events += 1;
         row.response_fingerprint = Some(evidence.response_fingerprint.clone());
-        row.verification_source = Some(
-            "codex_session_final_answer_fingerprint_plus_deterministic_git_status_and_command_outcome_verifier_v1"
-                .to_owned(),
-        );
+        row.tool_call_fingerprints = evidence.tool_call_fingerprints.clone();
+        row.verification_source = Some(evidence.verification_source.clone());
         row.verified_safe_accept = Some(evidence.verified_safe_accept);
         deterministic_verification_events += usize::from(evidence.verifier_applicable);
         verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
@@ -6479,8 +6494,11 @@ where
         operator_candidate_calls,
         scoreable_candidate_calls,
         session_ids_requested: session_ids.len(),
-        session_files_scanned: session_index.session_files_scanned,
-        codex_turns_indexed: session_index.codex_turns_indexed,
+        session_files_scanned: final_answer_session_index
+            .session_files_scanned
+            .max(tool_output_session_index.session_files_scanned),
+        codex_turns_indexed: final_answer_session_index.codex_turns_indexed
+            + tool_output_session_index.codex_turns_indexed,
         output_evidence_matched_events,
         no_session_output_match_events,
         deterministic_verification_events,
@@ -6494,8 +6512,8 @@ where
         proof_labels_used: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
-        claim_boundary: "Git-control output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and conservative command-outcome verification results, writes no raw prompt/response text, executes no git command, mutates no workspace, and does not enable local accepts or market savings claims.".to_owned(),
-        next_engineering_debt: "Run shadow analysis and verification-hook audit over the git-control evidence trace, then build a real tool-output/status verifier before any threshold calibration, local accept, or workspace mutation path.".to_owned(),
+        claim_boundary: "Git-control output evidence join only. It prefers existing Codex tool-output fingerprints when present and falls back to final-answer fingerprints for review rows. It writes no raw prompt/response/tool output, executes no git command, mutates no workspace, and does not enable local accepts or market savings claims.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the git-control evidence trace. Only tool-output-backed rows may make git-control calibration authoritative; final-answer-only rows remain review-only.".to_owned(),
     };
     write_json_file(&report_path, &report)?;
     println!(
@@ -6543,6 +6561,7 @@ where
     let mut label_true_rows = 0usize;
     let mut label_false_rows = 0usize;
     let mut no_score_rows = 0usize;
+    let mut tool_output_backed_rows = 0usize;
 
     for row in &trace_rows {
         let Some(label) = row.verified_safe_accept else {
@@ -6557,6 +6576,7 @@ where
         hook_ready_rows += 1;
         label_true_rows += usize::from(label);
         label_false_rows += usize::from(!label);
+        tool_output_backed_rows += usize::from(!row.tool_call_fingerprints.is_empty());
         let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
             no_score_rows += 1;
             continue;
@@ -6640,9 +6660,12 @@ where
         .map(|policy| policy.true_accepts)
         .max()
         .unwrap_or(0);
+    let tool_output_backed = tool_output_backed_rows > 0;
     let report = RoleBindingEditLocalAcceptCalibrationReport {
         schema_version: "nando_role_binding_git_control_local_accept_calibration_v1".to_owned(),
-        verdict: if safe_policy_found {
+        verdict: if safe_policy_found && tool_output_backed {
+            "GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_TOOL_BACKED_SAFE_POLICY_CANDIDATE"
+        } else if safe_policy_found {
             "GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_FINAL_ANSWER_SAFE_POLICY_CANDIDATE"
         } else {
             "GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
@@ -6663,8 +6686,14 @@ where
         request_side_margin_only_accepts_all_true_without_false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
-        claim_boundary: "Git-control calibration only. It evaluates score/readout policies against conservative final-answer command-outcome verifier labels, writes fingerprints and margins only, executes no git command, mutates no workspace, enables no local accepts, and is not authoritative enough for market savings or workspace mutation without a real tool-output/status verifier.".to_owned(),
-        next_engineering_debt: if safe_policy_found {
+        claim_boundary: if tool_output_backed {
+            "Git-control calibration only. It evaluates score/readout policies against existing Codex tool-output-backed git verifier labels, writes fingerprints and margins only, executes no git command, mutates no workspace, enables no local accepts, and cannot count savings until a separate promoted shadow/audit has provider cost and false_accepts=0.".to_owned()
+        } else {
+            "Git-control calibration only. It evaluates score/readout policies against conservative final-answer command-outcome verifier labels, writes fingerprints and margins only, executes no git command, mutates no workspace, enables no local accepts, and is not authoritative enough for market savings or workspace mutation without a real tool-output/status verifier.".to_owned()
+        },
+        next_engineering_debt: if safe_policy_found && tool_output_backed {
+            "Promote only through a separate git-control safe-policy artifact, then rerun shadow/audit with provider cost, false_accepts=0, and unverified_shadow_accepts=0 before counting savings. Workspace mutation execution stays disabled.".to_owned()
+        } else if safe_policy_found {
             "Treat this only as a final-answer-label candidate. Build a real tool-output/status verifier and rerun calibration before any safe-policy promotion, provider-cost savings claim, or workspace mutation path.".to_owned()
         } else {
             "Do not lower the git-control threshold. Current score geometry does not separate verifier-true from verifier-false rows; improve request-side admission, payload features, or tool-output verification before enabling local accepts.".to_owned()
@@ -6687,6 +6716,261 @@ where
         report.best_safe_true_accepts
     );
     Err("git-control local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_git_control_safe_policy_promote_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let calibration =
+        read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(&calibration_report_path)?;
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let Some(calibration_policy) = select_supported_mixed_safe_policy(&calibration) else {
+        return Err(
+            "git-control calibration report has no supported safe energy-threshold policy"
+                .to_owned(),
+        );
+    };
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let policy = select_mixed_promotion_policy_from_evidence(
+        &base_registry,
+        &trace_rows,
+        calibration_policy,
+        REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY,
+    )?;
+    let threshold = policy.threshold;
+    let acceptance_policy = "energy_threshold_only".to_owned();
+    let git_control_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if git_control_profile_ids.is_empty() {
+        return Err(
+            "git-control safe policy promotion found no git_control profile ids in trace"
+                .to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if git_control_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "git-control safe policy promotion found no matching profiles in registry for {:?}",
+            git_control_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut scoreable_candidate_calls = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let Some(request) = &mut row.nando_shadow_request else {
+            continue;
+        };
+        let is_git_control = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY);
+        if !is_git_control {
+            continue;
+        }
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(policy_accept);
+        if policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
+        row.notes = Some(format!(
+            "{}; git_control_safe_policy_promote_v1 policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_git_control_safe_policy_promote_v1".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "GIT_CONTROL_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "GIT_CONTROL_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: calibration_report_path.display().to_string(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: None,
+        request_side_policy_name: None,
+        calibration_policy_name: calibration_policy.policy_name.clone(),
+        calibration_policy_threshold: calibration_policy.threshold,
+        selected_policy_name: policy.policy_name.clone(),
+        selected_policy_source: policy.selection_source.clone(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: policy.accepts,
+        selected_policy_true_accepts: policy.true_accepts,
+        selected_policy_false_accepts: policy.false_accepts,
+        selected_policy_unverified_accepts: policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows: 0,
+        request_side_policy_accept_rows: 0,
+        request_side_policy_reject_rows: 0,
+        history_prompt_missing_rows: 0,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a promoted git-control registry and rewrites an evidence-backed shadow trace with provider-cost estimates. Offline tool-output labels choose the threshold, but serving uses only request-side payload score >= threshold. It executes no git command, mutates no workspace, and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted git-control registry/trace, then feed that safe-policy audit into CPU route feedback. Workspace mutation execution remains blocked until a separate action executor gate exists.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-git-control-safe-policy-promote-v1: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  selected_policy_name: {}", report.selected_policy_name);
+    println!(
+        "  selected_policy_source: {}",
+        report.selected_policy_source
+    );
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    println!(
+        "  provider_cost_events_written: {}",
+        report.provider_cost_events_written
+    );
+    Err(
+        "git-control safe-policy promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
 }
 
 pub(crate) fn run_role_binding_real_traffic_serving_ops_payload_dry_run_v1<I>(
@@ -13177,6 +13461,16 @@ where
     } else {
         None
     };
+    let git_control_safe_policy_audit_report_path =
+        PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_AUDIT_REPORT);
+    let git_control_safe_policy_verification_audit =
+        if git_control_safe_policy_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &git_control_safe_policy_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let git_control_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let git_control_local_accept_calibration =
@@ -13308,6 +13602,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(git_control_safe_policy_audit) = &git_control_safe_policy_verification_audit {
+        for row in &git_control_safe_policy_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(serving_ops_audit) = &serving_ops_verification_audit {
         for row in &serving_ops_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -13334,7 +13633,12 @@ where
         planning_next_step_verification_audit.as_ref();
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
     let effective_metrics_report_verification_audit = metrics_report_verification_audit.as_ref();
-    let effective_git_control_verification_audit = git_control_verification_audit.as_ref();
+    let effective_git_control_verification_audit = git_control_safe_policy_verification_audit
+        .as_ref()
+        .or(git_control_verification_audit.as_ref());
+    let git_control_tool_output_authoritative = effective_git_control_verification_audit
+        .map(|report| report.tool_call_fingerprint_events > 0)
+        .unwrap_or(false);
     let effective_serving_ops_verification_audit = serving_ops_safe_policy_verification_audit
         .as_ref()
         .or(serving_ops_verification_audit.as_ref());
@@ -13529,7 +13833,8 @@ where
         let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
         let local_accept_support_qualified = local_accept_safe_policy_found
             && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
-        let local_accept_calibration_authoritative = !is_git_control_route;
+        let local_accept_calibration_authoritative =
+            !is_git_control_route || git_control_tool_output_authoritative;
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
         } else if is_conditional_route {
@@ -14061,6 +14366,7 @@ where
         let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
         let local_accept_support_qualified = local_accept_safe_policy_found
             && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
+        let local_accept_calibration_authoritative = git_control_tool_output_authoritative;
         let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
             payload_built_events,
@@ -14071,7 +14377,7 @@ where
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
-            local_accept_calibration_authoritative: false,
+            local_accept_calibration_authoritative,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -14276,6 +14582,12 @@ where
         git_control_verification_audit_report_path: git_control_verification_audit
             .as_ref()
             .map(|_| git_control_audit_report_path.display().to_string()),
+        git_control_safe_policy_verification_audit_report_path:
+            git_control_safe_policy_verification_audit.as_ref().map(|_| {
+                git_control_safe_policy_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         git_control_local_accept_calibration_report_path: git_control_local_accept_calibration
             .as_ref()
             .map(|_| {
@@ -14438,6 +14750,9 @@ where
     }
     if let Some(path) = &report.git_control_verification_audit_report_path {
         println!("  git_control_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.git_control_safe_policy_verification_audit_report_path {
+        println!("  git_control_safe_policy_verification_audit_report: {path}");
     }
     if let Some(path) = &report.git_control_local_accept_calibration_report_path {
         println!("  git_control_local_accept_calibration_report: {path}");
@@ -17810,6 +18125,8 @@ struct CodexSessionOutputEvidenceIndex {
 #[derive(Clone, Debug)]
 struct CodexSessionOutputEvidence {
     response_fingerprint: String,
+    tool_call_fingerprints: Vec<String>,
+    verification_source: String,
     verified_safe_accept: bool,
     verifier_applicable: bool,
     verifier_status: String,
@@ -17838,6 +18155,14 @@ struct PlanningArtifactTurnEvidence {
     successful_progress_kinds: BTreeSet<String>,
     validation_tool_fingerprints: Vec<String>,
     successful_validation_kinds: BTreeSet<String>,
+    pending_tool_kinds: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GitControlToolTurnEvidence {
+    tool_call_fingerprints: Vec<String>,
+    successful_tool_kinds: BTreeSet<String>,
+    failed_tool_kinds: BTreeSet<String>,
     pending_tool_kinds: BTreeMap<String, String>,
 }
 
@@ -17957,6 +18282,7 @@ struct RoleBindingFeedbackLoopReport {
     metrics_report_verification_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,
     git_control_verification_audit_report_path: Option<String>,
+    git_control_safe_policy_verification_audit_report_path: Option<String>,
     git_control_local_accept_calibration_report_path: Option<String>,
     serving_ops_dry_run_report_path: Option<String>,
     serving_ops_verification_audit_report_path: Option<String>,
@@ -25397,6 +25723,10 @@ fn build_codex_session_output_evidence_index(
                     by_request_fingerprint.entry(request_fingerprint).or_insert(
                         CodexSessionOutputEvidence {
                             response_fingerprint,
+                            tool_call_fingerprints: Vec::new(),
+                            verification_source:
+                                "codex_session_final_answer_fingerprint_plus_deterministic_output_verifier_v1"
+                                    .to_owned(),
                             verified_safe_accept,
                             verifier_applicable,
                             verifier_status,
@@ -25426,6 +25756,10 @@ fn build_codex_session_output_evidence_index(
                             by_request_fingerprint.entry(request_fingerprint).or_insert(
                                 CodexSessionOutputEvidence {
                                     response_fingerprint,
+                                    tool_call_fingerprints: Vec::new(),
+                                    verification_source:
+                                        "codex_session_final_answer_fingerprint_plus_deterministic_output_verifier_v1"
+                                            .to_owned(),
                                     verified_safe_accept,
                                     verifier_applicable,
                                     verifier_status,
@@ -25446,6 +25780,304 @@ fn build_codex_session_output_evidence_index(
         session_files_scanned: session_files.len(),
         codex_turns_indexed,
     })
+}
+
+fn build_codex_session_git_control_tool_output_evidence_index(
+    sessions_root: &Path,
+    session_ids: &HashSet<String>,
+    wanted_request_fingerprints: &HashSet<String>,
+) -> Result<CodexSessionOutputEvidenceIndex, String> {
+    let mut session_files = Vec::new();
+    collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
+    let mut by_request_fingerprint = BTreeMap::new();
+    let mut codex_turns_indexed = 0usize;
+
+    for session_file in &session_files {
+        let text = fs::read_to_string(session_file).map_err(|error| {
+            format!(
+                "failed to read Codex session JSONL {}: {error}",
+                session_file.display()
+            )
+        })?;
+        let mut pending_request_fingerprint: Option<String> = None;
+        let mut pending_prompt_text: Option<String> = None;
+        let mut pending_git_evidence = GitControlToolTurnEvidence::default();
+
+        for (line_index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(trimmed).map_err(|error| {
+                format!(
+                    "failed to parse Codex session JSONL {} line {}: {error}",
+                    session_file.display(),
+                    line_index + 1
+                )
+            })?;
+            match value.get("type").and_then(serde_json::Value::as_str) {
+                Some("event_msg") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    match payload.get("type").and_then(serde_json::Value::as_str) {
+                        Some("user_message") => {
+                            if let Some(message) =
+                                payload.get("message").and_then(serde_json::Value::as_str)
+                            {
+                                let fingerprint = format!(
+                                    "fnv1a64:{:016x}",
+                                    stable_real_traffic_fingerprint64(message.as_bytes())
+                                );
+                                pending_prompt_text = Some(message.to_owned());
+                                pending_request_fingerprint = Some(fingerprint);
+                                pending_git_evidence = GitControlToolTurnEvidence::default();
+                            }
+                        }
+                        Some("agent_message")
+                            if payload.get("phase").and_then(serde_json::Value::as_str)
+                                == Some("final_answer") =>
+                        {
+                            let response_text =
+                                payload.get("message").and_then(serde_json::Value::as_str);
+                            if finalize_git_control_tool_output_turn(
+                                &mut by_request_fingerprint,
+                                wanted_request_fingerprints,
+                                pending_request_fingerprint.take(),
+                                pending_prompt_text.take(),
+                                response_text,
+                                std::mem::take(&mut pending_git_evidence),
+                            ) {
+                                codex_turns_indexed += 1;
+                            }
+                        }
+                        Some("task_complete") => {
+                            let response_text = payload
+                                .get("last_agent_message")
+                                .and_then(serde_json::Value::as_str);
+                            if finalize_git_control_tool_output_turn(
+                                &mut by_request_fingerprint,
+                                wanted_request_fingerprints,
+                                pending_request_fingerprint.take(),
+                                pending_prompt_text.take(),
+                                response_text,
+                                std::mem::take(&mut pending_git_evidence),
+                            ) {
+                                codex_turns_indexed += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Some("response_item") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    if let Some(prompt_text) = pending_prompt_text.as_deref()
+                        && pending_request_fingerprint
+                            .as_ref()
+                            .is_some_and(|fingerprint| {
+                                wanted_request_fingerprints.contains(fingerprint)
+                            })
+                    {
+                        track_git_control_tool_event(
+                            payload,
+                            prompt_text,
+                            &mut pending_git_evidence,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(CodexSessionOutputEvidenceIndex {
+        by_request_fingerprint,
+        session_files_scanned: session_files.len(),
+        codex_turns_indexed,
+    })
+}
+
+fn finalize_git_control_tool_output_turn(
+    by_request_fingerprint: &mut BTreeMap<String, CodexSessionOutputEvidence>,
+    wanted_request_fingerprints: &HashSet<String>,
+    request_fingerprint: Option<String>,
+    prompt_text: Option<String>,
+    response_text: Option<&str>,
+    tool_evidence: GitControlToolTurnEvidence,
+) -> bool {
+    let Some(request_fingerprint) = request_fingerprint else {
+        return false;
+    };
+    if !wanted_request_fingerprints.contains(&request_fingerprint) {
+        return false;
+    }
+    let Some(prompt_text) = prompt_text else {
+        return false;
+    };
+    if extract_git_control_tokens(&prompt_text).is_none() {
+        return false;
+    }
+    let verifier_applicable = !tool_evidence.successful_tool_kinds.is_empty()
+        || !tool_evidence.failed_tool_kinds.is_empty();
+    if !verifier_applicable {
+        return false;
+    }
+    let response_fingerprint = response_text
+        .map(|text| {
+            format!(
+                "fnv1a64:{:016x}",
+                stable_real_traffic_fingerprint64(text.as_bytes())
+            )
+        })
+        .unwrap_or_else(|| "fnv1a64:0000000000000000".to_owned());
+    let verified_safe_accept = !tool_evidence.successful_tool_kinds.is_empty();
+    let verifier_status = if verified_safe_accept {
+        format!(
+            "verified_git_tool_output_success:{}",
+            tool_evidence
+                .successful_tool_kinds
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("+")
+        )
+    } else {
+        format!(
+            "rejected_git_tool_output_failure:{}",
+            tool_evidence
+                .failed_tool_kinds
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("+")
+        )
+    };
+    by_request_fingerprint.entry(request_fingerprint).or_insert(
+        CodexSessionOutputEvidence {
+            response_fingerprint,
+            tool_call_fingerprints: tool_evidence.tool_call_fingerprints,
+            verification_source:
+                "codex_session_tool_output_fingerprint_plus_deterministic_git_command_outcome_verifier_v1"
+                    .to_owned(),
+            verified_safe_accept,
+            verifier_applicable,
+            verifier_status,
+        },
+    );
+    true
+}
+
+fn track_git_control_tool_event(
+    payload: &serde_json::Value,
+    prompt_text: &str,
+    evidence: &mut GitControlToolTurnEvidence,
+) -> bool {
+    match payload.get("type").and_then(serde_json::Value::as_str) {
+        Some("function_call") | Some("custom_tool_call") => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if call_id.is_empty() {
+                return false;
+            }
+            let name = payload
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let detail = payload
+                .get("arguments")
+                .or_else(|| payload.get("input"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if let Some(kind) = git_control_tool_kind(name, detail, prompt_text) {
+                evidence.pending_tool_kinds.insert(call_id.to_owned(), kind);
+            }
+            false
+        }
+        Some("function_call_output") | Some("custom_tool_call_output") => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let Some(kind) = evidence.pending_tool_kinds.remove(call_id) else {
+                return false;
+            };
+            let output = payload
+                .get("output")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let success = git_control_tool_output_success(output);
+            let fingerprint = format!(
+                "toolfnv1a64:{:016x}",
+                stable_real_traffic_fingerprint64(
+                    format!("git_control:{kind}:{call_id}:{success}:{output}").as_bytes()
+                )
+            );
+            evidence.tool_call_fingerprints.push(fingerprint);
+            if success {
+                evidence.successful_tool_kinds.insert(kind);
+            } else {
+                evidence.failed_tool_kinds.insert(kind);
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+fn git_control_tool_kind(name: &str, detail: &str, prompt_text: &str) -> Option<String> {
+    if name.trim() != "exec_command" {
+        return None;
+    }
+    let lower = detail.to_lowercase();
+    if !lower.contains("git") {
+        return None;
+    }
+    let tokens = extract_git_control_tokens(prompt_text)?;
+    let command_kind = git_control_command_kind(&prompt_text.to_lowercase(), &tokens.command_token);
+    let command_matches = match command_kind {
+        "commit" => lower.contains("git commit"),
+        "push" => lower.contains("git push"),
+        "status" => lower.contains("git status"),
+        "diff" => lower.contains("git diff"),
+        "branch" => lower.contains("git branch") || lower.contains("rev-parse --abbrev-ref"),
+        "log_or_show" => lower.contains("git log") || lower.contains("git show"),
+        _ => false,
+    };
+    if command_matches {
+        Some(format!("git_{command_kind}"))
+    } else {
+        None
+    }
+}
+
+fn git_control_tool_output_success(output: &str) -> bool {
+    let lower = output.to_lowercase();
+    if contains_any(
+        &lower,
+        &[
+            "process exited with code 0",
+            "exit code: 0",
+            "\"exit_code\":0",
+            "\"exit_code\": 0",
+        ],
+    ) {
+        return !contains_any(
+            &lower,
+            &[
+                "fatal:",
+                "error:",
+                "process exited with code 1",
+                "process exited with code 2",
+                "exit code: 1",
+                "exit code: 2",
+            ],
+        );
+    }
+    false
 }
 
 fn build_codex_session_planning_artifact_progress_index(
