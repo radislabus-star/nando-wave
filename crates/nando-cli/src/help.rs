@@ -298,6 +298,12 @@ pub(crate) fn print_help() {
         "            Compile answer-evidence dry-run payloads into a disabled-threshold .nwrb profile; local accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-answer-evidence-output-evidence-v1 [answer-evidence-dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach final-answer fingerprints plus grounded answer-evidence verifier status; no local accepts or market claims"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

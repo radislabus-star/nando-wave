@@ -1,5 +1,151 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Answer-Evidence Output Evidence Hook V1
+
+Verdict:
+
+```text
+ANSWER_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-answer-evidence-output-evidence-v1
+
+The answer_or_explain route can now join offline Codex final-answer evidence
+to the disabled-profile shadow trace. The command writes response fingerprints
+and deterministic verifier status only. It writes no raw prompt or response
+text and does not enable local accepts.
+```
+
+Output evidence:
+
+```text
+trace:
+  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.report.json
+
+output_evidence_matched_events: 9
+verified_true_events: 3
+verified_false_events: 6
+raw_prompt_text_written: false
+raw_response_text_written: false
+response_text_used_for_verification: true
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Shadow and verification audit:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.shadow-report.json
+
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 214912
+
+verification_audit:
+  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.verification-hook-audit.report.json
+
+operator_candidate_calls: 9
+scoreable_candidate_calls: 9
+verification_hook_ready_events: 9
+verified_cpu_accept_eligible_events: 0
+candidates_missing_provider_cost: 9
+market_claim_allowed: false
+```
+
+Feedback loop:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+total_llm_calls: 1000
+operator_candidate_calls: 1000
+operator_candidate_route_sum_events: 1025
+scoreable_candidate_calls: 145
+verification_hook_ready_events: 117
+verified_cpu_routability_milli: 32
+unique_verified_cpu_accepts: 26
+incremental_unique_cpu_accepts: 25
+
+answer_or_explain:
+  candidate_events: 216
+  payload_ready_events: 17
+  scoreable_payload_events: 9
+  verification_hook_ready_events: 9
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 0
+  stage: verification_hook_ready_waiting_local_accept
+```
+
+Catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+top_catalog_row: answer_or_explain (existing_profile_route)
+existing_operator_candidate_calls: 1000
+existing_operator_candidate_route_sum_events: 1025
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls: 774
+recommended_payload_builder: answer_evidence_payload_builder_v1
+recommended_verifier: grounded_answer_evidence_verifier_v1
+```
+
+Decision:
+
+```text
+This closes the "verification hook missing" gap for the nine scoreable
+answer_or_explain rows. It does not create verified CPU accepts or market
+savings. The next engineering step is request-side local-accept calibration
+and provider-cost evidence, with false_accepts=0 still required.
+```
+
+Claim boundary:
+
+```text
+candidate coverage is capped at total_llm_calls. Route overlap is reported
+separately as operator_candidate_route_sum_events. No market claim is allowed:
+answer_evidence has 0 shadow accepts, 0 verified CPU eligible accepts, and
+missing provider cost on all 9 hook-ready rows.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/answer-evidence-output-evidence-hook-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-hook-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 22
+note: narrow route-swap check only: verification-hook-ready telemetry is not
+      local accept, verified CPU saving, or market claim.
+```
+
 ## 2026-07-04 - Executor Integration: Answer-Evidence Disabled Profile V1
 
 Verdict:
