@@ -108,6 +108,10 @@ const DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.trace.jsonl";
 const DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json";
+const DEFAULT_TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl";
+const DEFAULT_TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.report.json";
 const DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb";
 const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -7126,6 +7130,285 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "test-output-parse tool-output state capture is review-only; build payload/profile/admission before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_test_output_parse_tool_state_payload_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let tool_state_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_REPORT));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_REPORT));
+
+    let tool_state_report =
+        read_json_file::<RoleBindingTestOutputParseToolOutputStateReport>(&tool_state_report_path)?;
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID);
+
+    let mut trace_rows = Vec::with_capacity(tool_state_report.rows.len());
+    let mut report_rows = Vec::new();
+    let mut parent_route_counts = BTreeMap::<String, usize>::new();
+    let mut command_signal_counts = BTreeMap::<String, usize>::new();
+    let mut status_counts = BTreeMap::<String, usize>::new();
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+    let mut operator_candidate_calls = 0usize;
+    let mut non_exact_candidate_events = 0usize;
+    let mut exact_cache_overlap_events = 0usize;
+    let mut tool_output_state_matched_events = 0usize;
+    let mut command_status_detected_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+
+    for row in &tool_state_report.rows {
+        operator_candidate_calls += 1;
+        exact_cache_overlap_events += usize::from(row.exact_cache_hit);
+        non_exact_candidate_events += usize::from(!row.exact_cache_hit);
+        tool_output_state_matched_events += usize::from(row.previous_tool_output_matched);
+        command_status_detected_events +=
+            usize::from(row.previous_tool_output_matched && row.command_status != "unknown");
+        *parent_route_counts
+            .entry(row.parent_route_key.clone())
+            .or_insert(0) += 1;
+        *command_signal_counts
+            .entry(row.command_signal.clone())
+            .or_insert(0) += 1;
+        *status_counts.entry(row.command_status.clone()).or_insert(0) += 1;
+
+        let mut nando_shadow_request = None;
+        let mut builder_status = if !row.previous_tool_output_matched {
+            "missing_previous_tool_output_state"
+        } else if row.command_status == "unknown" {
+            "unknown_command_status_requires_fallback"
+        } else {
+            "payload_ready_from_previous_tool_output_state"
+        }
+        .to_owned();
+        let mut payload_built = false;
+        let mut scoreable = false;
+        let mut active_fringe_centers = 0usize;
+        let mut slots = 0usize;
+        let mut positive_impulses = 0usize;
+        let mut negative_impulses = 0usize;
+        let mut command_token = String::new();
+        let mut status_token = String::new();
+        let mut artifact_token = String::new();
+        let mut boundary_token = String::new();
+
+        if row.previous_tool_output_matched && row.command_status != "unknown" {
+            payload_ready_events += 1;
+            if let Some((request, tokens)) =
+                build_test_output_parse_tool_state_request(&row.event_id, row)
+            {
+                active_fringe_centers = request.active_fringe.len();
+                slots = request.slots.len();
+                positive_impulses = request
+                    .slots
+                    .iter()
+                    .map(|slot| slot.positive_impulses.len())
+                    .sum::<usize>();
+                negative_impulses = request
+                    .slots
+                    .iter()
+                    .map(|slot| slot.negative_impulses.len())
+                    .sum::<usize>();
+                scoreable = active_fringe_centers > 0 && slots > 0;
+                payload_built = true;
+                payload_built_events += 1;
+                scoreable_payload_events += usize::from(scoreable);
+                active_fringe_centers_total += active_fringe_centers;
+                slots_total += slots;
+                positive_impulses_total += positive_impulses;
+                negative_impulses_total += negative_impulses;
+                builder_status = if scoreable && profile_registered {
+                    "scoreable_tool_state_payload_profile_registered"
+                } else if scoreable {
+                    "scoreable_tool_state_payload_profile_missing"
+                } else {
+                    "tool_state_payload_built_but_not_scoreable"
+                }
+                .to_owned();
+                command_token = tokens.command_token;
+                status_token = tokens.status_token;
+                artifact_token = tokens.artifact_token;
+                boundary_token = tokens.boundary_token;
+                nando_shadow_request = Some(request);
+            } else {
+                builder_rejected_events += 1;
+                builder_status = "tool_state_payload_builder_rejected".to_owned();
+            }
+        } else {
+            builder_rejected_events += 1;
+        }
+
+        *builder_status_counts
+            .entry(builder_status.clone())
+            .or_insert(0) += 1;
+        report_rows.push(RoleBindingTestOutputParseToolStatePayloadRow {
+            event_id: row.event_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            parent_route_key: row.parent_route_key.clone(),
+            split_key: row.split_key.clone(),
+            route_key: REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID.to_owned(),
+            exact_cache_hit: row.exact_cache_hit,
+            previous_tool_output_matched: row.previous_tool_output_matched,
+            command_signal: row.command_signal.clone(),
+            command_status: row.command_status.clone(),
+            payload_built,
+            scoreable,
+            profile_registered,
+            builder_status: builder_status.clone(),
+            active_fringe_centers,
+            slots,
+            positive_impulses,
+            negative_impulses,
+            command_token,
+            status_token,
+            artifact_token,
+            boundary_token,
+            feature_flags: row.feature_flags.clone(),
+        });
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: row.event_id.clone(),
+            traffic_source: Some("codex_history_test_output_parse_tool_state_payload".to_owned()),
+            time_ms: None,
+            request_fingerprint: Some(row.request_fingerprint.clone()),
+            response_fingerprint: None,
+            tool_call_fingerprints: row
+                .tool_output_fingerprint
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            verification_source: Some(
+                "request-side test_output_parse payload from previous tool-output state report only; raw prompt/tool-output/response text, target labels, and proof labels not used"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key: row
+                .request_fingerprint
+                .strip_prefix("fnv1a64:")
+                .map(|fingerprint| format!("codex_history_request:{fingerprint}")),
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(format!(
+                "test-output-parse tool-state payload dry-run; status={}; builder_status={builder_status}; local accepts disabled",
+                row.command_status
+            )),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingTestOutputParseToolStatePayloadReport {
+        schema_version: "nando_role_binding_test_output_parse_tool_state_payload_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        tool_state_report_path: tool_state_report_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        input_state_rows: tool_state_report.rows.len(),
+        operator_candidate_calls,
+        non_exact_candidate_events,
+        exact_cache_overlap_events,
+        tool_output_state_matched_events,
+        command_status_detected_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        parent_route_counts: parent_route_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        command_signal_counts: command_signal_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        status_counts: status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        expected_unique_cpu_accepts_over_exact_cache: 0,
+        expected_savings_milli: 0,
+        false_accepts: 0,
+        raw_prompt_text_written: false,
+        raw_tool_output_text_written: false,
+        raw_response_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side payload dry-run from previous tool-output state only. It reads the tool-output-state report, writes scoreable Nando shadow requests for pass/fail rows, writes no raw prompt/tool-output/response text, reads no final answers or target/proof labels, enables no local accepts, and cannot count CPU savings until a profile plus admission/shadow proves false_accepts=0.".to_owned(),
+        next_engineering_debt: "Compile a disabled-threshold test_output_parse .nwrb profile from the scoreable tool-state payload trace, run shadow scoring and admission audit, then count unique verified CPU accepts over exact cache only if verifier support remains clean.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-test-output-parse-tool-state-payload-v1: {}",
+        report.verdict
+    );
+    println!("  tool_state_report: {}", tool_state_report_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  operator_candidate_calls: {}", operator_candidate_calls);
+    println!("  payload_ready_events: {}", payload_ready_events);
+    println!("  payload_built_events: {}", payload_built_events);
+    println!("  scoreable_payload_events: {}", scoreable_payload_events);
+    println!("  profile_registered: {}", profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "test-output-parse tool-state payload dry-run is review-only; build profile+admission before claims"
             .to_owned(),
     )
 }
@@ -32071,6 +32354,76 @@ struct RoleBindingTestOutputParseToolOutputStateRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingTestOutputParseToolStatePayloadReport {
+    schema_version: String,
+    verdict: String,
+    tool_state_report_path: String,
+    registry_config_path: String,
+    trace_path: String,
+    input_state_rows: usize,
+    operator_candidate_calls: usize,
+    non_exact_candidate_events: usize,
+    exact_cache_overlap_events: usize,
+    tool_output_state_matched_events: usize,
+    command_status_detected_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    parent_route_counts: Vec<RoleBindingNamedCount>,
+    command_signal_counts: Vec<RoleBindingNamedCount>,
+    status_counts: Vec<RoleBindingNamedCount>,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    expected_unique_cpu_accepts_over_exact_cache: usize,
+    expected_savings_milli: usize,
+    false_accepts: usize,
+    raw_prompt_text_written: bool,
+    raw_tool_output_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingTestOutputParseToolStatePayloadRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingTestOutputParseToolStatePayloadRow {
+    event_id: String,
+    request_fingerprint: String,
+    parent_route_key: String,
+    split_key: String,
+    route_key: String,
+    profile_id: String,
+    exact_cache_hit: bool,
+    previous_tool_output_matched: bool,
+    command_signal: String,
+    command_status: String,
+    payload_built: bool,
+    scoreable: bool,
+    profile_registered: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+    command_token: String,
+    status_token: String,
+    artifact_token: String,
+    boundary_token: String,
+    feature_flags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingAnswerEvidenceProfileReport {
     schema_version: String,
     verdict: String,
@@ -40019,6 +40372,85 @@ fn build_test_output_parse_dry_run_request(
         active_fringe,
         slots,
         // Dry-run only: command-output verification is not attached yet.
+        expect_local_operator: Some(false),
+    };
+    Some((request, tokens))
+}
+
+fn build_test_output_parse_tool_state_request(
+    event_id: &str,
+    row: &RoleBindingTestOutputParseToolOutputStateRow,
+) -> Option<(RoleBindingProfileScoreRequest, TestOutputParseTokens)> {
+    if !row.previous_tool_output_matched || row.command_status == "unknown" {
+        return None;
+    }
+    let status_token = format!("test_status_{}", row.command_status);
+    let artifact_token = "previous_tool_output_state".to_owned();
+    let boundary_token = format!("request_time_previous_tool_output_{}", row.command_status);
+    let tokens = TestOutputParseTokens {
+        command_token: row.command_signal.clone(),
+        status_token,
+        artifact_token,
+        boundary_token,
+    };
+
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(test_output_parse_operator_centers());
+    active_fringe.extend(test_output_parse_role_surface_centers(
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_COMMAND_ROLE_SLOT,
+        &tokens.command_token,
+    ));
+    active_fringe.extend(test_output_parse_role_surface_centers(
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_STATUS_ROLE_SLOT,
+        &tokens.status_token,
+    ));
+    active_fringe.extend(test_output_parse_role_surface_centers(
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_ARTIFACT_ROLE_SLOT,
+        &tokens.artifact_token,
+    ));
+    active_fringe.extend(test_output_parse_role_surface_centers(
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_BOUNDARY_ROLE_SLOT,
+        &tokens.boundary_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = test_output_parse_request_score_slot(
+        0,
+        &tokens.command_token,
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = test_output_parse_request_score_slot(
+        1,
+        &tokens.status_token,
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = test_output_parse_request_score_slot(
+        2,
+        &tokens.boundary_token,
+        REAL_TRAFFIC_TEST_OUTPUT_PARSE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+
+    let request = RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY.to_owned()),
+        profile_id: Some(REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID.to_owned()),
+        exact_cache_key: row
+            .request_fingerprint
+            .strip_prefix("fnv1a64:")
+            .map(|fingerprint| format!("codex_history_request:{fingerprint}")),
+        active_fringe,
+        slots,
+        // Dry-run only: admission remains disabled until profile/shadow/audit.
         expect_local_operator: Some(false),
     };
     Some((request, tokens))

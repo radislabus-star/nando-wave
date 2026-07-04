@@ -406,6 +406,12 @@ pub(crate) fn print_help() {
         "            Measure previous command-output state coverage for test_output_parse candidates; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-test-output-parse-tool-state-payload-v1 [tool-state-report-json] [registry-config-json] [trace-jsonl] [report-json]"
+    );
+    println!(
+        "            Build scoreable test_output_parse payloads from previous command-output state; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-file-path-evidence-profile-v1 [base-registry-json] [file-path-evidence-dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

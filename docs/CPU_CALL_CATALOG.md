@@ -334,6 +334,51 @@ scoreable payloads from this tool-output state, compile a disabled profile, and
 promote only after admission/shadow proves false_accepts=0 over exact cache.
 ```
 
+### Test Output Parse Tool-State Payload V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.report.json
+```
+
+Measured result:
+
+```text
+operator_candidate_calls: 104
+non_exact_candidate_events: 102
+exact_cache_overlap_events: 2
+tool_output_state_matched_events: 104
+command_status_detected_events: 97
+payload_ready_events: 97
+payload_built_events: 97
+scoreable_payload_events: 97
+builder_rejected_events: 7
+profile_registered: false
+shadow_score_ready: false
+expected_unique_cpu_accepts_over_exact_cache: 0
+expected_savings_milli: 0
+false_accepts: 0
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Catalog status after tool-state payload:
+
+```text
+CANDIDATE / PAYLOAD_READY_PROFILE_MISSING
+```
+
+Decision:
+
+```text
+The prior support bottleneck is materially improved: scoreable payload support
+is now 97/104 instead of 3/104, using previous tool-output state rather than
+final answers. This is still not a savings claim. The missing artifact is a
+disabled-threshold profile plus shadow/admission audit proving false_accepts=0
+before any unique CPU accepts can count over exact cache.
+```
+
 ## File Path Evidence Payload Dry-Run V1
 
 Source report:

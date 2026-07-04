@@ -1,5 +1,90 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Tool-State Payload V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-tool-state-payload-v1
+```
+
+Why:
+
+```text
+The tool-output state stage showed that all 104 test_output_parse candidates
+have previous tool-output state and 97 have deterministic command status. This
+stage turns those pass/fail rows into scoreable Nando shadow payloads without
+reading raw prompt text, raw tool output, final answers, target labels, or proof
+labels. Unknown-status rows remain fallback/review.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-tool-state-payload-v1 \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.report.json
+```
+
+Measured result:
+
+```text
+operator_candidate_calls: 104
+non_exact_candidate_events: 102
+exact_cache_overlap_events: 2
+tool_output_state_matched_events: 104
+command_status_detected_events: 97
+payload_ready_events: 97
+payload_built_events: 97
+scoreable_payload_events: 97
+builder_rejected_events: 7
+profile_registered: false
+shadow_score_ready: false
+expected_unique_cpu_accepts_over_exact_cache: 0
+expected_savings_milli: 0
+false_accepts: 0
+raw_prompt_text_written: false
+raw_tool_output_text_written: false
+raw_response_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+The scoreable support bottleneck moved from 3/104 to 97/104 without answer
+leakage. This still proves no savings because the profile is not registered and
+local accepts are disabled. Next step is a disabled-threshold
+test_output_parse profile from this payload trace, followed by shadow/admission
+audit before counting any verified unique CPU accepts.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-tool-state-payload-v1.md
+verdict: PASS
+complexity_score: 58
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Tool-Output State V1
 
 Verdict:

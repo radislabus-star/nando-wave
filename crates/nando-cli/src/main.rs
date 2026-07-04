@@ -196,6 +196,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_test_output_parse_output_evidence_v1,
     run_role_binding_real_traffic_test_output_parse_payload_dry_run_v1,
     run_role_binding_real_traffic_test_output_parse_tool_output_state_v1,
+    run_role_binding_real_traffic_test_output_parse_tool_state_payload_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
 };
 use snapshot_io::{read_snapshot, save_snapshot};
@@ -760,6 +761,12 @@ fn main() -> ExitCode {
             exit_for_result(
                 run_role_binding_real_traffic_test_output_parse_tool_output_state_v1(args),
                 "try: nando-cli role-binding-real-traffic-test-output-parse-tool-output-state-v1 [history-jsonl] [broad-split-report-json] [sessions-root] [trace-jsonl] [report-json] [max-events]",
+            )
+        }
+        Some("role-binding-real-traffic-test-output-parse-tool-state-payload-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_test_output_parse_tool_state_payload_v1(args),
+                "try: nando-cli role-binding-real-traffic-test-output-parse-tool-state-payload-v1 [tool-state-report-json] [registry-config-json] [trace-jsonl] [report-json]",
             )
         }
         Some("role-binding-real-traffic-file-path-evidence-profile-v1") => exit_for_result(
