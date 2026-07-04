@@ -1,5 +1,93 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Short Decision Ack Prior Blocker V1
+
+Verdict:
+
+```text
+SHORT_DECISION_ACK_PRIOR_BLOCKER_V1_REVIEW_STANDALONE_ACK_ROUTE_BLOCKED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The CPU operator catalog now reads:
+  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json
+
+and carries prior short_ack false-accept evidence into the
+`short_decision_ack` route-gap row.
+```
+
+Why:
+
+```text
+The catalog had promoted short_decision_ack to the top actionable row because
+it had 19 route-gap candidates and no explicit profile route.
+
+That was misleading. Prior agent-control admission evidence already showed:
+
+  short_ack_intent:
+    true_accepts: 1
+    false_accepts: 48
+
+So a standalone "ok/yes/да" route is unsafe without explicit previous-turn
+decision-state evidence.
+```
+
+Catalog after regeneration:
+
+```text
+short_decision_ack:
+  priority_rank: 23
+  short_decision_ack_prior_blocked: true
+  short_decision_ack_prior_true_accepts: 1
+  short_decision_ack_prior_false_accepts: 48
+
+top_catalog_row:
+  style_brevity (existing_profile_route)
+```
+
+Decision:
+
+```text
+Do not build a standalone short_ack route.
+
+The only acceptable future version is:
+  explicit previous-turn decision-state evidence
+  + active_turn_state_transition_verifier_v1
+  + false_accepts=0
+  + no task-content inference
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created.
+CPU Routability 80 remains open.
+
+This change improves route selection quality only: it prevents the catalog from
+spending engineering effort on a known false-accept-prone short-ack route.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/short-decision-ack-prior-blocker-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/short-decision-ack-prior-blocker-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 41
+note: narrow catalog-routing check only: short_decision_ack is blocked by
+      prior false-accept evidence and must not be treated as a standalone
+      safe CPU promotion route.
+```
+
 ## 2026-07-04 - Executor Integration: Answer Evidence Local-Accept Calibration Feedback V1
 
 Verdict:

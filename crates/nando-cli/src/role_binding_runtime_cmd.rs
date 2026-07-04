@@ -14531,6 +14531,17 @@ where
     } else {
         None
     };
+    let agent_control_admission_calibration_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT);
+    let agent_control_admission_calibration = if agent_control_admission_calibration_report_path
+        .exists()
+    {
+        Some(read_json_file::<
+            RoleBindingAgentControlAdmissionCalibrationReport,
+        >(&agent_control_admission_calibration_report_path)?)
+    } else {
+        None
+    };
     let git_control_admission_audit_report_path =
         PathBuf::from(DEFAULT_GIT_CONTROL_ADMISSION_AUDIT_REPORT);
     let git_control_admission_audit = if git_control_admission_audit_report_path.exists() {
@@ -14870,6 +14881,9 @@ where
             edit_current_support_exhausted,
             serving_ops_local_accept_best_safe_true_accepts,
             serving_ops_current_support_exhausted,
+            short_decision_ack_prior_true_accepts: 0,
+            short_decision_ack_prior_false_accepts: 0,
+            short_decision_ack_prior_blocked: false,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
@@ -14929,6 +14943,23 @@ where
             && git_control_gap_support_exhausted;
         let serving_ops_support_exhausted = family.family_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
             && serving_ops_gap_support_exhausted;
+        let short_decision_ack_prior_policy = agent_control_admission_calibration
+            .as_ref()
+            .filter(|_| family.family_key == "short_decision_ack")
+            .and_then(|audit| {
+                audit
+                    .policies
+                    .iter()
+                    .find(|policy| policy.policy_name == "short_ack_intent")
+            });
+        let short_decision_ack_prior_true_accepts = short_decision_ack_prior_policy
+            .map(|policy| policy.true_accepts)
+            .unwrap_or_default();
+        let short_decision_ack_prior_false_accepts = short_decision_ack_prior_policy
+            .map(|policy| policy.false_accepts)
+            .unwrap_or_default();
+        let short_decision_ack_prior_blocked =
+            short_decision_ack_prior_false_accepts > short_decision_ack_prior_true_accepts;
         let existing_scoreable_feedback_row = feedback
             .routes
             .iter()
@@ -14958,6 +14989,9 @@ where
         {
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
+        } else if short_decision_ack_prior_blocked {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
         } else if existing_scoreable_feedback_row.is_some() {
             priority_score = priority_score
                 .saturating_sub(CPU_OPERATOR_LOW_SUPPORT_LOCAL_ACCEPT_PRIORITY_PENALTY);
@@ -14977,6 +15011,10 @@ where
         } else if serving_ops_support_exhausted {
             format!(
                 "Serving-ops gap is payload-ready, but current safe serving support is exhausted at {serving_ops_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve daemon health evidence or split a new ops subfamily before another promote."
+            )
+        } else if short_decision_ack_prior_blocked {
+            format!(
+                "Short-decision ack is blocked by prior agent-control admission evidence: short_ack_intent accepted {short_decision_ack_prior_true_accepts} true rows but {short_decision_ack_prior_false_accepts} false rows. Do not build a standalone short_ack route; first require explicit previous-turn decision-state evidence and an active_turn_state_transition verifier."
             )
         } else if let Some(answer_report) = answer_evidence_dry_run {
             if let Some(feedback_row) =
@@ -15103,6 +15141,9 @@ where
                 0
             },
             serving_ops_current_support_exhausted: serving_ops_support_exhausted,
+            short_decision_ack_prior_true_accepts,
+            short_decision_ack_prior_false_accepts,
+            short_decision_ack_prior_blocked,
             false_accepts: family_false_accepts,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -15166,6 +15207,13 @@ where
         agent_control_admission_audit_report_path: agent_control_admission_audit
             .as_ref()
             .map(|_| agent_control_admission_audit_report_path.display().to_string()),
+        agent_control_admission_calibration_report_path: agent_control_admission_calibration
+            .as_ref()
+            .map(|_| {
+                agent_control_admission_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         git_control_admission_audit_report_path: git_control_admission_audit
             .as_ref()
             .map(|_| git_control_admission_audit_report_path.display().to_string()),
@@ -15260,6 +15308,12 @@ where
         println!(
             "  agent_control_admission_audit_report: {}",
             agent_control_admission_audit_report_path.display()
+        );
+    }
+    if agent_control_admission_calibration.is_some() {
+        println!(
+            "  agent_control_admission_calibration_report: {}",
+            agent_control_admission_calibration_report_path.display()
         );
     }
     if git_control_admission_audit.is_some() {
@@ -26984,6 +27038,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     agent_control_admission_audit_report_path: Option<String>,
     #[serde(default)]
+    agent_control_admission_calibration_report_path: Option<String>,
+    #[serde(default)]
     git_control_admission_audit_report_path: Option<String>,
     #[serde(default)]
     mixed_admission_audit_report_path: Option<String>,
@@ -27082,6 +27138,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     serving_ops_local_accept_best_safe_true_accepts: usize,
     #[serde(default)]
     serving_ops_current_support_exhausted: bool,
+    #[serde(default)]
+    short_decision_ack_prior_true_accepts: usize,
+    #[serde(default)]
+    short_decision_ack_prior_false_accepts: usize,
+    #[serde(default)]
+    short_decision_ack_prior_blocked: bool,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
