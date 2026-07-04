@@ -119,6 +119,63 @@ read_inspect verifier/evidence
 test_output_parse if found in real trace
 ```
 
+## Broad Route Split Discovery V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json
+```
+
+Purpose:
+
+```text
+Split REJECT_FOR_NOW broad routes into narrow artifact-backed call classes
+before building another CPU profile.
+```
+
+Measured on the current 5k Codex history window:
+
+```text
+sampled_llm_calls: 5000
+broad_candidate_events: 3330
+non_exact_broad_candidate_events: 3089
+candidate_split_rows: 11
+watch_split_rows: 6
+rejected_split_rows: 3
+business_value_gate_passed_rows: 0
+```
+
+Top candidate splits:
+
+| rank | parent route | split | candidates | non-exact | payload-ready | verifier-signal | status |
+| ---: | --- | --- | ---: | ---: | ---: | ---: | --- |
+| 1 | `answer_or_explain` | `file_path_evidence_answer` | 79 | 79 | 70 | 70 | `CANDIDATE` |
+| 2 | `project_context_dialogue` | `file_path_evidence_answer` | 65 | 63 | 51 | 52 | `CANDIDATE` |
+| 3 | `answer_or_explain` | `test_output_parse` | 57 | 57 | 3 | 35 | `CANDIDATE` |
+| 4 | `answer_or_explain` | `metric_from_report` | 27 | 27 | 14 | 14 | `CANDIDATE` |
+| 5 | `answer_or_explain` | `git_status_summary` | 10 | 10 | 5 | 10 | `CANDIDATE` |
+| 6 | `agent_continue_execute` | `git_status_summary` | 8 | 8 | 4 | 8 | `CANDIDATE` |
+
+Still rejected:
+
+```text
+project_context_dialogue / broad_reasoning_requires_llm: 1216 non-exact
+answer_or_explain / broad_reasoning_requires_llm: 1029 non-exact
+agent_continue_execute / artifact_progress: WATCH, high stateful singleton risk
+```
+
+Decision:
+
+```text
+The broad routes remain blocked as full routes.
+The next high-value narrow work should start from file_path_evidence_answer
+or test_output_parse, because they have real traffic and deterministic verifier
+shapes. They still have expected_unique_cpu_accepts_over_exact_cache = 0 until
+output evidence, admission audit, shadow, feedback, and CPU catalog prove
+false_accepts=0.
+```
+
 Blocked for now:
 
 ```text

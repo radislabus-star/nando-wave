@@ -107,6 +107,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_answer_evidence_payload_dry_run_v1,
     run_role_binding_real_traffic_answer_evidence_profile_v1,
     run_role_binding_real_traffic_answer_evidence_safe_policy_promote_v1,
+    run_role_binding_real_traffic_broad_route_split_discovery_v1,
     run_role_binding_real_traffic_codex_history_ingest_v1,
     run_role_binding_real_traffic_codex_history_route_candidates_v1,
     run_role_binding_real_traffic_conditional_admission_audit_v1,
@@ -1105,6 +1106,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-cpu-operator-catalog-v1") => exit_for_result(
             run_role_binding_real_traffic_cpu_operator_catalog_v1(args),
             "try: nando-cli role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]",
+        ),
+        Some("role-binding-real-traffic-broad-route-split-discovery-v1") => exit_for_result(
+            run_role_binding_real_traffic_broad_route_split_discovery_v1(args),
+            "try: nando-cli role-binding-real-traffic-broad-route-split-discovery-v1 [history-jsonl] [registry-config-json] [split-report-json] [max-events]",
         ),
         Some("role-binding-real-traffic-agent-loop-profile-registry-v1") => exit_for_result(
             run_role_binding_real_traffic_agent_loop_profile_registry_v1(args),

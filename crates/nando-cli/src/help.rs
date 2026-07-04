@@ -850,6 +850,12 @@ pub(crate) fn print_help() {
         "            Rank profile routes with BUSINESS_VALUE_GATE before the next CPU operator build"
     );
     println!(
+        "  role-binding-real-traffic-broad-route-split-discovery-v1 [history-jsonl] [registry-config-json] [split-report-json] [max-events]"
+    );
+    println!(
+        "            Split broad REJECT routes into narrow artifact-backed CPU call classes; review-only, no savings claim"
+    );
+    println!(
         "  role-binding-real-traffic-agent-loop-profile-registry-v1 [feedback-report-json] [cpu-operator-catalog-json] [agent-loop-profile-registry-report-json]"
     );
     println!(

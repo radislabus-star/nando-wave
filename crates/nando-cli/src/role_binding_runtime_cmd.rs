@@ -311,6 +311,8 @@ const DEFAULT_REAL_TRAFFIC_CPU_OPERATOR_CATALOG_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_AGENT_LOOP_PROFILE_REGISTRY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-loop-profile-registry-v1.report.json";
+const DEFAULT_REAL_TRAFFIC_BROAD_ROUTE_SPLIT_DISCOVERY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json";
 const DEFAULT_AGENT_CONTROL_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-seed0.nwrb";
 const DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG: &str =
@@ -4332,6 +4334,305 @@ where
     println!("  raw_text_written: false");
     println!("  local_accepts_enabled: false");
     Err("manual route discovery is review-only; it is not verified savings".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_broad_route_split_discovery_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_BROAD_ROUTE_SPLIT_DISCOVERY_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(5000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let skip = history_rows.len().saturating_sub(max_events);
+    let sampled_llm_calls = history_rows.len().saturating_sub(skip);
+    let mut exact_cache_seen = BTreeSet::<String>::new();
+    let mut accumulators = BTreeMap::<String, BroadRouteSplitDiscoveryAccumulator>::new();
+    let mut rows = Vec::new();
+    let mut broad_candidate_events = 0usize;
+    let mut exact_cache_overlap_events = 0usize;
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = format!("codex_history_request:{fingerprint:016x}");
+        let exact_cache_hit = !exact_cache_seen.insert(exact_cache_key);
+        let gap_family_key = route_gap_family_key(&row.text);
+        let parent_route_key = if cpu_catalog_broad_route_reject(gap_family_key) {
+            gap_family_key.to_owned()
+        } else {
+            route_catalog
+                .classify_request_text(&row.text)
+                .map(|candidate| candidate.route_key)
+                .unwrap_or_else(|| gap_family_key.to_owned())
+        };
+        if !cpu_catalog_broad_route_reject(&parent_route_key) {
+            continue;
+        }
+
+        broad_candidate_events += 1;
+        exact_cache_overlap_events += usize::from(exact_cache_hit);
+        let discovery = broad_route_split_discovery_metadata(parent_route_key.as_str(), &row.text);
+        let signal = analyze_broad_route_split_discovery_signal(
+            parent_route_key.as_str(),
+            discovery.split_key,
+            &row.text,
+        );
+        let features =
+            broad_route_split_discovery_feature_flags(parent_route_key.as_str(), &row.text);
+        let accumulator_key = format!("{}::{}", parent_route_key, discovery.split_key);
+        let accumulator = accumulators.entry(accumulator_key).or_insert_with(|| {
+            BroadRouteSplitDiscoveryAccumulator {
+                parent_route_key: parent_route_key.clone(),
+                split_key: discovery.split_key.to_owned(),
+                call_class: discovery.call_class.to_owned(),
+                profile_line: discovery.recommended_profile_line.to_owned(),
+                payload_builder: discovery.recommended_payload_builder.to_owned(),
+                verifier: discovery.recommended_verifier.to_owned(),
+                claim_boundary: discovery.claim_boundary.to_owned(),
+                ..BroadRouteSplitDiscoveryAccumulator::default()
+            }
+        });
+        accumulator.candidate_events += 1;
+        accumulator.exact_cache_overlap += usize::from(exact_cache_hit);
+        accumulator.request_signal_events += usize::from(signal.has_request_signal);
+        accumulator.context_signal_events += usize::from(signal.has_context_signal);
+        accumulator.evidence_signal_events += usize::from(signal.has_evidence_signal);
+        accumulator.verifier_signal_events += usize::from(signal.has_verifier_signal);
+        accumulator.payload_ready_events += usize::from(signal.payload_ready);
+        for feature in &features {
+            accumulator
+                .feature_counts
+                .entry(feature.clone())
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
+        }
+
+        rows.push(RoleBindingBroadRouteSplitDiscoveryEventRow {
+            event_id: format!(
+                "codex_history_broad_route_split::{}::{}::{}",
+                row.session_id, row.ts, index
+            ),
+            request_fingerprint,
+            parent_route_key,
+            split_key: discovery.split_key.to_owned(),
+            exact_cache_hit,
+            has_request_signal: signal.has_request_signal,
+            has_context_signal: signal.has_context_signal,
+            has_evidence_signal: signal.has_evidence_signal,
+            has_verifier_signal: signal.has_verifier_signal,
+            payload_ready: signal.payload_ready,
+            feature_flags: features,
+            recommended_payload_builder: discovery.recommended_payload_builder.to_owned(),
+            recommended_verifier: discovery.recommended_verifier.to_owned(),
+            claim_boundary: discovery.claim_boundary.to_owned(),
+        });
+    }
+
+    let mut subfamilies = accumulators
+        .into_values()
+        .map(|accumulator| {
+            let split_key = accumulator.split_key;
+            let non_exact_candidate_calls = accumulator
+                .candidate_events
+                .saturating_sub(accumulator.exact_cache_overlap);
+            let mut top_features = accumulator
+                .feature_counts
+                .into_iter()
+                .map(|(name, count)| RoleBindingNamedCount { name, count })
+                .collect::<Vec<_>>();
+            top_features.sort_by(|left, right| {
+                right
+                    .count
+                    .cmp(&left.count)
+                    .then_with(|| left.name.cmp(&right.name))
+            });
+            top_features.truncate(8);
+            let meta = broad_route_split_metadata_by_key(&split_key);
+            let is_candidate = non_exact_candidate_calls > 0
+                && accumulator.payload_ready_events > 0
+                && accumulator.verifier_signal_events > 0
+                && meta.false_accept_risk != "HIGH_BROAD_UNSPLIT";
+            let current_status = if meta.false_accept_risk == "HIGH_BROAD_UNSPLIT" {
+                "REJECT_FOR_NOW"
+            } else if is_candidate {
+                "CANDIDATE"
+            } else {
+                "WATCH"
+            }
+            .to_owned();
+            let priority_score = (non_exact_candidate_calls as i64 * 240)
+                + (accumulator.payload_ready_events as i64 * 500)
+                + (accumulator.verifier_signal_events as i64 * 700)
+                + (accumulator.evidence_signal_events as i64 * 150)
+                - (accumulator.exact_cache_overlap as i64 * 40)
+                - if meta.false_accept_risk.starts_with("HIGH") {
+                    20_000
+                } else {
+                    0
+                };
+            let next_action = if current_status == "CANDIDATE" {
+                format!(
+                    "Build {} + {}; then run output evidence, admission audit, shadow, feedback, and CPU catalog. Expected unique stays zero until verified false_accepts=0.",
+                    accumulator.payload_builder, accumulator.verifier
+                )
+            } else if current_status == "WATCH" {
+                "Collect more real trace/evidence before building; do not promote a singleton or weak-policy split.".to_owned()
+            } else {
+                "Keep fallback; split is still too broad for a deterministic CPU verifier.".to_owned()
+            };
+            RoleBindingBroadRouteSplitDiscoverySubfamilyRow {
+                priority_rank: 0,
+                parent_route_key: accumulator.parent_route_key,
+                split_key,
+                call_class: accumulator.call_class,
+                candidate_events: accumulator.candidate_events,
+                traffic_share_milli: ratio_milli(accumulator.candidate_events, sampled_llm_calls),
+                exact_cache_overlap: accumulator.exact_cache_overlap,
+                non_exact_candidate_calls,
+                request_signal_events: accumulator.request_signal_events,
+                context_signal_events: accumulator.context_signal_events,
+                evidence_signal_events: accumulator.evidence_signal_events,
+                verifier_signal_events: accumulator.verifier_signal_events,
+                payload_ready_events: accumulator.payload_ready_events,
+                payload_ready_rate_milli: ratio_milli(
+                    accumulator.payload_ready_events,
+                    accumulator.candidate_events,
+                ),
+                current_status,
+                business_value_gate_passed: false,
+                expected_unique_cpu_accepts_over_exact_cache: 0,
+                expected_savings_milli: 0,
+                false_accepts: 0,
+                false_accept_risk: meta.false_accept_risk.to_owned(),
+                top_features,
+                recommended_profile_line: accumulator.profile_line,
+                recommended_payload_builder: accumulator.payload_builder,
+                recommended_verifier: accumulator.verifier,
+                next_action,
+                priority_score,
+                market_claim_allowed: false,
+                claim_boundary: accumulator.claim_boundary,
+            }
+        })
+        .collect::<Vec<_>>();
+    subfamilies.sort_by(|left, right| {
+        broad_route_split_status_rank(&right.current_status)
+            .cmp(&broad_route_split_status_rank(&left.current_status))
+            .then_with(|| right.priority_score.cmp(&left.priority_score))
+            .then_with(|| {
+                right
+                    .non_exact_candidate_calls
+                    .cmp(&left.non_exact_candidate_calls)
+            })
+            .then_with(|| right.payload_ready_events.cmp(&left.payload_ready_events))
+            .then_with(|| left.split_key.cmp(&right.split_key))
+    });
+    for (index, subfamily) in subfamilies.iter_mut().enumerate() {
+        subfamily.priority_rank = index + 1;
+    }
+
+    let top_split_key = subfamilies
+        .iter()
+        .find(|row| row.current_status == "CANDIDATE")
+        .or_else(|| subfamilies.first())
+        .map(|row| row.split_key.clone());
+    let candidate_split_rows = subfamilies
+        .iter()
+        .filter(|row| row.current_status == "CANDIDATE")
+        .count();
+    let watch_split_rows = subfamilies
+        .iter()
+        .filter(|row| row.current_status == "WATCH")
+        .count();
+    let rejected_split_rows = subfamilies
+        .iter()
+        .filter(|row| row.current_status == "REJECT_FOR_NOW")
+        .count();
+
+    let report = RoleBindingBroadRouteSplitDiscoveryReport {
+        schema_version: "nando_role_binding_broad_route_split_discovery_v1".to_owned(),
+        verdict: if broad_candidate_events > 0 {
+            "BROAD_ROUTE_SPLIT_DISCOVERY_V1_REVIEW_SPLITS_FOUND"
+        } else {
+            "BROAD_ROUTE_SPLIT_DISCOVERY_V1_NO_BROAD_REJECT_ROWS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        total_history_rows: history_rows.len(),
+        max_events,
+        sampled_llm_calls,
+        broad_candidate_events,
+        broad_candidate_traffic_share_milli: ratio_milli(broad_candidate_events, sampled_llm_calls),
+        exact_cache_overlap_events,
+        non_exact_broad_candidate_events: broad_candidate_events
+            .saturating_sub(exact_cache_overlap_events),
+        top_split_key,
+        business_value_gate_passed_rows: 0,
+        candidate_split_rows,
+        watch_split_rows,
+        rejected_split_rows,
+        subfamilies,
+        rows,
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Broad-route split discovery only. It scans non-synthetic Codex history, writes fingerprints/features/counts but no raw prompt text, splits answer_or_explain/project_context_dialogue/agent_continue_execute into narrow artifact-backed call classes, enables no local accepts, uses no response/target/proof labels, and cannot prove savings.".to_owned(),
+        next_engineering_debt: "Use this report only to choose the next deterministic profile candidate. A split contributes to CPU80 only after payload builder, verifier, shadow/audit with false_accepts=0, provider-cost evidence, and unique attribution over exact cache.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-broad-route-split-discovery-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  sampled_llm_calls: {}", report.sampled_llm_calls);
+    println!(
+        "  broad_candidate_events: {}",
+        report.broad_candidate_events
+    );
+    println!(
+        "  non_exact_broad_candidate_events: {}",
+        report.non_exact_broad_candidate_events
+    );
+    println!("  candidate_split_rows: {}", report.candidate_split_rows);
+    if let Some(top_split_key) = &report.top_split_key {
+        println!("  top_split_key: {top_split_key}");
+    }
+    println!("  raw_text_written: false");
+    println!("  local_accepts_enabled: false");
+    Err("broad-route split discovery is review-only; it is not verified savings".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_resource_pressure_payload_dry_run_v1<I>(
@@ -29753,6 +30054,86 @@ struct RoleBindingManualRouteDiscoveryEventRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingBroadRouteSplitDiscoveryReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    total_history_rows: usize,
+    max_events: usize,
+    sampled_llm_calls: usize,
+    broad_candidate_events: usize,
+    broad_candidate_traffic_share_milli: usize,
+    exact_cache_overlap_events: usize,
+    non_exact_broad_candidate_events: usize,
+    top_split_key: Option<String>,
+    business_value_gate_passed_rows: usize,
+    candidate_split_rows: usize,
+    watch_split_rows: usize,
+    rejected_split_rows: usize,
+    subfamilies: Vec<RoleBindingBroadRouteSplitDiscoverySubfamilyRow>,
+    rows: Vec<RoleBindingBroadRouteSplitDiscoveryEventRow>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingBroadRouteSplitDiscoverySubfamilyRow {
+    priority_rank: usize,
+    parent_route_key: String,
+    split_key: String,
+    call_class: String,
+    candidate_events: usize,
+    traffic_share_milli: usize,
+    exact_cache_overlap: usize,
+    non_exact_candidate_calls: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    payload_ready_events: usize,
+    payload_ready_rate_milli: usize,
+    current_status: String,
+    business_value_gate_passed: bool,
+    expected_unique_cpu_accepts_over_exact_cache: usize,
+    expected_savings_milli: usize,
+    false_accepts: usize,
+    false_accept_risk: String,
+    top_features: Vec<RoleBindingNamedCount>,
+    recommended_profile_line: String,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    next_action: String,
+    priority_score: i64,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingBroadRouteSplitDiscoveryEventRow {
+    event_id: String,
+    request_fingerprint: String,
+    parent_route_key: String,
+    split_key: String,
+    exact_cache_hit: bool,
+    has_request_signal: bool,
+    has_context_signal: bool,
+    has_evidence_signal: bool,
+    has_verifier_signal: bool,
+    payload_ready: bool,
+    feature_flags: Vec<String>,
+    recommended_payload_builder: String,
+    recommended_verifier: String,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingPlanningNextStepPayloadDryRunReport {
     schema_version: String,
     verdict: String,
@@ -30974,6 +31355,25 @@ struct ManualRouteDiscoveryAccumulator {
 }
 
 #[derive(Clone, Debug, Default)]
+struct BroadRouteSplitDiscoveryAccumulator {
+    parent_route_key: String,
+    split_key: String,
+    call_class: String,
+    candidate_events: usize,
+    exact_cache_overlap: usize,
+    request_signal_events: usize,
+    context_signal_events: usize,
+    evidence_signal_events: usize,
+    verifier_signal_events: usize,
+    payload_ready_events: usize,
+    feature_counts: BTreeMap<String, usize>,
+    profile_line: String,
+    payload_builder: String,
+    verifier: String,
+    claim_boundary: String,
+}
+
+#[derive(Clone, Debug, Default)]
 struct ProjectContextSubfamilyAccumulator {
     candidate_events: usize,
     payload_ready_events: usize,
@@ -31316,6 +31716,17 @@ struct ManualRouteDiscoveryMetadata {
     recommended_payload_builder: &'static str,
     recommended_verifier: &'static str,
     claim_boundary: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BroadRouteSplitDiscoveryMetadata {
+    split_key: &'static str,
+    call_class: &'static str,
+    recommended_profile_line: &'static str,
+    recommended_payload_builder: &'static str,
+    recommended_verifier: &'static str,
+    claim_boundary: &'static str,
+    false_accept_risk: &'static str,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -45433,6 +45844,531 @@ fn manual_route_discovery_feature_flags(text: &str) -> Vec<String> {
         flags.push("no_known_manual_route_features".to_owned());
     }
     flags
+}
+
+fn broad_route_split_discovery_metadata(
+    parent_route_key: &str,
+    text: &str,
+) -> BroadRouteSplitDiscoveryMetadata {
+    let lower = text.to_lowercase();
+    if broad_split_has_test_output_parse_terms(&lower) {
+        broad_route_split_metadata_by_key("test_output_parse")
+    } else if broad_split_has_metric_from_report_terms(&lower) {
+        broad_route_split_metadata_by_key("metric_from_report")
+    } else if broad_split_has_git_status_terms(&lower) {
+        broad_route_split_metadata_by_key("git_status_summary")
+    } else if broad_split_has_serving_terms(&lower) {
+        broad_route_split_metadata_by_key("serving_health_metric_readout")
+    } else if broad_split_has_report_sync_terms(&lower) {
+        broad_route_split_metadata_by_key("report_sync")
+    } else if broad_split_has_file_evidence_terms(text, &lower) {
+        broad_route_split_metadata_by_key("file_path_evidence_answer")
+    } else if broad_split_has_dataset_terms(&lower) {
+        broad_route_split_metadata_by_key("dataset_corpus_quality")
+    } else if parent_route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+        && broad_split_has_artifact_progress_terms(&lower)
+    {
+        broad_route_split_metadata_by_key("artifact_progress")
+    } else {
+        broad_route_split_metadata_by_key("broad_reasoning_requires_llm")
+    }
+}
+
+fn broad_route_split_metadata_by_key(split_key: &str) -> BroadRouteSplitDiscoveryMetadata {
+    match split_key {
+        "test_output_parse" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "test_output_parse",
+            call_class: "test_output_parse",
+            recommended_profile_line: "validation_result_parse_operator",
+            recommended_payload_builder: "validation_result_payload_builder_v1",
+            recommended_verifier: "tool_output_validation_result_verifier_v1",
+            claim_boundary: "Can parse explicit test/check/build output and report pass/fail/error class; cannot infer test state without tool-output evidence.",
+            false_accept_risk: "MEDIUM_NEEDS_TOOL_OUTPUT_VERIFIER",
+        },
+        "metric_from_report" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "metric_from_report",
+            call_class: "metric_from_report",
+            recommended_profile_line: "metric_report_readout_operator",
+            recommended_payload_builder: "metric_from_report_payload_builder_v1",
+            recommended_verifier: "numeric_report_field_verifier_v1",
+            claim_boundary: "Can answer explicit numeric metric readouts from named reports; cannot invent fresh measurements or treat stale report values as current.",
+            false_accept_risk: "MEDIUM_NEEDS_REPORT_FIELD_VERIFIER",
+        },
+        "git_status_summary" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "git_status_summary",
+            call_class: "git_status_summary",
+            recommended_profile_line: "git_status_summary_operator",
+            recommended_payload_builder: "git_status_summary_payload_builder_v1",
+            recommended_verifier: "git_status_and_command_outcome_verifier_v1",
+            claim_boundary: "Can summarize explicit git command outcomes; cannot mutate git state or claim push/commit success without command evidence.",
+            false_accept_risk: "MEDIUM_NEEDS_GIT_OUTPUT_VERIFIER",
+        },
+        "serving_health_metric_readout" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "serving_health_metric_readout",
+            call_class: "serving_health_metric_readout",
+            recommended_profile_line: "serving_health_metric_operator",
+            recommended_payload_builder: "serving_health_metric_payload_builder_v1",
+            recommended_verifier: "serving_metrics_and_health_verifier_v1",
+            claim_boundary: "Can read explicit serving health/latency/RSS metrics from artifacts; cannot operate daemons or assert production SLO without live serving evidence.",
+            false_accept_risk: "MEDIUM_NEEDS_SERVING_REPORT_VERIFIER",
+        },
+        "report_sync" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "report_sync",
+            call_class: "report_sync",
+            recommended_profile_line: "report_sync_operator",
+            recommended_payload_builder: "report_sync_payload_builder_v1",
+            recommended_verifier: "report_contains_fresh_metric_verifier_v1",
+            claim_boundary: "Can synchronize explicit result/findings into a named report artifact; cannot treat a written note as proof of model performance.",
+            false_accept_risk: "MEDIUM_NEEDS_ARTIFACT_DIFF_VERIFIER",
+        },
+        "artifact_progress" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "artifact_progress",
+            call_class: "artifact_progress",
+            recommended_profile_line: "artifact_progress_operator",
+            recommended_payload_builder: "artifact_progress_payload_builder_v1",
+            recommended_verifier: "artifact_progress_and_no_drift_verifier_v1",
+            claim_boundary: "Can continue only when active goal, previous artifact state, and next concrete step are explicit; broad planning remains fallback.",
+            false_accept_risk: "HIGH_STATEFUL_SINGLETON_RISK",
+        },
+        "file_path_evidence_answer" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "file_path_evidence_answer",
+            call_class: "file_path_evidence_answer",
+            recommended_profile_line: "file_path_evidence_answer_operator",
+            recommended_payload_builder: "file_path_evidence_payload_builder_v1",
+            recommended_verifier: "source_path_or_url_presence_verifier_v1",
+            claim_boundary: "Can answer with explicit local path/source evidence; cannot answer broad knowledge questions without retrieved evidence.",
+            false_accept_risk: "MEDIUM_NEEDS_SOURCE_EVIDENCE_VERIFIER",
+        },
+        "dataset_corpus_quality" => BroadRouteSplitDiscoveryMetadata {
+            split_key: "dataset_corpus_quality",
+            call_class: "dataset_corpus_quality",
+            recommended_profile_line: "dataset_corpus_quality_operator",
+            recommended_payload_builder: "dataset_corpus_quality_payload_builder_v1",
+            recommended_verifier: "schema_balance_shortcut_gate_verifier_v1",
+            claim_boundary: "Can check explicit corpus/schema/balance/shortcut report facts; cannot claim semantic quality without heldout/shortcut artifacts.",
+            false_accept_risk: "MEDIUM_NEEDS_DATASET_REPORT_VERIFIER",
+        },
+        _ => BroadRouteSplitDiscoveryMetadata {
+            split_key: "broad_reasoning_requires_llm",
+            call_class: "broad_reasoning_requires_llm",
+            recommended_profile_line: "none",
+            recommended_payload_builder: "none",
+            recommended_verifier: "fallback_to_llm_required",
+            claim_boundary: "Broad reasoning/dialogue route remains fallback. Split into an artifact-backed deterministic subfamily before any CPU work.",
+            false_accept_risk: "HIGH_BROAD_UNSPLIT",
+        },
+    }
+}
+
+fn broad_route_split_status_rank(status: &str) -> usize {
+    match status {
+        "CANDIDATE" => 3,
+        "WATCH" => 2,
+        "REJECT_FOR_NOW" => 1,
+        _ => 0,
+    }
+}
+
+fn analyze_broad_route_split_discovery_signal(
+    parent_route_key: &str,
+    split_key: &str,
+    text: &str,
+) -> RouteGapPayloadReadiness {
+    let lower = text.to_lowercase();
+    let artifact_signal = has_route_gap_artifact_signal(text, &lower);
+    let file_signal = contains_file_like_token(text);
+    let numeric_signal = text.chars().any(|ch| ch.is_ascii_digit());
+    let report_signal = contains_any(
+        &lower,
+        &[
+            "report",
+            "отчет",
+            "отчёт",
+            "json",
+            ".json",
+            ".jsonl",
+            "md",
+            ".md",
+            "artifact",
+            "артефакт",
+        ],
+    );
+    let verifier_signal = artifact_signal
+        || file_signal
+        || report_signal
+        || contains_any(
+            &lower,
+            &[
+                "провер",
+                "verify",
+                "verifier",
+                "gate",
+                "audit",
+                "result",
+                "результат",
+                "status",
+                "статус",
+                "pass",
+                "fail",
+                "ошибка",
+            ],
+        );
+
+    let (has_request_signal, has_context_signal, has_evidence_signal, has_verifier_signal) =
+        match split_key {
+            "test_output_parse" => {
+                let request = broad_split_has_test_output_parse_terms(&lower);
+                let context = request && (file_signal || report_signal || lower.contains("cargo"));
+                let evidence = request
+                    && contains_any(
+                        &lower,
+                        &[
+                            "passed",
+                            "failed",
+                            "fail",
+                            "error",
+                            "warning",
+                            "process exited",
+                            "code 0",
+                            "code 1",
+                            "ошибка",
+                            "упало",
+                            "чисто",
+                        ],
+                    );
+                (request, context, evidence, verifier_signal || evidence)
+            }
+            "metric_from_report" => {
+                let request = broad_split_has_metric_from_report_terms(&lower);
+                (
+                    request,
+                    request && (report_signal || file_signal || numeric_signal),
+                    request && numeric_signal,
+                    verifier_signal && numeric_signal,
+                )
+            }
+            "git_status_summary" => {
+                let request = broad_split_has_git_status_terms(&lower);
+                (
+                    request,
+                    request,
+                    request
+                        && contains_any(
+                            &lower,
+                            &[
+                                "commit",
+                                "коммит",
+                                "status",
+                                "diff",
+                                "branch",
+                                "push",
+                                "clean",
+                                "dirty",
+                                "измен",
+                            ],
+                        ),
+                    verifier_signal || request,
+                )
+            }
+            "serving_health_metric_readout" => {
+                let request = broad_split_has_serving_terms(&lower);
+                (
+                    request,
+                    request && (report_signal || numeric_signal || lower.contains("http")),
+                    request && (numeric_signal || lower.contains("health")),
+                    verifier_signal && (numeric_signal || lower.contains("health")),
+                )
+            }
+            "report_sync" => {
+                let request = broad_split_has_report_sync_terms(&lower);
+                (
+                    request,
+                    request && (report_signal || file_signal),
+                    request && (report_signal || file_signal),
+                    verifier_signal && (report_signal || file_signal),
+                )
+            }
+            "artifact_progress" => {
+                let request = parent_route_key == REAL_TRAFFIC_AGENT_CONTINUE_EXECUTE_ROUTE_KEY
+                    && broad_split_has_artifact_progress_terms(&lower);
+                (
+                    request,
+                    request && (artifact_signal || report_signal || file_signal),
+                    request && (artifact_signal || report_signal || file_signal),
+                    verifier_signal && request,
+                )
+            }
+            "file_path_evidence_answer" => {
+                let request = broad_split_has_file_evidence_terms(text, &lower);
+                (
+                    request,
+                    file_signal || artifact_signal,
+                    file_signal || artifact_signal,
+                    verifier_signal,
+                )
+            }
+            "dataset_corpus_quality" => {
+                let request = broad_split_has_dataset_terms(&lower);
+                (
+                    request,
+                    request && (file_signal || report_signal || numeric_signal),
+                    request && (report_signal || numeric_signal),
+                    verifier_signal && (report_signal || numeric_signal),
+                )
+            }
+            _ => (true, false, false, false),
+        };
+    let payload_ready =
+        has_request_signal && has_context_signal && has_evidence_signal && has_verifier_signal;
+    let recommended_builder_kind = if payload_ready {
+        format!("{split_key}_payload_candidate")
+    } else {
+        format!("{split_key}_needs_more_evidence")
+    };
+    let mut missing_reasons = Vec::new();
+    if !has_request_signal {
+        missing_reasons.push("missing_request_signal".to_owned());
+    }
+    if !has_context_signal {
+        missing_reasons.push("missing_context_signal".to_owned());
+    }
+    if !has_evidence_signal {
+        missing_reasons.push("missing_evidence_signal".to_owned());
+    }
+    if !has_verifier_signal {
+        missing_reasons.push("missing_verifier_signal".to_owned());
+    }
+    RouteGapPayloadReadiness {
+        has_request_signal,
+        has_context_signal,
+        has_evidence_signal,
+        has_verifier_signal,
+        payload_ready,
+        recommended_builder_kind,
+        missing_reasons,
+    }
+}
+
+fn broad_route_split_discovery_feature_flags(parent_route_key: &str, text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let mut flags = Vec::new();
+    flags.push(format!("parent:{parent_route_key}"));
+    for (flag, present) in [
+        (
+            "test_output_terms",
+            broad_split_has_test_output_parse_terms(&lower),
+        ),
+        (
+            "metric_terms",
+            broad_split_has_metric_from_report_terms(&lower),
+        ),
+        ("git_terms", broad_split_has_git_status_terms(&lower)),
+        ("serving_terms", broad_split_has_serving_terms(&lower)),
+        (
+            "report_sync_terms",
+            broad_split_has_report_sync_terms(&lower),
+        ),
+        (
+            "artifact_progress_terms",
+            broad_split_has_artifact_progress_terms(&lower),
+        ),
+        ("dataset_terms", broad_split_has_dataset_terms(&lower)),
+        (
+            "file_path_terms",
+            broad_split_has_file_evidence_terms(text, &lower),
+        ),
+        ("file_like_token", contains_file_like_token(text)),
+        (
+            "artifact_signal",
+            has_route_gap_artifact_signal(text, &lower),
+        ),
+        ("numeric_signal", text.chars().any(|ch| ch.is_ascii_digit())),
+    ] {
+        if present {
+            flags.push(flag.to_owned());
+        }
+    }
+    flags
+}
+
+fn broad_split_has_test_output_parse_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "cargo test",
+            "cargo check",
+            "cargo clippy",
+            "cargo fmt",
+            "pytest",
+            "test result",
+            "tests passed",
+            "test failed",
+            "failed test",
+            "process exited",
+            "exit code",
+            "ошибка компиля",
+            "ошибка сбор",
+            "тест",
+            "проверк",
+            "clippy",
+            "fmt --check",
+            "сборк",
+        ],
+    )
+}
+
+fn broad_split_has_metric_from_report_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "p99",
+            "p90",
+            "latency",
+            "core_score",
+            "worker_score",
+            "rss",
+            "qps",
+            "false_accept",
+            "verified_cpu",
+            "savings",
+            "coverage",
+            "milli",
+            "ns",
+            "ms",
+            "metric",
+            "метрик",
+            "латент",
+            "эконом",
+        ],
+    )
+}
+
+fn broad_split_has_git_status_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "git ",
+            "коммит",
+            "commit",
+            "push",
+            "пуш",
+            "status",
+            "статус git",
+            "diff",
+            "ветк",
+            "branch",
+            "рабочее дерево",
+            "working tree",
+        ],
+    )
+}
+
+fn broad_split_has_serving_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "daemon",
+            "демон",
+            "worker",
+            "lb",
+            "load balancer",
+            "http",
+            "hostworld",
+            "vps",
+            "nginx",
+            "systemd",
+            "server",
+            "сервер",
+            "health",
+            "endpoint",
+        ],
+    )
+}
+
+fn broad_split_has_report_sync_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "executor_review_notes",
+            "cpu_call_catalog",
+            "запиши",
+            "фиксируй",
+            "record",
+            "report",
+            "отчет",
+            "отчёт",
+            "notes",
+            "runbook",
+            "документируй",
+            "сохрани результат",
+        ],
+    )
+}
+
+fn broad_split_has_artifact_progress_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "дальше",
+            "делай",
+            "продолж",
+            "go ahead",
+            "next",
+            "goal",
+            "цель",
+            "план",
+            "что осталось",
+            "progress",
+            "артефакт",
+            "artifact",
+        ],
+    )
+}
+
+fn broad_split_has_file_evidence_terms(text: &str, lower: &str) -> bool {
+    contains_file_like_token(text)
+        || contains_any(
+            lower,
+            &[
+                "/home/ubu/",
+                "projects/",
+                "docs/",
+                "target/",
+                ".md",
+                ".rs",
+                ".json",
+                ".jsonl",
+                "file",
+                "файл",
+                "path",
+                "путь",
+                "строк",
+                "line",
+                "source",
+                "источник",
+            ],
+        )
+}
+
+fn broad_split_has_dataset_terms(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "dataset",
+            "датасет",
+            "corpus",
+            "корпус",
+            "jsonl",
+            "batch",
+            "near_negative",
+            "negative",
+            "schema",
+            "валид",
+            "баланс",
+            "shortcut",
+            "heldout",
+        ],
+    )
 }
 
 fn analyze_route_gap_payload_readiness(family_key: &str, text: &str) -> RouteGapPayloadReadiness {

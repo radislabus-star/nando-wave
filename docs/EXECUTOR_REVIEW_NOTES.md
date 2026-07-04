@@ -1,5 +1,102 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Broad Route Split Discovery V1
+
+Verdict:
+
+```text
+BROAD_ROUTE_SPLIT_DISCOVERY_V1_REVIEW_SPLITS_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Generated:
+  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json
+```
+
+Why:
+
+```text
+CPU80 cannot be reached by improving broad answer/project/continue routes as a
+whole. They need to be split into narrow artifact-backed CPU call classes with
+traffic count, exact-cache overlap, verifier shape, and expected unique value
+before any new profile work.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-broad-route-split-discovery-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
+  5000
+```
+
+Measured result:
+
+```text
+sampled_llm_calls: 5000
+broad_candidate_events: 3330
+non_exact_broad_candidate_events: 3089
+candidate_split_rows: 11
+watch_split_rows: 6
+rejected_split_rows: 3
+business_value_gate_passed_rows: 0
+raw_text_written: false
+local_accepts_enabled: false
+```
+
+Top candidate splits:
+
+```text
+answer_or_explain / file_path_evidence_answer: candidates=79, non_exact=79, payload=70, verifier=70
+project_context_dialogue / file_path_evidence_answer: candidates=65, non_exact=63, payload=51, verifier=52
+answer_or_explain / test_output_parse: candidates=57, non_exact=57, payload=3, verifier=35
+answer_or_explain / metric_from_report: candidates=27, non_exact=27, payload=14, verifier=14
+answer_or_explain / git_status_summary: candidates=10, non_exact=10, payload=5, verifier=10
+agent_continue_execute / git_status_summary: candidates=8, non_exact=8, payload=4, verifier=8
+```
+
+Still blocked:
+
+```text
+project_context_dialogue / broad_reasoning_requires_llm: non_exact=1216
+answer_or_explain / broad_reasoning_requires_llm: non_exact=1029
+agent_continue_execute / artifact_progress: WATCH, high stateful singleton risk
+```
+
+Decision:
+
+```text
+Broad routes remain REJECT_FOR_NOW as whole routes.
+
+Next build should start from a narrow deterministic split, not from the broad
+route:
+  file_path_evidence_answer
+  test_output_parse
+  metric_from_report
+  git_status_summary
+
+Discovery rows are not savings. They keep expected_unique_cpu_accepts_over_exact_cache=0
+until payload builder, verifier, shadow/audit, feedback, and CPU catalog prove
+false_accepts=0 and unique value over exact cache.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/broad-route-split-discovery-v1.md
+verdict: PASS
+```
+
 ## 2026-07-04 - Executor Integration: CPU Call Catalog Business Value Gate V1
 
 Verdict:
