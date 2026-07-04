@@ -346,6 +346,30 @@ pub(crate) fn print_help() {
         "            Calibrate git-control score/readout thresholds against final-answer verifier labels; real tool-output verifier still required before local accept"
     );
     println!(
+        "  role-binding-real-traffic-serving-ops-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run serving/daemon metric payloads from request text only; server mutations and local accepts stay disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-serving-ops-profile-v1 [base-registry-json] [serving-ops-dry-run-trace-jsonl] [serving-ops-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile serving-ops dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
+    );
+    println!(
+        "  role-binding-real-traffic-serving-ops-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
+    );
+    println!(
+        "            Attach Codex final-answer fingerprints plus conservative service-health metric verifier results; server mutations and local accepts stay disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-serving-ops-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate serving-ops score/readout thresholds against deterministic health/metric verifier labels; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(
@@ -538,7 +562,7 @@ pub(crate) fn print_help() {
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / mixed / metrics-report / git-control route reports from default artifact paths when present; planning, agent-control, mixed, metrics, and git-control reports default to v1 unless supplied"
+        "            Auto-loads conditional / mixed / metrics-report / git-control / serving-ops route reports from default artifact paths when present; planning, agent-control, mixed, metrics, git-control, and serving-ops reports default to v1 unless supplied"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"

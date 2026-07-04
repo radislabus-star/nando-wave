@@ -1,5 +1,196 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Serving-Ops Route Payload/Profile/Evidence
+
+Verdict:
+
+```text
+SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added commands:
+  role-binding-real-traffic-serving-ops-payload-dry-run-v1
+  role-binding-real-traffic-serving-ops-profile-v1
+  role-binding-real-traffic-serving-ops-output-evidence-v1
+  role-binding-real-traffic-serving-ops-local-accept-calibration-v1
+
+Added route/profile:
+  route_key: serving_ops
+  profile_id: route_gap_serving_ops_profile_v1
+
+Added verifier:
+  deterministic_serving_ops_output_verification
+  verification_source:
+    codex_session_final_answer_fingerprint_plus_deterministic_service_health_metric_verifier_v1
+```
+
+Serving-ops request-side payload dry-run:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.trace.jsonl
+
+serving_ops_candidate_events:         25
+payload_ready_events:                 8
+payload_built_events:                 8
+scoreable_payload_events:             8
+profile_registered:                   false
+raw_text_written:                     false
+response_text_used:                   false
+target_labels_used:                   false
+proof_labels_used:                    false
+server_mutation_enabled:              false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Serving-ops profile:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/serving-ops-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-serving-ops-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/serving-ops-profile-v1.report.json
+
+scoreable_payload_events:             8
+package_training_requests:            8
+edge_count:                           8
+package_bytes:                        140
+runtime_bytes_estimate:               33000
+median_energy_margin:                 1359872
+p10_energy_margin:                    720896
+unexpected_local_accepts_under_disabled_threshold: 0
+server_mutation_enabled:              false
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed:                 false
+```
+
+Serving-ops output evidence:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1.report.json
+
+verification audit:
+  target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1.verification-hook-audit.report.json
+
+output_evidence_matched_events:       7
+deterministic_verification_events:    7
+verifier_not_applicable_events:       0
+verified_true_events:                 5
+verified_false_events:                2
+verification_hook_ready_events:       7
+verified_cpu_accept_eligible_events:  0
+raw_prompt_text_written:              false
+raw_response_text_written:            false
+response_text_used_for_verification:  true
+server_mutation_enabled:              false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Serving-ops local accept calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/serving-ops-local-accept-calibration-v1.report.json
+
+hook_ready_rows:                      7
+scored_rows:                          7
+label_true_rows:                      5
+label_false_rows:                     2
+safe_policy_found:                    true
+best_safe_true_accepts:               3
+minimum_true_support:                 3
+local_accept_support_qualified:       true
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Feedback loop after serving-ops integration:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             427 / 1000
+scoreable_candidate_calls:            167 / 1000
+verification_hook_ready_events:       130 / 1000
+verified_cpu_accept_eligible_events:  8 / 1000
+verified_cpu_routability_milli:       8
+verified_gap_to_80_calls:             792
+market_claim_allowed:                 false
+
+serving_ops route row:
+  candidate_events:                   25
+  scoreable_payload_events:           8
+  verification_hook_ready_events:     7
+  local_accept_calibration_ran:       true
+  local_accept_safe_policy_found:     true
+  local_accept_support_qualified:     true
+  local_accept_best_safe_true_accepts: 3
+  verified_cpu_accept_eligible_events: 0
+  false_accepts:                      0
+  stage:                              local_accept_calibration_safe_policy_candidate
+  next_action:                        Promote the safe policy only through a separate shadow trace rewrite with provider cost, rollback, and false_accepts=0.
+```
+
+Route-gap after registering serving-ops:
+
+```text
+catalog:
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-serving-ops-v1.report.json
+
+readiness:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-serving-ops-v1.report.json
+
+existing_route_candidate_events:      520 / 1000
+no_candidate_events:                  480 / 1000
+payload_ready_events:                 10
+top_payload_ready_family:             uncatalogued
+```
+
+Claim boundary:
+
+```text
+This moves serving_ops from route-gap into a scoreable registered service /
+daemon / HTTP metric readout profile with deterministic final-answer evidence
+labels. It does not touch a server, does not restart daemons, does not enable
+local accepts, and does not prove savings.
+
+The route has a safe readout candidate with enough support for a separate
+promotion artifact, but verified CPU accepts remain 0 for serving_ops until a
+promoted shadow trace carries provider cost and passes false_accepts=0 /
+unverified_shadow_accepts=0. Red gates stay red.
+```
+
+Next engineering debt:
+
+```text
+Build serving_ops safe-policy promotion artifact:
+  registry threshold/policy must come from calibration;
+  trace rewrite must stay request-side only;
+  provider_cost_microusd must be attached before savings;
+  run shadow + verification-hook audit;
+  require false_accepts=0 and unverified_shadow_accepts=0 before counting
+  serving_ops verified CPU accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Git-Control Local Accept Calibration
 
 Verdict:
