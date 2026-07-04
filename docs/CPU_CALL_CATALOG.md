@@ -240,6 +240,7 @@ project_context, metrics_report, git_control, and serving_ops:
   git-control-local-accept-calibration-v1-current5k.report.json
   serving-ops-payload-dry-run-v1-current5k.report.json
   serving-ops-output-evidence-v1-current5k.verification-hook-audit.report.json
+  serving-ops-safe-policy-v1-current5k.verification-hook-audit.report.json
   serving-ops-local-accept-calibration-v1-current5k.report.json
 ```
 

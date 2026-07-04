@@ -28453,8 +28453,10 @@ where
     } else {
         None
     };
-    let serving_ops_safe_policy_audit_report_path =
-        PathBuf::from(DEFAULT_SERVING_OPS_SAFE_POLICY_AUDIT_REPORT);
+    let serving_ops_safe_policy_audit_report_path = current_window_companion_report_path(
+        DEFAULT_SERVING_OPS_SAFE_POLICY_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let serving_ops_safe_policy_verification_audit =
         if serving_ops_safe_policy_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(

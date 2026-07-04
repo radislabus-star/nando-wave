@@ -34,6 +34,11 @@ current_window_companion_report_path when running a current5k window.
 This makes the feedback loop load:
   metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json
 instead of the default 1000-call audit.
+
+The same current-window companion resolution was also applied to
+DEFAULT_SERVING_OPS_SAFE_POLICY_AUDIT_REPORT. It does not change the current5k
+count, but it makes provenance point at:
+  serving-ops-safe-policy-v1-current5k.verification-hook-audit.report.json
 ```
 
 Measured metrics-report safe-policy artifacts:
