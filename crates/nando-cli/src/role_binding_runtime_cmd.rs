@@ -3775,7 +3775,7 @@ where
     let registry_config_path = args
         .next()
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_PROFILE_REGISTRY_CONFIG));
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
     let report_path = args
         .next()
         .map(PathBuf::from)
@@ -11423,6 +11423,66 @@ where
                 .collect::<BTreeMap<_, _>>()
         })
         .unwrap_or_default();
+    let agent_control_audit_best_robust_true_accepts = agent_control_admission_audit
+        .as_ref()
+        .map(|audit| audit.best_robust_true_accepts)
+        .unwrap_or_default();
+    let agent_control_audit_current_policy_event_support_exhausted = agent_control_admission_audit
+        .as_ref()
+        .map(|audit| audit.current_policy_event_support_exhausted)
+        .unwrap_or(false);
+    let agent_control_audit_unique_contribution_constrained = agent_control_admission_audit
+        .as_ref()
+        .map(|audit| audit.unique_contribution_constrained)
+        .unwrap_or(false);
+    let metrics_report_gap_best_robust_true_accepts = metrics_report_admission_calibration
+        .as_ref()
+        .map(|audit| audit.best_robust_true_accepts)
+        .unwrap_or_default();
+    let metrics_report_gap_current_support = feedback
+        .routes
+        .iter()
+        .find(|route| route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY)
+        .map(|route| {
+            route
+                .unique_accepts
+                .incremental_verified_request_fingerprints
+        })
+        .unwrap_or_default();
+    let metrics_report_gap_support_exhausted = metrics_report_gap_best_robust_true_accepts > 0
+        && metrics_report_gap_best_robust_true_accepts <= metrics_report_gap_current_support;
+    let git_control_gap_best_safe_true_accepts = git_control_admission_audit
+        .as_ref()
+        .map(|audit| audit.best_safe_true_accepts)
+        .unwrap_or_default();
+    let git_control_gap_current_support = feedback
+        .routes
+        .iter()
+        .find(|route| route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
+        .map(|route| {
+            route
+                .unique_accepts
+                .incremental_verified_request_fingerprints
+        })
+        .unwrap_or_default();
+    let git_control_gap_support_exhausted = git_control_gap_best_safe_true_accepts > 0
+        && git_control_gap_best_safe_true_accepts <= git_control_gap_current_support;
+    let serving_ops_gap_best_safe_true_accepts = serving_ops_local_accept_calibration
+        .as_ref()
+        .map(|audit| audit.best_safe_true_accepts)
+        .unwrap_or_default();
+    let serving_ops_gap_current_support = feedback
+        .routes
+        .iter()
+        .find(|route| route.route_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY)
+        .map(|route| {
+            route
+                .unique_accepts
+                .incremental_verified_request_fingerprints
+        })
+        .unwrap_or_default();
+    let serving_ops_gap_support_exhausted = serving_ops_gap_best_safe_true_accepts > 0
+        && serving_ops_gap_best_safe_true_accepts <= serving_ops_gap_current_support;
     let target_verified_cpu_calls =
         projected_accepts(feedback.total_llm_calls, feedback.target_routability_milli);
     let mut rows = Vec::new();
@@ -11636,7 +11696,7 @@ where
         let payload_ready_events = readiness
             .map(|family| family.payload_ready_events)
             .unwrap_or_default();
-        let priority_score = cpu_operator_priority_score(
+        let mut priority_score = cpu_operator_priority_score(
             family.candidate_events,
             payload_ready_events,
             0,
@@ -11644,6 +11704,45 @@ where
             0,
             family.cpu_operator_readiness.as_str(),
         );
+        let agent_control_stop_support_exhausted = family.family_key == "agent_control_stop"
+            && agent_control_audit_current_policy_event_support_exhausted;
+        let metrics_report_support_exhausted = family.family_key
+            == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY
+            && metrics_report_gap_support_exhausted;
+        let git_control_support_exhausted = family.family_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            && git_control_gap_support_exhausted;
+        let serving_ops_support_exhausted = family.family_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
+            && serving_ops_gap_support_exhausted;
+        if agent_control_stop_support_exhausted
+            || metrics_report_support_exhausted
+            || git_control_support_exhausted
+            || serving_ops_support_exhausted
+        {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
+        }
+        let next_action = if agent_control_stop_support_exhausted {
+            format!(
+                "Agent-control stop gap is payload-ready, but the current strict stop policy support is exhausted at {agent_control_audit_best_robust_true_accepts} robust true accepts and unique contribution is constrained. Do not repeat stop promotion; add stronger tool-state/no-mutation evidence or split a new control subfamily."
+            )
+        } else if metrics_report_support_exhausted {
+            format!(
+                "Metrics-report gap is payload-ready, but current robust metrics support is exhausted at {metrics_report_gap_best_robust_true_accepts} true accepts already covered by incremental unique support. Improve numeric evidence geometry or split a new report subfamily before another promote."
+            )
+        } else if git_control_support_exhausted {
+            format!(
+                "Git-control gap is payload-ready, but current safe git support is exhausted at {git_control_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve command outcome evidence or split a new git subfamily before another promote."
+            )
+        } else if serving_ops_support_exhausted {
+            format!(
+                "Serving-ops gap is payload-ready, but current safe serving support is exhausted at {serving_ops_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve daemon health evidence or split a new ops subfamily before another promote."
+            )
+        } else {
+            format!(
+                "Build {} + {}; keep local accepts disabled until deterministic verification exists.",
+                family.recommended_payload_builder, family.recommended_verifier
+            )
+        };
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
             source_kind: "route_gap_family".to_owned(),
@@ -11662,28 +11761,52 @@ where
             priority_verified_accept_events: 0,
             conditional_admission_best_safe_true_accepts: 0,
             conditional_admission_current_support_exhausted: false,
-            agent_control_admission_best_robust_true_accepts: 0,
-            agent_control_current_policy_event_support_exhausted: false,
-            agent_control_unique_contribution_constrained: false,
-            git_control_admission_best_safe_true_accepts: 0,
-            git_control_current_support_exhausted: false,
+            agent_control_admission_best_robust_true_accepts: if family.family_key
+                == "agent_control_stop"
+            {
+                agent_control_audit_best_robust_true_accepts
+            } else {
+                0
+            },
+            agent_control_current_policy_event_support_exhausted:
+                agent_control_stop_support_exhausted,
+            agent_control_unique_contribution_constrained: family.family_key
+                == "agent_control_stop"
+                && agent_control_audit_unique_contribution_constrained,
+            git_control_admission_best_safe_true_accepts: if family.family_key
+                == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            {
+                git_control_gap_best_safe_true_accepts
+            } else {
+                0
+            },
+            git_control_current_support_exhausted: git_control_support_exhausted,
             mixed_admission_best_safe_true_accepts: 0,
             mixed_current_support_exhausted: false,
-            metrics_report_admission_best_robust_true_accepts: 0,
-            metrics_report_current_support_exhausted: false,
+            metrics_report_admission_best_robust_true_accepts: if family.family_key
+                == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY
+            {
+                metrics_report_gap_best_robust_true_accepts
+            } else {
+                0
+            },
+            metrics_report_current_support_exhausted: metrics_report_support_exhausted,
             edit_local_accept_best_safe_true_accepts: 0,
             edit_current_support_exhausted: false,
-            serving_ops_local_accept_best_safe_true_accepts: 0,
-            serving_ops_current_support_exhausted: false,
+            serving_ops_local_accept_best_safe_true_accepts: if family.family_key
+                == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
+            {
+                serving_ops_gap_best_safe_true_accepts
+            } else {
+                0
+            },
+            serving_ops_current_support_exhausted: serving_ops_support_exhausted,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
             recommended_payload_builder: family.recommended_payload_builder.clone(),
             recommended_verifier: family.recommended_verifier.clone(),
-            next_action: format!(
-                "Build {} + {}; keep local accepts disabled until deterministic verification exists.",
-                family.recommended_payload_builder, family.recommended_verifier
-            ),
+            next_action,
             priority_score,
             market_claim_allowed: false,
             claim_boundary: family.claim_boundary.clone(),
@@ -31874,6 +31997,18 @@ fn analyze_route_gap_payload_readiness(family_key: &str, text: &str) -> RouteGap
 
     let (has_request_signal, has_context_signal, has_evidence_signal, has_verifier_signal) =
         match family_key {
+            "agent_control_stop" => {
+                let request = has_agent_control_stop_intent(&lower);
+                let clean_control_surface = request
+                    && normalized_token_count(&lower) <= 8
+                    && !contains_file_like_token(text);
+                (
+                    request,
+                    clean_control_surface,
+                    clean_control_surface,
+                    clean_control_surface,
+                )
+            }
             "planning_next_step" => {
                 let request = contains_any(
                     &lower,

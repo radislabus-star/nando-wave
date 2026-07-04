@@ -1,5 +1,104 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Route-Gap Exhaustion Alignment V1
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_REVIEW_EXHAUSTED_GAP_FAMILIES_RERANKED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Route-gap payload readiness now uses the same base profile registry as the
+route-gap catalog by default. This prevents the readiness pass from hiding
+base-registry no-candidate families after later overlay profiles are generated.
+
+The readiness analyzer now treats clean agent_control_stop prompts as
+request-side payload-ready control surfaces, but the CPU operator catalog
+also carries exhaustion signals from existing safe-policy audits into matching
+route-gap families. Exhausted stop, metrics, git, and serving gap rows are
+downranked instead of being rediscovered as fresh work.
+```
+
+Fresh route-gap readiness:
+
+```text
+readiness_report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
+
+sampled_llm_calls:              1000
+existing_route_candidate_events:  334
+no_candidate_events:              666
+payload_ready_events:             105
+top_payload_ready_family:         metrics_report_readout
+
+agent_control_stop:
+  candidate_events:     36
+  payload_ready_events: 31
+  payload_ready_rate:   861 milli
+```
+
+Fresh catalog:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls:    774
+top_catalog_row:             read_inspect (existing_profile_route)
+
+exhausted gap families now downranked:
+  metrics_report_readout route_gap_family: rank 21
+  agent_control_stop     route_gap_family: rank 22
+  serving_ops            route_gap_family: rank 23
+  git_control            route_gap_family: rank 24
+```
+
+Decision:
+
+```text
+Do not repeat threshold-only promotes for agent_control_stop, metrics-report,
+git-control, or serving-ops from the current request geometry. Their safe
+support is already covered by current incremental unique accepts.
+
+The next highest-priority row is now:
+  read_inspect existing_profile_route
+
+Recommended next action:
+  improve read_inspect request-side admission or payload geometry, then attach
+  a deterministic read-only path/excerpt verifier before any local accept.
+```
+
+Claim boundary:
+
+```text
+This is route-selection instrumentation only. It adds no verified CPU accepts.
+CPU Routability 80 remains at 26/1000 unique verified accepts, with
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/route-gap-exhaustion-alignment-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/route-gap-exhaustion-alignment-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 28
+note: narrow packet checks the risky role swap only:
+      agent_control_stop payload-ready does not imply a fresh savings route
+      while existing strict stop support is exhausted.
+```
+
 ## 2026-07-04 - Executor Integration: Catalog Exhaustion Rerank V1
 
 Verdict:
