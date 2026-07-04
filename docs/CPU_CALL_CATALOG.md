@@ -176,6 +176,62 @@ output evidence, admission audit, shadow, feedback, and CPU catalog prove
 false_accepts=0.
 ```
 
+## File Path Evidence Payload Dry-Run V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.report.json
+```
+
+Purpose:
+
+```text
+Turn the broad-route split `file_path_evidence_answer` into real request-side
+payloads without promoting broad answer/project routes.
+```
+
+Measured on the same 5k Codex history window:
+
+```text
+file_path_evidence_candidate_events: 146
+non_exact_candidate_events: 144
+exact_cache_overlap_events: 2
+payload_ready_events: 122
+payload_built_events: 44
+scoreable_payload_events: 44
+profile_registered: false
+shadow_score_ready: false
+expected_unique_cpu_accepts_over_exact_cache: 0
+expected_savings_milli: 0
+false_accepts: 0
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Parent-route provenance:
+
+```text
+answer_or_explain: 79
+project_context_dialogue: 65
+agent_continue_execute: 2
+```
+
+Catalog status:
+
+```text
+CANDIDATE
+```
+
+Decision:
+
+```text
+This row has real traffic and scoreable request-side payloads, but it is not
+CPU savings. It stays CANDIDATE until a disabled-threshold profile, deterministic
+source/path verifier, admission audit, shadow, feedback, and CPU catalog prove
+unique accepts over exact cache with false_accepts=0.
+```
+
 Blocked for now:
 
 ```text

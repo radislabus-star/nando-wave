@@ -382,6 +382,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run answer-evidence payloads only for grounded answer_or_explain rows; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-file-path-evidence-payload-dry-run-v1 [history-jsonl] [registry-config-json] [broad-split-report-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build narrow file_path_evidence_answer payloads from broad-route split discovery; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-profile-v1 [base-registry-json] [answer-evidence-dry-run-trace-jsonl] [answer-evidence-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

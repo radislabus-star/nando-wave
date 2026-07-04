@@ -1,5 +1,110 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: File Path Evidence Payload Dry-Run V1
+
+Verdict:
+
+```text
+FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added CLI route:
+  role-binding-real-traffic-file-path-evidence-payload-dry-run-v1
+```
+
+Why:
+
+```text
+Broad answer/project/continue routes are blocked as whole routes. The previous
+broad-route split discovery found file_path_evidence_answer as the densest
+artifact-backed narrow class, so this stage builds request-side payloads for
+that split only.
+
+This is not a local accept profile and not a market claim.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-payload-dry-run-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.report.json \
+  5000
+```
+
+Measured result:
+
+```text
+sampled_history_rows: 5000
+file_path_evidence_candidate_events: 146
+non_exact_candidate_events: 144
+exact_cache_overlap_events: 2
+payload_ready_events: 122
+payload_built_events: 44
+scoreable_payload_events: 44
+builder_rejected_events: 78
+readiness_rejected_events: 24
+profile_registered: false
+shadow_score_ready: false
+expected_unique_cpu_accepts_over_exact_cache: 0
+expected_savings_milli: 0
+false_accepts: 0
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Parent-route provenance:
+
+```text
+answer_or_explain: 79
+project_context_dialogue: 65
+agent_continue_execute: 2
+```
+
+Decision:
+
+```text
+file_path_evidence_answer now has 44 scoreable request-side payloads from
+non-synthetic real Codex history and broad-route split discovery.
+
+It does not count toward CPU80 savings. It stays CANDIDATE until a disabled
+profile, source_path_or_url_presence verifier, admission audit, shadow, feedback,
+and CPU catalog prove false_accepts=0 and unique value over exact cache.
+```
+
+Next route debt:
+
+```text
+compile disabled-threshold file_path_evidence .nwrb profile
+attach source_path_or_url_presence_verifier_v1 output evidence
+calibrate request-side admission
+run shadow/audit and feed CPU_CALL_CATALOG
+only then consider expected_unique_cpu_accepts_over_exact_cache > 0
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/file-path-evidence-payload-dry-run-v1.md
+verdict: PASS
+```
+
 ## 2026-07-04 - Executor Integration: Broad Route Split Discovery V1
 
 Verdict:

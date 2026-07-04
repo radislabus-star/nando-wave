@@ -92,6 +92,10 @@ const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.report.json";
+const DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-seed0.nwrb";
 const DEFAULT_ANSWER_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -489,6 +493,10 @@ const REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY: &str = "answer_or_explain";
 const REAL_TRAFFIC_ANSWER_EVIDENCE_PROFILE_ID: &str = "route_gap_answer_evidence_profile_v1";
 const REAL_TRAFFIC_ANSWER_EVIDENCE_WRONG_TOKEN: &str = "__ANSWER_EVIDENCE_WRONG__";
 const REAL_TRAFFIC_ANSWER_EVIDENCE_DISABLED_THRESHOLD: i32 = i32::MAX;
+const REAL_TRAFFIC_FILE_PATH_EVIDENCE_SPLIT_KEY: &str = "file_path_evidence_answer";
+const REAL_TRAFFIC_FILE_PATH_EVIDENCE_ROUTE_KEY: &str = "file_path_evidence_answer";
+const REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID: &str =
+    "split_file_path_evidence_answer_profile_v1";
 const REAL_TRAFFIC_PLANNING_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_PLANNING_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_PLANNING_OPERATOR_PAIR_BASE: u32 = 37 << 12;
@@ -6032,6 +6040,312 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "answer-evidence payload dry-run is review-only; build profile+verifier before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_file_path_evidence_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let broad_split_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_BROAD_ROUTE_SPLIT_DISCOVERY_REPORT));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(5000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID);
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let broad_report =
+        read_json_file::<RoleBindingBroadRouteSplitDiscoveryReport>(&broad_split_report_path)?;
+    let file_path_history_indexes = broad_report
+        .rows
+        .iter()
+        .filter(|row| row.split_key == REAL_TRAFFIC_FILE_PATH_EVIDENCE_SPLIT_KEY)
+        .filter_map(|row| {
+            route_gap_payload_readiness_history_index(&row.event_id).map(|index| (index, row))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut parent_route_counts = BTreeMap::<String, usize>::new();
+    let mut file_path_candidate_events = 0usize;
+    let mut non_exact_candidate_events = 0usize;
+    let mut exact_cache_overlap_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_file_path_evidence_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "not file_path_evidence_answer broad-split candidate".to_owned();
+
+        if let Some(split_row) = file_path_history_indexes.get(&index) {
+            file_path_candidate_events += 1;
+            exact_cache_overlap_events += usize::from(split_row.exact_cache_hit);
+            non_exact_candidate_events += usize::from(!split_row.exact_cache_hit);
+            *parent_route_counts
+                .entry(split_row.parent_route_key.clone())
+                .or_insert(0) += 1;
+            if split_row.payload_ready {
+                payload_ready_events += 1;
+                let built =
+                    build_answer_evidence_dry_run_request(&event_id, &fingerprint, &row.text);
+                match built {
+                    Some(mut request) => {
+                        request.route_key =
+                            Some(REAL_TRAFFIC_FILE_PATH_EVIDENCE_ROUTE_KEY.to_owned());
+                        request.profile_id =
+                            Some(REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID.to_owned());
+                        request.expect_local_operator = Some(false);
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable && profile_registered {
+                            "scoreable_payload_built_profile_registered"
+                        } else if scoreable {
+                            "scoreable_payload_built_profile_missing"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingFilePathEvidencePayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            parent_route_key: split_row.parent_route_key.clone(),
+                            split_key: split_row.split_key.clone(),
+                            route_key: REAL_TRAFFIC_FILE_PATH_EVIDENCE_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID.to_owned(),
+                            exact_cache_hit: split_row.exact_cache_hit,
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                            feature_flags: split_row.feature_flags.clone(),
+                        });
+                        notes = format!(
+                            "request-side file-path-evidence payload built from broad-split row; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingFilePathEvidencePayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            parent_route_key: split_row.parent_route_key.clone(),
+                            split_key: split_row.split_key.clone(),
+                            route_key: REAL_TRAFFIC_FILE_PATH_EVIDENCE_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_FILE_PATH_EVIDENCE_PROFILE_ID.to_owned(),
+                            exact_cache_hit: split_row.exact_cache_hit,
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                            feature_flags: split_row.feature_flags.clone(),
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "broad_split_payload_not_ready".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = builder_status;
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_file_path_evidence_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side file_path_evidence_answer payload dry-run from broad-route split report and local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingFilePathEvidencePayloadDryRunReport {
+        schema_version: "nando_role_binding_file_path_evidence_payload_dry_run_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        broad_split_report_path: broad_split_report_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        sampled_history_rows: history_rows.len().saturating_sub(skip),
+        trace_rows_written: trace_rows.len(),
+        file_path_evidence_candidate_events: file_path_candidate_events,
+        non_exact_candidate_events,
+        exact_cache_overlap_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        parent_route_counts: parent_route_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        expected_unique_cpu_accepts_over_exact_cache: 0,
+        expected_savings_milli: 0,
+        false_accepts: 0,
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side narrow split dry-run only. It uses broad-route split discovery to select file_path_evidence_answer rows, reads prompt text at analysis time, writes fingerprints/features/counts but no raw prompt text, enables no local accepts, uses no response/target/proof labels, and cannot prove CPU savings.".to_owned(),
+        next_engineering_debt: "Compile a disabled-threshold file_path_evidence .nwrb profile only for scoreable rows, attach source_path_or_url_presence_verifier_v1 output evidence, calibrate request-side admission, then count unique CPU accepts only after shadow/audit proves false_accepts=0 over exact cache.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-file-path-evidence-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!(
+        "  broad_split_report: {}",
+        broad_split_report_path.display()
+    );
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  file_path_evidence_candidate_events: {}",
+        report.file_path_evidence_candidate_events
+    );
+    println!(
+        "  non_exact_candidate_events: {}",
+        report.non_exact_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  profile_registered: {}", report.profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "file-path evidence payload dry-run is review-only; build profile+verifier before claims"
             .to_owned(),
     )
 }
@@ -30267,6 +30581,69 @@ struct RoleBindingAnswerEvidencePayloadDryRunRow {
     slots: usize,
     positive_impulses: usize,
     negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingFilePathEvidencePayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    broad_split_report_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    sampled_history_rows: usize,
+    trace_rows_written: usize,
+    file_path_evidence_candidate_events: usize,
+    non_exact_candidate_events: usize,
+    exact_cache_overlap_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    parent_route_counts: Vec<RoleBindingNamedCount>,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    expected_unique_cpu_accepts_over_exact_cache: usize,
+    expected_savings_milli: usize,
+    false_accepts: usize,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingFilePathEvidencePayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingFilePathEvidencePayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    parent_route_key: String,
+    split_key: String,
+    route_key: String,
+    profile_id: String,
+    exact_cache_hit: bool,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    profile_registered: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+    feature_flags: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
