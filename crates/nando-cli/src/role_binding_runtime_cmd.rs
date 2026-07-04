@@ -403,6 +403,7 @@ const REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD: i32 = i32::MAX;
 const REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN: usize = 114;
 const PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114: &str =
     "first_slot_threshold_active_fringe_min_114";
+const PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE: &str = "energy_nonnegative";
 const REAL_TRAFFIC_GIT_CONTROL_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_GIT_CONTROL_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_GIT_CONTROL_OPERATOR_PAIR_BASE: u32 = 40 << 12;
@@ -14374,7 +14375,11 @@ where
     )?;
     let request_side_policy_name = policy.request_side_policy_name.clone();
     let threshold = policy.policy.threshold;
-    let acceptance_policy = "energy_threshold_only".to_owned();
+    let acceptance_policy = if threshold == 0 {
+        PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE.to_owned()
+    } else {
+        "energy_threshold_only".to_owned()
+    };
 
     let conditional_profile_ids = trace_rows
         .iter()
@@ -14396,7 +14401,12 @@ where
     let mut promoted_profile_ids = Vec::new();
     for profile in &mut promoted_config.profiles {
         if conditional_profile_ids.contains(&profile.profile_id) {
-            profile.threshold = threshold;
+            profile.threshold = if acceptance_policy == PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE
+            {
+                1
+            } else {
+                threshold
+            };
             profile.acceptance_policy = acceptance_policy.clone();
             promoted_profile_ids.push(profile.profile_id.clone());
         }
@@ -26635,6 +26645,7 @@ fn profile_acceptance_policy_is_supported(policy: &str) -> bool {
         policy,
         "strict_ordered_energy_threshold"
             | "energy_threshold_only"
+            | PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE
             | "first_slot_threshold"
             | PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114
     )
@@ -26649,6 +26660,7 @@ fn profile_accepts_score(
 ) -> bool {
     match acceptance_policy {
         "energy_threshold_only" => energy_margin >= threshold,
+        PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE => energy_margin >= 0,
         "first_slot_threshold" => first_slot_margin >= threshold,
         _ => strict_ordered_pass && energy_margin >= threshold,
     }
@@ -27362,12 +27374,21 @@ fn conditional_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool
         ],
     );
     let has_json_terms = contains_any(&lower, &["json", ".json", "jsonl", ".jsonl"]);
+    let has_digit = text.chars().any(|ch| ch.is_ascii_digit());
+    let has_conditional_terms = contains_any(
+        &lower,
+        &["если", "if ", "condition", "conditional", "branch", "услов"],
+    );
     if let Some(threshold) = policy_name.strip_prefix("conditional_no_goal_no_json_len_ge_") {
         let len_threshold = threshold.parse::<usize>().ok()?;
         return Some(!has_goal_terms && !has_json_terms && text.len() >= len_threshold);
     }
     let accepts = match policy_name {
         "conditional_gate_terms_prompt_len_ge_300" => has_gate_terms && text.len() >= 300,
+        "conditional_gate_digit_terms" => has_gate_terms && has_digit,
+        "conditional_gate_digit_conditional_terms" => {
+            has_gate_terms && has_digit && has_conditional_terms
+        }
         _ => return None,
     };
     Some(accepts)
@@ -27491,47 +27512,50 @@ fn select_conditional_safe_policy_v2_from_evidence(
         let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
             continue;
         };
-        let lower = prompt_text.to_lowercase();
-        let has_goal_terms = contains_any(
-            &lower,
-            &[
-                "goal",
-                "objective",
-                "цель",
-                "подцель",
-                "stop",
-                "стоп",
-                "останов",
-            ],
-        );
-        let has_json_terms = contains_any(&lower, &["json", ".json", "jsonl", ".jsonl"]);
-        if has_goal_terms || has_json_terms {
-            continue;
-        }
         let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
             continue;
         };
-        rows.push((
-            prompt_text.len(),
-            score.energy_margin,
-            row.verified_safe_accept,
-        ));
+        rows.push((*prompt_text, score.energy_margin, row.verified_safe_accept));
     }
     if rows.is_empty() {
         return Err(
-            "conditional safe policy v2 selection found no no-goal/no-json scoreable rows"
-                .to_owned(),
+            "conditional safe policy v2 selection found no scoreable conditional rows".to_owned(),
         );
     }
 
-    let mut len_thresholds = rows.iter().map(|(len, _, _)| *len).collect::<Vec<_>>();
+    let mut best: Option<RoleBindingConditionalPromotionPolicySelection> = None;
+
+    let mut request_side_policies = vec![
+        "conditional_gate_digit_conditional_terms".to_owned(),
+        "conditional_gate_digit_terms".to_owned(),
+    ];
+    let no_goal_no_json_rows = rows
+        .iter()
+        .filter(|(prompt_text, _, _)| {
+            conditional_safe_policy_accepts("conditional_no_goal_no_json_len_ge_0", prompt_text)
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    let mut len_thresholds = no_goal_no_json_rows
+        .iter()
+        .map(|(prompt_text, _, _)| prompt_text.len())
+        .collect::<Vec<_>>();
     len_thresholds.sort_unstable();
     len_thresholds.dedup();
-    let mut best: Option<RoleBindingConditionalPromotionPolicySelection> = None;
     for len_threshold in len_thresholds {
+        request_side_policies.push(format!(
+            "conditional_no_goal_no_json_len_ge_{}",
+            len_threshold
+        ));
+    }
+
+    for request_side_policy_name in request_side_policies {
         let scored_rows = rows
             .iter()
-            .filter(|(len, _, _)| *len >= len_threshold)
+            .filter(|(prompt_text, _, _)| {
+                conditional_safe_policy_accepts(&request_side_policy_name, prompt_text)
+                    .unwrap_or(false)
+            })
             .map(|(_, energy_margin, label)| (*energy_margin, *label))
             .collect::<Vec<_>>();
         if scored_rows.is_empty() {
@@ -27540,16 +27564,14 @@ fn select_conditional_safe_policy_v2_from_evidence(
         let mut energy_thresholds = scored_rows
             .iter()
             .map(|(energy_margin, _)| *energy_margin)
+            .filter(|energy_margin| *energy_margin >= 0)
             .collect::<Vec<_>>();
         energy_thresholds.sort_unstable();
         energy_thresholds.dedup();
         for energy_threshold in energy_thresholds {
             let policy = evaluate_mixed_energy_promotion_threshold(
                 "conditional_no_goal_no_json_len_energy_threshold",
-                &format!(
-                    "request_side_no_goal_no_json_len_ge_{}_plus_energy_threshold",
-                    len_threshold
-                ),
+                &format!("{request_side_policy_name}_plus_energy_threshold"),
                 energy_threshold,
                 &scored_rows,
             );
@@ -27566,33 +27588,19 @@ fn select_conditional_safe_policy_v2_from_evidence(
                         && policy.accepts < current.policy.accepts)
                     || (policy.true_accepts == current.policy.true_accepts
                         && policy.accepts == current.policy.accepts
-                        && len_threshold
-                            < conditional_v2_policy_len_threshold(
-                                &current.request_side_policy_name,
-                            )
-                            .unwrap_or(usize::MAX))
+                        && policy.threshold > current.policy.threshold)
             });
             if replace {
                 best = Some(RoleBindingConditionalPromotionPolicySelection {
-                    request_side_policy_name: format!(
-                        "conditional_no_goal_no_json_len_ge_{}",
-                        len_threshold
-                    ),
+                    request_side_policy_name: request_side_policy_name.clone(),
                     policy,
                 });
             }
         }
     }
     best.ok_or_else(|| {
-        "conditional safe policy v2 found no no-goal/no-json length and energy threshold with true support >= 3, false=0, and unverified=0".to_owned()
+        "conditional safe policy v2 found no request-side policy and nonnegative energy threshold with true support >= 3, false=0, and unverified=0".to_owned()
     })
-}
-
-fn conditional_v2_policy_len_threshold(policy_name: &str) -> Option<usize> {
-    policy_name
-        .strip_prefix("conditional_no_goal_no_json_len_ge_")?
-        .parse()
-        .ok()
 }
 
 fn select_mixed_promotion_policy_from_evidence(

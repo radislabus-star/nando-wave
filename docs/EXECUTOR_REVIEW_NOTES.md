@@ -1,5 +1,124 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Conditional Safe-Policy Promote V2
+
+Verdict:
+
+```text
+CONDITIONAL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Completed existing command path:
+  role-binding-real-traffic-conditional-safe-policy-promote-v2
+```
+
+Fresh promotion artifact:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.report.json
+
+promoted_registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-conditional-safe-policy-v2.json
+
+promoted_trace:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.trace.jsonl
+
+request_side_policy_name:
+  conditional_gate_digit_terms
+
+selected_acceptance_policy:          energy_nonnegative
+selected_policy_threshold:           0
+registry_runtime_threshold:          1
+request_side_policy_accept_rows:     53
+runtime_policy_accept_rows:           3
+runtime_policy_verified_true_rows:    3
+runtime_policy_verified_false_rows:   0
+runtime_policy_unverified_rows:       0
+provider_cost_events_written:        53
+market_claim_allowed:             false
+```
+
+Fresh conditional v2 shadow:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.shadow-report.json
+
+total_llm_calls:                        1000
+exact_cache_hits:                         53
+nando_shadow_accepts:                      3
+verified_safe_accepts:                     3
+false_accepts:                             0
+unverified_shadow_accepts:                 0
+incremental_savings_over_exact_cache:      3
+p99_shadow_score_latency_ns:          255062
+synthetic_trace_used:                  false
+```
+
+Fresh conditional v2 verification audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.verification-hook-audit.report.json
+
+operator_candidate_calls:                 53
+scoreable_candidate_calls:                53
+verification_hook_ready_events:           40
+verified_cpu_accept_eligible_events:       3
+shadow_false_accepts:                      0
+market_claim_allowed:                   true
+```
+
+Fresh default feedback after conditional v2 audit wiring:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+route_sum_verified_cpu_eligible_hits:      28
+unique_verified_cpu_accepts:               22 / 1000
+verified_cpu_accept_unique_routability_milli: 22
+unique_verified_gap_to_80_calls:          778
+incremental_cpu_accept_unique_request_fingerprints: 22
+
+conditional route row:
+  stage: verified_cpu_accept_eligible
+  candidate_events:                        166
+  scoreable_payload_events:                 53
+  verification_hook_ready_events:           40
+  verified_cpu_accept_eligible_events:       3
+  false_accepts:                             0
+```
+
+Claim boundary:
+
+```text
+This is a narrow route-local conditional v2 promoted trace PASS: 3 verified
+safe accepts, 0 false accepts, and 0 unverified accepts. It completes the
+previously unfinished conditional-safe-policy-promote-v2 integration.
+
+This is not CPU Routability 80 and does not improve the unique global feedback
+count: unique verified CPU accepts remain 22/1000. The route-sum count is 28,
+but route-sum can contain overlapping request fingerprints and must not be used
+as the market claim.
+
+The policy is intentionally low-margin: serving admission is request-side
+gate/digit terms plus energy_nonnegative. The .nwrb registry still keeps a
+positive runtime threshold field for package loading, but the acceptance policy
+uses the explicit nonnegative energy rule. Treat this as a small safe pocket,
+not as a broad conditional operator proof.
+```
+
 ## 2026-07-04 - Executor Integration: Git-Control Safe-Policy Promote V2
 
 Verdict:
