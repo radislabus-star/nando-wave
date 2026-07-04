@@ -292,6 +292,12 @@ pub(crate) fn print_help() {
         "            Build scoreable dry-run answer-evidence payloads only for grounded answer_or_explain rows; verified accepts remain disabled"
     );
     println!(
+        "  role-binding-real-traffic-answer-evidence-profile-v1 [base-registry-json] [answer-evidence-dry-run-trace-jsonl] [answer-evidence-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile answer-evidence dry-run payloads into a disabled-threshold .nwrb profile; local accepts remain disabled"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

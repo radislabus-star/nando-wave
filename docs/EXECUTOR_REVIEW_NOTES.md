@@ -1,5 +1,162 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Answer-Evidence Disabled Profile V1
+
+Verdict:
+
+```text
+ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+ANSWER_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-answer-evidence-profile-v1
+
+The answer_or_explain grounded-evidence subset now has a disabled-threshold
+.nwrb profile and registry overlay. The profile is generated from request-side
+dry-run payloads only. It writes no raw prompt text, uses no response text, no
+target labels, and no proof labels. The profile threshold is i32::MAX, so it
+can produce score/margin telemetry but cannot locally accept.
+```
+
+Payload dry-run:
+
+```text
+trace:
+  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl
+
+report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.report.json
+
+answer_evidence_candidate_events: 216
+payload_ready_events: 17
+payload_built_events: 9
+scoreable_payload_events: 9
+profile_registered: false
+shadow_score_ready: false
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Disabled profile:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/answer-evidence-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-answer-evidence-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-profile-v1.report.json
+
+profile_id: route_gap_answer_evidence_profile_v1
+package_bytes: 116
+edge_count: 6
+runtime_bytes_estimate: 32944
+threshold: 2147483647
+trace_rows_read: 1000
+scoreable_payload_events: 9
+package_training_requests: 9
+positive_updates: 648
+negative_updates: 648
+changed_edges: 130
+positive_margin_rows: 9
+strict_ordered_pass_rows: 9
+unexpected_local_accepts_under_disabled_threshold: 0
+median_energy_margin: 1123328
+p10_energy_margin: 1106944
+min_energy_margin: 1106944
+median_min_slot_margin: 361472
+p10_min_slot_margin: 361472
+min_slot_margin: 361472
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed: false
+```
+
+Shadow:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-profile-v1.shadow-report.json
+
+total_requests: 1000
+total_llm_calls: 1000
+exact_cache_hits: 53
+nando_shadow_accepts: 0
+verified_safe_accepts: 0
+false_accepts: 0
+incremental_reduction_vs_exact_cache_milli: 0
+p99_shadow_score_latency_ns: 233725
+```
+
+Catalog:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+answer_or_explain:
+  priority_rank: 1
+  candidate_events: 216
+  payload_ready_events: 17
+  scoreable_payload_events: 9
+  recommended_payload_builder: answer_evidence_payload_builder_v1
+  recommended_verifier: grounded_answer_evidence_verifier_v1
+  next_action: run shadow/audit next, but keep local accepts disabled until
+               grounded_answer_evidence_verifier_v1 proves false_accepts=0.
+```
+
+Decision:
+
+```text
+This closes the "profile missing" gap for the narrow grounded-evidence subset
+of answer_or_explain. It does not create local accepts, verified CPU accepts,
+or market savings. The next engineering step is grounded_answer_evidence_verifier_v1
+over the disabled-profile shadow trace.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created. CPU Routability 80 remains open:
+26/1000 unique verified accepts, gap 774.
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/answer-evidence-disabled-profile-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-disabled-profile-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 31
+note: narrow role-swap check only: disabled answer-evidence profile ready is not
+      a verifier, local accept, verified CPU saving, or market claim.
+```
+
 ## 2026-07-04 - Executor Integration: Answer-Evidence Payload Dry-Run V1
 
 Verdict:

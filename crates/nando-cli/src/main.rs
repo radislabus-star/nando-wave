@@ -94,6 +94,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_agent_control_profile_v1,
     run_role_binding_real_traffic_agent_control_safe_policy_promote_v1,
     run_role_binding_real_traffic_answer_evidence_payload_dry_run_v1,
+    run_role_binding_real_traffic_answer_evidence_profile_v1,
     run_role_binding_real_traffic_codex_history_ingest_v1,
     run_role_binding_real_traffic_codex_history_route_candidates_v1,
     run_role_binding_real_traffic_conditional_admission_audit_v1,
@@ -680,6 +681,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-answer-evidence-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_answer_evidence_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-answer-evidence-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",
+        ),
+        Some("role-binding-real-traffic-answer-evidence-profile-v1") => exit_for_result(
+            run_role_binding_real_traffic_answer_evidence_profile_v1(args),
+            "try: nando-cli role-binding-real-traffic-answer-evidence-profile-v1 [base-registry-json] [answer-evidence-dry-run-trace-jsonl] [answer-evidence-package-nwrb] [overlay-registry-json] [profile-report-json]",
         ),
         Some("role-binding-real-traffic-planning-next-step-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_planning_next_step_payload_dry_run_v1(args),
