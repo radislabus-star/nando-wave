@@ -1,5 +1,87 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Metrics Report Admission Unverified Guard
+
+Verdict:
+
+```text
+METRICS_REPORT_ADMISSION_UNVERIFIED_GUARD_RECORDED
+NO_NEW_CPU_ACCEPTS_PROMOTED
+```
+
+Why:
+
+```text
+The metrics-report request-side split briefly looked promising on labeled rows:
+p99_terms_not_concise had 12 verifier-true rows and 0 verifier-false rows.
+Promotion correctly failed because the full trace also had unverified rows with
+the same request-side shape. Unknown verification state must be unsafe for
+BUSINESS_VALUE_GATE.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/metrics-report-admission-unverified-guard-v1.md
+verdict: PASS
+complexity_score: 32
+trace_path: /tmp/nanda-structural-gate/metrics-report-admission-unverified-guard-v1.trace.json
+```
+
+What changed:
+
+```text
+metrics_report_admission_calibration now includes unverified profile rows in
+policy selection and counts them as unsafe accepts, while reporting
+unverified_rows separately.
+
+cpu_operator_catalog current5k now prefers current-window companion artifacts
+when they exist:
+  git-control-admission-audit-v1-current5k.report.json
+  metrics-report-admission-calibration-v1-5k.report.json
+```
+
+Measured result:
+
+```text
+metrics_report hook_ready_rows: 63
+metrics_report label_true_rows: 31
+metrics_report label_false_rows: 20
+metrics_report unverified_rows: 12
+metrics_report robust_safe_policy_found: false
+metrics_report best_robust_true_accepts: 0
+
+p99_terms_not_concise:
+  accepts: 14
+  true_accepts: 12
+  unsafe_false_or_unverified_accepts: 2
+```
+
+CPU80 counter after refresh:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+current_verified_cpu_accepts: 106
+current_incremental_unique_cpu_accepts_over_exact_cache: 104
+incremental_unique_gap_to_80_calls: 3896
+```
+
+Decision:
+
+```text
+Do not promote the metrics p99 split. It is a useful discovery, not a safe
+profile. Next work is either attach missing output evidence for the unverified
+metrics rows, or move to the next BUSINESS_VALUE_GATE route with real expected
+unique accepts and a deterministic verifier.
+```
+
 ## 2026-07-04 - Executor Integration: Business Value Gate V2 / CPU Call Catalog Discipline
 
 Verdict:

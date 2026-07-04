@@ -171,6 +171,45 @@ catalog watch_profile_rows: 16
 catalog rejected_profile_rows: 5
 ```
 
+Latest guardrail refresh:
+
+```text
+metrics_report_admission_calibration now treats unverified profile rows as
+unsafe for request-side policy selection.
+
+current5k companion reports used by catalog:
+  git-control-admission-audit-v1-current5k.report.json
+  metrics-report-admission-calibration-v1-5k.report.json
+```
+
+Metrics-report p99 split finding:
+
+```text
+initial labeled-only read:
+  p99_terms_not_concise: 12 true / 0 false
+
+full trace with unverified rows included:
+  hook_ready_rows: 63
+  label_true_rows: 31
+  label_false_rows: 20
+  unverified_rows: 12
+  p99_terms_not_concise: 14 accepts, 12 true, 2 unsafe false-or-unverified
+  robust_safe_policy_found: false
+  best_robust_true_accepts: 0
+
+decision:
+  WATCH / NO_SAFE_POLICY
+```
+
+Interpretation:
+
+```text
+The p99 metrics split is a useful action-center discovery, but not a safe CPU
+accept path. Unknown output evidence is treated as unsafe. Do not promote this
+route until the missing output evidence is attached or a narrower split shows
+false_accepts=0 and unverified_accepts=0.
+```
+
 PROVEN rows on current5k:
 
 | rank | call class | candidates | scoreable | hooks | verified eligible | incremental unique | expected savings milli | status note |
