@@ -514,6 +514,12 @@ pub(crate) fn print_help() {
         "            Search request-side agent-control admission policies against evidence labels; no local accepts are enabled"
     );
     println!(
+        "  role-binding-real-traffic-agent-control-admission-audit-v1 [admission-report-json] [feedback-report-json] [audit-report-json]"
+    );
+    println!(
+        "            Join agent-control admission support with unique feedback attribution to detect exhausted stop/control policy support"
+    );
+    println!(
         "  role-binding-real-traffic-agent-control-safe-policy-promote-v1 [agent-control-registry-json] [evidence-trace-jsonl] [admission-report-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
     );
     println!(

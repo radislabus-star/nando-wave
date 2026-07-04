@@ -1,5 +1,101 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent-Control Admission Audit V1
+
+Verdict:
+
+```text
+AGENT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_CURRENT_POLICY_SUPPORT_EXHAUSTED
+CPU_OPERATOR_CATALOG_V1_REVIEW_AGENT_CONTROL_SUPPORT_EXHAUSTED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-agent-control-admission-audit-v1
+
+The audit joins the existing agent-control admission calibration summary with
+feedback-loop unique attribution. It writes no raw prompt/response text, enables
+no local accepts, and cannot count as savings.
+```
+
+Fresh agent-control admission audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.report.json
+
+candidate_events:                         143
+scoreable_payload_events:                  11
+verification_hook_ready_events:            11
+label_true_rows:                           12
+label_false_rows:                         112
+best_robust_true_accepts:                  11
+robust_remaining_true_rows:                 1
+verified_cpu_accept_eligible_events:       11
+unique_verified_request_fingerprints:       6
+incremental_verified_request_fingerprints:  5
+exact_cache_overlap:                        1
+duplicate_verified_route_hits:              5
+
+current_policy_event_support_exhausted: true
+unique_contribution_constrained:         true
+```
+
+Decision:
+
+```text
+Do not keep ranking agent_control first from the current stop/control policy.
+The robust request-side policy has already captured its current event support,
+and unique contribution is constrained by duplicates and exact-cache overlap.
+
+Next agent-control work must split broader agent-state/tool-state subfamilies
+or add stronger request-side evidence before another promote.
+```
+
+Fresh catalog after agent-control exhaustion awareness:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+top_catalog_row: git_control
+
+agent_control row:
+  current_policy_event_support_exhausted: true
+  unique_contribution_constrained: true
+  best_robust_true_accepts: 11
+```
+
+Claim boundary:
+
+```text
+This is route-selection instrumentation only. It adds no verified CPU accepts.
+CPU Routability 80 remains at 22/1000 unique verified accepts, with
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/agent-control-admission-audit-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.nanda.json
+
+verdict: PASS
+complexity_score: 36
+note: metric-value packet form used; evidence labels were made field-specific
+      after NANDA rejected generic attribution labels as incompatible fillers
+```
+
 ## 2026-07-04 - Executor Integration: Conditional Admission Audit V1
 
 Verdict:

@@ -216,6 +216,8 @@ const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json";
+const DEFAULT_AGENT_CONTROL_ADMISSION_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.report.json";
 const DEFAULT_AGENT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.trace.jsonl";
 const DEFAULT_AGENT_CONTROL_SAFE_POLICY_REPORT: &str =
@@ -11117,6 +11119,17 @@ where
     } else {
         None
     };
+    let agent_control_admission_audit_report_path =
+        PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_AUDIT_REPORT);
+    let agent_control_admission_audit = if agent_control_admission_audit_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingAgentControlAdmissionAuditReport>(
+                &agent_control_admission_audit_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
     let route_gap_readiness_by_family = route_gap_payload_readiness
         .as_ref()
         .map(|report| {
@@ -11158,10 +11171,32 @@ where
         if conditional_admission_current_support_exhausted {
             priority_score = priority_score.saturating_sub(80_000);
         }
+        let agent_control_admission_best_robust_true_accepts = agent_control_admission_audit
+            .as_ref()
+            .filter(|_| route.route_key.contains("agent_control"))
+            .map(|audit| audit.best_robust_true_accepts)
+            .unwrap_or_default();
+        let agent_control_current_policy_event_support_exhausted = agent_control_admission_audit
+            .as_ref()
+            .filter(|_| route.route_key.contains("agent_control"))
+            .map(|audit| audit.current_policy_event_support_exhausted)
+            .unwrap_or(false);
+        let agent_control_unique_contribution_constrained = agent_control_admission_audit
+            .as_ref()
+            .filter(|_| route.route_key.contains("agent_control"))
+            .map(|audit| audit.unique_contribution_constrained)
+            .unwrap_or(false);
+        if agent_control_current_policy_event_support_exhausted {
+            priority_score = priority_score.saturating_sub(80_000);
+        }
         let mut next_action = route.next_action.clone();
         if conditional_admission_current_support_exhausted {
             next_action = format!(
                 "Conditional admission audit found only {conditional_admission_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve conditional payload geometry or split a stronger subfamily before another promote."
+            );
+        } else if agent_control_current_policy_event_support_exhausted {
+            next_action = format!(
+                "Agent-control audit found current robust stop/control policy event support exhausted at {agent_control_admission_best_robust_true_accepts} true accepts; unique contribution is constrained by duplicates/exact-cache overlap. Split broader agent-state/tool-state subfamilies before another promote."
             );
         }
         rows.push(RoleBindingCpuOperatorCatalogRow {
@@ -11190,6 +11225,9 @@ where
             priority_verified_accept_events,
             conditional_admission_best_safe_true_accepts,
             conditional_admission_current_support_exhausted,
+            agent_control_admission_best_robust_true_accepts,
+            agent_control_current_policy_event_support_exhausted,
+            agent_control_unique_contribution_constrained,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
@@ -11235,6 +11273,9 @@ where
             priority_verified_accept_events: 0,
             conditional_admission_best_safe_true_accepts: 0,
             conditional_admission_current_support_exhausted: false,
+            agent_control_admission_best_robust_true_accepts: 0,
+            agent_control_current_policy_event_support_exhausted: false,
+            agent_control_unique_contribution_constrained: false,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -11285,6 +11326,9 @@ where
         conditional_admission_audit_report_path: conditional_admission_audit
             .as_ref()
             .map(|_| conditional_admission_audit_report_path.display().to_string()),
+        agent_control_admission_audit_report_path: agent_control_admission_audit
+            .as_ref()
+            .map(|_| agent_control_admission_audit_report_path.display().to_string()),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
@@ -11332,6 +11376,12 @@ where
         println!(
             "  conditional_admission_audit_report: {}",
             conditional_admission_audit_report_path.display()
+        );
+    }
+    if agent_control_admission_audit.is_some() {
+        println!(
+            "  agent_control_admission_audit_report: {}",
+            agent_control_admission_audit_report_path.display()
         );
     }
     println!("  report: {}", report_path.display());
@@ -11948,6 +11998,150 @@ where
         report.best_robust_true_accepts
     );
     Err("agent-control admission calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_agent_control_admission_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT));
+    let feedback_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_AUDIT_REPORT));
+
+    let calibration = read_json_file::<RoleBindingAgentControlAdmissionCalibrationReport>(
+        &calibration_report_path,
+    )?;
+    let feedback = read_json_file::<RoleBindingFeedbackLoopReport>(&feedback_report_path)?;
+    let route = feedback
+        .routes
+        .iter()
+        .find(|route| route.route_key.contains("agent_control"));
+    let (
+        candidate_events,
+        payload_ready_events,
+        scoreable_payload_events,
+        verification_hook_ready_events,
+        verified_cpu_accept_eligible_events,
+        unique_verified_request_fingerprints,
+        incremental_verified_request_fingerprints,
+        exact_cache_overlap_verified_request_fingerprints,
+        duplicate_verified_route_hits,
+        cross_route_overlap_verified_request_fingerprints,
+    ) = route
+        .map(|route| {
+            (
+                route.candidate_events,
+                route.payload_ready_events,
+                route.scoreable_payload_events,
+                route.verification_hook_ready_events,
+                route.verified_cpu_accept_eligible_events,
+                route.unique_accepts.unique_verified_request_fingerprints,
+                route
+                    .unique_accepts
+                    .incremental_verified_request_fingerprints,
+                route
+                    .unique_accepts
+                    .exact_cache_overlap_verified_request_fingerprints,
+                route.unique_accepts.duplicate_verified_route_hits,
+                route
+                    .unique_accepts
+                    .cross_route_overlap_verified_request_fingerprints,
+            )
+        })
+        .unwrap_or_default();
+    let robust_remaining_true_rows = calibration
+        .label_true_rows
+        .saturating_sub(calibration.best_robust_true_accepts);
+    let current_policy_event_support_exhausted = calibration.robust_safe_policy_found
+        && calibration.best_robust_true_accepts > 0
+        && calibration.best_robust_true_accepts <= verified_cpu_accept_eligible_events;
+    let unique_contribution_constrained = verified_cpu_accept_eligible_events
+        > incremental_verified_request_fingerprints
+        && (duplicate_verified_route_hits > 0
+            || exact_cache_overlap_verified_request_fingerprints > 0);
+    let report = RoleBindingAgentControlAdmissionAuditReport {
+        schema_version: "nando_role_binding_agent_control_admission_audit_v1".to_owned(),
+        verdict: if current_policy_event_support_exhausted {
+            "AGENT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_CURRENT_POLICY_SUPPORT_EXHAUSTED"
+        } else if calibration.robust_safe_policy_found {
+            "AGENT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_ROBUST_POLICY_SUPPORT_AVAILABLE"
+        } else {
+            "AGENT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_NO_ROBUST_POLICY"
+        }
+        .to_owned(),
+        calibration_report_path: calibration_report_path.display().to_string(),
+        feedback_report_path: feedback_report_path.display().to_string(),
+        total_llm_calls: feedback.total_llm_calls,
+        route_key: route
+            .map(|route| route.route_key.clone())
+            .unwrap_or_else(|| REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY.to_owned()),
+        candidate_events,
+        payload_ready_events,
+        scoreable_payload_events,
+        verification_hook_ready_events,
+        label_true_rows: calibration.label_true_rows,
+        label_false_rows: calibration.label_false_rows,
+        robust_safe_policy_found: calibration.robust_safe_policy_found,
+        best_robust_true_accepts: calibration.best_robust_true_accepts,
+        robust_remaining_true_rows,
+        current_policy_event_support_exhausted,
+        verified_cpu_accept_eligible_events,
+        unique_verified_request_fingerprints,
+        incremental_verified_request_fingerprints,
+        exact_cache_overlap_verified_request_fingerprints,
+        duplicate_verified_route_hits,
+        cross_route_overlap_verified_request_fingerprints,
+        unique_contribution_constrained,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Agent-control admission audit only. It joins the request-side calibration summary to feedback-loop unique attribution, writes no raw prompt/response text, enables no local accepts, and cannot be used as a market savings claim. Its purpose is to prevent the CPU operator catalog from repeatedly prioritizing an already exhausted stop/control policy.".to_owned(),
+        next_engineering_debt: if current_policy_event_support_exhausted {
+            "Do not promote another broad agent-control policy from the current stop/control geometry. Split broader agent-state/tool-state subfamilies or add stronger request-side evidence before another promote.".to_owned()
+        } else {
+            "If robust support remains, promote only through a separate shadow trace with provider cost, deterministic verification, and false_accepts=0.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-agent-control-admission-audit-v1: {}",
+        report.verdict
+    );
+    println!(
+        "  calibration_report: {}",
+        calibration_report_path.display()
+    );
+    println!("  feedback_report: {}", feedback_report_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  candidate_events: {}", report.candidate_events);
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    println!(
+        "  incremental_unique_accepts: {}",
+        report.incremental_verified_request_fingerprints
+    );
+    println!(
+        "  current_policy_event_support_exhausted: {}",
+        report.current_policy_event_support_exhausted
+    );
+    Err("agent-control admission audit is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_agent_control_safe_policy_promote_v1<I>(
@@ -21401,6 +21595,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     route_gap_payload_readiness_report_path: Option<String>,
     #[serde(default)]
     conditional_admission_audit_report_path: Option<String>,
+    #[serde(default)]
+    agent_control_admission_audit_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
@@ -21458,6 +21654,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     conditional_admission_best_safe_true_accepts: usize,
     #[serde(default)]
     conditional_admission_current_support_exhausted: bool,
+    #[serde(default)]
+    agent_control_admission_best_robust_true_accepts: usize,
+    #[serde(default)]
+    agent_control_current_policy_event_support_exhausted: bool,
+    #[serde(default)]
+    agent_control_unique_contribution_constrained: bool,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
@@ -22249,6 +22451,42 @@ struct RoleBindingAgentControlAdmissionCalibrationRow {
     response_fingerprint: Option<String>,
     verifier_label: bool,
     features: RoleBindingAgentControlAdmissionFeatures,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingAgentControlAdmissionAuditReport {
+    schema_version: String,
+    verdict: String,
+    calibration_report_path: String,
+    feedback_report_path: String,
+    total_llm_calls: usize,
+    route_key: String,
+    candidate_events: usize,
+    payload_ready_events: usize,
+    scoreable_payload_events: usize,
+    verification_hook_ready_events: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    robust_safe_policy_found: bool,
+    best_robust_true_accepts: usize,
+    robust_remaining_true_rows: usize,
+    current_policy_event_support_exhausted: bool,
+    verified_cpu_accept_eligible_events: usize,
+    unique_verified_request_fingerprints: usize,
+    incremental_verified_request_fingerprints: usize,
+    exact_cache_overlap_verified_request_fingerprints: usize,
+    duplicate_verified_route_hits: usize,
+    cross_route_overlap_verified_request_fingerprints: usize,
+    unique_contribution_constrained: bool,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
