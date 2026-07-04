@@ -104,6 +104,10 @@ const DEFAULT_TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.trace.jsonl";
 const DEFAULT_TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.report.json";
+const DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.trace.jsonl";
+const DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json";
 const DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb";
 const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -6849,6 +6853,279 @@ where
     println!("  raw_response_text_written: false");
     Err(
         "test-output-parse output evidence is review-only; run profile/shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_test_output_parse_tool_output_state_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let broad_split_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_BROAD_ROUTE_SPLIT_DISCOVERY_REPORT));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(5000);
+
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let broad_report =
+        read_json_file::<RoleBindingBroadRouteSplitDiscoveryReport>(&broad_split_report_path)?;
+    let test_output_history_indexes = broad_report
+        .rows
+        .iter()
+        .filter(|row| row.split_key == REAL_TRAFFIC_TEST_OUTPUT_PARSE_SPLIT_KEY)
+        .filter_map(|row| {
+            route_gap_payload_readiness_history_index(&row.event_id).map(|index| (index, row))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let skip = history_rows.len().saturating_sub(max_events);
+
+    let mut wanted_request_fingerprints = HashSet::new();
+    let mut session_ids = HashSet::new();
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        if test_output_history_indexes.contains_key(&index) {
+            let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+            wanted_request_fingerprints.insert(format!("fnv1a64:{fingerprint:016x}"));
+            session_ids.insert(row.session_id.clone());
+        }
+    }
+
+    let state_index = build_codex_session_previous_tool_output_state_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+    )?;
+
+    let mut trace_rows = Vec::new();
+    let mut report_rows = Vec::new();
+    let mut parent_route_counts = BTreeMap::<String, usize>::new();
+    let mut command_signal_counts = BTreeMap::<String, usize>::new();
+    let mut status_counts = BTreeMap::<String, usize>::new();
+    let mut test_output_parse_candidate_events = 0usize;
+    let mut non_exact_candidate_events = 0usize;
+    let mut exact_cache_overlap_events = 0usize;
+    let mut tool_output_state_matched_events = 0usize;
+    let mut missing_tool_output_state_events = 0usize;
+    let mut command_status_detected_events = 0usize;
+    let mut pass_status_events = 0usize;
+    let mut fail_status_events = 0usize;
+    let mut warning_status_events = 0usize;
+    let mut unknown_status_events = 0usize;
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let Some(split_row) = test_output_history_indexes.get(&index) else {
+            continue;
+        };
+        test_output_parse_candidate_events += 1;
+        exact_cache_overlap_events += usize::from(split_row.exact_cache_hit);
+        non_exact_candidate_events += usize::from(!split_row.exact_cache_hit);
+        *parent_route_counts
+            .entry(split_row.parent_route_key.clone())
+            .or_insert(0) += 1;
+
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let event_id = format!(
+            "codex_history_test_output_parse_tool_output_state::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let evidence = state_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+            .cloned();
+        let previous_tool_output_matched = evidence
+            .as_ref()
+            .and_then(|evidence| evidence.tool_output_fingerprint.as_ref())
+            .is_some();
+        tool_output_state_matched_events += usize::from(previous_tool_output_matched);
+        missing_tool_output_state_events += usize::from(!previous_tool_output_matched);
+
+        let command_signal = evidence
+            .as_ref()
+            .map(|evidence| evidence.command_signal.clone())
+            .unwrap_or_else(|| "no_previous_test_tool_output".to_owned());
+        let command_status = evidence
+            .as_ref()
+            .map(|evidence| evidence.command_status.clone())
+            .unwrap_or_else(|| "unknown".to_owned());
+        let verifier_status = evidence
+            .as_ref()
+            .map(|evidence| evidence.verifier_status.clone())
+            .unwrap_or_else(|| "missing_previous_test_tool_output_state".to_owned());
+        let tool_output_fingerprint = evidence
+            .as_ref()
+            .and_then(|evidence| evidence.tool_output_fingerprint.clone());
+        let tool_call_fingerprints = evidence
+            .as_ref()
+            .map(|evidence| evidence.tool_call_fingerprints.clone())
+            .unwrap_or_default();
+
+        *command_signal_counts
+            .entry(command_signal.clone())
+            .or_insert(0) += 1;
+        *status_counts.entry(command_status.clone()).or_insert(0) += 1;
+        command_status_detected_events +=
+            usize::from(previous_tool_output_matched && command_status != "unknown");
+        pass_status_events += usize::from(command_status == "pass");
+        fail_status_events += usize::from(command_status == "fail");
+        warning_status_events += usize::from(command_status == "warning");
+        unknown_status_events += usize::from(command_status == "unknown");
+
+        report_rows.push(RoleBindingTestOutputParseToolOutputStateRow {
+            event_id: event_id.clone(),
+            request_fingerprint: request_fingerprint.clone(),
+            parent_route_key: split_row.parent_route_key.clone(),
+            split_key: split_row.split_key.clone(),
+            exact_cache_hit: split_row.exact_cache_hit,
+            previous_tool_output_matched,
+            command_signal: command_signal.clone(),
+            command_status: command_status.clone(),
+            verifier_status: verifier_status.clone(),
+            tool_output_fingerprint: tool_output_fingerprint.clone(),
+            tool_call_fingerprint_events: tool_call_fingerprints.len(),
+            request_time_state_only: true,
+            feature_flags: split_row.feature_flags.clone(),
+        });
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_test_output_parse_tool_output_state".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints,
+            verification_source: Some(
+                "request-time previous Codex tool-output state fingerprint plus deterministic test/check status classifier; raw prompt/tool-output/response text not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request: None,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(format!(
+                "test-output-parse previous tool-output state capture; matched={previous_tool_output_matched}; status={command_status}; signal={command_signal}; verifier_status={verifier_status}; local accepts disabled"
+            )),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let report = RoleBindingTestOutputParseToolOutputStateReport {
+        schema_version: "nando_role_binding_test_output_parse_tool_output_state_v1".to_owned(),
+        verdict: if test_output_parse_candidate_events == 0 {
+            "TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_V1_REVIEW_NO_CANDIDATES"
+        } else if tool_output_state_matched_events > 0 {
+            "TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_V1_REVIEW_TOOL_STATE_ATTACHED"
+        } else {
+            "TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_V1_REVIEW_NO_TOOL_STATE_MATCHES"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        broad_split_report_path: broad_split_report_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        sampled_history_rows: history_rows.len().saturating_sub(skip),
+        trace_rows_written: trace_rows.len(),
+        test_output_parse_candidate_events,
+        non_exact_candidate_events,
+        exact_cache_overlap_events,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: state_index.session_files_scanned,
+        codex_turns_indexed: state_index.codex_turns_indexed,
+        tool_outputs_indexed: state_index.tool_outputs_indexed,
+        tool_output_state_matched_events,
+        missing_tool_output_state_events,
+        command_status_detected_events,
+        pass_status_events,
+        fail_status_events,
+        warning_status_events,
+        unknown_status_events,
+        parent_route_counts: parent_route_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        command_signal_counts: command_signal_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        status_counts: status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        expected_unique_cpu_accepts_over_exact_cache: 0,
+        expected_savings_milli: 0,
+        false_accepts: 0,
+        raw_prompt_text_written: false,
+        raw_tool_output_text_written: false,
+        raw_response_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-time agent-loop state capture only. It associates test_output_parse candidate prompts with the previous Codex tool-output fingerprint/status visible before that user request, writes no raw prompt/tool-output/response text, reads no target/proof labels, enables no local accepts, and cannot prove savings until a payload builder/profile/admission policy uses this state under false_accepts=0.".to_owned(),
+        next_engineering_debt: "Use matched previous-tool-output states to build scoreable test_output_parse payloads without final-answer evidence; then train/compile a disabled profile, run shadow/admission audit, and count unique verified CPU accepts over exact cache only if verifier support is sufficient.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-test-output-parse-tool-output-state-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!(
+        "  broad_split_report: {}",
+        broad_split_report_path.display()
+    );
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  test_output_parse_candidate_events: {}",
+        report.test_output_parse_candidate_events
+    );
+    println!(
+        "  tool_output_state_matched_events: {}",
+        report.tool_output_state_matched_events
+    );
+    println!(
+        "  command_status_detected_events: {}",
+        report.command_status_detected_events
+    );
+    println!("  local_accepts_enabled: false");
+    Err(
+        "test-output-parse tool-output state capture is review-only; build payload/profile/admission before claims"
             .to_owned(),
     )
 }
@@ -31732,6 +32009,68 @@ struct RoleBindingTestOutputParsePayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingTestOutputParseToolOutputStateReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    broad_split_report_path: String,
+    sessions_root: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    sampled_history_rows: usize,
+    trace_rows_written: usize,
+    test_output_parse_candidate_events: usize,
+    non_exact_candidate_events: usize,
+    exact_cache_overlap_events: usize,
+    session_ids_requested: usize,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    tool_outputs_indexed: usize,
+    tool_output_state_matched_events: usize,
+    missing_tool_output_state_events: usize,
+    command_status_detected_events: usize,
+    pass_status_events: usize,
+    fail_status_events: usize,
+    warning_status_events: usize,
+    unknown_status_events: usize,
+    parent_route_counts: Vec<RoleBindingNamedCount>,
+    command_signal_counts: Vec<RoleBindingNamedCount>,
+    status_counts: Vec<RoleBindingNamedCount>,
+    expected_unique_cpu_accepts_over_exact_cache: usize,
+    expected_savings_milli: usize,
+    false_accepts: usize,
+    raw_prompt_text_written: bool,
+    raw_tool_output_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingTestOutputParseToolOutputStateRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingTestOutputParseToolOutputStateRow {
+    event_id: String,
+    request_fingerprint: String,
+    parent_route_key: String,
+    split_key: String,
+    exact_cache_hit: bool,
+    previous_tool_output_matched: bool,
+    command_signal: String,
+    command_status: String,
+    verifier_status: String,
+    tool_output_fingerprint: Option<String>,
+    tool_call_fingerprint_events: usize,
+    request_time_state_only: bool,
+    feature_flags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingAnswerEvidenceProfileReport {
     schema_version: String,
     verdict: String,
@@ -34652,6 +34991,23 @@ struct CodexSessionPreviousAgentStateIndex {
 struct CodexSessionPreviousAgentStateEvidence {
     previous_response_fingerprint: Option<String>,
     features: RoleBindingAgentContinueExecuteStateAdmissionFeatures,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionToolOutputStateIndex {
+    by_request_fingerprint: BTreeMap<String, CodexSessionToolOutputStateEvidence>,
+    session_files_scanned: usize,
+    codex_turns_indexed: usize,
+    tool_outputs_indexed: usize,
+}
+
+#[derive(Clone, Debug)]
+struct CodexSessionToolOutputStateEvidence {
+    tool_output_fingerprint: Option<String>,
+    tool_call_fingerprints: Vec<String>,
+    command_signal: String,
+    command_status: String,
+    verifier_status: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -50093,6 +50449,232 @@ fn build_codex_session_previous_agent_state_index(
         session_files_scanned: session_files.len(),
         codex_turns_indexed,
     })
+}
+
+fn build_codex_session_previous_tool_output_state_index(
+    sessions_root: &Path,
+    session_ids: &HashSet<String>,
+    wanted_request_fingerprints: &HashSet<String>,
+) -> Result<CodexSessionToolOutputStateIndex, String> {
+    let mut session_files = Vec::new();
+    collect_codex_session_jsonl_files(sessions_root, session_ids, &mut session_files)?;
+    let mut by_request_fingerprint = BTreeMap::new();
+    let mut codex_turns_indexed = 0usize;
+    let mut tool_outputs_indexed = 0usize;
+
+    println!(
+        "test-output-parse tool-output state: scanning {} Codex session file(s)",
+        session_files.len()
+    );
+    for (session_file_index, session_file) in session_files.iter().enumerate() {
+        println!(
+            "test-output-parse tool-output state: session {}/{} {}",
+            session_file_index + 1,
+            session_files.len(),
+            session_file.display()
+        );
+        let text = fs::read_to_string(session_file).map_err(|error| {
+            format!(
+                "failed to read Codex session JSONL {}: {error}",
+                session_file.display()
+            )
+        })?;
+        let mut last_test_tool_output_state: Option<CodexSessionToolOutputStateEvidence> = None;
+        let mut pending_tool_details = BTreeMap::<String, String>::new();
+
+        for (line_index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = serde_json::from_str::<serde_json::Value>(trimmed).map_err(|error| {
+                format!(
+                    "failed to parse Codex session JSONL {} line {}: {error}",
+                    session_file.display(),
+                    line_index + 1
+                )
+            })?;
+            match value.get("type").and_then(serde_json::Value::as_str) {
+                Some("event_msg") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    if payload.get("type").and_then(serde_json::Value::as_str)
+                        == Some("user_message")
+                        && let Some(message) =
+                            payload.get("message").and_then(serde_json::Value::as_str)
+                    {
+                        let request_fingerprint = format!(
+                            "fnv1a64:{:016x}",
+                            stable_real_traffic_fingerprint64(message.as_bytes())
+                        );
+                        if wanted_request_fingerprints.contains(&request_fingerprint) {
+                            by_request_fingerprint
+                                .entry(request_fingerprint)
+                                .or_insert_with(|| {
+                                    last_test_tool_output_state.clone().unwrap_or_else(|| {
+                                        CodexSessionToolOutputStateEvidence {
+                                            tool_output_fingerprint: None,
+                                            tool_call_fingerprints: Vec::new(),
+                                            command_signal: "no_previous_test_tool_output"
+                                                .to_owned(),
+                                            command_status: "unknown".to_owned(),
+                                            verifier_status:
+                                                "missing_previous_test_tool_output_state"
+                                                    .to_owned(),
+                                        }
+                                    })
+                                });
+                            codex_turns_indexed += 1;
+                        }
+                    }
+                }
+                Some("response_item") => {
+                    let Some(payload) = value.get("payload") else {
+                        continue;
+                    };
+                    match payload.get("type").and_then(serde_json::Value::as_str) {
+                        Some("function_call") | Some("custom_tool_call") => {
+                            let call_id = payload
+                                .get("call_id")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default();
+                            if call_id.is_empty() {
+                                continue;
+                            }
+                            let name = payload
+                                .get("name")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default();
+                            let detail = payload
+                                .get("arguments")
+                                .or_else(|| payload.get("input"))
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default();
+                            pending_tool_details
+                                .insert(call_id.to_owned(), format!("{name} {detail}"));
+                        }
+                        Some("function_call_output") | Some("custom_tool_call_output") => {
+                            let call_id = payload
+                                .get("call_id")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default();
+                            let detail = pending_tool_details.remove(call_id).unwrap_or_default();
+                            let output = payload
+                                .get("output")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default();
+                            if let Some(state) =
+                                summarize_previous_test_tool_output_state(call_id, &detail, output)
+                            {
+                                last_test_tool_output_state = Some(state);
+                                tool_outputs_indexed += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(CodexSessionToolOutputStateIndex {
+        by_request_fingerprint,
+        session_files_scanned: session_files.len(),
+        codex_turns_indexed,
+        tool_outputs_indexed,
+    })
+}
+
+fn summarize_previous_test_tool_output_state(
+    call_id: &str,
+    detail: &str,
+    output: &str,
+) -> Option<CodexSessionToolOutputStateEvidence> {
+    let combined = format!("{detail}\n{output}");
+    let lower = combined.to_lowercase();
+    let command_signal = test_output_command_signal(&lower)?;
+    let command_status = test_output_command_status(&lower).to_owned();
+    let fingerprint = format!(
+        "toolfnv1a64:{:016x}",
+        stable_real_traffic_fingerprint64(
+            format!("test_output_state:{call_id}:{command_signal}:{command_status}:{output}")
+                .as_bytes(),
+        )
+    );
+    Some(CodexSessionToolOutputStateEvidence {
+        tool_output_fingerprint: Some(fingerprint.clone()),
+        tool_call_fingerprints: vec![fingerprint],
+        command_signal: command_signal.to_owned(),
+        verifier_status: format!("previous_tool_output_{command_status}_{command_signal}"),
+        command_status,
+    })
+}
+
+fn test_output_command_signal(lower: &str) -> Option<&'static str> {
+    if contains_any(lower, &["cargo clippy", "clippy"]) {
+        Some("cargo_clippy")
+    } else if contains_any(lower, &["cargo fmt", "fmt --check", "rustfmt"]) {
+        Some("cargo_fmt")
+    } else if contains_any(lower, &["cargo test", "test result:", "running ", "pytest"]) {
+        if lower.contains("pytest") {
+            Some("pytest")
+        } else {
+            Some("cargo_test")
+        }
+    } else if contains_any(lower, &["cargo check", "checking ", "finished "]) {
+        Some("cargo_check")
+    } else if contains_any(lower, &["cargo build", "compiling ", "build"]) {
+        Some("build_check")
+    } else if contains_any(lower, &["process exited with code", "exit code:"]) {
+        Some("command_exit_status")
+    } else if contains_any(lower, &["error:", "warning:"]) {
+        Some("diagnostic_output")
+    } else {
+        None
+    }
+}
+
+fn test_output_command_status(lower: &str) -> &'static str {
+    if contains_any(
+        lower,
+        &[
+            "process exited with code 1",
+            "process exited with code 2",
+            "process exited with code 101",
+            "exit code: 1",
+            "exit code: 2",
+            "exit code: 101",
+            "\"exit_code\":1",
+            "\"exit_code\": 1",
+            "test result: failed",
+            "failures:",
+            "failed.",
+            "could not compile",
+            "panicked at",
+            "error:",
+        ],
+    ) {
+        "fail"
+    } else if contains_any(
+        lower,
+        &[
+            "process exited with code 0",
+            "exit code: 0",
+            "\"exit_code\":0",
+            "\"exit_code\": 0",
+            "test result: ok",
+            "0 failed",
+            "finished ",
+        ],
+    ) {
+        "pass"
+    } else if contains_any(lower, &["warning:", "warnings:"]) {
+        "warning"
+    } else {
+        "unknown"
+    }
 }
 
 fn build_codex_session_git_control_tool_output_evidence_index(

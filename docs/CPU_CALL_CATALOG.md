@@ -284,6 +284,56 @@ request-side payload builder sees explicit status evidence in only 3 of 104
 candidate rows.
 ```
 
+### Test Output Parse Tool-Output State V1
+
+Source report:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json
+```
+
+Measured on the same 5k Codex history window:
+
+```text
+test_output_parse_candidate_events: 104
+non_exact_candidate_events: 102
+exact_cache_overlap_events: 2
+session_ids_requested: 9
+session_files_scanned: 9
+codex_turns_indexed: 104
+tool_outputs_indexed: 145578
+tool_output_state_matched_events: 104
+command_status_detected_events: 97
+pass_status_events: 90
+fail_status_events: 7
+unknown_status_events: 7
+raw_prompt_text_written: false
+raw_tool_output_text_written: false
+raw_response_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Catalog status after tool-output state capture:
+
+```text
+CANDIDATE / STATE_READY_REVIEW
+```
+
+Decision:
+
+```text
+`test_output_parse` now has request-time agent-loop state coverage: every
+candidate can be linked to the previous tool-output fingerprint, and 97/104 have
+deterministic pass/fail/unknown status. This removes the previous support
+bottleneck, but still does not count as CPU savings. Next work should build
+scoreable payloads from this tool-output state, compile a disabled profile, and
+promote only after admission/shadow proves false_accepts=0 over exact cache.
+```
+
 ## File Path Evidence Payload Dry-Run V1
 
 Source report:

@@ -400,6 +400,12 @@ pub(crate) fn print_help() {
         "            Attach conservative test/check output verifier labels; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-test-output-parse-tool-output-state-v1 [history-jsonl] [broad-split-report-json] [sessions-root] [trace-jsonl] [report-json] [max-events]"
+    );
+    println!(
+        "            Measure previous command-output state coverage for test_output_parse candidates; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-file-path-evidence-profile-v1 [base-registry-json] [file-path-evidence-dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

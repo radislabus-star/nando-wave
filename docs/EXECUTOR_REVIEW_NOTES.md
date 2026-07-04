@@ -1,5 +1,100 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Tool-Output State V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_V1_REVIEW_TOOL_STATE_ATTACHED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-tool-output-state-v1
+```
+
+Why:
+
+```text
+The previous test_output_parse dry-run found 104 real candidates, but only 3
+scoreable request-side payloads. This stage measures whether those candidates
+can be connected to request-time agent-loop tool-output state, using only the
+previous command-output fingerprint/status visible before the user request.
+It writes no raw prompt/tool-output/response text and does not enable local
+accepts.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-tool-output-state-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
+  /home/ubu/.codex/sessions \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json \
+  5000
+```
+
+Measured result:
+
+```text
+test_output_parse_candidate_events: 104
+non_exact_candidate_events: 102
+exact_cache_overlap_events: 2
+session_ids_requested: 9
+session_files_scanned: 9
+codex_turns_indexed: 104
+tool_outputs_indexed: 145578
+tool_output_state_matched_events: 104
+command_status_detected_events: 97
+pass_status_events: 90
+fail_status_events: 7
+warning_status_events: 0
+unknown_status_events: 7
+raw_prompt_text_written: false
+raw_tool_output_text_written: false
+raw_response_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+The bottleneck is no longer "no agent-loop state": all 104 candidates have a
+previous tool-output fingerprint, and 97/104 have deterministic command status.
+This is still not a savings claim. The next debt is to turn this previous
+tool-output state into scoreable test_output_parse payloads without using final
+answers, then train/compile a disabled profile and run admission/shadow.
+```
+
+Operational note:
+
+```text
+The session scan is offline and can be slow on large rollout JSONL files. The
+route now prints per-session progress. Do not confuse this offline scan cost
+with product hot-path latency.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-tool-output-state-v1.md
+verdict: PASS
+complexity_score: 66
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Output Evidence V1
 
 Verdict:
