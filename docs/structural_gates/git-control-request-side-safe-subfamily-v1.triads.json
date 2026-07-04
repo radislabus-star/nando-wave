@@ -1,0 +1,186 @@
+{
+  "task_id": "git-control-request-side-safe-subfamily-v1",
+  "domain": "code",
+  "query": "Verify git_control current5k admission-safe subfamily boundary without counting unpromoted savings.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "git_control_admission_audit_current5k",
+      "relation": "scoreable_candidate_rows",
+      "object": "90",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t2",
+      "subject": "git_control_admission_audit_current5k",
+      "relation": "hook_ready_rows",
+      "object": "74",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t3",
+      "subject": "git_control_admission_audit_current5k",
+      "relation": "label_true_rows",
+      "object": "35",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t4",
+      "subject": "git_control_admission_audit_current5k",
+      "relation": "label_false_rows",
+      "object": "39",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t5",
+      "subject": "git_control_admission_audit_current5k",
+      "relation": "safe_policy_found",
+      "object": "true",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit",
+      "object_role": "verdict",
+      "route": "git_control"
+    },
+    {
+      "id": "t6",
+      "subject": "git_control_safe_policy_candidate",
+      "relation": "true_accepts",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json.safe_policy_candidates[0]",
+      "confidence": 1.0,
+      "subject_role": "policy_candidate",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t7",
+      "subject": "git_control_safe_policy_candidate",
+      "relation": "excludes",
+      "object": "false_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json.safe_policy_candidates[0]",
+      "confidence": 1.0,
+      "subject_role": "policy_candidate",
+      "object_role": "failure_metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t8",
+      "subject": "git_control_safe_policy_candidate",
+      "relation": "unverified_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json.safe_policy_candidates[0]",
+      "confidence": 1.0,
+      "subject_role": "policy_candidate",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t9",
+      "subject": "cpu_catalog_git_control_existing_profile",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json.rows[git_control existing_profile_route]",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "metric",
+      "route": "cpu_catalog"
+    },
+    {
+      "id": "t10",
+      "subject": "cpu_catalog_git_control_existing_profile",
+      "relation": "false_accept_risk",
+      "object": "MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json.rows[git_control existing_profile_route]",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "risk",
+      "route": "cpu_catalog"
+    },
+    {
+      "id": "t11",
+      "subject": "promotion_boundary",
+      "relation": "keeps_local_accepts_disabled",
+      "object": "git_control_runtime",
+      "evidence": "docs/CPU_CALL_CATALOG.md",
+      "confidence": 1.0,
+      "subject_role": "boundary",
+      "object_role": "runtime",
+      "route": "claim_boundary"
+    }
+  ],
+  "candidate_triads": [
+    {
+      "id": "c1",
+      "subject": "git_control_admission_audit_current5k",
+      "relation": "safe_policy_found",
+      "object": "true",
+      "evidence": "candidate answer",
+      "confidence": 1.0,
+      "subject_role": "audit",
+      "object_role": "verdict",
+      "route": "git_control"
+    },
+    {
+      "id": "c2",
+      "subject": "git_control_safe_policy_candidate",
+      "relation": "true_accepts",
+      "object": "3",
+      "evidence": "candidate answer",
+      "confidence": 1.0,
+      "subject_role": "policy_candidate",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "c3",
+      "subject": "git_control_safe_policy_candidate",
+      "relation": "excludes",
+      "object": "false_accepts",
+      "evidence": "candidate answer",
+      "confidence": 1.0,
+      "subject_role": "policy_candidate",
+      "object_role": "failure_metric",
+      "route": "git_control"
+    },
+    {
+      "id": "c4",
+      "subject": "cpu_catalog_git_control_existing_profile",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "0",
+      "evidence": "candidate answer",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "metric",
+      "route": "cpu_catalog"
+    },
+    {
+      "id": "c5",
+      "subject": "promotion_boundary",
+      "relation": "keeps_local_accepts_disabled",
+      "object": "git_control_runtime",
+      "evidence": "candidate answer",
+      "confidence": 1.0,
+      "subject_role": "boundary",
+      "object_role": "runtime",
+      "route": "claim_boundary"
+    }
+  ],
+  "candidate_answer": "git_control has a tiny request-side safe subfamily but no promoted CPU savings yet; local accepts and market claims remain disabled."
+}

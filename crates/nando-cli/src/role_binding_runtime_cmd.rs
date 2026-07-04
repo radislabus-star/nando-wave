@@ -20373,6 +20373,12 @@ where
             next_action = format!(
                 "Git-control admission audit found only {git_control_admission_best_safe_true_accepts} market-safe request-side accepts, already covered by current incremental unique support; improve git payload/evidence geometry before another promote."
             );
+        } else if route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            && git_control_admission_best_safe_true_accepts > 0
+        {
+            next_action = format!(
+                "Git-control admission audit found a narrow request-side safe subfamily ({git_control_admission_best_safe_true_accepts} true accepts, 0 false, 0 unverified). Do not count savings yet; build a separate promoted shadow trace/registry for this policy, rerun shadow/audit/feedback with provider cost, and keep workspace mutations disabled."
+            );
         } else if mixed_current_support_exhausted {
             next_action = format!(
                 "Mixed-map admission audit found only {mixed_admission_best_safe_true_accepts} market-safe request-side accepts, already covered by current incremental unique support; improve mixed payload/evidence geometry before another promote."
@@ -20462,13 +20468,20 @@ where
             route.local_accept_safe_policy_found,
             route.local_accept_support_qualified,
         );
-        let false_accept_risk = cpu_catalog_false_accept_risk(
+        let mut false_accept_risk = cpu_catalog_false_accept_risk(
             route.false_accepts,
             route.verification_hook_ready_events,
             route.local_accept_safe_policy_found,
             route.local_accept_support_qualified,
             route.route_key.as_str(),
         );
+        if route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            && git_control_admission_best_safe_true_accepts > 0
+            && !git_control_current_support_exhausted
+            && route.false_accepts == 0
+        {
+            false_accept_risk = "MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE".to_owned();
+        }
         let business_value_gate_passed = cpu_catalog_business_value_gate_passed(
             route.candidate_events,
             route.non_exact_candidate_calls,
@@ -20785,6 +20798,12 @@ where
             format!(
                 "Git-control gap is payload-ready, but current safe git support is exhausted at {git_control_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve command outcome evidence or split a new git subfamily before another promote."
             )
+        } else if family.family_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            && git_control_gap_best_safe_true_accepts > 0
+        {
+            format!(
+                "Git-control gap has a narrow request-side safe admission candidate ({git_control_gap_best_safe_true_accepts} true accepts, 0 false, 0 unverified). Do not promote the broad gap row directly; build a separate promoted shadow/audit for that policy and keep workspace mutations disabled."
+            )
         } else if serving_ops_support_exhausted {
             format!(
                 "Serving-ops gap is payload-ready, but current safe serving support is exhausted at {serving_ops_gap_best_safe_true_accepts} true accepts already covered by incremental unique support. Improve daemon health evidence or split a new ops subfamily before another promote."
@@ -20916,13 +20935,20 @@ where
             local_accept_safe_policy_found,
             local_accept_support_qualified,
         );
-        let false_accept_risk = cpu_catalog_false_accept_risk(
+        let mut false_accept_risk = cpu_catalog_false_accept_risk(
             family_false_accepts,
             family_verification_hook_ready_events,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
             family.family_key.as_str(),
         );
+        if family.family_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            && git_control_gap_best_safe_true_accepts > 0
+            && !git_control_support_exhausted
+            && family_false_accepts == 0
+        {
+            false_accept_risk = "MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE".to_owned();
+        }
         let business_value_gate_passed = cpu_catalog_business_value_gate_passed(
             family.candidate_events,
             non_exact_candidate_calls,
@@ -45400,6 +45426,90 @@ fn git_control_admission_feature_names(text: &str) -> Vec<String> {
     let has_status_terms = contains_any(&lower, &["status", "статус"]);
     let has_diff_terms = contains_any(&lower, &["diff", "дифф"]);
     let has_branch_terms = contains_any(&lower, &["branch", "ветк"]);
+    let has_log_terms = contains_any(&lower, &["log", "лог"]);
+    let has_show_terms = contains_any(&lower, &["show", "покажи"]);
+    let has_remote_terms = contains_any(&lower, &["remote", "origin", "upstream", "удален"]);
+    let has_worktree_terms = contains_any(
+        &lower,
+        &[
+            "working tree",
+            "worktree",
+            "рабочее дерево",
+            "рабочем дереве",
+            "dirty",
+            "clean",
+            "чист",
+        ],
+    );
+    let has_commit_hash_shape = response_contains_git_hash(text);
+    let has_read_only_terms = contains_any(
+        &lower,
+        &[
+            "проверь",
+            "проверить",
+            "посмотри",
+            "показать",
+            "покажи",
+            "скажи",
+            "какой",
+            "какая",
+            "какие",
+            "что там",
+            "статус",
+            "status",
+            "diff",
+            "show",
+            "log",
+            "summary",
+            "сводк",
+            "отчет",
+            "отчёт",
+        ],
+    );
+    let has_mutation_verbs = contains_any(
+        &lower,
+        &[
+            "сделай",
+            "сделать",
+            "выполни",
+            "выполнить",
+            "запусти",
+            "запустить",
+            "создай",
+            "создать",
+            "зафикс",
+            "закоммит",
+            "commit -",
+            "git commit",
+            "запуш",
+            "git push",
+            "отправь",
+            "отправить",
+        ],
+    );
+    let has_commit_create_terms = contains_any(
+        &lower,
+        &[
+            "сделай коммит",
+            "создай коммит",
+            "закоммит",
+            "зафиксируй",
+            "зафиксировать",
+            "commit -",
+            "git commit",
+        ],
+    );
+    let has_push_execute_terms = contains_any(
+        &lower,
+        &[
+            "запуш",
+            "git push",
+            "push ",
+            "push\n",
+            "отправь",
+            "отправить",
+        ],
+    );
     let has_file_path_terms = contains_any(
         &lower,
         &[
@@ -45430,21 +45540,96 @@ fn git_control_admission_feature_names(text: &str) -> Vec<String> {
     }
     if has_commit_terms {
         features.insert("has_commit_terms".to_owned());
+    } else {
+        features.insert("no_commit_terms".to_owned());
     }
     if has_push_terms {
         features.insert("has_push_terms".to_owned());
+    } else {
+        features.insert("no_push_terms".to_owned());
     }
     if has_status_terms {
         features.insert("has_status_terms".to_owned());
+    } else {
+        features.insert("no_status_terms".to_owned());
     }
     if has_diff_terms {
         features.insert("has_diff_terms".to_owned());
+    } else {
+        features.insert("no_diff_terms".to_owned());
     }
     if has_branch_terms {
         features.insert("has_branch_terms".to_owned());
+    } else {
+        features.insert("no_branch_terms".to_owned());
+    }
+    if has_log_terms {
+        features.insert("has_log_terms".to_owned());
+    } else {
+        features.insert("no_log_terms".to_owned());
+    }
+    if has_show_terms {
+        features.insert("has_show_terms".to_owned());
+    } else {
+        features.insert("no_show_terms".to_owned());
+    }
+    if has_remote_terms {
+        features.insert("has_remote_terms".to_owned());
+    }
+    if has_worktree_terms {
+        features.insert("has_worktree_terms".to_owned());
+    }
+    if has_commit_hash_shape {
+        features.insert("has_commit_hash_shape".to_owned());
     }
     if has_file_path_terms {
         features.insert("has_file_path_terms".to_owned());
+    } else {
+        features.insert("no_file_path_terms".to_owned());
+    }
+    if has_read_only_terms {
+        features.insert("has_read_only_terms".to_owned());
+    } else {
+        features.insert("no_read_only_terms".to_owned());
+    }
+    if has_mutation_verbs {
+        features.insert("has_mutation_verbs".to_owned());
+    } else {
+        features.insert("no_mutation_verbs".to_owned());
+    }
+    if has_commit_create_terms {
+        features.insert("has_commit_create_terms".to_owned());
+    }
+    if has_push_execute_terms {
+        features.insert("has_push_execute_terms".to_owned());
+    }
+    if let Some(tokens) = extract_git_control_tokens(text) {
+        let command_kind = git_control_command_kind(&lower, &tokens.command_token);
+        features.insert(format!("command_kind_{command_kind}"));
+        if has_read_only_terms && !has_mutation_verbs {
+            features.insert("git_read_only_intent".to_owned());
+        }
+        if has_mutation_verbs {
+            features.insert("git_mutating_intent".to_owned());
+        }
+        if has_read_only_terms && has_mutation_verbs {
+            features.insert("git_mixed_read_and_mutation_intent".to_owned());
+        }
+        if has_status_terms && !has_commit_terms && !has_push_terms && !has_mutation_verbs {
+            features.insert("git_status_read_only".to_owned());
+        }
+        if has_diff_terms && !has_commit_create_terms && !has_push_execute_terms {
+            features.insert("git_diff_read_only".to_owned());
+        }
+        if (has_log_terms || has_show_terms) && !has_mutation_verbs {
+            features.insert("git_log_show_read_only".to_owned());
+        }
+        if has_commit_terms && !has_commit_create_terms && !has_push_execute_terms {
+            features.insert("git_commit_reference_only".to_owned());
+        }
+        if has_question_mark && has_read_only_terms && !has_mutation_verbs {
+            features.insert("git_current_state_question".to_owned());
+        }
     }
     if has_goal_terms {
         features.insert("has_goal_terms".to_owned());
@@ -45484,7 +45669,7 @@ fn git_control_admission_policy_candidates(
     let top_features = feature_counts
         .iter()
         .filter(|feature| feature.rows > 0)
-        .take(18)
+        .take(48)
         .map(|feature| feature.feature_name.clone())
         .collect::<Vec<_>>();
     let mut feature_sets = Vec::<Vec<String>>::new();
@@ -45556,6 +45741,26 @@ fn git_control_admission_features_contradict(left: &str, right: &str) -> bool {
         (left, right),
         ("has_digit", "no_digit")
             | ("no_digit", "has_digit")
+            | ("has_commit_terms", "no_commit_terms")
+            | ("no_commit_terms", "has_commit_terms")
+            | ("has_push_terms", "no_push_terms")
+            | ("no_push_terms", "has_push_terms")
+            | ("has_status_terms", "no_status_terms")
+            | ("no_status_terms", "has_status_terms")
+            | ("has_diff_terms", "no_diff_terms")
+            | ("no_diff_terms", "has_diff_terms")
+            | ("has_branch_terms", "no_branch_terms")
+            | ("no_branch_terms", "has_branch_terms")
+            | ("has_log_terms", "no_log_terms")
+            | ("no_log_terms", "has_log_terms")
+            | ("has_show_terms", "no_show_terms")
+            | ("no_show_terms", "has_show_terms")
+            | ("has_file_path_terms", "no_file_path_terms")
+            | ("no_file_path_terms", "has_file_path_terms")
+            | ("has_read_only_terms", "no_read_only_terms")
+            | ("no_read_only_terms", "has_read_only_terms")
+            | ("has_mutation_verbs", "no_mutation_verbs")
+            | ("no_mutation_verbs", "has_mutation_verbs")
             | ("has_goal_terms", "no_goal_terms")
             | ("no_goal_terms", "has_goal_terms")
             | ("has_question_mark", "no_question_mark")

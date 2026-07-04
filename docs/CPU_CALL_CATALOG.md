@@ -171,6 +171,41 @@ catalog watch_profile_rows: 16
 catalog rejected_profile_rows: 5
 ```
 
+Git-control request-side admission refresh:
+
+```text
+git_control admission audit:
+  scoreable_candidate_rows: 90
+  hook_ready_rows: 74
+  label_true_rows: 35
+  label_false_rows: 39
+  unverified_rows: 16
+  safe_policy_found: true
+  best_safe_true_accepts: 3
+  best policy:
+    no_mutation_verbs AND has_push_terms AND energy >= 1386496
+    true_accepts: 3
+    false_accepts: 0
+    unverified_accepts: 0
+
+catalog git_control existing_profile_route:
+  current_status: CANDIDATE
+  expected_unique_cpu_accepts_over_exact_cache: 0
+  git_control_admission_best_safe_true_accepts: 3
+  false_accept_risk: MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy
+```
+
+Boundary:
+
+```text
+This is not a market savings claim and not a local-accept promotion.
+It only means the request-side admission audit found a tiny safe git subfamily.
+The next valid step is a separate promoted shadow trace/registry for that exact
+policy, followed by shadow/audit/feedback with provider cost and false_accepts=0.
+```
+
 Latest guardrail refresh:
 
 ```text

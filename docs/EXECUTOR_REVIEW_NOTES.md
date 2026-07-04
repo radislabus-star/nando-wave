@@ -1,5 +1,110 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Git-Control Request-Side Admission Split Found Tiny Safe Candidate
+
+Verdict:
+
+```text
+GIT_CONTROL_REQUEST_SIDE_SAFE_SUBFAMILY_FOUND
+NO_NEW_CPU_ACCEPTS_PROMOTED
+```
+
+Why:
+
+```text
+The current5k git_control route had real traffic and verifier hooks, but the
+catalog still treated it as a generic no-safe-policy candidate. The admission
+audit only used coarse git/status/diff/commit/push features, so it could not
+distinguish read-only command-outcome checks from mutation-shaped prompts.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+What changed:
+
+```text
+git_control admission audit now adds richer request-side features:
+  command_kind_*
+  read-only vs mutation intent
+  no_* complements for git command families
+  log/show/remote/worktree/hash-shape signals
+  composite read-only git subfamily markers
+
+The CPU catalog now reports a git_control safe admission candidate as
+POLICY_PENDING_PROMOTE instead of incorrectly calling it safe_policy_missing.
+```
+
+Generated:
+
+```text
+target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+```
+
+Measured git_control admission result:
+
+```text
+scoreable_candidate_rows: 90
+hook_ready_rows: 74
+label_true_rows: 35
+label_false_rows: 39
+unverified_rows: 16
+safe_policy_found: true
+best_safe_true_accepts: 3
+best policy family:
+  no_mutation_verbs AND has_push_terms AND energy >= 1386496
+  accepts: 3
+  true_accepts: 3
+  false_accepts: 0
+  unverified_accepts: 0
+```
+
+Measured CPU catalog result after refresh:
+
+```text
+current_incremental_unique_cpu_accepts_over_exact_cache: 104
+business_value_gate_passed_rows: 5
+proven_profile_rows: 5
+candidate_profile_rows: 3
+watch_profile_rows: 16
+rejected_profile_rows: 5
+
+git_control existing_profile_route:
+  current_status: CANDIDATE
+  expected_unique_cpu_accepts_over_exact_cache: 0
+  git_control_admission_best_safe_true_accepts: 3
+  false_accept_risk: MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy
+```
+
+Decision:
+
+```text
+Do not count the 3 admission-safe rows as CPU savings yet.
+Do not enable git local accepts.
+Do not execute workspace mutations.
+
+Next valid git_control step:
+  build a separate promoted shadow trace/registry for this exact
+  request-side policy, rerun shadow/audit/feedback with provider cost, and only
+  then count verified unique accepts if false_accepts=0.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/git-control-request-side-safe-subfamily-v1.md
+triads: docs/structural_gates/git-control-request-side-safe-subfamily-v1.triads.json
+verdict: PASS
+complexity_score: 44
+trace_path: /tmp/nanda-structural-gate/git-control-request-side-safe-subfamily-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Git/Serving Current5k Evidence Routed Into Feedback Loop
 
 Verdict:
