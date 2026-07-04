@@ -87,22 +87,22 @@ route_candidate_events: 1439
 route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
-feedback operator_candidate_calls: 2336
-feedback scoreable_candidate_calls: 364
-feedback verification_hook_ready_events: 171
-feedback verified_cpu_accept_eligible_events: 98
-feedback verified_cpu_accept_unique_request_fingerprints: 96
-feedback incremental_cpu_accept_unique_request_fingerprints: 94
+feedback operator_candidate_calls: 2490
+feedback scoreable_candidate_calls: 474
+feedback verification_hook_ready_events: 278
+feedback verified_cpu_accept_eligible_events: 99
+feedback verified_cpu_accept_unique_request_fingerprints: 97
+feedback incremental_cpu_accept_unique_request_fingerprints: 95
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 18
-feedback incremental_unique_gap_to_80_calls: 3906
+feedback incremental_cpu_accept_unique_reduction_milli: 19
+feedback incremental_unique_gap_to_80_calls: 3905
 
-catalog current_verified_cpu_accepts: 96
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 94
-catalog business_value_gate_passed_rows: 2
-catalog proven_profile_rows: 2
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 21
+catalog current_verified_cpu_accepts: 97
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 95
+catalog business_value_gate_passed_rows: 3
+catalog proven_profile_rows: 3
+catalog candidate_profile_rows: 2
+catalog watch_profile_rows: 19
 catalog rejected_profile_rows: 5
 ```
 
@@ -111,7 +111,8 @@ PROVEN rows on current5k:
 | rank | call class | candidates | scoreable | hooks | verified eligible | incremental unique | expected savings milli | status note |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | 18 | Keep as narrow previous-tool-output status parser; do not treat it as broad answer parsing. |
-| 5 | `metrics_report_readout` | 99 | 63 | 51 | 3 | 3 | 0 | Small proven sidecar only; support is exhausted and p99 shadow score was WATCH in the promote run. |
+| 4 | `metrics_report_readout` | 99 | 63 | 51 | 3 | 3 | 0 | Small proven sidecar only; support is exhausted and p99 shadow score was WATCH in the promote run. |
+| 5 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
 
 Important non-promotions:
 
@@ -128,15 +129,20 @@ metrics_report current5k:
   request-side robust admission: no safe policy
   score/readout safe policy: 3 true accepts, 0 false accepts
   decision: PROVEN, but tiny; split or improve numeric evidence before more work
+
+serving_ops current5k:
+  score/readout safe policy: 1 true accept, 0 false accepts
+  server mutations: disabled
+  decision: PROVEN, but tiny; split or improve daemon health evidence before more work
 ```
 
 Current5k BUSINESS_VALUE_GATE shelves:
 
 | shelf | count | meaning |
 | --- | ---: | --- |
-| `PROVEN` | 2 | Unique verified CPU accepts exist on this 5k window. |
-| `CANDIDATE` | 1 | Evidence exists, but no unique verified accepts yet. |
-| `WATCH` | 21 | Low support, exhausted policy, singleton-only, or missing verifier. |
+| `PROVEN` | 3 | Unique verified CPU accepts exist on this 5k window. |
+| `CANDIDATE` | 2 | Evidence exists, but no unique verified accepts yet. |
+| `WATCH` | 19 | Low support, exhausted policy, singleton-only, or missing verifier. |
 | `REJECT_FOR_NOW` | 5 | Broad route or unsafe route; split before work. |
 
 Decision:
@@ -313,6 +319,59 @@ readout nor request-side admission separates a safe subfamily. Keep it WATCH /
 NO_SAFE_POLICY_CURRENT5K. Do not lower thresholds and do not execute workspace
 mutations. The next git work must split into a narrower command-outcome
 subfamily before another safe-policy attempt.
+```
+
+### Serving Ops Current5k Probe
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/serving-ops-profile-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/serving-ops-local-accept-calibration-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.shadow-report.json
+target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.verification-hook-audit.report.json
+```
+
+Measured on current5k:
+
+```text
+serving_ops_candidate_events: 74
+payload_ready_events: 40
+payload_built_events: 40
+scoreable_payload_events: 40
+edge_count: 8
+output_evidence_matched_events: 33
+verified_true_events: 21
+verified_false_events: 12
+
+local_accept_calibration safe_policy_found: true
+local_accept_calibration best_safe_true_accepts: 6
+promoted policy_accept_rows: 1
+promoted policy_accept_verified_true_rows: 1
+promoted policy_accept_verified_false_rows: 0
+promoted policy_accept_unverified_rows: 0
+
+shadow nando_shadow_accepts: 1
+shadow verified_safe_accepts: 1
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 371226
+verification_hook_ready_events: 33
+verified_cpu_accept_eligible_events: 1
+market_claim_allowed: true
+server_mutation_enabled: false
+```
+
+Decision:
+
+```text
+`serving_ops` is PROVEN on current5k, but only as a tiny safe-policy row:
+1 verified accept, false_accepts=0. This is useful evidence that the value gate
+can promote a new profile, but it is not meaningful CPU80 growth. Keep daemon
+actions disabled. The next serving work should split a stronger health/metric
+subfamily instead of widening thresholds.
 ```
 
 ## Broad Route Split Discovery V1

@@ -68,22 +68,22 @@ route_candidates: 1439
 route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
-feedback operator_candidate_calls: 2336
-feedback scoreable_candidate_calls: 364
-feedback verification_hook_ready_events: 171
-feedback verified_cpu_accept_eligible_events: 98
-feedback verified_cpu_accept_unique_request_fingerprints: 96
-feedback incremental_cpu_accept_unique_request_fingerprints: 94
+feedback operator_candidate_calls: 2490
+feedback scoreable_candidate_calls: 474
+feedback verification_hook_ready_events: 278
+feedback verified_cpu_accept_eligible_events: 99
+feedback verified_cpu_accept_unique_request_fingerprints: 97
+feedback incremental_cpu_accept_unique_request_fingerprints: 95
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 18
-feedback incremental_unique_gap_to_80_calls: 3906
+feedback incremental_cpu_accept_unique_reduction_milli: 19
+feedback incremental_unique_gap_to_80_calls: 3905
 
-catalog current_verified_cpu_accepts: 96
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 94
-catalog business_value_gate_passed_rows: 2
-catalog proven_profile_rows: 2
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 21
+catalog current_verified_cpu_accepts: 97
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 95
+catalog business_value_gate_passed_rows: 3
+catalog proven_profile_rows: 3
+catalog candidate_profile_rows: 2
+catalog watch_profile_rows: 19
 catalog rejected_profile_rows: 5
 ```
 
@@ -106,6 +106,15 @@ metrics_report_readout:
   incremental_unique_accepts: 3
   false_accepts: 0
 
+serving_ops:
+  status: PROVEN, tiny support only
+  candidate_events: 74
+  scoreable_payload_events: 40
+  verification_hook_ready_events: 33
+  verified_cpu_accept_eligible_events: 1
+  incremental_unique_accepts: 1
+  false_accepts: 0
+
 agent_control:
   status: WATCH / NO_SAFE_POLICY
   scoreable_payload_events: 540
@@ -119,7 +128,7 @@ Decision:
 
 ```text
 Current5k is now the active commercial filter. CPU80 is still not proven:
-incremental unique reduction is 18 milli and the gap to 80% is 3906 calls.
+incremental unique reduction is 19 milli and the gap to 80% is 3905 calls.
 The next profile must be chosen by BUSINESS_VALUE_GATE, not by architecture
 interest. Broad routes remain blocked as whole routes; only narrow,
 artifact-backed splits may move forward.
@@ -232,6 +241,69 @@ verifier evidence, but current geometry mixes 35 true with 39 false rows and no
 safe readout/admission policy exists. Do not lower thresholds and do not promote
 workspace mutation routes. The next git work must split to a narrower
 command-outcome subfamily before any new safe-policy attempt.
+```
+
+## 2026-07-04 - Executor Integration: Serving Ops Current5k Tiny Safe Policy
+
+Verdict:
+
+```text
+SERVING_OPS_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+SERVING_OPS_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+SERVING_OPS_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
+SERVING_OPS_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+After git_control failed safe-policy calibration, serving_ops was the next
+artifact-backed candidate with real current5k traffic and service-health
+verifier shape. It produced a tiny safe policy: only one verified accept, but
+false_accepts=0 and no server mutation path.
+```
+
+Measured result:
+
+```text
+serving_ops_candidate_events: 74
+payload_ready_events: 40
+payload_built_events: 40
+scoreable_payload_events: 40
+edge_count: 8
+output_evidence_matched_events: 33
+verified_true_events: 21
+verified_false_events: 12
+
+local_accept_calibration safe_policy_found: true
+local_accept_calibration best_safe_true_accepts: 6
+promoted policy_accept_rows: 1
+promoted policy_accept_verified_true_rows: 1
+promoted policy_accept_verified_false_rows: 0
+promoted policy_accept_unverified_rows: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 452
+shadow nando_shadow_accepts: 1
+shadow verified_safe_accepts: 1
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 371226
+
+verification_hook_ready_events: 33
+verified_cpu_accept_eligible_events: 1
+market_claim_allowed: true
+```
+
+Decision:
+
+```text
+serving_ops is now PROVEN on current5k, but only as a tiny support row. It adds
+one verified CPU accept and keeps false_accepts=0. This is useful as a proof of
+the BUSINESS_VALUE_GATE path, not as CPU80 progress. Keep daemon/server actions
+disabled and split a stronger service-health subfamily before another promote.
 ```
 
 Structural gate:
