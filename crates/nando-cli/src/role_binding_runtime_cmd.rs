@@ -27950,7 +27950,10 @@ where
     } else {
         None
     };
-    let git_control_dry_run_report_path = PathBuf::from(DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_REPORT);
+    let git_control_dry_run_report_path = current_window_companion_report_path(
+        DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_REPORT,
+        prefer_current5k_companions,
+    );
     let git_control_dry_run = if git_control_dry_run_report_path.exists() {
         Some(read_json_file::<RoleBindingGitControlPayloadDryRunReport>(
             &git_control_dry_run_report_path,
@@ -27958,8 +27961,10 @@ where
     } else {
         None
     };
-    let git_control_audit_report_path =
-        PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let git_control_audit_report_path = current_window_companion_report_path(
+        DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let git_control_verification_audit = if git_control_audit_report_path.exists() {
         Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
             &git_control_audit_report_path,
@@ -27987,8 +27992,10 @@ where
         } else {
             None
         };
-    let git_control_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let git_control_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let git_control_local_accept_calibration =
         if git_control_local_accept_calibration_report_path.exists() {
             Some(
@@ -28038,7 +28045,10 @@ where
     } else {
         None
     };
-    let serving_ops_dry_run_report_path = PathBuf::from(DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_REPORT);
+    let serving_ops_dry_run_report_path = current_window_companion_report_path(
+        DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_REPORT,
+        prefer_current5k_companions,
+    );
     let serving_ops_dry_run = if serving_ops_dry_run_report_path.exists() {
         Some(read_json_file::<RoleBindingServingOpsPayloadDryRunReport>(
             &serving_ops_dry_run_report_path,
@@ -28046,8 +28056,10 @@ where
     } else {
         None
     };
-    let serving_ops_audit_report_path =
-        PathBuf::from(DEFAULT_SERVING_OPS_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let serving_ops_audit_report_path = current_window_companion_report_path(
+        DEFAULT_SERVING_OPS_OUTPUT_EVIDENCE_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let serving_ops_verification_audit = if serving_ops_audit_report_path.exists() {
         Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
             &serving_ops_audit_report_path,
@@ -28065,8 +28077,10 @@ where
         } else {
             None
         };
-    let serving_ops_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let serving_ops_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let serving_ops_local_accept_calibration =
         if serving_ops_local_accept_calibration_report_path.exists() {
             Some(

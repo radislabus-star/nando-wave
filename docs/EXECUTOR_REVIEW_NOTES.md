@@ -1,5 +1,111 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Git/Serving Current5k Evidence Routed Into Feedback Loop
+
+Verdict:
+
+```text
+GIT_SERVING_CURRENT5K_EVIDENCE_WIRED
+NO_NEW_CPU_ACCEPTS_PROMOTED
+```
+
+Why:
+
+```text
+git_control and serving_ops already had current5k dry-run, verification-audit,
+and local-accept calibration artifacts. The feedback loop still read the
+default companion filenames for these routes, so the CPU catalog could drift
+between old companion evidence and the current5k window.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+What changed:
+
+```text
+role-binding-real-traffic-feedback-loop-v1 now uses current-window companion
+reports for git_control and serving_ops when the forecast/edit/feedback inputs
+are a current5k window.
+```
+
+Current5k companion artifacts now read by the feedback loop:
+
+```text
+git-control-payload-dry-run-v1-current5k.report.json
+git-control-output-evidence-v1-current5k.verification-hook-audit.report.json
+git-control-local-accept-calibration-v1-current5k.report.json
+serving-ops-payload-dry-run-v1-current5k.report.json
+serving-ops-output-evidence-v1-current5k.verification-hook-audit.report.json
+serving-ops-local-accept-calibration-v1-current5k.report.json
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/git-serving-current5k-feedback-catalog-v1.md
+verdict: PASS
+complexity_score: 77
+trace_path: /tmp/nanda-structural-gate/git-serving-current5k-feedback-catalog-v1.trace.json
+```
+
+Measured feedback-loop result:
+
+```text
+total_llm_calls: 5000
+scoreable_candidate_calls: 599
+verification_hook_ready_events: 392
+verified_cpu_accept_eligible_events: 108
+verified_cpu_accept_unique_request_fingerprints: 106
+incremental_cpu_accept_unique_request_fingerprints: 104
+```
+
+Measured route rows:
+
+```text
+git_control:
+  candidate_events: 123
+  scoreable_payload_events: 90
+  verification_hook_ready_events: 74
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 0
+  stage: local_accept_calibration_failed
+
+serving_ops:
+  candidate_events: 74
+  scoreable_payload_events: 40
+  verification_hook_ready_events: 33
+  verified_cpu_accept_eligible_events: 1
+  false_accepts: 0
+  stage: verified_cpu_accept_eligible
+```
+
+Catalog boundary:
+
+```text
+git_control:
+  current_status: CANDIDATE
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+
+serving_ops:
+  current_status: PROVEN
+  business_value_gate_failure_reason: PASSED
+  expected_unique_cpu_accepts_over_exact_cache: 1
+```
+
+Decision:
+
+```text
+Do not promote git_control. It has real current5k evidence, but no safe policy.
+Do not widen serving_ops. It has one verified accept and remains tiny support
+only; daemon mutations stay disabled and a non-synthetic soak is required
+before any market claim.
+```
+
 ## 2026-07-04 - Executor Integration: Project Context Current5k Evidence Routed Into Feedback Loop
 
 Verdict:

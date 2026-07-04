@@ -152,9 +152,9 @@ route_candidate_events: 1439
 route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
-feedback operator_candidate_calls: 2490
-feedback scoreable_candidate_calls: 593
-feedback verification_hook_ready_events: 384
+feedback operator_candidate_calls: 3593
+feedback scoreable_candidate_calls: 599
+feedback verification_hook_ready_events: 392
 feedback verified_cpu_accept_eligible_events: 108
 feedback verified_cpu_accept_unique_request_fingerprints: 106
 feedback incremental_cpu_accept_unique_request_fingerprints: 104
@@ -183,10 +183,16 @@ current5k companion reports used by catalog:
   edit-admission-calibration-v1-current5k.report.json
 
 feedback-loop current5k companion reports now used for artifact-backed
-project_context:
+project_context, git_control, and serving_ops:
   project-context-payload-dry-run-v1-current5k.report.json
   project-context-output-evidence-v1-current5k.verification-hook-audit.report.json
   project-context-local-accept-calibration-v1-current5k.report.json
+  git-control-payload-dry-run-v1-current5k.report.json
+  git-control-output-evidence-v1-current5k.verification-hook-audit.report.json
+  git-control-local-accept-calibration-v1-current5k.report.json
+  serving-ops-payload-dry-run-v1-current5k.report.json
+  serving-ops-output-evidence-v1-current5k.verification-hook-audit.report.json
+  serving-ops-local-accept-calibration-v1-current5k.report.json
 ```
 
 Business Value Gate reason refresh:
@@ -218,6 +224,31 @@ git_control:
 role_binding_edit_marker_length_seed0:
   business_value_gate_failure_reason:
     expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,no_safe_request_side_policy,safe_policy_missing
+```
+
+Git/serving feedback-loop current5k refresh:
+
+```text
+git_control:
+  feedback candidate_events: 123
+  feedback scoreable_payload_events: 90
+  feedback verification_hook_ready_events: 74
+  feedback verified_cpu_accept_eligible_events: 0
+  catalog status: CANDIDATE
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+  decision: do not promote; improve request-side admission, verifier evidence,
+    or split the git command-outcome geometry first.
+
+serving_ops:
+  feedback candidate_events: 74
+  feedback scoreable_payload_events: 40
+  feedback verification_hook_ready_events: 33
+  feedback verified_cpu_accept_eligible_events: 1
+  catalog status: PROVEN
+  business_value_gate_failure_reason: PASSED
+  decision: keep as tiny proven support only; run non-synthetic soak before any
+    market claim and keep daemon mutations disabled.
 ```
 
 Decision:
