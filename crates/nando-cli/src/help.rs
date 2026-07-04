@@ -322,6 +322,12 @@ pub(crate) fn print_help() {
         "            Split uncatalogued real Codex prompts into privacy-safe next-route subfamilies; review-only"
     );
     println!(
+        "  role-binding-real-traffic-resource-pressure-payload-dry-run-v1 [history-jsonl] [registry-config-json] [manual-discovery-report-json] [trace-jsonl] [report-json] [max-events]"
+    );
+    println!(
+        "            Build request-side resource-pressure score payloads from manual-discovery rows; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

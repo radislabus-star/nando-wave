@@ -1,5 +1,130 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Resource Pressure Payload Dry Run V1
+
+Verdict:
+
+```text
+RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-resource-pressure-payload-dry-run-v1
+
+The command reads:
+  /home/ubu/.codex/history.jsonl
+  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.report.json
+
+and writes:
+  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.trace.jsonl
+  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.report.json
+
+The CPU operator catalog now auto-loads that dry-run report when present and
+carries resource_pressure scoreable payload progress into the uncatalogued row.
+```
+
+Why:
+
+```text
+Manual Route Discovery V1 found the top uncatalogued subfamily:
+
+  resource_pressure_budget
+
+but that was only a backlog label. We needed to prove whether the route can
+actually build request-side active_fringe/slots from prompt text without using
+the response, target labels, proof_rule_id, or raw prompt output.
+```
+
+Dry-run result:
+
+```text
+resource_pressure_candidate_events: 3
+payload_ready_events: 1
+payload_built_events: 1
+scoreable_payload_events: 1
+active_fringe_centers: 124
+slots: 3
+positive_impulses: 72
+negative_impulses: 72
+
+profile_registered: false
+shadow_score_ready: false
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Catalog after regeneration:
+
+```text
+top row:
+  route_or_family_key: uncatalogued
+  manual_route_discovery_top_subfamily: resource_pressure_budget
+  candidate_events: 13
+  payload_ready_events: 3
+  scoreable_payload_events: 1
+  verified_cpu_accept_eligible_events: 0
+
+next_action:
+  Attach write_rate_or_resource_budget_verifier_v1 and keep local accepts
+  disabled until deterministic verifier evidence, shadow/audit, provider cost,
+  and false_accepts=0.
+```
+
+Decision:
+
+```text
+Do not compile/promote a resource_pressure .nwrb profile yet.
+Do not count the one scoreable payload as CPU savings.
+Do not treat resource/budget prompts as locally safe without measured
+write-rate/resource-budget evidence.
+
+The next concrete debt is:
+  real response/tool-call evidence
+  + write_rate_or_resource_budget_verifier_v1
+  + only then disabled-threshold profile work if verifier-true support exists.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+CPU Routability 80 remains open:
+
+  current_verified_cpu_accepts: 26
+  verified_gap_to_80_calls: 774
+
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/resource-pressure-payload-dry-run-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 32
+note: narrow claim-boundary check only: resource_pressure_budget has one
+      scoreable request-side payload, but zero verified CPU accepts and no
+      market claim. The gate packet intentionally keeps the non-claim core
+      instead of duplicating every JSON guard field.
+```
+
 ## 2026-07-04 - Executor Integration: Manual Route Discovery V1
 
 Verdict:

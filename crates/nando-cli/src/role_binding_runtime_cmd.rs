@@ -59,6 +59,10 @@ const DEFAULT_REAL_TRAFFIC_ROUTE_GAP_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json";
 const DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.report.json";
+const DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -539,6 +543,20 @@ const REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN: usize = 114;
 const PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114: &str =
     "first_slot_threshold_active_fringe_min_114";
 const PROFILE_ACCEPTANCE_POLICY_ENERGY_NONNEGATIVE: &str = "energy_nonnegative";
+const REAL_TRAFFIC_RESOURCE_PRESSURE_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_OPERATOR_PAIR_BASE: u32 = 47 << 12;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_RESOURCE_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_LIMIT_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_SCOPE_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_BOUNDARY_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY: &str = "resource_pressure_budget";
+const REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID: &str =
+    "route_gap_resource_pressure_budget_profile_v1";
+const REAL_TRAFFIC_RESOURCE_PRESSURE_WRONG_TOKEN: &str = "__RESOURCE_PRESSURE_WRONG__";
 const REAL_TRAFFIC_GIT_CONTROL_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_GIT_CONTROL_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_GIT_CONTROL_OPERATOR_PAIR_BASE: u32 = 40 << 12;
@@ -4254,6 +4272,277 @@ where
     println!("  raw_text_written: false");
     println!("  local_accepts_enabled: false");
     Err("manual route discovery is review-only; it is not verified savings".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_resource_pressure_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG));
+    let manual_discovery_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(1000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID);
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let manual_report =
+        read_json_file::<RoleBindingManualRouteDiscoveryReport>(&manual_discovery_report_path)?;
+    let resource_history_indexes = manual_report
+        .rows
+        .iter()
+        .filter(|row| row.discovered_subfamily == REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY)
+        .filter_map(|row| {
+            route_gap_payload_readiness_history_index(&row.event_id).map(|index| (index, row))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut resource_pressure_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_resource_pressure_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "not resource_pressure_budget manual-discovery candidate".to_owned();
+
+        if let Some(manual_row) = resource_history_indexes.get(&index) {
+            resource_pressure_candidate_events += 1;
+            if manual_row.payload_ready {
+                payload_ready_events += 1;
+                let built =
+                    build_resource_pressure_dry_run_request(&event_id, &fingerprint, &row.text);
+                match built {
+                    Some(request) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable && profile_registered {
+                            "scoreable_payload_built_profile_registered"
+                        } else if scoreable {
+                            "scoreable_payload_built_profile_missing"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingResourcePressurePayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                        });
+                        notes = format!(
+                            "request-side resource-pressure payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingResourcePressurePayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "manual_discovery_payload_not_ready".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = builder_status;
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_resource_pressure_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side resource-pressure payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingResourcePressurePayloadDryRunReport {
+        schema_version: "nando_role_binding_resource_pressure_payload_dry_run_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        manual_discovery_report_path: manual_discovery_report_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        resource_pressure_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for resource_pressure_budget manual-discovery rows from prompt text only, keeps verified_safe_accept=None and expect_local_operator=false, writes no raw prompt text, and cannot prove savings. A write-rate/resource-budget verifier is required before any local accept.".to_owned(),
+        next_engineering_debt: "Attach write_rate_or_resource_budget_verifier_v1 to real response/tool evidence, then compile a disabled-threshold resource_pressure .nwrb profile only if enough verifier-true rows exist. Keep local accepts disabled until shadow/audit with provider cost and false_accepts=0.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-resource-pressure-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!(
+        "  manual_discovery_report: {}",
+        manual_discovery_report_path.display()
+    );
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  resource_pressure_candidate_events: {}",
+        report.resource_pressure_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  profile_registered: {}", report.profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "resource-pressure payload dry-run is review-only; attach verifier/profile before claims"
+            .to_owned(),
+    )
 }
 
 pub(crate) fn run_role_binding_real_traffic_answer_evidence_payload_dry_run_v1<I>(
@@ -14836,6 +15125,17 @@ where
     } else {
         None
     };
+    let resource_pressure_payload_dry_run_report_path =
+        PathBuf::from(DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_REPORT);
+    let resource_pressure_payload_dry_run = if resource_pressure_payload_dry_run_report_path
+        .exists()
+    {
+        Some(read_json_file::<
+            RoleBindingResourcePressurePayloadDryRunReport,
+        >(&resource_pressure_payload_dry_run_report_path)?)
+    } else {
+        None
+    };
     let answer_evidence_payload_dry_run_report_path =
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT);
     let answer_evidence_payload_dry_run = if answer_evidence_payload_dry_run_report_path.exists() {
@@ -15388,8 +15688,27 @@ where
         let manual_route_discovery_payload_ready_events = manual_top_subfamily
             .map(|subfamily| subfamily.payload_ready_events)
             .unwrap_or_default();
+        let resource_pressure_dry_run =
+            if manual_route_discovery_top_subfamily == REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY {
+                resource_pressure_payload_dry_run.as_ref()
+            } else {
+                None
+            };
+        let payload_ready_events = payload_ready_events.max(
+            resource_pressure_dry_run
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default(),
+        );
+        let scoreable_payload_events = scoreable_payload_events.max(
+            resource_pressure_dry_run
+                .map(|report| report.scoreable_payload_events)
+                .unwrap_or_default(),
+        );
         if manual_top_subfamily.is_some() {
             priority_score += manual_route_discovery_payload_ready_events as i64 * 120;
+        }
+        if let Some(resource_report) = resource_pressure_dry_run {
+            priority_score += resource_report.scoreable_payload_events as i64 * 250;
         }
         if agent_control_stop_support_exhausted
             || metrics_report_support_exhausted
@@ -15461,6 +15780,11 @@ where
                 family.family_key,
                 feedback_row.scoreable_payload_events,
                 family.recommended_verifier
+            )
+        } else if let Some(resource_report) = resource_pressure_dry_run {
+            format!(
+                "Manual route discovery top subfamily resource_pressure_budget now has {} payload-ready and {} scoreable dry-run payloads. Attach write_rate_or_resource_budget_verifier_v1 and keep local accepts disabled until deterministic verifier evidence, shadow/audit, provider cost, and false_accepts=0.",
+                resource_report.payload_ready_events, resource_report.scoreable_payload_events
             )
         } else if let Some(subfamily) = manual_top_subfamily {
             format!(
@@ -15573,10 +15897,16 @@ where
             recommended_profile_line: family.recommended_profile_line.clone(),
             recommended_payload_builder: if answer_evidence_dry_run.is_some() {
                 "answer_evidence_payload_builder_v1".to_owned()
+            } else if resource_pressure_dry_run.is_some() {
+                "resource_pressure_payload_builder_v1".to_owned()
             } else {
                 family.recommended_payload_builder.clone()
             },
-            recommended_verifier: family.recommended_verifier.clone(),
+            recommended_verifier: if resource_pressure_dry_run.is_some() {
+                "write_rate_or_resource_budget_verifier_v1".to_owned()
+            } else {
+                family.recommended_verifier.clone()
+            },
             next_action,
             priority_score,
             market_claim_allowed: false,
@@ -15619,6 +15949,9 @@ where
         manual_route_discovery_report_path: manual_route_discovery
             .as_ref()
             .map(|_| manual_route_discovery_report_path.display().to_string()),
+        resource_pressure_payload_dry_run_report_path: resource_pressure_payload_dry_run
+            .as_ref()
+            .map(|_| resource_pressure_payload_dry_run_report_path.display().to_string()),
         answer_evidence_payload_dry_run_report_path: answer_evidence_payload_dry_run
             .as_ref()
             .map(|_| answer_evidence_payload_dry_run_report_path.display().to_string()),
@@ -15714,6 +16047,12 @@ where
         println!(
             "  manual_route_discovery_report: {}",
             manual_route_discovery_report_path.display()
+        );
+    }
+    if resource_pressure_payload_dry_run.is_some() {
+        println!(
+            "  resource_pressure_payload_dry_run_report: {}",
+            resource_pressure_payload_dry_run_report_path.display()
         );
     }
     if answer_evidence_payload_dry_run.is_some() {
@@ -27063,6 +27402,58 @@ struct RoleBindingStyleBrevityPayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingResourcePressurePayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    manual_discovery_report_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    resource_pressure_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingResourcePressurePayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingResourcePressurePayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    profile_registered: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingStyleBrevityProfileReport {
     schema_version: String,
     verdict: String,
@@ -27590,6 +27981,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     route_gap_payload_readiness_report_path: Option<String>,
     #[serde(default)]
     manual_route_discovery_report_path: Option<String>,
+    #[serde(default)]
+    resource_pressure_payload_dry_run_report_path: Option<String>,
     #[serde(default)]
     answer_evidence_payload_dry_run_report_path: Option<String>,
     #[serde(default)]
@@ -33158,6 +33551,306 @@ struct MetricsReportTokens {
     report_token: String,
     readout_token: String,
     boundary_token: String,
+}
+
+#[derive(Clone, Debug)]
+struct ResourcePressureTokens {
+    resource_token: String,
+    limit_token: String,
+    scope_token: String,
+    boundary_token: String,
+}
+
+fn build_resource_pressure_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    text: &str,
+) -> Option<RoleBindingProfileScoreRequest> {
+    let tokens = extract_resource_pressure_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(resource_pressure_operator_centers());
+    active_fringe.extend(resource_pressure_role_surface_centers(
+        REAL_TRAFFIC_RESOURCE_PRESSURE_RESOURCE_ROLE_SLOT,
+        &tokens.resource_token,
+    ));
+    active_fringe.extend(resource_pressure_role_surface_centers(
+        REAL_TRAFFIC_RESOURCE_PRESSURE_LIMIT_ROLE_SLOT,
+        &tokens.limit_token,
+    ));
+    active_fringe.extend(resource_pressure_role_surface_centers(
+        REAL_TRAFFIC_RESOURCE_PRESSURE_SCOPE_ROLE_SLOT,
+        &tokens.scope_token,
+    ));
+    active_fringe.extend(resource_pressure_role_surface_centers(
+        REAL_TRAFFIC_RESOURCE_PRESSURE_BOUNDARY_ROLE_SLOT,
+        &tokens.boundary_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = resource_pressure_request_score_slot(
+        0,
+        &tokens.resource_token,
+        REAL_TRAFFIC_RESOURCE_PRESSURE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = resource_pressure_request_score_slot(
+        1,
+        &tokens.limit_token,
+        REAL_TRAFFIC_RESOURCE_PRESSURE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = resource_pressure_request_score_slot(
+        2,
+        &tokens.boundary_token,
+        REAL_TRAFFIC_RESOURCE_PRESSURE_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+
+    Some(RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY.to_owned()),
+        profile_id: Some(REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID.to_owned()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: budget/rate claims need deterministic evidence.
+        expect_local_operator: Some(false),
+    })
+}
+
+fn resource_pressure_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_RESOURCE_PRESSURE_RESOURCE_ROLE_SLOT),
+        (1, REAL_TRAFFIC_RESOURCE_PRESSURE_LIMIT_ROLE_SLOT),
+        (2, REAL_TRAFFIC_RESOURCE_PRESSURE_SCOPE_ROLE_SLOT),
+        (2, REAL_TRAFFIC_RESOURCE_PRESSURE_BOUNDARY_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_RESOURCE_PRESSURE_OPERATOR_PAIR_BASE
+                + resource_pressure_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn resource_pressure_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_RESOURCE_PRESSURE_OPERATOR_PAIR_SHIFT)
+        | u32::from(role_slot)
+}
+
+fn resource_pressure_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_RESOURCE_PRESSURE_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_RESOURCE_PRESSURE_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_RESOURCE_PRESSURE_PAGE_SIZE,
+        REAL_TRAFFIC_RESOURCE_PRESSURE_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn resource_pressure_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_RESOURCE_PRESSURE_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_RESOURCE_PRESSURE_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_resource_pressure_tokens(text: &str) -> Option<ResourcePressureTokens> {
+    let lower = text.to_lowercase();
+    if !contains_any(
+        &lower,
+        &[
+            "диск",
+            "ssd",
+            "ram",
+            "памят",
+            "memory",
+            "лог",
+            "log",
+            "json",
+            "токен",
+            "token",
+            "пиш",
+            "write",
+            "rate",
+            "budget",
+            "лимит",
+            "хват",
+            "жр",
+            "потреб",
+        ],
+    ) {
+        return None;
+    }
+    let tokens = extract_request_side_edit_tokens(text, 24);
+    if tokens.is_empty() {
+        return None;
+    }
+    let resource_token = first_matching_branch_token(
+        &lower,
+        &[
+            "disk",
+            "ssd",
+            "ram",
+            "memory",
+            "log",
+            "json",
+            "token",
+            "диск",
+            "памят",
+            "лог",
+            "токен",
+        ],
+    )
+    .or_else(|| {
+        tokens
+            .iter()
+            .find(|token| looks_like_resource_pressure_resource_token(token))
+            .cloned()
+    })
+    .unwrap_or_else(|| tokens[0].clone());
+    let limit_token = tokens
+        .iter()
+        .find(|token| looks_like_resource_pressure_limit_token(token))
+        .cloned()
+        .or_else(|| {
+            first_matching_branch_token(
+                &lower,
+                &[
+                    "budget",
+                    "limit",
+                    "лимит",
+                    "дохуя",
+                    "хват",
+                    "жр",
+                    "потреб",
+                    "rate",
+                    "write",
+                ],
+            )
+        })
+        .unwrap_or_else(|| "resource_budget_pressure".to_owned());
+    let scope_token = tokens
+        .iter()
+        .find(|token| looks_like_metrics_report_artifact_token(token))
+        .cloned()
+        .or_else(|| {
+            first_matching_branch_token(
+                &lower,
+                &[
+                    "worker",
+                    "runtime",
+                    "корпус",
+                    "dataset",
+                    "trace",
+                    "json",
+                    "daemon",
+                    "демон",
+                ],
+            )
+        })
+        .unwrap_or_else(|| resource_token.clone());
+    let boundary_token = if contains_any(&lower, &["сколько", "how much", "потреб"]) {
+        "measure_resource_usage"
+    } else if contains_any(&lower, &["хват", "не хват", "fit", "влез"]) {
+        "capacity_fit_boundary"
+    } else if contains_any(&lower, &["эконом", "сжать", "compress", "budget"]) {
+        "budget_reduction_boundary"
+    } else {
+        "resource_pressure_review"
+    }
+    .to_owned();
+    Some(ResourcePressureTokens {
+        resource_token,
+        limit_token,
+        scope_token,
+        boundary_token,
+    })
+}
+
+fn looks_like_resource_pressure_resource_token(token: &str) -> bool {
+    contains_any(
+        token,
+        &[
+            "disk",
+            "ssd",
+            "ram",
+            "memory",
+            "json",
+            "log",
+            "token",
+            "cache",
+            "диск",
+            "памят",
+            "лог",
+        ],
+    )
+}
+
+fn looks_like_resource_pressure_limit_token(token: &str) -> bool {
+    token.chars().any(|ch| ch.is_ascii_digit())
+        || contains_any(
+            token,
+            &[
+                "mb",
+                "gb",
+                "mib",
+                "gib",
+                "kb",
+                "миб",
+                "гб",
+                "мб",
+                "1m",
+                "100k",
+                "limit",
+                "budget",
+                "rate",
+                "лимит",
+                "дохуя",
+                "хват",
+                "жр",
+            ],
+        )
 }
 
 fn build_git_control_dry_run_request(
