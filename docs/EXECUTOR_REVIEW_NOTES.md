@@ -475,6 +475,106 @@ verdict: PASS
 complexity_score: 33
 ```
 
+## 2026-07-04 - Executor Integration: Conditional Current5k Tiny Safe Policy
+
+Verdict:
+
+```text
+CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
+CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+CONDITIONAL_ADMISSION_AUDIT_V1_REVIEW_SAFE_SUBFAMILY_CANDIDATE_FOUND
+CONDITIONAL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+conditional_branch was still high-frequency on current5k, but the old catalog
+row had no current-window accepts. This stage reran the whole route on the
+5000-call Codex history window. The broad readout policy remains unsafe, but a
+very small request-side v2 subfamily passes shadow/audit with false_accepts=0.
+```
+
+Measured result:
+
+```text
+conditional_route_candidate_events: 456
+payload_ready_events: 147
+payload_built_events: 147
+scoreable_payload_events: 147
+output_evidence_matched_events: 134
+verified_true_events: 36
+verified_false_events: 98
+
+local_accept_calibration safe_policy_found: false
+local_accept_calibration best_safe_true_accepts: 0
+admission_audit safe_policy_found: true
+admission_audit best_safe_true_accepts: 5
+
+promoted request_side_policy_name: conditional_gate_digit_terms
+promoted selected_policy_threshold: 8192
+promoted request_side_policy_accept_rows: 58
+promoted runtime_policy_accept_rows: 3
+promoted runtime_policy_verified_true_rows: 3
+promoted runtime_policy_verified_false_rows: 0
+promoted runtime_policy_unverified_rows: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 453
+shadow nando_shadow_accepts: 3
+shadow verified_safe_accepts: 3
+shadow false_accepts: 0
+shadow incremental_reduction_vs_exact_cache_milli: 0
+shadow p99_shadow_score_latency_ns: 719583
+
+verification_hook_ready_events: 53
+verified_cpu_accept_eligible_events: 3
+market_claim_allowed: true
+```
+
+Updated current5k scoreboard:
+
+```text
+feedback operator_candidate_calls: 2490
+feedback scoreable_candidate_calls: 593
+feedback verification_hook_ready_events: 384
+feedback verified_cpu_accept_eligible_events: 108
+feedback verified_cpu_accept_unique_request_fingerprints: 106
+feedback incremental_cpu_accept_unique_request_fingerprints: 104
+feedback incremental_cpu_accept_unique_reduction_milli: 20
+feedback incremental_unique_gap_to_80_calls: 3896
+
+catalog current_verified_cpu_accepts: 106
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 104
+catalog business_value_gate_passed_rows: 5
+catalog proven_profile_rows: 5
+catalog candidate_profile_rows: 3
+catalog watch_profile_rows: 16
+catalog rejected_profile_rows: 5
+```
+
+Decision:
+
+```text
+conditional_branch is now PROVEN only as a tiny request-side v2 subset. It adds
+3 incremental unique CPU accepts over exact cache and keeps false_accepts=0.
+Do not widen broad conditional_branch: route-wide local readout is still unsafe
+against 36 true / 98 false evidence rows. The next conditional work must split
+a stronger, artifact-backed branch family instead of lowering thresholds.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/conditional-current5k-tiny-safe-policy-v1.md
+verdict: PASS
+complexity_score: 38
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
 
 Verdict:

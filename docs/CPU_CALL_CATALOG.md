@@ -88,21 +88,21 @@ route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
 feedback operator_candidate_calls: 2490
-feedback scoreable_candidate_calls: 485
-feedback verification_hook_ready_events: 289
-feedback verified_cpu_accept_eligible_events: 105
-feedback verified_cpu_accept_unique_request_fingerprints: 103
-feedback incremental_cpu_accept_unique_request_fingerprints: 101
+feedback scoreable_candidate_calls: 593
+feedback verification_hook_ready_events: 384
+feedback verified_cpu_accept_eligible_events: 108
+feedback verified_cpu_accept_unique_request_fingerprints: 106
+feedback incremental_cpu_accept_unique_request_fingerprints: 104
 feedback exact_cache_overlap_verified_cpu_accepts: 2
 feedback incremental_cpu_accept_unique_reduction_milli: 20
-feedback incremental_unique_gap_to_80_calls: 3899
+feedback incremental_unique_gap_to_80_calls: 3896
 
-catalog current_verified_cpu_accepts: 103
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 101
-catalog business_value_gate_passed_rows: 4
-catalog proven_profile_rows: 4
-catalog candidate_profile_rows: 2
-catalog watch_profile_rows: 18
+catalog current_verified_cpu_accepts: 106
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 104
+catalog business_value_gate_passed_rows: 5
+catalog proven_profile_rows: 5
+catalog candidate_profile_rows: 3
+catalog watch_profile_rows: 16
 catalog rejected_profile_rows: 5
 ```
 
@@ -111,9 +111,10 @@ PROVEN rows on current5k:
 | rank | call class | candidates | scoreable | hooks | verified eligible | incremental unique | expected savings milli | status note |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | 18 | Keep as narrow previous-tool-output status parser; do not treat it as broad answer parsing. |
-| 3 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | 1 | Safe request-side admission policy; useful but still small. |
+| 2 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | 1 | Safe request-side admission policy; useful but still small. |
+| 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | 0 | Tiny request-side v2 safe policy; broad conditional calibration is still unsafe. |
 | 4 | `metrics_report_readout` | 99 | 63 | 51 | 3 | 3 | 0 | Small proven sidecar only; support is exhausted and p99 shadow score was WATCH in the promote run. |
-| 5 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
+| 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
 
 Important non-promotions:
 
@@ -139,15 +140,20 @@ serving_ops current5k:
 mixed_map current5k:
   request-side admission safe policy: 6 true accepts, 0 false accepts
   decision: PROVEN, but still small; split or improve map evidence before more work
+
+conditional_branch current5k:
+  local readout calibration: no safe policy
+  request-side v2 safe policy: 3 true accepts, 0 false accepts, 0 unverified
+  decision: PROVEN tiny subset only; do not widen the broad conditional route
 ```
 
 Current5k BUSINESS_VALUE_GATE shelves:
 
 | shelf | count | meaning |
 | --- | ---: | --- |
-| `PROVEN` | 4 | Unique verified CPU accepts exist on this 5k window. |
-| `CANDIDATE` | 2 | Evidence exists, but no unique verified accepts yet. |
-| `WATCH` | 18 | Low support, exhausted policy, singleton-only, or missing verifier. |
+| `PROVEN` | 5 | Unique verified CPU accepts exist on this 5k window. |
+| `CANDIDATE` | 3 | Evidence exists, but no unique verified accepts yet. |
+| `WATCH` | 16 | Low support, exhausted policy, singleton-only, or missing verifier. |
 | `REJECT_FOR_NOW` | 5 | Broad route or unsafe route; split before work. |
 
 Decision:
