@@ -418,6 +418,12 @@ pub(crate) fn print_help() {
         "            Compile disabled-threshold test_output_parse .nwrb profile for shadow scoring; local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-test-output-parse-safe-policy-promote-v1 [base-registry-json] [tool-state-payload-trace-jsonl] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
+    );
+    println!(
+        "            Promote known-status test_output_parse rows into a separate shadow trace/registry; review-only until shadow/audit pass"
+    );
+    println!(
         "  role-binding-real-traffic-file-path-evidence-profile-v1 [base-registry-json] [file-path-evidence-dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

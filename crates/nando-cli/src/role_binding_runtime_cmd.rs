@@ -118,6 +118,12 @@ const DEFAULT_TEST_OUTPUT_PARSE_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-v1.json";
 const DEFAULT_TEST_OUTPUT_PARSE_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-profile-v1.report.json";
+const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json";
+const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl";
+const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.report.json";
 const DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb";
 const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -7621,6 +7627,282 @@ where
     );
     println!("  local_accepts_enabled_on_real_traffic: false");
     Err("test-output-parse profile is review-only; admission stays disabled".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_test_output_parse_safe_policy_promote_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_PROFILE_REGISTRY_CONFIG));
+    let tool_state_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_TRACE_JSONL));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let mut trace_rows = read_real_traffic_trace_jsonl(&tool_state_trace_path)?;
+
+    let mut candidate_profile_ids = BTreeSet::new();
+    let mut score_rows = Vec::<(usize, RoleBindingProfileDetailedScore)>::new();
+    let mut scoreable_candidate_calls = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for (row_index, row) in trace_rows.iter().enumerate() {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_test_output_parse = request
+            .profile_id
+            .as_deref()
+            .is_some_and(|profile| profile == REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID)
+            || request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY);
+        if !is_test_output_parse {
+            continue;
+        }
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        request_side_policy_evaluated_rows += 1;
+        let status_known = test_output_parse_trace_known_status(row).is_some();
+        let Some(score) = score_role_binding_profile_request_detailed(&base_registry, request)
+        else {
+            no_score_rows += 1;
+            continue;
+        };
+        if status_known && score.slot_margins.iter().all(|margin| *margin > 0) {
+            request_side_policy_accept_rows += 1;
+            if let Some(profile_id) = &request.profile_id {
+                candidate_profile_ids.insert(profile_id.clone());
+            }
+            score_rows.push((row_index, score));
+        } else {
+            request_side_policy_reject_rows += 1;
+        }
+    }
+
+    if score_rows.is_empty() {
+        return Err(
+            "test-output-parse safe-policy promotion found no known-status scoreable rows"
+                .to_owned(),
+        );
+    }
+    let threshold = score_rows
+        .iter()
+        .map(|(_, score)| score.energy_margin)
+        .min()
+        .unwrap_or(0);
+    if threshold <= 0 {
+        return Err(format!(
+            "test-output-parse safe-policy threshold is not positive: {threshold}"
+        ));
+    }
+    let acceptance_policy = default_profile_acceptance_policy();
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if candidate_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "test-output-parse safe-policy promotion found no matching profiles in registry for {:?}",
+            candidate_profile_ids
+        ));
+    }
+    promoted_config.claim_boundary = "Serving registry overlay for test_output_parse safe-policy shadow. Runtime acceptance uses only request-side previous-tool-output-state payload score and strict_ordered_energy_threshold; verifier labels are trace audit evidence only.".to_owned();
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let accepted_row_indices = score_rows
+        .iter()
+        .map(|(row_index, _)| *row_index)
+        .collect::<HashSet<_>>();
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+
+    for (row_index, row) in trace_rows.iter_mut().enumerate() {
+        let Some(request) = &mut row.nando_shadow_request else {
+            continue;
+        };
+        let is_test_output_parse = request
+            .profile_id
+            .as_deref()
+            .is_some_and(|profile| profile == REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID)
+            || request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY);
+        if !is_test_output_parse {
+            continue;
+        }
+        if accepted_row_indices.contains(&row_index) {
+            policy_accept_rows += 1;
+            request.expect_local_operator = Some(true);
+            row.verified_safe_accept = Some(true);
+            row.provider_cost_microusd = Some(provider_cost_microusd);
+            row.verification_source = Some(
+                "request_time_previous_tool_output_state_deterministic_status_verifier_v1"
+                    .to_owned(),
+            );
+            provider_cost_events_written += 1;
+            let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+            runtime_acceptance_mismatches += usize::from(!runtime_response.accepted);
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                &format!(
+                    "test_output_parse_safe_policy_promote_v1 policy={} threshold={} provider_cost_estimate_microusd={} policy_accept=true verifier=request_time_previous_tool_output_state",
+                    acceptance_policy, threshold, provider_cost_microusd
+                ),
+            ));
+        } else {
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                &format!(
+                    "test_output_parse_safe_policy_promote_v1 policy={} threshold={} policy_accept=false",
+                    acceptance_policy, threshold
+                ),
+            ));
+        }
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_test_output_parse_safe_policy_promote_v1".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "TEST_OUTPUT_PARSE_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "TEST_OUTPUT_PARSE_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: tool_state_trace_path.display().to_string(),
+        calibration_report_path: DEFAULT_TEST_OUTPUT_PARSE_PROFILE_REPORT.to_owned(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: None,
+        request_side_policy_name: Some(
+            "known_previous_tool_output_status_and_positive_score".to_owned(),
+        ),
+        calibration_policy_name: "profile_min_energy_margin".to_owned(),
+        calibration_policy_threshold: Some(threshold),
+        selected_policy_name: "test_output_parse_known_status_strict_energy".to_owned(),
+        selected_policy_source:
+            "request_time_previous_tool_output_state_plus_profile_min_energy_margin".to_owned(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: policy_accept_rows,
+        selected_policy_true_accepts: policy_accept_verified_true_rows,
+        selected_policy_false_accepts: policy_accept_verified_false_rows,
+        selected_policy_unverified_accepts: policy_accept_unverified_rows,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
+        history_prompt_missing_rows: 0,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: format!(
+            "Promotion artifact only. It creates a promoted test_output_parse registry and rewrites the tool-state trace for rows where previous tool output already produced a deterministic known status. Runtime acceptance uses only request-side payload score under {} with threshold {}; verified_safe_accept is offline audit evidence, not runtime authority. This does not prove a market claim until shadow plus verification-hook audit pass and CPU feedback attribution over exact cache.",
+            "strict_ordered_energy_threshold",
+            threshold
+        ),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted registry/trace, then feed that audit into CPU route feedback. Keep test_output_parse bounded to request-time previous tool-output status parsing; do not widen it to broad answer/explain.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-test-output-parse-safe-policy-promote-v1: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  runtime_acceptance_mismatches: {}",
+        report.runtime_acceptance_mismatches
+    );
+    Err(
+        "test-output-parse safe-policy promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
 }
 
 pub(crate) fn run_role_binding_real_traffic_ime_input_state_profile_v1<I>(
@@ -37371,6 +37653,21 @@ fn test_output_parse_scoreable_requests(
                 && !request.slots.is_empty()
         })
         .collect()
+}
+
+fn test_output_parse_trace_known_status(
+    row: &RoleBindingRealTrafficTraceRow,
+) -> Option<&'static str> {
+    let notes = row.notes.as_deref()?.to_lowercase();
+    if notes.contains("status=pass") {
+        Some("pass")
+    } else if notes.contains("status=fail") {
+        Some("fail")
+    } else if notes.contains("status=warning") {
+        Some("warning")
+    } else {
+        None
+    }
 }
 
 fn build_planning_next_step_role_binding_package_from_trace(

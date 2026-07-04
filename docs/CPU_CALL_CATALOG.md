@@ -426,6 +426,57 @@ work must add deterministic verifier/admission, not lower the threshold from
 score margins alone.
 ```
 
+### Test Output Parse Safe Policy V1
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-shadow-v1.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.verification-hook-audit.report.json
+```
+
+Measured result:
+
+```text
+policy_accept_rows: 97
+policy_accept_verified_true_rows: 97
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+runtime_acceptance_mismatches: 0
+
+shadow total_llm_calls: 104
+shadow exact_cache_hits: 2
+shadow nando_shadow_accepts: 97
+shadow verified_safe_accepts: 97
+shadow unverified_shadow_accepts: 0
+shadow false_accepts: 0
+shadow incremental_savings_over_exact_cache: 95
+shadow incremental_reduction_vs_exact_cache_milli: 931
+shadow p99_shadow_score_latency_ns: 531326
+
+verification_hook_ready_events: 97
+verified_cpu_accept_eligible_events: 97
+market_claim_allowed: true
+```
+
+Catalog status after safe-policy shadow:
+
+```text
+PROVEN / ROUTE_SPECIFIC_SHADOW_PASS / FEEDBACK_WINDOW_NOT_REGENERATED
+```
+
+Decision:
+
+```text
+`test_output_parse` is now a verified narrow CPU profile for request-time
+previous-tool-output status parsing. This is not a broad answer/explain route:
+the accepted rows are only rows where the agent loop already has deterministic
+previous tool-output state and the `.nwrb` score passes the promoted strict
+energy threshold. The next debt is to feed this route-specific pass into the
+full CPU feedback window and keep unique attribution over exact cache.
+```
+
 ## File Path Evidence Payload Dry-Run V1
 
 Source report:

@@ -1,5 +1,106 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Safe Policy V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-safe-policy-promote-v1
+```
+
+Why:
+
+```text
+The disabled profile showed strong margins but no accepts. This stage creates a
+separate promoted registry/trace for only known-status previous-tool-output
+rows, then proves shadow accept + verifier audit. The base disabled profile is
+not modified.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-safe-policy-promote-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.report.json \
+  100
+
+cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-shadow-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-shadow-v1.report.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.verification-hook-audit.report.json
+```
+
+Measured result:
+
+```text
+selected_policy_threshold: 1196032
+policy_accept_rows: 97
+policy_accept_verified_true_rows: 97
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+provider_cost_events_written: 97
+runtime_acceptance_mismatches: 0
+
+shadow total_llm_calls: 104
+shadow exact_cache_hits: 2
+shadow nando_shadow_accepts: 97
+shadow verified_safe_accepts: 97
+shadow unverified_shadow_accepts: 0
+shadow false_accepts: 0
+shadow incremental_savings_over_exact_cache: 95
+shadow incremental_reduction_vs_exact_cache_milli: 931
+shadow p99_shadow_score_latency_ns: 531326
+shadow synthetic_trace_used: false
+
+verification_hook_ready_events: 97
+verified_cpu_accept_eligible_events: 97
+verified_true_events: 97
+verified_false_events: 0
+market_claim_allowed: true
+```
+
+Decision:
+
+```text
+This promotes `test_output_parse` from CANDIDATE to a narrow PROVEN route for
+request-time previous-tool-output status parsing. It does not widen
+answer/explain and does not prove CPU80 by itself, because the full 1000-call
+feedback window has not been regenerated with this promoted safe-policy trace.
+Next debt: route this pass into CPU feedback/unique attribution and keep the
+BUSINESS_VALUE_GATE per call_class.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-safe-policy-v1.md
+verdict: PASS
+complexity_score: 62
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Profile V1
 
 Verdict:
