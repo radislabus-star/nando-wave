@@ -379,6 +379,53 @@ disabled-threshold profile plus shadow/admission audit proving false_accepts=0
 before any unique CPU accepts can count over exact cache.
 ```
 
+### Test Output Parse Profile V1
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/test-output-parse-profile-v1.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-profile-shadow-v1.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-profile-v1.verification-hook-audit.report.json
+```
+
+Measured result:
+
+```text
+scoreable_payload_events: 97
+package_training_requests: 97
+edge_count: 7
+runtime_bytes_estimate: 32972
+strict_ordered_pass_rows: 97
+unexpected_local_accepts_under_disabled_threshold: 0
+
+shadow operator_candidate_calls: 97
+shadow nando_shadow_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 484436
+
+verification_hook_ready_events: 0
+verified_cpu_accept_eligible_events: 0
+candidates_missing_explicit_verification: 97
+market_claim_allowed: false
+```
+
+Catalog status after profile:
+
+```text
+CANDIDATE / PROFILE_READY_ACCEPTS_DISABLED / VERIFIER_MISSING
+```
+
+Decision:
+
+```text
+`test_output_parse` now has a compiled .nwrb profile and overlay registry for
+shadow scoring. It is still blocked from verified CPU savings because explicit
+verification/admission is missing for all 97 scoreable rows. The next profile
+work must add deterministic verifier/admission, not lower the threshold from
+score margins alone.
+```
+
 ## File Path Evidence Payload Dry-Run V1
 
 Source report:

@@ -1,5 +1,104 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Profile V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-profile-v1
+```
+
+Why:
+
+```text
+The tool-state payload stage produced 97 scoreable test_output_parse payloads.
+This stage compiles those payloads into a disabled-threshold .nwrb profile and
+overlay registry so shadow scoring can measure margins/latency without enabling
+local accepts.
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-profile-v1 \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-seed0.nwrb \
+  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-profile-v1.report.json
+```
+
+Measured profile result:
+
+```text
+profile_id: route_gap_test_output_parse_profile_v1
+package_bytes: 128
+edge_count: 7
+runtime_bytes_estimate: 32972
+threshold: 2147483647
+trace_rows_read: 104
+scoreable_payload_events: 97
+package_training_requests: 97
+changed_edges: 112
+positive_margin_rows: 97
+strict_ordered_pass_rows: 97
+unexpected_local_accepts_under_disabled_threshold: 0
+median_energy_margin: 1196032
+min_slot_margin: 393216
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed: false
+```
+
+Shadow/audit:
+
+```text
+role-binding-real-traffic-shadow-v1:
+  operator_candidate_calls: 97
+  nando_shadow_accepts: 0
+  nando_shadow_fallbacks: 97
+  verified_safe_accepts: 0
+  false_accepts: 0
+  p99_shadow_score_latency_ns: 484436
+  synthetic_trace_used: false
+
+role-binding-real-traffic-verification-hook-audit-v1:
+  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
+  scoreable_candidate_calls: 97
+  verification_hook_ready_events: 0
+  verified_cpu_accept_eligible_events: 0
+  candidates_missing_explicit_verification: 97
+  market_claim_allowed: false
+```
+
+Decision:
+
+```text
+The profile is ready for shadow scoring, and disabled-threshold safety holds:
+0 unexpected accepts and 0 false accepts. This is still not a CPU savings claim.
+The next debt is explicit deterministic verification/admission for these 97
+scoreable rows; do not lower the threshold from profile margins alone.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-profile-v1.md
+verdict: PASS
+complexity_score: 56
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Tool-State Payload V1
 
 Verdict:
