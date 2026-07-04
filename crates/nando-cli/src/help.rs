@@ -334,6 +334,12 @@ pub(crate) fn print_help() {
         "            Attach deterministic source/path/URL output evidence to retrieval-lookup payload traces; no raw response text is written"
     );
     println!(
+        "  role-binding-real-traffic-retrieval-lookup-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate retrieval-lookup score/readout thresholds against source/path/URL verifier labels; local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-read-inspect-profile-v1 [base-registry-json] [read-inspect-dry-run-trace-jsonl] [read-inspect-package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(
@@ -610,7 +616,7 @@ pub(crate) fn print_help() {
         "            Summarize route -> payload -> verification -> verified CPU gap toward Routability 80"
     );
     println!(
-        "            Auto-loads conditional / mixed / metrics-report / git-control / serving-ops route reports from default artifact paths when present; mismatched total_llm_calls audit windows are excluded and reported"
+        "            Auto-loads conditional / mixed / retrieval-lookup / metrics-report / git-control / serving-ops route reports from default artifact paths when present; mismatched total_llm_calls audit windows are excluded and reported"
     );
     println!(
         "  role-binding-real-traffic-cpu-operator-catalog-v1 [feedback-report-json] [route-gap-report-json] [catalog-report-json] [route-gap-payload-readiness-report-json]"

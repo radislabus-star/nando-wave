@@ -1,5 +1,121 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Retrieval-Lookup Calibration + Feedback Wiring V1
+
+Verdict:
+
+```text
+RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SUPPORT_INSUFFICIENT
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+CPU_OPERATOR_CATALOG_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-retrieval-lookup-local-accept-calibration-v1
+```
+
+Fresh retrieval_lookup calibration:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-local-accept-calibration-v1.report.json
+
+hook_ready_rows:                         2
+scored_rows:                             2
+label_true_rows:                         2
+label_false_rows:                        0
+safe_policy_found:                    true
+best_safe_true_accepts:                  2
+minimum true-support gate:               3
+local_accepts_enabled:               false
+market_claim_allowed:                false
+```
+
+Decision:
+
+```text
+A safe-looking retrieval_lookup margin policy exists on the current two
+verifier-true rows, but support is below the minimum true-support gate. It must
+remain review-only. Do not lower the disabled threshold or count it as savings.
+```
+
+Fresh default feedback after wiring retrieval_lookup:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:                 595 / 1000
+scoreable_candidate_calls:                177 / 1000
+verification_hook_ready_events:           138
+verified_cpu_accept_eligible_events:       21 route-sum
+unique_verified_cpu_accepts:               16
+unique_verified_gap_to_80_calls:          784
+
+retrieval_lookup route row:
+  candidate_events:                        25
+  payload_ready_events:                     2
+  payload_built_events:                     2
+  scoreable_payload_events:                 2
+  verification_hook_ready_events:           2
+  local_accept_calibration_ran:          true
+  local_accept_safe_policy_found:        true
+  local_accept_support_qualified:       false
+  verified_cpu_accept_eligible_events:      0
+  false_accepts:                            0
+  stage: local_accept_calibration_support_insufficient
+```
+
+Fresh operator catalog:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+existing_operator_candidate_calls:        595
+no_candidate_calls:                       405
+current_verified_cpu_accepts:             16
+verified_gap_to_80_calls:                 784
+
+retrieval_lookup existing-profile row:
+  priority_rank:                           15
+  candidate_events:                        25
+  scoreable_payload_events:                 2
+  verification_hook_ready_events:           2
+  verified_cpu_accept_eligible_events:      0
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/retrieval-lookup-feedback-wiring-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-feedback-wiring-v1.nanda.json
+
+verdict: PASS
+complexity_score: 37
+route_coherence retrieval_lookup: 0.9214
+```
+
+Claim boundary:
+
+```text
+retrieval_lookup is now visible in the main CPU80 feedback ladder and catalog,
+but it adds zero verified CPU accepts. Current CPU Routability remains
+16/1000 unique requests, not 80%. The next retrieval step is broader
+request-side admission/evidence coverage, not promotion.
+```
+
 ## 2026-07-04 - Executor Integration: Retrieval-Lookup Profile + Evidence V1
 
 Verdict:

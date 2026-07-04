@@ -85,6 +85,8 @@ const DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.trace.jsonl";
 const DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.report.json";
+const DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.verification-hook-audit.report.json";
+const DEFAULT_RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_REPORT: &str = "target/nando-wave/real-traffic-shadow/retrieval-lookup-local-accept-calibration-v1.report.json";
 const DEFAULT_READ_INSPECT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-seed0.nwrb";
 const DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG: &str =
@@ -6784,6 +6786,191 @@ where
         "retrieval-lookup output evidence is review-only; run shadow/audit before claims"
             .to_owned(),
     )
+}
+
+pub(crate) fn run_role_binding_real_traffic_retrieval_lookup_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let artifact_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let source_slot_margin = score.slot_margins.get(2).copied().unwrap_or_else(|| {
+            score
+                .slot_margins
+                .get(1)
+                .copied()
+                .unwrap_or(artifact_slot_margin)
+        });
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin: artifact_slot_margin,
+            end_slot_margin: source_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_disabled_profile_policy", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_positive_policy =
+        evaluate_edit_calibration_policy("energy_positive_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let strict_positive_policy = evaluate_edit_calibration_policy(
+        "strict_positive_slots_and_energy_positive",
+        &scored_rows,
+        |row| row.min_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let artifact_slot_policy =
+        evaluate_edit_calibration_policy("artifact_slot_positive_only", &scored_rows, |row| {
+            row.marker_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let source_slot_policy =
+        evaluate_edit_calibration_policy("source_slot_positive_only", &scored_rows, |row| {
+            row.end_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let best_energy_threshold_policy =
+        best_single_threshold_policy("best_energy_margin_threshold", &scored_rows, |row| {
+            row.energy_margin
+        });
+    let best_min_slot_threshold_policy =
+        best_single_threshold_policy("best_min_slot_margin_threshold", &scored_rows, |row| {
+            row.min_slot_margin
+        });
+    let best_artifact_slot_threshold_policy =
+        best_single_threshold_policy("best_artifact_slot_margin_threshold", &scored_rows, |row| {
+            row.marker_slot_margin
+        });
+    let best_source_slot_threshold_policy =
+        best_single_threshold_policy("best_source_slot_margin_threshold", &scored_rows, |row| {
+            row.end_slot_margin
+        });
+    let margin_collision_diagnostics = planning_margin_collision_diagnostics(&scored_rows);
+    let request_side_margin_only_accepts_all_true_without_false = margin_collision_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.safe_accepts_all_true_rows);
+    let policies = vec![
+        current_policy,
+        energy_positive_policy,
+        strict_positive_policy,
+        artifact_slot_policy,
+        source_slot_policy,
+        best_energy_threshold_policy,
+        best_min_slot_threshold_policy,
+        best_artifact_slot_threshold_policy,
+        best_source_slot_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let support_qualified =
+        best_safe_true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_retrieval_lookup_local_accept_calibration_v1"
+            .to_owned(),
+        verdict: if safe_policy_found && support_qualified {
+            "RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND"
+        } else if safe_policy_found {
+            "RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SUPPORT_INSUFFICIENT"
+        } else {
+            "RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        margin_collision_diagnostics,
+        request_side_margin_only_accepts_all_true_without_false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Retrieval-lookup calibration only. It evaluates disabled-profile score/readout margins against deterministic source/path/URL verifier labels, writes fingerprints and margins only, enables no local accepts, and cannot be used as a market savings claim.".to_owned(),
+        next_engineering_debt: if safe_policy_found && support_qualified {
+            "Promote only through a separate retrieval_lookup safe-policy artifact, then rerun shadow/audit with provider cost, false_accepts=0, and unverified_shadow_accepts=0 before counting savings.".to_owned()
+        } else if safe_policy_found {
+            "Do not lower the retrieval_lookup threshold yet. Current verifier support is below the minimum true-support gate; collect more real source/path/URL verified rows or tighten request-side admission before promotion.".to_owned()
+        } else {
+            "Do not lower the retrieval_lookup threshold. Current score geometry does not separate verifier-true from verifier-false rows; improve request-side admission or payload features before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-retrieval-lookup-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("retrieval-lookup local accept calibration is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_read_inspect_profile_v1<I>(
@@ -14774,6 +14961,10 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_AUDIT_REPORT));
+    let retrieval_lookup_dry_run_report_path =
+        PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_REPORT);
+    let retrieval_lookup_verification_audit_report_path =
+        PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let metrics_report_dry_run_report_path = args
         .next()
         .map(PathBuf::from)
@@ -14968,6 +15159,33 @@ where
         } else {
             None
         };
+    let retrieval_lookup_dry_run = if retrieval_lookup_dry_run_report_path.exists() {
+        Some(read_json_file::<
+            RoleBindingRetrievalLookupPayloadDryRunReport,
+        >(&retrieval_lookup_dry_run_report_path)?)
+    } else {
+        None
+    };
+    let retrieval_lookup_verification_audit =
+        if retrieval_lookup_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &retrieval_lookup_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
+    let retrieval_lookup_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let retrieval_lookup_local_accept_calibration =
+        if retrieval_lookup_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &retrieval_lookup_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
     let metrics_report_dry_run = if metrics_report_dry_run_report_path.exists() {
         Some(
             read_json_file::<RoleBindingMetricsReportPayloadDryRunReport>(
@@ -15138,6 +15356,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let retrieval_lookup_verification_audit = keep_feedback_window_matched_audit(
+        retrieval_lookup_verification_audit,
+        &retrieval_lookup_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let metrics_report_verification_audit = keep_feedback_window_matched_audit(
         metrics_report_verification_audit,
         &metrics_report_verification_audit_report_path,
@@ -15218,6 +15442,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(retrieval_lookup_audit) = &retrieval_lookup_verification_audit {
+        for row in &retrieval_lookup_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(metrics_report_audit) = &metrics_report_verification_audit {
         for row in &metrics_report_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -15258,6 +15487,8 @@ where
     let effective_planning_next_step_verification_audit =
         planning_next_step_verification_audit.as_ref();
     let effective_read_inspect_verification_audit = read_inspect_verification_audit.as_ref();
+    let effective_retrieval_lookup_verification_audit =
+        retrieval_lookup_verification_audit.as_ref();
     let effective_metrics_report_verification_audit = metrics_report_verification_audit.as_ref();
     let effective_git_control_verification_audit = git_control_safe_policy_verification_audit
         .as_ref()
@@ -15276,6 +15507,7 @@ where
             effective_agent_control_verification_audit,
             effective_planning_next_step_verification_audit,
             effective_read_inspect_verification_audit,
+            effective_retrieval_lookup_verification_audit,
             effective_metrics_report_verification_audit,
             effective_git_control_verification_audit,
             effective_serving_ops_verification_audit,
@@ -15291,6 +15523,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY);
+    let forecast_has_retrieval_lookup = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY);
     let forecast_has_metrics_report = forecast
         .routes
         .iter()
@@ -15328,6 +15564,9 @@ where
         + effective_read_inspect_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
+        + effective_retrieval_lookup_verification_audit
+            .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
         + effective_metrics_report_verification_audit
             .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default()
@@ -15354,6 +15593,9 @@ where
         + effective_read_inspect_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
+        + effective_retrieval_lookup_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
         + effective_metrics_report_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
@@ -15375,6 +15617,18 @@ where
             .map(|report| report.read_inspect_candidate_events)
             .or_else(|| {
                 effective_read_inspect_verification_audit
+                    .map(|report| report.operator_candidate_calls)
+            })
+            .unwrap_or_default()
+    };
+    let retrieval_lookup_candidate_calls = if forecast_has_retrieval_lookup {
+        0
+    } else {
+        retrieval_lookup_dry_run
+            .as_ref()
+            .map(|report| report.retrieval_lookup_candidate_events)
+            .or_else(|| {
+                effective_retrieval_lookup_verification_audit
                     .map(|report| report.operator_candidate_calls)
             })
             .unwrap_or_default()
@@ -15426,6 +15680,7 @@ where
     let operator_candidate_calls = forecast.operator_candidate_calls
         + planning_next_step_candidate_calls
         + read_inspect_candidate_calls
+        + retrieval_lookup_candidate_calls
         + metrics_report_candidate_calls
         + agent_control_candidate_calls
         + git_control_candidate_calls
@@ -15444,6 +15699,7 @@ where
         let is_agent_control_route = route.route_key.contains("agent_control");
         let is_planning_route = route.route_key == REAL_TRAFFIC_PLANNING_ROUTE_KEY;
         let is_read_inspect_route = route.route_key == REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY;
+        let is_retrieval_lookup_route = route.route_key == REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY;
         let is_metrics_report_route = route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY;
         let is_git_control_route = route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY;
         let is_serving_ops_route = route.route_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY;
@@ -15457,6 +15713,8 @@ where
             planning_next_step_local_accept_calibration.as_ref()
         } else if is_read_inspect_route {
             read_inspect_local_accept_calibration.as_ref()
+        } else if is_retrieval_lookup_route {
+            retrieval_lookup_local_accept_calibration.as_ref()
         } else if is_metrics_report_route {
             metrics_report_local_accept_calibration.as_ref()
         } else if is_git_control_route {
@@ -15520,6 +15778,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_retrieval_lookup_route {
+            retrieval_lookup_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else if is_metrics_report_route {
             metrics_report_dry_run
                 .as_ref()
@@ -15565,6 +15828,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
+        } else if is_retrieval_lookup_route {
+            retrieval_lookup_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else if is_metrics_report_route {
             metrics_report_dry_run
                 .as_ref()
@@ -15604,6 +15872,10 @@ where
                         .map(|report| report.scoreable_payload_events)
                 } else if is_read_inspect_route {
                     read_inspect_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else if is_retrieval_lookup_route {
+                    retrieval_lookup_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
                 } else if is_metrics_report_route {
@@ -15848,6 +16120,104 @@ where
             candidate_events,
             non_exact_candidate_calls: candidate_events,
             payload_builder: "read_inspect_request_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
+            local_accept_best_safe_true_accepts,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
+    if !forecast_has_retrieval_lookup
+        && (retrieval_lookup_dry_run.is_some()
+            || retrieval_lookup_verification_audit.is_some()
+            || retrieval_lookup_local_accept_calibration.is_some())
+    {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY)
+            .copied();
+        let payload_ready_events = retrieval_lookup_dry_run
+            .as_ref()
+            .map(|report| report.payload_ready_events)
+            .unwrap_or_default();
+        let payload_built_events = retrieval_lookup_dry_run
+            .as_ref()
+            .map(|report| report.payload_built_events)
+            .unwrap_or_default();
+        let scoreable_payload_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .or_else(|| {
+                retrieval_lookup_dry_run
+                    .as_ref()
+                    .map(|report| report.scoreable_payload_events)
+            })
+            .unwrap_or_default();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let candidate_events = retrieval_lookup_dry_run
+            .as_ref()
+            .map(|report| report.retrieval_lookup_candidate_events)
+            .or_else(|| verification.map(|row| row.candidate_calls))
+            .unwrap_or_default();
+        let local_accept_calibration_ran = retrieval_lookup_local_accept_calibration.is_some();
+        let local_accept_safe_policy_found = retrieval_lookup_local_accept_calibration
+            .as_ref()
+            .map(|report| report.safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = retrieval_lookup_local_accept_calibration
+            .as_ref()
+            .map(|report| report.best_safe_true_accepts)
+            .unwrap_or_default();
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
+            local_accept_calibration_authoritative: true,
+        });
+        let next_action = feedback_route_next_action(&stage);
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_RETRIEVAL_LOOKUP_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "retrieval_lookup_request_payload_builder_v1".to_owned(),
             stage,
             next_action,
             payload_ready_events,
@@ -16317,6 +16687,22 @@ where
                     .display()
                     .to_string()
             }),
+        retrieval_lookup_dry_run_report_path: retrieval_lookup_dry_run
+            .as_ref()
+            .map(|_| retrieval_lookup_dry_run_report_path.display().to_string()),
+        retrieval_lookup_local_accept_calibration_report_path:
+            retrieval_lookup_local_accept_calibration.as_ref().map(|_| {
+                retrieval_lookup_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
+        retrieval_lookup_verification_audit_report_path: retrieval_lookup_verification_audit
+            .as_ref()
+            .map(|_| {
+                retrieval_lookup_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         metrics_report_dry_run_report_path: metrics_report_dry_run
             .as_ref()
             .map(|_| metrics_report_dry_run_report_path.display().to_string()),
@@ -16451,6 +16837,7 @@ where
             .no_candidate_calls
             .saturating_sub(planning_next_step_candidate_calls)
             .saturating_sub(read_inspect_candidate_calls)
+            .saturating_sub(retrieval_lookup_candidate_calls)
             .saturating_sub(metrics_report_candidate_calls)
             .saturating_sub(agent_control_candidate_calls)
             .saturating_sub(git_control_candidate_calls)
@@ -16517,6 +16904,15 @@ where
     }
     if let Some(path) = &report.read_inspect_verification_audit_report_path {
         println!("  read_inspect_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.retrieval_lookup_dry_run_report_path {
+        println!("  retrieval_lookup_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.retrieval_lookup_local_accept_calibration_report_path {
+        println!("  retrieval_lookup_local_accept_calibration_report: {path}");
+    }
+    if let Some(path) = &report.retrieval_lookup_verification_audit_report_path {
+        println!("  retrieval_lookup_verification_audit_report: {path}");
     }
     if let Some(path) = &report.metrics_report_dry_run_report_path {
         println!("  metrics_report_dry_run_report: {path}");
@@ -20293,6 +20689,9 @@ struct RoleBindingFeedbackLoopReport {
     read_inspect_dry_run_report_path: Option<String>,
     read_inspect_local_accept_calibration_report_path: Option<String>,
     read_inspect_verification_audit_report_path: Option<String>,
+    retrieval_lookup_dry_run_report_path: Option<String>,
+    retrieval_lookup_local_accept_calibration_report_path: Option<String>,
+    retrieval_lookup_verification_audit_report_path: Option<String>,
     metrics_report_dry_run_report_path: Option<String>,
     metrics_report_local_accept_calibration_report_path: Option<String>,
     metrics_report_verification_audit_report_path: Option<String>,
