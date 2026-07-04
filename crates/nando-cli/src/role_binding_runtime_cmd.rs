@@ -162,6 +162,8 @@ const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_READ_INSPECT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-local-accept-calibration-v1.report.json";
+const DEFAULT_READ_INSPECT_ADMISSION_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/read-inspect-admission-audit-v1.report.json";
 const DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_METRICS_REPORT_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -12108,6 +12110,158 @@ where
         report.best_safe_true_accepts
     );
     Err("read-inspect local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_read_inspect_admission_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_ADMISSION_AUDIT_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+
+    for trace in &trace_rows {
+        let Some(label) = trace.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &trace.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_READ_INSPECT_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let request_fingerprint = trace.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let features = extract_read_inspect_admission_features(prompt_text);
+        rows.push(RoleBindingReadInspectAdmissionAuditRow {
+            trace_id: trace.trace_id.clone(),
+            request_fingerprint: trace.request_fingerprint.clone(),
+            response_fingerprint: trace.response_fingerprint.clone(),
+            verifier_label: label,
+            features,
+        });
+    }
+
+    let minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+    let policies = read_inspect_admission_policy_reports(&rows, minimum_true_support);
+    let robust_safe_policy_found = policies.iter().any(|policy| policy.robust_safe);
+    let singleton_safe_policy_found = policies.iter().any(|policy| policy.singleton_safe);
+    let best_robust_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.robust_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let best_singleton_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.singleton_safe)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let feature_counts = read_inspect_admission_feature_counts(&rows);
+    let report = RoleBindingReadInspectAdmissionAuditReport {
+        schema_version: "nando_role_binding_read_inspect_admission_audit_v1".to_owned(),
+        verdict: if robust_safe_policy_found {
+            "READ_INSPECT_ADMISSION_AUDIT_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND"
+        } else if singleton_safe_policy_found {
+            "READ_INSPECT_ADMISSION_AUDIT_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY"
+        } else {
+            "READ_INSPECT_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_POLICY"
+        }
+        .to_owned(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        hook_ready_rows,
+        rows_with_prompt_features: rows.len(),
+        history_prompt_missing_rows,
+        label_true_rows,
+        label_false_rows,
+        minimum_true_support,
+        robust_safe_policy_found,
+        singleton_safe_policy_found,
+        best_robust_true_accepts,
+        best_singleton_true_accepts,
+        feature_counts,
+        policies,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Read-inspect admission audit only. It joins verifier-ready rows back to local request text at analysis time, writes only fingerprints/features/counts, uses verifier labels only to evaluate request-side gates, enables no local accepts, and cannot be used as a market savings claim. Broad read/answer routes remain fallback-only unless a narrow path/evidence verifier and provider-cost shadow pass are proven.".to_owned(),
+        next_engineering_debt: if robust_safe_policy_found {
+            "Do not count this as CPU savings. Promote only through a separate read-inspect safe-policy shadow artifact with provider cost, false_accepts=0, unverified_shadow_accepts=0, unique attribution over exact cache, and rollback.".to_owned()
+        } else if singleton_safe_policy_found {
+            "Request-side features expose only singleton read-inspect support. Collect more verifier-true non-synthetic read-context rows or split the route into a narrower path/excerpt subfamily before promotion.".to_owned()
+        } else {
+            "Current read-inspect request-side features do not safely separate verifier-true path/excerpt rows from verifier-false rows. Improve request-side state/evidence extraction or split read_context_path before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-read-inspect-admission-audit-v1: {}",
+        report.verdict
+    );
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!(
+        "  rows_with_prompt_features: {}",
+        report.rows_with_prompt_features
+    );
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!(
+        "  robust_safe_policy_found: {}",
+        report.robust_safe_policy_found
+    );
+    println!(
+        "  best_robust_true_accepts: {}",
+        report.best_robust_true_accepts
+    );
+    Err("read-inspect admission audit is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_git_control_payload_dry_run_v1<I>(
@@ -30760,6 +30914,45 @@ struct RoleBindingAnswerEvidenceAdmissionCalibrationRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingReadInspectAdmissionAuditReport {
+    schema_version: String,
+    verdict: String,
+    evidence_trace_path: String,
+    history_path: String,
+    hook_ready_rows: usize,
+    rows_with_prompt_features: usize,
+    history_prompt_missing_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    minimum_true_support: usize,
+    robust_safe_policy_found: bool,
+    singleton_safe_policy_found: bool,
+    best_robust_true_accepts: usize,
+    best_singleton_true_accepts: usize,
+    feature_counts: Vec<RoleBindingEditAdmissionFeatureCount>,
+    policies: Vec<RoleBindingEditAdmissionPolicyReport>,
+    rows: Vec<RoleBindingReadInspectAdmissionAuditRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingReadInspectAdmissionAuditRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    response_fingerprint: Option<String>,
+    verifier_label: bool,
+    features: RoleBindingReadInspectAdmissionFeatures,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingMetricsReportAdmissionCalibrationReport {
     schema_version: String,
     verdict: String,
@@ -30839,6 +31032,32 @@ struct RoleBindingAnswerEvidenceAdmissionFeatures {
     has_nando_wave_terms: bool,
     digit_count_ge_4: bool,
     colon_count_ge_3: bool,
+    concise_request: bool,
+    long_context: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingReadInspectAdmissionFeatures {
+    request_len: usize,
+    line_count: usize,
+    token_count: usize,
+    starts_read_or_inspect: bool,
+    has_read_terms: bool,
+    has_inspect_terms: bool,
+    has_check_terms: bool,
+    has_evidence_terms: bool,
+    has_excerpt_terms: bool,
+    has_source_terms: bool,
+    has_file_like_token: bool,
+    has_path_terms: bool,
+    has_report_or_trace_terms: bool,
+    has_no_write_terms: bool,
+    has_mutation_terms: bool,
+    has_failure_terms: bool,
+    has_question_mark: bool,
+    has_code_or_fence: bool,
+    has_nando_wave_terms: bool,
+    digit_count_ge_4: bool,
     concise_request: bool,
     long_context: bool,
 }
@@ -39830,6 +40049,163 @@ fn extract_answer_evidence_admission_features(
     }
 }
 
+fn extract_read_inspect_admission_features(text: &str) -> RoleBindingReadInspectAdmissionFeatures {
+    let lower = text.to_lowercase();
+    let trimmed_lower = text.trim_start().to_lowercase();
+    let token_count = normalized_token_count(&lower);
+    RoleBindingReadInspectAdmissionFeatures {
+        request_len: text.trim().len(),
+        line_count: text.lines().count().max(1),
+        token_count,
+        starts_read_or_inspect: contains_any(
+            &trimmed_lower,
+            &[
+                "прочитай",
+                "читай",
+                "посмотри",
+                "ознаком",
+                "inspect",
+                "read",
+                "open",
+                "show",
+            ],
+        ),
+        has_read_terms: contains_any(
+            &lower,
+            &[
+                "прочитай",
+                "читай",
+                "посмотри",
+                "ознаком",
+                "read",
+                "open",
+                "show",
+            ],
+        ),
+        has_inspect_terms: contains_any(
+            &lower,
+            &["inspect", "посмотри", "ознаком", "смотри", "check"],
+        ),
+        has_check_terms: contains_any(&lower, &["проверь", "verify", "check", "audit", "аудит"]),
+        has_evidence_terms: contains_any(
+            &lower,
+            &[
+                "evidence",
+                "proof",
+                "source",
+                "источник",
+                "доказ",
+                "пруф",
+                "вывод",
+            ],
+        ),
+        has_excerpt_terms: contains_any(
+            &lower,
+            &[
+                "excerpt",
+                "line",
+                "lines",
+                "строк",
+                "строка",
+                "выдерж",
+                "цитат",
+            ],
+        ),
+        has_source_terms: contains_any(
+            &lower,
+            &[
+                "source",
+                "источник",
+                "docs/",
+                "crates/",
+                "target/",
+                "/home/",
+            ],
+        ),
+        has_file_like_token: contains_file_like_token(text),
+        has_path_terms: contains_any(
+            &lower,
+            &[
+                "path", "путь", "file", "файл", "docs/", "crates/", "target/", "/home/",
+            ],
+        ) || contains_file_like_token(text),
+        has_report_or_trace_terms: contains_any(
+            &lower,
+            &[
+                "report",
+                "trace",
+                "лог",
+                "log",
+                "отчет",
+                "отчёт",
+                "json",
+                "jsonl",
+            ],
+        ),
+        has_no_write_terms: contains_any(
+            &lower,
+            &[
+                "read-only",
+                "readonly",
+                "не меняй",
+                "не правь",
+                "не трогай",
+                "только проверь",
+                "только посмотри",
+                "только читай",
+            ],
+        ),
+        has_mutation_terms: contains_any(
+            &lower,
+            &[
+                "исправь",
+                "измени",
+                "обнови",
+                "запиши",
+                "удали",
+                "commit",
+                "push",
+                "apply",
+                "patch",
+                "write",
+                "delete",
+                "update",
+            ],
+        ),
+        has_failure_terms: contains_any(
+            &lower,
+            &[
+                "failed",
+                "failure",
+                "fail",
+                "ошибка",
+                "провал",
+                "не прошло",
+                "не проходит",
+                "watch",
+                "veto",
+            ],
+        ),
+        has_question_mark: text.contains('?') || text.contains('؟'),
+        has_code_or_fence: contains_marker_like_signal(text),
+        has_nando_wave_terms: contains_any(
+            &lower,
+            &[
+                "nando",
+                "wave",
+                "llmwave",
+                "нандо",
+                "волн",
+                "runtime",
+                "рантайм",
+            ],
+        ),
+        digit_count_ge_4: text.chars().filter(|ch| ch.is_ascii_digit()).count() >= 4,
+        concise_request: text.trim().len() <= 280,
+        long_context: text.trim().len() >= 1000,
+    }
+}
+
 fn extract_agent_control_admission_features(
     text: &str,
 ) -> RoleBindingAgentControlAdmissionFeatures {
@@ -40444,6 +40820,69 @@ fn answer_evidence_admission_policy_reports(
         .collect()
 }
 
+fn read_inspect_admission_policy_reports(
+    rows: &[RoleBindingReadInspectAdmissionAuditRow],
+    minimum_true_support: usize,
+) -> Vec<RoleBindingEditAdmissionPolicyReport> {
+    type ReadInspectAdmissionPredicate = fn(&RoleBindingReadInspectAdmissionFeatures) -> bool;
+    let policy_defs: Vec<(&str, ReadInspectAdmissionPredicate)> = vec![
+        ("all_hook_ready_rows", |_| true),
+        ("read_terms", |features| features.has_read_terms),
+        ("path_terms", |features| features.has_path_terms),
+        ("file_like_token", |features| features.has_file_like_token),
+        ("read_and_path", |features| {
+            features.has_read_terms && features.has_path_terms
+        }),
+        ("check_and_path", |features| {
+            features.has_check_terms && features.has_path_terms
+        }),
+        ("evidence_and_path", |features| {
+            features.has_evidence_terms && features.has_path_terms
+        }),
+        ("excerpt_and_path", |features| {
+            features.has_excerpt_terms && features.has_path_terms
+        }),
+        ("report_or_trace_path", |features| {
+            features.has_report_or_trace_terms && features.has_path_terms
+        }),
+        ("read_path_no_mutation", |features| {
+            features.has_read_terms && features.has_path_terms && !features.has_mutation_terms
+        }),
+        ("check_path_no_mutation", |features| {
+            features.has_check_terms && features.has_path_terms && !features.has_mutation_terms
+        }),
+        ("evidence_path_no_mutation", |features| {
+            features.has_evidence_terms && features.has_path_terms && !features.has_mutation_terms
+        }),
+        ("read_path_no_failure_no_mutation", |features| {
+            features.has_read_terms
+                && features.has_path_terms
+                && !features.has_failure_terms
+                && !features.has_mutation_terms
+        }),
+        ("no_write_contract_with_path", |features| {
+            features.has_no_write_terms && features.has_path_terms
+        }),
+        ("concise_read_path_no_mutation", |features| {
+            features.concise_request
+                && features.has_read_terms
+                && features.has_path_terms
+                && !features.has_mutation_terms
+        }),
+        ("nando_wave_read_path", |features| {
+            features.has_nando_wave_terms && features.has_read_terms && features.has_path_terms
+        }),
+    ];
+    policy_defs
+        .into_iter()
+        .map(|(name, predicate)| {
+            evaluate_read_inspect_admission_policy(name, rows, minimum_true_support, |row| {
+                predicate(&row.features)
+            })
+        })
+        .collect()
+}
+
 fn metrics_report_admission_policy_accepts(
     policy_name: &str,
     features: &RoleBindingMetricsReportAdmissionFeatures,
@@ -40689,6 +41128,37 @@ fn evaluate_answer_evidence_admission_policy<F>(
 ) -> RoleBindingEditAdmissionPolicyReport
 where
     F: Fn(&RoleBindingAnswerEvidenceAdmissionCalibrationRow) -> bool,
+{
+    let mut accepted = 0usize;
+    let mut true_accepts = 0usize;
+    let mut false_accepts = 0usize;
+    let mut missed_true = 0usize;
+    for row in rows {
+        let accept = accepts(row);
+        accepted += usize::from(accept);
+        true_accepts += usize::from(accept && row.verifier_label);
+        false_accepts += usize::from(accept && !row.verifier_label);
+        missed_true += usize::from(!accept && row.verifier_label);
+    }
+    RoleBindingEditAdmissionPolicyReport {
+        policy_name: policy_name.to_owned(),
+        accepts: accepted,
+        true_accepts,
+        false_accepts,
+        missed_true,
+        singleton_safe: false_accepts == 0 && true_accepts == 1,
+        robust_safe: false_accepts == 0 && true_accepts >= minimum_true_support,
+    }
+}
+
+fn evaluate_read_inspect_admission_policy<F>(
+    policy_name: &str,
+    rows: &[RoleBindingReadInspectAdmissionAuditRow],
+    minimum_true_support: usize,
+    accepts: F,
+) -> RoleBindingEditAdmissionPolicyReport
+where
+    F: Fn(&RoleBindingReadInspectAdmissionAuditRow) -> bool,
 {
     let mut accepted = 0usize;
     let mut true_accepts = 0usize;
@@ -41040,6 +41510,32 @@ fn answer_evidence_admission_feature_counts(
         .collect()
 }
 
+fn read_inspect_admission_feature_counts(
+    rows: &[RoleBindingReadInspectAdmissionAuditRow],
+) -> Vec<RoleBindingEditAdmissionFeatureCount> {
+    let mut counts = BTreeMap::<String, (usize, usize)>::new();
+    for row in rows {
+        for feature in read_inspect_admission_feature_names(&row.features) {
+            let entry = counts.entry(feature).or_default();
+            if row.verifier_label {
+                entry.0 += 1;
+            } else {
+                entry.1 += 1;
+            }
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(feature, (label_true_count, label_false_count))| {
+            RoleBindingEditAdmissionFeatureCount {
+                feature,
+                label_true_count,
+                label_false_count,
+            }
+        })
+        .collect()
+}
+
 fn agent_control_admission_feature_counts(
     rows: &[RoleBindingAgentControlAdmissionCalibrationRow],
 ) -> Vec<RoleBindingEditAdmissionFeatureCount> {
@@ -41117,6 +41613,70 @@ fn answer_evidence_admission_feature_names(
     }
     if features.colon_count_ge_3 {
         names.push("colon_count_ge_3".to_owned());
+    }
+    if features.concise_request {
+        names.push("concise_request".to_owned());
+    }
+    if features.long_context {
+        names.push("long_context".to_owned());
+    }
+    names
+}
+
+fn read_inspect_admission_feature_names(
+    features: &RoleBindingReadInspectAdmissionFeatures,
+) -> Vec<String> {
+    let mut names = Vec::new();
+    if features.starts_read_or_inspect {
+        names.push("starts_read_or_inspect".to_owned());
+    }
+    if features.has_read_terms {
+        names.push("has_read_terms".to_owned());
+    }
+    if features.has_inspect_terms {
+        names.push("has_inspect_terms".to_owned());
+    }
+    if features.has_check_terms {
+        names.push("has_check_terms".to_owned());
+    }
+    if features.has_evidence_terms {
+        names.push("has_evidence_terms".to_owned());
+    }
+    if features.has_excerpt_terms {
+        names.push("has_excerpt_terms".to_owned());
+    }
+    if features.has_source_terms {
+        names.push("has_source_terms".to_owned());
+    }
+    if features.has_file_like_token {
+        names.push("has_file_like_token".to_owned());
+    }
+    if features.has_path_terms {
+        names.push("has_path_terms".to_owned());
+    }
+    if features.has_report_or_trace_terms {
+        names.push("has_report_or_trace_terms".to_owned());
+    }
+    if features.has_no_write_terms {
+        names.push("has_no_write_terms".to_owned());
+    }
+    if features.has_mutation_terms {
+        names.push("has_mutation_terms".to_owned());
+    }
+    if features.has_failure_terms {
+        names.push("has_failure_terms".to_owned());
+    }
+    if features.has_question_mark {
+        names.push("has_question_mark".to_owned());
+    }
+    if features.has_code_or_fence {
+        names.push("has_code_or_fence".to_owned());
+    }
+    if features.has_nando_wave_terms {
+        names.push("has_nando_wave_terms".to_owned());
+    }
+    if features.digit_count_ge_4 {
+        names.push("digit_count_ge_4".to_owned());
     }
     if features.concise_request {
         names.push("concise_request".to_owned());

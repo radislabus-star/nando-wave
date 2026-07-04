@@ -472,6 +472,12 @@ pub(crate) fn print_help() {
         "            Calibrate read-inspect score/readout thresholds against deterministic verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-read-inspect-admission-audit-v1 [evidence-trace-jsonl] [history-jsonl] [admission-report-json]"
+    );
+    println!(
+        "            Audit read-inspect request-side admission features against verifier labels; review-only, no local accepts"
+    );
+    println!(
         "  role-binding-real-traffic-git-control-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

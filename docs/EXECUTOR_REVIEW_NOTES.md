@@ -1,5 +1,86 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Read Inspect Admission Audit V1
+
+Verdict:
+
+```text
+READ_INSPECT_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-read-inspect-admission-audit-v1
+
+The command reads:
+  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl
+  /home/ubu/.codex/history.jsonl
+
+and writes:
+  target/nando-wave/real-traffic-shadow/read-inspect-admission-audit-v1.report.json
+```
+
+Why:
+
+```text
+The agent-loop registry selected read_context_path as the next narrow profile.
+The current read_inspect score geometry had 9 verifier-hook-ready rows, but
+only 1 verifier-true row and 8 verifier-false rows.
+
+This audit checks whether request-side prompt features can separate the one
+true read-only path/excerpt row from the false rows before any local accept
+promotion.
+```
+
+Audit result:
+
+```text
+hook_ready_rows: 9
+rows_with_prompt_features: 9
+label_true_rows: 1
+label_false_rows: 8
+minimum_true_support: 3
+robust_safe_policy_found: false
+singleton_safe_policy_found: false
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 0
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Do not lower the read_inspect threshold.
+Do not promote read_context_path from current request-side features.
+Do not count read_inspect savings.
+
+The next safe work is not broad answer_or_explain and not a generic read route.
+It must be either:
+  1. split read_context_path into a narrower path/excerpt subfamily, or
+  2. capture richer request-side serving state/evidence before scoring.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+The audit writes fingerprints, boolean features, counts, and policy scores
+only. It writes no raw prompt text, no raw response text, no target labels, no
+proof labels, and enables no local accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Loop Profile Registry V1
 
 Verdict:
