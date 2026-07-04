@@ -149,6 +149,8 @@ const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1.report.json";
+const DEFAULT_GIT_CONTROL_ADMISSION_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1.report.json";
 const DEFAULT_GIT_CONTROL_SAFE_POLICY_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v1.json";
 const DEFAULT_GIT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
@@ -8822,6 +8824,226 @@ where
     Err("git-control local accept calibration is review-only".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_git_control_admission_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_ADMISSION_AUDIT_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut rows = Vec::new();
+    let mut policy_rows = Vec::new();
+    let mut feature_accumulators =
+        BTreeMap::<String, RoleBindingGitControlAdmissionFeatureCount>::new();
+    let mut git_candidate_rows = 0usize;
+    let mut scoreable_candidate_rows = 0usize;
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut unverified_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_git_control = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY);
+        if !is_git_control {
+            continue;
+        }
+        git_candidate_rows += 1;
+        if request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        scoreable_candidate_rows += 1;
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let features = git_control_admission_feature_names(prompt_text);
+        for feature in &features {
+            let entry = feature_accumulators
+                .entry(feature.clone())
+                .or_insert_with(|| RoleBindingGitControlAdmissionFeatureCount {
+                    feature_name: feature.clone(),
+                    ..RoleBindingGitControlAdmissionFeatureCount::default()
+                });
+            entry.rows += 1;
+            match row.verified_safe_accept {
+                Some(true) => entry.true_rows += 1,
+                Some(false) => entry.false_rows += 1,
+                None => entry.unverified_rows += 1,
+            }
+        }
+        hook_ready_rows += usize::from(row.verified_safe_accept.is_some());
+        label_true_rows += usize::from(row.verified_safe_accept == Some(true));
+        label_false_rows += usize::from(row.verified_safe_accept == Some(false));
+        unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        policy_rows.push(RoleBindingGitControlAdmissionPolicyInput {
+            features: features.iter().cloned().collect(),
+            energy_margin: score.energy_margin,
+            verifier_label: row.verified_safe_accept,
+        });
+        rows.push(RoleBindingGitControlAdmissionAuditRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            verifier_label: row.verified_safe_accept,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            first_slot_margin: score.slot_margins.first().copied().unwrap_or(0),
+            slot_count: score.slot_margins.len(),
+            feature_names: features,
+        });
+    }
+
+    let mut feature_counts = feature_accumulators.into_values().collect::<Vec<_>>();
+    feature_counts.sort_by(|left, right| {
+        right
+            .rows
+            .cmp(&left.rows)
+            .then_with(|| right.true_rows.cmp(&left.true_rows))
+            .then_with(|| left.false_rows.cmp(&right.false_rows))
+            .then_with(|| left.unverified_rows.cmp(&right.unverified_rows))
+            .then_with(|| left.feature_name.cmp(&right.feature_name))
+    });
+    let mut policy_candidates =
+        git_control_admission_policy_candidates(&policy_rows, &feature_counts);
+    policy_candidates.sort_by(|left, right| {
+        right
+            .safe
+            .cmp(&left.safe)
+            .then_with(|| right.true_accepts.cmp(&left.true_accepts))
+            .then_with(|| left.false_accepts.cmp(&right.false_accepts))
+            .then_with(|| left.unverified_accepts.cmp(&right.unverified_accepts))
+            .then_with(|| left.accepts.cmp(&right.accepts))
+            .then_with(|| right.energy_threshold.cmp(&left.energy_threshold))
+            .then_with(|| left.policy_name.cmp(&right.policy_name))
+    });
+    let top_policy_candidates = policy_candidates
+        .iter()
+        .take(24)
+        .cloned()
+        .collect::<Vec<_>>();
+    let safe_policy_candidates = policy_candidates
+        .iter()
+        .filter(|candidate| candidate.safe)
+        .take(12)
+        .cloned()
+        .collect::<Vec<_>>();
+    let best_safe_true_accepts = safe_policy_candidates
+        .iter()
+        .map(|candidate| candidate.true_accepts)
+        .max()
+        .unwrap_or_default();
+    let safe_policy_found =
+        best_safe_true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+
+    let report = RoleBindingGitControlAdmissionAuditReport {
+        schema_version: "nando_role_binding_git_control_admission_audit_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "GIT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND"
+        } else {
+            "GIT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_REQUEST_SUBFAMILY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        git_candidate_rows,
+        scoreable_candidate_rows,
+        hook_ready_rows,
+        label_true_rows,
+        label_false_rows,
+        unverified_rows,
+        history_prompt_missing_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        feature_counts,
+        top_policy_candidates,
+        safe_policy_candidates,
+        rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Git-control admission audit only. It joins request fingerprints back to local prompt text at analysis time, writes no raw prompt/response text, evaluates request-side feature conjunctions plus score thresholds against verifier labels, treats unverified rows as unsafe for promotion, and enables no local accepts. Any safe subfamily still requires a separate promoted trace, shadow, provider cost, and false_accepts=0 audit before savings count.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "If the best safe request subfamily exceeds the current promoted git-control support, build a separate v3 promoted trace and rerun shadow/audit/feedback. Do not execute git mutations.".to_owned()
+        } else {
+            "Keep current git-control v2 policy. Current request-side features plus score thresholds do not expose a larger safe request subfamily.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-git-control-admission-audit-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  scoreable_candidate_rows: {}",
+        report.scoreable_candidate_rows
+    );
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  unverified_rows: {}", report.unverified_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("git-control admission audit is review-only".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_git_control_safe_policy_promote_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -11130,6 +11352,15 @@ where
     } else {
         None
     };
+    let git_control_admission_audit_report_path =
+        PathBuf::from(DEFAULT_GIT_CONTROL_ADMISSION_AUDIT_REPORT);
+    let git_control_admission_audit = if git_control_admission_audit_report_path.exists() {
+        Some(read_json_file::<RoleBindingGitControlAdmissionAuditReport>(
+            &git_control_admission_audit_report_path,
+        )?)
+    } else {
+        None
+    };
     let route_gap_readiness_by_family = route_gap_payload_readiness
         .as_ref()
         .map(|report| {
@@ -11189,6 +11420,20 @@ where
         if agent_control_current_policy_event_support_exhausted {
             priority_score = priority_score.saturating_sub(80_000);
         }
+        let git_control_admission_best_safe_true_accepts = git_control_admission_audit
+            .as_ref()
+            .filter(|_| route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
+            .map(|audit| audit.best_safe_true_accepts)
+            .unwrap_or_default();
+        let git_control_current_support_exhausted = git_control_admission_best_safe_true_accepts
+            > 0
+            && git_control_admission_best_safe_true_accepts
+                <= route
+                    .unique_accepts
+                    .incremental_verified_request_fingerprints;
+        if git_control_current_support_exhausted {
+            priority_score = priority_score.saturating_sub(80_000);
+        }
         let mut next_action = route.next_action.clone();
         if conditional_admission_current_support_exhausted {
             next_action = format!(
@@ -11197,6 +11442,10 @@ where
         } else if agent_control_current_policy_event_support_exhausted {
             next_action = format!(
                 "Agent-control audit found current robust stop/control policy event support exhausted at {agent_control_admission_best_robust_true_accepts} true accepts; unique contribution is constrained by duplicates/exact-cache overlap. Split broader agent-state/tool-state subfamilies before another promote."
+            );
+        } else if git_control_current_support_exhausted {
+            next_action = format!(
+                "Git-control admission audit found only {git_control_admission_best_safe_true_accepts} market-safe request-side accepts, already covered by current incremental unique support; improve git payload/evidence geometry before another promote."
             );
         }
         rows.push(RoleBindingCpuOperatorCatalogRow {
@@ -11228,6 +11477,8 @@ where
             agent_control_admission_best_robust_true_accepts,
             agent_control_current_policy_event_support_exhausted,
             agent_control_unique_contribution_constrained,
+            git_control_admission_best_safe_true_accepts,
+            git_control_current_support_exhausted,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
@@ -11276,6 +11527,8 @@ where
             agent_control_admission_best_robust_true_accepts: 0,
             agent_control_current_policy_event_support_exhausted: false,
             agent_control_unique_contribution_constrained: false,
+            git_control_admission_best_safe_true_accepts: 0,
+            git_control_current_support_exhausted: false,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -11329,6 +11582,9 @@ where
         agent_control_admission_audit_report_path: agent_control_admission_audit
             .as_ref()
             .map(|_| agent_control_admission_audit_report_path.display().to_string()),
+        git_control_admission_audit_report_path: git_control_admission_audit
+            .as_ref()
+            .map(|_| git_control_admission_audit_report_path.display().to_string()),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
@@ -11382,6 +11638,12 @@ where
         println!(
             "  agent_control_admission_audit_report: {}",
             agent_control_admission_audit_report_path.display()
+        );
+    }
+    if git_control_admission_audit.is_some() {
+        println!(
+            "  git_control_admission_audit_report: {}",
+            git_control_admission_audit_report_path.display()
         );
     }
     println!("  report: {}", report_path.display());
@@ -21597,6 +21859,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     conditional_admission_audit_report_path: Option<String>,
     #[serde(default)]
     agent_control_admission_audit_report_path: Option<String>,
+    #[serde(default)]
+    git_control_admission_audit_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
@@ -21660,6 +21924,10 @@ struct RoleBindingCpuOperatorCatalogRow {
     agent_control_current_policy_event_support_exhausted: bool,
     #[serde(default)]
     agent_control_unique_contribution_constrained: bool,
+    #[serde(default)]
+    git_control_admission_best_safe_true_accepts: usize,
+    #[serde(default)]
+    git_control_current_support_exhausted: bool,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
@@ -22487,6 +22755,81 @@ struct RoleBindingAgentControlAdmissionAuditReport {
     market_claim_allowed: bool,
     claim_boundary: String,
     next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingGitControlAdmissionAuditReport {
+    schema_version: String,
+    verdict: String,
+    registry_config_path: String,
+    evidence_trace_path: String,
+    history_path: String,
+    total_trace_rows: usize,
+    git_candidate_rows: usize,
+    scoreable_candidate_rows: usize,
+    hook_ready_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    unverified_rows: usize,
+    history_prompt_missing_rows: usize,
+    no_score_rows: usize,
+    safe_policy_found: bool,
+    best_safe_true_accepts: usize,
+    feature_counts: Vec<RoleBindingGitControlAdmissionFeatureCount>,
+    top_policy_candidates: Vec<RoleBindingGitControlAdmissionPolicyCandidate>,
+    safe_policy_candidates: Vec<RoleBindingGitControlAdmissionPolicyCandidate>,
+    rows: Vec<RoleBindingGitControlAdmissionAuditRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct RoleBindingGitControlAdmissionFeatureCount {
+    feature_name: String,
+    rows: usize,
+    true_rows: usize,
+    false_rows: usize,
+    unverified_rows: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingGitControlAdmissionPolicyCandidate {
+    policy_name: String,
+    request_feature_conjunction: Vec<String>,
+    energy_threshold: i32,
+    accepts: usize,
+    true_accepts: usize,
+    false_accepts: usize,
+    unverified_accepts: usize,
+    missed_true: usize,
+    safe: bool,
+    selection_source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingGitControlAdmissionAuditRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    verifier_label: Option<bool>,
+    energy_margin: i32,
+    min_slot_margin: i32,
+    first_slot_margin: i32,
+    slot_count: usize,
+    feature_names: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct RoleBindingGitControlAdmissionPolicyInput {
+    features: BTreeSet<String>,
+    energy_margin: i32,
+    verifier_label: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -28402,6 +28745,196 @@ fn conditional_admission_features_contradict(left: &str, right: &str) -> bool {
             | ("no_goal_terms", "has_goal_terms")
             | ("has_json_terms", "no_json_terms")
             | ("no_json_terms", "has_json_terms")
+    )
+}
+
+fn git_control_admission_feature_names(text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let mut features = BTreeSet::new();
+    let len = text.len();
+    let token_count = extract_request_side_edit_tokens(text, 96).len();
+    let has_digit = text.chars().any(|ch| ch.is_ascii_digit());
+    let has_git_terms = contains_any(
+        &lower,
+        &[
+            "git",
+            "commit",
+            "коммит",
+            "push",
+            "пуш",
+            "status",
+            "diff",
+            "branch",
+            "ветк",
+            "show",
+            "log",
+        ],
+    );
+    let has_commit_terms = contains_any(&lower, &["commit", "коммит"]);
+    let has_push_terms = contains_any(&lower, &["push", "пуш"]);
+    let has_status_terms = contains_any(&lower, &["status", "статус"]);
+    let has_diff_terms = contains_any(&lower, &["diff", "дифф"]);
+    let has_branch_terms = contains_any(&lower, &["branch", "ветк"]);
+    let has_file_path_terms = contains_any(
+        &lower,
+        &[
+            ".rs", ".py", ".md", ".json", ".jsonl", ".toml", "crates/", "docs/", "target/",
+        ],
+    );
+    let has_goal_terms = contains_any(
+        &lower,
+        &[
+            "goal",
+            "objective",
+            "цель",
+            "подцель",
+            "stop goal",
+            "стоп goal",
+        ],
+    );
+    let has_question_mark = text.contains('?');
+    let has_code_fence = text.contains("```");
+
+    if has_digit {
+        features.insert("has_digit".to_owned());
+    } else {
+        features.insert("no_digit".to_owned());
+    }
+    if has_git_terms {
+        features.insert("has_git_terms".to_owned());
+    }
+    if has_commit_terms {
+        features.insert("has_commit_terms".to_owned());
+    }
+    if has_push_terms {
+        features.insert("has_push_terms".to_owned());
+    }
+    if has_status_terms {
+        features.insert("has_status_terms".to_owned());
+    }
+    if has_diff_terms {
+        features.insert("has_diff_terms".to_owned());
+    }
+    if has_branch_terms {
+        features.insert("has_branch_terms".to_owned());
+    }
+    if has_file_path_terms {
+        features.insert("has_file_path_terms".to_owned());
+    }
+    if has_goal_terms {
+        features.insert("has_goal_terms".to_owned());
+    } else {
+        features.insert("no_goal_terms".to_owned());
+    }
+    if has_question_mark {
+        features.insert("has_question_mark".to_owned());
+    } else {
+        features.insert("no_question_mark".to_owned());
+    }
+    if has_code_fence {
+        features.insert("has_code_fence".to_owned());
+    }
+    for threshold in [80usize, 160, 320, 640] {
+        if len >= threshold {
+            features.insert(format!("len_ge_{threshold}"));
+        }
+    }
+    for threshold in [8usize, 16, 32, 64] {
+        if token_count >= threshold {
+            features.insert(format!("tokens_ge_{threshold}"));
+        }
+    }
+    features.into_iter().collect()
+}
+
+fn git_control_admission_policy_candidates(
+    rows: &[RoleBindingGitControlAdmissionPolicyInput],
+    feature_counts: &[RoleBindingGitControlAdmissionFeatureCount],
+) -> Vec<RoleBindingGitControlAdmissionPolicyCandidate> {
+    let mut thresholds = rows.iter().map(|row| row.energy_margin).collect::<Vec<_>>();
+    thresholds.push(0);
+    thresholds.sort_unstable();
+    thresholds.dedup();
+
+    let top_features = feature_counts
+        .iter()
+        .filter(|feature| feature.rows > 0)
+        .take(18)
+        .map(|feature| feature.feature_name.clone())
+        .collect::<Vec<_>>();
+    let mut feature_sets = Vec::<Vec<String>>::new();
+    feature_sets.push(Vec::new());
+    for feature in &top_features {
+        feature_sets.push(vec![feature.clone()]);
+    }
+    for left_index in 0..top_features.len() {
+        for right_index in (left_index + 1)..top_features.len() {
+            let left = &top_features[left_index];
+            let right = &top_features[right_index];
+            if git_control_admission_features_contradict(left, right) {
+                continue;
+            }
+            feature_sets.push(vec![left.clone(), right.clone()]);
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for features in feature_sets {
+        for &threshold in &thresholds {
+            let mut accepts = 0usize;
+            let mut true_accepts = 0usize;
+            let mut false_accepts = 0usize;
+            let mut unverified_accepts = 0usize;
+            let mut missed_true = 0usize;
+            for row in rows {
+                let feature_accepts = features
+                    .iter()
+                    .all(|feature| row.features.contains(feature));
+                let accept = feature_accepts && row.energy_margin >= threshold;
+                accepts += usize::from(accept);
+                match row.verifier_label {
+                    Some(true) => {
+                        true_accepts += usize::from(accept);
+                        missed_true += usize::from(!accept);
+                    }
+                    Some(false) => false_accepts += usize::from(accept),
+                    None => unverified_accepts += usize::from(accept),
+                }
+            }
+            let safe = true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && false_accepts == 0
+                && unverified_accepts == 0;
+            let policy_name = if features.is_empty() {
+                format!("energy_ge_{threshold}")
+            } else {
+                format!("{} AND energy >= {threshold}", features.join(" AND "))
+            };
+            candidates.push(RoleBindingGitControlAdmissionPolicyCandidate {
+                policy_name,
+                request_feature_conjunction: features.clone(),
+                energy_threshold: threshold,
+                accepts,
+                true_accepts,
+                false_accepts,
+                unverified_accepts,
+                missed_true,
+                safe,
+                selection_source: "request_feature_conjunction_plus_energy_threshold".to_owned(),
+            });
+        }
+    }
+    candidates
+}
+
+fn git_control_admission_features_contradict(left: &str, right: &str) -> bool {
+    matches!(
+        (left, right),
+        ("has_digit", "no_digit")
+            | ("no_digit", "has_digit")
+            | ("has_goal_terms", "no_goal_terms")
+            | ("no_goal_terms", "has_goal_terms")
+            | ("has_question_mark", "no_question_mark")
+            | ("no_question_mark", "has_question_mark")
     )
 }
 

@@ -1,5 +1,101 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Git-Control Admission Audit V1
+
+Verdict:
+
+```text
+GIT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND
+CPU_OPERATOR_CATALOG_V1_REVIEW_GIT_CONTROL_SUPPORT_EXHAUSTED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-git-control-admission-audit-v1
+
+The audit scores git-control request-side feature conjunctions plus energy
+thresholds against real verification labels. Unverified rows are treated as
+unsafe for promotion. It writes no raw prompt/response text, enables no local
+accepts, and cannot count as savings.
+```
+
+Fresh git-control admission audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1.report.json
+
+scoreable_candidate_rows: 12
+hook_ready_rows:         10
+label_true_rows:          6
+label_false_rows:         4
+unverified_rows:          2
+safe_policy_found:     true
+best_safe_true_accepts:   4
+
+best safe candidate:
+  has_digit AND energy >= 1190912
+  accepts:            4
+  true_accepts:       4
+  false_accepts:      0
+  unverified_accepts: 0
+```
+
+Decision:
+
+```text
+Do not promote another git-control policy from the current request-side
+features. The audit found only 4 market-safe accepts, already covered by the
+current git-control v2 incremental unique support.
+
+The apparent calibration support of 5 is not market-safe once request-side
+admission and unverified rows are included.
+```
+
+Fresh catalog after git-control exhaustion awareness:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+top_catalog_row: role_binding_mixed_map_seed0
+
+git_control row:
+  rank: 26
+  incremental_unique: 4
+  git_control_admission_best_safe_true_accepts: 4
+  git_control_current_support_exhausted: true
+```
+
+Claim boundary:
+
+```text
+This is route-selection instrumentation only. It adds no verified CPU accepts.
+CPU Routability 80 remains at 22/1000 unique verified accepts, with
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/git-control-admission-audit-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1.nanda.json
+
+verdict: PASS
+complexity_score: 27
+note: minimal metric-value packet used to check the rerank claim only
+```
+
 ## 2026-07-04 - Executor Integration: Agent-Control Admission Audit V1
 
 Verdict:

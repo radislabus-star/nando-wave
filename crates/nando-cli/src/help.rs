@@ -382,6 +382,12 @@ pub(crate) fn print_help() {
         "            Calibrate git-control score/readout thresholds; tool-output-backed traces may become safe-policy candidates, final-answer-only traces stay review-only"
     );
     println!(
+        "  role-binding-real-traffic-git-control-admission-audit-v1 [registry-config-json] [evidence-trace-jsonl] [history-jsonl] [audit-report-json]"
+    );
+    println!(
+        "            Audit request-side git-control subfamilies plus energy thresholds; unverified rows are unsafe and local accepts stay disabled"
+    );
+    println!(
         "  role-binding-real-traffic-git-control-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
     );
     println!(
