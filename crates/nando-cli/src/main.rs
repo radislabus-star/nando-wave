@@ -138,6 +138,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_git_control_profile_v1,
     run_role_binding_real_traffic_git_control_safe_policy_promote_v1,
     run_role_binding_real_traffic_git_control_safe_policy_promote_v2,
+    run_role_binding_real_traffic_git_control_safe_policy_promote_v3,
     run_role_binding_real_traffic_ime_input_state_admission_audit_v1,
     run_role_binding_real_traffic_ime_input_state_output_evidence_v1,
     run_role_binding_real_traffic_ime_input_state_payload_dry_run_v1,
@@ -957,6 +958,10 @@ fn main() -> ExitCode {
         Some("role-binding-real-traffic-git-control-safe-policy-promote-v2") => exit_for_result(
             run_role_binding_real_traffic_git_control_safe_policy_promote_v2(args),
             "try: nando-cli role-binding-real-traffic-git-control-safe-policy-promote-v2 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]",
+        ),
+        Some("role-binding-real-traffic-git-control-safe-policy-promote-v3") => exit_for_result(
+            run_role_binding_real_traffic_git_control_safe_policy_promote_v3(args),
+            "try: nando-cli role-binding-real-traffic-git-control-safe-policy-promote-v3 [base-registry-json] [evidence-trace-jsonl] [admission-audit-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]",
         ),
         Some("role-binding-real-traffic-serving-ops-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_serving_ops_payload_dry_run_v1(args),

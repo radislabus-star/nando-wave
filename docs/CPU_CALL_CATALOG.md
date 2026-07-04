@@ -554,6 +554,9 @@ target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1-cu
 target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json
 target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.shadow-report.json
 target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.verification-hook-audit.report.json
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
 ```
 
 Measured on current5k:
@@ -571,27 +574,40 @@ unverified_rows: 16
 
 local_accept_calibration safe_policy_found: false
 local_accept_calibration best_safe_true_accepts: 0
-admission_audit safe_policy_found: false
-admission_audit best_safe_true_accepts: 0
+admission_audit safe_policy_found: true
+admission_audit best_safe_true_accepts: 3
+admission safe policy:
+  no_mutation_verbs AND has_push_terms AND energy >= 1386496
+  true_accepts: 3
+  false_accepts: 0
+  unverified_accepts: 0
 
-shadow nando_shadow_accepts: 0
-shadow verified_safe_accepts: 0
+v3 promoted request_side_policy_accept_rows: 22
+v3 promoted policy_accept_rows: 3
+v3 promoted policy_accept_verified_true_rows: 3
+v3 promoted policy_accept_verified_false_rows: 0
+v3 promoted policy_accept_unverified_rows: 0
+
+shadow nando_shadow_accepts: 3
+shadow verified_safe_accepts: 3
 shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 539917
-verification_hook_ready_events: 74
-verified_cpu_accept_eligible_events: 0
-market_claim_allowed: false
+shadow p99_shadow_score_latency_ns: 386418
+verification_hook_ready_events: 21
+verified_cpu_accept_eligible_events: 3
+market_claim_allowed: true
 ```
 
 Decision:
 
 ```text
-`git_control` is a real, artifact-backed route, but current5k evidence rejects
-promotion. The verifier finds both true and false rows, and neither local
-readout nor request-side admission separates a safe subfamily. Keep it WATCH /
-NO_SAFE_POLICY_CURRENT5K. Do not lower thresholds and do not execute workspace
-mutations. The next git work must split into a narrower command-outcome
-subfamily before another safe-policy attempt.
+`git_control` is now PROVEN as a tiny request-side safe CPU support row:
+3 incremental unique CPU accepts over exact cache, false_accepts=0.
+
+The broad git_control route is still not solved. The old local calibration
+still fails, and the v3 request-side safe policy exhausts all current support at
+3 accepts. Do not lower thresholds and do not execute workspace mutations.
+The next git work must improve command outcome evidence or split a new git
+subfamily before another promotion attempt.
 ```
 
 ### Edit Marker Length Current5k Probe

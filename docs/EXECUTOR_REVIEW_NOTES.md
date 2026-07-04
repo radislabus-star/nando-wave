@@ -1,5 +1,153 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Git-Control V3 Promoted Safe Policy Counted In Current5k Catalog
+
+Verdict:
+
+```text
+GIT_CONTROL_SAFE_POLICY_V3_PROMOTED_TRACE_INTEGRATED
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+The request-side admission audit found a tiny safe git_control subfamily, but
+the previous feedback loop did not load the current5k v3 audit path. That made
+the catalog correctly refuse savings, but it also hid the promoted v3 shadow
+trace from the full current5k attribution.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+crates/nando-cli/src/main.rs
+crates/nando-cli/src/help.rs
+```
+
+What changed:
+
+```text
+Added role-binding-real-traffic-git-control-safe-policy-promote-v3.
+
+The v3 promotion uses the admission-audit safe request-side feature
+conjunction plus the selected energy threshold. It writes a promoted registry
+and trace, but executes no git command and still requires shadow/audit/feedback.
+
+role-binding-real-traffic-feedback-loop-v1 now loads current-window
+git-control safe-policy companion reports, including:
+  git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
+
+The CPU catalog now marks the proven-but-exhausted git_control row as:
+  LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED
+instead of incorrectly calling it a missing policy.
+```
+
+Generated:
+
+```text
+target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v3-current5k.json
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.trace.jsonl
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json
+target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
+target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
+target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.md
+docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json
+```
+
+Measured v3 promote result:
+
+```text
+selected_policy:
+  no_mutation_verbs AND has_push_terms AND energy >= 1386496
+request_side_policy_accept_rows: 22
+policy_accept_rows: 3
+policy_accept_verified_true_rows: 3
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+runtime_acceptance_mismatches: 0
+provider_cost_events_written: 22
+market_claim_allowed: false
+```
+
+Measured v3 shadow/audit:
+
+```text
+shadow verdict: REAL_TRAFFIC_SHADOW_V1_PASS
+nando_shadow_accepts: 3
+verified_safe_accepts: 3
+false_accepts: 0
+p99_shadow_score_latency_ns: 386418
+
+audit operator_candidate_calls: 22
+audit scoreable_candidate_calls: 22
+audit verification_hook_ready_events: 21
+audit verified_cpu_accept_eligible_events: 3
+audit provider_cost_events: 22
+audit market_claim_allowed: true
+```
+
+Measured full current5k feedback/catalog after integration:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+verified_cpu_accept_eligible_events: 108
+verified_cpu_accept_unique_request_fingerprints: 106
+incremental_cpu_accept_unique_request_fingerprints: 104
+exact_cache_overlap_verified_cpu_accepts: 2
+incremental_unique_gap_to_80_calls: 3896
+
+catalog business_value_gate_passed_rows: 5
+catalog proven_profile_rows: 5
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 18
+catalog rejected_profile_rows: 5
+```
+
+Measured git_control catalog row:
+
+```text
+current_status: PROVEN
+business_value_gate_passed: true
+business_value_gate_failure_reason: PASSED
+false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED
+verified_cpu_accept_unique_request_fingerprints: 3
+incremental_cpu_accept_unique_request_fingerprints: 3
+expected_unique_cpu_accepts_over_exact_cache: 3
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Count git_control as a tiny PROVEN current5k CPU support row, but do not widen
+it. The broad git_control route remains unsolved: old local calibration failed,
+and the safe request-side policy has exhausted current support at 3 true
+accepts.
+
+Do not execute workspace mutations.
+Do not lower thresholds.
+Do not claim CPU80.
+
+Next valid git_control step:
+  improve command outcome evidence or split a new git subfamily before another
+  promote attempt.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.md
+triads: docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json
+verdict: PASS
+complexity_score: 46
+trace_path: /tmp/nanda-structural-gate/git-control-safe-policy-v3-current5k-catalog-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Git-Control Request-Side Admission Split Found Tiny Safe Candidate
 
 Verdict:

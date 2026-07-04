@@ -313,6 +313,13 @@ const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_TRACE_JSONL: &str =
 const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.report.json";
 const DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.verification-hook-audit.report.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v3.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3.trace.jsonl";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3.report.json";
+const DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3.verification-hook-audit.report.json";
 const DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_SERVING_OPS_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -17808,6 +17815,334 @@ where
     )
 }
 
+pub(crate) fn run_role_binding_real_traffic_git_control_safe_policy_promote_v3<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let admission_audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_ADMISSION_AUDIT_REPORT));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let admission_audit =
+        read_json_file::<RoleBindingGitControlAdmissionAuditReport>(&admission_audit_report_path)?;
+    let admission_policy = admission_audit
+        .safe_policy_candidates
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            "git-control admission audit has no safe policy candidate for v3 promotion".to_owned()
+        })?;
+    if !admission_policy.safe
+        || admission_policy.true_accepts < DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+        || admission_policy.false_accepts != 0
+        || admission_policy.unverified_accepts != 0
+    {
+        return Err(format!(
+            "git-control admission v3 selected unsafe policy {} true={} false={} unverified={}",
+            admission_policy.policy_name,
+            admission_policy.true_accepts,
+            admission_policy.false_accepts,
+            admission_policy.unverified_accepts
+        ));
+    }
+
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let threshold = admission_policy.energy_threshold;
+    let acceptance_policy = "energy_threshold_only".to_owned();
+    let git_control_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if git_control_profile_ids.is_empty() {
+        return Err(
+            "git-control safe policy v3 promotion found no git_control profile ids in trace"
+                .to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if git_control_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "git-control safe policy v3 promotion found no matching profiles in registry for {:?}",
+            git_control_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut scoreable_candidate_calls = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let is_git_control = row
+            .nando_shadow_request
+            .as_ref()
+            .and_then(|request| request.route_key.as_deref())
+            .is_some_and(|route| route == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY);
+        if !is_git_control {
+            continue;
+        }
+        let scoreable = row
+            .nando_shadow_request
+            .as_ref()
+            .is_some_and(|request| !request.active_fringe.is_empty() && !request.slots.is_empty());
+        scoreable_candidate_calls += usize::from(scoreable);
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; git_control_safe_policy_promote_v3 request_policy={} policy_accept=false reason=history_prompt_missing",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                admission_policy.policy_name
+            ));
+            continue;
+        };
+        request_side_policy_evaluated_rows += 1;
+        let prompt_features = git_control_admission_feature_names(prompt_text)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let request_policy_accept = admission_policy
+            .request_feature_conjunction
+            .iter()
+            .all(|feature| prompt_features.contains(feature));
+        if !request_policy_accept {
+            request_side_policy_reject_rows += 1;
+            row.nando_shadow_request = None;
+            row.provider_cost_microusd = None;
+            row.verified_safe_accept = None;
+            row.notes = Some(format!(
+                "{}; git_control_safe_policy_promote_v3 request_policy={} provider_cost_estimate_microusd={} policy_accept=false",
+                row.notes
+                    .clone()
+                    .unwrap_or_else(|| "real_codex_trace".to_owned()),
+                admission_policy.policy_name,
+                provider_cost_microusd
+            ));
+            continue;
+        }
+
+        request_side_policy_accept_rows += 1;
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+        let Some(request) = &mut row.nando_shadow_request else {
+            no_score_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(policy_accept);
+        if policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
+        row.notes = Some(format!(
+            "{}; git_control_safe_policy_promote_v3 request_policy={} runtime_policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            admission_policy.policy_name,
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_git_control_safe_policy_promote_v3".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "GIT_CONTROL_SAFE_POLICY_PROMOTE_V3_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "GIT_CONTROL_SAFE_POLICY_PROMOTE_V3_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: admission_audit_report_path.display().to_string(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: Some(history_path.display().to_string()),
+        request_side_policy_name: Some(admission_policy.policy_name.clone()),
+        calibration_policy_name: "git_control_admission_audit_safe_policy_candidate".to_owned(),
+        calibration_policy_threshold: Some(admission_policy.energy_threshold),
+        selected_policy_name: admission_policy.policy_name.clone(),
+        selected_policy_source: admission_policy.selection_source.clone(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: admission_policy.accepts,
+        selected_policy_true_accepts: admission_policy.true_accepts,
+        selected_policy_false_accepts: admission_policy.false_accepts,
+        selected_policy_unverified_accepts: admission_policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
+        history_prompt_missing_rows,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a promoted git-control registry from the git admission audit safe candidate and rewrites the trace so only request-side feature-conjunction rows keep nando_shadow_request. Runtime uses prompt-derived feature admission plus score >= threshold; labels/evidence are not runtime authority. It executes no git command, mutates no workspace, and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the v3 promoted git-control registry/trace, then feed that audit into CPU route feedback and catalog. Workspace mutation execution remains blocked until a separate action executor gate exists.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-git-control-safe-policy-promote-v3: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  request_side_policy_name: {}",
+        admission_policy.policy_name
+    );
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!(
+        "  request_side_policy_accept_rows: {}",
+        report.request_side_policy_accept_rows
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    Err(
+        "git-control safe-policy v3 promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
 pub(crate) fn run_role_binding_real_traffic_serving_ops_payload_dry_run_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -20481,6 +20816,13 @@ where
             && route.false_accepts == 0
         {
             false_accept_risk = "MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE".to_owned();
+        } else if route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY
+            && git_control_current_support_exhausted
+            && expected_unique_cpu_accepts_over_exact_cache > 0
+            && route.false_accepts == 0
+        {
+            false_accept_risk =
+                "LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED".to_owned();
         }
         let business_value_gate_passed = cpu_catalog_business_value_gate_passed(
             route.candidate_events,
@@ -27998,8 +28340,10 @@ where
     } else {
         None
     };
-    let git_control_safe_policy_audit_report_path =
-        PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_AUDIT_REPORT);
+    let git_control_safe_policy_audit_report_path = current_window_companion_report_path(
+        DEFAULT_GIT_CONTROL_SAFE_POLICY_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let git_control_safe_policy_verification_audit =
         if git_control_safe_policy_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -28008,12 +28352,26 @@ where
         } else {
             None
         };
-    let git_control_safe_policy_v2_audit_report_path =
-        PathBuf::from(DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_AUDIT_REPORT);
+    let git_control_safe_policy_v2_audit_report_path = current_window_companion_report_path(
+        DEFAULT_GIT_CONTROL_SAFE_POLICY_V2_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
     let git_control_safe_policy_v2_verification_audit =
         if git_control_safe_policy_v2_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
                 &git_control_safe_policy_v2_audit_report_path,
+            )?)
+        } else {
+            None
+        };
+    let git_control_safe_policy_v3_audit_report_path = current_window_companion_report_path(
+        DEFAULT_GIT_CONTROL_SAFE_POLICY_V3_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
+    let git_control_safe_policy_v3_verification_audit =
+        if git_control_safe_policy_v3_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &git_control_safe_policy_v3_audit_report_path,
             )?)
         } else {
             None
@@ -28246,6 +28604,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let git_control_safe_policy_v3_verification_audit = keep_feedback_window_matched_audit(
+        git_control_safe_policy_v3_verification_audit,
+        &git_control_safe_policy_v3_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let serving_ops_verification_audit = keep_feedback_window_matched_audit(
         serving_ops_verification_audit,
         &serving_ops_audit_report_path,
@@ -28430,8 +28794,9 @@ where
         answer_evidence_safe_policy_verification_audit
             .as_ref()
             .or(answer_evidence_verification_audit.as_ref());
-    let effective_git_control_verification_audit = git_control_safe_policy_v2_verification_audit
+    let effective_git_control_verification_audit = git_control_safe_policy_v3_verification_audit
         .as_ref()
+        .or(git_control_safe_policy_v2_verification_audit.as_ref())
         .or(git_control_safe_policy_verification_audit.as_ref())
         .or(git_control_verification_audit.as_ref());
     let git_control_tool_output_authoritative = effective_git_control_verification_audit
@@ -30519,6 +30884,14 @@ where
                         .display()
                         .to_string()
                 }),
+        git_control_safe_policy_v3_verification_audit_report_path:
+            git_control_safe_policy_v3_verification_audit
+                .as_ref()
+                .map(|_| {
+                    git_control_safe_policy_v3_audit_report_path
+                        .display()
+                        .to_string()
+                }),
         git_control_local_accept_calibration_report_path: git_control_local_accept_calibration
             .as_ref()
             .map(|_| {
@@ -30796,6 +31169,9 @@ where
     }
     if let Some(path) = &report.git_control_safe_policy_v2_verification_audit_report_path {
         println!("  git_control_safe_policy_v2_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.git_control_safe_policy_v3_verification_audit_report_path {
+        println!("  git_control_safe_policy_v3_verification_audit_report: {path}");
     }
     if let Some(path) = &report.git_control_local_accept_calibration_report_path {
         println!("  git_control_local_accept_calibration_report: {path}");
@@ -36487,6 +36863,8 @@ struct RoleBindingFeedbackLoopReport {
     git_control_verification_audit_report_path: Option<String>,
     git_control_safe_policy_verification_audit_report_path: Option<String>,
     git_control_safe_policy_v2_verification_audit_report_path: Option<String>,
+    #[serde(default)]
+    git_control_safe_policy_v3_verification_audit_report_path: Option<String>,
     git_control_local_accept_calibration_report_path: Option<String>,
     serving_ops_dry_run_report_path: Option<String>,
     serving_ops_verification_audit_report_path: Option<String>,

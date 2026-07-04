@@ -1,0 +1,173 @@
+{
+  "task_id": "git-control-safe-policy-v3-current5k-catalog-v1",
+  "domain": "code",
+  "query": "Verify git_control v3 promotion is counted only as a tiny proven current5k CPU support row, not as broad git-control coverage, workspace mutation authority, or CPU80.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "git_control_v3_admission_policy",
+      "relation": "selected_policy",
+      "object": "no_mutation_verbs_AND_has_push_terms_AND_energy_ge_1386496",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "policy",
+      "object_role": "policy_name",
+      "route": "git_control"
+    },
+    {
+      "id": "t2",
+      "subject": "git_control_v3_promote_report",
+      "relation": "request_side_policy_accept_rows",
+      "object": "22",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t3",
+      "subject": "git_control_v3_promote_report",
+      "relation": "policy_accept_verified_true_rows",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t4",
+      "subject": "git_control_v3_promote_report",
+      "relation": "excludes_false_accept_rows",
+      "object": "zero_false_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "safety_boundary",
+      "route": "git_control"
+    },
+    {
+      "id": "t5",
+      "subject": "git_control_v3_promote_report",
+      "relation": "excludes_unverified_accept_rows",
+      "object": "zero_unverified_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "promote_report",
+      "object_role": "safety_boundary",
+      "route": "git_control"
+    },
+    {
+      "id": "t6",
+      "subject": "git_control_v3_shadow_report",
+      "relation": "verified_safe_accepts",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json",
+      "confidence": 1.0,
+      "subject_role": "shadow_report",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t7",
+      "subject": "git_control_v3_shadow_report",
+      "relation": "excludes_false_accepts",
+      "object": "zero_false_accepts",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json",
+      "confidence": 1.0,
+      "subject_role": "shadow_report",
+      "object_role": "safety_boundary",
+      "route": "git_control"
+    },
+    {
+      "id": "t8",
+      "subject": "git_control_v3_audit_report",
+      "relation": "verified_cpu_accept_eligible_events",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.verification-hook-audit.report.json",
+      "confidence": 1.0,
+      "subject_role": "audit_report",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t9",
+      "subject": "current5k_feedback_loop",
+      "relation": "uses_git_control_v3_audit",
+      "object": "git-control-safe-policy-v3-current5k.verification-hook-audit.report.json",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "audit_artifact",
+      "route": "git_control"
+    },
+    {
+      "id": "t10",
+      "subject": "current5k_feedback_loop",
+      "relation": "incremental_cpu_accept_unique_request_fingerprints",
+      "object": "104",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "feedback_loop",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t11",
+      "subject": "current5k_catalog_git_control_row",
+      "relation": "current_status",
+      "object": "PROVEN",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "status",
+      "route": "git_control"
+    },
+    {
+      "id": "t12",
+      "subject": "current5k_catalog_git_control_row",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "metric",
+      "route": "git_control"
+    },
+    {
+      "id": "t13",
+      "subject": "current5k_catalog_git_control_row",
+      "relation": "false_accept_risk",
+      "object": "LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "risk_status",
+      "route": "git_control"
+    },
+    {
+      "id": "t14",
+      "subject": "current5k_catalog_git_control_row",
+      "relation": "forbids_workspace_mutation_execution",
+      "object": "workspace_mutations_disabled",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "safety_boundary",
+      "route": "git_control"
+    },
+    {
+      "id": "t15",
+      "subject": "current5k_catalog_git_control_row",
+      "relation": "forbids_cpu80_claim",
+      "object": "cpu80_not_achieved",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "catalog_row",
+      "object_role": "claim_boundary",
+      "route": "current5k"
+    }
+  ],
+  "candidate_triads": []
+}
