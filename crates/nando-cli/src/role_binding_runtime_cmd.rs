@@ -183,12 +183,12 @@ const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.report.json";
 const DEFAULT_AGENT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT: &str =
-    "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1.report.json";
+    "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json";
 const DEFAULT_AGENT_CONTROL_SAFE_POLICY_TRACE_JSONL: &str =
-    "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.trace.jsonl";
+    "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.trace.jsonl";
 const DEFAULT_AGENT_CONTROL_SAFE_POLICY_REPORT: &str =
-    "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.report.json";
-const DEFAULT_AGENT_CONTROL_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.verification-hook-audit.report.json";
+    "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.report.json";
+const DEFAULT_AGENT_CONTROL_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.verification-hook-audit.report.json";
 const DEFAULT_EDIT_PAYLOAD_READINESS_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json";
 const DEFAULT_EDIT_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
@@ -9092,15 +9092,23 @@ where
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
-        no_candidate_calls: route_gap.no_candidate_events,
+        no_candidate_calls: feedback.no_candidate_calls,
+        route_gap_no_candidate_events: route_gap.no_candidate_events,
+        route_gap_feedback_no_candidate_mismatch: route_gap.no_candidate_events
+            != feedback.no_candidate_calls,
         route_gap_payload_ready_events: route_gap_payload_readiness
             .as_ref()
             .map(|report| report.payload_ready_events)
             .unwrap_or_default(),
-        current_verified_cpu_accepts: feedback.verified_cpu_accept_eligible_events,
+        current_verified_cpu_accepts: feedback.verified_cpu_accept_unique_request_fingerprints,
+        verified_cpu_accept_route_sum_events: feedback.verified_cpu_accept_route_sum_events,
+        incremental_cpu_accept_unique_request_fingerprints: feedback
+            .incremental_cpu_accept_unique_request_fingerprints,
+        verified_cpu_accept_duplicate_route_hits: feedback.verified_cpu_accept_duplicate_route_hits,
+        exact_cache_overlap_verified_cpu_accepts: feedback.exact_cache_overlap_verified_cpu_accepts,
         target_verified_cpu_accepts: target_verified_cpu_calls,
         verified_gap_to_80_calls: target_verified_cpu_calls
-            .saturating_sub(feedback.verified_cpu_accept_eligible_events),
+            .saturating_sub(feedback.verified_cpu_accept_unique_request_fingerprints),
         top_gap_family,
         top_actionable_rows,
         rows,
@@ -17912,8 +17920,20 @@ struct RoleBindingCpuOperatorCatalogReport {
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
     no_candidate_calls: usize,
+    #[serde(default)]
+    route_gap_no_candidate_events: usize,
+    #[serde(default)]
+    route_gap_feedback_no_candidate_mismatch: bool,
     route_gap_payload_ready_events: usize,
     current_verified_cpu_accepts: usize,
+    #[serde(default)]
+    verified_cpu_accept_route_sum_events: usize,
+    #[serde(default)]
+    incremental_cpu_accept_unique_request_fingerprints: usize,
+    #[serde(default)]
+    verified_cpu_accept_duplicate_route_hits: usize,
+    #[serde(default)]
+    exact_cache_overlap_verified_cpu_accepts: usize,
     target_verified_cpu_accepts: usize,
     verified_gap_to_80_calls: usize,
     top_gap_family: Option<String>,

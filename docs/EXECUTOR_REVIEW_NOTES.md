@@ -1,5 +1,87 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent-Control V2 Default Promotion
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_AGENT_CONTROL_V2_DEFAULT_ACTIVE
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Default agent-control artifacts now point to the existing v2 safe-policy set:
+  agent-control-admission-calibration-v2.report.json
+  agent-control-safe-policy-v2.trace.jsonl
+  agent-control-safe-policy-v2.report.json
+  agent-control-safe-policy-v2.verification-hook-audit.report.json
+
+Catalog summary now treats unique request-fingerprint accepts as the CPU
+Routability scoreboard. Route-sum accepts are exposed separately.
+```
+
+Why this is allowed:
+
+```text
+agent-control-safe-policy-v2.verification-hook-audit.report.json:
+  total_llm_calls:                      1000
+  operator_candidate_calls:             11
+  scoreable_candidate_calls:            11
+  verification_hook_ready_events:       11
+  verified_cpu_accept_eligible_events:  11
+  shadow_false_accepts:                 0
+  shadow_incremental_savings_over_exact_cache: 6
+  market_claim_allowed:                 true
+```
+
+Fresh default feedback:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:                         570 / 1000
+no_candidate_calls:                               430 / 1000
+scoreable_candidate_calls:                        178 / 1000
+verification_hook_ready_events:                   138 / 1000
+verified_cpu_accept_eligible_events:              20
+verified_cpu_accept_route_sum_events:             20
+verified_cpu_accept_unique_request_fingerprints:  15
+incremental_cpu_accept_unique_request_fingerprints: 15
+verified_cpu_accept_duplicate_route_hits:         5
+exact_cache_overlap_verified_cpu_accepts:         1
+unique_verified_gap_to_80_calls:                  785
+false_accepts:                                    0
+```
+
+Fresh catalog:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-current-feedback-v1.report.json
+
+current_verified_cpu_accepts:                     15
+verified_cpu_accept_route_sum_events:             20
+verified_cpu_accept_duplicate_route_hits:         5
+route_gap_feedback_no_candidate_mismatch:         true
+
+interpretation:
+  CPU Routability scoreboard is now unique accepts, not route-sum. The route-gap
+  side can be stale relative to feedback and is explicitly marked when its
+  no-candidate count differs from feedback.no_candidate_calls.
+```
+
+Claim boundary:
+
+```text
+This is real progress from 12 unique accepts to 15 unique accepts on the same
+1000-row non-synthetic Codex trace. It is still not CPU Routability 80.
+```
+
 ## 2026-07-04 - Executor Integration: Feedback-Loop Unique Accept Dedupe
 
 Verdict:
