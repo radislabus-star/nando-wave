@@ -180,6 +180,7 @@ unsafe for request-side policy selection.
 current5k companion reports used by catalog:
   git-control-admission-audit-v1-current5k.report.json
   metrics-report-admission-calibration-v1-5k.report.json
+  edit-admission-calibration-v1-current5k.report.json
 ```
 
 Business Value Gate reason refresh:
@@ -210,7 +211,7 @@ git_control:
 
 role_binding_edit_marker_length_seed0:
   business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,no_safe_request_side_policy,safe_policy_missing
 ```
 
 Decision:
@@ -288,6 +289,20 @@ conditional_branch current5k:
   local readout calibration: no safe policy
   request-side v2 safe policy: 3 true accepts, 0 false accepts, 0 unverified
   decision: PROVEN tiny subset only; do not widen the broad conditional route
+
+edit_marker_length current5k:
+  route candidate events: 506
+  scoreable_payload_events: 50
+  verification_hook_ready_events: 42
+  admission hook_ready_rows: 42
+  admission label_true_rows: 14
+  admission label_false_rows: 28
+  robust_safe_policy_found: false
+  singleton_safe_policy_found: false
+  best_robust_true_accepts: 0
+  best_singleton_true_accepts: 0
+  decision: CANDIDATE / NO_SAFE_REQUEST_SIDE_POLICY
+  next_action: split into a narrower artifact-backed edit subfamily or collect stronger verifier evidence; do not lower thresholds
 
 file_path_evidence_answer current5k split:
   broad_split candidate events: 146

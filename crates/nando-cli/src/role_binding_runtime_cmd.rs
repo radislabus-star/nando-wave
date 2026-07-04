@@ -20024,6 +20024,17 @@ where
     } else {
         None
     };
+    let edit_admission_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
+    let edit_admission_calibration = if edit_admission_calibration_report_path.exists() {
+        Some(read_json_file::<RoleBindingEditAdmissionCalibrationReport>(
+            &edit_admission_calibration_report_path,
+        )?)
+    } else {
+        None
+    };
     let serving_ops_local_accept_calibration_report_path =
         PathBuf::from(DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let serving_ops_local_accept_calibration =
@@ -20283,6 +20294,26 @@ where
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
+        let edit_admission_best_robust_true_accepts = edit_admission_calibration
+            .as_ref()
+            .filter(|_| route.route_key.contains("edit_marker_length"))
+            .map(|audit| audit.best_robust_true_accepts)
+            .unwrap_or_default();
+        let edit_admission_best_singleton_true_accepts = edit_admission_calibration
+            .as_ref()
+            .filter(|_| route.route_key.contains("edit_marker_length"))
+            .map(|audit| audit.best_singleton_true_accepts)
+            .unwrap_or_default();
+        let edit_admission_no_safe_policy = edit_admission_calibration
+            .as_ref()
+            .filter(|_| route.route_key.contains("edit_marker_length"))
+            .is_some_and(|audit| {
+                !audit.robust_safe_policy_found && !audit.singleton_safe_policy_found
+            });
+        if edit_admission_no_safe_policy {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
         let serving_ops_local_accept_best_safe_true_accepts = serving_ops_local_accept_calibration
             .as_ref()
             .filter(|_| route.route_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY)
@@ -20379,6 +20410,10 @@ where
             next_action = format!(
                 "Edit local calibration found only {edit_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve edit payload/evidence geometry before another promote."
             );
+        } else if edit_admission_no_safe_policy {
+            next_action = format!(
+                "Edit admission calibration found no safe request-side policy (robust true accepts {edit_admission_best_robust_true_accepts}, singleton true accepts {edit_admission_best_singleton_true_accepts}). Do not lower thresholds; split edit_marker_length into a narrower artifact-backed subfamily or collect stronger verifier evidence."
+            );
         } else if serving_ops_current_support_exhausted {
             next_action = format!(
                 "Serving-ops local calibration found only {serving_ops_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve serving-ops payload/evidence geometry or split a stronger subfamily before another promote."
@@ -20459,6 +20494,7 @@ where
             local_accept_calibration_failed,
             local_accept_support_insufficient,
             support_exhausted,
+            edit_admission_no_safe_policy,
             false_accept_risk.as_str(),
         );
         rows.push(RoleBindingCpuOperatorCatalogRow {
@@ -20512,6 +20548,9 @@ where
             agent_continue_state_admission_no_safe_policy,
             edit_local_accept_best_safe_true_accepts,
             edit_current_support_exhausted,
+            edit_admission_best_robust_true_accepts,
+            edit_admission_best_singleton_true_accepts,
+            edit_admission_no_safe_policy,
             serving_ops_local_accept_best_safe_true_accepts,
             serving_ops_current_support_exhausted,
             style_brevity_verifier_true_events,
@@ -20906,6 +20945,7 @@ where
             false,
             false,
             support_exhausted,
+            false,
             false_accept_risk.as_str(),
         );
         rows.push(RoleBindingCpuOperatorCatalogRow {
@@ -21032,6 +21072,9 @@ where
             agent_continue_state_admission_no_safe_policy: agent_continue_state_gap_no_safe_policy,
             edit_local_accept_best_safe_true_accepts: 0,
             edit_current_support_exhausted: false,
+            edit_admission_best_robust_true_accepts: 0,
+            edit_admission_best_singleton_true_accepts: 0,
+            edit_admission_no_safe_policy: false,
             serving_ops_local_accept_best_safe_true_accepts: if family.family_key
                 == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY
             {
@@ -21229,6 +21272,9 @@ where
         edit_local_accept_calibration_report_path: edit_local_accept_calibration
             .as_ref()
             .map(|_| edit_local_accept_calibration_report_path.display().to_string()),
+        edit_admission_calibration_report_path: edit_admission_calibration
+            .as_ref()
+            .map(|_| edit_admission_calibration_report_path.display().to_string()),
         serving_ops_local_accept_calibration_report_path: serving_ops_local_accept_calibration
             .as_ref()
             .map(|_| {
@@ -21387,6 +21433,12 @@ where
         println!(
             "  edit_local_accept_calibration_report: {}",
             edit_local_accept_calibration_report_path.display()
+        );
+    }
+    if edit_admission_calibration.is_some() {
+        println!(
+            "  edit_admission_calibration_report: {}",
+            edit_admission_calibration_report_path.display()
         );
     }
     if serving_ops_local_accept_calibration.is_some() {
@@ -34413,6 +34465,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     edit_local_accept_calibration_report_path: Option<String>,
     #[serde(default)]
+    edit_admission_calibration_report_path: Option<String>,
+    #[serde(default)]
     serving_ops_local_accept_calibration_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
@@ -34535,6 +34589,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     edit_local_accept_best_safe_true_accepts: usize,
     #[serde(default)]
     edit_current_support_exhausted: bool,
+    #[serde(default)]
+    edit_admission_best_robust_true_accepts: usize,
+    #[serde(default)]
+    edit_admission_best_singleton_true_accepts: usize,
+    #[serde(default)]
+    edit_admission_no_safe_policy: bool,
     #[serde(default)]
     serving_ops_local_accept_best_safe_true_accepts: usize,
     #[serde(default)]
@@ -49003,6 +49063,7 @@ fn cpu_catalog_business_value_gate_failure_reason(
     local_accept_calibration_failed: bool,
     local_accept_support_insufficient: bool,
     support_exhausted: bool,
+    request_side_no_safe_policy: bool,
     false_accept_risk: &str,
 ) -> String {
     if business_value_gate_passed {
@@ -49036,6 +49097,9 @@ fn cpu_catalog_business_value_gate_failure_reason(
     }
     if support_exhausted {
         reasons.push("current_support_exhausted");
+    }
+    if request_side_no_safe_policy {
+        reasons.push("no_safe_request_side_policy");
     }
     if false_accept_risk.contains("UNKNOWN") {
         reasons.push("false_accept_risk_unknown");

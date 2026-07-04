@@ -1,5 +1,81 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Edit Admission Audit Routed Into CPU Catalog
+
+Verdict:
+
+```text
+EDIT_ADMISSION_NO_SAFE_POLICY_WIRED
+NO_NEW_CPU_ACCEPTS_PROMOTED
+```
+
+Why:
+
+```text
+The edit_marker_length route is the largest narrow non-broad candidate, but
+the current5k request-side admission audit already found no safe policy. The
+CPU call catalog now reads that audit directly so this route is not recycled as
+"just improve admission" work.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+Catalog artifact:
+
+```text
+target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/edit-admission-no-safe-policy-catalog-v1.md
+verdict: PASS
+complexity_score: 35
+trace_path: /tmp/nanda-structural-gate/edit-admission-no-safe-policy-catalog-v1.trace.json
+```
+
+Input audit:
+
+```text
+target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json
+```
+
+Measured edit admission result:
+
+```text
+hook_ready_rows: 42
+label_true_rows: 14
+label_false_rows: 28
+robust_safe_policy_found: false
+singleton_safe_policy_found: false
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 0
+```
+
+Catalog row result:
+
+```text
+role_binding_edit_marker_length_seed0:
+  current_status: CANDIDATE
+  edit_admission_no_safe_policy: true
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,no_safe_request_side_policy,safe_policy_missing
+```
+
+Decision:
+
+```text
+Do not lower edit thresholds. Do not promote edit_marker_length from the
+current request-side policy. The only valid next work is a narrower
+artifact-backed edit split or stronger verifier evidence that changes the
+BUSINESS_VALUE_GATE facts.
+```
+
 ## 2026-07-04 - Executor Integration: Business Value Gate Failure Reasons
 
 Verdict:
