@@ -101,6 +101,12 @@ const DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_REPORT: &str =
 const DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_METRICS_REPORT_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/metrics-report-local-accept-calibration-v1.report.json";
+const DEFAULT_METRICS_REPORT_SAFE_POLICY_REGISTRY_CONFIG: &str =
+    "target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-safe-policy-v1.json";
+const DEFAULT_METRICS_REPORT_SAFE_POLICY_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.trace.jsonl";
+const DEFAULT_METRICS_REPORT_SAFE_POLICY_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.report.json";
 const DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_GIT_CONTROL_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -5112,6 +5118,259 @@ where
         report.best_safe_true_accepts
     );
     Err("metrics-report local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_metrics_report_safe_policy_promote_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let calibration_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_LOCAL_ACCEPT_CALIBRATION_REPORT));
+    let promoted_registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_REGISTRY_CONFIG));
+    let promoted_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_METRICS_REPORT_SAFE_POLICY_REPORT));
+    let provider_cost_microusd = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|error| format!("invalid provider_cost_microusd '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(100);
+
+    let mut promoted_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&base_registry_config_path)?;
+    validate_registry_config(&promoted_config)?;
+    let calibration =
+        read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(&calibration_report_path)?;
+    let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let Some(calibration_policy) = select_supported_metrics_report_safe_policy(&calibration) else {
+        return Err(
+            "metrics-report calibration report has no supported metric-slot safe policy".to_owned(),
+        );
+    };
+    let base_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
+    let policy = select_metrics_report_promotion_policy_from_evidence(
+        &base_registry,
+        &trace_rows,
+        calibration_policy,
+    )?;
+    let threshold = policy.threshold;
+    let acceptance_policy = "first_slot_threshold".to_owned();
+    let metrics_report_profile_ids = trace_rows
+        .iter()
+        .filter_map(|row| row.nando_shadow_request.as_ref())
+        .filter(|request| {
+            request
+                .route_key
+                .as_deref()
+                .is_some_and(|route| route == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY)
+        })
+        .filter_map(|request| request.profile_id.clone())
+        .collect::<BTreeSet<_>>();
+    if metrics_report_profile_ids.is_empty() {
+        return Err(
+            "metrics-report safe policy promotion found no metrics_report profile ids in trace"
+                .to_owned(),
+        );
+    }
+    let mut promoted_profile_ids = Vec::new();
+    for profile in &mut promoted_config.profiles {
+        if metrics_report_profile_ids.contains(&profile.profile_id) {
+            profile.threshold = threshold;
+            profile.acceptance_policy = acceptance_policy.clone();
+            promoted_profile_ids.push(profile.profile_id.clone());
+        }
+    }
+    if promoted_profile_ids.is_empty() {
+        return Err(format!(
+            "metrics-report safe policy promotion found no matching profiles in registry for {:?}",
+            metrics_report_profile_ids
+        ));
+    }
+    validate_registry_config(&promoted_config)?;
+    write_json_file(&promoted_registry_config_path, &promoted_config)?;
+    let promoted_registry =
+        RoleBindingProfileRuntimeRegistry::from_config_path(&promoted_registry_config_path)?;
+
+    let mut scoreable_candidate_calls = 0usize;
+    let mut policy_accept_rows = 0usize;
+    let mut policy_accept_verified_true_rows = 0usize;
+    let mut policy_accept_verified_false_rows = 0usize;
+    let mut policy_accept_unverified_rows = 0usize;
+    let mut provider_cost_events_written = 0usize;
+    let mut runtime_acceptance_mismatches = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &mut trace_rows {
+        let Some(request) = &mut row.nando_shadow_request else {
+            continue;
+        };
+        let is_metrics_report = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY);
+        if !is_metrics_report {
+            continue;
+        }
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        row.provider_cost_microusd = Some(provider_cost_microusd);
+        provider_cost_events_written += 1;
+
+        let Some(score) = score_role_binding_profile_request_detailed(&promoted_registry, request)
+        else {
+            no_score_rows += 1;
+            request.expect_local_operator = Some(false);
+            continue;
+        };
+        let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
+        let policy_accept = profile_accepts_score(
+            &acceptance_policy,
+            strict_ordered_pass,
+            score.energy_margin,
+            score.slot_margins.first().copied().unwrap_or(0),
+            threshold,
+        );
+        request.expect_local_operator = Some(policy_accept);
+        if policy_accept {
+            policy_accept_rows += 1;
+            policy_accept_verified_true_rows += usize::from(row.verified_safe_accept == Some(true));
+            policy_accept_verified_false_rows +=
+                usize::from(row.verified_safe_accept == Some(false));
+            policy_accept_unverified_rows += usize::from(row.verified_safe_accept.is_none());
+        }
+        let runtime_response = score_role_binding_profile_request(&promoted_registry, request);
+        runtime_acceptance_mismatches += usize::from(runtime_response.accepted != policy_accept);
+        row.notes = Some(format!(
+            "{}; metrics_report_safe_policy_promote_v1 policy={} threshold={} provider_cost_estimate_microusd={} policy_accept={}",
+            row.notes
+                .clone()
+                .unwrap_or_else(|| "real_codex_trace".to_owned()),
+            acceptance_policy,
+            threshold,
+            provider_cost_microusd,
+            policy_accept
+        ));
+    }
+
+    write_real_traffic_trace_jsonl(&promoted_trace_path, &trace_rows)?;
+    let report = RoleBindingMixedSafePolicyPromoteReport {
+        schema_version: "nando_role_binding_metrics_report_safe_policy_promote_v1".to_owned(),
+        verdict: if policy_accept_rows > 0
+            && policy_accept_verified_false_rows == 0
+            && policy_accept_unverified_rows == 0
+            && runtime_acceptance_mismatches == 0
+        {
+            "METRICS_REPORT_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY"
+        } else {
+            "METRICS_REPORT_SAFE_POLICY_PROMOTE_V1_REVIEW_REQUIRES_SHADOW_AUDIT"
+        }
+        .to_owned(),
+        base_registry_config_path: base_registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        calibration_report_path: calibration_report_path.display().to_string(),
+        promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
+        promoted_trace_path: promoted_trace_path.display().to_string(),
+        history_path: None,
+        request_side_policy_name: None,
+        calibration_policy_name: calibration_policy.policy_name.clone(),
+        calibration_policy_threshold: calibration_policy.threshold,
+        selected_policy_name: policy.policy_name.clone(),
+        selected_policy_source: policy.selection_source.clone(),
+        selected_policy_threshold: threshold,
+        selected_acceptance_policy: acceptance_policy,
+        selected_policy_accepts: policy.accepts,
+        selected_policy_true_accepts: policy.true_accepts,
+        selected_policy_false_accepts: policy.false_accepts,
+        selected_policy_unverified_accepts: policy.unverified_accepts,
+        promoted_profile_ids,
+        provider_cost_microusd,
+        trace_rows_written: trace_rows.len(),
+        scoreable_candidate_calls,
+        request_side_policy_evaluated_rows: 0,
+        request_side_policy_accept_rows: 0,
+        request_side_policy_reject_rows: 0,
+        history_prompt_missing_rows: 0,
+        policy_accept_rows,
+        policy_accept_verified_true_rows,
+        policy_accept_verified_false_rows,
+        policy_accept_unverified_rows,
+        provider_cost_events_written,
+        no_score_rows,
+        runtime_acceptance_mismatches,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        market_claim_allowed: false,
+        claim_boundary: "Promotion artifact only. It creates a promoted metrics-report registry and rewrites an evidence-backed shadow trace with provider-cost estimates. Offline verifier labels choose the metric-slot threshold, but serving uses only request-side first-slot margin >= threshold. It writes no raw prompt/response text and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted metrics-report registry/trace. Keep this as a separate soak artifact unless the full CPU-route feedback window is regenerated with the same denominator.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-metrics-report-safe-policy-promote-v1: {}",
+        report.verdict
+    );
+    println!(
+        "  promoted_registry: {}",
+        promoted_registry_config_path.display()
+    );
+    println!("  promoted_trace: {}", promoted_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  selected_policy_name: {}", report.selected_policy_name);
+    println!(
+        "  selected_policy_source: {}",
+        report.selected_policy_source
+    );
+    println!(
+        "  selected_policy_threshold: {}",
+        report.selected_policy_threshold
+    );
+    println!("  policy_accept_rows: {}", report.policy_accept_rows);
+    println!(
+        "  policy_accept_verified_true_rows: {}",
+        report.policy_accept_verified_true_rows
+    );
+    println!(
+        "  policy_accept_verified_false_rows: {}",
+        report.policy_accept_verified_false_rows
+    );
+    println!(
+        "  policy_accept_unverified_rows: {}",
+        report.policy_accept_unverified_rows
+    );
+    println!(
+        "  provider_cost_events_written: {}",
+        report.provider_cost_events_written
+    );
+    Err(
+        "metrics-report safe-policy promotion is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
 }
 
 pub(crate) fn run_role_binding_real_traffic_read_inspect_payload_dry_run_v1<I>(
@@ -22665,6 +22924,27 @@ fn select_supported_mixed_safe_policy(
         })
 }
 
+fn select_supported_metrics_report_safe_policy(
+    calibration: &RoleBindingEditLocalAcceptCalibrationReport,
+) -> Option<&RoleBindingEditLocalAcceptPolicyReport> {
+    calibration
+        .policies
+        .iter()
+        .filter(|policy| {
+            policy.safe
+                && policy.false_accepts == 0
+                && policy.true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && policy.threshold.is_some()
+                && policy.policy_name == "best_metric_slot_margin_threshold"
+        })
+        .max_by(|left, right| {
+            left.true_accepts
+                .cmp(&right.true_accepts)
+                .then_with(|| right.accepts.cmp(&left.accepts))
+                .then_with(|| left.policy_name.cmp(&right.policy_name))
+        })
+}
+
 fn select_supported_agent_control_admission_policy(
     calibration: &RoleBindingAgentControlAdmissionCalibrationReport,
 ) -> Option<&RoleBindingEditAdmissionPolicyReport> {
@@ -22954,6 +23234,82 @@ fn select_mixed_promotion_policy_from_evidence(
     Ok(evaluate_mixed_energy_promotion_threshold(
         &calibration_policy.policy_name,
         "calibration_report_fallback_requires_shadow_audit",
+        calibration_threshold,
+        &scored_rows,
+    ))
+}
+
+fn select_metrics_report_promotion_policy_from_evidence(
+    registry: &RoleBindingProfileRuntimeRegistry,
+    trace_rows: &[RoleBindingRealTrafficTraceRow],
+    calibration_policy: &RoleBindingEditLocalAcceptPolicyReport,
+) -> Result<RoleBindingMixedPromotionPolicySelection, String> {
+    let calibration_threshold = calibration_policy
+        .threshold
+        .ok_or_else(|| "selected metrics-report calibration policy has no threshold".to_owned())?;
+    let mut scored_rows = Vec::new();
+    for row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_metrics_report = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY);
+        if !is_metrics_report || request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
+            continue;
+        };
+        scored_rows.push((
+            score.slot_margins.first().copied().unwrap_or(0),
+            row.verified_safe_accept,
+        ));
+    }
+    if scored_rows.is_empty() {
+        return Err("metrics-report safe policy selection found no scoreable rows".to_owned());
+    }
+
+    let mut thresholds = scored_rows
+        .iter()
+        .map(|(metric_slot_margin, _)| *metric_slot_margin)
+        .collect::<Vec<_>>();
+    thresholds.push(calibration_threshold);
+    thresholds.sort_unstable();
+    thresholds.dedup();
+
+    let mut best_market_safe: Option<RoleBindingMixedPromotionPolicySelection> = None;
+    for threshold in thresholds {
+        let selection = evaluate_mixed_energy_promotion_threshold(
+            "market_safe_metric_slot_margin_threshold",
+            "evidence_trace_metric_slot_safe_threshold",
+            threshold,
+            &scored_rows,
+        );
+        let market_safe = selection.true_accepts
+            >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+            && selection.false_accepts == 0
+            && selection.unverified_accepts == 0;
+        if !market_safe {
+            continue;
+        }
+        let replace = best_market_safe.as_ref().is_none_or(|current| {
+            selection.true_accepts > current.true_accepts
+                || (selection.true_accepts == current.true_accepts
+                    && selection.threshold < current.threshold)
+        });
+        if replace {
+            best_market_safe = Some(selection);
+        }
+    }
+    if let Some(selection) = best_market_safe {
+        return Ok(selection);
+    }
+
+    Ok(evaluate_mixed_energy_promotion_threshold(
+        &calibration_policy.policy_name,
+        "metrics_report_calibration_report_fallback_requires_shadow_audit",
         calibration_threshold,
         &scored_rows,
     ))

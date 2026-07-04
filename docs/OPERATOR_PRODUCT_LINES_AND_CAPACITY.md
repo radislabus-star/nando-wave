@@ -248,6 +248,24 @@ Metrics-report route/profile rung:
   verified_cpu_accepts: 0
   blocker: local_accept_support_insufficient
 
+Metrics-report 5000-row safe-policy soak:
+  artifact_root: target/nando-wave/real-traffic-shadow/metrics-report-soak-v1
+  trace_rows_written: 5000
+  metrics_report_candidate_events: 98
+  metrics_report_scoreable_payloads: 63
+  output_evidence_matched_events: 51
+  verifier_true_events: 31
+  verifier_false_events: 20
+  selected_acceptance_policy: first_slot_threshold
+  selected_policy_threshold: 393216
+  nando_shadow_accepts: 4
+  verified_safe_accepts: 3
+  unverified_shadow_accepts: 1
+  false_accepts: 0
+  p99_shadow_score_latency_ns: 306256
+  market_claim_allowed: false
+  interpretation: near-pass route soak; cannot count into default 1000-row feedback or market savings until the unverified accept is resolved
+
 Git-control route/profile/evidence rung:
   base_registry: profile-registry-git-control-v1.json
   promoted_registry: profile-registry-git-control-safe-policy-v1.json

@@ -406,6 +406,12 @@ pub(crate) fn print_help() {
         "            Calibrate metrics-report score/readout thresholds against deterministic verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-metrics-report-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]"
+    );
+    println!(
+        "            Create a promoted metrics-report shadow registry/trace from a safe metric-slot calibration; still requires shadow/audit before claims"
+    );
+    println!(
         "  role-binding-real-traffic-planning-next-step-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]"
     );
     println!(

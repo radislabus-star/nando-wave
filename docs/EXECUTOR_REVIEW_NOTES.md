@@ -1,5 +1,121 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Metrics-Report 5000-Row Safe-Policy Soak
+
+Verdict:
+
+```text
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-metrics-report-safe-policy-promote-v1
+
+Added soak artifacts under ignored target path:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/
+```
+
+5000-row metrics-report soak:
+
+```text
+payload_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-payload-dry-run-v1.report.json
+
+trace_rows_written:                   5000
+metrics_report_candidate_events:      98
+payload_ready_events:                 63
+scoreable_payload_events:             63
+```
+
+Evidence and calibration:
+
+```text
+evidence_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-output-evidence-v1.report.json
+
+output_evidence_matched_events:       51
+verified_true_events:                 31
+verified_false_events:                20
+raw_prompt_text_written:              false
+raw_response_text_written:            false
+
+calibration_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-local-accept-calibration-v1.report.json
+
+safe_policy_found:                    true
+best_safe_true_accepts:               3
+best policy:                          best_metric_slot_margin_threshold
+best threshold:                       393216
+```
+
+Promoted shadow attempt:
+
+```text
+promote_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.report.json
+
+selected_acceptance_policy:           first_slot_threshold
+selected_policy_threshold:            393216
+policy_accept_rows:                   4
+policy_accept_verified_true_rows:     3
+policy_accept_verified_false_rows:    0
+policy_accept_unverified_rows:        1
+provider_cost_events_written:         63
+```
+
+Shadow/audit:
+
+```text
+shadow_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json
+
+verdict:                              REAL_TRAFFIC_SHADOW_V1_REVIEW
+total_llm_calls:                      5000
+operator_candidate_calls:             63
+nando_shadow_accepts:                 4
+verified_safe_accepts:                3
+unverified_shadow_accepts:            1
+false_accepts:                        0
+p99_shadow_score_latency_ns:          306256
+synthetic_trace_used:                 false
+
+audit_report:
+  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.verification-hook-audit.report.json
+
+verified_cpu_accept_eligible_events:  3
+market_claim_allowed:                 false
+```
+
+Claim boundary:
+
+```text
+This is not a promoted route PASS and must not be counted into the current
+1000-row feedback total. It is a separate 5000-row non-synthetic soak showing
+that metrics_report_readout has a safe-looking metric-slot pocket with
+false_accepts=0, but one unverified shadow accept blocks market claim and
+default CPU Routability aggregation.
+
+Do not lower thresholds or count this route until the unverified accept gets
+real evidence or request-side admission excludes it without reading the answer.
+```
+
+Next engineering debt:
+
+```text
+Fix the one unverified metrics_report shadow accept:
+  either recover missing Codex output evidence for that trace row,
+  or add a request-side admission feature that rejects it without using response,
+  or keep the route REVIEW.
+```
+
 ## 2026-07-04 - Executor Integration: Git-Control Tool-Output Safe-Policy Promotion
 
 Verdict:
