@@ -586,6 +586,12 @@ pub(crate) fn print_help() {
         "            Compare safe/unsafe readout policies on evidence-backed real Codex conditional rows"
     );
     println!(
+        "  role-binding-real-traffic-conditional-admission-audit-v1 [registry-config-json] [evidence-trace-jsonl] [history-jsonl] [audit-report-json]"
+    );
+    println!(
+        "            Audit request-side conditional subfamilies plus energy thresholds without enabling local accepts"
+    );
+    println!(
         "  role-binding-real-traffic-conditional-safe-policy-promote-v1 [base-registry-json] [evidence-trace-jsonl] [calibration-report-json] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd] [history-jsonl]"
     );
     println!(

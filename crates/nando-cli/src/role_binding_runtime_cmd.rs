@@ -296,6 +296,8 @@ const DEFAULT_EDIT_SAFE_POLICY_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.verification-hook-audit.report.json";
 const DEFAULT_CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/conditional-local-accept-calibration-v1.report.json";
+const DEFAULT_CONDITIONAL_ADMISSION_AUDIT_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/conditional-admission-audit-v1.report.json";
 const DEFAULT_EDIT_ADMISSION_CALIBRATION_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_REPORT: &str =
@@ -11104,6 +11106,17 @@ where
     } else {
         None
     };
+    let conditional_admission_audit_report_path =
+        PathBuf::from(DEFAULT_CONDITIONAL_ADMISSION_AUDIT_REPORT);
+    let conditional_admission_audit = if conditional_admission_audit_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingConditionalAdmissionAuditReport>(
+                &conditional_admission_audit_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
     let route_gap_readiness_by_family = route_gap_payload_readiness
         .as_ref()
         .map(|report| {
@@ -11123,7 +11136,7 @@ where
         let priority_verified_accept_events = route
             .unique_accepts
             .incremental_verified_request_fingerprints;
-        let priority_score = cpu_operator_priority_score(
+        let mut priority_score = cpu_operator_priority_score(
             route.candidate_events,
             route.scoreable_payload_events,
             route.verification_hook_ready_events,
@@ -11131,6 +11144,26 @@ where
             route.false_accepts,
             "existing_profile",
         );
+        let conditional_admission_best_safe_true_accepts = conditional_admission_audit
+            .as_ref()
+            .filter(|_| route.route_key.contains("conditional_branch"))
+            .map(|audit| audit.best_safe_true_accepts)
+            .unwrap_or_default();
+        let conditional_admission_current_support_exhausted =
+            conditional_admission_best_safe_true_accepts > 0
+                && conditional_admission_best_safe_true_accepts
+                    <= route
+                        .unique_accepts
+                        .incremental_verified_request_fingerprints;
+        if conditional_admission_current_support_exhausted {
+            priority_score = priority_score.saturating_sub(80_000);
+        }
+        let mut next_action = route.next_action.clone();
+        if conditional_admission_current_support_exhausted {
+            next_action = format!(
+                "Conditional admission audit found only {conditional_admission_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve conditional payload geometry or split a stronger subfamily before another promote."
+            );
+        }
         rows.push(RoleBindingCpuOperatorCatalogRow {
             priority_rank: 0,
             source_kind: "existing_profile_route".to_owned(),
@@ -11155,12 +11188,14 @@ where
                 .unique_accepts
                 .cross_route_overlap_verified_request_fingerprints,
             priority_verified_accept_events,
+            conditional_admission_best_safe_true_accepts,
+            conditional_admission_current_support_exhausted,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
             recommended_payload_builder: route.payload_builder.clone(),
             recommended_verifier,
-            next_action: route.next_action.clone(),
+            next_action,
             priority_score,
             market_claim_allowed: false,
             claim_boundary: "Existing routed profile. Only hook-backed local accepts with false_accepts=0 count toward CPU Routability; candidate or scoreable rows alone are not market savings.".to_owned(),
@@ -11198,6 +11233,8 @@ where
             duplicate_verified_route_hits: 0,
             cross_route_overlap_verified_request_fingerprints: 0,
             priority_verified_accept_events: 0,
+            conditional_admission_best_safe_true_accepts: 0,
+            conditional_admission_current_support_exhausted: false,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -11245,6 +11282,9 @@ where
                 .display()
                 .to_string()
         }),
+        conditional_admission_audit_report_path: conditional_admission_audit
+            .as_ref()
+            .map(|_| conditional_admission_audit_report_path.display().to_string()),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
@@ -11271,7 +11311,7 @@ where
         raw_text_written: false,
         local_accepts_enabled: false,
         market_claim_allowed: false,
-        claim_boundary: "CPU operator catalog only. It ranks existing profile routes and no-candidate route-gap families from non-synthetic Codex traffic reports, writes no raw prompt/response text, enables no local accepts, and cannot prove market savings. Existing routes are prioritized by incremental unique verified accepts, not route-sum duplicates. Rows become savings only after request-side payload, deterministic verifier evidence, shadow accept, provider-cost evidence, and false_accepts=0.".to_owned(),
+        claim_boundary: "CPU operator catalog only. It ranks existing profile routes and no-candidate route-gap families from non-synthetic Codex traffic reports, writes no raw prompt/response text, enables no local accepts, and cannot prove market savings. Existing routes are prioritized by incremental unique verified accepts, not route-sum duplicates. If a route-specific admission audit shows current safe support is exhausted, the row is deprioritized until payload geometry or subfamily admission improves. Rows become savings only after request-side payload, deterministic verifier evidence, shadow accept, provider-cost evidence, and false_accepts=0.".to_owned(),
         next_engineering_debt: "Pick the highest-volume row whose verifier can be deterministic and whose unique/incremental contribution is not already exhausted by duplicates or exact-cache overlap. Build its request-side payload builder and verifier as a separate route, then rerun shadow/audit/feedback-loop. Do not promote answer_or_explain or project_context_dialogue without grounded evidence.".to_owned(),
     };
 
@@ -11286,6 +11326,12 @@ where
         println!(
             "  route_gap_payload_readiness_report: {}",
             route_gap_payload_readiness_report_path.display()
+        );
+    }
+    if conditional_admission_audit.is_some() {
+        println!(
+            "  conditional_admission_audit_report: {}",
+            conditional_admission_audit_report_path.display()
         );
     }
     println!("  report: {}", report_path.display());
@@ -14010,6 +14056,218 @@ where
         report.best_safe_true_accepts
     );
     Err("conditional local accept calibration is review-only".to_owned())
+}
+
+pub(crate) fn run_role_binding_real_traffic_conditional_admission_audit_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_ROLE_BINDING_PROFILE_REGISTRY_CONFIG));
+    let evidence_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONDITIONAL_ADMISSION_AUDIT_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let history_by_fingerprint = history_rows
+        .iter()
+        .map(|row| {
+            (
+                format!(
+                    "fnv1a64:{:016x}",
+                    stable_real_traffic_fingerprint64(row.text.as_bytes())
+                ),
+                row.text.as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut audit_rows = Vec::new();
+    let mut policy_rows = Vec::new();
+    let mut feature_accumulators =
+        BTreeMap::<String, RoleBindingConditionalAdmissionFeatureCount>::new();
+    let mut conditional_candidate_rows = 0usize;
+    let mut scoreable_candidate_rows = 0usize;
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut unverified_rows = 0usize;
+    let mut history_prompt_missing_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        let is_conditional = request
+            .route_key
+            .as_deref()
+            .is_some_and(|route| route.contains("conditional_branch"));
+        if !is_conditional {
+            continue;
+        }
+        conditional_candidate_rows += 1;
+        if request.active_fringe.is_empty() || request.slots.is_empty() {
+            continue;
+        }
+        scoreable_candidate_rows += 1;
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(prompt_text) = history_by_fingerprint.get(&request_fingerprint) else {
+            history_prompt_missing_rows += 1;
+            continue;
+        };
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let Some(label) = row.verified_safe_accept else {
+            unverified_rows += 1;
+            continue;
+        };
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let features = conditional_admission_feature_names(prompt_text);
+        for feature in &features {
+            let entry = feature_accumulators
+                .entry(feature.clone())
+                .or_insert_with(|| RoleBindingConditionalAdmissionFeatureCount {
+                    feature_name: feature.clone(),
+                    ..RoleBindingConditionalAdmissionFeatureCount::default()
+                });
+            entry.rows += 1;
+            entry.true_rows += usize::from(label);
+            entry.false_rows += usize::from(!label);
+        }
+        policy_rows.push(RoleBindingConditionalAdmissionPolicyInput {
+            features: features.iter().cloned().collect(),
+            energy_margin: score.energy_margin,
+            label,
+        });
+        audit_rows.push(RoleBindingConditionalAdmissionAuditRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            verifier_label: label,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            first_slot_margin: score.slot_margins.first().copied().unwrap_or(0),
+            slot_count: score.slot_margins.len(),
+            feature_names: features,
+        });
+    }
+
+    let mut feature_counts = feature_accumulators.into_values().collect::<Vec<_>>();
+    feature_counts.sort_by(|left, right| {
+        right
+            .rows
+            .cmp(&left.rows)
+            .then_with(|| right.true_rows.cmp(&left.true_rows))
+            .then_with(|| left.feature_name.cmp(&right.feature_name))
+    });
+    let mut policy_candidates =
+        conditional_admission_policy_candidates(&policy_rows, &feature_counts);
+    policy_candidates.sort_by(|left, right| {
+        right
+            .safe
+            .cmp(&left.safe)
+            .then_with(|| right.true_accepts.cmp(&left.true_accepts))
+            .then_with(|| left.false_accepts.cmp(&right.false_accepts))
+            .then_with(|| left.accepts.cmp(&right.accepts))
+            .then_with(|| right.energy_threshold.cmp(&left.energy_threshold))
+            .then_with(|| left.policy_name.cmp(&right.policy_name))
+    });
+    let top_policy_candidates = policy_candidates
+        .iter()
+        .take(24)
+        .cloned()
+        .collect::<Vec<_>>();
+    let safe_policy_candidates = policy_candidates
+        .iter()
+        .filter(|candidate| candidate.safe)
+        .take(12)
+        .cloned()
+        .collect::<Vec<_>>();
+    let best_safe_true_accepts = safe_policy_candidates
+        .iter()
+        .map(|candidate| candidate.true_accepts)
+        .max()
+        .unwrap_or_default();
+    let safe_policy_found =
+        best_safe_true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+
+    let report = RoleBindingConditionalAdmissionAuditReport {
+        schema_version: "nando_role_binding_conditional_admission_audit_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "CONDITIONAL_ADMISSION_AUDIT_V1_REVIEW_SAFE_SUBFAMILY_CANDIDATE_FOUND"
+        } else {
+            "CONDITIONAL_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_SUBFAMILY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        evidence_trace_path: evidence_trace_path.display().to_string(),
+        history_path: history_path.display().to_string(),
+        total_trace_rows: trace_rows.len(),
+        conditional_candidate_rows,
+        scoreable_candidate_rows,
+        hook_ready_rows,
+        label_true_rows,
+        label_false_rows,
+        unverified_rows,
+        history_prompt_missing_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        feature_counts,
+        top_policy_candidates,
+        safe_policy_candidates,
+        rows: audit_rows,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_features: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Conditional admission audit only. It joins request fingerprints back to local prompt text at analysis time, writes no raw prompt/response text, evaluates request-side features plus score thresholds against verifier labels, and enables no local accepts. Any safe subfamily candidate still requires a separate promoted trace, shadow, provider cost, and false_accepts=0 audit before savings count.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Build a separate conditional admission promote path for the best safe subfamily, then rerun shadow/audit/feedback. Do not count this audit as savings.".to_owned()
+        } else {
+            "Keep broad conditional route red. Current request-side features plus energy score do not expose a safe subfamily with enough true support; improve conditional payload geometry or verifier specificity before promotion.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-conditional-admission-audit-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  evidence_trace: {}", evidence_trace_path.display());
+    println!("  history: {}", history_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("conditional admission audit is review-only".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_conditional_safe_policy_promote_v1<I>(
@@ -21141,6 +21399,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     feedback_report_path: String,
     route_gap_report_path: String,
     route_gap_payload_readiness_report_path: Option<String>,
+    #[serde(default)]
+    conditional_admission_audit_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
@@ -21194,6 +21454,10 @@ struct RoleBindingCpuOperatorCatalogRow {
     cross_route_overlap_verified_request_fingerprints: usize,
     #[serde(default)]
     priority_verified_accept_events: usize,
+    #[serde(default)]
+    conditional_admission_best_safe_true_accepts: usize,
+    #[serde(default)]
+    conditional_admission_current_support_exhausted: bool,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
@@ -21641,6 +21905,79 @@ struct RoleBindingLocalAcceptMarginCollisionReport {
     false_rows_at_or_above_min_true_margin: usize,
     safe_accepts_all_true_rows: bool,
     best_safe_true_accepts: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalAdmissionAuditReport {
+    schema_version: String,
+    verdict: String,
+    registry_config_path: String,
+    evidence_trace_path: String,
+    history_path: String,
+    total_trace_rows: usize,
+    conditional_candidate_rows: usize,
+    scoreable_candidate_rows: usize,
+    hook_ready_rows: usize,
+    label_true_rows: usize,
+    label_false_rows: usize,
+    unverified_rows: usize,
+    history_prompt_missing_rows: usize,
+    no_score_rows: usize,
+    safe_policy_found: bool,
+    best_safe_true_accepts: usize,
+    feature_counts: Vec<RoleBindingConditionalAdmissionFeatureCount>,
+    top_policy_candidates: Vec<RoleBindingConditionalAdmissionPolicyCandidate>,
+    safe_policy_candidates: Vec<RoleBindingConditionalAdmissionPolicyCandidate>,
+    rows: Vec<RoleBindingConditionalAdmissionAuditRow>,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    response_text_used_for_features: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct RoleBindingConditionalAdmissionFeatureCount {
+    feature_name: String,
+    rows: usize,
+    true_rows: usize,
+    false_rows: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalAdmissionPolicyCandidate {
+    policy_name: String,
+    request_feature_conjunction: Vec<String>,
+    energy_threshold: i32,
+    accepts: usize,
+    true_accepts: usize,
+    false_accepts: usize,
+    missed_true: usize,
+    safe: bool,
+    selection_source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingConditionalAdmissionAuditRow {
+    trace_id: String,
+    request_fingerprint: Option<String>,
+    verifier_label: bool,
+    energy_margin: i32,
+    min_slot_margin: i32,
+    first_slot_margin: i32,
+    slot_count: usize,
+    feature_names: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct RoleBindingConditionalAdmissionPolicyInput {
+    features: BTreeSet<String>,
+    energy_margin: i32,
+    label: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -27632,6 +27969,202 @@ fn conditional_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool
         _ => return None,
     };
     Some(accepts)
+}
+
+fn conditional_admission_feature_names(text: &str) -> Vec<String> {
+    let lower = text.to_lowercase();
+    let mut features = BTreeSet::new();
+    let len = text.len();
+    let token_count = extract_request_side_edit_tokens(text, 64).len();
+    let has_gate_terms = contains_any(
+        &lower,
+        &[
+            "gate",
+            "гейт",
+            "audit",
+            "hook",
+            "verdict",
+            "report",
+            "отчет",
+            "отчёт",
+        ],
+    );
+    let has_goal_terms = contains_any(
+        &lower,
+        &[
+            "goal",
+            "objective",
+            "цель",
+            "подцель",
+            "stop",
+            "стоп",
+            "останов",
+        ],
+    );
+    let has_json_terms = contains_any(&lower, &["json", ".json", "jsonl", ".jsonl"]);
+    let has_digit = text.chars().any(|ch| ch.is_ascii_digit());
+    let has_conditional_terms = contains_any(
+        &lower,
+        &["если", "if ", "condition", "conditional", "branch", "услов"],
+    );
+    let has_branch_terms = contains_any(
+        &lower,
+        &[
+            "pass",
+            "fail",
+            "accept",
+            "reject",
+            "allow",
+            "fallback",
+            "true",
+            "false",
+            "green",
+            "red",
+            "принять",
+            "отклон",
+            "разреш",
+            "запрет",
+        ],
+    );
+    let has_report_terms = contains_any(&lower, &["report", "отчет", "отчёт"]);
+    let has_audit_terms = contains_any(&lower, &["audit", "аудит"]);
+    let has_verdict_terms = contains_any(&lower, &["verdict", "вердикт"]);
+    let has_hook_terms = contains_any(&lower, &["hook", "verification"]);
+    let has_false_accept_terms = contains_any(&lower, &["false_accept", "false accept"]);
+    let has_latency_terms = contains_any(&lower, &["latency", "p99", "p90", "p50"]);
+    let has_runtime_terms = contains_any(&lower, &["runtime", "worker", "lb", "daemon"]);
+    let has_route_terms = contains_any(&lower, &["route", "router", "routing"]);
+
+    let named_features = [
+        ("has_gate_terms", has_gate_terms),
+        ("has_goal_terms", has_goal_terms),
+        ("no_goal_terms", !has_goal_terms),
+        ("has_json_terms", has_json_terms),
+        ("no_json_terms", !has_json_terms),
+        ("has_digit", has_digit),
+        ("has_conditional_terms", has_conditional_terms),
+        ("has_branch_terms", has_branch_terms),
+        ("has_report_terms", has_report_terms),
+        ("has_audit_terms", has_audit_terms),
+        ("has_verdict_terms", has_verdict_terms),
+        ("has_hook_terms", has_hook_terms),
+        ("has_false_accept_terms", has_false_accept_terms),
+        ("has_latency_terms", has_latency_terms),
+        ("has_runtime_terms", has_runtime_terms),
+        ("has_route_terms", has_route_terms),
+        ("has_file_like_token", contains_file_like_token(text)),
+        ("has_marker_like_signal", contains_marker_like_signal(text)),
+        ("len_ge_300", len >= 300),
+        ("len_ge_500", len >= 500),
+        ("len_ge_800", len >= 800),
+        ("len_ge_1200", len >= 1200),
+        ("tokens_ge_20", token_count >= 20),
+        ("tokens_ge_40", token_count >= 40),
+        ("tokens_ge_64", token_count >= 64),
+    ];
+    for (name, present) in named_features {
+        if present {
+            features.insert(name.to_owned());
+        }
+    }
+    features.into_iter().collect()
+}
+
+fn conditional_admission_policy_candidates(
+    rows: &[RoleBindingConditionalAdmissionPolicyInput],
+    feature_counts: &[RoleBindingConditionalAdmissionFeatureCount],
+) -> Vec<RoleBindingConditionalAdmissionPolicyCandidate> {
+    let mut filter_sets = Vec::<Vec<String>>::new();
+    filter_sets.push(Vec::new());
+    let features = feature_counts
+        .iter()
+        .filter(|feature| feature.rows >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT)
+        .map(|feature| feature.feature_name.clone())
+        .collect::<Vec<_>>();
+    for feature in &features {
+        filter_sets.push(vec![feature.clone()]);
+    }
+    for left_index in 0..features.len() {
+        for right_index in (left_index + 1)..features.len() {
+            let left = &features[left_index];
+            let right = &features[right_index];
+            if conditional_admission_features_contradict(left, right) {
+                continue;
+            }
+            filter_sets.push(vec![left.clone(), right.clone()]);
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for filter in filter_sets {
+        let filtered_rows = rows
+            .iter()
+            .filter(|row| {
+                filter
+                    .iter()
+                    .all(|feature| row.features.contains(feature.as_str()))
+            })
+            .collect::<Vec<_>>();
+        if filtered_rows.is_empty() {
+            continue;
+        }
+        let mut thresholds = filtered_rows
+            .iter()
+            .map(|row| row.energy_margin)
+            .filter(|threshold| *threshold >= 0)
+            .collect::<Vec<_>>();
+        thresholds.sort_unstable();
+        thresholds.dedup();
+        for threshold in thresholds {
+            let mut accepts = 0usize;
+            let mut true_accepts = 0usize;
+            let mut false_accepts = 0usize;
+            for row in &filtered_rows {
+                if row.energy_margin >= threshold {
+                    accepts += 1;
+                    true_accepts += usize::from(row.label);
+                    false_accepts += usize::from(!row.label);
+                }
+            }
+            if accepts == 0 {
+                continue;
+            }
+            let missed_true = rows
+                .iter()
+                .filter(|row| row.label)
+                .count()
+                .saturating_sub(true_accepts);
+            let safe = true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
+                && false_accepts == 0;
+            let policy_name = if filter.is_empty() {
+                format!("all_rows_plus_energy_ge_{threshold}")
+            } else {
+                format!("{}_plus_energy_ge_{}", filter.join("__and__"), threshold)
+            };
+            candidates.push(RoleBindingConditionalAdmissionPolicyCandidate {
+                policy_name,
+                request_feature_conjunction: filter.clone(),
+                energy_threshold: threshold,
+                accepts,
+                true_accepts,
+                false_accepts,
+                missed_true,
+                safe,
+                selection_source: "request_feature_conjunction_plus_energy_threshold".to_owned(),
+            });
+        }
+    }
+    candidates
+}
+
+fn conditional_admission_features_contradict(left: &str, right: &str) -> bool {
+    matches!(
+        (left, right),
+        ("has_goal_terms", "no_goal_terms")
+            | ("no_goal_terms", "has_goal_terms")
+            | ("has_json_terms", "no_json_terms")
+            | ("no_json_terms", "has_json_terms")
+    )
 }
 
 fn mixed_safe_policy_accepts(policy_name: &str, text: &str) -> Option<bool> {

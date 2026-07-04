@@ -1,5 +1,111 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Conditional Admission Audit V1
+
+Verdict:
+
+```text
+CONDITIONAL_ADMISSION_AUDIT_V1_REVIEW_SAFE_SUBFAMILY_CANDIDATE_FOUND
+CPU_OPERATOR_CATALOG_V1_REVIEW_CONDITIONAL_SUPPORT_EXHAUSTED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added:
+  role-binding-real-traffic-conditional-admission-audit-v1
+
+The audit joins request fingerprints back to local Codex prompt text at
+analysis time, writes no raw prompt/response text, and evaluates only:
+  request-side feature conjunctions
+  .nwrb energy thresholds
+  deterministic verifier labels
+
+It enables no local accepts and cannot be counted as savings.
+```
+
+Fresh conditional admission audit:
+
+```text
+audit_report:
+  target/nando-wave/real-traffic-shadow/conditional-admission-audit-v1.report.json
+
+hook_ready_rows:        63
+label_true_rows:        17
+label_false_rows:       46
+safe_policy_found:    true
+best_safe_true_accepts:  3
+
+best safe candidate:
+  has_digit AND has_gate_terms AND energy >= 0
+  accepts:       3
+  true_accepts:  3
+  false_accepts: 0
+  missed_true:  14
+```
+
+Decision:
+
+```text
+Do not promote another broad conditional policy from the current geometry.
+The only safe request-side subfamily found by the audit has support=3, which
+is already covered by the current conditional-safe-policy-v2 incremental
+unique accepts.
+
+The CPU operator catalog now auto-loads this audit and deprioritizes the
+conditional row when:
+  conditional_admission_best_safe_true_accepts
+    <= incremental unique accepts already credited to the route.
+```
+
+Fresh catalog after conditional exhaustion awareness:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+top_catalog_row: role_binding_agent_control_seed0
+
+conditional row:
+  rank: 7
+  route_sum: 3
+  unique: 3
+  incremental_unique: 3
+  conditional_admission_best_safe_true_accepts: 3
+  conditional_admission_current_support_exhausted: true
+  next_action:
+    improve conditional payload geometry or split a stronger subfamily
+    before another promote
+```
+
+Claim boundary:
+
+```text
+This is route-selection instrumentation only. It adds no verified CPU accepts.
+CPU Routability 80 remains at 22/1000 unique verified accepts, with
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/conditional-admission-audit-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/conditional-admission-audit-v1.nanda.json
+
+verdict: PASS
+complexity_score: 36
+note: compact metric-value packet form used after the first larger packet VETOed
+      the catalog-top-row binding as a weak composite
+```
+
 ## 2026-07-04 - Executor Integration: CPU Operator Catalog Unique Priority V1
 
 Verdict:
