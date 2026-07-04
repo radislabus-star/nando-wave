@@ -1,5 +1,90 @@
 # Executor Review Notes
 
+## 2026-07-05 - Executor Integration: Test Output Parse Runtime Command Split
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_ROUTE_COMMAND_SPLIT
+NO_RUNTIME_BEHAVIOR_CHANGE
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+role_binding_runtime_cmd.rs is still the active real-traffic command surface,
+but the proven test_output_parse route had become a large coherent command
+block inside the monolith.
+
+The split keeps the same Rust module scope through include!, so private helper
+types/functions remain in the parent module and no CLI dispatch/help behavior
+changes. This is a boundary-cleanup step only, not a new CPU80 result.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+crates/nando-cli/src/role_binding_runtime_cmd/test_output_parse.rs
+```
+
+What changed:
+
+```text
+Moved 1632 lines of test_output_parse public real-traffic command handlers into
+role_binding_runtime_cmd/test_output_parse.rs.
+
+The parent module now includes that file at the original route position:
+  include!("role_binding_runtime_cmd/test_output_parse.rs");
+
+No main.rs command dispatch, help text, runtime scoring, admission policy,
+verifier authority, profile registry, or report schema was changed.
+```
+
+Current CPU80 boundary remains:
+
+```text
+total_llm_calls: 5000
+current_verified_cpu_accepts: 112
+current_incremental_unique_cpu_accepts_over_exact_cache: 110
+business_value_gate_passed_rows: 7
+proven_profile_rows: 7
+candidate_profile_rows: 1
+watch_profile_rows: 16
+rejected_profile_rows: 5
+
+CPU80 remains not achieved.
+```
+
+Verification:
+
+```text
+nanda-self-check: PASS
+cargo fmt --check: PASS
+cargo check -p nando-cli: PASS
+cargo clippy -p nando-cli -- -D warnings: PASS
+git diff --check: PASS
+```
+
+Boundary note:
+
+```text
+nanda-boundary-economics crates/nando-cli/src --find-refactors --format json
+still reports broad refactor pressure as KEEP / no_size_only_split. Therefore
+this step intentionally avoids a larger API/module split and only performs a
+route-owned include extraction.
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/test-output-parse-command-split-v1.md
+verdict: PASS
+complexity_score: 54
+trace_path: /tmp/nanda-structural-gate/test-output-parse-command-split-v1.trace.json
+```
+
 ## 2026-07-05 - Executor Integration: Edit Safe-Policy V2 Promoted On Current5k And Runtime Command Split
 
 Verdict:
