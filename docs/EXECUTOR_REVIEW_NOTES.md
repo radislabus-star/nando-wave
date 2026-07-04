@@ -136,6 +136,112 @@ wide, so this gate records the coherent current5k claim boundary without
 splicing unrelated profile routes.
 ```
 
+## 2026-07-04 - Executor Integration: Git Control Current5k Business Gate Probe
+
+Verdict:
+
+```text
+GIT_CONTROL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+GIT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+GIT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+GIT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_REQUEST_SUBFAMILY
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+After current5k BUSINESS_VALUE_GATE, git_control looked like the next narrow
+artifact-backed candidate: 123 real events and 90 scoreable payloads. This
+stage checks whether it can be safely promoted. It cannot: verifier evidence is
+available, but true and false rows do not separate under readout or admission.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-git-control-payload-dry-run-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.report.json \
+  5000
+
+cargo run -p nando-cli -- role-binding-real-traffic-git-control-profile-v1 \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/git-control-seed0-current5k.nwrb \
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1-current5k.json \
+  target/nando-wave/real-traffic-shadow/git-control-profile-v1-current5k.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-git-control-output-evidence-v1 \
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.trace.jsonl \
+  /home/ubu/.codex/sessions \
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-git-control-local-accept-calibration-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1-current5k.json \
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1-current5k.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-git-control-admission-audit-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1-current5k.json \
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.trace.jsonl \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json
+```
+
+Measured result:
+
+```text
+git_control_candidate_events: 123
+payload_ready_events: 90
+payload_built_events: 90
+scoreable_payload_events: 90
+edge_count: 8
+output_evidence_matched_events: 74
+verified_true_events: 35
+verified_false_events: 39
+unverified_rows: 16
+
+local_accept_calibration safe_policy_found: false
+local_accept_calibration best_safe_true_accepts: 0
+admission_audit safe_policy_found: false
+admission_audit best_safe_true_accepts: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 452
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 539917
+
+verification_hook_ready_events: 74
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Keep git_control on WATCH / NO_SAFE_POLICY_CURRENT5K. It has real traffic and
+verifier evidence, but current geometry mixes 35 true with 39 false rows and no
+safe readout/admission policy exists. Do not lower thresholds and do not promote
+workspace mutation routes. The next git work must split to a narrower
+command-outcome subfamily before any new safe-policy attempt.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/git-control-current5k-no-safe-policy-v1.md
+verdict: PASS
+complexity_score: 30
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
 
 Verdict:

@@ -263,6 +263,58 @@ read_inspect verifier/evidence
 test_output_parse if found in real trace
 ```
 
+### Git Control Current5k Probe
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-profile-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.shadow-report.json
+target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.verification-hook-audit.report.json
+```
+
+Measured on current5k:
+
+```text
+git_control_candidate_events: 123
+payload_ready_events: 90
+payload_built_events: 90
+scoreable_payload_events: 90
+edge_count: 8
+output_evidence_matched_events: 74
+verified_true_events: 35
+verified_false_events: 39
+unverified_rows: 16
+
+local_accept_calibration safe_policy_found: false
+local_accept_calibration best_safe_true_accepts: 0
+admission_audit safe_policy_found: false
+admission_audit best_safe_true_accepts: 0
+
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 539917
+verification_hook_ready_events: 74
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+`git_control` is a real, artifact-backed route, but current5k evidence rejects
+promotion. The verifier finds both true and false rows, and neither local
+readout nor request-side admission separates a safe subfamily. Keep it WATCH /
+NO_SAFE_POLICY_CURRENT5K. Do not lower thresholds and do not execute workspace
+mutations. The next git work must split into a narrower command-outcome
+subfamily before another safe-policy attempt.
+```
+
 ## Broad Route Split Discovery V1
 
 Source report:
