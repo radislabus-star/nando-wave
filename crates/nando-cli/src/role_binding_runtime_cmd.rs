@@ -15969,6 +15969,8 @@ fn collect_feedback_unique_accepts<'a>(
     let mut route_sum_verified_accepts = 0usize;
     let mut missing_request_fingerprint_rows = 0usize;
     let mut shadow_reports = Vec::new();
+    let mut route_accumulators =
+        BTreeMap::<String, RoleBindingFeedbackRouteUniqueAcceptAccumulator>::new();
 
     for audit in audits {
         route_sum_verified_accepts += audit.verified_cpu_accept_eligible_events;
@@ -15976,6 +15978,11 @@ fn collect_feedback_unique_accepts<'a>(
             continue;
         }
 
+        let route_keys = audit
+            .routes
+            .iter()
+            .map(|route| route.route_key.clone())
+            .collect::<Vec<_>>();
         let shadow_report_path = PathBuf::from(&audit.shadow_report_path);
         let shadow_report =
             read_json_file::<RoleBindingRealTrafficShadowReport>(&shadow_report_path)?;
@@ -15983,6 +15990,8 @@ fn collect_feedback_unique_accepts<'a>(
         let mut exact_cache_overlap_rows = 0usize;
         let mut incremental_rows = 0usize;
         let mut report_unique_verified = BTreeSet::new();
+        let mut report_unique_incremental = BTreeSet::new();
+        let mut report_unique_exact_cache_overlap = BTreeSet::new();
         let mut report_missing_request_fingerprint_rows = 0usize;
 
         for row in &shadow_report.rows {
@@ -16011,19 +16020,47 @@ fn collect_feedback_unique_accepts<'a>(
             report_unique_verified.insert(request_fingerprint.clone());
             unique_verified_fingerprints.insert(request_fingerprint.clone());
             if row.exact_cache_hit {
+                report_unique_exact_cache_overlap.insert(request_fingerprint.clone());
                 unique_exact_cache_overlap_fingerprints.insert(request_fingerprint.clone());
             } else {
+                report_unique_incremental.insert(request_fingerprint.clone());
                 unique_incremental_fingerprints.insert(request_fingerprint.clone());
+            }
+        }
+
+        if route_keys.len() == 1 {
+            let route_key = route_keys[0].clone();
+            let route_accumulator = route_accumulators.entry(route_key).or_default();
+            route_accumulator.accepted_verified_rows += accepted_rows;
+            route_accumulator
+                .unique_verified_request_fingerprints
+                .extend(report_unique_verified.iter().cloned());
+            route_accumulator
+                .unique_verified_incremental_request_fingerprints
+                .extend(report_unique_incremental.iter().cloned());
+            route_accumulator
+                .unique_verified_exact_cache_overlap_request_fingerprints
+                .extend(report_unique_exact_cache_overlap.iter().cloned());
+            route_accumulator.missing_request_fingerprint_rows +=
+                report_missing_request_fingerprint_rows;
+            route_accumulator
+                .shadow_report_paths
+                .insert(audit.shadow_report_path.clone());
+            route_accumulator.attribution_status = "single_route_shadow_report".to_owned();
+        } else if accepted_rows > 0 {
+            for route_key in &route_keys {
+                let route_accumulator = route_accumulators.entry(route_key.clone()).or_default();
+                route_accumulator
+                    .shadow_report_paths
+                    .insert(audit.shadow_report_path.clone());
+                route_accumulator.attribution_status =
+                    "multi_route_shadow_report_not_route_attributed".to_owned();
             }
         }
 
         shadow_reports.push(RoleBindingFeedbackUniqueAcceptShadowReport {
             shadow_report_path: audit.shadow_report_path.clone(),
-            route_keys: audit
-                .routes
-                .iter()
-                .map(|route| route.route_key.clone())
-                .collect(),
+            route_keys,
             total_llm_calls: shadow_report.total_llm_calls,
             accepted_verified_rows: accepted_rows,
             unique_verified_request_fingerprints: report_unique_verified.len(),
@@ -16034,17 +16071,97 @@ fn collect_feedback_unique_accepts<'a>(
     }
 
     let unique_verified_count = unique_verified_fingerprints.len();
+    let mut route_fingerprint_use_counts = BTreeMap::<String, usize>::new();
+    for route_accumulator in route_accumulators.values() {
+        for request_fingerprint in &route_accumulator.unique_verified_request_fingerprints {
+            *route_fingerprint_use_counts
+                .entry(request_fingerprint.clone())
+                .or_default() += 1;
+        }
+    }
+    let mut route_accepts = BTreeMap::new();
+    let mut route_unique_sum_request_fingerprints = 0usize;
+    let mut duplicate_within_route_verified_hits = 0usize;
+    for (route_key, route_accumulator) in route_accumulators {
+        let unique_verified = route_accumulator.unique_verified_request_fingerprints.len();
+        let duplicate_route_hits = route_accumulator
+            .accepted_verified_rows
+            .saturating_sub(unique_verified);
+        let cross_route_overlap_verified_request_fingerprints = route_accumulator
+            .unique_verified_request_fingerprints
+            .iter()
+            .filter(|request_fingerprint| {
+                route_fingerprint_use_counts
+                    .get(*request_fingerprint)
+                    .copied()
+                    .unwrap_or_default()
+                    > 1
+            })
+            .count();
+        let globally_exclusive_verified_request_fingerprints =
+            unique_verified.saturating_sub(cross_route_overlap_verified_request_fingerprints);
+        route_unique_sum_request_fingerprints += unique_verified;
+        duplicate_within_route_verified_hits += duplicate_route_hits;
+        route_accepts.insert(
+            route_key,
+            RoleBindingFeedbackRouteUniqueAcceptReport {
+                accepted_verified_rows: route_accumulator.accepted_verified_rows,
+                unique_verified_request_fingerprints: unique_verified,
+                incremental_verified_request_fingerprints: route_accumulator
+                    .unique_verified_request_fingerprints
+                    .difference(
+                        &route_accumulator.unique_verified_exact_cache_overlap_request_fingerprints,
+                    )
+                    .count(),
+                exact_cache_overlap_verified_request_fingerprints: route_accumulator
+                    .unique_verified_exact_cache_overlap_request_fingerprints
+                    .len(),
+                duplicate_verified_route_hits: duplicate_route_hits,
+                cross_route_overlap_verified_request_fingerprints,
+                globally_exclusive_verified_request_fingerprints,
+                missing_request_fingerprint_rows: route_accumulator
+                    .missing_request_fingerprint_rows,
+                shadow_report_paths: route_accumulator.shadow_report_paths.into_iter().collect(),
+                attribution_status: if route_accumulator.attribution_status.is_empty() {
+                    "no_verified_accepts_for_route".to_owned()
+                } else {
+                    route_accumulator.attribution_status
+                },
+            },
+        );
+    }
     Ok(RoleBindingFeedbackUniqueAccepts {
         route_sum_verified_accepts,
+        route_unique_sum_request_fingerprints,
         unique_verified_request_fingerprints: unique_verified_count,
-        unique_verified_incremental_request_fingerprints: unique_incremental_fingerprints.len(),
+        unique_verified_incremental_request_fingerprints: unique_verified_fingerprints
+            .difference(&unique_exact_cache_overlap_fingerprints)
+            .count(),
         unique_verified_exact_cache_overlap_request_fingerprints:
             unique_exact_cache_overlap_fingerprints.len(),
+        duplicate_within_route_verified_hits,
+        cross_route_overlap_verified_request_fingerprints: route_unique_sum_request_fingerprints
+            .saturating_sub(unique_verified_count),
         duplicate_verified_route_hits: route_sum_verified_accepts
             .saturating_sub(unique_verified_count),
         missing_request_fingerprint_rows,
         shadow_reports,
+        route_accepts,
     })
+}
+
+fn feedback_route_unique_accept_report(
+    unique_accepts: &RoleBindingFeedbackUniqueAccepts,
+    route_key: &str,
+) -> RoleBindingFeedbackRouteUniqueAcceptReport {
+    unique_accepts
+        .route_accepts
+        .get(route_key)
+        .cloned()
+        .unwrap_or_else(|| RoleBindingFeedbackRouteUniqueAcceptReport {
+            attribution_status: "no_verified_accepts_for_route".to_owned(),
+            ..RoleBindingFeedbackRouteUniqueAcceptReport::default()
+        })
 }
 
 pub(crate) fn run_role_binding_real_traffic_feedback_loop_v1<I>(mut args: I) -> Result<(), String>
@@ -17171,6 +17288,7 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(&unique_accepts, &route.route_key),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: route.candidate_share_milli_of_all_llm_calls,
             scoreable_share_milli_of_all_llm_calls: ratio_milli(
@@ -17269,6 +17387,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_PLANNING_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -17367,6 +17489,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_READ_INSPECT_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -17465,6 +17591,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_RETRIEVAL_LOOKUP_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -17575,6 +17705,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -17674,6 +17808,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_AGENT_CONTROL_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -17773,6 +17911,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -17872,6 +18014,10 @@ where
             local_accept_support_qualified,
             local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY,
+            ),
             false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
@@ -18137,6 +18283,12 @@ where
             .saturating_sub(unique_accepts.unique_verified_incremental_request_fingerprints),
         exact_cache_overlap_verified_cpu_accepts: unique_accepts
             .unique_verified_exact_cache_overlap_request_fingerprints,
+        verified_cpu_accept_route_unique_sum_request_fingerprints: unique_accepts
+            .route_unique_sum_request_fingerprints,
+        verified_cpu_accept_duplicate_within_route_hits: unique_accepts
+            .duplicate_within_route_verified_hits,
+        verified_cpu_accept_cross_route_overlap_request_fingerprints: unique_accepts
+            .cross_route_overlap_verified_request_fingerprints,
         verified_cpu_accept_duplicate_route_hits: unique_accepts.duplicate_verified_route_hits,
         verified_cpu_accept_missing_request_fingerprint_rows: unique_accepts
             .missing_request_fingerprint_rows,
@@ -18289,6 +18441,22 @@ where
     println!(
         "  verified_gap_to_80_calls: {}",
         report.verified_gap_to_80_calls
+    );
+    println!(
+        "  unique_verified_cpu_accepts: {}",
+        report.verified_cpu_accept_unique_request_fingerprints
+    );
+    println!(
+        "  unique_verified_gap_to_80_calls: {}",
+        report.unique_verified_gap_to_80_calls
+    );
+    println!(
+        "  incremental_unique_cpu_accepts: {}",
+        report.incremental_cpu_accept_unique_request_fingerprints
+    );
+    println!(
+        "  incremental_unique_gap_to_80_calls: {}",
+        report.incremental_unique_gap_to_80_calls
     );
     Err("CPU route feedback loop is review-only; routability 80 is not achieved".to_owned())
 }
@@ -22099,6 +22267,8 @@ struct RoleBindingFeedbackLoopReport {
     #[serde(default)]
     verified_cpu_accept_route_sum_events: usize,
     #[serde(default)]
+    verified_cpu_accept_route_unique_sum_request_fingerprints: usize,
+    #[serde(default)]
     verified_cpu_accept_unique_request_fingerprints: usize,
     #[serde(default)]
     verified_cpu_accept_unique_routability_milli: usize,
@@ -22112,6 +22282,10 @@ struct RoleBindingFeedbackLoopReport {
     incremental_unique_gap_to_80_calls: usize,
     #[serde(default)]
     exact_cache_overlap_verified_cpu_accepts: usize,
+    #[serde(default)]
+    verified_cpu_accept_duplicate_within_route_hits: usize,
+    #[serde(default)]
+    verified_cpu_accept_cross_route_overlap_request_fingerprints: usize,
     #[serde(default)]
     verified_cpu_accept_duplicate_route_hits: usize,
     #[serde(default)]
@@ -22127,12 +22301,27 @@ struct RoleBindingFeedbackLoopReport {
 #[derive(Clone, Debug, Default)]
 struct RoleBindingFeedbackUniqueAccepts {
     route_sum_verified_accepts: usize,
+    route_unique_sum_request_fingerprints: usize,
     unique_verified_request_fingerprints: usize,
     unique_verified_incremental_request_fingerprints: usize,
     unique_verified_exact_cache_overlap_request_fingerprints: usize,
+    duplicate_within_route_verified_hits: usize,
+    cross_route_overlap_verified_request_fingerprints: usize,
     duplicate_verified_route_hits: usize,
     missing_request_fingerprint_rows: usize,
     shadow_reports: Vec<RoleBindingFeedbackUniqueAcceptShadowReport>,
+    route_accepts: BTreeMap<String, RoleBindingFeedbackRouteUniqueAcceptReport>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RoleBindingFeedbackRouteUniqueAcceptAccumulator {
+    accepted_verified_rows: usize,
+    unique_verified_request_fingerprints: BTreeSet<String>,
+    unique_verified_incremental_request_fingerprints: BTreeSet<String>,
+    unique_verified_exact_cache_overlap_request_fingerprints: BTreeSet<String>,
+    missing_request_fingerprint_rows: usize,
+    shadow_report_paths: BTreeSet<String>,
+    attribution_status: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -22145,6 +22334,20 @@ struct RoleBindingFeedbackUniqueAcceptShadowReport {
     incremental_verified_rows: usize,
     exact_cache_overlap_rows: usize,
     missing_request_fingerprint_rows: usize,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct RoleBindingFeedbackRouteUniqueAcceptReport {
+    accepted_verified_rows: usize,
+    unique_verified_request_fingerprints: usize,
+    incremental_verified_request_fingerprints: usize,
+    exact_cache_overlap_verified_request_fingerprints: usize,
+    duplicate_verified_route_hits: usize,
+    cross_route_overlap_verified_request_fingerprints: usize,
+    globally_exclusive_verified_request_fingerprints: usize,
+    missing_request_fingerprint_rows: usize,
+    shadow_report_paths: Vec<String>,
+    attribution_status: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -22176,6 +22379,8 @@ struct RoleBindingFeedbackLoopRouteRow {
     local_accept_support_qualified: bool,
     local_accept_best_safe_true_accepts: usize,
     verified_cpu_accept_eligible_events: usize,
+    #[serde(default)]
+    unique_accepts: RoleBindingFeedbackRouteUniqueAcceptReport,
     false_accepts: usize,
     candidate_share_milli_of_all_llm_calls: usize,
     scoreable_share_milli_of_all_llm_calls: usize,

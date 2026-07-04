@@ -1,5 +1,143 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: CPU Route Feedback Unique Contribution V1
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_UNIQUE_CONTRIBUTION_V1_REVIEW_INSTRUMENTED
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+RETRIEVAL_LOOKUP_WINDOW5000_REVIEW_NO_SAFE_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+Feedback-loop report now separates:
+  route-sum verified accepts
+  route-local unique request fingerprints
+  global unique request fingerprints
+  conservative incremental unique request fingerprints
+  duplicate hits inside one route
+  cross-route overlaps
+```
+
+Fresh feedback after uniqueness instrumentation:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+total_llm_calls:                                      1000
+operator_candidate_calls:                              595
+scoreable_candidate_calls:                             133
+verification_hook_ready_events:                        108
+route_sum_verified_cpu_eligible_hits:                   28
+route_unique_sum_request_fingerprints:                  23
+global_unique_verified_cpu_accepts:                     22
+conservative_incremental_unique_cpu_accepts:            21
+exact_cache_overlap_verified_cpu_accepts:                1
+duplicate_within_route_verified_hits:                    5
+cross_route_overlap_verified_request_fingerprints:       1
+duplicate_route_hits_total:                              6
+unique_verified_gap_to_80_calls:                       778
+incremental_unique_gap_to_80_calls:                    779
+```
+
+Route-level unique contribution:
+
+```text
+conditional:
+  route_sum: 3
+  unique:    3
+  cross_route_overlap: 1
+  exclusive: 2
+
+edit:
+  route_sum: 1
+  unique:    1
+  exclusive: 1
+
+mixed:
+  route_sum: 3
+  unique:    3
+  exclusive: 3
+
+metrics_report:
+  route_sum: 3
+  unique:    3
+  exclusive: 3
+
+agent_control:
+  route_sum: 11
+  unique:     6
+  conservative_incremental_unique: 5
+  exact_cache_overlap_unique:      1
+  duplicate_hits_inside_route:     5
+
+git_control:
+  route_sum: 4
+  unique:    4
+  cross_route_overlap: 1
+  exclusive: 3
+
+serving_ops:
+  route_sum: 3
+  unique:    3
+  exclusive: 3
+```
+
+Retrieval wider-window diagnostic:
+
+```text
+artifacts:
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-window5000-payload-dry-run.report.json
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-window5000-output-evidence.report.json
+  target/nando-wave/real-traffic-shadow/retrieval-lookup-window5000-local-accept-calibration.report.json
+
+window:                         5000 real Codex events
+retrieval_lookup_candidates:       91
+scoreable_payload_events:           7
+output_evidence_matched:            6
+verified_true_events:               5
+verified_false_events:              1
+safe_policy_found:              false
+```
+
+Decision:
+
+```text
+Do not promote retrieval_lookup. The wider window found a false row at the
+same energy scale as true rows, so retrieval remains red. This is useful
+negative evidence, not a failure of the feedback loop.
+```
+
+Claim boundary:
+
+```text
+The route-sum number is diagnostic only. The current honest CPU80 state is
+22/1000 global unique verified CPU accepts, or 21/1000 conservative
+incremental unique accepts over exact cache. CPU Routability 80 is not
+achieved and market_claim_allowed remains false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/cpu-route-feedback-unique-contribution-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-unique-contribution-v1.nanda.json
+
+verdict: PASS
+complexity_score: 39
+note: metric-value packet form used for numeric report bindings
+```
+
 ## 2026-07-04 - Executor Integration: Conditional Safe-Policy Promote V2
 
 Verdict:
