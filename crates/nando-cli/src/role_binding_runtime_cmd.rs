@@ -347,6 +347,9 @@ const REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY: &str = "metrics_report_readout";
 const REAL_TRAFFIC_METRICS_REPORT_PROFILE_ID: &str = "route_gap_metrics_report_profile_v1";
 const REAL_TRAFFIC_METRICS_REPORT_WRONG_TOKEN: &str = "__METRICS_REPORT_WRONG__";
 const REAL_TRAFFIC_METRICS_REPORT_DISABLED_THRESHOLD: i32 = i32::MAX;
+const REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN: usize = 114;
+const PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114: &str =
+    "first_slot_threshold_active_fringe_min_114";
 const REAL_TRAFFIC_GIT_CONTROL_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_GIT_CONTROL_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_GIT_CONTROL_OPERATOR_PAIR_BASE: u32 = 40 << 12;
@@ -5179,7 +5182,11 @@ where
         calibration_policy,
     )?;
     let threshold = policy.threshold;
-    let acceptance_policy = "first_slot_threshold".to_owned();
+    let acceptance_policy = PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114.to_owned();
+    let request_side_policy_name = format!(
+        "metrics_report_active_fringe_min_{}",
+        REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN
+    );
     let metrics_report_profile_ids = trace_rows
         .iter()
         .filter_map(|row| row.nando_shadow_request.as_ref())
@@ -5224,6 +5231,9 @@ where
     let mut provider_cost_events_written = 0usize;
     let mut runtime_acceptance_mismatches = 0usize;
     let mut no_score_rows = 0usize;
+    let mut request_side_policy_evaluated_rows = 0usize;
+    let mut request_side_policy_accept_rows = 0usize;
+    let mut request_side_policy_reject_rows = 0usize;
 
     for row in &mut trace_rows {
         let Some(request) = &mut row.nando_shadow_request else {
@@ -5236,8 +5246,18 @@ where
         if !is_metrics_report {
             continue;
         }
-        scoreable_candidate_calls +=
-            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        let scoreable = !request.active_fringe.is_empty() && !request.slots.is_empty();
+        scoreable_candidate_calls += usize::from(scoreable);
+        if scoreable {
+            request_side_policy_evaluated_rows += 1;
+            if request.active_fringe.len()
+                >= REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN
+            {
+                request_side_policy_accept_rows += 1;
+            } else {
+                request_side_policy_reject_rows += 1;
+            }
+        }
         row.provider_cost_microusd = Some(provider_cost_microusd);
         provider_cost_events_written += 1;
 
@@ -5248,11 +5268,12 @@ where
             continue;
         };
         let strict_ordered_pass = score.slot_margins.iter().all(|margin| *margin > 0);
-        let policy_accept = profile_accepts_score(
+        let policy_accept = profile_accepts_request_score(
             &acceptance_policy,
             strict_ordered_pass,
             score.energy_margin,
             score.slot_margins.first().copied().unwrap_or(0),
+            request.active_fringe.len(),
             threshold,
         );
         request.expect_local_operator = Some(policy_accept);
@@ -5296,7 +5317,7 @@ where
         promoted_registry_config_path: promoted_registry_config_path.display().to_string(),
         promoted_trace_path: promoted_trace_path.display().to_string(),
         history_path: None,
-        request_side_policy_name: None,
+        request_side_policy_name: Some(request_side_policy_name),
         calibration_policy_name: calibration_policy.policy_name.clone(),
         calibration_policy_threshold: calibration_policy.threshold,
         selected_policy_name: policy.policy_name.clone(),
@@ -5311,9 +5332,9 @@ where
         provider_cost_microusd,
         trace_rows_written: trace_rows.len(),
         scoreable_candidate_calls,
-        request_side_policy_evaluated_rows: 0,
-        request_side_policy_accept_rows: 0,
-        request_side_policy_reject_rows: 0,
+        request_side_policy_evaluated_rows,
+        request_side_policy_accept_rows,
+        request_side_policy_reject_rows,
         history_prompt_missing_rows: 0,
         policy_accept_rows,
         policy_accept_verified_true_rows,
@@ -5327,7 +5348,7 @@ where
         target_labels_used_for_runtime: false,
         proof_labels_used_for_runtime: false,
         market_claim_allowed: false,
-        claim_boundary: "Promotion artifact only. It creates a promoted metrics-report registry and rewrites an evidence-backed shadow trace with provider-cost estimates. Offline verifier labels choose the metric-slot threshold, but serving uses only request-side first-slot margin >= threshold. It writes no raw prompt/response text and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.".to_owned(),
+        claim_boundary: format!("Promotion artifact only. It creates a promoted metrics-report registry and rewrites an evidence-backed shadow trace with provider-cost estimates. Offline verifier labels choose the metric-slot threshold, but serving uses only request-side first-slot margin >= threshold plus active_fringe_len >= {}. It writes no raw prompt/response text and does not prove market savings until shadow plus verification-hook audit pass with false_accepts=0 and unverified_shadow_accepts=0.", REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN),
         next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on the promoted metrics-report registry/trace. Keep this as a separate soak artifact unless the full CPU-route feedback window is regenerated with the same denominator.".to_owned(),
     };
     write_json_file(&report_path, &report)?;
@@ -15932,18 +15953,20 @@ fn score_role_binding_profile_request(
         );
     }
     let threshold = profile.runtime.policy().local_margin_threshold;
-    let accepted = profile_accepts_score(
+    let accepted = profile_accepts_request_score(
         &profile.config.acceptance_policy,
         strict_ordered_pass,
         energy_margin,
         first_slot_margin,
+        request.active_fringe.len(),
         threshold,
     );
-    let fallback_reason = profile_fallback_reason(
+    let fallback_reason = profile_request_fallback_reason(
         &profile.config.acceptance_policy,
         strict_ordered_pass,
         energy_margin,
         first_slot_margin,
+        request.active_fringe.len(),
         threshold,
     );
     let false_local_accept = accepted && request.expect_local_operator == Some(false);
@@ -22418,7 +22441,10 @@ fn default_profile_acceptance_policy() -> String {
 fn profile_acceptance_policy_is_supported(policy: &str) -> bool {
     matches!(
         policy,
-        "strict_ordered_energy_threshold" | "energy_threshold_only" | "first_slot_threshold"
+        "strict_ordered_energy_threshold"
+            | "energy_threshold_only"
+            | "first_slot_threshold"
+            | PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114
     )
 }
 
@@ -22433,6 +22459,29 @@ fn profile_accepts_score(
         "energy_threshold_only" => energy_margin >= threshold,
         "first_slot_threshold" => first_slot_margin >= threshold,
         _ => strict_ordered_pass && energy_margin >= threshold,
+    }
+}
+
+fn profile_accepts_request_score(
+    acceptance_policy: &str,
+    strict_ordered_pass: bool,
+    energy_margin: i32,
+    first_slot_margin: i32,
+    active_fringe_len: usize,
+    threshold: i32,
+) -> bool {
+    match acceptance_policy {
+        PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114 => {
+            first_slot_margin >= threshold
+                && active_fringe_len >= REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN
+        }
+        _ => profile_accepts_score(
+            acceptance_policy,
+            strict_ordered_pass,
+            energy_margin,
+            first_slot_margin,
+            threshold,
+        ),
     }
 }
 
@@ -22457,6 +22506,38 @@ fn profile_fallback_reason(
         Some("strict_slot_check_failed".to_owned())
     } else {
         Some("margin_below_threshold".to_owned())
+    }
+}
+
+fn profile_request_fallback_reason(
+    acceptance_policy: &str,
+    strict_ordered_pass: bool,
+    energy_margin: i32,
+    first_slot_margin: i32,
+    active_fringe_len: usize,
+    threshold: i32,
+) -> Option<String> {
+    if profile_accepts_request_score(
+        acceptance_policy,
+        strict_ordered_pass,
+        energy_margin,
+        first_slot_margin,
+        active_fringe_len,
+        threshold,
+    ) {
+        None
+    } else if acceptance_policy == PROFILE_ACCEPTANCE_POLICY_FIRST_SLOT_ACTIVE_FRINGE_MIN_114
+        && active_fringe_len < REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN
+    {
+        Some("active_fringe_below_request_side_policy_minimum".to_owned())
+    } else {
+        profile_fallback_reason(
+            acceptance_policy,
+            strict_ordered_pass,
+            energy_margin,
+            first_slot_margin,
+            threshold,
+        )
     }
 }
 
@@ -23262,13 +23343,19 @@ fn select_metrics_report_promotion_policy_from_evidence(
         let Some(score) = score_role_binding_profile_request_detailed(registry, request) else {
             continue;
         };
-        scored_rows.push((
-            score.slot_margins.first().copied().unwrap_or(0),
-            row.verified_safe_accept,
-        ));
+        if request.active_fringe.len() >= REAL_TRAFFIC_METRICS_REPORT_SAFE_POLICY_ACTIVE_FRINGE_MIN
+        {
+            scored_rows.push((
+                score.slot_margins.first().copied().unwrap_or(0),
+                row.verified_safe_accept,
+            ));
+        }
     }
     if scored_rows.is_empty() {
-        return Err("metrics-report safe policy selection found no scoreable rows".to_owned());
+        return Err(
+            "metrics-report safe policy selection found no request-side-admitted scoreable rows"
+                .to_owned(),
+        );
     }
 
     let mut thresholds = scored_rows
@@ -23282,8 +23369,8 @@ fn select_metrics_report_promotion_policy_from_evidence(
     let mut best_market_safe: Option<RoleBindingMixedPromotionPolicySelection> = None;
     for threshold in thresholds {
         let selection = evaluate_mixed_energy_promotion_threshold(
-            "market_safe_metric_slot_margin_threshold",
-            "evidence_trace_metric_slot_safe_threshold",
+            "market_safe_metric_slot_margin_threshold_with_active_fringe_min",
+            "evidence_trace_metric_slot_safe_threshold_plus_active_fringe_min",
             threshold,
             &scored_rows,
         );

@@ -3,15 +3,16 @@
 NANDA status: PASS.
 
 This packet checks the 5000-row metrics_report safe-policy soak boundary:
-the route produced 3 verified safe accepts and 0 false accepts, but 1
-unverified shadow accept keeps the route in REVIEW and outside the default
-CPU Routability 80 claim.
+the route produced 3 verified safe accepts, 0 unverified shadow accepts, and
+0 false accepts after adding a request-side active-fringe admission gate.
+It is a narrow route PASS for the separate 5000-row soak, not a default
+1000-row CPU Routability 80 proof.
 
 Current structural-gate result:
 
 ```text
 nanda_structural_gate: PASS
-complexity_score: 43
+complexity_score: 32
 agent_action: SAFE_TO_EDIT
 reason: candidate structure is coherent with source triads
 ```
@@ -20,28 +21,24 @@ reason: candidate structure is coherent with source triads
 
 | subject | relation | object | evidence |
 |---|---|---|---|
-| metrics report soak | trace_rows_written | 5000 | metrics-report-soak-v1/metrics-report-payload-dry-run-v1.report.json |
-| metrics report soak | scoreable_payload_events | 63 | metrics-report-soak-v1/metrics-report-payload-dry-run-v1.report.json |
-| metrics report calibration | best_safe_true_accepts | 3 | metrics-report-soak-v1/metrics-report-local-accept-calibration-v1.report.json |
-| metrics report promoted shadow | verdict | REAL_TRAFFIC_SHADOW_V1_REVIEW | metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json |
-| metrics report promoted shadow | verified_safe_accepts | 3 | metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json |
-| metrics report promoted shadow | unverified_shadow_accepts | 1 | metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json |
-| metrics report promoted shadow | false_accepts | 0 | metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json |
-| metrics report verification audit | market_claim_allowed | false | metrics-report-soak-v1/metrics-report-safe-policy-v1.verification-hook-audit.report.json |
-| default CPU feedback | verified_cpu_accept_eligible_events | 12 | cpu-route-feedback-loop-v1.report.json |
-| CPU Routability 80 | claim_status | not_achieved | cpu-route-feedback-loop-v1.report.json |
+| metrics-report-soak | trace rows | 5000 | metrics-report-soak-v1 payload report |
+| metrics-report-soak | scoreable rows | 63 | metrics-report-soak-v1 payload report |
+| metrics-report-soak | active-fringe admission | min 114 | metrics-report-soak-v1 promote report |
+| metrics-report-soak | verified accepts | 3 | metrics-report-soak-v1 shadow report |
+| metrics-report-soak | unverified accepts | 0 | metrics-report-soak-v1 shadow report |
+| metrics-report-soak | unsafe accepts | zero | metrics-report-soak-v1 shadow report |
+| CPU-Routability-80 | status | not achieved | cpu-route-feedback-loop-v1 report |
+| metrics-report-soak | aggregation boundary | separate 5000-row window | executor notes |
 
 ## candidate_triads
 
 | subject | relation | object | evidence |
 |---|---|---|---|
-| metrics report soak | trace_rows_written | 5000 | candidate claim |
-| metrics report soak | scoreable_payload_events | 63 | candidate claim |
-| metrics report calibration | best_safe_true_accepts | 3 | candidate claim |
-| metrics report promoted shadow | verdict | REAL_TRAFFIC_SHADOW_V1_REVIEW | candidate claim |
-| metrics report promoted shadow | verified_safe_accepts | 3 | candidate claim |
-| metrics report promoted shadow | unverified_shadow_accepts | 1 | candidate claim |
-| metrics report promoted shadow | false_accepts | 0 | candidate claim |
-| metrics report verification audit | market_claim_allowed | false | candidate claim |
-| default CPU feedback | verified_cpu_accept_eligible_events | 12 | candidate claim |
-| CPU Routability 80 | claim_status | not_achieved | candidate claim |
+| metrics-report-soak | trace rows | 5000 | candidate claim |
+| metrics-report-soak | scoreable rows | 63 | candidate claim |
+| metrics-report-soak | active-fringe admission | min 114 | candidate claim |
+| metrics-report-soak | verified accepts | 3 | candidate claim |
+| metrics-report-soak | unverified accepts | 0 | candidate claim |
+| metrics-report-soak | unsafe accepts | zero | candidate claim |
+| CPU-Routability-80 | status | not achieved | candidate claim |
+| metrics-report-soak | aggregation boundary | separate 5000-row window | candidate claim |

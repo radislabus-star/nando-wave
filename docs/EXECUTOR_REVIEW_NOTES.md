@@ -5,7 +5,7 @@
 Verdict:
 
 ```text
-REAL_TRAFFIC_SHADOW_V1_REVIEW
+REAL_TRAFFIC_SHADOW_V1_PASS
 ```
 
 What changed:
@@ -62,12 +62,19 @@ Promoted shadow attempt:
 promote_report:
   target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.report.json
 
-selected_acceptance_policy:           first_slot_threshold
+selected_policy_name:                 market_safe_metric_slot_margin_threshold_with_active_fringe_min
+selected_policy_source:               evidence_trace_metric_slot_safe_threshold_plus_active_fringe_min
+selected_acceptance_policy:           first_slot_threshold_active_fringe_min_114
+request_side_policy_name:             metrics_report_active_fringe_min_114
 selected_policy_threshold:            393216
-policy_accept_rows:                   4
+request_side_policy_evaluated_rows:   63
+request_side_policy_accept_rows:      11
+request_side_policy_reject_rows:      52
+policy_accept_rows:                   3
 policy_accept_verified_true_rows:     3
 policy_accept_verified_false_rows:    0
-policy_accept_unverified_rows:        1
+policy_accept_unverified_rows:        0
+runtime_acceptance_mismatches:        0
 provider_cost_events_written:         63
 ```
 
@@ -77,43 +84,43 @@ Shadow/audit:
 shadow_report:
   target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json
 
-verdict:                              REAL_TRAFFIC_SHADOW_V1_REVIEW
+verdict:                              REAL_TRAFFIC_SHADOW_V1_PASS
 total_llm_calls:                      5000
 operator_candidate_calls:             63
-nando_shadow_accepts:                 4
+nando_shadow_accepts:                 3
 verified_safe_accepts:                3
-unverified_shadow_accepts:            1
+unverified_shadow_accepts:            0
 false_accepts:                        0
-p99_shadow_score_latency_ns:          306256
+p99_shadow_score_latency_ns:          272859
 synthetic_trace_used:                 false
 
 audit_report:
   target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.verification-hook-audit.report.json
 
 verified_cpu_accept_eligible_events:  3
-market_claim_allowed:                 false
+market_claim_allowed:                 true
 ```
 
 Claim boundary:
 
 ```text
-This is not a promoted route PASS and must not be counted into the current
-1000-row feedback total. It is a separate 5000-row non-synthetic soak showing
-that metrics_report_readout has a safe-looking metric-slot pocket with
-false_accepts=0, but one unverified shadow accept blocks market claim and
-default CPU Routability aggregation.
+This is a narrow promoted route PASS for the separate 5000-row non-synthetic
+metrics-report soak. The unverified accept was removed by a request-side
+active-fringe admission gate, not by reading the answer: runtime now requires
+first_slot_margin >= 393216 and active_fringe_len >= 114 for this promoted
+metrics_report profile.
 
-Do not lower thresholds or count this route until the unverified accept gets
-real evidence or request-side admission excludes it without reading the answer.
+Do not add these 3 accepts to the current 1000-row feedback total until the
+overall feedback window is regenerated with the same denominator. CPU
+Routability 80 is still not achieved.
 ```
 
 Next engineering debt:
 
 ```text
-Fix the one unverified metrics_report shadow accept:
-  either recover missing Codex output evidence for that trace row,
-  or add a request-side admission feature that rejects it without using response,
-  or keep the route REVIEW.
+Regenerate the overall real-traffic feedback loop on a single consistent
+window if metrics_report should be counted beside git_control, serving_ops,
+mixed, edit, and conditional routes.
 ```
 
 ## 2026-07-04 - Executor Integration: Git-Control Tool-Output Safe-Policy Promotion

@@ -256,15 +256,20 @@ Metrics-report 5000-row safe-policy soak:
   output_evidence_matched_events: 51
   verifier_true_events: 31
   verifier_false_events: 20
-  selected_acceptance_policy: first_slot_threshold
+  selected_policy_name: market_safe_metric_slot_margin_threshold_with_active_fringe_min
+  selected_acceptance_policy: first_slot_threshold_active_fringe_min_114
+  request_side_policy_name: metrics_report_active_fringe_min_114
   selected_policy_threshold: 393216
-  nando_shadow_accepts: 4
+  request_side_policy_evaluated_rows: 63
+  request_side_policy_accept_rows: 11
+  request_side_policy_reject_rows: 52
+  nando_shadow_accepts: 3
   verified_safe_accepts: 3
-  unverified_shadow_accepts: 1
+  unverified_shadow_accepts: 0
   false_accepts: 0
-  p99_shadow_score_latency_ns: 306256
-  market_claim_allowed: false
-  interpretation: near-pass route soak; cannot count into default 1000-row feedback or market savings until the unverified accept is resolved
+  p99_shadow_score_latency_ns: 272859
+  market_claim_allowed: true
+  interpretation: narrow route PASS for the separate 5000-row soak; do not add to default 1000-row CPU Routability total until the overall feedback window is regenerated with the same denominator
 
 Git-control route/profile/evidence rung:
   base_registry: profile-registry-git-control-v1.json
