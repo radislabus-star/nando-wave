@@ -195,21 +195,44 @@ metrics_report route/profile rung:
     metrics_report contributes 0 verified CPU accepts because safe support is
     below the 3-true minimum
 
-fresh default feedback after read_inspect + metrics_report calibration:
+git_control route/profile rung:
+  dry_run_report:
+    target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.report.json
+  profile_report:
+    target/nando-wave/real-traffic-shadow/git-control-profile-v1.report.json
+  profile_registry:
+    target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json
+  git_control_candidate_events: 18
+  git_control_payload_ready_events: 12
+  git_control_scoreable_payload_events: 12
+  git_control_edge_count: 8
+  git_control_runtime_bytes_estimate: 33000
+  median_energy_margin: 1240064
+  p10_energy_margin: 906240
+  workspace_mutation_enabled: false
+  local_accepts_enabled: false
+  verified_cpu_accept_eligible_events: 0
+  route_stage: scoreable_payload_missing_verification_hook
+  claim_boundary: scoreable workspace-command profile exists, but it does not
+    run git and cannot accept until git_status_and_command_outcome_verifier_v1
+    attaches command/outcome evidence
+
+fresh default feedback after read_inspect + metrics_report calibration + git_control profile:
   feedback:
     target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-  operator_candidate_calls:            384
-  scoreable_candidate_calls:           147
+  operator_candidate_calls:            402
+  scoreable_candidate_calls:           159
   verification_hook_ready_events:      113
   verified_cpu_accept_eligible_events: 8
   verified_cpu_routability_milli:      8
   verified_gap_to_80_calls:            792
+  git_control_stage:                   scoreable_payload_missing_verification_hook
 
 historical/current-number warning:
   The mixed-v2 bundle above remains the stronger historical 17/1000 verified
-  snapshot. The read_inspect and metrics_report output-evidence bundles are a
-  fresh default rebuild and should not be mixed with that historical number until
-  all promoted/audit artifacts are regenerated on the same route base.
+  snapshot. The read_inspect, metrics_report, and git_control bundles are a fresh
+  default rebuild and should not be mixed with that historical number until all
+  promoted/audit artifacts are regenerated on the same route base.
 ```
 
 Current real-traffic shadow path:
@@ -234,6 +257,8 @@ conditional_output_evidence_command: role-binding-real-traffic-conditional-outpu
 mixed_output_evidence_command: role-binding-real-traffic-mixed-output-evidence-v1
 read_inspect_output_evidence_command: role-binding-real-traffic-read-inspect-output-evidence-v1
 read_inspect_local_accept_calibration_command: role-binding-real-traffic-read-inspect-local-accept-calibration-v1
+git_control_payload_dry_run_command: role-binding-real-traffic-git-control-payload-dry-run-v1
+git_control_profile_command: role-binding-real-traffic-git-control-profile-v1
 metrics_report_payload_dry_run_command: role-binding-real-traffic-metrics-report-payload-dry-run-v1
 metrics_report_profile_command: role-binding-real-traffic-metrics-report-profile-v1
 metrics_report_output_evidence_command: role-binding-real-traffic-metrics-report-output-evidence-v1

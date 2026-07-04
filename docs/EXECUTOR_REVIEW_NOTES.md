@@ -1,5 +1,127 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Git-Control Route Payload/Profile
+
+Verdict:
+
+```text
+GIT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added commands:
+  role-binding-real-traffic-git-control-payload-dry-run-v1
+  role-binding-real-traffic-git-control-profile-v1
+
+Added route/profile:
+  route_key: git_control
+  profile_id: route_gap_git_control_profile_v1
+```
+
+Git-control request-side payload dry-run:
+
+```text
+report:
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.report.json
+
+trace:
+  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.trace.jsonl
+
+git_control_candidate_events:         18
+payload_ready_events:                 12
+payload_built_events:                 12
+scoreable_payload_events:             12
+profile_registered:                   false
+raw_text_written:                     false
+response_text_used:                   false
+target_labels_used:                   false
+proof_labels_used:                    false
+workspace_mutation_enabled:           false
+local_accepts_enabled:                false
+market_claim_allowed:                 false
+```
+
+Git-control profile:
+
+```text
+package:
+  target/nando-wave/real-traffic-shadow/git-control-seed0.nwrb
+
+registry:
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/git-control-profile-v1.report.json
+
+scoreable_payload_events:             12
+package_training_requests:            12
+edge_count:                           8
+package_bytes:                        140
+runtime_bytes_estimate:               33000
+median_energy_margin:                 1240064
+p10_energy_margin:                    906240
+unexpected_local_accepts_under_disabled_threshold: 0
+workspace_mutation_enabled:           false
+local_accepts_enabled_on_real_traffic: false
+market_claim_allowed:                 false
+```
+
+Feedback loop after git-control profile shadow:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:             402 / 1000
+scoreable_candidate_calls:            159 / 1000
+verification_hook_ready_events:       113
+verified_cpu_accept_eligible_events:  8
+verified_cpu_routability_milli:       8
+verified_gap_to_80_calls:             792
+market_claim_allowed:                 false
+
+git_control route row:
+  candidate_events:                   18
+  scoreable_payload_events:           12
+  verification_hook_ready_events:     0
+  verified_cpu_accept_eligible_events: 0
+  stage:                              scoreable_payload_missing_verification_hook
+  next_action:                        Attach response/tool-call evidence and deterministic output verification.
+```
+
+Route-gap after registering git-control profile:
+
+```text
+catalog:
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-git-control-v1.report.json
+
+readiness:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-git-control-v1.report.json
+
+existing_route_candidate_events:      507 / 1000
+no_candidate_events:                  493 / 1000
+payload_ready_events:                 13
+top_payload_ready_family:             serving_ops
+```
+
+Claim boundary:
+
+```text
+This moves git_control from route-gap into a scoreable registered workspace
+command profile. It does not run git, does not mutate the workspace, does not
+enable local accepts, and does not prove savings.
+
+The next required debt is git_status_and_command_outcome_verifier_v1. Until that
+exists, git_control must remain scoreable_payload_missing_verification_hook.
+```
+
 ## 2026-07-04 - Executor Integration: Read-Inspect Local Accept Calibration
 
 Verdict:

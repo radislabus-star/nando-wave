@@ -322,6 +322,18 @@ pub(crate) fn print_help() {
         "            Calibrate read-inspect score/readout thresholds against deterministic verifier labels; local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-git-control-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
+    );
+    println!(
+        "            Build scoreable dry-run git-control payloads from request text only; workspace mutations and local accepts stay disabled"
+    );
+    println!(
+        "  role-binding-real-traffic-git-control-profile-v1 [base-registry-json] [git-control-dry-run-trace-jsonl] [git-control-package-nwrb] [overlay-registry-json] [profile-report-json]"
+    );
+    println!(
+        "            Compile git-control dry-run payload geometry into a .nwrb profile with local accepts disabled by threshold"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(
