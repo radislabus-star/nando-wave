@@ -28,6 +28,33 @@ overlap, verifier evidence, expected unique CPU accepts, false_accept risk, and
 expected savings.
 ```
 
+Product identity:
+
+```text
+Nando is not sold as a single generic model.
+Nando is sold as a per-runtime CPU Call Catalog:
+
+  Codex catalog
+  Claude Code catalog
+  customer-support-agent catalog
+  workflow-agent catalog
+
+Each catalog is mined from that runtime's real traffic. A profile that is
+valuable for one runtime can be useless for another.
+```
+
+Market trajectory:
+
+```text
+real traffic
+  -> route classification
+  -> cost ranking
+  -> exact-cache overlap check
+  -> verifier audit
+  -> savings forecast
+  -> profile/payload/admission work only for rows that pass BUSINESS_VALUE_GATE
+```
+
 ## Business Value Gate
 
 A profile row passes the gate only when all conditions are true:
@@ -40,6 +67,19 @@ expected unique CPU accepts over exact cache > 0
 false_accepts = 0
 ```
 
+Before any new payload/profile/admission work, record this eight-field gate:
+
+```text
+call_class
+traffic_count / traffic_share
+exact_cache_overlap
+verifier_or_external_fact
+expected_unique_cpu_accepts_over_exact_cache
+false_accept_risk
+expected_savings
+next_action
+```
+
 Anything else goes to a shelf:
 
 ```text
@@ -48,6 +88,31 @@ CANDIDATE       payload/verifier evidence exists, but expected unique accepts ar
 WATCH           low support, singleton-only, no verifier, or exhausted support
 REJECT_FOR_NOW  broad or risky route; split before more work
 ```
+
+Hard stop:
+
+```text
+Do not build 100 elegant CPU/L3 profiles that add only +2.5% on real traffic.
+If a call_class has no real traffic count, no verifier, or no expected unique
+accepts over exact cache, it does not get engineering time yet.
+```
+
+## Online Operator Discovery
+
+Manual profile selection is allowed, but it should become less central over
+time. The product path is live action-center mining:
+
+```text
+observe LLM calls
+extract action/state features
+cluster repeated transitions / center-of-mass action groups
+rank by traffic and cost
+require deterministic verifier
+shadow mode
+promote only if false_accepts=0 and unique value over exact cache is proven
+```
+
+Auto-discovery is allowed. Auto-accept without a verifier is not allowed.
 
 ## Current Snapshot
 
@@ -1136,6 +1201,78 @@ project_context_dialogue as a whole
 agent_continue_execute as a whole
 IME singleton-only routes
 resource_pressure without verifier-true evidence
+```
+
+## Current5k Discovery Triage
+
+Manual route discovery and broad-route split discovery are review-only. They
+can nominate the next profile; they do not prove savings.
+
+Current manual discovery top rows:
+
+```text
+ime_input_state_debug:
+  candidate_events: 16
+  payload_ready_events: 6
+  output_evidence_matched_events: 5
+  verified_true_events: 3
+  verified_false_events: 2
+  robust_safe_policy_found: false
+  best_singleton_true_accepts: 1
+  decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
+
+document_stamp_layout_edit:
+  candidate_events: 5
+  payload_ready_events: 4
+  decision: WATCH until document/file verifier evidence exists
+
+resource_pressure_budget:
+  manual candidate_events: 7
+  payload_ready_events: 3
+  current scoreable_payload_events: 1
+  verifier_true_events: 0
+  decision: WATCH until real verifier-true support exists
+```
+
+Current broad split top candidates:
+
+```text
+file_path_evidence_answer:
+  candidate_events: 146
+  scoreable_payload_events: 44
+  verified_true_events: 16
+  verified_false_events: 23
+  robust_safe_policy_found: false
+  decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
+
+test_output_parse:
+  broad split candidates: 55 answer_or_explain + 46 project_context
+  existing full-window route already contributes 91 incremental unique accepts
+  decision: PROVEN for previous-tool-output status parsing, not broad answer parsing
+
+metric_from_report:
+  answer_or_explain candidate_events: 27
+  project_context candidate_events: 11
+  current metrics_report proven support: 3 incremental unique
+  decision: WATCH unless a stronger numeric-report subfamily is split
+
+git_status_summary:
+  combined broad candidates: 26
+  existing git_control: 90 scoreable / 74 hooks / no safe policy
+  decision: WATCH until command-outcome subfamily separates true from false
+
+report_sync:
+  combined broad candidates: 30
+  payload_ready_events: 5
+  decision: CANDIDATE only after artifact-diff verifier is implemented
+```
+
+Next selection rule:
+
+```text
+Prefer a new narrow split only if it can plausibly add >= 3 verified unique
+accepts over exact cache with false_accepts=0. Otherwise record WATCH and move
+to the next higher-value route instead of squeezing a singleton.
 ```
 
 ## Claim Boundary

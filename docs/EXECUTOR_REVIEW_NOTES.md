@@ -1,5 +1,114 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Business Value Gate V2 / CPU Call Catalog Discipline
+
+Verdict:
+
+```text
+CPU_CALL_CATALOG_BUSINESS_VALUE_GATE_V2_RECORDED
+NO_NEW_PROFILE_PROMOTED
+```
+
+Why:
+
+```text
+The current risk is no longer "can we build CPU/L3 profiles?" The risk is
+building many technically attractive profiles that add almost no unique
+verified savings on real traffic. The working rule is now: every new operator
+profile must pass BUSINESS_VALUE_GATE before payload/profile/admission work.
+```
+
+Updated:
+
+```text
+docs/CPU_CALL_CATALOG.md
+docs/structural_gates/cpu-call-catalog-business-value-gate-v2.md
+```
+
+Structural gate:
+
+```text
+first attempt: VETO
+reason: one packet mixed product identity, discovery, current5k triage, and
+candidate rejections under one broad evidence route.
+
+repair: shrink the packet to one coherent gate route:
+  per-runtime catalog
+  complete eight-field BUSINESS_VALUE_GATE
+  no candidate rows as savings
+  broad routes split before promotion
+  auto-discovery cannot auto-accept without verifier
+
+final verdict: PASS
+complexity_score: 29
+trace_path: /tmp/nanda-structural-gate/cpu-call-catalog-business-value-gate-v2.trace.json
+```
+
+Current hard filter:
+
+```text
+call_class found in real trace
+traffic_count / traffic_share measured
+exact-cache overlap known
+verifier or explicitly checkable external fact exists
+expected unique CPU accepts over exact cache estimated
+false_accept risk named
+expected savings named
+only then build/improve payload/profile/admission
+```
+
+Current5k facts:
+
+```text
+total_llm_calls: 5000
+exact_cache_hits: 452
+verified_cpu_accept_unique_request_fingerprints: 106
+incremental_cpu_accept_unique_request_fingerprints: 104
+incremental_unique_gap_to_80_calls: 3896
+```
+
+Discovery triage:
+
+```text
+manual discovery:
+  ime_input_state_debug:
+    16 candidates, 6 payload-ready, 5 evidence rows, 3 true, 2 false
+    robust_safe_policy_found: false
+    decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
+
+  document_stamp_layout_edit:
+    5 candidates, 4 payload-ready
+    decision: WATCH until document/file verifier evidence exists
+
+  resource_pressure_budget:
+    7 manual candidates, 3 payload-ready, current scoreable support 1
+    decision: WATCH until verifier-true support exists
+
+broad split discovery:
+  file_path_evidence_answer:
+    146 candidates, 44 scoreable, 16 true, 23 false
+    robust_safe_policy_found: false
+    decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
+
+  test_output_parse:
+    broad route split still exists, but the bounded previous-tool-output route
+    is already PROVEN and contributes the main current value.
+
+  metric_from_report / git_status_summary / report_sync:
+    candidate splits exist, but need narrower verifier-backed evidence before
+    engineering work is justified.
+```
+
+Decision:
+
+```text
+Do not create or promote another profile from technical interest. The next
+engineering target must be the highest expected unique CPU accepts over exact
+cache at false_accepts=0. Broad answer/project/continue routes remain blocked
+as whole routes. Online operator discovery may nominate repeated action
+centers, but auto-accept without verifier remains forbidden.
+```
+
 ## 2026-07-04 - Executor Integration: Current5k Business Value Gate Catalog
 
 Verdict:
