@@ -364,6 +364,12 @@ pub(crate) fn print_help() {
         "            Attach conservative IME symptom/artifact verifier labels; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-ime-input-state-admission-audit-v1 [output-evidence-trace-jsonl] [history-jsonl] [report-json]"
+    );
+    println!(
+        "            Audit IME/input-state verifier labels against request-side features; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-answer-evidence-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

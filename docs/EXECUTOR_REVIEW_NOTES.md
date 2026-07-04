@@ -1,5 +1,113 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: IME Input-State Admission Audit V1
+
+Verdict:
+
+```text
+IME_INPUT_STATE_ADMISSION_AUDIT_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-ime-input-state-admission-audit-v1
+```
+
+Why:
+
+```text
+The disabled IME/input-state profile can score real request-side payloads, but
+profile scoring is not permission to local-accept. This stage audits whether
+request-side features can safely separate verifier-true IME diagnostic rows
+from verifier-false rows before any safe-policy promotion.
+
+This is a quick profile audit, not a new sandbox. If no robust policy exists,
+the route stays disabled and the CPU80 work moves to higher-yield narrow
+agent-loop profiles.
+```
+
+Run artifact:
+
+```text
+target/nando-wave/real-traffic-shadow/ime-input-state-admission-audit-v1.report.json
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-ime-input-state-admission-audit-v1 \
+  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.trace.jsonl \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/real-traffic-shadow/ime-input-state-admission-audit-v1.report.json
+```
+
+Measured result:
+
+```text
+hook_ready_rows: 5
+rows_with_prompt_features: 5
+label_true_rows: 3
+label_false_rows: 2
+robust_safe_policy_found: false
+singleton_safe_policy_found: true
+best_robust_true_accepts: 0
+best_singleton_true_accepts: 1
+
+policy examples:
+  all_hook_ready_rows: true=3 false=2
+  ime_terms: true=3 false=1
+  ime_and_artifact: true=3 false=1
+  input_state_terms: true=1 false=0
+```
+
+Decision:
+
+```text
+IME input-state does not have a robust request-side admission policy.
+The only safe-looking policies are singleton support, so they are not enough
+to enable local accept.
+
+Do not promote this route now.
+Do not count IME toward CPU80 savings.
+Do not spend another long loop on IME until more non-synthetic verifier-true
+rows exist or the route is split into a narrower debug-artifact subfamily.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+No raw prompt text is written.
+No raw response text is written.
+Verifier labels are used only for offline policy evaluation.
+No target labels are used.
+No proof labels are used.
+Local accepts remain disabled.
+Broad answer_or_explain remains fallback-only.
+```
+
+Next CPU80 priority:
+
+```text
+metric_from_report / report_sync
+git_status_summary
+test_output_parse
+resource_pressure_budget
+edit_patch_small
+document_stamp_layout_edit
+```
+
 ## 2026-07-04 - Executor Integration: IME Input-State Disabled Profile V1
 
 Verdict:
