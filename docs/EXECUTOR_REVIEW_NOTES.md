@@ -1,5 +1,145 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Document Stamp Layout Payload Dry-Run V1
+
+Verdict:
+
+```text
+DOCUMENT_STAMP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-document-stamp-payload-dry-run-v1
+```
+
+Why:
+
+```text
+IME admission did not produce a robust safe policy, and resource_pressure has
+verifier false evidence. The next narrow real-traffic subfamily from 5k manual
+discovery is document_stamp_layout_edit.
+
+This stage builds request-side active_fringe/slot payloads only. It does not
+compile a profile, attach output evidence, enable local accepts, or claim
+market savings.
+```
+
+Run artifact:
+
+```text
+target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.trace.jsonl
+target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.report.json
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-document-stamp-payload-dry-run-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json \
+  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1-5k.report.json \
+  target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.report.json \
+  5000
+```
+
+Measured result:
+
+```text
+document_stamp_candidate_events: 5
+payload_ready_events: 4
+payload_built_events: 3
+scoreable_payload_events: 3
+builder_rejected_events: 1
+readiness_rejected_events: 1
+profile_registered: false
+shadow_score_ready: false
+active_fringe_centers_total: 385
+slots_total: 9
+positive_impulses_total: 216
+negative_impulses_total: 216
+raw_text_written: false
+response_text_used: false
+target_labels_used: false
+proof_labels_used: false
+local_accepts_enabled: false
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+document_stamp_layout_edit now has request-side scoreable payloads.
+It is not CPU savings and must not be counted toward CPU80.
+
+Next route debt:
+  attach document_position_and_attachment_verifier_v1
+  compile disabled-threshold document_stamp .nwrb profile only if verifier-true
+  rows exist
+  keep local accepts disabled until shadow/audit proves false_accepts=0
+```
+
+## 2026-07-04 - Executor Integration: Post-IME Current Feedback Snapshot
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+Run artifact:
+
+```text
+target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v5.post-ime-current.report.json
+```
+
+Command:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 \
+  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json \
+  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json \
+  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json \
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v5.post-ime-current.report.json
+```
+
+Measured result:
+
+```text
+total_llm_calls: 1000
+operator_candidate_calls: 1000
+operator_candidate_route_sum_events: 1019
+scoreable_candidate_calls: 174
+verification_hook_ready_events: 143
+verified_cpu_routability_milli: 32
+verified_gap_to_80_calls: 768
+unique_verified_cpu_accepts: 26
+unique_verified_gap_to_80_calls: 774
+incremental_unique_cpu_accepts: 25
+incremental_unique_gap_to_80_calls: 775
+```
+
+Decision:
+
+```text
+IME admission audit added no verified CPU accepts, as intended.
+The current consistent 1000-call window remains at 26 unique verified CPU
+accepts and 25 incremental unique accepts over exact cache.
+
+Do not count scoreable/profile rows as savings.
+Do not count IME singleton policies as savings.
+Next growth must come from either promoted existing narrow profiles with
+non-synthetic soak or new narrow profiles with deterministic verifiers.
+```
+
 ## 2026-07-04 - Executor Integration: IME Input-State Admission Audit V1
 
 Verdict:

@@ -84,6 +84,10 @@ const DEFAULT_IME_INPUT_STATE_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/ime-input-state-profile-v1.report.json";
 const DEFAULT_IME_INPUT_STATE_ADMISSION_AUDIT_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/ime-input-state-admission-audit-v1.report.json";
+const DEFAULT_DOCUMENT_STAMP_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.trace.jsonl";
+const DEFAULT_DOCUMENT_STAMP_PAYLOAD_DRY_RUN_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.report.json";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl";
 const DEFAULT_ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_REPORT: &str =
@@ -586,6 +590,19 @@ const REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY: &str = "resource_pressure_budget
 const REAL_TRAFFIC_RESOURCE_PRESSURE_PROFILE_ID: &str =
     "route_gap_resource_pressure_budget_profile_v1";
 const REAL_TRAFFIC_RESOURCE_PRESSURE_WRONG_TOKEN: &str = "__RESOURCE_PRESSURE_WRONG__";
+const REAL_TRAFFIC_DOCUMENT_STAMP_PAGE_SIZE: u32 = 4096;
+const REAL_TRAFFIC_DOCUMENT_STAMP_ROLE_BASE: u32 = 0;
+const REAL_TRAFFIC_DOCUMENT_STAMP_OPERATOR_PAIR_BASE: u32 = 49 << 12;
+const REAL_TRAFFIC_DOCUMENT_STAMP_DOCUMENT_ROLE_SLOT: u8 = 0;
+const REAL_TRAFFIC_DOCUMENT_STAMP_STAMP_ROLE_SLOT: u8 = 1;
+const REAL_TRAFFIC_DOCUMENT_STAMP_LAYOUT_ROLE_SLOT: u8 = 2;
+const REAL_TRAFFIC_DOCUMENT_STAMP_BOUNDARY_ROLE_SLOT: u8 = 3;
+const REAL_TRAFFIC_DOCUMENT_STAMP_OPERATOR_PAIR_SHIFT: u32 = 5;
+const REAL_TRAFFIC_DOCUMENT_STAMP_TOP_ROLE_L1_LANES: usize = 32;
+const REAL_TRAFFIC_DOCUMENT_STAMP_STATE_DELTA_LANES_PER_SIDE: usize = 24;
+const REAL_TRAFFIC_DOCUMENT_STAMP_ROUTE_KEY: &str = "document_stamp_layout_edit";
+const REAL_TRAFFIC_DOCUMENT_STAMP_PROFILE_ID: &str = "route_gap_document_stamp_layout_profile_v1";
+const REAL_TRAFFIC_DOCUMENT_STAMP_WRONG_TOKEN: &str = "__DOCUMENT_STAMP_WRONG__";
 const REAL_TRAFFIC_IME_INPUT_STATE_PAGE_SIZE: u32 = 4096;
 const REAL_TRAFFIC_IME_INPUT_STATE_ROLE_BASE: u32 = 0;
 const REAL_TRAFFIC_IME_INPUT_STATE_OPERATOR_PAIR_BASE: u32 = 48 << 12;
@@ -4743,6 +4760,285 @@ where
     println!("  local_accepts_enabled: false");
     Err(
         "resource-pressure output evidence is review-only; run shadow/audit before claims"
+            .to_owned(),
+    )
+}
+
+pub(crate) fn run_role_binding_real_traffic_document_stamp_payload_dry_run_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let history_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/history.jsonl"));
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG));
+    let manual_discovery_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_DOCUMENT_STAMP_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_DOCUMENT_STAMP_PAYLOAD_DRY_RUN_REPORT));
+    let max_events = args
+        .next()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("invalid max_events '{}': {error}", value))
+        })
+        .transpose()?
+        .unwrap_or(5000);
+
+    let registry_config =
+        read_json_file::<RoleBindingProfileRegistryConfig>(&registry_config_path)?;
+    validate_registry_config(&registry_config)?;
+    let profile_registered = registry_config
+        .profiles
+        .iter()
+        .any(|profile| profile.profile_id == REAL_TRAFFIC_DOCUMENT_STAMP_PROFILE_ID);
+    let history_rows = read_codex_history_jsonl(&history_path)?;
+    let manual_report =
+        read_json_file::<RoleBindingManualRouteDiscoveryReport>(&manual_discovery_report_path)?;
+    let document_stamp_history_indexes = manual_report
+        .rows
+        .iter()
+        .filter(|row| row.discovered_subfamily == REAL_TRAFFIC_DOCUMENT_STAMP_ROUTE_KEY)
+        .filter_map(|row| {
+            route_gap_payload_readiness_history_index(&row.event_id).map(|index| (index, row))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let skip = history_rows.len().saturating_sub(max_events);
+    let mut trace_rows = Vec::with_capacity(history_rows.len().saturating_sub(skip));
+    let mut report_rows = Vec::new();
+    let mut document_stamp_candidate_events = 0usize;
+    let mut payload_ready_events = 0usize;
+    let mut payload_built_events = 0usize;
+    let mut scoreable_payload_events = 0usize;
+    let mut builder_rejected_events = 0usize;
+    let mut readiness_rejected_events = 0usize;
+    let mut active_fringe_centers_total = 0usize;
+    let mut slots_total = 0usize;
+    let mut positive_impulses_total = 0usize;
+    let mut negative_impulses_total = 0usize;
+    let mut builder_status_counts = BTreeMap::<String, usize>::new();
+
+    for (index, row) in history_rows.iter().enumerate().skip(skip) {
+        let fingerprint = stable_real_traffic_fingerprint64(row.text.as_bytes());
+        let event_id = format!(
+            "codex_history_document_stamp_payload_dry_run::{}::{}::{}",
+            row.session_id, row.ts, index
+        );
+        let request_fingerprint = format!("fnv1a64:{fingerprint:016x}");
+        let exact_cache_key = Some(format!("codex_history_request:{fingerprint:016x}"));
+        let mut nando_shadow_request = None;
+        let mut notes = "not document_stamp_layout_edit manual-discovery candidate".to_owned();
+
+        if let Some(manual_row) = document_stamp_history_indexes.get(&index) {
+            document_stamp_candidate_events += 1;
+            if manual_row.payload_ready {
+                payload_ready_events += 1;
+                let built =
+                    build_document_stamp_dry_run_request(&event_id, &fingerprint, &row.text);
+                match built {
+                    Some((request, tokens)) => {
+                        let active_fringe_centers = request.active_fringe.len();
+                        let slots = request.slots.len();
+                        let positive_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.positive_impulses.len())
+                            .sum::<usize>();
+                        let negative_impulses = request
+                            .slots
+                            .iter()
+                            .map(|slot| slot.negative_impulses.len())
+                            .sum::<usize>();
+                        let scoreable = active_fringe_centers > 0 && slots > 0;
+                        payload_built_events += 1;
+                        scoreable_payload_events += usize::from(scoreable);
+                        active_fringe_centers_total += active_fringe_centers;
+                        slots_total += slots;
+                        positive_impulses_total += positive_impulses;
+                        negative_impulses_total += negative_impulses;
+                        let builder_status = if scoreable && profile_registered {
+                            "scoreable_payload_built_profile_registered"
+                        } else if scoreable {
+                            "scoreable_payload_built_profile_missing"
+                        } else {
+                            "payload_built_but_not_scoreable"
+                        }
+                        .to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingDocumentStampPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_DOCUMENT_STAMP_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_DOCUMENT_STAMP_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: true,
+                            scoreable,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers,
+                            slots,
+                            positive_impulses,
+                            negative_impulses,
+                            document_token: tokens.document_token,
+                            stamp_token: tokens.stamp_token,
+                            layout_token: tokens.layout_token,
+                            boundary_token: tokens.boundary_token,
+                        });
+                        notes = format!(
+                            "request-side document-stamp payload built; status={builder_status}; verified accepts disabled"
+                        );
+                        nando_shadow_request = Some(request);
+                    }
+                    None => {
+                        builder_rejected_events += 1;
+                        let builder_status = "builder_rejected_request_side_features".to_owned();
+                        *builder_status_counts
+                            .entry(builder_status.clone())
+                            .or_insert(0) += 1;
+                        report_rows.push(RoleBindingDocumentStampPayloadDryRunRow {
+                            event_id: event_id.clone(),
+                            request_fingerprint: request_fingerprint.clone(),
+                            route_key: REAL_TRAFFIC_DOCUMENT_STAMP_ROUTE_KEY.to_owned(),
+                            profile_id: REAL_TRAFFIC_DOCUMENT_STAMP_PROFILE_ID.to_owned(),
+                            readiness_payload_ready: true,
+                            payload_built: false,
+                            scoreable: false,
+                            profile_registered,
+                            builder_status: builder_status.clone(),
+                            active_fringe_centers: 0,
+                            slots: 0,
+                            positive_impulses: 0,
+                            negative_impulses: 0,
+                            document_token: String::new(),
+                            stamp_token: String::new(),
+                            layout_token: String::new(),
+                            boundary_token: String::new(),
+                        });
+                        notes = builder_status;
+                    }
+                }
+            } else {
+                readiness_rejected_events += 1;
+                let builder_status = "manual_discovery_payload_not_ready".to_owned();
+                *builder_status_counts
+                    .entry(builder_status.clone())
+                    .or_insert(0) += 1;
+                notes = builder_status;
+            }
+        }
+
+        trace_rows.push(RoleBindingRealTrafficTraceRow {
+            schema_version: "nando_role_binding_real_traffic_trace_v1".to_owned(),
+            trace_id: event_id,
+            traffic_source: Some("codex_history_document_stamp_payload_dry_run".to_owned()),
+            time_ms: Some(row.ts.saturating_mul(1000)),
+            request_fingerprint: Some(request_fingerprint),
+            response_fingerprint: None,
+            tool_call_fingerprints: Vec::new(),
+            verification_source: Some(
+                "request-side document-stamp payload dry-run from local Codex prompt only; raw text, response text, target labels, and proof labels not written"
+                    .to_owned(),
+            ),
+            llm_call: true,
+            exact_cache_key,
+            provider_cache_hit: None,
+            provider_cost_microusd: None,
+            nando_shadow_request,
+            verified_safe_accept: None,
+            synthetic_source: Some(false),
+            notes: Some(notes),
+        });
+    }
+
+    write_real_traffic_trace_jsonl(&trace_path, &trace_rows)?;
+    let shadow_score_ready = profile_registered && scoreable_payload_events > 0;
+    let report = RoleBindingDocumentStampPayloadDryRunReport {
+        schema_version: "nando_role_binding_document_stamp_payload_dry_run_v1".to_owned(),
+        verdict: if shadow_score_ready {
+            "DOCUMENT_STAMP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY"
+        } else if scoreable_payload_events > 0 {
+            "DOCUMENT_STAMP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING"
+        } else {
+            "DOCUMENT_STAMP_PAYLOAD_DRY_RUN_V1_REVIEW_NO_SCOREABLE_PAYLOADS"
+        }
+        .to_owned(),
+        history_path: history_path.display().to_string(),
+        registry_config_path: registry_config_path.display().to_string(),
+        manual_discovery_report_path: manual_discovery_report_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        max_events,
+        total_history_rows: history_rows.len(),
+        trace_rows_written: trace_rows.len(),
+        document_stamp_candidate_events,
+        payload_ready_events,
+        payload_built_events,
+        scoreable_payload_events,
+        builder_rejected_events,
+        readiness_rejected_events,
+        profile_registered,
+        shadow_score_ready,
+        active_fringe_centers_total,
+        slots_total,
+        positive_impulses_total,
+        negative_impulses_total,
+        builder_status_counts: builder_status_counts
+            .into_iter()
+            .map(|(name, count)| RoleBindingNamedCount { name, count })
+            .collect(),
+        raw_text_written: false,
+        response_text_used: false,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        rows: report_rows,
+        claim_boundary: "Request-side dry-run payload builder only. It emits active_fringe/slots for document_stamp_layout_edit manual-discovery rows from prompt text only, keeps verified_safe_accept=None and expect_local_operator=false, writes no raw prompt text, and cannot prove savings. A document-position/attachment verifier is required before any local accept.".to_owned(),
+        next_engineering_debt: "Attach document_position_and_attachment_verifier_v1 to real response/tool/file evidence, then compile a disabled-threshold document_stamp .nwrb profile only if enough verifier-true rows exist. Keep local accepts disabled until shadow/audit with provider cost and false_accepts=0.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-document-stamp-payload-dry-run-v1: {}",
+        report.verdict
+    );
+    println!("  history: {}", history_path.display());
+    println!("  registry_config: {}", registry_config_path.display());
+    println!(
+        "  manual_discovery_report: {}",
+        manual_discovery_report_path.display()
+    );
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  document_stamp_candidate_events: {}",
+        report.document_stamp_candidate_events
+    );
+    println!("  payload_ready_events: {}", report.payload_ready_events);
+    println!("  payload_built_events: {}", report.payload_built_events);
+    println!(
+        "  scoreable_payload_events: {}",
+        report.scoreable_payload_events
+    );
+    println!("  profile_registered: {}", report.profile_registered);
+    println!("  local_accepts_enabled: false");
+    Err(
+        "document-stamp payload dry-run is review-only; attach verifier/profile before claims"
             .to_owned(),
     )
 }
@@ -29876,6 +30172,62 @@ struct RoleBindingResourcePressurePayloadDryRunRow {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingDocumentStampPayloadDryRunReport {
+    schema_version: String,
+    verdict: String,
+    history_path: String,
+    registry_config_path: String,
+    manual_discovery_report_path: String,
+    trace_path: String,
+    max_events: usize,
+    total_history_rows: usize,
+    trace_rows_written: usize,
+    document_stamp_candidate_events: usize,
+    payload_ready_events: usize,
+    payload_built_events: usize,
+    scoreable_payload_events: usize,
+    builder_rejected_events: usize,
+    readiness_rejected_events: usize,
+    profile_registered: bool,
+    shadow_score_ready: bool,
+    active_fringe_centers_total: usize,
+    slots_total: usize,
+    positive_impulses_total: usize,
+    negative_impulses_total: usize,
+    builder_status_counts: Vec<RoleBindingNamedCount>,
+    raw_text_written: bool,
+    response_text_used: bool,
+    target_labels_used: bool,
+    proof_labels_used: bool,
+    local_accepts_enabled: bool,
+    market_claim_allowed: bool,
+    rows: Vec<RoleBindingDocumentStampPayloadDryRunRow>,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingDocumentStampPayloadDryRunRow {
+    event_id: String,
+    request_fingerprint: String,
+    route_key: String,
+    profile_id: String,
+    readiness_payload_ready: bool,
+    payload_built: bool,
+    scoreable: bool,
+    profile_registered: bool,
+    builder_status: String,
+    active_fringe_centers: usize,
+    slots: usize,
+    positive_impulses: usize,
+    negative_impulses: usize,
+    document_token: String,
+    stamp_token: String,
+    layout_token: String,
+    boundary_token: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingImeInputStatePayloadDryRunReport {
     schema_version: String,
     verdict: String,
@@ -37082,6 +37434,14 @@ struct ResourcePressureTokens {
     boundary_token: String,
 }
 
+#[derive(Clone, Debug)]
+struct DocumentStampTokens {
+    document_token: String,
+    stamp_token: String,
+    layout_token: String,
+    boundary_token: String,
+}
+
 fn build_resource_pressure_dry_run_request(
     event_id: &str,
     fingerprint: &u64,
@@ -37372,6 +37732,310 @@ fn looks_like_resource_pressure_limit_token(token: &str) -> bool {
                 "жр",
             ],
         )
+}
+
+fn build_document_stamp_dry_run_request(
+    event_id: &str,
+    fingerprint: &u64,
+    text: &str,
+) -> Option<(RoleBindingProfileScoreRequest, DocumentStampTokens)> {
+    let tokens = extract_document_stamp_tokens(text)?;
+    let mut active_fringe = Vec::new();
+    active_fringe.extend(document_stamp_operator_centers());
+    active_fringe.extend(document_stamp_role_surface_centers(
+        REAL_TRAFFIC_DOCUMENT_STAMP_DOCUMENT_ROLE_SLOT,
+        &tokens.document_token,
+    ));
+    active_fringe.extend(document_stamp_role_surface_centers(
+        REAL_TRAFFIC_DOCUMENT_STAMP_STAMP_ROLE_SLOT,
+        &tokens.stamp_token,
+    ));
+    active_fringe.extend(document_stamp_role_surface_centers(
+        REAL_TRAFFIC_DOCUMENT_STAMP_LAYOUT_ROLE_SLOT,
+        &tokens.layout_token,
+    ));
+    active_fringe.extend(document_stamp_role_surface_centers(
+        REAL_TRAFFIC_DOCUMENT_STAMP_BOUNDARY_ROLE_SLOT,
+        &tokens.boundary_token,
+    ));
+    let active_fringe = merge_profile_active_centers(active_fringe);
+
+    let mut slots = Vec::new();
+    if let Some(slot) = document_stamp_request_score_slot(
+        0,
+        &tokens.document_token,
+        REAL_TRAFFIC_DOCUMENT_STAMP_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = document_stamp_request_score_slot(
+        1,
+        &tokens.stamp_token,
+        REAL_TRAFFIC_DOCUMENT_STAMP_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if let Some(slot) = document_stamp_request_score_slot(
+        2,
+        &tokens.layout_token,
+        REAL_TRAFFIC_DOCUMENT_STAMP_WRONG_TOKEN,
+    ) {
+        slots.push(slot);
+    }
+    if active_fringe.is_empty() || slots.is_empty() {
+        return None;
+    }
+
+    let request = RoleBindingProfileScoreRequest {
+        request_id: event_id.to_owned(),
+        route_key: Some(REAL_TRAFFIC_DOCUMENT_STAMP_ROUTE_KEY.to_owned()),
+        profile_id: Some(REAL_TRAFFIC_DOCUMENT_STAMP_PROFILE_ID.to_owned()),
+        exact_cache_key: Some(format!("codex_history_request:{fingerprint:016x}")),
+        active_fringe,
+        slots,
+        // Dry-run only: document/file edits need deterministic file/tool evidence.
+        expect_local_operator: Some(false),
+    };
+    Some((request, tokens))
+}
+
+fn document_stamp_operator_centers() -> Vec<RoleBindingProfileActiveCenterRow> {
+    [
+        (0, REAL_TRAFFIC_DOCUMENT_STAMP_DOCUMENT_ROLE_SLOT),
+        (1, REAL_TRAFFIC_DOCUMENT_STAMP_STAMP_ROLE_SLOT),
+        (2, REAL_TRAFFIC_DOCUMENT_STAMP_LAYOUT_ROLE_SLOT),
+        (2, REAL_TRAFFIC_DOCUMENT_STAMP_BOUNDARY_ROLE_SLOT),
+    ]
+    .into_iter()
+    .map(
+        |(output_slot, role_slot)| RoleBindingProfileActiveCenterRow {
+            center_id: REAL_TRAFFIC_DOCUMENT_STAMP_OPERATOR_PAIR_BASE
+                + document_stamp_operator_pair_lane(output_slot, role_slot),
+            strength: 8,
+        },
+    )
+    .collect()
+}
+
+fn document_stamp_operator_pair_lane(output_slot: u8, role_slot: u8) -> u32 {
+    (u32::from(output_slot) << REAL_TRAFFIC_DOCUMENT_STAMP_OPERATOR_PAIR_SHIFT)
+        | u32::from(role_slot)
+}
+
+fn document_stamp_role_surface_centers(
+    role_slot: u8,
+    token: &str,
+) -> Vec<RoleBindingProfileActiveCenterRow> {
+    let slot_base = REAL_TRAFFIC_DOCUMENT_STAMP_ROLE_BASE
+        + u32::from(role_slot).saturating_mul(REAL_TRAFFIC_DOCUMENT_STAMP_PAGE_SIZE);
+    surface_lane_centers_folded_for_profile(
+        token,
+        slot_base,
+        REAL_TRAFFIC_DOCUMENT_STAMP_PAGE_SIZE,
+        REAL_TRAFFIC_DOCUMENT_STAMP_TOP_ROLE_L1_LANES,
+    )
+}
+
+fn document_stamp_request_score_slot(
+    binding_output_slot: u8,
+    correct_token: &str,
+    wrong_token: &str,
+) -> Option<RoleBindingProfileScoreSlotRow> {
+    if correct_token == wrong_token {
+        return None;
+    }
+    let base_wave = SurfaceWave4096::compile("");
+    let target_wave = SurfaceWave4096::compile(correct_token);
+    let wrong_wave = SurfaceWave4096::compile(wrong_token);
+    let positive_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        target_wave.lanes(),
+        wrong_wave.lanes(),
+        REAL_TRAFFIC_DOCUMENT_STAMP_STATE_DELTA_LANES_PER_SIDE,
+    );
+    let negative_impulses = discriminative_profile_impulses(
+        base_wave.lanes(),
+        wrong_wave.lanes(),
+        target_wave.lanes(),
+        REAL_TRAFFIC_DOCUMENT_STAMP_STATE_DELTA_LANES_PER_SIDE,
+    );
+    if positive_impulses.is_empty() || negative_impulses.is_empty() {
+        return None;
+    }
+    Some(RoleBindingProfileScoreSlotRow {
+        binding_output_slot: Some(binding_output_slot),
+        positive_impulses,
+        negative_impulses,
+    })
+}
+
+fn extract_document_stamp_tokens(text: &str) -> Option<DocumentStampTokens> {
+    let lower = text.to_lowercase();
+    if !contains_any(
+        &lower,
+        &[
+            "печать",
+            "подпись",
+            "stamp",
+            "signature",
+            "document",
+            "документ",
+            "docx",
+            "pdf",
+            "письмо",
+            "прикреп",
+            "вниз",
+            "выше",
+            "ниже",
+            "layout",
+            "позици",
+        ],
+    ) {
+        return None;
+    }
+    let tokens = extract_request_side_edit_tokens(text, 24);
+    if tokens.is_empty() {
+        return None;
+    }
+    let document_token = quoted_or_marked_chunks(text)
+        .into_iter()
+        .find_map(|chunk| {
+            extract_request_side_edit_tokens(&chunk, 1)
+                .into_iter()
+                .find(|token| looks_like_document_stamp_document_token(token))
+        })
+        .or_else(|| {
+            tokens
+                .iter()
+                .find(|token| looks_like_document_stamp_document_token(token))
+                .cloned()
+        })
+        .unwrap_or_else(|| {
+            first_matching_branch_token(
+                &lower,
+                &[
+                    "document",
+                    "docx",
+                    "pdf",
+                    "документ",
+                    "письмо",
+                    "файл",
+                    "влож",
+                ],
+            )
+            .unwrap_or_else(|| "document_artifact".to_owned())
+        });
+    let stamp_token = tokens
+        .iter()
+        .find(|token| looks_like_document_stamp_stamp_token(token))
+        .cloned()
+        .or_else(|| {
+            first_matching_branch_token(
+                &lower,
+                &["печать", "подпись", "stamp", "signature", "seal"],
+            )
+        })
+        .unwrap_or_else(|| "document_stamp_or_signature".to_owned());
+    let layout_token = tokens
+        .iter()
+        .find(|token| looks_like_document_stamp_layout_token(token))
+        .cloned()
+        .or_else(|| {
+            first_matching_branch_token(
+                &lower,
+                &[
+                    "вниз",
+                    "вверх",
+                    "ниже",
+                    "выше",
+                    "подним",
+                    "опуст",
+                    "позици",
+                    "layout",
+                    "transparent",
+                    "прозрач",
+                ],
+            )
+        })
+        .unwrap_or_else(|| "document_layout_position".to_owned());
+    let boundary_token = if contains_any(&lower, &["прикреп", "attach", "влож", "email", "письмо"])
+    {
+        "attachment_boundary"
+    } else if contains_any(&lower, &["прозрач", "transparent"]) {
+        "visual_transparency_boundary"
+    } else if contains_any(&lower, &["вниз", "вверх", "ниже", "выше", "позици"])
+    {
+        "position_boundary"
+    } else {
+        "document_layout_review"
+    }
+    .to_owned();
+    Some(DocumentStampTokens {
+        document_token,
+        stamp_token,
+        layout_token,
+        boundary_token,
+    })
+}
+
+fn looks_like_document_stamp_document_token(token: &str) -> bool {
+    contains_any(
+        token,
+        &[
+            ".doc",
+            ".docx",
+            ".pdf",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            "document",
+            "doc",
+            "file",
+            "letter",
+            "документ",
+            "письмо",
+            "файл",
+        ],
+    )
+}
+
+fn looks_like_document_stamp_stamp_token(token: &str) -> bool {
+    contains_any(
+        token,
+        &[
+            "stamp",
+            "signature",
+            "seal",
+            "печать",
+            "подпись",
+            "штамп",
+            "logo",
+            "логотип",
+            "签字",
+            "盖章",
+        ],
+    )
+}
+
+fn looks_like_document_stamp_layout_token(token: &str) -> bool {
+    contains_any(
+        token,
+        &[
+            "layout",
+            "position",
+            "transparent",
+            "down",
+            "up",
+            "lower",
+            "higher",
+            "позици",
+            "вниз",
+            "вверх",
+            "ниже",
+            "выше",
+            "прозрач",
+        ],
+    )
 }
 
 #[derive(Clone, Debug)]

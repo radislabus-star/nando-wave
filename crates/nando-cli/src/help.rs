@@ -346,6 +346,12 @@ pub(crate) fn print_help() {
         "            Attach conservative write-rate/resource-budget verifier labels; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-document-stamp-payload-dry-run-v1 [history-jsonl] [registry-config-json] [manual-discovery-report-json] [trace-jsonl] [report-json] [max-events]"
+    );
+    println!(
+        "            Build request-side document/stamp/layout payloads from manual-discovery rows; review-only, local accepts disabled"
+    );
+    println!(
         "  role-binding-real-traffic-ime-input-state-payload-dry-run-v1 [history-jsonl] [registry-config-json] [manual-discovery-report-json] [trace-jsonl] [report-json] [max-events]"
     );
     println!(
