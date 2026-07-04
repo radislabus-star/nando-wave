@@ -321,6 +321,66 @@ mutations. The next git work must split into a narrower command-outcome
 subfamily before another safe-policy attempt.
 ```
 
+### Edit Marker Length Current5k Probe
+
+Source reports:
+
+```text
+target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/edit-output-evidence-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json
+target/nando-wave/real-traffic-shadow/edit-output-evidence-v1-current5k.shadow-report.json
+target/nando-wave/real-traffic-shadow/edit-output-evidence-v1-current5k.verification-hook-audit.report.json
+```
+
+Measured on current5k:
+
+```text
+edit_route_candidate_events: 505
+payload_ready_events: 50
+payload_built_events: 50
+scoreable_payload_events: 50
+output_evidence_matched_events: 42
+verified_true_events: 14
+verified_false_events: 28
+
+local_accept_calibration safe_policy_found: false
+local_accept_calibration best_safe_true_accepts: 0
+admission_calibration robust_safe_policy_found: false
+admission_calibration singleton_safe_policy_found: false
+admission_calibration best_robust_true_accepts: 0
+
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 1213283
+verification_hook_ready_events: 42
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Feedback/catalog boundary:
+
+```text
+feedback candidate_events: 506
+feedback payload_ready_events: 50
+feedback payload_built_events: 50
+feedback scoreable_payload_events: 0
+feedback verified_cpu_accept_eligible_events: 0
+catalog status: WATCH
+```
+
+Decision:
+
+```text
+`edit_marker_length` is a high-volume route but not a safe CPU profile on
+current5k. It exposes 50 dry-run payloads and 42 verifier-hook-ready rows, but
+the verifier split is 14 true / 28 false and no safe readout or admission policy
+exists. Keep it WATCH / NO_SAFE_POLICY_CURRENT5K. Do not lower thresholds; split
+the edit family by concrete external edit evidence before another promote.
+```
+
 ### Serving Ops Current5k Probe
 
 Source reports:

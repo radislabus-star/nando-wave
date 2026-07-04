@@ -306,6 +306,66 @@ the BUSINESS_VALUE_GATE path, not as CPU80 progress. Keep daemon/server actions
 disabled and split a stronger service-health subfamily before another promote.
 ```
 
+## 2026-07-04 - Executor Integration: Edit Marker Length Current5k No Safe Policy
+
+Verdict:
+
+```text
+EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
+EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+EDIT_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+edit_marker_length had the largest non-broad candidate count after the current
+PROVEN rows, so it was the next BUSINESS_VALUE_GATE probe. It produced some
+request-side payloads and verifier evidence, but the true/false split is unsafe
+and no safe policy exists.
+```
+
+Measured result:
+
+```text
+edit_route_candidate_events: 505
+payload_ready_events: 50
+payload_built_events: 50
+scoreable_payload_events: 50
+output_evidence_matched_events: 42
+verified_true_events: 14
+verified_false_events: 28
+
+local_accept_calibration safe_policy_found: false
+local_accept_calibration best_safe_true_accepts: 0
+admission_calibration robust_safe_policy_found: false
+admission_calibration singleton_safe_policy_found: false
+admission_calibration best_robust_true_accepts: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 453
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 1213283
+
+verification_hook_ready_events: 42
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Keep edit_marker_length on WATCH / NO_SAFE_POLICY_CURRENT5K. The route is
+visible in real traffic, but current evidence mixes 14 true with 28 false rows
+and no readout/admission policy separates safe accepts. Do not lower thresholds.
+Next edit work must split by concrete external edit evidence before promotion.
+```
+
 Structural gate:
 
 ```text
