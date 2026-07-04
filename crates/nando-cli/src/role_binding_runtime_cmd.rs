@@ -131,6 +131,11 @@ const DEFAULT_STYLE_BREVITY_PROFILE_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-style-brevity-v1.json";
 const DEFAULT_STYLE_BREVITY_PROFILE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.report.json";
+const DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/style-brevity-output-evidence-v1.trace.jsonl";
+const DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/style-brevity-output-evidence-v1.report.json";
+const DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/style-brevity-output-evidence-v1.verification-hook-audit.report.json";
 const DEFAULT_READ_INSPECT_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/read-inspect-seed0.nwrb";
 const DEFAULT_READ_INSPECT_PROFILE_REGISTRY_CONFIG: &str =
@@ -9771,6 +9776,161 @@ where
     Err("style-brevity profile is review-only; attach verifier before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_style_brevity_output_evidence_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let input_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_STYLE_BREVITY_PAYLOAD_DRY_RUN_TRACE_JSONL));
+    let sessions_root = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/home/ubu/.codex/sessions"));
+    let output_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_REPORT));
+
+    let trace_rows = read_real_traffic_trace_jsonl(&input_trace_path)?;
+    let wanted_request_fingerprints = trace_rows
+        .iter()
+        .filter(|row| {
+            row.nando_shadow_request.as_ref().is_some_and(|request| {
+                request.profile_id.as_deref() == Some(REAL_TRAFFIC_STYLE_BREVITY_PROFILE_ID)
+            })
+        })
+        .filter_map(|row| row.request_fingerprint.as_deref())
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let session_ids = trace_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter_map(|row| codex_history_session_id_from_trace_id(&row.trace_id))
+        .collect::<HashSet<_>>();
+    let session_index = build_codex_session_output_evidence_index(
+        &sessions_root,
+        &session_ids,
+        &wanted_request_fingerprints,
+        deterministic_style_brevity_output_verification,
+    )?;
+
+    let mut enriched_rows = Vec::with_capacity(trace_rows.len());
+    let mut operator_candidate_calls = 0usize;
+    let mut scoreable_candidate_calls = 0usize;
+    let mut output_evidence_matched_events = 0usize;
+    let mut deterministic_verification_events = 0usize;
+    let mut verified_true_events = 0usize;
+    let mut verified_false_events = 0usize;
+    let mut no_session_output_match_events = 0usize;
+    let mut verifier_not_applicable_events = 0usize;
+
+    for mut row in trace_rows {
+        let Some(request) = &row.nando_shadow_request else {
+            enriched_rows.push(row);
+            continue;
+        };
+        operator_candidate_calls += 1;
+        scoreable_candidate_calls +=
+            usize::from(!request.active_fringe.is_empty() && !request.slots.is_empty());
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_STYLE_BREVITY_PROFILE_ID) {
+            enriched_rows.push(row);
+            continue;
+        }
+        let request_fingerprint = row.request_fingerprint.clone().unwrap_or_default();
+        let Some(evidence) = session_index
+            .by_request_fingerprint
+            .get(&request_fingerprint)
+        else {
+            no_session_output_match_events += 1;
+            row.notes = Some(append_trace_note(
+                row.notes.as_deref(),
+                "style-brevity output evidence missing: no matching Codex final answer found",
+            ));
+            enriched_rows.push(row);
+            continue;
+        };
+        output_evidence_matched_events += 1;
+        row.response_fingerprint = Some(evidence.response_fingerprint.clone());
+        row.verification_source = Some(
+            "codex_session_final_answer_fingerprint_plus_response_length_and_format_verifier_v1"
+                .to_owned(),
+        );
+        row.verified_safe_accept = Some(evidence.verified_safe_accept);
+        deterministic_verification_events += usize::from(evidence.verifier_applicable);
+        verifier_not_applicable_events += usize::from(!evidence.verifier_applicable);
+        verified_true_events += usize::from(evidence.verified_safe_accept);
+        verified_false_events += usize::from(!evidence.verified_safe_accept);
+        row.notes = Some(append_trace_note(
+            row.notes.as_deref(),
+            &format!(
+                "style-brevity output evidence attached; verifier_status={}",
+                evidence.verifier_status
+            ),
+        ));
+        enriched_rows.push(row);
+    }
+
+    write_real_traffic_trace_jsonl(&output_trace_path, &enriched_rows)?;
+    let report = RoleBindingEditOutputEvidenceReport {
+        schema_version: "nando_role_binding_style_brevity_output_evidence_v1".to_owned(),
+        verdict: if output_evidence_matched_events > 0 {
+            "STYLE_BREVITY_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED"
+        } else {
+            "STYLE_BREVITY_OUTPUT_EVIDENCE_V1_REVIEW_NO_OUTPUT_EVIDENCE"
+        }
+        .to_owned(),
+        input_trace_path: input_trace_path.display().to_string(),
+        sessions_root: sessions_root.display().to_string(),
+        output_trace_path: output_trace_path.display().to_string(),
+        total_trace_rows: enriched_rows.len(),
+        operator_candidate_calls,
+        scoreable_candidate_calls,
+        session_ids_requested: session_ids.len(),
+        session_files_scanned: session_index.session_files_scanned,
+        codex_turns_indexed: session_index.codex_turns_indexed,
+        output_evidence_matched_events,
+        no_session_output_match_events,
+        deterministic_verification_events,
+        verifier_not_applicable_events,
+        verified_true_events,
+        verified_false_events,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        response_text_used_for_verification: true,
+        target_labels_used: false,
+        proof_labels_used: false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Style-brevity output evidence join only. It reads local Codex final answers at analysis time, writes response fingerprints and deterministic response-shape verifier status, writes no raw prompt/response text, and cannot prove semantic CPU savings by itself.".to_owned(),
+        next_engineering_debt: "Run shadow analysis and verification-hook audit over the style_brevity evidence trace, then calibrate only as a response-shape policy with provider cost, false_accepts=0, and a strict claim boundary that semantic task content still falls back.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-style-brevity-output-evidence-v1: {}",
+        report.verdict
+    );
+    println!("  input_trace: {}", input_trace_path.display());
+    println!("  sessions_root: {}", sessions_root.display());
+    println!("  output_trace: {}", output_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!(
+        "  output_evidence_matched_events: {}",
+        report.output_evidence_matched_events
+    );
+    println!("  verified_true_events: {}", report.verified_true_events);
+    println!("  verified_false_events: {}", report.verified_false_events);
+    println!("  raw_response_text_written: false");
+    Err("style-brevity output evidence is review-only; run shadow/audit before claims".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_retrieval_lookup_profile_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -14509,6 +14669,16 @@ where
         } else {
             None
         };
+    let style_brevity_verification_audit_report_path =
+        PathBuf::from(DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let style_brevity_verification_audit = if style_brevity_verification_audit_report_path.exists()
+    {
+        Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+            &style_brevity_verification_audit_report_path,
+        )?)
+    } else {
+        None
+    };
     let conditional_admission_audit_report_path =
         PathBuf::from(DEFAULT_CONDITIONAL_ADMISSION_AUDIT_REPORT);
     let conditional_admission_audit = if conditional_admission_audit_report_path.exists() {
@@ -14788,6 +14958,25 @@ where
             priority_score =
                 priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
+        let style_brevity_verifier_true_events = style_brevity_verification_audit
+            .as_ref()
+            .filter(|_| route.route_key == REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY)
+            .map(|audit| audit.verified_true_events)
+            .unwrap_or_default();
+        let style_brevity_verifier_false_events = style_brevity_verification_audit
+            .as_ref()
+            .filter(|_| route.route_key == REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY)
+            .map(|audit| audit.verified_false_events)
+            .unwrap_or_default();
+        let style_brevity_verifier_true_support_zero = route.route_key
+            == REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY
+            && route.verification_hook_ready_events > 0
+            && style_brevity_verifier_true_events == 0
+            && style_brevity_verifier_false_events > 0;
+        if style_brevity_verifier_true_support_zero {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_FAILED_LOCAL_ACCEPT_PRIORITY_PENALTY);
+        }
         let local_accept_calibration_failed =
             route.local_accept_calibration_ran && !route.local_accept_safe_policy_found;
         let local_accept_support_insufficient =
@@ -14828,6 +15017,10 @@ where
         } else if serving_ops_current_support_exhausted {
             next_action = format!(
                 "Serving-ops local calibration found only {serving_ops_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve serving-ops payload/evidence geometry or split a stronger subfamily before another promote."
+            );
+        } else if style_brevity_verifier_true_support_zero {
+            next_action = format!(
+                "Style-brevity has verifier evidence, but current response-shape audit found {style_brevity_verifier_true_events} true and {style_brevity_verifier_false_events} false rows. Do not run local-accept calibration yet; collect better matching style-only samples or tighten admission."
             );
         } else if local_accept_support_insufficient {
             next_action = format!(
@@ -14881,6 +15074,9 @@ where
             edit_current_support_exhausted,
             serving_ops_local_accept_best_safe_true_accepts,
             serving_ops_current_support_exhausted,
+            style_brevity_verifier_true_events,
+            style_brevity_verifier_false_events,
+            style_brevity_verifier_true_support_zero,
             short_decision_ack_prior_true_accepts: 0,
             short_decision_ack_prior_false_accepts: 0,
             short_decision_ack_prior_blocked: false,
@@ -15141,6 +15337,9 @@ where
                 0
             },
             serving_ops_current_support_exhausted: serving_ops_support_exhausted,
+            style_brevity_verifier_true_events: 0,
+            style_brevity_verifier_false_events: 0,
+            style_brevity_verifier_true_support_zero: false,
             short_decision_ack_prior_true_accepts,
             short_decision_ack_prior_false_accepts,
             short_decision_ack_prior_blocked,
@@ -15201,6 +15400,9 @@ where
         answer_evidence_verification_audit_report_path: answer_evidence_verification_audit
             .as_ref()
             .map(|_| answer_evidence_verification_audit_report_path.display().to_string()),
+        style_brevity_verification_audit_report_path: style_brevity_verification_audit
+            .as_ref()
+            .map(|_| style_brevity_verification_audit_report_path.display().to_string()),
         conditional_admission_audit_report_path: conditional_admission_audit
             .as_ref()
             .map(|_| conditional_admission_audit_report_path.display().to_string()),
@@ -15296,6 +15498,12 @@ where
         println!(
             "  answer_evidence_verification_audit_report: {}",
             answer_evidence_verification_audit_report_path.display()
+        );
+    }
+    if style_brevity_verification_audit.is_some() {
+        println!(
+            "  style_brevity_verification_audit_report: {}",
+            style_brevity_verification_audit_report_path.display()
         );
     }
     if conditional_admission_audit.is_some() {
@@ -21215,6 +21423,8 @@ where
         PathBuf::from(DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let style_brevity_dry_run_report_path =
         PathBuf::from(DEFAULT_STYLE_BREVITY_PAYLOAD_DRY_RUN_REPORT);
+    let style_brevity_verification_audit_report_path =
+        PathBuf::from(DEFAULT_STYLE_BREVITY_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let metrics_report_dry_run_report_path = args
         .next()
         .map(PathBuf::from)
@@ -21550,6 +21760,14 @@ where
     } else {
         None
     };
+    let style_brevity_verification_audit = if style_brevity_verification_audit_report_path.exists()
+    {
+        Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+            &style_brevity_verification_audit_report_path,
+        )?)
+    } else {
+        None
+    };
     let metrics_report_dry_run = if metrics_report_dry_run_report_path.exists() {
         Some(
             read_json_file::<RoleBindingMetricsReportPayloadDryRunReport>(
@@ -21779,6 +21997,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let style_brevity_verification_audit = keep_feedback_window_matched_audit(
+        style_brevity_verification_audit,
+        &style_brevity_verification_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let metrics_report_verification_audit = keep_feedback_window_matched_audit(
         metrics_report_verification_audit,
         &metrics_report_verification_audit_report_path,
@@ -21891,6 +22115,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(style_brevity_audit) = &style_brevity_verification_audit {
+        for row in &style_brevity_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     if let Some(metrics_report_audit) = &metrics_report_verification_audit {
         for row in &metrics_report_audit.routes {
             verification_by_route.insert(row.route_key.as_str(), row);
@@ -21958,6 +22187,7 @@ where
     let effective_retrieval_lookup_verification_audit =
         retrieval_lookup_verification_audit.as_ref();
     let effective_project_context_verification_audit = project_context_verification_audit.as_ref();
+    let effective_style_brevity_verification_audit = style_brevity_verification_audit.as_ref();
     let effective_metrics_report_verification_audit = metrics_report_safe_policy_verification_audit
         .as_ref()
         .or(metrics_report_verification_audit.as_ref());
@@ -21986,6 +22216,7 @@ where
             effective_read_inspect_verification_audit,
             effective_retrieval_lookup_verification_audit,
             effective_project_context_verification_audit,
+            effective_style_brevity_verification_audit,
             effective_metrics_report_verification_audit,
             effective_answer_evidence_verification_audit,
             effective_git_control_verification_audit,
@@ -23021,13 +23252,25 @@ where
             .as_ref()
             .map(|report| report.style_brevity_candidate_events)
             .unwrap_or_default();
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY)
+            .copied();
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
         let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
             payload_built_events,
             scoreable_payload_events,
-            verification_hook_ready_events: 0,
-            verified_cpu_accept_eligible_events: 0,
-            false_accepts: 0,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
             local_accept_calibration_ran: false,
             local_accept_safe_policy_found: false,
             local_accept_support_qualified: false,
@@ -23046,18 +23289,18 @@ where
             payload_ready_events,
             payload_built_events,
             scoreable_payload_events,
-            verification_hook_ready_events: 0,
+            verification_hook_ready_events,
             local_accept_calibration_ran: false,
             local_accept_safe_policy_found: false,
             local_accept_minimum_true_support: DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT,
             local_accept_support_qualified: false,
             local_accept_best_safe_true_accepts: 0,
-            verified_cpu_accept_eligible_events: 0,
+            verified_cpu_accept_eligible_events,
             unique_accepts: feedback_route_unique_accept_report(
                 &unique_accepts,
                 REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY,
             ),
-            false_accepts: 0,
+            false_accepts,
             candidate_share_milli_of_all_llm_calls: ratio_milli(
                 candidate_events,
                 forecast.total_llm_calls,
@@ -23675,6 +23918,13 @@ where
         style_brevity_dry_run_report_path: style_brevity_dry_run
             .as_ref()
             .map(|_| style_brevity_dry_run_report_path.display().to_string()),
+        style_brevity_verification_audit_report_path: style_brevity_verification_audit
+            .as_ref()
+            .map(|_| {
+                style_brevity_verification_audit_report_path
+                    .display()
+                    .to_string()
+            }),
         metrics_report_dry_run_report_path: metrics_report_dry_run
             .as_ref()
             .map(|_| metrics_report_dry_run_report_path.display().to_string()),
@@ -23953,6 +24203,9 @@ where
     }
     if let Some(path) = &report.style_brevity_dry_run_report_path {
         println!("  style_brevity_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.style_brevity_verification_audit_report_path {
+        println!("  style_brevity_verification_audit_report: {path}");
     }
     if let Some(path) = &report.metrics_report_dry_run_report_path {
         println!("  metrics_report_dry_run_report: {path}");
@@ -27034,6 +27287,8 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     answer_evidence_verification_audit_report_path: Option<String>,
     #[serde(default)]
+    style_brevity_verification_audit_report_path: Option<String>,
+    #[serde(default)]
     conditional_admission_audit_report_path: Option<String>,
     #[serde(default)]
     agent_control_admission_audit_report_path: Option<String>,
@@ -27138,6 +27393,12 @@ struct RoleBindingCpuOperatorCatalogRow {
     serving_ops_local_accept_best_safe_true_accepts: usize,
     #[serde(default)]
     serving_ops_current_support_exhausted: bool,
+    #[serde(default)]
+    style_brevity_verifier_true_events: usize,
+    #[serde(default)]
+    style_brevity_verifier_false_events: usize,
+    #[serde(default)]
+    style_brevity_verifier_true_support_zero: bool,
     #[serde(default)]
     short_decision_ack_prior_true_accepts: usize,
     #[serde(default)]
@@ -28497,6 +28758,8 @@ struct RoleBindingFeedbackLoopReport {
     project_context_verification_audit_report_path: Option<String>,
     project_context_local_accept_calibration_report_path: Option<String>,
     style_brevity_dry_run_report_path: Option<String>,
+    #[serde(default)]
+    style_brevity_verification_audit_report_path: Option<String>,
     metrics_report_dry_run_report_path: Option<String>,
     metrics_report_local_accept_calibration_report_path: Option<String>,
     metrics_report_admission_calibration_report_path: Option<String>,
@@ -39211,6 +39474,7 @@ fn codex_history_session_id_from_trace_id(trace_id: &str) -> Option<String> {
         .or_else(|| trace_id.strip_prefix("codex_history_project_context_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_read_inspect_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_retrieval_lookup_payload_dry_run::"))
+        .or_else(|| trace_id.strip_prefix("codex_history_style_brevity_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_metrics_report_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_git_control_payload_dry_run::"))
         .or_else(|| trace_id.strip_prefix("codex_history_serving_ops_payload_dry_run::"))
@@ -40617,6 +40881,76 @@ fn deterministic_edit_output_verification(
         "rejected_no_edit_confirmation"
     };
     (verified, true, status.to_owned())
+}
+
+fn deterministic_style_brevity_output_verification(
+    prompt_text: &str,
+    response_text: &str,
+) -> (bool, bool, String) {
+    let readiness =
+        analyze_route_gap_payload_readiness(REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY, prompt_text);
+    if !readiness.payload_ready {
+        return (
+            false,
+            false,
+            format!(
+                "not_applicable_readiness_missing:{}",
+                readiness.missing_reasons.join(",")
+            ),
+        );
+    }
+    let Some(tokens) = extract_style_brevity_tokens(prompt_text) else {
+        return (
+            false,
+            false,
+            "not_applicable_missing_style_brevity_tokens".to_owned(),
+        );
+    };
+    let trimmed = response_text.trim();
+    if trimmed.is_empty() {
+        return (false, true, "rejected_empty_response".to_owned());
+    }
+    if trimmed.contains("```") {
+        return (false, true, "rejected_code_block_response".to_owned());
+    }
+
+    let char_count = trimmed.chars().count();
+    let word_count = trimmed.split_whitespace().count();
+    let nonempty_line_count = trimmed
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count();
+    let bullet_like_line_count = trimmed
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("- ") || line.starts_with("* ") || line.starts_with(char::is_numeric)
+        })
+        .count();
+
+    let no_long_wall = tokens.limit_token == "no_long_wall_limit";
+    let max_chars = if no_long_wall { 900 } else { 600 };
+    let max_words = if no_long_wall { 120 } else { 80 };
+    let max_lines = if no_long_wall { 8 } else { 6 };
+    let max_bullets = if no_long_wall { 6 } else { 4 };
+    let verified = char_count <= max_chars
+        && word_count <= max_words
+        && nonempty_line_count <= max_lines
+        && bullet_like_line_count <= max_bullets;
+    let status = if verified {
+        format!(
+            "verified_response_shape_brevity(chars={char_count},words={word_count},lines={nonempty_line_count})"
+        )
+    } else if char_count > max_chars {
+        format!("rejected_too_many_chars(chars={char_count},max={max_chars})")
+    } else if word_count > max_words {
+        format!("rejected_too_many_words(words={word_count},max={max_words})")
+    } else if nonempty_line_count > max_lines {
+        format!("rejected_too_many_lines(lines={nonempty_line_count},max={max_lines})")
+    } else {
+        format!("rejected_too_many_bullets(bullets={bullet_like_line_count},max={max_bullets})")
+    };
+    (verified, true, status)
 }
 
 fn deterministic_conditional_output_verification(

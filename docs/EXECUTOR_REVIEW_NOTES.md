@@ -1,5 +1,132 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Style Brevity Evidence Hook V1
+
+Verdict:
+
+```text
+STYLE_BREVITY_OUTPUT_EVIDENCE_V1_REVIEW_VERIFIER_FALSE_NO_PROMOTION
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added CLI route:
+  role-binding-real-traffic-style-brevity-output-evidence-v1
+
+The style_brevity route now has a response-shape evidence join using:
+  response_length_and_format_verifier_v1
+
+The feedback-loop also auto-loads:
+  target/nando-wave/real-traffic-shadow/style-brevity-output-evidence-v1.verification-hook-audit.report.json
+```
+
+Why:
+
+```text
+Before this step, style_brevity was scoreable but had no verification hook:
+
+  candidate_events: 3
+  scoreable_payload_events: 3
+  verification_hook_ready_events: 0
+
+The CPU operator catalog therefore ranked it as the top next row even though
+no deterministic evidence existed.
+```
+
+Evidence run:
+
+```text
+style-brevity output evidence:
+  session_ids_requested: 1
+  session_files_scanned: 1
+  codex_turns_indexed: 1
+  output_evidence_matched_events: 1
+  verified_true_events: 0
+  verified_false_events: 1
+  raw_prompt_text_written: false
+  raw_response_text_written: false
+
+style-brevity shadow:
+  total_llm_calls: 1000
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  p99_shadow_score_latency_ns: 222178
+
+style-brevity verification audit:
+  operator_candidate_calls: 3
+  scoreable_candidate_calls: 3
+  verification_hook_ready_events: 1
+  verified_cpu_accept_eligible_events: 0
+  verified_true_events: 0
+  verified_false_events: 1
+  market_claim_allowed: false
+```
+
+Catalog correction:
+
+```text
+Before:
+  top_catalog_row: style_brevity (existing_profile_route)
+
+After:
+  top_catalog_row: uncatalogued (route_gap_family)
+
+style_brevity existing profile:
+  priority_rank: 23
+  style_brevity_verifier_true_events: 0
+  style_brevity_verifier_false_events: 1
+  style_brevity_verifier_true_support_zero: true
+  priority_score: -158090
+```
+
+Decision:
+
+```text
+Do not run local-accept calibration for style_brevity yet.
+Do not count style_brevity as CPU savings.
+Do not treat a response-style policy as a semantic task solver.
+
+The route needs better matching style-only samples or tighter admission before
+promotion. Current verifier evidence is negative.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+CPU Routability 80 remains open:
+
+  verified_cpu_routability_milli: 32
+  verified_gap_to_80_calls: 768
+  unique_verified_cpu_accepts: 26
+  incremental_unique_cpu_accepts: 25
+
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/style-brevity-evidence-hook-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/style-brevity-evidence-hook-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 37
+note: narrow claim-boundary check only: style_brevity has verifier evidence,
+      but the verifier found 0 true / 1 false rows, so the route remains
+      blocked from local-accept calibration and CPU-savings claims.
+```
+
 ## 2026-07-04 - Executor Integration: Short Decision Ack Prior Blocker V1
 
 Verdict:

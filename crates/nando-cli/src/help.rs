@@ -763,6 +763,12 @@ pub(crate) fn print_help() {
         "            Compile a disabled-threshold style-brevity .nwrb profile and registry overlay; review-only, local accepts disabled"
     );
     println!(
+        "  role-binding-real-traffic-style-brevity-output-evidence-v1 [dry-run-trace-jsonl] [sessions-root] [output-trace-jsonl] [report-json]"
+    );
+    println!(
+        "            Attach response-length/format verification fingerprints to style-brevity rows; review-only"
+    );
+    println!(
         "            Feedback-loop auto-loads the default style-brevity dry-run report when present"
     );
     println!(
