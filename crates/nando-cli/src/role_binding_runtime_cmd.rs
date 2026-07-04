@@ -17320,6 +17320,26 @@ where
     } else {
         None
     };
+    let resource_pressure_output_evidence_report_path =
+        PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_REPORT);
+    let resource_pressure_output_evidence =
+        if resource_pressure_output_evidence_report_path.exists() {
+            Some(read_json_file::<RoleBindingEditOutputEvidenceReport>(
+                &resource_pressure_output_evidence_report_path,
+            )?)
+        } else {
+            None
+        };
+    let resource_pressure_verification_audit_report_path =
+        PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let resource_pressure_verification_audit =
+        if resource_pressure_verification_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &resource_pressure_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
     let routes_by_key = feedback
         .routes
         .iter()
@@ -17350,6 +17370,11 @@ where
     apply_read_inspect_admission_audit_to_agent_loop_registry(
         &mut rows,
         read_inspect_admission_audit.as_ref(),
+    );
+    apply_resource_pressure_audit_to_agent_loop_registry(
+        &mut rows,
+        resource_pressure_output_evidence.as_ref(),
+        resource_pressure_verification_audit.as_ref(),
     );
 
     rows.sort_by(|left, right| {
@@ -17407,6 +17432,12 @@ where
         read_inspect_admission_audit_report_path: read_inspect_admission_audit
             .as_ref()
             .map(|_| read_inspect_admission_audit_report_path.display().to_string()),
+        resource_pressure_output_evidence_report_path: resource_pressure_output_evidence
+            .as_ref()
+            .map(|_| resource_pressure_output_evidence_report_path.display().to_string()),
+        resource_pressure_verification_audit_report_path: resource_pressure_verification_audit
+            .as_ref()
+            .map(|_| resource_pressure_verification_audit_report_path.display().to_string()),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         target_verified_cpu_accepts: feedback.target_verified_cpu_calls,
@@ -29736,6 +29767,10 @@ struct RoleBindingAgentLoopProfileRegistryReport {
     catalog_report_path: String,
     #[serde(default)]
     read_inspect_admission_audit_report_path: Option<String>,
+    #[serde(default)]
+    resource_pressure_output_evidence_report_path: Option<String>,
+    #[serde(default)]
+    resource_pressure_verification_audit_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     target_verified_cpu_accepts: usize,
@@ -32537,6 +32572,63 @@ fn apply_read_inspect_admission_audit_to_agent_loop_registry(
     row.priority_score -= 90_000;
     row.claim_boundary = format!(
         "{} Admission audit blocks promotion until a robust safe policy is proven with false_accepts=0 and unique attribution.",
+        row.claim_boundary
+    );
+}
+
+fn apply_resource_pressure_audit_to_agent_loop_registry(
+    rows: &mut [RoleBindingAgentLoopProfileRegistryRow],
+    output_evidence: Option<&RoleBindingEditOutputEvidenceReport>,
+    verification_audit: Option<&RoleBindingVerificationHookAuditReport>,
+) {
+    let output_blocks = output_evidence.is_some_and(|report| {
+        report.output_evidence_matched_events > 0
+            && report.verified_true_events == 0
+            && report.verified_false_events > 0
+    });
+    let audit_blocks = verification_audit.is_some_and(|report| {
+        report.verification_hook_ready_events > 0
+            && report.verified_cpu_accept_eligible_events == 0
+            && !report.market_claim_allowed
+    });
+    if !output_blocks && !audit_blocks {
+        return;
+    }
+    let Some(row) = rows
+        .iter_mut()
+        .find(|row| row.profile_key == "resource_budget_extract")
+    else {
+        return;
+    };
+
+    let output_true = output_evidence
+        .map(|report| report.verified_true_events)
+        .unwrap_or_default();
+    let output_false = output_evidence
+        .map(|report| report.verified_false_events)
+        .unwrap_or_default();
+    let hook_ready = verification_audit
+        .map(|report| report.verification_hook_ready_events)
+        .unwrap_or_default();
+    let eligible = verification_audit
+        .map(|report| report.verified_cpu_accept_eligible_events)
+        .unwrap_or_default();
+    let provider_cost_events = verification_audit
+        .map(|report| report.provider_cost_events)
+        .unwrap_or_default();
+
+    row.admission_blocked_by_audit = true;
+    row.readiness_state = "verification_audit_no_true_resource_budget_rows".to_owned();
+    row.admission_block_reason = Some(format!(
+        "resource_pressure audit blocked promotion: output_verified_true_events={output_true}, output_verified_false_events={output_false}, verification_hook_ready_events={hook_ready}, verified_cpu_accept_eligible_events={eligible}, provider_cost_events={provider_cost_events}"
+    ));
+    row.next_action = format!(
+        "{} has only verifier-false resource-pressure evidence in the current trace (true={}, false={}, hook_ready={}, eligible={}, provider_cost={}). Collect verifier-true/provider-cost rows or split a narrower budget subfamily before promotion.",
+        row.profile_key, output_true, output_false, hook_ready, eligible, provider_cost_events
+    );
+    row.priority_score -= 90_000;
+    row.claim_boundary = format!(
+        "{} Resource-pressure audit blocks promotion until verifier-true evidence, provider cost, false_accepts=0, and unique attribution are proven.",
         row.claim_boundary
     );
 }

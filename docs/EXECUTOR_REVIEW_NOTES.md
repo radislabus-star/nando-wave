@@ -1,6 +1,6 @@
 # Executor Review Notes
 
-## 2026-07-04 - Executor Integration: Agent Loop Registry Admission Rerank
+## 2026-07-04 - Executor Integration: Agent Loop Registry Audit Rerank
 
 Verdict:
 
@@ -16,6 +16,8 @@ Updated:
 
 The agent-loop registry now reads, when present:
   target/nando-wave/real-traffic-shadow/read-inspect-admission-audit-v1.report.json
+  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.report.json
+  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.verification-hook-audit.report.json
 
 and applies it before profile ranking.
 ```
@@ -32,20 +34,31 @@ after the read-inspect admission audit had already proven:
 
 That made the worklist loop back into a route whose current request-side
 features cannot safely separate 1 verifier-true row from 8 verifier-false rows.
+
+After that fix, resource_budget_extract became top_next_profile_key, but its
+only hook-ready row was already verified false:
+  verified_true_events: 0
+  verified_false_events: 1
+  verified_cpu_accept_eligible_events: 0
+  provider_cost_events: 0
 ```
 
 Reranked result:
 
 ```text
-admission_blocked_profiles: 1
+admission_blocked_profiles: 2
 exhausted_current_support_profiles: 13
-top_next_profile_key: resource_budget_extract
+top_next_profile_key: null
 
 read_context_path:
   readiness_state: admission_audit_no_safe_policy
   admission_blocked_by_audit: true
+  priority_rank: 11
+
+resource_budget_extract:
+  readiness_state: verification_audit_no_true_resource_budget_rows
+  admission_blocked_by_audit: true
   priority_rank: 12
-  priority_score: -89091
 
 response_shape_brevity:
   readiness_state: support_exhausted_or_singleton_only
@@ -58,18 +71,19 @@ Decision:
 Do not return to read_context_path until a split path/excerpt subfamily or
 richer request-side serving state/evidence exists.
 
+Do not return to resource_budget_extract from the current evidence: its only
+hook-ready row is verifier-false and has no provider-cost evidence.
+
 Do not promote response_shape_brevity as CPU80 growth from current evidence:
 the catalog marks style-brevity verifier true support as zero.
 
-The current top narrow work item is resource_budget_extract. It has:
-  candidate_events: 3
-  scoreable_payload_events: 1
-  verification_hook_ready_events: 1
-  unique_verified_request_fingerprints: 0
+The current 1000-call trace has no safe top_next_profile_key left after audit
+blocks and support-exhaustion guards.
 
-It is not verified savings yet. It only says the next safe experiment is a
-small admission/verifier pass for explicit resource/budget extraction, with
-false_accepts=0 and unique attribution required before any local accept.
+Next real work:
+  1. collect more real trace traffic, especially test/tool/report/git paths, or
+  2. split exhausted profiles into narrower sibling subprofiles with new
+     verifier-true rows.
 ```
 
 Claim boundary:
