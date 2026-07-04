@@ -424,6 +424,12 @@ pub(crate) fn print_help() {
         "            Promote known-status test_output_parse rows into a separate shadow trace/registry; review-only until shadow/audit pass"
     );
     println!(
+        "  role-binding-real-traffic-test-output-parse-safe-policy-window-v1 [base-window-trace-jsonl] [promoted-route-trace-jsonl] [output-window-trace-jsonl] [window-report-json]"
+    );
+    println!(
+        "            Build an isolated 1000-call full-window trace containing only verified test_output_parse shadow requests"
+    );
+    println!(
         "  role-binding-real-traffic-file-path-evidence-profile-v1 [base-registry-json] [file-path-evidence-dry-run-trace-jsonl] [package-nwrb] [overlay-registry-json] [profile-report-json]"
     );
     println!(

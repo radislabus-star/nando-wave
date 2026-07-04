@@ -47,6 +47,8 @@ const DEFAULT_CODEX_HISTORY_REAL_TRAFFIC_INGEST_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-events-v1.report.json";
 const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_EVENTS_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.events.jsonl";
+const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.trace.jsonl";
 const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.report.json";
 const DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_SHADOW_REPORT: &str =
@@ -124,6 +126,11 @@ const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl";
 const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.report.json";
+const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_TRACE_JSONL: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl";
+const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.report.json";
+const DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.verification-hook-audit.report.json";
 const DEFAULT_FILE_PATH_EVIDENCE_PACKAGE_PATH: &str =
     "target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb";
 const DEFAULT_FILE_PATH_EVIDENCE_PROFILE_REGISTRY_CONFIG: &str =
@@ -7903,6 +7910,140 @@ where
         "test-output-parse safe-policy promotion is review-only; run shadow/audit before claims"
             .to_owned(),
     )
+}
+
+pub(crate) fn run_role_binding_real_traffic_test_output_parse_safe_policy_window_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let base_window_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CODEX_HISTORY_ROUTE_CANDIDATES_TRACE_JSONL));
+    let promoted_route_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_TRACE_JSONL));
+    let output_window_trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_REPORT));
+
+    let base_rows = read_real_traffic_trace_jsonl(&base_window_trace_path)?;
+    let promoted_rows = read_real_traffic_trace_jsonl(&promoted_route_trace_path)?;
+    let promoted_by_request_fingerprint = promoted_rows
+        .iter()
+        .filter(|row| row.nando_shadow_request.is_some())
+        .filter(|row| row.verified_safe_accept == Some(true))
+        .filter_map(|row| {
+            row.request_fingerprint
+                .as_ref()
+                .map(|fingerprint| (fingerprint.clone(), row.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut output_rows = Vec::with_capacity(base_rows.len());
+    let mut promoted_rows_inserted = 0usize;
+    let mut forced_fallback_rows = 0usize;
+    let mut missing_base_match_rows = 0usize;
+    let mut exact_cache_overlap_promoted_rows = 0usize;
+    let mut seen_base_fingerprints = BTreeSet::new();
+    let mut exact_cache_seen = HashSet::new();
+
+    for base_row in base_rows {
+        let request_fingerprint = base_row.request_fingerprint.clone().unwrap_or_default();
+        seen_base_fingerprints.insert(request_fingerprint.clone());
+        if let Some(promoted) = promoted_by_request_fingerprint.get(&request_fingerprint) {
+            let mut promoted = promoted.clone();
+            if promoted.exact_cache_key.is_none() {
+                promoted.exact_cache_key = base_row.exact_cache_key.clone();
+            }
+            if promoted.time_ms.is_none() {
+                promoted.time_ms = base_row.time_ms;
+            }
+            promoted.traffic_source =
+                Some("codex_history_test_output_parse_safe_policy_full_window".to_owned());
+            let exact_cache_hit = promoted
+                .exact_cache_key
+                .as_ref()
+                .map(|key| !exact_cache_seen.insert(key.clone()))
+                .unwrap_or(false);
+            exact_cache_overlap_promoted_rows += usize::from(exact_cache_hit);
+            promoted_rows_inserted += 1;
+            output_rows.push(promoted);
+        } else {
+            let mut fallback = base_row;
+            if let Some(key) = &fallback.exact_cache_key {
+                exact_cache_seen.insert(key.clone());
+            }
+            fallback.nando_shadow_request = None;
+            fallback.verified_safe_accept = None;
+            fallback.provider_cost_microusd = None;
+            fallback.notes = Some(append_trace_note(
+                fallback.notes.as_deref(),
+                "test_output_parse_safe_policy_window_v1 forced_fallback_non_test_output_parse",
+            ));
+            forced_fallback_rows += 1;
+            output_rows.push(fallback);
+        }
+    }
+
+    for fingerprint in promoted_by_request_fingerprint.keys() {
+        missing_base_match_rows += usize::from(!seen_base_fingerprints.contains(fingerprint));
+    }
+
+    write_real_traffic_trace_jsonl(&output_window_trace_path, &output_rows)?;
+    let report = RoleBindingTestOutputParseSafePolicyWindowReport {
+        schema_version: "nando_role_binding_test_output_parse_safe_policy_window_v1".to_owned(),
+        verdict: if promoted_rows_inserted > 0 && missing_base_match_rows == 0 {
+            "TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_V1_REVIEW_FULL_WINDOW_READY"
+        } else {
+            "TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_V1_REVIEW_MISSING_BASE_MATCHES"
+        }
+        .to_owned(),
+        base_window_trace_path: base_window_trace_path.display().to_string(),
+        promoted_route_trace_path: promoted_route_trace_path.display().to_string(),
+        output_window_trace_path: output_window_trace_path.display().to_string(),
+        base_window_rows: output_rows.len(),
+        promoted_route_rows: promoted_rows.len(),
+        promoted_rows_inserted,
+        forced_fallback_rows,
+        missing_base_match_rows,
+        exact_cache_overlap_promoted_rows,
+        single_route_shadow_ready: true,
+        raw_prompt_text_written: false,
+        raw_response_text_written: false,
+        target_labels_used_for_runtime: false,
+        proof_labels_used_for_runtime: false,
+        local_accepts_enabled_by_trace_rewrite_only: true,
+        market_claim_allowed: false,
+        claim_boundary: "Full-window trace builder only. It preserves the 1000-call denominator from the Codex route-candidate trace, injects only verified test_output_parse safe-policy rows by request fingerprint, and clears all other nando_shadow_request values so feedback attribution remains single-route. It writes no raw prompt/response text and proves no claim until shadow plus verification-hook audit pass.".to_owned(),
+        next_engineering_debt: "Run role-binding-real-traffic-shadow-v1 and verification-hook-audit-v1 on this full-window isolated trace, then feed the resulting 1000-call audit into CPU feedback unique attribution.".to_owned(),
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-test-output-parse-safe-policy-window-v1: {}",
+        report.verdict
+    );
+    println!("  output_trace: {}", output_window_trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  base_window_rows: {}", report.base_window_rows);
+    println!(
+        "  promoted_rows_inserted: {}",
+        report.promoted_rows_inserted
+    );
+    println!("  forced_fallback_rows: {}", report.forced_fallback_rows);
+    println!(
+        "  missing_base_match_rows: {}",
+        report.missing_base_match_rows
+    );
+    Err("test-output-parse full-window trace is review-only; run shadow/audit".to_owned())
 }
 
 pub(crate) fn run_role_binding_real_traffic_ime_input_state_profile_v1<I>(
@@ -27304,6 +27445,8 @@ where
         PathBuf::from(DEFAULT_RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_REPORT);
     let resource_pressure_verification_audit_report_path =
         PathBuf::from(DEFAULT_RESOURCE_PRESSURE_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let test_output_parse_safe_policy_window_audit_report_path =
+        PathBuf::from(DEFAULT_TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_AUDIT_REPORT);
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -27396,6 +27539,14 @@ where
         if resource_pressure_verification_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
                 &resource_pressure_verification_audit_report_path,
+            )?)
+        } else {
+            None
+        };
+    let test_output_parse_safe_policy_window_audit =
+        if test_output_parse_safe_policy_window_audit_report_path.exists() {
+            Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
+                &test_output_parse_safe_policy_window_audit_report_path,
             )?)
         } else {
             None
@@ -27951,6 +28102,12 @@ where
         forecast.total_llm_calls,
         &mut audit_window_mismatches,
     );
+    let test_output_parse_safe_policy_window_audit = keep_feedback_window_matched_audit(
+        test_output_parse_safe_policy_window_audit,
+        &test_output_parse_safe_policy_window_audit_report_path,
+        forecast.total_llm_calls,
+        &mut audit_window_mismatches,
+    );
     let mut verification_by_route = verification_audit
         .routes
         .iter()
@@ -28077,6 +28234,11 @@ where
             verification_by_route.insert(row.route_key.as_str(), row);
         }
     }
+    if let Some(test_output_parse_audit) = &test_output_parse_safe_policy_window_audit {
+        for row in &test_output_parse_audit.routes {
+            verification_by_route.insert(row.route_key.as_str(), row);
+        }
+    }
     let effective_mixed_verification_audit = mixed_safe_policy_verification_audit
         .as_ref()
         .or(mixed_verification_audit.as_ref());
@@ -28118,6 +28280,8 @@ where
         .or(serving_ops_verification_audit.as_ref());
     let effective_resource_pressure_verification_audit =
         resource_pressure_verification_audit.as_ref();
+    let effective_test_output_parse_verification_audit =
+        test_output_parse_safe_policy_window_audit.as_ref();
     let unique_accepts = collect_feedback_unique_accepts(
         [
             Some(effective_edit_verification_audit),
@@ -28135,6 +28299,7 @@ where
             effective_git_control_verification_audit,
             effective_serving_ops_verification_audit,
             effective_resource_pressure_verification_audit,
+            effective_test_output_parse_verification_audit,
         ]
         .into_iter()
         .flatten(),
@@ -28187,6 +28352,10 @@ where
         .routes
         .iter()
         .any(|route| route.route_key == REAL_TRAFFIC_RESOURCE_PRESSURE_ROUTE_KEY);
+    let forecast_has_test_output_parse = forecast
+        .routes
+        .iter()
+        .any(|route| route.route_key == REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY);
 
     let target_routability_milli = 800usize;
     let target_verified_cpu_calls =
@@ -28231,6 +28400,9 @@ where
             .unwrap_or_default()
         + effective_resource_pressure_verification_audit
             .map(|report| report.verification_hook_ready_events)
+            .unwrap_or_default()
+        + effective_test_output_parse_verification_audit
+            .map(|report| report.verification_hook_ready_events)
             .unwrap_or_default();
     let verified_cpu_accept_eligible_events = effective_edit_verification_audit
         .verified_cpu_accept_eligible_events
@@ -28271,6 +28443,9 @@ where
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default()
         + effective_resource_pressure_verification_audit
+            .map(|report| report.verified_cpu_accept_eligible_events)
+            .unwrap_or_default()
+        + effective_test_output_parse_verification_audit
             .map(|report| report.verified_cpu_accept_eligible_events)
             .unwrap_or_default();
     let planning_next_step_candidate_calls = effective_planning_next_step_verification_audit
@@ -28397,6 +28572,13 @@ where
             })
             .unwrap_or_default()
     };
+    let test_output_parse_candidate_calls = if forecast_has_test_output_parse {
+        0
+    } else {
+        effective_test_output_parse_verification_audit
+            .map(|report| report.operator_candidate_calls)
+            .unwrap_or_default()
+    };
     let operator_candidate_route_sum_events = forecast.operator_candidate_calls
         + planning_next_step_candidate_calls
         + agent_continue_execute_candidate_calls
@@ -28409,7 +28591,8 @@ where
         + agent_control_candidate_calls
         + git_control_candidate_calls
         + serving_ops_candidate_calls
-        + resource_pressure_candidate_calls;
+        + resource_pressure_candidate_calls
+        + test_output_parse_candidate_calls;
     let operator_candidate_calls =
         operator_candidate_route_sum_events.min(forecast.total_llm_calls);
     let routing_gap_to_80_calls =
@@ -29927,6 +30110,87 @@ where
         });
     }
 
+    if !forecast_has_test_output_parse && test_output_parse_safe_policy_window_audit.is_some() {
+        let verification = verification_by_route
+            .get(REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY)
+            .copied();
+        let payload_ready_events = verification
+            .map(|row| row.scoreable_candidate_calls)
+            .unwrap_or_default();
+        let payload_built_events = payload_ready_events;
+        let scoreable_payload_events = payload_ready_events;
+        let verification_hook_ready_events = verification
+            .map(|row| row.verification_hook_ready_events)
+            .unwrap_or_default();
+        let verified_cpu_accept_eligible_events = verification
+            .map(|row| row.verified_cpu_accept_eligible_events)
+            .unwrap_or_default();
+        let false_accepts = verification
+            .map(|row| row.false_accepts)
+            .unwrap_or_default();
+        let candidate_events = verification
+            .map(|row| row.candidate_calls)
+            .unwrap_or_default();
+        let local_accept_safe_policy_found =
+            verified_cpu_accept_eligible_events > 0 && false_accepts == 0;
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified =
+            verified_cpu_accept_eligible_events >= local_accept_minimum_true_support;
+        let stage = feedback_route_stage(FeedbackRouteStageInputs {
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            verified_cpu_accept_eligible_events,
+            false_accepts,
+            local_accept_calibration_ran: true,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
+            local_accept_calibration_authoritative: true,
+        });
+        let mut next_action = feedback_route_next_action(&stage);
+        if verified_cpu_accept_eligible_events > 0 {
+            next_action = "Keep test_output_parse as a narrow full-window proven route; do not count route-specific 97/104 outside the current 1000-call denominator. Mine the next high-value profile through BUSINESS_VALUE_GATE.".to_owned();
+        }
+        route_rows.push(RoleBindingFeedbackLoopRouteRow {
+            priority_rank: route_rows.len() + 1,
+            route_key: REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY.to_owned(),
+            profile_id: REAL_TRAFFIC_TEST_OUTPUT_PARSE_PROFILE_ID.to_owned(),
+            candidate_events,
+            non_exact_candidate_calls: candidate_events,
+            payload_builder: "test_output_parse_tool_state_payload_builder_v1".to_owned(),
+            stage,
+            next_action,
+            payload_ready_events,
+            payload_built_events,
+            scoreable_payload_events,
+            verification_hook_ready_events,
+            local_accept_calibration_ran: true,
+            local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
+            local_accept_best_safe_true_accepts: verified_cpu_accept_eligible_events,
+            verified_cpu_accept_eligible_events,
+            unique_accepts: feedback_route_unique_accept_report(
+                &unique_accepts,
+                REAL_TRAFFIC_TEST_OUTPUT_PARSE_ROUTE_KEY,
+            ),
+            false_accepts,
+            candidate_share_milli_of_all_llm_calls: ratio_milli(
+                candidate_events,
+                forecast.total_llm_calls,
+            ),
+            scoreable_share_milli_of_all_llm_calls: ratio_milli(
+                scoreable_payload_events,
+                forecast.total_llm_calls,
+            ),
+            verified_share_milli_of_all_llm_calls: ratio_milli(
+                verified_cpu_accept_eligible_events,
+                forecast.total_llm_calls,
+            ),
+        });
+    }
+
     let scoreable_candidate_calls = route_rows
         .iter()
         .map(|row| row.scoreable_payload_events)
@@ -30065,6 +30329,14 @@ where
                     .display()
                     .to_string()
             }),
+        test_output_parse_safe_policy_window_audit_report_path:
+            test_output_parse_safe_policy_window_audit
+                .as_ref()
+                .map(|_| {
+                    test_output_parse_safe_policy_window_audit_report_path
+                        .display()
+                        .to_string()
+                }),
         git_control_dry_run_report_path: git_control_dry_run
             .as_ref()
             .map(|_| git_control_dry_run_report_path.display().to_string()),
@@ -30226,7 +30498,8 @@ where
             .saturating_sub(agent_control_candidate_calls)
             .saturating_sub(git_control_candidate_calls)
             .saturating_sub(serving_ops_candidate_calls)
-            .saturating_sub(resource_pressure_candidate_calls),
+            .saturating_sub(resource_pressure_candidate_calls)
+            .saturating_sub(test_output_parse_candidate_calls),
         audit_window_mismatches,
         verified_cpu_accept_route_sum_events: unique_accepts.route_sum_verified_accepts,
         verified_cpu_accept_unique_request_fingerprints: unique_accepts
@@ -34960,6 +35233,30 @@ struct RoleBindingMixedSafePolicyPromoteReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct RoleBindingTestOutputParseSafePolicyWindowReport {
+    schema_version: String,
+    verdict: String,
+    base_window_trace_path: String,
+    promoted_route_trace_path: String,
+    output_window_trace_path: String,
+    base_window_rows: usize,
+    promoted_route_rows: usize,
+    promoted_rows_inserted: usize,
+    forced_fallback_rows: usize,
+    missing_base_match_rows: usize,
+    exact_cache_overlap_promoted_rows: usize,
+    single_route_shadow_ready: bool,
+    raw_prompt_text_written: bool,
+    raw_response_text_written: bool,
+    target_labels_used_for_runtime: bool,
+    proof_labels_used_for_runtime: bool,
+    local_accepts_enabled_by_trace_rewrite_only: bool,
+    market_claim_allowed: bool,
+    claim_boundary: String,
+    next_engineering_debt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct RoleBindingConditionalSafePolicyPromoteReport {
     schema_version: String,
     verdict: String,
@@ -36007,6 +36304,8 @@ struct RoleBindingFeedbackLoopReport {
     resource_pressure_payload_dry_run_report_path: Option<String>,
     #[serde(default)]
     resource_pressure_verification_audit_report_path: Option<String>,
+    #[serde(default)]
+    test_output_parse_safe_policy_window_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,
     git_control_verification_audit_report_path: Option<String>,
     git_control_safe_policy_verification_audit_report_path: Option<String>,

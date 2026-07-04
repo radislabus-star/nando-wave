@@ -46,10 +46,11 @@ Window:
 ```text
 total_llm_calls: 1000
 exact_cache_hits: 53
-current_verified_cpu_accepts: 26
-current_incremental_unique_cpu_accepts_over_exact_cache: 25
+current_verified_cpu_accepts_route_sum: 42
+current_unique_verified_cpu_accepts: 36
+current_incremental_unique_cpu_accepts_over_exact_cache: 35
 business_value_gate_passed_rows: 7
-proven_profile_rows: 7
+proven_profile_rows: 8
 candidate_profile_rows: 4
 watch_profile_rows: 12
 rejected_profile_rows: 6
@@ -59,13 +60,14 @@ PROVEN rows:
 
 | rank | call class | candidates | non-exact | expected unique | status note |
 | ---: | --- | ---: | ---: | ---: | --- |
-| 1 | `role_binding_mixed_map_seed0` | 99 | 96 | 7 | Support is already covered; improve payload/evidence before another promote. |
-| 2 | `role_binding_agent_control_seed0` | 111 | 74 | 5 | Duplicates/exact-cache overlap constrain unique value; split broader tool-state subfamilies. |
-| 3 | `git_control` | 18 | 18 | 4 | Current safe support is exhausted; improve command outcome evidence or split. |
-| 4 | `role_binding_conditional_branch_seed0` | 88 | 87 | 3 | Verifier-ready, but policy support is exhausted; split stronger conditional subfamily. |
-| 5 | `metrics_report_readout` | 55 | 55 | 3 | Current robust metrics support is exhausted; split stronger report subfamily. |
-| 6 | `serving_ops` | 25 | 25 | 3 | Current serving support is exhausted; split stronger daemon/health subfamily. |
-| 7 | `role_binding_edit_marker_length_seed0` | 92 | 92 | 1 | Low support; improve edit evidence before another promote. |
+| 1 | `test_output_parse` | 10 | 10 | 10 | Full-window attribution only: route-specific proof is 97/104, but current 1000-call denominator contains 10 matching rows. |
+| 2 | `role_binding_mixed_map_seed0` | 99 | 96 | 7 | Support is already covered; improve payload/evidence before another promote. |
+| 3 | `role_binding_agent_control_seed0` | 111 | 74 | 5 | Duplicates/exact-cache overlap constrain unique value; split broader tool-state subfamilies. |
+| 4 | `git_control` | 18 | 18 | 4 | Current safe support is exhausted; improve command outcome evidence or split. |
+| 5 | `role_binding_conditional_branch_seed0` | 88 | 87 | 3 | Verifier-ready, but policy support is exhausted; split stronger conditional subfamily. |
+| 6 | `metrics_report_readout` | 55 | 55 | 3 | Current robust metrics support is exhausted; split stronger report subfamily. |
+| 7 | `serving_ops` | 25 | 25 | 3 | Current serving support is exhausted; split stronger daemon/health subfamily. |
+| 8 | `role_binding_edit_marker_length_seed0` | 92 | 92 | 1 | Low support; improve edit evidence before another promote. |
 
 CANDIDATE rows:
 
@@ -434,6 +436,10 @@ Source reports:
 target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.report.json
 target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-shadow-v1.report.json
 target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.verification-hook-audit.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1.report.json
+target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.verification-hook-audit.report.json
+target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
 ```
 
 Measured result:
@@ -458,12 +464,28 @@ shadow p99_shadow_score_latency_ns: 531326
 verification_hook_ready_events: 97
 verified_cpu_accept_eligible_events: 97
 market_claim_allowed: true
+
+full_window base_window_rows: 1000
+full_window promoted_rows_inserted: 10
+full_window forced_fallback_rows: 990
+full_window missing_base_match_rows: 85
+full_window shadow nando_shadow_accepts: 10
+full_window shadow verified_safe_accepts: 10
+full_window shadow false_accepts: 0
+full_window shadow incremental_savings_over_exact_cache: 10
+full_window shadow incremental_reduction_vs_exact_cache_milli: 10
+full_window audit verification_hook_ready_events: 10
+full_window audit verified_cpu_accept_eligible_events: 10
+feedback route test_output_parse verified_cpu_accept_eligible_events: 10
+feedback route test_output_parse incremental_verified_request_fingerprints: 10
+feedback total verified_cpu_accept_eligible_events: 42
+feedback total incremental_unique_cpu_accepts: 35
 ```
 
 Catalog status after safe-policy shadow:
 
 ```text
-PROVEN / ROUTE_SPECIFIC_SHADOW_PASS / FEEDBACK_WINDOW_NOT_REGENERATED
+PROVEN / ROUTE_SPECIFIC_97_OF_104 / FULL_WINDOW_ROUTE_DELTA_10_OF_1000
 ```
 
 Decision:
@@ -473,8 +495,14 @@ Decision:
 previous-tool-output status parsing. This is not a broad answer/explain route:
 the accepted rows are only rows where the agent loop already has deterministic
 previous tool-output state and the `.nwrb` score passes the promoted strict
-energy threshold. The next debt is to feed this route-specific pass into the
-full CPU feedback window and keep unique attribution over exact cache.
+energy threshold.
+
+The route-specific proof is strong, but it is not the CPU80 denominator. The
+current feedback window contains only 10 matching request fingerprints from the
+97 promoted rows; the other 85 promoted rows are outside the current 1000-call
+forecast window and are intentionally not counted. The next debt is to mine the
+next high-value call class through BUSINESS_VALUE_GATE, or rerun discovery on a
+larger/current trace window before increasing the market claim.
 ```
 
 ## File Path Evidence Payload Dry-Run V1

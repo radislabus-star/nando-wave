@@ -197,6 +197,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_test_output_parse_payload_dry_run_v1,
     run_role_binding_real_traffic_test_output_parse_profile_v1,
     run_role_binding_real_traffic_test_output_parse_safe_policy_promote_v1,
+    run_role_binding_real_traffic_test_output_parse_safe_policy_window_v1,
     run_role_binding_real_traffic_test_output_parse_tool_output_state_v1,
     run_role_binding_real_traffic_test_output_parse_tool_state_payload_v1,
     run_role_binding_real_traffic_verification_hook_audit_v1,
@@ -779,6 +780,12 @@ fn main() -> ExitCode {
             exit_for_result(
                 run_role_binding_real_traffic_test_output_parse_safe_policy_promote_v1(args),
                 "try: nando-cli role-binding-real-traffic-test-output-parse-safe-policy-promote-v1 [base-registry-json] [tool-state-payload-trace-jsonl] [promoted-registry-json] [promoted-trace-jsonl] [promote-report-json] [provider-cost-microusd]",
+            )
+        }
+        Some("role-binding-real-traffic-test-output-parse-safe-policy-window-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_test_output_parse_safe_policy_window_v1(args),
+                "try: nando-cli role-binding-real-traffic-test-output-parse-safe-policy-window-v1 [base-window-trace-jsonl] [promoted-route-trace-jsonl] [output-window-trace-jsonl] [window-report-json]",
             )
         }
         Some("role-binding-real-traffic-file-path-evidence-profile-v1") => exit_for_result(

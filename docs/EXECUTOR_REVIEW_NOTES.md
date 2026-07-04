@@ -1,5 +1,124 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Test Output Parse Full-Window Attribution V1
+
+Verdict:
+
+```text
+TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_V1_REVIEW_MISSING_BASE_MATCHES
+REAL_TRAFFIC_SHADOW_V1_PASS
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+  docs/CPU_CALL_CATALOG.md
+
+Added CLI route:
+  role-binding-real-traffic-test-output-parse-safe-policy-window-v1
+```
+
+Why:
+
+```text
+The route-specific safe-policy proof had 97/104 accepts, but CPU80 must be
+counted on the current 1000-call feedback denominator. This stage builds an
+isolated full-window trace from the 1000-row Codex route-candidate window,
+injects only matching verified test_output_parse rows by request fingerprint,
+and clears all other Nando shadow requests so attribution remains single-route.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-safe-policy-window-v1 \
+  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
+  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1.report.json \
+  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.verification-hook-audit.report.json
+
+cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1
+```
+
+Measured result:
+
+```text
+window base_window_rows: 1000
+window promoted_route_rows: 104
+window promoted_rows_inserted: 10
+window forced_fallback_rows: 990
+window missing_base_match_rows: 85
+window exact_cache_overlap_promoted_rows: 0
+
+shadow total_llm_calls: 1000
+shadow exact_cache_hits: 53
+shadow operator_candidate_calls: 10
+shadow nando_shadow_accepts: 10
+shadow verified_safe_accepts: 10
+shadow false_accepts: 0
+shadow incremental_savings_over_exact_cache: 10
+shadow incremental_reduction_vs_exact_cache_milli: 10
+shadow p99_shadow_score_latency_ns: 484968
+
+audit operator_candidate_calls: 10
+audit scoreable_candidate_calls: 10
+audit verification_hook_ready_events: 10
+audit verified_cpu_accept_eligible_events: 10
+audit verified_true_events: 10
+audit verified_false_events: 0
+audit market_claim_allowed: true
+
+feedback total_llm_calls: 1000
+feedback exact_cache_hits: 53
+feedback operator_candidate_calls: 1000
+feedback operator_candidate_route_sum_events: 1029
+feedback scoreable_candidate_calls: 184
+feedback verification_hook_ready_events: 153
+feedback verified_cpu_accept_eligible_events: 42
+feedback verified_cpu_routability_milli: 42
+feedback unique_verified_cpu_accepts: 36
+feedback incremental_unique_cpu_accepts: 35
+
+feedback test_output_parse candidate_events: 10
+feedback test_output_parse verified_cpu_accept_eligible_events: 10
+feedback test_output_parse false_accepts: 0
+feedback test_output_parse incremental_verified_request_fingerprints: 10
+```
+
+Decision:
+
+```text
+`test_output_parse` remains PROVEN, but only as a narrow full-window route
+delta of 10/1000 for the current feedback denominator. The stronger 97/104
+route-specific proof is preserved as route evidence, not counted as CPU80
+progress in this window. This fixes the previous attribution debt without
+promoting broad answer/explain behavior.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/test-output-parse-safe-policy-window-v1.md
+verdict: PASS
+complexity_score: 57
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse Safe Policy V1
 
 Verdict:
