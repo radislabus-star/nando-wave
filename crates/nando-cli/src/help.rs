@@ -340,6 +340,12 @@ pub(crate) fn print_help() {
         "            Attach Codex final-answer fingerprints plus conservative git command-outcome verifier results; workspace mutations and local accepts stay disabled"
     );
     println!(
+        "  role-binding-real-traffic-git-control-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]"
+    );
+    println!(
+        "            Calibrate git-control score/readout thresholds against final-answer verifier labels; real tool-output verifier still required before local accept"
+    );
+    println!(
         "  role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]"
     );
     println!(

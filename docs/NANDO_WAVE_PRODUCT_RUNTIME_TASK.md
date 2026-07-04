@@ -5,7 +5,7 @@ Date: 2026-07-04
 Status:
 
 ```text
-REAL_TRAFFIC_CPU_ROUTABILITY_REVIEW_17_OF_1000
+REAL_TRAFFIC_CPU_ROUTABILITY_REVIEW_8_OF_1000_CURRENT_DEFAULT
 ```
 
 ## Goal
@@ -74,6 +74,28 @@ market-wide savings claim.
 Current real-traffic CPU routability snapshot:
 
 ```text
+current default feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+current default total_llm_calls:              1000
+current default exact_cache_hits:             53
+current default operator_candidate_calls:     402
+current default scoreable_candidate_calls:    159
+current default verification_hook_ready_events: 123
+current default verified_cpu_accept_eligible_events: 8
+current default verified_cpu_routability_milli: 8
+current default verified_gap_to_80_calls:     792
+current default false_accepts:                0
+current default market_claim_allowed:         false
+
+historical strongest feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.mixed-v2-agent-control-planning-v3.report.json
+
+historical strongest result:
+  verified_cpu_accept_eligible_events: 17 / 1000
+  verified_cpu_routability_milli:      17
+  verified_gap_to_80_calls:            783
+
 feedback_report:
   target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.mixed-v2-agent-control-planning-v3.report.json
 
@@ -208,6 +230,8 @@ git_control route/profile rung:
     target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl
   output_evidence_audit:
     target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json
+  local_accept_calibration_report:
+    target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1.report.json
   git_control_candidate_events: 18
   git_control_payload_ready_events: 12
   git_control_scoreable_payload_events: 12
@@ -222,15 +246,20 @@ git_control route/profile rung:
   verifier_false_events: 6
   verification_hook_ready_events: 10
   candidates_missing_output_evidence: 2
+  local_accept_safe_policy_found: true
+  local_accept_best_safe_true_accepts: 3
+  local_accept_minimum_true_support: 3
+  local_accept_support_qualified: true
   shadow_accepts: 0
   workspace_mutation_enabled: false
   local_accepts_enabled: false
   verified_cpu_accept_eligible_events: 0
   false_accepts: 0
-  route_stage: verification_hook_ready_waiting_local_accept
-  claim_boundary: conservative final-answer command/outcome evidence exists, but
-    it does not run git and cannot accept until a real tool-output/status
-    verifier plus local-accept calibration proves safety
+  route_stage: local_accept_calibration_needs_stronger_verifier
+  claim_boundary: conservative final-answer command/outcome evidence and a
+    score/readout safe-policy candidate exist, but the labels are not
+    authoritative command status/output; git_control cannot accept until a real
+    tool-output/status verifier proves safety
 
 fresh default feedback after read_inspect + metrics_report calibration + git_control evidence:
   feedback:
@@ -241,7 +270,7 @@ fresh default feedback after read_inspect + metrics_report calibration + git_con
   verified_cpu_accept_eligible_events: 8
   verified_cpu_routability_milli:      8
   verified_gap_to_80_calls:            792
-  git_control_stage:                   verification_hook_ready_waiting_local_accept
+  git_control_stage:                   local_accept_calibration_needs_stronger_verifier
 
 historical/current-number warning:
   The mixed-v2 bundle above remains the stronger historical 17/1000 verified

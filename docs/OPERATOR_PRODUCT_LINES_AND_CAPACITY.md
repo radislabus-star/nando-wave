@@ -261,18 +261,24 @@ Git-control route/profile/evidence rung:
   verifier_true_events: 4
   verifier_false_events: 6
   verification_hook_ready_events: 10
+  local_accept_calibration_report: git-control-local-accept-calibration-v1.report.json
+  safe_policy_found: true
+  best_safe_true_accepts: 3
+  minimum_true_support: 3
+  support_qualified: true
   workspace_mutation_enabled: false
   local_accepts_enabled: false
   verified_cpu_accepts: 0
-  blocker: verification_hook_ready_waiting_local_accept; needs real tool-output/status verifier and calibration
+  blocker: local_accept_calibration_needs_stronger_verifier; current labels are final-answer evidence, not authoritative tool-output/status
 
-Fresh default feedback after read_inspect + metrics_report calibration + git_control evidence:
+Fresh default feedback after read_inspect + metrics_report calibration + git_control calibration:
   operator_candidate_calls: 402 / 1000
   scoreable_candidate_calls: 159 / 1000
   verification_hook_ready_events: 123
   verified_cpu_accepts: 8 / 1000
   verified_gap_to_80_calls: 792
   market_claim_allowed: false
+  git_control_stage: local_accept_calibration_needs_stronger_verifier
 
 Route-gap after git_control registry:
   existing_route_candidate_events: 507 / 1000

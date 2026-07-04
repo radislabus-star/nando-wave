@@ -1,5 +1,88 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Git-Control Local Accept Calibration
+
+Verdict:
+
+```text
+GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_FINAL_ANSWER_SAFE_POLICY_CANDIDATE
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+  crates/nando-cli/src/main.rs
+  crates/nando-cli/src/help.rs
+
+Added command:
+  role-binding-real-traffic-git-control-local-accept-calibration-v1
+```
+
+Calibration:
+
+```text
+input_trace:
+  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl
+
+registry_config:
+  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json
+
+report:
+  target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1.report.json
+
+hook_ready_rows:       10
+scored_rows:           10
+label_true_rows:       4
+label_false_rows:      6
+no_score_rows:         0
+safe_policy_found:     true
+best_safe_true_accepts: 3
+local_accepts_enabled: false
+market_claim_allowed:  false
+```
+
+Feedback loop after calibration:
+
+```text
+feedback:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+operator_candidate_calls:            402 / 1000
+scoreable_candidate_calls:           159 / 1000
+verification_hook_ready_events:      123
+verified_cpu_accept_eligible_events: 8
+verified_cpu_routability_milli:      8
+verified_gap_to_80_calls:            792
+market_claim_allowed:                false
+
+git_control route row:
+  candidate_events:                   18
+  scoreable_payload_events:           12
+  verification_hook_ready_events:     10
+  local_accept_calibration_ran:       true
+  local_accept_safe_policy_found:     true
+  local_accept_support_qualified:     true
+  local_accept_best_safe_true_accepts: 3
+  verified_cpu_accept_eligible_events: 0
+  false_accepts:                      0
+  stage:                              local_accept_calibration_needs_stronger_verifier
+  next_action:                        Attach a real tool-output/status verifier before safe-policy promotion; final-answer labels are review-only.
+```
+
+Claim boundary:
+
+```text
+The calibration is useful as a score/readout probe, but its labels come from
+conservative final-answer command-outcome evidence. It does not execute git,
+does not inspect real command status/output, does not mutate the workspace,
+does not enable local accepts, and does not prove savings.
+
+Git-control remains REVIEW with 0 verified CPU accepts until a real
+tool-output/status verifier proves the policy on non-synthetic trace rows.
+```
+
 ## 2026-07-04 - Executor Integration: Git-Control Output Evidence Verifier
 
 Verdict:

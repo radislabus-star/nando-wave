@@ -108,6 +108,7 @@ use role_binding_runtime_cmd::{
     run_role_binding_real_traffic_edit_payload_readiness_v1,
     run_role_binding_real_traffic_edit_safe_policy_promote_v1,
     run_role_binding_real_traffic_feedback_loop_v1,
+    run_role_binding_real_traffic_git_control_local_accept_calibration_v1,
     run_role_binding_real_traffic_git_control_output_evidence_v1,
     run_role_binding_real_traffic_git_control_payload_dry_run_v1,
     run_role_binding_real_traffic_git_control_profile_v1,
@@ -686,6 +687,12 @@ fn main() -> ExitCode {
             run_role_binding_real_traffic_git_control_output_evidence_v1(args),
             "try: nando-cli role-binding-real-traffic-git-control-output-evidence-v1 [input-trace-jsonl] [codex-sessions-root] [output-trace-jsonl] [evidence-report-json]",
         ),
+        Some("role-binding-real-traffic-git-control-local-accept-calibration-v1") => {
+            exit_for_result(
+                run_role_binding_real_traffic_git_control_local_accept_calibration_v1(args),
+                "try: nando-cli role-binding-real-traffic-git-control-local-accept-calibration-v1 [registry-config-json] [evidence-trace-jsonl] [calibration-report-json]",
+            )
+        }
         Some("role-binding-real-traffic-metrics-report-payload-dry-run-v1") => exit_for_result(
             run_role_binding_real_traffic_metrics_report_payload_dry_run_v1(args),
             "try: nando-cli role-binding-real-traffic-metrics-report-payload-dry-run-v1 [history-jsonl] [registry-config-json] [trace-jsonl] [dry-run-report-json] [max-events]",

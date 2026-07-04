@@ -116,6 +116,8 @@ const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
 const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json";
 const DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json";
+const DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT: &str =
+    "target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1.report.json";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl";
 const DEFAULT_PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_REPORT: &str =
@@ -6477,6 +6479,178 @@ where
     Err("git-control output evidence is review-only; run shadow/audit before claims".to_owned())
 }
 
+pub(crate) fn run_role_binding_real_traffic_git_control_local_accept_calibration_v1<I>(
+    mut args: I,
+) -> Result<(), String>
+where
+    I: Iterator<Item = String>,
+{
+    let registry_config_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_PROFILE_REGISTRY_CONFIG));
+    let trace_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_OUTPUT_EVIDENCE_TRACE_JSONL));
+    let report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT));
+
+    let registry = RoleBindingProfileRuntimeRegistry::from_config_path(&registry_config_path)?;
+    let trace_rows = read_real_traffic_trace_jsonl(&trace_path)?;
+    let mut scored_rows = Vec::new();
+    let mut hook_ready_rows = 0usize;
+    let mut label_true_rows = 0usize;
+    let mut label_false_rows = 0usize;
+    let mut no_score_rows = 0usize;
+
+    for row in &trace_rows {
+        let Some(label) = row.verified_safe_accept else {
+            continue;
+        };
+        let Some(request) = &row.nando_shadow_request else {
+            continue;
+        };
+        if request.profile_id.as_deref() != Some(REAL_TRAFFIC_GIT_CONTROL_PROFILE_ID) {
+            continue;
+        }
+        hook_ready_rows += 1;
+        label_true_rows += usize::from(label);
+        label_false_rows += usize::from(!label);
+        let Some(score) = score_role_binding_profile_request_detailed(&registry, request) else {
+            no_score_rows += 1;
+            continue;
+        };
+        let current_response = score_role_binding_profile_request(&registry, request);
+        let command_slot_margin = score.slot_margins.first().copied().unwrap_or(0);
+        let target_slot_margin = score.slot_margins.get(1).copied().unwrap_or(0);
+        scored_rows.push(RoleBindingEditLocalAcceptCalibrationRow {
+            trace_id: row.trace_id.clone(),
+            request_fingerprint: row.request_fingerprint.clone(),
+            response_fingerprint: row.response_fingerprint.clone(),
+            verifier_label: label,
+            production_accepted: current_response.accepted,
+            production_fallback_reason: current_response.fallback_reason,
+            energy_margin: score.energy_margin,
+            min_slot_margin: score.min_slot_margin,
+            marker_slot_margin: command_slot_margin,
+            end_slot_margin: target_slot_margin,
+            slot_count: score.slot_margins.len(),
+        });
+    }
+
+    let current_policy =
+        evaluate_edit_calibration_policy("current_disabled_profile_policy", &scored_rows, |row| {
+            row.production_accepted
+        });
+    let energy_positive_policy =
+        evaluate_edit_calibration_policy("energy_positive_no_slot_order", &scored_rows, |row| {
+            row.energy_margin >= 1
+        });
+    let strict_positive_policy = evaluate_edit_calibration_policy(
+        "strict_positive_slots_and_energy_positive",
+        &scored_rows,
+        |row| row.min_slot_margin > 0 && row.energy_margin >= 1,
+    );
+    let command_slot_policy =
+        evaluate_edit_calibration_policy("command_slot_positive_only", &scored_rows, |row| {
+            row.marker_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let target_slot_policy =
+        evaluate_edit_calibration_policy("target_slot_positive_only", &scored_rows, |row| {
+            row.end_slot_margin > 0 && row.energy_margin >= 1
+        });
+    let best_energy_threshold_policy =
+        best_single_threshold_policy("best_energy_margin_threshold", &scored_rows, |row| {
+            row.energy_margin
+        });
+    let best_min_slot_threshold_policy =
+        best_single_threshold_policy("best_min_slot_margin_threshold", &scored_rows, |row| {
+            row.min_slot_margin
+        });
+    let best_command_slot_threshold_policy =
+        best_single_threshold_policy("best_command_slot_margin_threshold", &scored_rows, |row| {
+            row.marker_slot_margin
+        });
+    let best_target_slot_threshold_policy =
+        best_single_threshold_policy("best_target_slot_margin_threshold", &scored_rows, |row| {
+            row.end_slot_margin
+        });
+    let margin_collision_diagnostics = planning_margin_collision_diagnostics(&scored_rows);
+    let request_side_margin_only_accepts_all_true_without_false = margin_collision_diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.safe_accepts_all_true_rows);
+    let policies = vec![
+        current_policy,
+        energy_positive_policy,
+        strict_positive_policy,
+        command_slot_policy,
+        target_slot_policy,
+        best_energy_threshold_policy,
+        best_min_slot_threshold_policy,
+        best_command_slot_threshold_policy,
+        best_target_slot_threshold_policy,
+    ];
+    let safe_policy_found = policies
+        .iter()
+        .any(|policy| policy.false_accepts == 0 && policy.true_accepts > 0);
+    let best_safe_true_accepts = policies
+        .iter()
+        .filter(|policy| policy.false_accepts == 0)
+        .map(|policy| policy.true_accepts)
+        .max()
+        .unwrap_or(0);
+    let report = RoleBindingEditLocalAcceptCalibrationReport {
+        schema_version: "nando_role_binding_git_control_local_accept_calibration_v1".to_owned(),
+        verdict: if safe_policy_found {
+            "GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_FINAL_ANSWER_SAFE_POLICY_CANDIDATE"
+        } else {
+            "GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY"
+        }
+        .to_owned(),
+        registry_config_path: registry_config_path.display().to_string(),
+        trace_path: trace_path.display().to_string(),
+        hook_ready_rows,
+        scored_rows: scored_rows.len(),
+        label_true_rows,
+        label_false_rows,
+        no_score_rows,
+        safe_policy_found,
+        best_safe_true_accepts,
+        policies,
+        rows: scored_rows,
+        margin_collision_diagnostics,
+        request_side_margin_only_accepts_all_true_without_false,
+        local_accepts_enabled: false,
+        market_claim_allowed: false,
+        claim_boundary: "Git-control calibration only. It evaluates score/readout policies against conservative final-answer command-outcome verifier labels, writes fingerprints and margins only, executes no git command, mutates no workspace, enables no local accepts, and is not authoritative enough for market savings or workspace mutation without a real tool-output/status verifier.".to_owned(),
+        next_engineering_debt: if safe_policy_found {
+            "Treat this only as a final-answer-label candidate. Build a real tool-output/status verifier and rerun calibration before any safe-policy promotion, provider-cost savings claim, or workspace mutation path.".to_owned()
+        } else {
+            "Do not lower the git-control threshold. Current score geometry does not separate verifier-true from verifier-false rows; improve request-side admission, payload features, or tool-output verification before enabling local accepts.".to_owned()
+        },
+    };
+    write_json_file(&report_path, &report)?;
+    println!(
+        "role-binding-real-traffic-git-control-local-accept-calibration-v1: {}",
+        report.verdict
+    );
+    println!("  registry_config: {}", registry_config_path.display());
+    println!("  trace: {}", trace_path.display());
+    println!("  report: {}", report_path.display());
+    println!("  hook_ready_rows: {}", report.hook_ready_rows);
+    println!("  label_true_rows: {}", report.label_true_rows);
+    println!("  label_false_rows: {}", report.label_false_rows);
+    println!("  safe_policy_found: {}", report.safe_policy_found);
+    println!(
+        "  best_safe_true_accepts: {}",
+        report.best_safe_true_accepts
+    );
+    Err("git-control local accept calibration is review-only".to_owned())
+}
+
 pub(crate) fn run_role_binding_real_traffic_planning_next_step_output_evidence_v1<I>(
     mut args: I,
 ) -> Result<(), String>
@@ -11921,6 +12095,18 @@ where
     } else {
         None
     };
+    let git_control_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let git_control_local_accept_calibration =
+        if git_control_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &git_control_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
     let metrics_report_verification_audit =
         if metrics_report_verification_audit_report_path.exists() {
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
@@ -12153,6 +12339,8 @@ where
             read_inspect_local_accept_calibration.as_ref()
         } else if is_metrics_report_route {
             metrics_report_local_accept_calibration.as_ref()
+        } else if is_git_control_route {
+            git_control_local_accept_calibration.as_ref()
         } else {
             None
         };
@@ -12181,6 +12369,7 @@ where
         let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
         let local_accept_support_qualified = local_accept_safe_policy_found
             && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
+        let local_accept_calibration_authoritative = !is_git_control_route;
         let payload_ready_events = if is_edit_route {
             edit_dry_run.payload_ready_events
         } else if is_conditional_route {
@@ -12316,6 +12505,7 @@ where
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
+            local_accept_calibration_authoritative,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -12413,6 +12603,7 @@ where
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
+            local_accept_calibration_authoritative: true,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -12510,6 +12701,7 @@ where
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
+            local_accept_calibration_authoritative: true,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -12607,6 +12799,7 @@ where
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
+            local_accept_calibration_authoritative: true,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -12645,7 +12838,9 @@ where
     }
 
     if !forecast_has_git_control
-        && (git_control_dry_run.is_some() || git_control_verification_audit.is_some())
+        && (git_control_dry_run.is_some()
+            || git_control_verification_audit.is_some()
+            || git_control_local_accept_calibration.is_some())
     {
         let verification = verification_by_route
             .get(REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY)
@@ -12680,11 +12875,18 @@ where
             .map(|report| report.git_control_candidate_events)
             .or_else(|| verification.map(|row| row.candidate_calls))
             .unwrap_or_default();
-        let local_accept_calibration_ran = false;
-        let local_accept_safe_policy_found = false;
-        let local_accept_best_safe_true_accepts = 0;
+        let local_accept_calibration_ran = git_control_local_accept_calibration.is_some();
+        let local_accept_safe_policy_found = git_control_local_accept_calibration
+            .as_ref()
+            .map(|report| report.safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = git_control_local_accept_calibration
+            .as_ref()
+            .map(|report| report.best_safe_true_accepts)
+            .unwrap_or_default();
         let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
-        let local_accept_support_qualified = false;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
         let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
             payload_built_events,
@@ -12695,6 +12897,7 @@ where
             local_accept_calibration_ran,
             local_accept_safe_policy_found,
             local_accept_support_qualified,
+            local_accept_calibration_authoritative: false,
         });
         let next_action = feedback_route_next_action(&stage);
         route_rows.push(RoleBindingFeedbackLoopRouteRow {
@@ -12800,6 +13003,13 @@ where
         git_control_verification_audit_report_path: git_control_verification_audit
             .as_ref()
             .map(|_| git_control_audit_report_path.display().to_string()),
+        git_control_local_accept_calibration_report_path: git_control_local_accept_calibration
+            .as_ref()
+            .map(|_| {
+                git_control_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         agent_control_dry_run_report_path: agent_control_dry_run
             .as_ref()
             .map(|_| agent_control_dry_run_report_path.display().to_string()),
@@ -12935,6 +13145,9 @@ where
     }
     if let Some(path) = &report.git_control_verification_audit_report_path {
         println!("  git_control_verification_audit_report: {path}");
+    }
+    if let Some(path) = &report.git_control_local_accept_calibration_report_path {
+        println!("  git_control_local_accept_calibration_report: {path}");
     }
     if let Some(path) = &report.conditional_dry_run_report_path {
         println!("  conditional_dry_run_report: {path}");
@@ -16338,6 +16551,7 @@ struct RoleBindingFeedbackLoopReport {
     metrics_report_verification_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,
     git_control_verification_audit_report_path: Option<String>,
+    git_control_local_accept_calibration_report_path: Option<String>,
     agent_control_dry_run_report_path: Option<String>,
     agent_control_verification_audit_report_path: Option<String>,
     agent_control_safe_policy_verification_audit_report_path: Option<String>,
@@ -21669,6 +21883,7 @@ struct FeedbackRouteStageInputs {
     local_accept_calibration_ran: bool,
     local_accept_safe_policy_found: bool,
     local_accept_support_qualified: bool,
+    local_accept_calibration_authoritative: bool,
 }
 
 fn feedback_route_stage(inputs: FeedbackRouteStageInputs) -> String {
@@ -21676,6 +21891,10 @@ fn feedback_route_stage(inputs: FeedbackRouteStageInputs) -> String {
         "false_accepts_block_local_policy".to_owned()
     } else if inputs.verified_cpu_accept_eligible_events > 0 {
         "verified_cpu_accept_eligible".to_owned()
+    } else if inputs.local_accept_safe_policy_found
+        && !inputs.local_accept_calibration_authoritative
+    {
+        "local_accept_calibration_needs_stronger_verifier".to_owned()
     } else if inputs.local_accept_safe_policy_found && !inputs.local_accept_support_qualified {
         "local_accept_calibration_support_insufficient".to_owned()
     } else if inputs.local_accept_safe_policy_found {
@@ -21712,6 +21931,9 @@ fn feedback_route_next_action(stage: &str) -> String {
         }
         "local_accept_calibration_support_insufficient" => {
             "Collect more verifier-true rows or raise admission quality before promotion; low-support safe policies stay review-only.".to_owned()
+        }
+        "local_accept_calibration_needs_stronger_verifier" => {
+            "Attach a real tool-output/status verifier before safe-policy promotion; final-answer labels are review-only.".to_owned()
         }
         "local_accept_calibration_failed" => {
             "Improve request-side admission or payload geometry before enabling local accepts.".to_owned()
