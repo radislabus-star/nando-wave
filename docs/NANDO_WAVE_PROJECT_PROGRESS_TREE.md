@@ -248,7 +248,7 @@ Nando Wave / Operator Layer
 |   |   +-- unverified_shadow_accepts                [0]
 |   |   +-- false_accepts                            [0]
 |   |   +-- market_claim_allowed                     [true]
-|   |   +-- boundary                                 [separate 5000-row soak; not added to default 12/1000 until unified feedback regeneration]
+|   |   +-- boundary                                 [separate 5000-row soak; not added to default 16/1000 unique scoreboard until unified feedback regeneration]
 |   |   +-- current_feedback_impact                  [none; separate 5000-row denominator]
 |   |   +-- next_debt                                [regenerate one unified feedback window before counting this route beside default 1000-row routes]
 |   +-- git_control route/profile/evidence/promoted-safe-policy rung [PASS narrow shadow, 1/1000]

@@ -1,5 +1,80 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Post-16 Route Triage
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_POST_16_TRIAGE_NO_THRESHOLD_SHORTCUT
+```
+
+Current scoreboard:
+
+```text
+feedback_report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
+
+verified_cpu_accept_route_sum_events:             21 / 1000
+verified_cpu_accept_unique_request_fingerprints:  16 / 1000
+verified_cpu_accept_duplicate_route_hits:         5
+exact_cache_overlap_verified_cpu_accepts:         1
+unique_verified_gap_to_80_calls:                  784
+false_accepts:                                    0
+```
+
+Route triage:
+
+```text
+conditional_branch:
+  candidate_events:                 166
+  verification_hook_ready_events:    40
+  verified_cpu_accept_eligible:       2
+  blocker: calibration says score/readout geometry does not separate 17 true from 46 false.
+  decision: do not lower threshold; improve branch extraction/admission first.
+
+metrics_report_readout:
+  default_1000_window:
+    hook_ready_rows:                  32
+    label_true_rows:                  18
+    label_false_rows:                 14
+    best_safe_true_accepts:            2
+    minimum_true_support:              3
+    decision: keep review-only in default feedback.
+  separate_5000_soak:
+    audit: metrics-report-soak-v1/metrics-report-safe-policy-v1.verification-hook-audit.report.json
+    total_llm_calls:                5000
+    verified_cpu_accept_eligible:      3
+    shadow_false_accepts:              0
+    market_claim_allowed:           true
+    decision: valid narrow soak, but excluded from the 1000-row feedback denominator.
+
+agent_control:
+  candidate_events:                 143
+  verified_true_rows:                12
+  current_safe_policy_true_accepts:  11
+  false_accepts:                      0
+  finding: the remaining true row is short_ack-shaped; no clean request-side conjunction
+           over current features captures 12/12 without false rows.
+  decision: keep strict_control_stop_forms at 11/0.
+
+git_control:
+  calibration_best_safe_true_accepts: 5
+  promoted_safe_policy_accepts:       1
+  reason: lower threshold would admit unverified rows in the promoted trace.
+  decision: need more tool-output evidence, not a lower threshold.
+```
+
+Next engineering cut:
+
+```text
+Build a new route-gap operator instead of squeezing thresholds:
+  1. project_context_dialogue -> active_project_state_payload_builder_v1
+  2. answer_or_explain       -> grounded_answer_evidence_verifier_v1
+  3. retrieval_lookup        -> local_path_or_link_lookup_payload_builder_v1
+
+Keep local accepts disabled until deterministic verifier + shadow audit pass.
+```
+
 ## 2026-07-04 - Executor Integration: Mixed V2 Default Promotion
 
 Verdict:
