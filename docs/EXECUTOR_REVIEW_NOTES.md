@@ -1,5 +1,91 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Catalog Exhaustion Rerank V1
+
+Verdict:
+
+```text
+CPU_OPERATOR_CATALOG_V1_REVIEW_EXHAUSTED_ROUTES_RERANKED
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The CPU operator catalog now treats exhausted safe-policy support as a first
+class routing signal. Metrics-report, serving-ops, and edit existing-profile
+routes are downranked when their best safe calibration support is already
+covered by current incremental unique verified accepts. The exhaustion penalty
+was centralized as CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY.
+```
+
+Fresh catalog:
+
+```text
+catalog_report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
+
+current_verified_cpu_accepts: 26
+verified_gap_to_80_calls:    774
+top_catalog_row:             planning_next_step (route_gap_family)
+
+metrics_report_readout existing route:
+  rank:                                  26
+  incremental_unique_accepts:             3
+  metrics_report_best_robust_true_accepts: 3
+  metrics_report_current_support_exhausted: true
+
+serving_ops existing route:
+  serving_ops_best_safe_true_accepts: 3
+  serving_ops_current_support_exhausted: true
+
+edit existing route:
+  edit_best_safe_true_accepts: 1
+  edit_current_support_exhausted: true
+```
+
+Decision:
+
+```text
+Do not spend the next CPU80 step on another threshold-only pass for
+metrics-report, serving-ops, or edit. Their current request/score geometry has
+already captured its safe support in the 1000-call window.
+
+The next highest-priority route is now:
+  planning_next_step route_gap_family
+
+Recommended next action:
+  build or improve goal_state_transition_payload_builder_v1
+  plus plan_step_artifact_progress_verifier_v1
+  while keeping local accepts disabled until deterministic verification exists.
+```
+
+Claim boundary:
+
+```text
+This is route-selection instrumentation only. It adds no verified CPU accepts.
+CPU Routability 80 remains at 26/1000 unique verified accepts, with
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/catalog-exhaustion-rerank-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/catalog-exhaustion-rerank-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 34
+note: route-specific evidence labels are required; the first packet reused
+      generic incremental-unique evidence labels across routes and NANDA
+      correctly rejected that as a role-filler conflict
+```
+
 ## 2026-07-04 - Executor Integration: Mixed Safe Policy V3
 
 Verdict:

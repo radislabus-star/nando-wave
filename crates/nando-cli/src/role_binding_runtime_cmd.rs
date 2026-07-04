@@ -320,6 +320,7 @@ const DEFAULT_REAL_TRAFFIC_VERIFICATION_HOOK_AUDIT_REPORT: &str =
 const DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json";
 const DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT: usize = 3;
+const CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY: i64 = 200_000;
 const ROLE_BINDING_EVAL_PACK_BINARY_MAGIC: [u8; 8] = *b"NWRE0001";
 const HTTP_READ_TIMEOUT_SECS: u64 = 10;
 const MAX_HTTP_REQUEST_BYTES: usize = 4 * 1024 * 1024;
@@ -11378,6 +11379,40 @@ where
     } else {
         None
     };
+    let metrics_report_admission_calibration_report_path =
+        PathBuf::from(DEFAULT_METRICS_REPORT_ADMISSION_CALIBRATION_REPORT);
+    let metrics_report_admission_calibration = if metrics_report_admission_calibration_report_path
+        .exists()
+    {
+        Some(read_json_file::<
+            RoleBindingMetricsReportAdmissionCalibrationReport,
+        >(&metrics_report_admission_calibration_report_path)?)
+    } else {
+        None
+    };
+    let edit_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_EDIT_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let edit_local_accept_calibration = if edit_local_accept_calibration_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                &edit_local_accept_calibration_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
+    let serving_ops_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let serving_ops_local_accept_calibration =
+        if serving_ops_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &serving_ops_local_accept_calibration_report_path,
+                )?,
+            )
+        } else {
+            None
+        };
     let route_gap_readiness_by_family = route_gap_payload_readiness
         .as_ref()
         .map(|report| {
@@ -11417,7 +11452,8 @@ where
                         .unique_accepts
                         .incremental_verified_request_fingerprints;
         if conditional_admission_current_support_exhausted {
-            priority_score = priority_score.saturating_sub(80_000);
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
         let agent_control_admission_best_robust_true_accepts = agent_control_admission_audit
             .as_ref()
@@ -11435,7 +11471,8 @@ where
             .map(|audit| audit.unique_contribution_constrained)
             .unwrap_or(false);
         if agent_control_current_policy_event_support_exhausted {
-            priority_score = priority_score.saturating_sub(80_000);
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
         let git_control_admission_best_safe_true_accepts = git_control_admission_audit
             .as_ref()
@@ -11449,7 +11486,8 @@ where
                     .unique_accepts
                     .incremental_verified_request_fingerprints;
         if git_control_current_support_exhausted {
-            priority_score = priority_score.saturating_sub(80_000);
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
         let mixed_admission_best_safe_true_accepts = mixed_admission_audit
             .as_ref()
@@ -11462,7 +11500,53 @@ where
                     .unique_accepts
                     .incremental_verified_request_fingerprints;
         if mixed_current_support_exhausted {
-            priority_score = priority_score.saturating_sub(80_000);
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
+        }
+        let metrics_report_admission_best_robust_true_accepts =
+            metrics_report_admission_calibration
+                .as_ref()
+                .filter(|_| route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY)
+                .map(|audit| audit.best_robust_true_accepts)
+                .unwrap_or_default();
+        let metrics_report_current_support_exhausted =
+            metrics_report_admission_best_robust_true_accepts > 0
+                && metrics_report_admission_best_robust_true_accepts
+                    <= route
+                        .unique_accepts
+                        .incremental_verified_request_fingerprints;
+        if metrics_report_current_support_exhausted {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
+        }
+        let edit_local_accept_best_safe_true_accepts = edit_local_accept_calibration
+            .as_ref()
+            .filter(|_| route.route_key.contains("edit_marker_length"))
+            .map(|audit| audit.best_safe_true_accepts)
+            .unwrap_or_default();
+        let edit_current_support_exhausted = edit_local_accept_best_safe_true_accepts > 0
+            && edit_local_accept_best_safe_true_accepts
+                <= route
+                    .unique_accepts
+                    .incremental_verified_request_fingerprints;
+        if edit_current_support_exhausted {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
+        }
+        let serving_ops_local_accept_best_safe_true_accepts = serving_ops_local_accept_calibration
+            .as_ref()
+            .filter(|_| route.route_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY)
+            .map(|audit| audit.best_safe_true_accepts)
+            .unwrap_or_default();
+        let serving_ops_current_support_exhausted = serving_ops_local_accept_best_safe_true_accepts
+            > 0
+            && serving_ops_local_accept_best_safe_true_accepts
+                <= route
+                    .unique_accepts
+                    .incremental_verified_request_fingerprints;
+        if serving_ops_current_support_exhausted {
+            priority_score =
+                priority_score.saturating_sub(CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY);
         }
         let mut next_action = route.next_action.clone();
         if conditional_admission_current_support_exhausted {
@@ -11480,6 +11564,18 @@ where
         } else if mixed_current_support_exhausted {
             next_action = format!(
                 "Mixed-map admission audit found only {mixed_admission_best_safe_true_accepts} market-safe request-side accepts, already covered by current incremental unique support; improve mixed payload/evidence geometry before another promote."
+            );
+        } else if metrics_report_current_support_exhausted {
+            next_action = format!(
+                "Metrics-report admission calibration found only {metrics_report_admission_best_robust_true_accepts} robust safe true accepts, already covered by current incremental unique support; improve metrics payload/evidence geometry or split a stronger report subfamily before another promote."
+            );
+        } else if edit_current_support_exhausted {
+            next_action = format!(
+                "Edit local calibration found only {edit_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve edit payload/evidence geometry before another promote."
+            );
+        } else if serving_ops_current_support_exhausted {
+            next_action = format!(
+                "Serving-ops local calibration found only {serving_ops_local_accept_best_safe_true_accepts} safe true accepts, already covered by current incremental unique support; improve serving-ops payload/evidence geometry or split a stronger subfamily before another promote."
             );
         }
         rows.push(RoleBindingCpuOperatorCatalogRow {
@@ -11515,6 +11611,12 @@ where
             git_control_current_support_exhausted,
             mixed_admission_best_safe_true_accepts,
             mixed_current_support_exhausted,
+            metrics_report_admission_best_robust_true_accepts,
+            metrics_report_current_support_exhausted,
+            edit_local_accept_best_safe_true_accepts,
+            edit_current_support_exhausted,
+            serving_ops_local_accept_best_safe_true_accepts,
+            serving_ops_current_support_exhausted,
             false_accepts: route.false_accepts,
             cpu_operator_readiness: "existing_profile".to_owned(),
             recommended_profile_line: format!("existing_profile:{}", route.profile_id),
@@ -11567,6 +11669,12 @@ where
             git_control_current_support_exhausted: false,
             mixed_admission_best_safe_true_accepts: 0,
             mixed_current_support_exhausted: false,
+            metrics_report_admission_best_robust_true_accepts: 0,
+            metrics_report_current_support_exhausted: false,
+            edit_local_accept_best_safe_true_accepts: 0,
+            edit_current_support_exhausted: false,
+            serving_ops_local_accept_best_safe_true_accepts: 0,
+            serving_ops_current_support_exhausted: false,
             false_accepts: 0,
             cpu_operator_readiness: family.cpu_operator_readiness.clone(),
             recommended_profile_line: family.recommended_profile_line.clone(),
@@ -11626,6 +11734,22 @@ where
         mixed_admission_audit_report_path: mixed_admission_audit
             .as_ref()
             .map(|_| mixed_admission_audit_report_path.display().to_string()),
+        metrics_report_admission_calibration_report_path:
+            metrics_report_admission_calibration.as_ref().map(|_| {
+                metrics_report_admission_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
+        edit_local_accept_calibration_report_path: edit_local_accept_calibration
+            .as_ref()
+            .map(|_| edit_local_accept_calibration_report_path.display().to_string()),
+        serving_ops_local_accept_calibration_report_path: serving_ops_local_accept_calibration
+            .as_ref()
+            .map(|_| {
+                serving_ops_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         existing_operator_candidate_calls: feedback.operator_candidate_calls,
@@ -11691,6 +11815,24 @@ where
         println!(
             "  mixed_admission_audit_report: {}",
             mixed_admission_audit_report_path.display()
+        );
+    }
+    if metrics_report_admission_calibration.is_some() {
+        println!(
+            "  metrics_report_admission_calibration_report: {}",
+            metrics_report_admission_calibration_report_path.display()
+        );
+    }
+    if edit_local_accept_calibration.is_some() {
+        println!(
+            "  edit_local_accept_calibration_report: {}",
+            edit_local_accept_calibration_report_path.display()
+        );
+    }
+    if serving_ops_local_accept_calibration.is_some() {
+        println!(
+            "  serving_ops_local_accept_calibration_report: {}",
+            serving_ops_local_accept_calibration_report_path.display()
         );
     }
     println!("  report: {}", report_path.display());
@@ -22452,6 +22594,12 @@ struct RoleBindingCpuOperatorCatalogReport {
     git_control_admission_audit_report_path: Option<String>,
     #[serde(default)]
     mixed_admission_audit_report_path: Option<String>,
+    #[serde(default)]
+    metrics_report_admission_calibration_report_path: Option<String>,
+    #[serde(default)]
+    edit_local_accept_calibration_report_path: Option<String>,
+    #[serde(default)]
+    serving_ops_local_accept_calibration_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     existing_operator_candidate_calls: usize,
@@ -22523,6 +22671,18 @@ struct RoleBindingCpuOperatorCatalogRow {
     mixed_admission_best_safe_true_accepts: usize,
     #[serde(default)]
     mixed_current_support_exhausted: bool,
+    #[serde(default)]
+    metrics_report_admission_best_robust_true_accepts: usize,
+    #[serde(default)]
+    metrics_report_current_support_exhausted: bool,
+    #[serde(default)]
+    edit_local_accept_best_safe_true_accepts: usize,
+    #[serde(default)]
+    edit_current_support_exhausted: bool,
+    #[serde(default)]
+    serving_ops_local_accept_best_safe_true_accepts: usize,
+    #[serde(default)]
+    serving_ops_current_support_exhausted: bool,
     false_accepts: usize,
     cpu_operator_readiness: String,
     recommended_profile_line: String,
