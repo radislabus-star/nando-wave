@@ -181,6 +181,12 @@ current5k companion reports used by catalog:
   git-control-admission-audit-v1-current5k.report.json
   metrics-report-admission-calibration-v1-5k.report.json
   edit-admission-calibration-v1-current5k.report.json
+
+feedback-loop current5k companion reports now used for artifact-backed
+project_context:
+  project-context-payload-dry-run-v1-current5k.report.json
+  project-context-output-evidence-v1-current5k.verification-hook-audit.report.json
+  project-context-local-accept-calibration-v1-current5k.report.json
 ```
 
 Business Value Gate reason refresh:
@@ -316,12 +322,16 @@ file_path_evidence_answer current5k split:
 
 project_context artifact_backed_project_state current5k split:
   project_context candidate events: 1313
-  payload_ready_events: 14
-  scoreable_payload_events: 7
-  artifact_evidence_matched_events: 7
+  feedback route candidate events: 1314
+  payload_ready_events: 15
+  scoreable_payload_events: 8
+  verification_hook_ready_events: 8
+  artifact_evidence_matched_events: 8
   verified_true_events: 1
-  verified_false_events: 6
+  verified_false_events: 7
   safe_policy_found: true, best_safe_true_accepts: 1
+  minimum_true_support: 3
+  local_accept_support_qualified: false
   verified_cpu_accept_eligible_events: 0
   decision: WATCH / SINGLETON_ONLY_BELOW_MIN_SUPPORT
 ```

@@ -27477,6 +27477,14 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_FEEDBACK_LOOP_REPORT));
+    let prefer_current5k_companions = [
+        forecast_report_path.as_path(),
+        edit_dry_run_report_path.as_path(),
+        verification_audit_report_path.as_path(),
+        feedback_report_path.as_path(),
+    ]
+    .iter()
+    .any(|path| path.to_string_lossy().contains("current5k"));
     let planning_next_step_dry_run_report_path = args
         .next()
         .map(PathBuf::from)
@@ -27523,10 +27531,18 @@ where
         PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_REPORT);
     let retrieval_lookup_verification_audit_report_path =
         PathBuf::from(DEFAULT_RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_AUDIT_REPORT);
-    let project_context_dry_run_report_path =
-        PathBuf::from(DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT);
-    let project_context_verification_audit_report_path =
-        PathBuf::from(DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_AUDIT_REPORT);
+    let project_context_dry_run_report_path = current_window_companion_report_path(
+        DEFAULT_PROJECT_CONTEXT_PAYLOAD_DRY_RUN_REPORT,
+        prefer_current5k_companions,
+    );
+    let project_context_verification_audit_report_path = current_window_companion_report_path(
+        DEFAULT_PROJECT_CONTEXT_OUTPUT_EVIDENCE_AUDIT_REPORT,
+        prefer_current5k_companions,
+    );
+    let project_context_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let style_brevity_dry_run_report_path =
         PathBuf::from(DEFAULT_STYLE_BREVITY_PAYLOAD_DRY_RUN_REPORT);
     let style_brevity_verification_audit_report_path =
@@ -27898,8 +27914,6 @@ where
         } else {
             None
         };
-    let project_context_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_REPORT);
     let project_context_local_accept_calibration =
         if project_context_local_accept_calibration_report_path.exists() {
             Some(
@@ -44767,9 +44781,19 @@ fn current_window_companion_report_path(
     if !prefer_current5k {
         return PathBuf::from(default_report_path);
     }
-    for suffix in ["-current5k.report.json", "-5k.report.json"] {
+    for window_suffix in ["-current5k", "-5k"] {
+        if let Some(prefix) =
+            default_report_path.strip_suffix(".verification-hook-audit.report.json")
+        {
+            let candidate = PathBuf::from(format!(
+                "{prefix}{window_suffix}.verification-hook-audit.report.json"
+            ));
+            if candidate.exists() {
+                return candidate;
+            }
+        }
         if let Some(prefix) = default_report_path.strip_suffix(".report.json") {
-            let candidate = PathBuf::from(format!("{prefix}{suffix}"));
+            let candidate = PathBuf::from(format!("{prefix}{window_suffix}.report.json"));
             if candidate.exists() {
                 return candidate;
             }

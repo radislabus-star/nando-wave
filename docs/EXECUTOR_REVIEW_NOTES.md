@@ -1,5 +1,96 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Project Context Current5k Evidence Routed Into Feedback Loop
+
+Verdict:
+
+```text
+PROJECT_CONTEXT_CURRENT5K_EVIDENCE_WIRED
+NO_NEW_CPU_ACCEPTS_PROMOTED
+```
+
+Why:
+
+```text
+The broad project_context_dialogue family is one of the largest real-traffic
+gaps, but it must not be promoted as a broad route. A current5k
+artifact-backed subfamily already had payload, workspace evidence, and
+calibration artifacts. The feedback loop was still reading non-current default
+project-context reports, so the CPU catalog under-reported that evidence as
+missing verifier work.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+```
+
+What changed:
+
+```text
+role-binding-real-traffic-feedback-loop-v1 now uses current-window companion
+reports for project_context when the forecast/edit/feedback inputs are a
+current5k window.
+
+current_window_companion_report_path now also recognizes:
+  *-current5k.verification-hook-audit.report.json
+  *-5k.verification-hook-audit.report.json
+```
+
+Current5k project-context artifacts:
+
+```text
+project-context-payload-dry-run-v1-current5k.report.json
+project-context-output-evidence-v1-current5k.verification-hook-audit.report.json
+project-context-local-accept-calibration-v1-current5k.report.json
+```
+
+Structural gate:
+
+```text
+packet: docs/structural_gates/project-context-current5k-feedback-catalog-v1.md
+verdict: PASS
+complexity_score: 47
+trace_path: /tmp/nanda-structural-gate/project-context-current5k-feedback-catalog-v1.trace.json
+```
+
+Measured project-context feedback-loop result:
+
+```text
+route_key: project_context_dialogue
+candidate_events: 1314
+payload_ready_events: 15
+payload_built_events: 8
+scoreable_payload_events: 8
+verification_hook_ready_events: 8
+verified_cpu_accept_eligible_events: 0
+local_accept_safe_policy_found: true
+local_accept_best_safe_true_accepts: 1
+local_accept_minimum_true_support: 3
+local_accept_support_qualified: false
+false_accepts: 0
+stage: local_accept_calibration_support_insufficient
+```
+
+Catalog row result:
+
+```text
+project_context_dialogue:
+  current_status: REJECT_FOR_NOW
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,broad_route_requires_split,safe_policy_support_insufficient
+```
+
+Decision:
+
+```text
+Do not promote broad project_context_dialogue. The artifact-backed project
+state split is real, but current support is singleton-only. The next valid work
+is to collect more verifier-true workspace-artifact rows or split an even
+narrower artifact-backed subfamily; local accepts remain disabled.
+```
+
 ## 2026-07-04 - Executor Integration: Edit Admission Audit Routed Into CPU Catalog
 
 Verdict:
