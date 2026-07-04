@@ -1,5 +1,141 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Current5k Business Value Gate Catalog
+
+Verdict:
+
+```text
+CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
+ROUTE_GAP_CATALOG_V1_REVIEW
+ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND
+CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  docs/CPU_CALL_CATALOG.md
+
+Added:
+  docs/structural_gates/cpu-catalog-current5k-business-value-v1.md
+
+Generated:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-current5k.report.json
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+```
+
+Why:
+
+```text
+The user clarified the main product risk: building many elegant CPU/L3 profiles
+that add only tiny real-traffic savings. This stage turns BUSINESS_VALUE_GATE
+into the working filter for current5k evidence: a profile must show real trace
+traffic, cache overlap, verifier support, expected unique accepts over exact
+cache, false_accept risk, and expected savings before more profile work.
+```
+
+Commands:
+
+```text
+cargo run -p nando-cli -- role-binding-real-traffic-route-gap-catalog-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-current5k.report.json \
+  5000
+
+cargo run -p nando-cli -- role-binding-real-traffic-route-gap-payload-readiness-v1 \
+  /home/ubu/.codex/history.jsonl \
+  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json \
+  5000
+
+cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1 \
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json \
+  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-current5k.report.json \
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json \
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json
+```
+
+Measured result:
+
+```text
+current5k total_llm_calls: 5000
+current5k exact_cache_hits: 452
+route_candidates: 1439
+route_gap_no_candidate_events: 3561
+route_gap_payload_ready_events: 807
+
+feedback operator_candidate_calls: 2336
+feedback scoreable_candidate_calls: 364
+feedback verification_hook_ready_events: 171
+feedback verified_cpu_accept_eligible_events: 98
+feedback verified_cpu_accept_unique_request_fingerprints: 96
+feedback incremental_cpu_accept_unique_request_fingerprints: 94
+feedback exact_cache_overlap_verified_cpu_accepts: 2
+feedback incremental_cpu_accept_unique_reduction_milli: 18
+feedback incremental_unique_gap_to_80_calls: 3906
+
+catalog current_verified_cpu_accepts: 96
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 94
+catalog business_value_gate_passed_rows: 2
+catalog proven_profile_rows: 2
+catalog candidate_profile_rows: 1
+catalog watch_profile_rows: 21
+catalog rejected_profile_rows: 5
+```
+
+Profile decisions:
+
+```text
+test_output_parse:
+  status: PROVEN
+  candidate_events: 95
+  verified_cpu_accept_eligible_events: 95
+  incremental_unique_accepts: 91
+  false_accepts: 0
+
+metrics_report_readout:
+  status: PROVEN, small-support sidecar only
+  candidate_events: 99
+  scoreable_payload_events: 63
+  verification_hook_ready_events: 51
+  verified_cpu_accept_eligible_events: 3
+  incremental_unique_accepts: 3
+  false_accepts: 0
+
+agent_control:
+  status: WATCH / NO_SAFE_POLICY
+  scoreable_payload_events: 540
+  output_evidence_matched_events: 476
+  verified_true_events: 35
+  verified_false_events: 441
+  robust_safe_policy_found: false
+```
+
+Decision:
+
+```text
+Current5k is now the active commercial filter. CPU80 is still not proven:
+incremental unique reduction is 18 milli and the gap to 80% is 3906 calls.
+The next profile must be chosen by BUSINESS_VALUE_GATE, not by architecture
+interest. Broad routes remain blocked as whole routes; only narrow,
+artifact-backed splits may move forward.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/cpu-catalog-current5k-business-value-v1.md
+verdict: PASS
+complexity_score: 51
+note: source-only audit packet; candidate-route version was rejected as too
+wide, so this gate records the coherent current5k claim boundary without
+splicing unrelated profile routes.
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
 
 Verdict:
