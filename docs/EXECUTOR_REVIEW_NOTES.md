@@ -1,5 +1,89 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Agent Loop Registry Admission Rerank
+
+Verdict:
+
+```text
+AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The agent-loop registry now reads, when present:
+  target/nando-wave/real-traffic-shadow/read-inspect-admission-audit-v1.report.json
+
+and applies it before profile ranking.
+```
+
+Why:
+
+```text
+The previous registry still selected read_context_path as top_next_profile_key
+after the read-inspect admission audit had already proven:
+  robust_safe_policy_found: false
+  singleton_safe_policy_found: false
+  best_robust_true_accepts: 0
+  best_singleton_true_accepts: 0
+
+That made the worklist loop back into a route whose current request-side
+features cannot safely separate 1 verifier-true row from 8 verifier-false rows.
+```
+
+Reranked result:
+
+```text
+admission_blocked_profiles: 1
+exhausted_current_support_profiles: 13
+top_next_profile_key: resource_budget_extract
+
+read_context_path:
+  readiness_state: admission_audit_no_safe_policy
+  admission_blocked_by_audit: true
+  priority_rank: 12
+  priority_score: -89091
+
+response_shape_brevity:
+  readiness_state: support_exhausted_or_singleton_only
+  current_support_exhausted: true
+```
+
+Decision:
+
+```text
+Do not return to read_context_path until a split path/excerpt subfamily or
+richer request-side serving state/evidence exists.
+
+Do not promote response_shape_brevity as CPU80 growth from current evidence:
+the catalog marks style-brevity verifier true support as zero.
+
+The current top narrow work item is resource_budget_extract. It has:
+  candidate_events: 3
+  scoreable_payload_events: 1
+  verification_hook_ready_events: 1
+  unique_verified_request_fingerprints: 0
+
+It is not verified savings yet. It only says the next safe experiment is a
+small admission/verifier pass for explicit resource/budget extraction, with
+false_accepts=0 and unique attribution required before any local accept.
+```
+
+Claim boundary:
+
+```text
+No verified CPU accepts were added.
+current_verified_cpu_accepts remains 26.
+verified_gap_to_80_calls remains 774.
+market_claim_allowed remains false.
+
+The rerank changes the worklist only. It writes no raw prompt text, no raw
+response text, no target labels, no proof labels, and enables no local accepts.
+```
+
 ## 2026-07-04 - Executor Integration: Read Inspect Admission Audit V1
 
 Verdict:

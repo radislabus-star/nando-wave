@@ -17304,9 +17304,22 @@ where
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_REAL_TRAFFIC_AGENT_LOOP_PROFILE_REGISTRY_REPORT));
+    let read_inspect_admission_audit_report_path = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_READ_INSPECT_ADMISSION_AUDIT_REPORT));
 
     let feedback = read_json_file::<RoleBindingFeedbackLoopReport>(&feedback_report_path)?;
     let catalog = read_json_file::<RoleBindingCpuOperatorCatalogReport>(&catalog_report_path)?;
+    let read_inspect_admission_audit = if read_inspect_admission_audit_report_path.exists() {
+        Some(
+            read_json_file::<RoleBindingReadInspectAdmissionAuditReport>(
+                &read_inspect_admission_audit_report_path,
+            )?,
+        )
+    } else {
+        None
+    };
     let routes_by_key = feedback
         .routes
         .iter()
@@ -17334,6 +17347,10 @@ where
             build_agent_loop_profile_registry_row(spec, route, catalog_row)
         })
         .collect::<Vec<_>>();
+    apply_read_inspect_admission_audit_to_agent_loop_registry(
+        &mut rows,
+        read_inspect_admission_audit.as_ref(),
+    );
 
     rows.sort_by(|left, right| {
         right
@@ -17367,11 +17384,16 @@ where
         .iter()
         .filter(|row| row.current_support_exhausted)
         .count();
+    let admission_blocked_profiles = rows
+        .iter()
+        .filter(|row| row.admission_blocked_by_audit)
+        .count();
     let top_next_profile_key = rows
         .iter()
         .find(|row| {
             row.unique_verified_request_fingerprints == 0
                 && !row.current_support_exhausted
+                && !row.admission_blocked_by_audit
                 && !row.wide_route_quarantine
                 && row.candidate_events > 0
         })
@@ -17382,6 +17404,9 @@ where
         verdict: "AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW".to_owned(),
         feedback_report_path: feedback_report_path.display().to_string(),
         catalog_report_path: catalog_report_path.display().to_string(),
+        read_inspect_admission_audit_report_path: read_inspect_admission_audit
+            .as_ref()
+            .map(|_| read_inspect_admission_audit_report_path.display().to_string()),
         total_llm_calls: feedback.total_llm_calls,
         exact_cache_hits: feedback.exact_cache_hits,
         target_verified_cpu_accepts: feedback.target_verified_cpu_calls,
@@ -17395,6 +17420,7 @@ where
         scoreable_profiles,
         blocked_wide_route_profiles,
         exhausted_current_support_profiles,
+        admission_blocked_profiles,
         top_next_profile_key,
         rows,
         raw_text_written: false,
@@ -17422,6 +17448,10 @@ where
         report.verified_gap_to_80_calls
     );
     println!("  microprofile_count: {}", report.microprofile_count);
+    println!(
+        "  admission_blocked_profiles: {}",
+        report.admission_blocked_profiles
+    );
     println!(
         "  microprofiles_observed: {}",
         report.microprofiles_observed
@@ -29704,6 +29734,8 @@ struct RoleBindingAgentLoopProfileRegistryReport {
     verdict: String,
     feedback_report_path: String,
     catalog_report_path: String,
+    #[serde(default)]
+    read_inspect_admission_audit_report_path: Option<String>,
     total_llm_calls: usize,
     exact_cache_hits: usize,
     target_verified_cpu_accepts: usize,
@@ -29717,6 +29749,8 @@ struct RoleBindingAgentLoopProfileRegistryReport {
     scoreable_profiles: usize,
     blocked_wide_route_profiles: usize,
     exhausted_current_support_profiles: usize,
+    #[serde(default)]
+    admission_blocked_profiles: usize,
     top_next_profile_key: Option<String>,
     rows: Vec<RoleBindingAgentLoopProfileRegistryRow>,
     raw_text_written: bool,
@@ -29748,6 +29782,10 @@ struct RoleBindingAgentLoopProfileRegistryRow {
     duplicate_verified_route_hits: usize,
     false_accepts: usize,
     current_support_exhausted: bool,
+    #[serde(default)]
+    admission_blocked_by_audit: bool,
+    #[serde(default)]
+    admission_block_reason: Option<String>,
     wide_route_quarantine: bool,
     readiness_state: String,
     next_action: String,
@@ -32441,6 +32479,8 @@ fn build_agent_loop_profile_registry_row(
         duplicate_verified_route_hits: evidence.duplicate_verified_route_hits,
         false_accepts: evidence.false_accepts,
         current_support_exhausted: evidence.current_support_exhausted,
+        admission_blocked_by_audit: false,
+        admission_block_reason: None,
         wide_route_quarantine: spec.wide_route_quarantine,
         readiness_state,
         next_action,
@@ -32448,6 +32488,57 @@ fn build_agent_loop_profile_registry_row(
         market_claim_allowed: false,
         claim_boundary: spec.claim_boundary.to_owned(),
     }
+}
+
+fn apply_read_inspect_admission_audit_to_agent_loop_registry(
+    rows: &mut [RoleBindingAgentLoopProfileRegistryRow],
+    audit: Option<&RoleBindingReadInspectAdmissionAuditReport>,
+) {
+    let Some(audit) = audit else {
+        return;
+    };
+    if audit.hook_ready_rows == 0 || audit.robust_safe_policy_found {
+        return;
+    }
+    let Some(row) = rows
+        .iter_mut()
+        .find(|row| row.profile_key == "read_context_path")
+    else {
+        return;
+    };
+
+    row.admission_blocked_by_audit = true;
+    row.readiness_state = if audit.singleton_safe_policy_found {
+        "admission_audit_singleton_only_no_robust_policy".to_owned()
+    } else {
+        "admission_audit_no_safe_policy".to_owned()
+    };
+    row.admission_block_reason = Some(format!(
+        "read_inspect admission audit blocked promotion: hook_ready_rows={}, label_true_rows={}, label_false_rows={}, robust_safe_policy_found={}, singleton_safe_policy_found={}, best_robust_true_accepts={}, best_singleton_true_accepts={}",
+        audit.hook_ready_rows,
+        audit.label_true_rows,
+        audit.label_false_rows,
+        audit.robust_safe_policy_found,
+        audit.singleton_safe_policy_found,
+        audit.best_robust_true_accepts,
+        audit.best_singleton_true_accepts
+    ));
+    row.next_action = if audit.singleton_safe_policy_found {
+        format!(
+            "{} has only singleton read-inspect support after admission audit (best_singleton_true_accepts={}, robust=0). Collect more verifier-true rows or split a narrower path/excerpt subfamily before promotion.",
+            row.profile_key, audit.best_singleton_true_accepts
+        )
+    } else {
+        format!(
+            "{} admission audit found no safe request-side policy ({} true, {} false hook-ready rows). Split path/excerpt subfamily or capture richer serving state/evidence before promotion.",
+            row.profile_key, audit.label_true_rows, audit.label_false_rows
+        )
+    };
+    row.priority_score -= 90_000;
+    row.claim_boundary = format!(
+        "{} Admission audit blocks promotion until a robust safe policy is proven with false_accepts=0 and unique attribution.",
+        row.claim_boundary
+    );
 }
 
 fn agent_loop_catalog_support_exhausted(row: &RoleBindingCpuOperatorCatalogRow) -> bool {
@@ -32459,6 +32550,7 @@ fn agent_loop_catalog_support_exhausted(row: &RoleBindingCpuOperatorCatalogRow) 
         || row.metrics_report_current_support_exhausted
         || row.edit_current_support_exhausted
         || row.serving_ops_current_support_exhausted
+        || row.style_brevity_verifier_true_support_zero
         || row.answer_evidence_admission_singleton_only
         || row.agent_continue_admission_no_safe_policy
         || row.agent_continue_state_admission_best_singleton_true_accepts > 0
