@@ -575,6 +575,90 @@ verdict: PASS
 complexity_score: 38
 ```
 
+## 2026-07-04 - Executor Integration: File Path Evidence Current5k Split Probe
+
+Verdict:
+
+```text
+BROAD_ROUTE_SPLIT_DISCOVERY_V1_REVIEW_SPLITS_FOUND
+FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
+FILE_PATH_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
+REAL_TRAFFIC_SHADOW_V1_REVIEW
+FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
+FILE_PATH_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
+VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
+```
+
+Why:
+
+```text
+After the current5k catalog left broad answer/project routes rejected, the next
+safe move was split discovery, not broad route improvement. The top split was
+file_path_evidence_answer, an artifact-backed answer class with a deterministic
+source/path/URL presence verifier.
+```
+
+Measured result:
+
+```text
+broad_split sampled_llm_calls: 5000
+broad_split broad_candidate_events: 3325
+broad_split non_exact_broad_candidate_events: 3087
+broad_split top_split_key: file_path_evidence_answer
+
+file_path_evidence_candidate_events: 146
+non_exact_candidate_events: 144
+payload_ready_events: 122
+payload_built_events: 44
+scoreable_payload_events: 44
+profile_registered: false
+local_accepts_enabled: false
+
+profile edge_count: 7
+profile median_energy_margin: 1123328
+profile unexpected_local_accepts_under_disabled_threshold: 0
+
+shadow total_llm_calls: 5000
+shadow exact_cache_hits: 453
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
+shadow false_accepts: 0
+shadow p99_shadow_score_latency_ns: 436908
+
+output_evidence_matched_events: 39
+verified_true_events: 16
+verified_false_events: 23
+
+admission hook_ready_rows: 39
+admission rows_with_prompt_features: 39
+admission robust_safe_policy_found: false
+admission best_robust_true_accepts: 0
+admission singleton_safe_policy_found: true
+admission best_singleton_true_accepts: 1
+
+verification_hook_ready_events: 39
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
+```
+
+Decision:
+
+```text
+Keep file_path_evidence_answer on WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY.
+It is the right kind of artifact-backed split, but current prompt-side features
+do not separate 16 true rows from 23 false rows. Do not write a promote path
+for singleton support. The next work is either collect more verifier-true rows
+or split file-path evidence into a stricter source/path/URL subfamily.
+```
+
+Structural gate:
+
+```text
+docs/structural_gates/file-path-evidence-current5k-watch-v1.md
+verdict: PASS
+complexity_score: 48
+```
+
 ## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
 
 Verdict:

@@ -145,6 +145,16 @@ conditional_branch current5k:
   local readout calibration: no safe policy
   request-side v2 safe policy: 3 true accepts, 0 false accepts, 0 unverified
   decision: PROVEN tiny subset only; do not widen the broad conditional route
+
+file_path_evidence_answer current5k split:
+  broad_split candidate events: 146
+  scoreable_payload_events: 44
+  verification_hook_ready_events: 39
+  verified_true_events: 16
+  verified_false_events: 23
+  robust_safe_policy_found: false
+  singleton_safe_policy_found: true, best_singleton_true_accepts: 1
+  decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
 ```
 
 Current5k BUSINESS_VALUE_GATE shelves:
@@ -264,6 +274,13 @@ clear deterministic verifier evidence that can raise expected unique accepts
 ```
 
 The current highest-leverage pattern is not another generic profile. It is:
+
+```text
+1. Keep PROVEN tiny routes only as bounded CPU support.
+2. For broad rejected traffic, split by artifact-backed evidence first.
+3. Do not promote singleton-only splits; collect more verifier-true rows or
+   split again until robust support exists.
+```
 
 ```text
 split high-volume REJECT_FOR_NOW routes into narrow artifact-backed call classes
