@@ -21175,6 +21175,8 @@ where
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_OUTPUT_EVIDENCE_AUDIT_REPORT);
     let answer_evidence_safe_policy_audit_report_path =
         PathBuf::from(DEFAULT_ANSWER_EVIDENCE_SAFE_POLICY_AUDIT_REPORT);
+    let answer_evidence_local_accept_calibration_report_path =
+        PathBuf::from(DEFAULT_ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_REPORT);
 
     let forecast = read_json_file::<RoleBindingCpuRouteForecastReport>(&forecast_report_path)?;
     let edit_dry_run =
@@ -21241,6 +21243,16 @@ where
             Some(read_json_file::<RoleBindingVerificationHookAuditReport>(
                 &answer_evidence_safe_policy_audit_report_path,
             )?)
+        } else {
+            None
+        };
+    let answer_evidence_local_accept_calibration =
+        if answer_evidence_local_accept_calibration_report_path.exists() {
+            Some(
+                read_json_file::<RoleBindingEditLocalAcceptCalibrationReport>(
+                    &answer_evidence_local_accept_calibration_report_path,
+                )?,
+            )
         } else {
             None
         };
@@ -22198,6 +22210,7 @@ where
         let is_project_context_route = route.route_key == REAL_TRAFFIC_PROJECT_CONTEXT_ROUTE_KEY;
         let is_style_brevity_route = route.route_key == REAL_TRAFFIC_STYLE_BREVITY_ROUTE_KEY;
         let is_metrics_report_route = route.route_key == REAL_TRAFFIC_METRICS_REPORT_ROUTE_KEY;
+        let is_answer_evidence_route = route.route_key == REAL_TRAFFIC_ANSWER_EVIDENCE_ROUTE_KEY;
         let is_git_control_route = route.route_key == REAL_TRAFFIC_GIT_CONTROL_ROUTE_KEY;
         let is_serving_ops_route = route.route_key == REAL_TRAFFIC_SERVING_OPS_ROUTE_KEY;
         let local_accept_calibration = if is_edit_route {
@@ -22220,6 +22233,8 @@ where
             None
         } else if is_metrics_report_route {
             metrics_report_local_accept_calibration.as_ref()
+        } else if is_answer_evidence_route {
+            answer_evidence_local_accept_calibration.as_ref()
         } else if is_git_control_route {
             git_control_local_accept_calibration.as_ref()
         } else if is_serving_ops_route {
@@ -22325,6 +22340,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_ready_events)
                 .unwrap_or_default()
+        } else if is_answer_evidence_route {
+            answer_evidence_payload_dry_run
+                .as_ref()
+                .map(|report| report.payload_ready_events)
+                .unwrap_or_default()
         } else if is_git_control_route {
             git_control_dry_run
                 .as_ref()
@@ -22390,6 +22410,11 @@ where
                 .as_ref()
                 .map(|report| report.payload_built_events)
                 .unwrap_or_default()
+        } else if is_answer_evidence_route {
+            answer_evidence_payload_dry_run
+                .as_ref()
+                .map(|report| report.payload_built_events)
+                .unwrap_or_default()
         } else if is_git_control_route {
             git_control_dry_run
                 .as_ref()
@@ -22444,6 +22469,10 @@ where
                         .map(|report| report.scoreable_payload_events)
                 } else if is_metrics_report_route {
                     metrics_report_dry_run
+                        .as_ref()
+                        .map(|report| report.scoreable_payload_events)
+                } else if is_answer_evidence_route {
+                    answer_evidence_payload_dry_run
                         .as_ref()
                         .map(|report| report.scoreable_payload_events)
                 } else if is_git_control_route {
@@ -23138,6 +23167,18 @@ where
             .map(|report| report.answer_evidence_candidate_events)
             .or_else(|| verification.map(|row| row.candidate_calls))
             .unwrap_or_default();
+        let local_accept_calibration_ran = answer_evidence_local_accept_calibration.is_some();
+        let local_accept_safe_policy_found = answer_evidence_local_accept_calibration
+            .as_ref()
+            .map(|report| report.safe_policy_found)
+            .unwrap_or(false);
+        let local_accept_best_safe_true_accepts = answer_evidence_local_accept_calibration
+            .as_ref()
+            .map(|report| report.best_safe_true_accepts)
+            .unwrap_or_default();
+        let local_accept_minimum_true_support = DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT;
+        let local_accept_support_qualified = local_accept_safe_policy_found
+            && local_accept_best_safe_true_accepts >= local_accept_minimum_true_support;
         let stage = feedback_route_stage(FeedbackRouteStageInputs {
             payload_ready_events,
             payload_built_events,
@@ -23145,9 +23186,9 @@ where
             verification_hook_ready_events,
             verified_cpu_accept_eligible_events,
             false_accepts,
-            local_accept_calibration_ran: false,
-            local_accept_safe_policy_found: false,
-            local_accept_support_qualified: false,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_support_qualified,
             local_accept_calibration_authoritative: true,
         });
         let next_action = feedback_route_next_action(&stage);
@@ -23164,11 +23205,11 @@ where
             payload_built_events,
             scoreable_payload_events,
             verification_hook_ready_events,
-            local_accept_calibration_ran: false,
-            local_accept_safe_policy_found: false,
-            local_accept_minimum_true_support: DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT,
-            local_accept_support_qualified: false,
-            local_accept_best_safe_true_accepts: 0,
+            local_accept_calibration_ran,
+            local_accept_safe_policy_found,
+            local_accept_minimum_true_support,
+            local_accept_support_qualified,
+            local_accept_best_safe_true_accepts,
             verified_cpu_accept_eligible_events,
             unique_accepts: feedback_route_unique_accept_report(
                 &unique_accepts,
@@ -23611,6 +23652,12 @@ where
         answer_evidence_payload_dry_run_report_path: answer_evidence_payload_dry_run
             .as_ref()
             .map(|_| answer_evidence_payload_dry_run_report_path.display().to_string()),
+        answer_evidence_local_accept_calibration_report_path:
+            answer_evidence_local_accept_calibration.as_ref().map(|_| {
+                answer_evidence_local_accept_calibration_report_path
+                    .display()
+                    .to_string()
+            }),
         answer_evidence_verification_audit_report_path: answer_evidence_verification_audit
             .as_ref()
             .map(|_| answer_evidence_verification_audit_report_path.display().to_string()),
@@ -23870,6 +23917,9 @@ where
     }
     if let Some(path) = &report.answer_evidence_payload_dry_run_report_path {
         println!("  answer_evidence_payload_dry_run_report: {path}");
+    }
+    if let Some(path) = &report.answer_evidence_local_accept_calibration_report_path {
+        println!("  answer_evidence_local_accept_calibration_report: {path}");
     }
     if let Some(path) = &report.answer_evidence_verification_audit_report_path {
         println!("  answer_evidence_verification_audit_report: {path}");
@@ -28392,6 +28442,8 @@ struct RoleBindingFeedbackLoopReport {
     metrics_report_safe_policy_verification_audit_report_path: Option<String>,
     #[serde(default)]
     answer_evidence_payload_dry_run_report_path: Option<String>,
+    #[serde(default)]
+    answer_evidence_local_accept_calibration_report_path: Option<String>,
     #[serde(default)]
     answer_evidence_verification_audit_report_path: Option<String>,
     git_control_dry_run_report_path: Option<String>,

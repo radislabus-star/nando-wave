@@ -1,5 +1,145 @@
 # Executor Review Notes
 
+## 2026-07-04 - Executor Integration: Answer Evidence Local-Accept Calibration Feedback V1
+
+Verdict:
+
+```text
+ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
+```
+
+What changed:
+
+```text
+Updated:
+  crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+The feedback-loop now reads:
+  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.report.json
+
+and applies it to the `answer_or_explain` route row even though that row is
+currently injected from the answer-evidence side path rather than from the
+primary forecast route list.
+```
+
+Calibration result:
+
+```text
+hook_ready_rows:          9
+scored_rows:              9
+label_true_rows:          3
+label_false_rows:         6
+safe_policy_found:    false
+best_safe_true_accepts:   0
+local_accepts_enabled: false
+market_claim_allowed:  false
+```
+
+Policy audit:
+
+```text
+energy_positive_no_slot_order:
+  accepts: 9
+  true_accepts: 3
+  false_accepts: 6
+
+strict_positive_slots_and_energy_positive:
+  accepts: 9
+  true_accepts: 3
+  false_accepts: 6
+
+evidence_slot_positive_only:
+  accepts: 9
+  true_accepts: 3
+  false_accepts: 6
+
+boundary_slot_positive_only:
+  accepts: 9
+  true_accepts: 3
+  false_accepts: 6
+
+best threshold policies:
+  best_safe_true_accepts: 0
+```
+
+Margin collision:
+
+```text
+energy_margin:
+  min_true_margin: 1123328
+  false_rows_at_or_above_min_true_margin: 5
+
+min_slot_margin:
+  min_true_margin: 361472
+  false_rows_at_or_above_min_true_margin: 6
+
+marker_slot_margin:
+  min_true_margin: 393216
+  false_rows_at_or_above_min_true_margin: 5
+
+end_slot_margin:
+  min_true_margin: 368640
+  false_rows_at_or_above_min_true_margin: 6
+```
+
+Feedback/catalog after regeneration:
+
+```text
+feedback answer_or_explain:
+  stage: local_accept_calibration_failed
+  local_accept_calibration_ran: true
+  local_accept_safe_policy_found: false
+  local_accept_best_safe_true_accepts: 0
+  verified_cpu_accept_eligible_events: 0
+  false_accepts: 0
+
+catalog:
+  answer_or_explain existing-profile row is no longer treated as
+  waiting-for-calibration. It is marked local_accept_calibration_failed and
+  deprioritized until request-side admission, verifier evidence, or payload
+  geometry improves.
+```
+
+Decision:
+
+```text
+Do not promote answer_or_explain.
+Do not lower thresholds.
+Do not count scoreable/hook-ready answer rows as savings.
+
+The current grounded answer-evidence readout does not separate true grounded
+answers from verifier-false rows. This is a payload/readout geometry failure,
+not a missing calibration run.
+```
+
+Claim boundary:
+
+```text
+No new verified CPU accepts were created.
+CPU Routability 80 remains open:
+
+  verified_cpu_accept_eligible_events: 32 / 1000
+  verified_gap_to_80_calls: 768
+
+market_claim_allowed=false.
+```
+
+Structural gate:
+
+```text
+packet:
+  docs/structural_gates/answer-evidence-local-accept-feedback-v1.md
+
+gate_report:
+  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-feedback-v1.nanda.txt
+
+verdict: PASS
+complexity_score: 42
+note: narrow claim-boundary check only: answer_or_explain local-accept
+      calibration failed, feedback marks the route failed, local accepts remain
+      disabled, and verified CPU savings stay unchanged.
+```
+
 ## 2026-07-04 - Executor Integration: Agent Continue Execute Local-Accept Calibration V1
 
 Verdict:
