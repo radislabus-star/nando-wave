@@ -238,7 +238,7 @@ const DEFAULT_MIXED_SAFE_POLICY_TRACE_JSONL: &str =
     "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl";
 const DEFAULT_MIXED_SAFE_POLICY_REPORT: &str =
     "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.report.json";
-const DEFAULT_MIXED_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.verification-hook-audit.report.json";
+const DEFAULT_MIXED_SAFE_POLICY_AUDIT_REPORT: &str = "target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.verification-hook-audit.report.json";
 const DEFAULT_MIXED_SAFE_POLICY_V2_REGISTRY_CONFIG: &str =
     "target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v2.json";
 const DEFAULT_MIXED_SAFE_POLICY_V2_TRACE_JSONL: &str =

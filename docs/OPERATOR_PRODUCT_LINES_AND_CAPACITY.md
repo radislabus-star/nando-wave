@@ -276,12 +276,12 @@ Feedback-loop window guard:
   default_total_llm_calls: 1000
   default_operator_candidate_calls: 570
   default_no_candidate_calls: 430
-  default_scoreable_candidate_calls: 178
-  default_verification_hook_ready_events: 138
-  default_verified_cpu_accepts: 20
-  default_unique_verified_cpu_accepts: 15
-  default_incremental_unique_cpu_accepts: 15
-  default_unique_verified_gap_to_80_calls: 785
+  default_scoreable_candidate_calls: 175
+  default_verification_hook_ready_events: 136
+  default_verified_cpu_accepts: 21
+  default_unique_verified_cpu_accepts: 16
+  default_incremental_unique_cpu_accepts: 16
+  default_unique_verified_gap_to_80_calls: 784
   default_duplicate_verified_route_hits: 5
   default_exact_cache_overlap_unique_accepts: 1
   default_audit_window_mismatches: []
@@ -291,8 +291,8 @@ Feedback-loop window guard:
   interpretation: route-specific audits with mismatched total_llm_calls cannot inflate CPU Routability
 
 Feedback-loop unique accept dedupe:
-  current_default_route_sum_accepts: 20
-  current_default_unique_accepts: 15
+  current_default_route_sum_accepts: 21
+  current_default_unique_accepts: 16
   current_default_agent_control_route_visible: true
   current_default_agent_control_candidates: 143
   current_default_agent_control_verified_accepts: 11
@@ -310,6 +310,14 @@ Agent-control v2 default promotion:
   shadow_false_accepts: 0
   shadow_incremental_savings_over_exact_cache: 6
   interpretation: v2 replaces the older 3-accept default source; unique scoreboard rises from 12 to 15 because several agent-control accepts overlap by request fingerprint or exact-cache.
+
+Mixed v2 default promotion:
+  default_safe_policy_audit: target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.verification-hook-audit.report.json
+  operator_candidate_calls: 11
+  verified_cpu_accepts: 3
+  shadow_false_accepts: 0
+  shadow_incremental_savings_over_exact_cache: 3
+  interpretation: v2 replaces the older 2-accept mixed default source; unique scoreboard rises from 15 to 16.
 
 Git-control route/profile/evidence rung:
   base_registry: profile-registry-git-control-v1.json
@@ -359,27 +367,28 @@ Serving-ops promoted safe-policy rung:
   server_mutation_enabled: false
   market_claim_boundary: narrow route shadow PASS, not CPU Routability 80
 
-Fresh default feedback after read_inspect + metrics_report calibration + agent-control v2 safe-policy + git_control safe-policy + serving_ops safe-policy:
+Fresh default feedback after read_inspect + metrics_report calibration + agent-control v2 safe-policy + mixed v2 safe-policy + git_control safe-policy + serving_ops safe-policy:
   operator_candidate_calls: 570 / 1000
   no_candidate_calls: 430 / 1000
-  scoreable_candidate_calls: 178 / 1000
-  verification_hook_ready_events: 138
-  verified_cpu_accepts: 20 / 1000
-  unique_verified_cpu_accepts: 15 / 1000
-  incremental_unique_cpu_accepts: 15 / 1000
+  scoreable_candidate_calls: 175 / 1000
+  verification_hook_ready_events: 136
+  verified_cpu_accepts: 21 / 1000
+  unique_verified_cpu_accepts: 16 / 1000
+  incremental_unique_cpu_accepts: 16 / 1000
   duplicate_verified_route_hits: 5
   exact_cache_overlap_verified_cpu_accepts: 1
-  verified_gap_to_80_calls: 780
-  unique_verified_gap_to_80_calls: 785
+  verified_gap_to_80_calls: 779
+  unique_verified_gap_to_80_calls: 784
   market_claim_allowed: false
   agent_control_stage: verified_cpu_accept_eligible
+  mixed_stage: verified_cpu_accept_eligible
   git_control_stage: verified_cpu_accept_eligible
   serving_ops_stage: verified_cpu_accept_eligible
 
 Current catalog scoreboard:
   catalog_report: target/nando-wave/real-traffic-shadow/cpu-operator-catalog-current-feedback-v1.report.json
-  current_verified_cpu_accepts: 15
-  verified_cpu_accept_route_sum_events: 20
+  current_verified_cpu_accepts: 16
+  verified_cpu_accept_route_sum_events: 21
   route_gap_feedback_no_candidate_mismatch: true
   interpretation: catalog now uses unique request-fingerprint accepts as the current CPU Routability value.
 
