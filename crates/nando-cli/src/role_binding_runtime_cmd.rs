@@ -43514,6 +43514,23 @@ fn git_control_admission_policy_candidates(
             feature_sets.push(vec![left.clone(), right.clone()]);
         }
     }
+    let triple_features = top_features.iter().take(32).collect::<Vec<_>>();
+    for left_index in 0..triple_features.len() {
+        for middle_index in (left_index + 1)..triple_features.len() {
+            for right_index in (middle_index + 1)..triple_features.len() {
+                let left = triple_features[left_index];
+                let middle = triple_features[middle_index];
+                let right = triple_features[right_index];
+                if git_control_admission_features_contradict(left, middle)
+                    || git_control_admission_features_contradict(left, right)
+                    || git_control_admission_features_contradict(middle, right)
+                {
+                    continue;
+                }
+                feature_sets.push(vec![left.clone(), middle.clone(), right.clone()]);
+            }
+        }
+    }
 
     let mut candidates = Vec::new();
     for features in feature_sets {

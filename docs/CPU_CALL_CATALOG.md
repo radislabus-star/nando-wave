@@ -154,16 +154,21 @@ route_gap_payload_ready_events: 807
 
 feedback operator_candidate_calls: 3549
 feedback scoreable_candidate_calls: 554
-feedback verification_hook_ready_events: 301
-feedback verified_cpu_accept_eligible_events: 114
-feedback verified_cpu_accept_unique_request_fingerprints: 112
-feedback incremental_cpu_accept_unique_request_fingerprints: 110
+feedback verification_hook_ready_events: 292
+feedback verified_cpu_accept_eligible_events: 117
+feedback verified_cpu_accept_unique_request_fingerprints: 115
+feedback incremental_cpu_accept_unique_request_fingerprints: 113
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 21
-feedback incremental_unique_gap_to_80_calls: 3890
+feedback incremental_cpu_accept_unique_reduction_milli: 22
+feedback incremental_unique_gap_to_80_calls: 3887
+feedback nando_cpu_tokens_saved: 24182
+feedback nando_cpu_cost_saved_microusd: 72546
+feedback nando_calls_saved_pct: 2.26
+feedback nando_tokens_saved_pct: 3.9735643440710384
+feedback nando_cost_saved_pct: 3.9735643440710384
 
-catalog current_verified_cpu_accepts: 112
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 110
+catalog current_verified_cpu_accepts: 115
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 113
 catalog business_value_gate_passed_rows: 7
 catalog proven_profile_rows: 7
 catalog candidate_profile_rows: 1
@@ -178,7 +183,7 @@ Latest current5k proven rows:
 | 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | Narrow previous-tool-output status parser. |
 | 2 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | Small safe request-side policy. |
 | 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | Tiny safe policy; broad conditional remains unsafe. |
-| 4 | `git_control` | 123 | 90 | 74 | 3 | 3 | Request-side v3 policy proven, but support exhausted. |
+| 4 | `git_control` | 123 | 90 | 74 | 6 | 6 | Triple-feature request-side v3 policy proven, but support exhausted. |
 | 5 | `metrics_report_readout` | 55 | 63 | 51 | 3 | 3 | Safe-policy sidecar proven, but still tiny. |
 | 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | Tiny server-ops proof; daemon mutations remain disabled. |
 | 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | Edit safe-policy v2: request-side `code_diff_and_question_mark` plus energy threshold, false_accepts=0. |
@@ -193,29 +198,31 @@ git_control admission audit:
   label_false_rows: 39
   unverified_rows: 16
   safe_policy_found: true
-  best_safe_true_accepts: 3
+  best_safe_true_accepts: 6
   best policy:
-    no_mutation_verbs AND has_push_terms AND energy >= 1386496
-    true_accepts: 3
+    no_mutation_verbs AND no_file_path_terms AND has_push_terms AND energy >= 967680
+    true_accepts: 6
     false_accepts: 0
     unverified_accepts: 0
 
 catalog git_control existing_profile_route:
-  current_status: CANDIDATE
-  expected_unique_cpu_accepts_over_exact_cache: 0
-  git_control_admission_best_safe_true_accepts: 3
-  false_accept_risk: MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE
-  business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy
+  current_status: PROVEN
+  expected_unique_cpu_accepts_over_exact_cache: 6
+  git_control_admission_best_safe_true_accepts: 6
+  false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED
+  business_value_gate_failure_reason: PASSED
 ```
 
 Boundary:
 
 ```text
-This is not a market savings claim and not a local-accept promotion.
-It only means the request-side admission audit found a tiny safe git subfamily.
-The next valid step is a separate promoted shadow trace/registry for that exact
-policy, followed by shadow/audit/feedback with provider cost and false_accepts=0.
+This is still not CPU80 and not workspace mutation authority.
+The promoted git_control v3 current5k path is a tiny verified CPU support row:
+6 unique incremental accepts, false_accepts=0.
+
+The next valid git step is not another threshold tweak on the same policy.
+The current safe support is exhausted; improve command-outcome evidence or split
+a new git subfamily before another promote.
 ```
 
 Edit marker-length request-side admission refresh:

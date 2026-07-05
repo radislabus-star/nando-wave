@@ -1,5 +1,119 @@
 # Executor Review Notes
 
+## 2026-07-05 - CPU80: Git-Control Triple-Feature Safe Policy Refresh
+
+Verdict:
+
+```text
+GIT_CONTROL_SAFE_POLICY_V3_CURRENT5K_REFRESH
+TRIPLE_FEATURE_REQUEST_SIDE_POLICY_PROMOTED
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+The cost-aware route-gap readiness step selected git_control as the next
+ready-cost family, but the existing pair-feature admission audit was exhausted
+at 3 verified unique accepts.
+
+The git-control admission audit now tests 3-feature request-side conjunctions
+in addition to singles and pairs. This exposed a larger safe subfamily without
+changing serving scoring math or enabling workspace mutation.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+git_control_admission_policy_candidates now includes non-contradictory
+3-feature conjunctions from the existing top feature set.
+```
+
+Selected current5k policy:
+
+```text
+no_mutation_verbs AND no_file_path_terms AND has_push_terms AND energy >= 967680
+
+request_side_policy_accept_rows: 12
+policy_accept_verified_true_rows: 6
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+```
+
+Measured shadow/audit:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json
+
+nando_shadow_accepts: 6
+verified_safe_accepts: 6
+false_accepts: 0
+p99_shadow_score_latency_ns: 443316
+
+verification audit:
+  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
+
+operator_candidate_calls: 12
+scoreable_candidate_calls: 12
+verification_hook_ready_events: 12
+verified_cpu_accept_eligible_events: 6
+market_claim_allowed: true
+```
+
+Current5k feedback/catalog after full companion rerun:
+
+```text
+feedback report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
+
+total_llm_calls: 5000
+verified_cpu_accept_unique_request_fingerprints: 115
+incremental_cpu_accept_unique_request_fingerprints: 113
+incremental_unique_gap_to_80_calls: 3887
+nando_cpu_tokens_saved: 24182
+nando_cpu_cost_saved_microusd: 72546
+nando_calls_saved_pct: 2.26
+nando_tokens_saved_pct: 3.9735643440710384
+nando_cost_saved_pct: 3.9735643440710384
+
+catalog report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+
+current_verified_cpu_accepts: 115
+current_incremental_unique_cpu_accepts_over_exact_cache: 113
+git_control expected_unique_cpu_accepts_over_exact_cache: 6
+```
+
+Boundary:
+
+```text
+Allowed claim:
+  git_control v3 current5k is a tiny PROVEN route with 6 verified unique
+  incremental CPU accepts and false_accepts=0.
+
+Forbidden claim:
+  CPU80 is achieved.
+  Broad git_control is solved.
+  Workspace git mutation execution is allowed.
+  Candidate/payload-ready rows are savings.
+```
+
+Verification:
+
+```text
+jq empty docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json: PASS
+nanda-check --triads docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json --format text: PASS
+  complexity_score: 46
+  agent_action: SAFE_TO_EDIT
+cargo fmt --check: PASS
+cargo check -p nando-cli: PASS
+cargo clippy -p nando-cli -- -D warnings: PASS
+git diff --check: PASS
+```
+
 ## 2026-07-05 - CPU80: Cost-Aware Route-Gap Readiness
 
 Verdict:
