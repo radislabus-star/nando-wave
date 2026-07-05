@@ -1,0 +1,152 @@
+{
+  "task_id": "cost-aware-route-gap-readiness-v1",
+  "domain": "code",
+  "query": "Verify cost-aware route-gap readiness separates broad count gap, payload-ready cost gap, and verified CPU savings.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "route_gap_payload_readiness_current5k",
+      "relation": "sampled_llm_calls",
+      "object": "5000",
+      "evidence": "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "readiness_report",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t2",
+      "subject": "project_context_dialogue",
+      "relation": "broad_count_gap",
+      "object": "1314_plus_candidates",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "broad_route",
+      "object_role": "count_gap",
+      "route": "count_priority"
+    },
+    {
+      "id": "t3",
+      "subject": "project_context_dialogue",
+      "relation": "current_status",
+      "object": "REJECT_FOR_NOW",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "broad_route",
+      "object_role": "claim_boundary",
+      "route": "safety"
+    },
+    {
+      "id": "t4",
+      "subject": "git_control",
+      "relation": "payload_ready_events",
+      "object": "90",
+      "evidence": "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route_family",
+      "object_role": "readiness_metric",
+      "route": "cost_ready_priority"
+    },
+    {
+      "id": "t5",
+      "subject": "git_control",
+      "relation": "payload_ready_tokens",
+      "object": "94932",
+      "evidence": "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route_family",
+      "object_role": "token_metric",
+      "route": "cost_ready_priority"
+    },
+    {
+      "id": "t6",
+      "subject": "git_control",
+      "relation": "payload_ready_cost_microusd",
+      "object": "284796",
+      "evidence": "target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route_family",
+      "object_role": "cost_metric",
+      "route": "cost_ready_priority"
+    },
+    {
+      "id": "t7",
+      "subject": "cpu_operator_catalog_current5k",
+      "relation": "route_gap_top_payload_ready_family",
+      "object": "git_control",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog",
+      "object_role": "route_family",
+      "route": "catalog_bridge"
+    },
+    {
+      "id": "t8",
+      "subject": "cpu_operator_catalog_current5k",
+      "relation": "route_gap_top_payload_ready_tokens",
+      "object": "94932",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog",
+      "object_role": "token_metric",
+      "route": "catalog_bridge"
+    },
+    {
+      "id": "t9",
+      "subject": "cpu_operator_catalog_current5k",
+      "relation": "route_gap_top_payload_ready_cost_microusd",
+      "object": "284796",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "catalog",
+      "object_role": "cost_metric",
+      "route": "catalog_bridge"
+    },
+    {
+      "id": "t10",
+      "subject": "git_control",
+      "relation": "verified_incremental_support_current",
+      "object": "3",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "route_family",
+      "object_role": "verified_savings_metric",
+      "route": "verified_savings"
+    },
+    {
+      "id": "t11",
+      "subject": "git_control",
+      "relation": "next_engineering_debt",
+      "object": "improve_payload_evidence_or_split_new_subfamily",
+      "evidence": "docs/structural_gates/cost-aware-route-gap-readiness-v1.md",
+      "confidence": 1.0,
+      "subject_role": "route_family",
+      "object_role": "next_action",
+      "route": "engineering_plan"
+    },
+    {
+      "id": "t12",
+      "subject": "cost_ready_priority",
+      "relation": "does_not_equal",
+      "object": "verified_cpu_savings",
+      "evidence": "docs/structural_gates/cost-aware-route-gap-readiness-v1.md",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "claim_boundary",
+      "route": "safety"
+    },
+    {
+      "id": "t13",
+      "subject": "token_cost_estimate_used",
+      "relation": "remains",
+      "object": "true",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "cost_source",
+      "object_role": "claim_boundary",
+      "route": "estimator"
+    }
+  ],
+  "candidate_triads": [],
+  "candidate_answer": "Cost-aware readiness selects git_control as the next route family to improve, while project_context_dialogue remains broad REJECT_FOR_NOW and ready-cost rows are not verified savings."
+}

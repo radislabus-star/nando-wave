@@ -4092,6 +4092,8 @@ where
     validate_registry_config(&registry_config)?;
     let route_catalog = CodexHistoryRouteCatalog::from_registry(&registry_config)?;
     let history_rows = read_codex_history_jsonl(&history_path)?;
+    let model_price_config_path = role_binding_model_price_config_path();
+    let model_price_config = read_role_binding_model_price_config(&model_price_config_path)?;
     let skip = history_rows.len().saturating_sub(max_events);
     let sampled_llm_calls = history_rows.len().saturating_sub(skip);
     let mut existing_route_candidate_events = 0usize;
@@ -4107,6 +4109,11 @@ where
         }
 
         no_candidate_events += 1;
+        let cost_estimate =
+            estimate_role_binding_token_cost_from_text(&row.text, &model_price_config);
+        let estimated_total_tokens = cost_estimate
+            .input_tokens
+            .saturating_add(cost_estimate.output_tokens);
         let family_key = route_gap_family_key(&row.text);
         let meta = route_gap_family_metadata(family_key);
         let readiness = analyze_route_gap_payload_readiness(family_key, &row.text);
@@ -4115,7 +4122,21 @@ where
             .entry(family_key.to_owned())
             .or_default();
         accumulator.candidate_events += 1;
+        accumulator.candidate_tokens = accumulator
+            .candidate_tokens
+            .saturating_add(u128::from(estimated_total_tokens));
+        accumulator.candidate_cost_microusd = accumulator
+            .candidate_cost_microusd
+            .saturating_add(u128::from(cost_estimate.estimated_total_cost_microusd));
         accumulator.payload_ready_events += usize::from(readiness.payload_ready);
+        if readiness.payload_ready {
+            accumulator.payload_ready_tokens = accumulator
+                .payload_ready_tokens
+                .saturating_add(u128::from(estimated_total_tokens));
+            accumulator.payload_ready_cost_microusd = accumulator
+                .payload_ready_cost_microusd
+                .saturating_add(u128::from(cost_estimate.estimated_total_cost_microusd));
+        }
         accumulator.request_signal_events += usize::from(readiness.has_request_signal);
         accumulator.context_signal_events += usize::from(readiness.has_context_signal);
         accumulator.evidence_signal_events += usize::from(readiness.has_evidence_signal);
@@ -4134,6 +4155,9 @@ where
             ),
             request_fingerprint: format!("fnv1a64:{fingerprint:016x}"),
             family_key: family_key.to_owned(),
+            estimated_total_tokens,
+            estimated_total_cost_microusd: cost_estimate.estimated_total_cost_microusd,
+            token_cost_estimate_used: true,
             cpu_operator_readiness: meta.cpu_operator_readiness.to_owned(),
             has_request_signal: readiness.has_request_signal,
             has_context_signal: readiness.has_context_signal,
@@ -4166,6 +4190,14 @@ where
                     accumulator.payload_ready_events,
                     accumulator.candidate_events,
                 ),
+                candidate_tokens: u128_to_u64_saturating(accumulator.candidate_tokens),
+                candidate_cost_microusd: u128_to_u64_saturating(
+                    accumulator.candidate_cost_microusd,
+                ),
+                payload_ready_tokens: u128_to_u64_saturating(accumulator.payload_ready_tokens),
+                payload_ready_cost_microusd: u128_to_u64_saturating(
+                    accumulator.payload_ready_cost_microusd,
+                ),
                 request_signal_events: accumulator.request_signal_events,
                 context_signal_events: accumulator.context_signal_events,
                 evidence_signal_events: accumulator.evidence_signal_events,
@@ -4181,8 +4213,15 @@ where
         .collect::<Vec<_>>();
     families.sort_by(|left, right| {
         right
-            .payload_ready_events
-            .cmp(&left.payload_ready_events)
+            .payload_ready_cost_microusd
+            .cmp(&left.payload_ready_cost_microusd)
+            .then_with(|| right.payload_ready_tokens.cmp(&left.payload_ready_tokens))
+            .then_with(|| right.payload_ready_events.cmp(&left.payload_ready_events))
+            .then_with(|| {
+                right
+                    .candidate_cost_microusd
+                    .cmp(&left.candidate_cost_microusd)
+            })
             .then_with(|| right.candidate_events.cmp(&left.candidate_events))
             .then_with(|| left.family_key.cmp(&right.family_key))
     });
@@ -4269,6 +4308,8 @@ where
         .unwrap_or_else(|| PathBuf::from(DEFAULT_MANUAL_ROUTE_DISCOVERY_REPORT));
 
     let history_rows = read_codex_history_jsonl(&history_path)?;
+    let model_price_config_path = role_binding_model_price_config_path();
+    let model_price_config = read_role_binding_model_price_config(&model_price_config_path)?;
     let readiness_report =
         read_json_file::<RoleBindingRouteGapPayloadReadinessReport>(&readiness_report_path)?;
     let mut accumulators = BTreeMap::<String, ManualRouteDiscoveryAccumulator>::new();
@@ -4293,6 +4334,11 @@ where
             missing_history_rows += 1;
             continue;
         };
+        let cost_estimate =
+            estimate_role_binding_token_cost_from_text(&history_row.text, &model_price_config);
+        let estimated_total_tokens = cost_estimate
+            .input_tokens
+            .saturating_add(cost_estimate.output_tokens);
         let discovery = manual_route_discovery_subfamily(&history_row.text);
         let features = manual_route_discovery_feature_flags(&history_row.text);
         let accumulator = accumulators
@@ -4305,7 +4351,21 @@ where
                 ..ManualRouteDiscoveryAccumulator::default()
             });
         accumulator.candidate_events += 1;
+        accumulator.candidate_tokens = accumulator
+            .candidate_tokens
+            .saturating_add(u128::from(estimated_total_tokens));
+        accumulator.candidate_cost_microusd = accumulator
+            .candidate_cost_microusd
+            .saturating_add(u128::from(cost_estimate.estimated_total_cost_microusd));
         accumulator.payload_ready_events += usize::from(readiness.payload_ready);
+        if readiness.payload_ready {
+            accumulator.payload_ready_tokens = accumulator
+                .payload_ready_tokens
+                .saturating_add(u128::from(estimated_total_tokens));
+            accumulator.payload_ready_cost_microusd = accumulator
+                .payload_ready_cost_microusd
+                .saturating_add(u128::from(cost_estimate.estimated_total_cost_microusd));
+        }
         accumulator.context_signal_events += usize::from(readiness.has_context_signal);
         accumulator.evidence_signal_events += usize::from(readiness.has_evidence_signal);
         accumulator.verifier_signal_events += usize::from(readiness.has_verifier_signal);
@@ -4320,6 +4380,9 @@ where
             event_id: readiness.event_id.clone(),
             request_fingerprint: readiness.request_fingerprint.clone(),
             discovered_subfamily: discovery.subfamily_key.to_owned(),
+            estimated_total_tokens,
+            estimated_total_cost_microusd: cost_estimate.estimated_total_cost_microusd,
+            token_cost_estimate_used: true,
             payload_ready: readiness.payload_ready,
             has_context_signal: readiness.has_context_signal,
             has_evidence_signal: readiness.has_evidence_signal,
@@ -4360,6 +4423,14 @@ where
                     accumulator.payload_ready_events,
                     accumulator.candidate_events,
                 ),
+                candidate_tokens: u128_to_u64_saturating(accumulator.candidate_tokens),
+                candidate_cost_microusd: u128_to_u64_saturating(
+                    accumulator.candidate_cost_microusd,
+                ),
+                payload_ready_tokens: u128_to_u64_saturating(accumulator.payload_ready_tokens),
+                payload_ready_cost_microusd: u128_to_u64_saturating(
+                    accumulator.payload_ready_cost_microusd,
+                ),
                 context_signal_events: accumulator.context_signal_events,
                 evidence_signal_events: accumulator.evidence_signal_events,
                 verifier_signal_events: accumulator.verifier_signal_events,
@@ -4376,8 +4447,15 @@ where
         .collect::<Vec<_>>();
     subfamilies.sort_by(|left, right| {
         right
-            .payload_ready_events
-            .cmp(&left.payload_ready_events)
+            .payload_ready_cost_microusd
+            .cmp(&left.payload_ready_cost_microusd)
+            .then_with(|| right.payload_ready_tokens.cmp(&left.payload_ready_tokens))
+            .then_with(|| right.payload_ready_events.cmp(&left.payload_ready_events))
+            .then_with(|| {
+                right
+                    .candidate_cost_microusd
+                    .cmp(&left.candidate_cost_microusd)
+            })
             .then_with(|| right.candidate_events.cmp(&left.candidate_events))
             .then_with(|| left.subfamily_key.cmp(&right.subfamily_key))
     });
@@ -4387,7 +4465,6 @@ where
     let top_subfamily = subfamilies
         .first()
         .map(|subfamily| subfamily.subfamily_key.clone());
-
     let report = RoleBindingManualRouteDiscoveryReport {
         schema_version: "nando_role_binding_manual_route_discovery_v1".to_owned(),
         verdict: if uncatalogued_events > 0 {
@@ -19024,6 +19101,9 @@ where
         .cloned()
         .collect::<Vec<_>>();
     let top_gap_family = route_gap.top_gap_family.clone();
+    let route_gap_top_payload_ready = route_gap_payload_readiness
+        .as_ref()
+        .and_then(|report| report.families.first());
     let report = RoleBindingCpuOperatorCatalogReport {
         schema_version: "nando_role_binding_cpu_operator_catalog_v1".to_owned(),
         verdict: "CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW".to_owned(),
@@ -19127,6 +19207,14 @@ where
         route_gap_payload_ready_events: route_gap_payload_readiness
             .as_ref()
             .map(|report| report.payload_ready_events)
+            .unwrap_or_default(),
+        route_gap_top_payload_ready_family: route_gap_top_payload_ready
+            .map(|family| family.family_key.clone()),
+        route_gap_top_payload_ready_tokens: route_gap_top_payload_ready
+            .map(|family| family.payload_ready_tokens)
+            .unwrap_or_default(),
+        route_gap_top_payload_ready_cost_microusd: route_gap_top_payload_ready
+            .map(|family| family.payload_ready_cost_microusd)
             .unwrap_or_default(),
         current_verified_cpu_accepts: feedback.verified_cpu_accept_unique_request_fingerprints,
         current_incremental_unique_cpu_accepts_over_exact_cache: feedback
@@ -19297,6 +19385,17 @@ where
         "  business_value_gate_passed_rows: {}",
         report.business_value_gate_passed_rows
     );
+    if let Some(family) = &report.route_gap_top_payload_ready_family {
+        println!("  route_gap_top_payload_ready_family: {family}");
+        println!(
+            "  route_gap_top_payload_ready_tokens: {}",
+            report.route_gap_top_payload_ready_tokens
+        );
+        println!(
+            "  route_gap_top_payload_ready_cost_microusd: {}",
+            report.route_gap_top_payload_ready_cost_microusd
+        );
+    }
     println!("  proven_profile_rows: {}", report.proven_profile_rows);
     println!(
         "  candidate_profile_rows: {}",
@@ -30359,6 +30458,14 @@ struct RoleBindingRouteGapPayloadReadinessFamilyRow {
     candidate_events: usize,
     payload_ready_events: usize,
     payload_ready_rate_milli: usize,
+    #[serde(default)]
+    candidate_tokens: u64,
+    #[serde(default)]
+    candidate_cost_microusd: u64,
+    #[serde(default)]
+    payload_ready_tokens: u64,
+    #[serde(default)]
+    payload_ready_cost_microusd: u64,
     request_signal_events: usize,
     context_signal_events: usize,
     evidence_signal_events: usize,
@@ -30376,6 +30483,12 @@ struct RoleBindingRouteGapPayloadReadinessEventRow {
     event_id: String,
     request_fingerprint: String,
     family_key: String,
+    #[serde(default)]
+    estimated_total_tokens: u64,
+    #[serde(default)]
+    estimated_total_cost_microusd: u64,
+    #[serde(default)]
+    token_cost_estimate_used: bool,
     cpu_operator_readiness: String,
     has_request_signal: bool,
     has_context_signal: bool,
@@ -30419,6 +30532,14 @@ struct RoleBindingManualRouteDiscoverySubfamilyRow {
     candidate_events: usize,
     payload_ready_events: usize,
     payload_ready_rate_milli: usize,
+    #[serde(default)]
+    candidate_tokens: u64,
+    #[serde(default)]
+    candidate_cost_microusd: u64,
+    #[serde(default)]
+    payload_ready_tokens: u64,
+    #[serde(default)]
+    payload_ready_cost_microusd: u64,
     context_signal_events: usize,
     evidence_signal_events: usize,
     verifier_signal_events: usize,
@@ -30437,6 +30558,12 @@ struct RoleBindingManualRouteDiscoveryEventRow {
     event_id: String,
     request_fingerprint: String,
     discovered_subfamily: String,
+    #[serde(default)]
+    estimated_total_tokens: u64,
+    #[serde(default)]
+    estimated_total_cost_microusd: u64,
+    #[serde(default)]
+    token_cost_estimate_used: bool,
     payload_ready: bool,
     has_context_signal: bool,
     has_evidence_signal: bool,
@@ -31990,6 +32117,10 @@ struct ImeInputStatePackageBuild {
 struct RouteGapPayloadFamilyAccumulator {
     candidate_events: usize,
     payload_ready_events: usize,
+    candidate_tokens: u128,
+    candidate_cost_microusd: u128,
+    payload_ready_tokens: u128,
+    payload_ready_cost_microusd: u128,
     request_signal_events: usize,
     context_signal_events: usize,
     evidence_signal_events: usize,
@@ -32001,6 +32132,10 @@ struct RouteGapPayloadFamilyAccumulator {
 struct ManualRouteDiscoveryAccumulator {
     candidate_events: usize,
     payload_ready_events: usize,
+    candidate_tokens: u128,
+    candidate_cost_microusd: u128,
+    payload_ready_tokens: u128,
+    payload_ready_cost_microusd: u128,
     context_signal_events: usize,
     evidence_signal_events: usize,
     verifier_signal_events: usize,
@@ -32108,6 +32243,12 @@ struct RoleBindingCpuOperatorCatalogReport {
     #[serde(default)]
     route_gap_feedback_no_candidate_mismatch: bool,
     route_gap_payload_ready_events: usize,
+    #[serde(default)]
+    route_gap_top_payload_ready_family: Option<String>,
+    #[serde(default)]
+    route_gap_top_payload_ready_tokens: u64,
+    #[serde(default)]
+    route_gap_top_payload_ready_cost_microusd: u64,
     current_verified_cpu_accepts: usize,
     #[serde(default)]
     current_incremental_unique_cpu_accepts_over_exact_cache: usize,

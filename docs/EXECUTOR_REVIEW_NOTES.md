@@ -1,5 +1,85 @@
 # Executor Review Notes
 
+## 2026-07-05 - CPU80: Cost-Aware Route-Gap Readiness
+
+Verdict:
+
+```text
+COST_AWARE_ROUTE_GAP_READINESS_V1
+COUNT_ONLY_ROUTE_PRIORITY_REJECTED
+NEXT_CPU80_WORK_FAMILY: git_control
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+After the token/cost meter, route priority must not be chosen by raw call
+count alone. The broad project_context_dialogue family remains
+REJECT_FOR_NOW even though it has the largest count gap.
+
+The new route-gap readiness reports rank under-routed traffic by
+payload-ready token/cost pressure, so the next engineering work is aimed at a
+route that has request-side payload shape plus meaningful estimated cost.
+```
+
+Current5k evidence:
+
+```text
+route_gap_payload_readiness report:
+  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json
+
+sampled_llm_calls: 5000
+existing_route_candidate_events: 1432
+no_candidate_events: 3568
+payload_ready_events: 807
+top_payload_ready_family: git_control
+
+git_control:
+  candidate_events: 126
+  payload_ready_events: 90
+  candidate_tokens: 102424
+  candidate_cost_microusd: 307272
+  payload_ready_tokens: 94932
+  payload_ready_cost_microusd: 284796
+```
+
+Catalog bridge:
+
+```text
+cpu_operator_catalog report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+
+route_gap_top_payload_ready_family: git_control
+route_gap_top_payload_ready_tokens: 94932
+route_gap_top_payload_ready_cost_microusd: 284796
+current_incremental_unique_cpu_accepts_over_exact_cache: 110
+```
+
+Boundary:
+
+```text
+Allowed claim:
+  git_control is the next highest ready-cost route family to improve.
+
+Forbidden claim:
+  ready-cost rows are verified CPU savings.
+  broad project_context_dialogue can be promoted whole.
+  CPU80 is achieved.
+```
+
+Verification:
+
+```text
+jq empty docs/structural_gates/cost-aware-route-gap-readiness-v1.triads.json: PASS
+nanda-check --triads docs/structural_gates/cost-aware-route-gap-readiness-v1.triads.json --format text: PASS
+  complexity_score: 51
+  agent_action: SAFE_TO_EDIT
+cargo fmt --check: PASS
+cargo check -p nando-cli: PASS
+cargo clippy -p nando-cli -- -D warnings: PASS
+```
+
 ## 2026-07-05 - Executor Integration: Test Output Parse Runtime Command Split
 
 Verdict:
