@@ -1,5 +1,124 @@
 # Executor Review Notes
 
+## 2026-07-05 - CPU80: Metrics-Report Triple-Feature Admission Refresh
+
+Verdict:
+
+```text
+METRICS_REPORT_SAFE_POLICY_CURRENT5K_REFRESH
+TRIPLE_FEATURE_P99_READOUT_SIDECAR_PROMOTED
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+metrics_report_readout was the next high ready-cost route after git_control:
+the current5k route-gap readiness report shows 104 candidates, 66 payload-ready
+events, and 164484 payload-ready cost microusd.
+
+The previous metrics-report current5k promote counted only 3 verified accepts.
+The admission calibration now includes bounded 2/3-term request-side feature
+conjunctions. That exposed a narrow p99 readout sidecar with 11 verified true
+accepts and no false or unverified accepts.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+
+metrics_report_admission_policy_reports now evaluates generated feature
+conjunctions using positive and no_* request-side feature terms.
+
+metrics_report_admission_policy_accepts can replay those conjunction policies
+during promotion, so the selected policy is not just an offline report row.
+```
+
+Selected current5k policy:
+
+```text
+has_p99_terms AND no_has_report_terms AND no_concise_request
+plus active_fringe_min_66 and first_slot_threshold_278528
+
+request_side_policy_accept_rows: 11
+policy_accept_verified_true_rows: 11
+policy_accept_verified_false_rows: 0
+policy_accept_unverified_rows: 0
+```
+
+Measured shadow/audit:
+
+```text
+shadow report:
+  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.shadow-report.json
+
+nando_shadow_accepts: 11
+verified_safe_accepts: 11
+false_accepts: 0
+p99_shadow_score_latency_ns: 288107
+
+verification audit:
+  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json
+
+operator_candidate_calls: 11
+scoreable_candidate_calls: 11
+verification_hook_ready_events: 11
+verified_cpu_accept_eligible_events: 11
+market_claim_allowed: true
+```
+
+Current5k feedback/catalog after full companion rerun:
+
+```text
+feedback report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
+
+total_llm_calls: 5000
+verified_cpu_accept_unique_request_fingerprints: 123
+incremental_cpu_accept_unique_request_fingerprints: 121
+incremental_unique_gap_to_80_calls: 3879
+nando_cpu_tokens_saved: 29458
+nando_cpu_cost_saved_microusd: 88374
+nando_calls_saved_pct: 2.42
+nando_tokens_saved_pct: 4.840448256597325
+nando_cost_saved_pct: 4.840448256597325
+
+catalog report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+
+current_verified_cpu_accepts: 123
+current_incremental_unique_cpu_accepts_over_exact_cache: 121
+metrics_report expected_unique_cpu_accepts_over_exact_cache: 11
+```
+
+Boundary:
+
+```text
+Allowed claim:
+  metrics_report current5k is a tiny PROVEN p99/latency readout sidecar with
+  11 verified unique incremental CPU accepts and false_accepts=0.
+
+Forbidden claim:
+  CPU80 is achieved.
+  Broad report interpretation is solved.
+  Generic metrics/report summaries can local-accept.
+  Candidate/payload-ready rows are savings.
+```
+
+Verification:
+
+```text
+jq empty docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.triads.json: PASS
+nanda-check --triads docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.triads.json --format text: PASS
+  complexity_score: 44
+  agent_action: SAFE_TO_EDIT
+cargo fmt --check: PASS
+cargo check -p nando-cli: PASS
+cargo clippy -p nando-cli -- -D warnings: PASS
+git diff --check: PASS
+```
+
 ## 2026-07-05 - CPU80: Git-Control Triple-Feature Safe Policy Refresh
 
 Verdict:

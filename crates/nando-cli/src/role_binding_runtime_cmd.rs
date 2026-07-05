@@ -42864,20 +42864,27 @@ fn select_supported_answer_evidence_safe_policy(
 fn select_supported_metrics_report_admission_policy(
     calibration: &RoleBindingMetricsReportAdmissionCalibrationReport,
 ) -> Option<&RoleBindingEditAdmissionPolicyReport> {
-    const PREFERRED_POLICIES: &[&str] = &[
-        "p99_terms_not_concise",
-        "p99_latency_digit_not_concise",
-        "p99_verdict_or_false_accept_terms",
-        "false_accept_terms_no_failure",
-    ];
-    PREFERRED_POLICIES.iter().find_map(|policy_name| {
-        calibration.policies.iter().find(|policy| {
-            policy.policy_name == *policy_name
-                && policy.robust_safe
+    calibration
+        .policies
+        .iter()
+        .filter(|policy| {
+            policy.robust_safe
                 && policy.false_accepts == 0
                 && policy.true_accepts >= calibration.minimum_true_support
         })
-    })
+        .max_by(|left, right| {
+            left.true_accepts
+                .cmp(&right.true_accepts)
+                .then_with(|| {
+                    right
+                        .policy_name
+                        .matches("_AND_")
+                        .count()
+                        .cmp(&left.policy_name.matches("_AND_").count())
+                })
+                .then_with(|| right.accepts.cmp(&left.accepts))
+                .then_with(|| left.policy_name.cmp(&right.policy_name))
+        })
 }
 
 fn select_supported_agent_control_admission_policy(
@@ -45640,6 +45647,29 @@ fn edit_admission_policy_reports(
         .collect()
 }
 
+const METRICS_REPORT_ADMISSION_FEATURE_TERMS: &[&str] = &[
+    "length_lt_1000",
+    "line_count_le_3",
+    "token_count_le_30",
+    "has_false_accept_terms",
+    "has_p99_terms",
+    "has_latency_terms",
+    "has_metric_terms",
+    "has_report_terms",
+    "has_json_terms",
+    "has_verdict_terms",
+    "has_question_mark",
+    "has_failure_terms",
+    "digit_count_ge_4",
+    "colon_count_ge_3",
+    "concise_request",
+    "long_report_context",
+];
+
+fn metrics_report_admission_terms_contradict(left: &str, right: &str) -> bool {
+    left.strip_prefix("no_") == Some(right) || right.strip_prefix("no_") == Some(left)
+}
+
 fn metrics_report_admission_policy_reports(
     rows: &[RoleBindingMetricsReportAdmissionCalibrationRow],
     minimum_true_support: usize,
@@ -45688,14 +45718,65 @@ fn metrics_report_admission_policy_reports(
             features.concise_request && features.has_question_mark && features.has_metric_terms
         }),
     ];
-    policy_defs
+    let mut reports = policy_defs
         .into_iter()
         .map(|(name, predicate)| {
             evaluate_metrics_report_admission_policy(name, rows, minimum_true_support, |row| {
                 predicate(&row.features)
             })
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    let mut terms = Vec::new();
+    for feature in METRICS_REPORT_ADMISSION_FEATURE_TERMS {
+        terms.push((*feature).to_owned());
+        terms.push(format!("no_{feature}"));
+    }
+    for left_index in 0..terms.len() {
+        for right_index in (left_index + 1)..terms.len() {
+            let left = &terms[left_index];
+            let right = &terms[right_index];
+            if metrics_report_admission_terms_contradict(left, right) {
+                continue;
+            }
+            let policy_name = format!("{left}_AND_{right}");
+            reports.push(evaluate_metrics_report_admission_policy(
+                &policy_name,
+                rows,
+                minimum_true_support,
+                |row| {
+                    metrics_report_admission_policy_accepts(&policy_name, &row.features)
+                        .unwrap_or(false)
+                },
+            ));
+        }
+    }
+    for left_index in 0..terms.len() {
+        for middle_index in (left_index + 1)..terms.len() {
+            for right_index in (middle_index + 1)..terms.len() {
+                let left = &terms[left_index];
+                let middle = &terms[middle_index];
+                let right = &terms[right_index];
+                if metrics_report_admission_terms_contradict(left, middle)
+                    || metrics_report_admission_terms_contradict(left, right)
+                    || metrics_report_admission_terms_contradict(middle, right)
+                {
+                    continue;
+                }
+                let policy_name = format!("{left}_AND_{middle}_AND_{right}");
+                reports.push(evaluate_metrics_report_admission_policy(
+                    &policy_name,
+                    rows,
+                    minimum_true_support,
+                    |row| {
+                        metrics_report_admission_policy_accepts(&policy_name, &row.features)
+                            .unwrap_or(false)
+                    },
+                ));
+            }
+        }
+    }
+    reports
 }
 
 fn answer_evidence_admission_policy_reports(
@@ -45878,7 +45959,7 @@ fn metrics_report_admission_policy_accepts(
     policy_name: &str,
     features: &RoleBindingMetricsReportAdmissionFeatures,
 ) -> Option<bool> {
-    Some(match policy_name {
+    let accepts = match policy_name {
         "all_hook_ready_rows" => true,
         "false_accept_terms" => features.has_false_accept_terms,
         "false_accept_terms_no_failure" => {
@@ -45910,6 +45991,61 @@ fn metrics_report_admission_policy_accepts(
         "concise_metric_question" => {
             features.concise_request && features.has_question_mark && features.has_metric_terms
         }
+        _ => {
+            return metrics_report_admission_policy_accepts_conjunction(policy_name, features);
+        }
+    };
+    Some(accepts)
+}
+
+fn metrics_report_admission_policy_accepts_conjunction(
+    policy_name: &str,
+    features: &RoleBindingMetricsReportAdmissionFeatures,
+) -> Option<bool> {
+    if !policy_name.contains("_AND_") {
+        return None;
+    }
+    let mut saw_term = false;
+    for term in policy_name.split("_AND_") {
+        saw_term = true;
+        if !metrics_report_admission_term_accepts(term, features)? {
+            return Some(false);
+        }
+    }
+    Some(saw_term)
+}
+
+fn metrics_report_admission_term_accepts(
+    term: &str,
+    features: &RoleBindingMetricsReportAdmissionFeatures,
+) -> Option<bool> {
+    if let Some(feature) = term.strip_prefix("no_") {
+        return metrics_report_admission_feature_value(feature, features).map(|value| !value);
+    }
+    metrics_report_admission_feature_value(term, features)
+}
+
+fn metrics_report_admission_feature_value(
+    feature: &str,
+    features: &RoleBindingMetricsReportAdmissionFeatures,
+) -> Option<bool> {
+    Some(match feature {
+        "length_lt_1000" => features.request_len < 1000,
+        "line_count_le_3" => features.line_count <= 3,
+        "token_count_le_30" => features.token_count <= 30,
+        "has_false_accept_terms" => features.has_false_accept_terms,
+        "has_p99_terms" => features.has_p99_terms,
+        "has_latency_terms" => features.has_latency_terms,
+        "has_metric_terms" => features.has_metric_terms,
+        "has_report_terms" => features.has_report_terms,
+        "has_json_terms" => features.has_json_terms,
+        "has_verdict_terms" => features.has_verdict_terms,
+        "has_question_mark" => features.has_question_mark,
+        "has_failure_terms" => features.has_failure_terms,
+        "digit_count_ge_4" => features.digit_count_ge_4,
+        "colon_count_ge_3" => features.colon_count_ge_3,
+        "concise_request" => features.concise_request,
+        "long_report_context" => features.long_report_context,
         _ => return None,
     })
 }

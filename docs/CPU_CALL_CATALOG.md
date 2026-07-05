@@ -153,22 +153,22 @@ route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
 feedback operator_candidate_calls: 3549
-feedback scoreable_candidate_calls: 554
-feedback verification_hook_ready_events: 292
-feedback verified_cpu_accept_eligible_events: 117
-feedback verified_cpu_accept_unique_request_fingerprints: 115
-feedback incremental_cpu_accept_unique_request_fingerprints: 113
+feedback scoreable_candidate_calls: 502
+feedback verification_hook_ready_events: 252
+feedback verified_cpu_accept_eligible_events: 125
+feedback verified_cpu_accept_unique_request_fingerprints: 123
+feedback incremental_cpu_accept_unique_request_fingerprints: 121
 feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 22
-feedback incremental_unique_gap_to_80_calls: 3887
-feedback nando_cpu_tokens_saved: 24182
-feedback nando_cpu_cost_saved_microusd: 72546
-feedback nando_calls_saved_pct: 2.26
-feedback nando_tokens_saved_pct: 3.9735643440710384
-feedback nando_cost_saved_pct: 3.9735643440710384
+feedback incremental_cpu_accept_unique_reduction_milli: 24
+feedback incremental_unique_gap_to_80_calls: 3879
+feedback nando_cpu_tokens_saved: 29458
+feedback nando_cpu_cost_saved_microusd: 88374
+feedback nando_calls_saved_pct: 2.42
+feedback nando_tokens_saved_pct: 4.840448256597325
+feedback nando_cost_saved_pct: 4.840448256597325
 
-catalog current_verified_cpu_accepts: 115
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 113
+catalog current_verified_cpu_accepts: 123
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 121
 catalog business_value_gate_passed_rows: 7
 catalog proven_profile_rows: 7
 catalog candidate_profile_rows: 1
@@ -183,8 +183,8 @@ Latest current5k proven rows:
 | 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | Narrow previous-tool-output status parser. |
 | 2 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | Small safe request-side policy. |
 | 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | Tiny safe policy; broad conditional remains unsafe. |
-| 4 | `git_control` | 123 | 90 | 74 | 6 | 6 | Triple-feature request-side v3 policy proven, but support exhausted. |
-| 5 | `metrics_report_readout` | 55 | 63 | 51 | 3 | 3 | Safe-policy sidecar proven, but still tiny. |
+| 4 | `metrics_report_readout` | 55 | 11 | 11 | 11 | 11 | Triple-feature p99 sidecar proven, but support exhausted. |
+| 5 | `git_control` | 123 | 90 | 74 | 6 | 6 | Triple-feature request-side v3 policy proven, but support exhausted. |
 | 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | Tiny server-ops proof; daemon mutations remain disabled. |
 | 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | Edit safe-policy v2: request-side `code_diff_and_question_mark` plus energy threshold, false_accepts=0. |
 
@@ -384,29 +384,43 @@ artifact-backed subfamily, or move to a higher-value route.
 Metrics-report p99 split finding:
 
 ```text
-initial labeled-only read:
-  p99_terms_not_concise: 12 true / 0 false
+initial p99 split:
+  p99_terms_not_concise was useful but unsafe on the full current5k trace
 
-full trace with unverified rows included:
+current5k full trace with unverified rows included:
   hook_ready_rows: 63
   label_true_rows: 31
   label_false_rows: 20
   unverified_rows: 12
-  p99_terms_not_concise: 14 accepts, 12 true, 2 unsafe false-or-unverified
-  robust_safe_policy_found: false
-  best_robust_true_accepts: 0
+  robust_safe_policy_found: true
+  best_robust_true_accepts: 11
+
+selected safe request-side policy:
+  has_p99_terms AND no_has_report_terms AND no_concise_request
+  plus active_fringe_min_66 and first_slot_threshold_278528
+
+promoted shadow/audit:
+  request_side_policy_accept_rows: 11
+  policy_accept_verified_true_rows: 11
+  policy_accept_verified_false_rows: 0
+  policy_accept_unverified_rows: 0
+  shadow verified_safe_accepts: 11
+  shadow false_accepts: 0
+  shadow p99_shadow_score_latency_ns: 288107
+  audit verified_cpu_accept_eligible_events: 11
 
 decision:
-  WATCH / NO_SAFE_POLICY
+  PROVEN tiny / support exhausted
 ```
 
 Interpretation:
 
 ```text
-The p99 metrics split is a useful action-center discovery, but not a safe CPU
-accept path. Unknown output evidence is treated as unsafe. Do not promote this
-route until the missing output evidence is attached or a narrower split shows
-false_accepts=0 and unverified_accepts=0.
+The safe metrics-report path is a narrow latency/p99 readout sidecar, not broad
+report interpretation. Count only 11 incremental unique verified accepts over
+exact cache. The next valid metrics step is improving output evidence/payload
+geometry or splitting a stronger report subfamily, not widening generic report
+summaries.
 ```
 
 PROVEN rows on current5k:
@@ -416,7 +430,7 @@ PROVEN rows on current5k:
 | 1 | `test_output_parse` | 95 | 95 | 95 | 95 | 91 | 18 | Keep as narrow previous-tool-output status parser; do not treat it as broad answer parsing. |
 | 2 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | 1 | Safe request-side admission policy; useful but still small. |
 | 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | 0 | Tiny request-side v2 safe policy; broad conditional calibration is still unsafe. |
-| 4 | `metrics_report_readout` | 99 | 63 | 51 | 3 | 3 | 0 | Small proven sidecar only; support is exhausted and p99 shadow score was WATCH in the promote run. |
+| 4 | `metrics_report_readout` | 55 | 11 | 11 | 11 | 11 | 2 | Triple-feature p99 readout sidecar only; support is exhausted. |
 | 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
 | 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | 0 | Edit safe-policy v2 tiny proof; do not widen broad edit. |
 
@@ -436,8 +450,11 @@ agent_control current5k audit:
   decision: WATCH / NO_SAFE_POLICY
 
 metrics_report current5k:
-  request-side robust admission: no safe policy
-  score/readout safe policy: 3 true accepts, 0 false accepts
+  request-side robust admission: 11 true accepts, 0 false accepts
+  selected policy:
+    has_p99_terms AND no_has_report_terms AND no_concise_request
+  score/readout threshold:
+    active_fringe_min_66 and first_slot_threshold_278528
   decision: PROVEN, but tiny; split or improve numeric evidence before more work
 
 serving_ops current5k:
