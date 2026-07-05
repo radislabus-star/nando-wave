@@ -1,5 +1,168 @@
 # Executor Review Notes
 
+## 2026-07-05 - CPU10: Broad Control Routes Are Not Safe Savings Yet
+
+Verdict:
+
+```text
+CLEAN_CPU10_NOT_ACHIEVED
+AGENT_CONTROL_VOLUME_FOUND_BUT_UNSAFE
+AGENT_CONTINUE_VOLUME_FOUND_BUT_UNSEPARATED
+NEXT_REQUIRED_MECHANISM_ACTIVE_TURN_STATE
+```
+
+Measured current5k:
+
+```text
+clean Nando CPU incremental accepts: 120 / 5000 = 2.4%
+clean CPU10 target: 500 / 5000
+gap: 380 unique accepts
+
+agent_continue_execute:
+  scoreable_payload_events: 313
+  artifact_progress verifier true/false: 74 / 223
+  best prompt/state robust safe policy: 0
+  only request_starts_continue_or_next isolates 10 true / 0 false
+
+agent_control:
+  scoreable_payload_events: 539
+  intents: continue=19, short_ack=272, stop=248
+  output verifier true/false: 35 / 439
+  robust safe policy: 0
+
+after current5k companion-path fix:
+  feedback operator_candidate_calls: 3768
+  feedback scoreable_candidate_calls: 444
+  clean Nando CPU incremental accepts: still 120 / 5000
+```
+
+Decision:
+
+```text
+Do not promote broad agent_control, short_context_chatter, or
+agent_continue_execute as CPU savings. They have the traffic volume needed for
+CPU10, but current request-side text features do not separate safe local accepts
+from false accepts.
+```
+
+Next high-value mechanism:
+
+```text
+Build active_turn_state / tool-state verifier channel:
+  previous agent state
+  pending action type
+  last tool result
+  mutation/no-mutation state
+  user control intent
+  deterministic verifier outcome
+
+Only then re-test control/continue routes. Without that state channel, lowering
+thresholds would be a fake 10% and would violate false_accepts=0.
+```
+
+## 2026-07-05 - CPU80: Serving-Ops Route-Leak Fix And Catalog Downgrade
+
+Verdict:
+
+```text
+SERVING_OPS_ROUTE_LEAK_FIXED
+STALE_TINY_ACCEPT_REMOVED
+CPU80_NOT_ACHIEVED
+```
+
+Why:
+
+```text
+The current5k serving_ops row looked like a tiny PROVEN profile, but manual
+inspection showed that the request-side payload builder admitted browser, URL,
+and account-management prompts. Those rows are not daemon/LB/worker serving
+runtime operations and must not count as server-ops savings.
+```
+
+Code change:
+
+```text
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+crates/nando-cli/src/role_binding_runtime_cmd/serving_ops.rs
+
+serving_ops payload extraction now requires a strong serving signal:
+score, core_score, worker_score, load_balancer, daemon, worker, HostWorld,
+VPS, nginx, systemd, p99/p90, latency, RSS, QPS, health, metrics endpoint,
+profile worker, LB replay, serving runtime, or serving stack.
+
+Generic `http` no longer qualifies a prompt as serving_ops.
+The CPU catalog now reads the current5k serving_ops calibration companion
+instead of stale non-window calibration when current5k artifacts are used.
+```
+
+Measured current5k after narrowing:
+
+```text
+serving_ops payload:
+  serving_ops_candidate_events: 73
+  payload_ready_events: 39
+  payload_built_events: 8
+  scoreable_payload_events: 8
+
+serving_ops evidence:
+  output_evidence_matched_events: 8
+  verified_true_events: 4
+  verified_false_events: 4
+
+serving_ops calibration:
+  safe_policy_found: false
+  best_safe_true_accepts: 0
+
+serving_ops shadow/audit:
+  nando_shadow_accepts: 0
+  verified_safe_accepts: 0
+  false_accepts: 0
+  market_claim_allowed: false
+```
+
+Current5k feedback/catalog after rerun:
+
+```text
+feedback report:
+  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
+
+total_llm_calls: 5000
+exact_cache_hits: 452
+verified_cpu_accept_unique_request_fingerprints: 122
+incremental_cpu_accept_unique_request_fingerprints: 120
+incremental_unique_gap_to_80_calls: 3880
+nando_cpu_tokens_saved: 29406
+nando_cpu_cost_saved_microusd: 88218
+nando_calls_saved_pct: 2.4
+nando_tokens_saved_pct: 4.831903776003155
+nando_cost_saved_pct: 4.831903776003155
+
+catalog report:
+  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+
+current_verified_cpu_accepts: 122
+current_incremental_unique_cpu_accepts_over_exact_cache: 120
+business_value_gate_passed_rows: 6
+proven_profile_rows: 6
+serving_ops route_gap_family: WATCH
+serving_ops existing_profile_route: CANDIDATE
+serving_ops expected_unique_cpu_accepts_over_exact_cache: 0
+```
+
+Boundary:
+
+```text
+Allowed claim:
+  serving_ops now has a stricter request-side candidate builder and no current5k
+  local-accept policy. The stale one-row server-ops savings claim was removed.
+
+Forbidden claim:
+  serving_ops is PROVEN on current5k.
+  Browser/URL/account-management rows are serving runtime operations.
+  Candidate, payload-ready, or scoreable rows are savings.
+  CPU80 is achieved.
+```
+
 ## 2026-07-05 - CPU80: Metrics-Report Triple-Feature Admission Refresh
 
 Verdict:

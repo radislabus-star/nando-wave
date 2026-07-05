@@ -1,0 +1,162 @@
+{
+  "task_id": "cpu10-broad-control-current5k-v1",
+  "domain": "code",
+  "query": "Verify clean CPU10 is not achieved by broad agent control/continue routes and requires active turn-state evidence.",
+  "triads": [
+    {
+      "id": "t0",
+      "subject": "clean_nando_cpu_current5k",
+      "relation": "incremental_unique_accepts_over_exact_cache",
+      "object": "120_of_5000",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t1",
+      "subject": "clean_cpu10_target",
+      "relation": "requires_incremental_unique_accepts",
+      "object": "500_of_5000",
+      "evidence": "docs/CPU_CALL_CATALOG.md",
+      "confidence": 1.0,
+      "subject_role": "target",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t2",
+      "subject": "clean_cpu10_gap",
+      "relation": "remaining_unique_accepts",
+      "object": "380",
+      "evidence": "docs/CPU_CALL_CATALOG.md",
+      "confidence": 1.0,
+      "subject_role": "target",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t3",
+      "subject": "agent_continue_execute_current5k",
+      "relation": "scoreable_payload_events",
+      "object": "313",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-continue-execute-payload-dry-run-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "metric",
+      "route": "agent_continue_execute"
+    },
+    {
+      "id": "t4",
+      "subject": "agent_continue_execute_current5k",
+      "relation": "verifier_true_false",
+      "object": "74_true_223_false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "safety_metric",
+      "route": "agent_continue_execute"
+    },
+    {
+      "id": "t5",
+      "subject": "agent_continue_execute_current5k",
+      "relation": "robust_safe_policy_found",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-continue-execute-state-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "safety_boundary",
+      "route": "agent_continue_execute"
+    },
+    {
+      "id": "t6",
+      "subject": "agent_continue_execute_current5k",
+      "relation": "broad_route_promotion_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-continue-execute-state-admission-audit-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "claim_boundary",
+      "route": "agent_continue_execute"
+    },
+    {
+      "id": "t7",
+      "subject": "agent_control_current5k",
+      "relation": "scoreable_payload_events",
+      "object": "539",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "metric",
+      "route": "agent_control"
+    },
+    {
+      "id": "t8",
+      "subject": "agent_control_current5k",
+      "relation": "intent_counts",
+      "object": "continue_19_short_ack_272_stop_248",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "metric",
+      "route": "agent_control"
+    },
+    {
+      "id": "t9",
+      "subject": "agent_control_current5k",
+      "relation": "verifier_true_false",
+      "object": "35_true_439_false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "safety_metric",
+      "route": "agent_control"
+    },
+    {
+      "id": "t10",
+      "subject": "agent_control_current5k",
+      "relation": "robust_safe_policy_found",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "safety_boundary",
+      "route": "agent_control"
+    },
+    {
+      "id": "t11",
+      "subject": "agent_control_current5k",
+      "relation": "broad_route_promotion_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "route",
+      "object_role": "claim_boundary",
+      "route": "agent_control"
+    },
+    {
+      "id": "t12",
+      "subject": "next_required_mechanism",
+      "relation": "is",
+      "object": "active_turn_state_tool_state_channel",
+      "evidence": "docs/CPU_CALL_CATALOG.md",
+      "confidence": 1.0,
+      "subject_role": "mechanism",
+      "object_role": "architecture_debt",
+      "route": "cpu10"
+    },
+    {
+      "id": "t13",
+      "subject": "active_turn_state_tool_state_channel",
+      "relation": "must_precede",
+      "object": "control_continue_route_promotion",
+      "evidence": "docs/CPU_CALL_CATALOG.md",
+      "confidence": 1.0,
+      "subject_role": "mechanism",
+      "object_role": "claim_boundary",
+      "route": "cpu10"
+    }
+  ],
+  "candidate_triads": []
+}

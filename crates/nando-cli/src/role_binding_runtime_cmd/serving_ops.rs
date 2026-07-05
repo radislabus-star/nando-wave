@@ -840,7 +840,7 @@ where
     let mut trace_rows = read_real_traffic_trace_jsonl(&evidence_trace_path)?;
     let base_registry =
         RoleBindingProfileRuntimeRegistry::from_config_path(&base_registry_config_path)?;
-    let second_slot_candidate =
+    let metric_slot_candidate =
         if let Some(calibration_policy) = select_supported_serving_ops_safe_policy(&calibration) {
             Some((
                 calibration_policy.policy_name.clone(),
@@ -854,18 +854,18 @@ where
         } else {
             None
         };
-    let second_slot_market_safe = second_slot_candidate
+    let metric_slot_market_safe = metric_slot_candidate
         .as_ref()
         .is_some_and(|(_, _, policy)| {
-            policy.policy_name == "market_safe_second_slot_margin_threshold"
+            policy.policy_name == "market_safe_metric_slot_margin_threshold"
                 && policy.true_accepts >= DEFAULT_REAL_TRAFFIC_MIN_SAFE_POLICY_TRUE_SUPPORT
                 && policy.false_accepts == 0
                 && policy.unverified_accepts == 0
         });
     let (calibration_policy_name, calibration_policy_threshold, policy, acceptance_policy) =
-        if second_slot_market_safe {
+        if metric_slot_market_safe {
             let (calibration_policy_name, calibration_policy_threshold, policy) =
-                second_slot_candidate.expect("second-slot candidate exists when market safe");
+                metric_slot_candidate.expect("metric-slot candidate exists when market safe");
             (
                 calibration_policy_name,
                 calibration_policy_threshold,
@@ -1081,4 +1081,3 @@ where
             .to_owned(),
     )
 }
-

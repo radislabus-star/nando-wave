@@ -1,0 +1,184 @@
+{
+  "task_id": "serving-ops-route-leak-current5k-catalog-v1",
+  "domain": "code",
+  "query": "Verify serving_ops route-leak fix downgrades stale savings and preserves CPU80 claim boundary.",
+  "triads": [
+    {
+      "id": "t0",
+      "subject": "serving_ops_previous_candidate_set",
+      "relation": "contained_route_leak",
+      "object": "browser_url_account_management_rows",
+      "evidence": "manual inspection of current5k serving_ops prompts",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "risk",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t1",
+      "subject": "serving_ops_payload_builder",
+      "relation": "requires_strong_serving_signal",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/role_binding_runtime_cmd.rs",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "code_guard",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t2",
+      "subject": "serving_ops_payload_builder",
+      "relation": "generic_http_qualifies_as_serving_ops",
+      "object": "false",
+      "evidence": "crates/nando-cli/src/role_binding_runtime_cmd.rs",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "code_guard",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t3",
+      "subject": "serving_ops_payload_dry_run_current5k",
+      "relation": "scoreable_payload_events",
+      "object": "8",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t4",
+      "subject": "serving_ops_output_evidence_current5k",
+      "relation": "verified_true_events",
+      "object": "4",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t5",
+      "subject": "serving_ops_output_evidence_current5k",
+      "relation": "verified_false_events",
+      "object": "4",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t6",
+      "subject": "serving_ops_local_accept_calibration_current5k",
+      "relation": "safe_policy_found",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-local-accept-calibration-v1-current5k.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "safety_boundary",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t7",
+      "subject": "serving_ops_shadow_current5k",
+      "relation": "verified_safe_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.shadow-report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t8",
+      "subject": "serving_ops_shadow_current5k",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.shadow-report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "safety_boundary",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t9",
+      "subject": "serving_ops_verification_audit_current5k",
+      "relation": "market_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.verification-hook-audit.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "claim_boundary",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t10",
+      "subject": "cpu_feedback_current5k",
+      "relation": "incremental_cpu_accept_unique_request_fingerprints",
+      "object": "120",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t11",
+      "subject": "cpu_feedback_current5k",
+      "relation": "nando_calls_saved_pct",
+      "object": "2.4",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "current5k"
+    },
+    {
+      "id": "t12",
+      "subject": "cpu_catalog_serving_ops_existing_profile",
+      "relation": "current_status",
+      "object": "CANDIDATE",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t13",
+      "subject": "cpu_catalog_serving_ops_route_gap_family",
+      "relation": "current_status",
+      "object": "WATCH",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t14",
+      "subject": "cpu_catalog_serving_ops",
+      "relation": "expected_unique_cpu_accepts_over_exact_cache",
+      "object": "0",
+      "evidence": "target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "metric",
+      "route": "serving_ops"
+    },
+    {
+      "id": "t15",
+      "subject": "claim_boundary",
+      "relation": "cpu80_achieved",
+      "object": "false",
+      "evidence": "docs/EXECUTOR_REVIEW_NOTES.md",
+      "confidence": 1.0,
+      "subject_role": "artifact",
+      "object_role": "claim_boundary",
+      "route": "current5k"
+    }
+  ],
+  "candidate_triads": []
+}

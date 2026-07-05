@@ -152,27 +152,33 @@ route_candidate_events: 1439
 route_gap_no_candidate_events: 3561
 route_gap_payload_ready_events: 807
 
-feedback operator_candidate_calls: 3549
-feedback scoreable_candidate_calls: 502
-feedback verification_hook_ready_events: 252
-feedback verified_cpu_accept_eligible_events: 125
-feedback verified_cpu_accept_unique_request_fingerprints: 123
-feedback incremental_cpu_accept_unique_request_fingerprints: 121
+feedback operator_candidate_calls: 3768
+feedback scoreable_candidate_calls: 444
+feedback verification_hook_ready_events: 227
+feedback verified_cpu_accept_eligible_events: 124
+feedback verified_cpu_accept_unique_request_fingerprints: 122
+feedback incremental_cpu_accept_unique_request_fingerprints: 120
 feedback exact_cache_overlap_verified_cpu_accepts: 2
 feedback incremental_cpu_accept_unique_reduction_milli: 24
-feedback incremental_unique_gap_to_80_calls: 3879
-feedback nando_cpu_tokens_saved: 29458
-feedback nando_cpu_cost_saved_microusd: 88374
-feedback nando_calls_saved_pct: 2.42
-feedback nando_tokens_saved_pct: 4.840448256597325
-feedback nando_cost_saved_pct: 4.840448256597325
+feedback incremental_unique_gap_to_80_calls: 3880
+feedback nando_cpu_tokens_saved: 29406
+feedback nando_cpu_cost_saved_microusd: 88218
+feedback nando_calls_saved_pct: 2.4
+feedback nando_tokens_saved_pct: 4.831903776003155
+feedback nando_cost_saved_pct: 4.831903776003155
 
-catalog current_verified_cpu_accepts: 123
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 121
-catalog business_value_gate_passed_rows: 7
-catalog proven_profile_rows: 7
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 16
+clean_cpu10_target:
+  exact_cache_hits are a separate baseline and do not count toward Nando CPU.
+  Nando CPU clean incremental target: 500 / 5000 unique accepts.
+  Current clean Nando CPU incremental: 120 / 5000 = 2.4%.
+  Gap to clean CPU10: 380 unique accepts.
+
+catalog current_verified_cpu_accepts: 122
+catalog current_incremental_unique_cpu_accepts_over_exact_cache: 120
+catalog business_value_gate_passed_rows: 6
+catalog proven_profile_rows: 6
+catalog candidate_profile_rows: 2
+catalog watch_profile_rows: 15
 catalog rejected_profile_rows: 5
 ```
 
@@ -185,8 +191,58 @@ Latest current5k proven rows:
 | 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | Tiny safe policy; broad conditional remains unsafe. |
 | 4 | `metrics_report_readout` | 55 | 11 | 11 | 11 | 11 | Triple-feature p99 sidecar proven, but support exhausted. |
 | 5 | `git_control` | 123 | 90 | 74 | 6 | 6 | Triple-feature request-side v3 policy proven, but support exhausted. |
-| 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | Tiny server-ops proof; daemon mutations remain disabled. |
-| 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | Edit safe-policy v2: request-side `code_diff_and_question_mark` plus energy threshold, false_accepts=0. |
+| 6 | `role_binding_edit_marker_length_seed0` | 506 | 5 | 4 | 3 | 3 | Edit safe-policy v2: request-side `code_diff_and_question_mark` plus energy threshold, false_accepts=0. |
+
+Serving-ops note:
+
+```text
+serving_ops was removed from PROVEN after the route-leak audit. The previous
+candidate set contained browser/URL/account-management rows, not only daemon,
+LB, worker, score, health, RSS, latency, or metrics-endpoint operations.
+
+After narrowing the request-side payload builder to strong serving signals:
+  scoreable_payload_events: 8
+  verification_hook_ready_events: 8
+  verified_true_events: 4
+  verified_false_events: 4
+  safe_policy_found: false
+  current catalog status:
+    route_gap_family: WATCH
+    existing_profile_route: CANDIDATE
+  expected_unique_cpu_accepts_over_exact_cache: 0
+
+Do not count serving_ops as savings until a new zero-false verified policy
+exists on current5k.
+```
+
+CPU10 blocker audit:
+
+```text
+The clean CPU10 target is not blocked by lack of candidate traffic. It is
+blocked by lack of safe turn-state separation.
+
+agent_continue_execute:
+  scoreable_payload_events: 313
+  artifact_progress verified true/false: 74 / 223
+  robust prompt/state safe policy: 0
+  best simple zero-false slice: request_starts_continue_or_next = 10 true / 0 false
+  decision: do not promote as a broad route.
+
+agent_control:
+  scoreable_payload_events: 539
+  intent counts: continue=19, short_ack=272, stop=248
+  output verifier true/false: 35 / 439
+  robust safe policy: 0
+  decision: do not promote short_context_chatter or broad control as savings.
+
+feedback/catalog after current5k companion-path fix:
+  operator_candidate_calls: 3768
+  scoreable_candidate_calls: 444
+  current clean Nando CPU incremental remains 120 / 5000.
+
+Required next mechanism:
+  active_turn_state / tool-state channel, not another keyword profile.
+```
 
 Git-control request-side admission refresh:
 
@@ -363,14 +419,15 @@ git_control:
     or split the git command-outcome geometry first.
 
 serving_ops:
-  feedback candidate_events: 74
-  feedback scoreable_payload_events: 40
-  feedback verification_hook_ready_events: 33
-  feedback verified_cpu_accept_eligible_events: 1
-  catalog status: PROVEN
-  business_value_gate_failure_reason: PASSED
-  decision: keep as tiny proven support only; run non-synthetic soak before any
-    market claim and keep daemon mutations disabled.
+  feedback candidate_events: 73 existing-profile / 74 route-gap family
+  feedback scoreable_payload_events: 8
+  feedback verification_hook_ready_events: 8
+  feedback verified_cpu_accept_eligible_events: 0
+  catalog status: CANDIDATE for existing profile, WATCH for route-gap family
+  business_value_gate_failure_reason:
+    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
+  decision: do not promote; the route was narrowed after a browser/URL/account
+    management leak and no zero-false current5k safe policy remains.
 ```
 
 Decision:
@@ -431,8 +488,7 @@ PROVEN rows on current5k:
 | 2 | `role_binding_mixed_map_seed0` | 477 | 11 | 11 | 6 | 6 | 1 | Safe request-side admission policy; useful but still small. |
 | 3 | `role_binding_conditional_branch_seed0` | 456 | 58 | 53 | 3 | 3 | 0 | Tiny request-side v2 safe policy; broad conditional calibration is still unsafe. |
 | 4 | `metrics_report_readout` | 55 | 11 | 11 | 11 | 11 | 2 | Triple-feature p99 readout sidecar only; support is exhausted. |
-| 6 | `serving_ops` | 74 | 40 | 33 | 1 | 1 | 0 | Tiny safe-policy proof; server mutations remain disabled and this is not a serving market claim. |
-| 7 | `role_binding_edit_marker_length_seed0` | 506 | 50 | 42 | 3 | 3 | 0 | Edit safe-policy v2 tiny proof; do not widen broad edit. |
+| 6 | `role_binding_edit_marker_length_seed0` | 506 | 5 | 4 | 3 | 3 | 0 | Edit safe-policy v2 tiny proof; do not widen broad edit. |
 
 Important non-promotions:
 
@@ -458,9 +514,12 @@ metrics_report current5k:
   decision: PROVEN, but tiny; split or improve numeric evidence before more work
 
 serving_ops current5k:
-  score/readout safe policy: 1 true accept, 0 false accepts
+  narrowed scoreable payloads: 8
+  output evidence: 4 true / 4 false
+  safe_policy_found: false
+  shadow verified accepts after stale policy disable: 0
   server mutations: disabled
-  decision: PROVEN, but tiny; split or improve daemon health evidence before more work
+  decision: WATCH/CANDIDATE; split or improve daemon health evidence before more work
 
 mixed_map current5k:
   request-side admission safe policy: 6 true accepts, 0 false accepts
@@ -853,40 +912,35 @@ target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1-current5k.verif
 Measured on current5k:
 
 ```text
-serving_ops_candidate_events: 74
-payload_ready_events: 40
-payload_built_events: 40
-scoreable_payload_events: 40
+serving_ops_candidate_events: 73
+payload_ready_events: 39
+payload_built_events: 8
+scoreable_payload_events: 8
 edge_count: 8
-output_evidence_matched_events: 33
-verified_true_events: 21
-verified_false_events: 12
+output_evidence_matched_events: 8
+verified_true_events: 4
+verified_false_events: 4
 
-local_accept_calibration safe_policy_found: true
-local_accept_calibration best_safe_true_accepts: 6
-promoted policy_accept_rows: 1
-promoted policy_accept_verified_true_rows: 1
-promoted policy_accept_verified_false_rows: 0
-promoted policy_accept_unverified_rows: 0
+local_accept_calibration safe_policy_found: false
+local_accept_calibration best_safe_true_accepts: 0
 
-shadow nando_shadow_accepts: 1
-shadow verified_safe_accepts: 1
+shadow nando_shadow_accepts: 0
+shadow verified_safe_accepts: 0
 shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 371226
-verification_hook_ready_events: 33
-verified_cpu_accept_eligible_events: 1
-market_claim_allowed: true
+verification_hook_ready_events: 8
+verified_cpu_accept_eligible_events: 0
+market_claim_allowed: false
 server_mutation_enabled: false
 ```
 
 Decision:
 
 ```text
-`serving_ops` is PROVEN on current5k, but only as a tiny safe-policy row:
-1 verified accept, false_accepts=0. This is useful evidence that the value gate
-can promote a new profile, but it is not meaningful CPU80 growth. Keep daemon
-actions disabled. The next serving work should split a stronger health/metric
-subfamily instead of widening thresholds.
+`serving_ops` is not PROVEN on current5k after the route-leak fix. The narrowed
+builder removed browser/URL/account rows, leaving 8 scoreable payloads with
+4 true and 4 false verifier labels and no safe policy. Keep daemon actions
+disabled. The next serving work should split a stronger health/metric subfamily
+instead of widening thresholds.
 ```
 
 ## Broad Route Split Discovery V1

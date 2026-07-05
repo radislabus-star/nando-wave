@@ -17764,9 +17764,15 @@ where
         None
     };
     let agent_continue_execute_admission_calibration_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT);
+        current_window_companion_report_path(
+            DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT,
+            prefer_current5k_companions,
+        );
     let agent_continue_execute_state_admission_audit_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT);
+        current_window_companion_report_path(
+            DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT,
+            prefer_current5k_companions,
+        );
     let agent_continue_execute_admission_calibration =
         if agent_continue_execute_admission_calibration_report_path.exists() {
             Some(read_json_file::<
@@ -17811,8 +17817,10 @@ where
     } else {
         None
     };
-    let serving_ops_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT);
+    let serving_ops_local_accept_calibration_report_path = current_window_companion_report_path(
+        DEFAULT_SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_REPORT,
+        prefer_current5k_companions,
+    );
     let serving_ops_local_accept_calibration =
         if serving_ops_local_accept_calibration_report_path.exists() {
             Some(
@@ -25041,16 +25049,30 @@ where
         args.next().map(PathBuf::from).unwrap_or_else(|| {
             PathBuf::from(DEFAULT_PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_AUDIT_REPORT)
         });
-    let agent_continue_execute_dry_run_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_REPORT);
+    let agent_continue_execute_dry_run_report_path = current_window_companion_report_path(
+        DEFAULT_AGENT_CONTINUE_EXECUTE_PAYLOAD_DRY_RUN_REPORT,
+        prefer_current5k_companions,
+    );
     let agent_continue_execute_verification_audit_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT);
+        current_window_companion_report_path(
+            DEFAULT_AGENT_CONTINUE_EXECUTE_ARTIFACT_PROGRESS_AUDIT_REPORT,
+            prefer_current5k_companions,
+        );
     let agent_continue_execute_local_accept_calibration_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT);
+        current_window_companion_report_path(
+            DEFAULT_AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_REPORT,
+            prefer_current5k_companions,
+        );
     let agent_continue_execute_admission_calibration_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT);
+        current_window_companion_report_path(
+            DEFAULT_AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_REPORT,
+            prefer_current5k_companions,
+        );
     let agent_continue_execute_state_admission_audit_report_path =
-        PathBuf::from(DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT);
+        current_window_companion_report_path(
+            DEFAULT_AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_REPORT,
+            prefer_current5k_companions,
+        );
     let agent_control_admission_calibration_report_path = args
         .next()
         .map(PathBuf::from)
@@ -40723,6 +40745,9 @@ fn extract_serving_ops_tokens(text: &str) -> Option<ServingOpsTokens> {
         return None;
     }
     let lower = text.to_lowercase();
+    if !has_strong_serving_ops_signal(&lower) {
+        return None;
+    }
     let service_token = first_matching_branch_token(
         &lower,
         &[
@@ -40731,7 +40756,6 @@ fn extract_serving_ops_tokens(text: &str) -> Option<ServingOpsTokens> {
             "worker",
             "lb",
             "load_balancer",
-            "http",
             "hostworld",
             "vps",
             "nginx",
@@ -40803,6 +40827,40 @@ fn extract_serving_ops_tokens(text: &str) -> Option<ServingOpsTokens> {
         health_token,
         boundary_token,
     })
+}
+
+fn has_strong_serving_ops_signal(lower: &str) -> bool {
+    contains_any(
+        lower,
+        &[
+            "/score",
+            "core_score",
+            "worker_score",
+            "load_balancer",
+            "load balancer",
+            "daemon",
+            "демон",
+            "worker",
+            "воркер",
+            "hostworld",
+            "vps",
+            "nginx",
+            "systemd",
+            "p99",
+            "p90",
+            "latency",
+            "rss",
+            "qps",
+            "health",
+            "metrics endpoint",
+            "profile worker",
+            "lb replay",
+            "lb p99",
+            "серверный стенд",
+            "serving runtime",
+            "serving stack",
+        ],
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -42638,14 +42696,19 @@ fn current_window_agent_control_admission_calibration_report_path(
     if !prefer_current5k {
         return requested_path;
     }
+    let requested = requested_path.to_string_lossy().into_owned();
+    let current5k_companion = current_window_companion_report_path(&requested, true);
+    if current5k_companion.exists() {
+        return current5k_companion;
+    }
+
     let default_path = PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_REPORT);
     let current5k_path = PathBuf::from(DEFAULT_AGENT_CONTROL_ADMISSION_CALIBRATION_5K_REPORT);
     if requested_path == default_path && current5k_path.exists() {
         return current5k_path;
     }
 
-    let requested = requested_path.to_string_lossy().into_owned();
-    current_window_companion_report_path(&requested, true)
+    current5k_companion
 }
 
 type RoleBindingCalibrationMarginAccessor = fn(&RoleBindingEditLocalAcceptCalibrationRow) -> i32;
@@ -44130,8 +44193,8 @@ fn select_serving_ops_promotion_policy_from_evidence(
     let mut best_market_safe: Option<RoleBindingMixedPromotionPolicySelection> = None;
     for threshold in thresholds {
         let selection = evaluate_mixed_energy_promotion_threshold(
-            "market_safe_second_slot_margin_threshold",
-            "evidence_trace_serving_ops_second_slot_safe_threshold",
+            "market_safe_metric_slot_margin_threshold",
+            "evidence_trace_serving_ops_metric_slot_safe_threshold",
             threshold,
             &scored_rows,
         );
