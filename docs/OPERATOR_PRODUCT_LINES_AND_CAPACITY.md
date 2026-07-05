@@ -8,6 +8,28 @@
 
 Этот файл не вводит новую архитектуру. Это карта требований и пределов.
 
+## 2026-07-05 Forbidden Legacy Correction
+
+The `.nwrb role-binding profiles -> payload builder -> verifier -> catalog`
+line is no longer an allowed product path. Old `.nwrb/.nwreb` entries below
+are historical capacity/evidence notes only; they are not CPU80 progress,
+market-savings evidence, or a backend to extend.
+
+Allowed current direction:
+
+```text
+phase-center / phase-action package
+-> flat CPU runtime
+-> parity / ablation / shortcut gates
+-> verifier-backed real-traffic shadow
+```
+
+See:
+
+```text
+docs/FORBIDDEN_LEGACY_NWRB_COMMERCIAL_BACKEND.md
+```
+
 ## Короткий Ответ
 
 ```text

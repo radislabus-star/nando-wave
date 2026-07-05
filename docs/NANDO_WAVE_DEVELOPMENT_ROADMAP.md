@@ -58,7 +58,21 @@ docs/OPERATOR_PRODUCT_LINES_AND_CAPACITY.md
 docs/PRODUCT_TRAJECTORY.md
 ```
 
-Текущий product serving runtime рубеж:
+Forbidden historical `.nwrb` runtime snapshot, not a current roadmap target:
+
+```text
+This section is retained only as audit history. The active `.nwrb`
+role-binding CLI/SDK/test path has been removed. Do not use these numbers as
+CPU80 progress, product direction, or market evidence.
+
+Current runtime direction:
+  phase-center / phase-action package
+  -> flat CPU runtime
+  -> parity / ablation / shortcut gates
+  -> verifier-backed real-traffic shadow
+```
+
+Old snapshot:
 
 ```text
 data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_PROFILE_RUNTIME_SMOKE.md
@@ -142,7 +156,7 @@ deployed HostWorld cheap-VPS replay after packed hot-path redeploy:
   max_worker_runtime_bytes_estimate: 492792.
   max_worker_p99_latency_ns: 698145.
 
-Boundary: local `.nwrb` serving smoke/replay and local load-balancer replay are
+Historical boundary: local `.nwrb` serving smoke/replay and local load-balancer replay were
 closed for sampled release-suite traffic. The deployed cheap-VPS packed
 hot-path replay is now back inside the 3 ms p99 envelope after transport
 cleanup and compact LB -> worker responses. This is still not real Codex

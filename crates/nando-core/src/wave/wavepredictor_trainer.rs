@@ -503,7 +503,7 @@ impl WavePredictorTrainer {
         field: &mut WavePredictorHebbianField,
         active_fringe: &[WavePredictorActiveCenter],
         impulse: WavePredictorStateImpulse,
-        binding_output_slot: Option<u8>,
+        _binding_output_slot: Option<u8>,
         eta: i16,
         direction: i32,
         report: &mut WavePredictorHebbianUpdateReport,
@@ -521,14 +521,6 @@ impl WavePredictorTrainer {
                 report.touched_edges += 1;
             }
         }
-        let role_binding_delta = direction * i32::from(field.config().eta_binding) * magnitude;
-        report.touched_edges += field.adjust_state_delta_role_binding(
-            impulse.lane_id,
-            impulse.signed_strength,
-            active_fringe,
-            binding_output_slot,
-            role_binding_delta,
-        );
 
         for active in active_fringe {
             let active_strength = active.strength.max(0);

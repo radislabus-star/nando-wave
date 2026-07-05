@@ -2,6 +2,27 @@
 
 Date: 2026-06-20
 
+## 2026-07-05 Correction
+
+The `.nwrb role-binding profiles -> payload builder -> verifier -> catalog`
+line is forbidden and removed from the active CLI/SDK/test path.
+
+Current operator-runtime work must use the phase-center / phase-action path:
+
+```text
+relation/action waves
+-> phase / Fourier center of mass
+-> compact operator center
+-> margin-gated flat CPU runtime
+-> verifier-backed real-traffic shadow
+```
+
+See:
+
+```text
+docs/FORBIDDEN_LEGACY_NWRB_COMMERCIAL_BACKEND.md
+```
+
 ## Decision
 
 Nando Wave now has two generations of core code in the repository:

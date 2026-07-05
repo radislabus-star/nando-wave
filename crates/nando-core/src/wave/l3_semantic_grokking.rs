@@ -396,7 +396,7 @@ impl L3SemanticGrokkingMemory {
             .or_else(|| self.semantic.solve_equation(&equation, candidates))
     }
 
-    pub(super) fn solve_query_with_role_binding_ablation(
+    pub(super) fn solve_query_with_slot_binding_ablation(
         &self,
         text: &str,
         candidates: &[SemanticCandidate],

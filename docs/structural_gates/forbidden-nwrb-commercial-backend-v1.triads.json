@@ -1,0 +1,107 @@
+{
+  "task_id": "forbidden-nwrb-commercial-backend-v1",
+  "domain": "code",
+  "query": "Verify the legacy .nwrb role-binding commercial backend is forbidden and the active direction is phase-center / phase-action.",
+  "triads": [
+    {
+      "id": "t0",
+      "subject": "legacy_nwrb_role_binding_backend",
+      "relation": "status",
+      "object": "forbidden_legacy",
+      "evidence": "docs/FORBIDDEN_LEGACY_NWRB_COMMERCIAL_BACKEND.md",
+      "confidence": 1.0,
+      "subject_role": "backend",
+      "object_role": "status",
+      "route": "forbidden_legacy"
+    },
+    {
+      "id": "t1",
+      "subject": "legacy_nwrb_cli_commands",
+      "relation": "runtime_behavior",
+      "object": "reject_all_role_binding_commands",
+      "evidence": "crates/nando-cli/src/main.rs",
+      "confidence": 1.0,
+      "subject_role": "cli_surface",
+      "object_role": "guard",
+      "route": "active_code"
+    },
+    {
+      "id": "t2",
+      "subject": "legacy_nwrb_package_cli_modules",
+      "relation": "active_code_status",
+      "object": "deleted",
+      "evidence": "crates/nando-cli/src/role_binding_package_cmd.rs",
+      "confidence": 1.0,
+      "subject_role": "cli_modules",
+      "object_role": "removal_status",
+      "route": "active_code"
+    },
+    {
+      "id": "t3",
+      "subject": "legacy_nwrb_public_sdk_test",
+      "relation": "active_code_status",
+      "object": "deleted",
+      "evidence": "crates/nando-core/tests/wavepredictor_role_binding_sdk_public.rs",
+      "confidence": 1.0,
+      "subject_role": "sdk_test",
+      "object_role": "removal_status",
+      "route": "active_code"
+    },
+    {
+      "id": "t4",
+      "subject": "legacy_role_binding_pressure_gate",
+      "relation": "active_code_status",
+      "object": "deleted",
+      "evidence": "crates/nando-core/tests/wavepredictor_binding_pressure_l3.rs",
+      "confidence": 1.0,
+      "subject_role": "test_gate",
+      "object_role": "removal_status",
+      "route": "active_code"
+    },
+    {
+      "id": "t5",
+      "subject": "nando_core_public_api",
+      "relation": "exports_legacy_nwrb_sdk",
+      "object": "false",
+      "evidence": "crates/nando-core/src/lib.rs",
+      "confidence": 1.0,
+      "subject_role": "public_api",
+      "object_role": "guard",
+      "route": "active_code"
+    },
+    {
+      "id": "t6",
+      "subject": "active_operator_runtime_direction",
+      "relation": "is",
+      "object": "phase_center_phase_action",
+      "evidence": "docs/NANDO_WAVE_DEVELOPMENT_ROADMAP.md",
+      "confidence": 1.0,
+      "subject_role": "runtime_direction",
+      "object_role": "allowed_backend",
+      "route": "current_architecture"
+    },
+    {
+      "id": "t7",
+      "subject": "market_savings_claims",
+      "relation": "may_use_legacy_nwrb_numbers",
+      "object": "false",
+      "evidence": "docs/FORBIDDEN_LEGACY_NWRB_COMMERCIAL_BACKEND.md",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "forbidden_source",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t8",
+      "subject": "phase_center_public_sdk",
+      "relation": "active_test_status",
+      "object": "passes",
+      "evidence": "cargo test -p nando-core --test phase_center_offload_sdk_public -- --nocapture",
+      "confidence": 1.0,
+      "subject_role": "allowed_backend",
+      "object_role": "verification",
+      "route": "active_code"
+    }
+  ],
+  "candidate_triads": []
+}

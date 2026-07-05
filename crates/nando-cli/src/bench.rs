@@ -375,8 +375,8 @@ fn print_l3_metrics(proof: &L3SemanticGrokkingProof, elapsed: Duration) {
     println!("  answer_binding_learned: {}", proof.answer_binding_learned);
     println!("  answer_lookup_only: {}", proof.answer_lookup_only);
     println!(
-        "  role_binding_ablation_drop: {:.6}",
-        proof.role_binding_ablation_drop
+        "  slot_binding_ablation_drop: {:.6}",
+        proof.slot_binding_ablation_drop
     );
     println!(
         "  semantic_compiler_ready: {}",

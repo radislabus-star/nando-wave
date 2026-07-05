@@ -5750,7 +5750,6 @@ struct StrictMultiSeedRuntimeLogReport {
     flat_gap_parity_mismatches: Option<usize>,
     flat_sequence_energy_parity_mismatches: Option<usize>,
     state_delta_edges: Option<usize>,
-    role_binding_edges: Option<usize>,
     target_center_id_training_used: Option<bool>,
     proof_rule_id_training_authority_used: Option<bool>,
     concrete_x_lookup_used: Option<bool>,
@@ -14977,7 +14976,6 @@ fn parse_strict_multiseed_runtime_log(
     let flat_sequence_energy_parity_mismatches =
         strict_metric_usize(&metrics, &["flat_sequence_energy_parity_mismatches"]);
     let state_delta_edges = strict_metric_usize(&metrics, &["state_delta_edges"]);
-    let role_binding_edges = strict_metric_usize(&metrics, &["role_binding_edges"]);
     let target_center_id_training_used =
         strict_metric_bool(&metrics, &["target_center_id_training_used"]);
     let proof_rule_id_training_authority_used =
@@ -15080,10 +15078,6 @@ fn parse_strict_multiseed_runtime_log(
             "flat slot accuracy mismatch field={slot_accuracy_milli:?} flat={flat_slot_accuracy_milli:?}"
         ));
     }
-    if role_binding_edges.is_none() {
-        evidence_warnings.push(String::from("role_binding_edges metric missing"));
-    }
-
     Ok(StrictMultiSeedRuntimeLogReport {
         seed,
         operator_class: operator_class.to_string(),
@@ -15101,7 +15095,6 @@ fn parse_strict_multiseed_runtime_log(
         flat_gap_parity_mismatches,
         flat_sequence_energy_parity_mismatches,
         state_delta_edges,
-        role_binding_edges,
         target_center_id_training_used,
         proof_rule_id_training_authority_used,
         concrete_x_lookup_used,

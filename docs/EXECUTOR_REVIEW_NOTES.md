@@ -17011,6 +17011,59 @@ routing, `.nwpc` bridge, raw-language action parsing, broad workflow reasoning,
 or text generation.
 ```
 
+## 2026-07-05: Forbidden `.nwrb` Commercial Backend Removal
+
+Decision:
+
+```text
+The `.nwrb role-binding profiles -> payload builder -> verifier -> catalog`
+path is forbidden. It is not CPU80 progress, not a commercial offload backend,
+not market-savings evidence, and not a future Nando Wave architecture path.
+```
+
+Removed from active Rust path:
+
+```text
+crates/nando-cli/src/role_binding_package_cmd.rs
+crates/nando-cli/src/role_binding_runtime_cmd.rs
+crates/nando-cli/src/role_binding_runtime_cmd/edit_safe_policy.rs
+crates/nando-cli/src/role_binding_runtime_cmd/serving_ops.rs
+crates/nando-cli/src/role_binding_runtime_cmd/test_output_parse.rs
+crates/nando-core/tests/wavepredictor_binding_pressure_l3.rs
+crates/nando-core/tests/wavepredictor_role_binding_sdk_public.rs
+nando_core public re-exports for WavePredictorRoleBinding*
+nando_core `.nwrb` package/SDK/serving runtime internals
+```
+
+Current guard:
+
+```text
+nando-cli role-binding-* -> FORBIDDEN_LEGACY_NWRB_BACKEND
+```
+
+Allowed path:
+
+```text
+phase-center / phase-action package
+-> flat CPU runtime
+-> parity / ablation / shortcut gates
+-> verifier-backed real-traffic shadow
+```
+
+Verification:
+
+```text
+cargo fmt --check
+cargo check -p nando-core
+cargo check -p nando-cli
+cargo clippy -p nando-core -- -D warnings
+cargo clippy -p nando-cli -- -D warnings
+cargo test -p nando-core --test phase_center_offload_sdk_public -- --nocapture
+cargo test -p nando-core --tests --no-run
+cargo test -p nando-cli --no-run
+nanda-check --triads docs/structural_gates/forbidden-nwrb-commercial-backend-v1.triads.json
+```
+
 ## 2026-07-03 - Slot32 Role-Binding CLI Corpus Score/Verify Rung
 
 Verdict:

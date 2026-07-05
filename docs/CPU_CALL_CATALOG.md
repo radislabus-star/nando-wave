@@ -1,6 +1,15 @@
 # CPU Call Catalog
 
-Status: review-only working catalog for CPU80.
+Status: archived legacy catalog. Do not use for CPU80 progress.
+
+2026-07-05 correction:
+
+```text
+The old .nwrb role-binding profiles -> payload builder -> verifier -> catalog
+path is forbidden and removed from the active CLI/SDK/test path.
+Rows below are historical audit material only.
+Current CPU catalog work must be phase-center / phase-action based.
+```
 
 Source report:
 

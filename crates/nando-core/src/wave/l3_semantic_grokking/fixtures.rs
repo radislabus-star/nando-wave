@@ -21,7 +21,7 @@ pub(super) fn candidates_for_fact(fact: &super::super::SemanticFact) -> [Semanti
     ]
 }
 
-pub(super) fn role_binding_ablation_candidates_for_fact(
+pub(super) fn slot_binding_ablation_candidates_for_fact(
     fact: &super::super::SemanticFact,
 ) -> [SemanticCandidate; 3] {
     let family = fact.subject.family.clone();

@@ -205,15 +205,9 @@ pub use wave_pattern_compiler::{
     WavePatternCompiler, WavePatternSelection, WavePatternTemplate,
 };
 pub use wavepredictor_hebbian::{
-    WAVE_PREDICTOR_ROLE_BINDING_PACKAGE_HEADER_BYTES, WAVE_PREDICTOR_ROLE_BINDING_PACKAGE_MAGIC,
     WavePredictorActiveCenter, WavePredictorCenterId, WavePredictorConvergenceError,
-    WavePredictorFlatRoleBindingEdge, WavePredictorFlatRoleBindingTable,
     WavePredictorHebbianConfig, WavePredictorHebbianEdge, WavePredictorHebbianField,
-    WavePredictorHebbianUpdateReport, WavePredictorRoleBindingDecision,
-    WavePredictorRoleBindingEvalTask, WavePredictorRoleBindingOffloadAction,
-    WavePredictorRoleBindingOffloadPolicy, WavePredictorRoleBindingOffloadRuntime,
-    WavePredictorRoleBindingOffloadSummary, WavePredictorRoleBindingPackageError,
-    WavePredictorRoleBindingPackageInfo, WavePredictorRoleBindingPreparedFringe,
+    WavePredictorHebbianUpdateReport,
 };
 pub use wavepredictor_trainer::{
     WAVEPREDICTOR_STATE_DELTA_CAP, WAVEPREDICTOR_TARGET_AXIS_CAP, WavePredictorAxisTarget,

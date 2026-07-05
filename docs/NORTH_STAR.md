@@ -63,6 +63,29 @@ https://arxiv.org/abs/2301.05217
 
 Если это исчезает, проект теряет смысл.
 
+## Запрещенный старый коммерческий путь
+
+`.nwrb role-binding profiles -> payload builder -> verifier -> catalog`
+больше не является допустимым путем к CPU80, коммерческому offload или market
+claim.
+
+Это зафиксировано как forbidden legacy:
+
+```text
+docs/FORBIDDEN_LEGACY_NWRB_COMMERCIAL_BACKEND.md
+```
+
+Допустимый путь дальше:
+
+```text
+real traffic
+-> action/state atoms
+-> phase-center / Fourier center of mass
+-> compact operator runtime
+-> deterministic verifier
+-> feedback/catalog
+```
+
 ## Несущая волна
 
 В исходной идее очень важна несущая волна.
