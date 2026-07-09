@@ -773,8 +773,9 @@ def dashboard_metric_panel(title: str, rows: list[tuple[str, str, str]], lang: s
         rows = [("status", "unknown" if lang == "en" else "неизвестно", "")]
     body = []
     for label, value, hint in rows:
+        css_class = "metric metric-wide" if label == "selector_mode" else "metric"
         body.append(
-            "<div class='metric'>"
+            f"<div class='{css_class}'>"
             f"<span>{html.escape(label)}</span>"
             f"<b>{html.escape(value)}</b>"
             f"<small>{html.escape(hint)}</small>"
@@ -1186,6 +1187,8 @@ def status_dashboard_html(request_path: str = "") -> str:
     .metric span {{ color: #8e9aa5; font-size: 12px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }}
     .metric b {{ color: #fff; font-size: 20px; line-height: 1.05; overflow-wrap: anywhere; }}
     .metric small {{ color: #9aa7b2; font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }}
+    .metric-wide {{ grid-column: 1 / -1; }}
+    .metric-wide b {{ font-size: 13px; line-height: 1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; word-break: break-word; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th, td {{ text-align: left; border-bottom: 1px solid #28313a; padding: 9px 8px; white-space: nowrap; }}
     th {{ color: #a8b3bd; font-weight: 650; }}
