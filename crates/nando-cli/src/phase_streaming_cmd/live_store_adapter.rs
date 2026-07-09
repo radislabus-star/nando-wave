@@ -7225,17 +7225,26 @@ where
         };
         let estimated_cost_microusd =
             live_store_apply_tail_cost_estimate(&mut adapter_event, &price_config);
+        live_store_record_event_profile_kinds(&adapter_event, &mut append_profile_kind_by_id);
+        let auto_recovery_profile_ids = live_store_auto_recovery_profile_ids(
+            &store,
+            &append_profile_kind_by_id,
+            &product_hot_score_only_quarantined_profile_ids,
+            min_bucket_events,
+        );
         let mut quarantine_recovery_split_basis =
             adapter_event.bucket_selector_candidate_atoms.clone();
+        quarantine_recovery_split_basis.extend(adapter_event.selected_bucket_atoms.iter().cloned());
         quarantine_recovery_split_basis.extend(adapter_event.auto_subcenter_atoms.iter().cloned());
         quarantine_recovery_split_basis.sort();
         quarantine_recovery_split_basis.dedup();
         let quarantine_recovery_atoms =
-            hidden_state::live_store_quarantine_recovery_subcenter_atoms(
+            hidden_state::live_store_quarantine_recovery_subcenter_atoms_for_parent_ids(
                 &adapter_event.route_key,
                 &adapter_event.auto_subcenter_atoms,
+                &[adapter_event.bucket_id],
                 &quarantine_recovery_split_basis,
-                &product_hot_score_only_quarantined_profile_ids,
+                &auto_recovery_profile_ids,
                 DEFAULT_HOT_PATH_DAEMON_APPEND_LIVE_TAIL_MAX_AUTO_SUBCENTER_ATOMS / 2,
             );
         if !quarantine_recovery_atoms.is_empty() {
@@ -7250,8 +7259,8 @@ where
                     adapter_event.bucket_id,
                     &adapter_event.auto_subcenter_atoms,
                 );
+            live_store_record_event_profile_kinds(&adapter_event, &mut append_profile_kind_by_id);
         }
-        live_store_record_event_profile_kinds(&adapter_event, &mut append_profile_kind_by_id);
         if estimated_cost_microusd > 0 {
             append_estimated_cost_events = append_estimated_cost_events.saturating_add(1);
             append_estimated_total_cost_microusd =
@@ -7888,14 +7897,12 @@ where
                     && product_hot_score_only_post_quarantine_false_accepts == 0
                     && product_hot_score_only_quarantine_false_accepts == 0
             });
-        let quarantine_recovery_discovery = product_hot_score_only_quarantined_profile_ids
+        let quarantine_recovery_discovery = auto_recovery_profile_ids
             .contains(&adapter_event.bucket_id)
             || adapter_event
                 .auto_subcenter_bucket_ids
                 .iter()
-                .any(|bucket_id| {
-                    product_hot_score_only_quarantined_profile_ids.contains(bucket_id)
-                });
+                .any(|bucket_id| auto_recovery_profile_ids.contains(bucket_id));
         if quarantine_recovery_discovery {
             quarantine_recovery_discovery_events =
                 quarantine_recovery_discovery_events.saturating_add(1);

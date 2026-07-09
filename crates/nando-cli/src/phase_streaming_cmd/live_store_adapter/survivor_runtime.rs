@@ -125,6 +125,44 @@ pub(super) fn live_store_clean_candidate_value_reports(
         .collect()
 }
 
+pub(super) fn live_store_auto_recovery_profile_ids(
+    store: &PhaseCenterLiveOperatorStore,
+    known_profile_kinds: &BTreeMap<u32, &'static str>,
+    quarantined_profile_ids: &BTreeSet<u32>,
+    min_bucket_events: usize,
+) -> BTreeSet<u32> {
+    let mut ids = quarantined_profile_ids.clone();
+    for (profile_id, kind) in known_profile_kinds {
+        let Some(bucket) = store.miner().bucket(*profile_id) else {
+            continue;
+        };
+        if !bucket.is_active(min_bucket_events) {
+            continue;
+        }
+        let operator_power = live_store_operator_power_report(bucket, kind, min_bucket_events);
+        if live_store_candidate_needs_auto_recovery(bucket, *kind, operator_power.blocker) {
+            ids.insert(*profile_id);
+        }
+    }
+    ids
+}
+
+fn live_store_candidate_needs_auto_recovery(
+    bucket: &PhaseCenterOnlineBucket,
+    kind: &'static str,
+    operator_power_blocker: &'static str,
+) -> bool {
+    if bucket.rejected || bucket.false_accepts > 0 {
+        return true;
+    }
+    if kind == "observable_primary" && operator_power_blocker != "none" {
+        return true;
+    }
+    matches!(operator_power_blocker, "operator_power_false_risk_nonzero")
+        || bucket.trust_drift_micro > 100_000
+        || bucket.negative_events > 0
+}
+
 fn live_store_candidate_promotion_blocker(
     bucket: &PhaseCenterOnlineBucket,
     operator_power_blocker: &'static str,

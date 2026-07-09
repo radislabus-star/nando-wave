@@ -63,6 +63,7 @@ pub(super) fn live_store_auto_subcenter_atoms_from_safe_atoms(
     atoms
 }
 
+#[cfg(test)]
 pub(super) fn live_store_quarantine_recovery_subcenter_atoms(
     route_key: &str,
     parent_atoms: &[String],
@@ -70,7 +71,25 @@ pub(super) fn live_store_quarantine_recovery_subcenter_atoms(
     quarantined_profile_ids: &BTreeSet<u32>,
     limit: usize,
 ) -> Vec<String> {
-    if limit == 0 || quarantined_profile_ids.is_empty() {
+    live_store_quarantine_recovery_subcenter_atoms_for_parent_ids(
+        route_key,
+        parent_atoms,
+        &[],
+        split_atoms,
+        quarantined_profile_ids,
+        limit,
+    )
+}
+
+pub(super) fn live_store_quarantine_recovery_subcenter_atoms_for_parent_ids(
+    route_key: &str,
+    parent_atoms: &[String],
+    explicit_parent_bucket_ids: &[u32],
+    split_atoms: &[String],
+    recovery_profile_ids: &BTreeSet<u32>,
+    limit: usize,
+) -> Vec<String> {
+    if limit == 0 || recovery_profile_ids.is_empty() {
         return Vec::new();
     }
     let mut atoms = Vec::new();
@@ -79,7 +98,7 @@ pub(super) fn live_store_quarantine_recovery_subcenter_atoms(
         let parent_bucket_key = live_store_auto_subcenter_bucket_key(route_key, parent_atom);
         let parent_bucket_id =
             live_store_hash_id(["live_store_bucket", parent_bucket_key.as_str()]);
-        if !quarantined_profile_ids.contains(&parent_bucket_id) {
+        if !recovery_profile_ids.contains(&parent_bucket_id) {
             continue;
         }
         let recovery_prefix = if parent_atom.starts_with("hidden_state:") {
@@ -87,67 +106,112 @@ pub(super) fn live_store_quarantine_recovery_subcenter_atoms(
         } else {
             "quarantine_recovery"
         };
-        let safe_split_atoms = split_atoms
-            .iter()
-            .filter(|atom| *atom != parent_atom)
-            .filter(|atom| live_store_auto_subcenter_atom_blocker(atom) == "none")
-            .collect::<BTreeSet<_>>();
-        let mut safe_split_atoms = safe_split_atoms.into_iter().collect::<Vec<_>>();
-        safe_split_atoms.sort_by(|left, right| {
-            live_store_quarantine_recovery_split_atom_score(right)
-                .cmp(&live_store_quarantine_recovery_split_atom_score(left))
-                .then_with(|| left.cmp(right))
-        });
-        let single_limit = limit.saturating_add(2) / 3;
-        for split_atom in safe_split_atoms.iter().take(single_limit) {
-            let atom = format!("{recovery_prefix}:parent={parent_bucket_id}:split={split_atom}");
-            if seen.insert(atom.clone()) {
-                atoms.push(atom);
-                if atoms.len() >= limit {
-                    return atoms;
-                }
+        live_store_push_recovery_split_atoms(
+            &mut atoms,
+            &mut seen,
+            parent_bucket_id,
+            recovery_prefix,
+            split_atoms,
+            Some(parent_atom),
+            limit,
+        );
+        if atoms.len() >= limit {
+            return atoms;
+        }
+    }
+    for parent_bucket_id in explicit_parent_bucket_ids {
+        if !recovery_profile_ids.contains(parent_bucket_id) {
+            continue;
+        }
+        live_store_push_recovery_split_atoms(
+            &mut atoms,
+            &mut seen,
+            *parent_bucket_id,
+            "quarantine_recovery",
+            split_atoms,
+            None,
+            limit,
+        );
+        if atoms.len() >= limit {
+            return atoms;
+        }
+    }
+    atoms
+}
+
+fn live_store_push_recovery_split_atoms(
+    atoms: &mut Vec<String>,
+    seen: &mut BTreeSet<String>,
+    parent_bucket_id: u32,
+    recovery_prefix: &str,
+    split_atoms: &[String],
+    excluded_parent_atom: Option<&String>,
+    limit: usize,
+) {
+    let safe_split_atoms = split_atoms
+        .iter()
+        .filter(|atom| Some(*atom) != excluded_parent_atom)
+        .filter(|atom| live_store_auto_subcenter_atom_blocker(atom) == "none")
+        .collect::<BTreeSet<_>>();
+    let mut safe_split_atoms = safe_split_atoms.into_iter().collect::<Vec<_>>();
+    safe_split_atoms.sort_by(|left, right| {
+        live_store_quarantine_recovery_split_atom_score(right)
+            .cmp(&live_store_quarantine_recovery_split_atom_score(left))
+            .then_with(|| left.cmp(right))
+    });
+    let single_limit = limit.saturating_add(2) / 3;
+    for split_atom in safe_split_atoms.iter().take(single_limit) {
+        let atom = format!("{recovery_prefix}:parent={parent_bucket_id}:split={split_atom}");
+        live_store_push_recovery_atom(atoms, seen, atom, limit);
+        if atoms.len() >= limit {
+            return;
+        }
+    }
+    for left_index in 0..safe_split_atoms.len() {
+        for right_index in left_index + 1..safe_split_atoms.len() {
+            let left_atom = safe_split_atoms[left_index];
+            let right_atom = safe_split_atoms[right_index];
+            let atom = format!(
+                "{recovery_prefix}:parent={parent_bucket_id}:split_pair={left_atom}+{right_atom}"
+            );
+            live_store_push_recovery_atom(atoms, seen, atom, limit);
+            if atoms.len() >= limit {
+                return;
             }
         }
-        for left_index in 0..safe_split_atoms.len() {
-            for right_index in left_index + 1..safe_split_atoms.len() {
-                let left_atom = safe_split_atoms[left_index];
-                let right_atom = safe_split_atoms[right_index];
+    }
+    let composite_split_atoms = safe_split_atoms
+        .iter()
+        .take(limit.max(3).min(12))
+        .copied()
+        .collect::<Vec<_>>();
+    for left_index in 0..composite_split_atoms.len() {
+        for middle_index in left_index + 1..composite_split_atoms.len() {
+            for right_index in middle_index + 1..composite_split_atoms.len() {
+                let left_atom = composite_split_atoms[left_index];
+                let middle_atom = composite_split_atoms[middle_index];
+                let right_atom = composite_split_atoms[right_index];
                 let atom = format!(
-                    "{recovery_prefix}:parent={parent_bucket_id}:split_pair={left_atom}+{right_atom}"
+                    "{recovery_prefix}:parent={parent_bucket_id}:split_triple={left_atom}+{middle_atom}+{right_atom}"
                 );
-                if seen.insert(atom.clone()) {
-                    atoms.push(atom);
-                    if atoms.len() >= limit {
-                        return atoms;
-                    }
-                }
-            }
-        }
-        let composite_split_atoms = safe_split_atoms
-            .iter()
-            .take(limit.max(3).min(12))
-            .copied()
-            .collect::<Vec<_>>();
-        for left_index in 0..composite_split_atoms.len() {
-            for middle_index in left_index + 1..composite_split_atoms.len() {
-                for right_index in middle_index + 1..composite_split_atoms.len() {
-                    let left_atom = composite_split_atoms[left_index];
-                    let middle_atom = composite_split_atoms[middle_index];
-                    let right_atom = composite_split_atoms[right_index];
-                    let atom = format!(
-                        "{recovery_prefix}:parent={parent_bucket_id}:split_triple={left_atom}+{middle_atom}+{right_atom}"
-                    );
-                    if seen.insert(atom.clone()) {
-                        atoms.push(atom);
-                        if atoms.len() >= limit {
-                            return atoms;
-                        }
-                    }
+                live_store_push_recovery_atom(atoms, seen, atom, limit);
+                if atoms.len() >= limit {
+                    return;
                 }
             }
         }
     }
-    atoms
+}
+
+fn live_store_push_recovery_atom(
+    atoms: &mut Vec<String>,
+    seen: &mut BTreeSet<String>,
+    atom: String,
+    limit: usize,
+) {
+    if atoms.len() < limit && seen.insert(atom.clone()) {
+        atoms.push(atom);
+    }
 }
 
 fn live_store_quarantine_recovery_split_atom_score(atom: &str) -> u16 {
@@ -487,6 +551,47 @@ mod tests {
         assert_eq!(recovery_atoms.len(), 1);
         assert!(recovery_atoms[0].starts_with("hidden_state:quarantine_recovery:"));
         assert!(recovery_atoms[0].contains("split=request_command_kind:cargo"));
+    }
+
+    #[test]
+    fn quarantine_recovery_subcenter_atoms_can_split_explicit_primary_parent_bucket() {
+        let route_key = "route:test_output_parse";
+        let primary_bucket_id = live_store_hash_id([
+            "live_store_bucket",
+            "route:test_output_parse::request_command_kind:cargo",
+        ]);
+        let mut recovery_ids = BTreeSet::new();
+        recovery_ids.insert(primary_bucket_id);
+
+        let recovery_atoms = live_store_quarantine_recovery_subcenter_atoms_for_parent_ids(
+            route_key,
+            &[],
+            &[primary_bucket_id],
+            &[
+                "request_command_kind:cargo".to_owned(),
+                "tool_check_kind:test".to_owned(),
+                "state_exit_code_band:zero".to_owned(),
+                "action_family:tool".to_owned(),
+            ],
+            &recovery_ids,
+            8,
+        );
+
+        assert!(!recovery_atoms.is_empty());
+        assert!(
+            recovery_atoms
+                .iter()
+                .all(|atom| atom.starts_with("quarantine_recovery:"))
+        );
+        assert!(recovery_atoms.iter().any(|atom| {
+            atom.contains(&format!("parent={primary_bucket_id}"))
+                && atom.contains("split=request_command_kind:cargo")
+        }));
+        assert!(
+            recovery_atoms
+                .iter()
+                .all(|atom| !atom.contains("action_family:tool"))
+        );
     }
 
     #[test]

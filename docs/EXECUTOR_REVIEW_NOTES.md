@@ -195,6 +195,48 @@ deploy note:
   system services are active: appender, live-tail, provider bridge.
 ```
 
+## Current Miner Work: Recovery Frontier V3
+
+```text
+timestamp: 2026-07-10T00:20+03:00
+
+goal:
+  make automatic recovery split broad or mixed profiles without manually picking
+  classes. Broad parents remain forbidden for hot accept; they feed child
+  subcenters only.
+
+change:
+  auto_subcenter_discovery_v3_recovery_frontier adds explicit primary bucket
+  parents to recovery. Recovery no longer depends only on quarantined
+  auto_subcenter ids.
+
+change:
+  recovery frontier now includes:
+    existing quarantined ids
+    operator_power blocked observable parents
+    drift / negative-memory profiles that need deeper split
+
+dashboard:
+  /v2/status/<key>?lang=ru now starts with a full traffic funnel:
+    captured -> parsed -> candidate -> CPU accepted -> fallback/verifier ->
+    auto recovery.
+
+live evidence after deploy:
+  health: OK
+  version: auto_subcenter_discovery_v3_recovery_frontier
+  active profiles: 70
+  non-final recovery profiles in clean candidate set: 1 broad parent
+  current fresh window: 17 rows, 13 CPU accepts, 14273 / 19972 tokens, false 0
+  prior full window before restart: 329 rows, 171 CPU accepts,
+    253104 / 349386 tokens, false 0
+  recovery: 329 events, 11903 subcenter observes in the pre-restart full
+    window; fresh v3 snapshot is still growing.
+
+boundary:
+  broad parent 474378738 remains exportable=false/final_hot=false and
+  auto_recovery_running=true. It is not a product-hot operator.
+```
+
 ## Current Runtime Work: Portable Hot .nwpc Package ABI
 
 ```text

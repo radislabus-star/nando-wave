@@ -1551,6 +1551,7 @@ def status_dashboard_html(request_path: str = "") -> str:
     boundary_tokens = dashboard_int(metrics.get("provider_bridge_boundary_total_tokens"))
     append_rows = dashboard_int(live_tail.get("append_parsed_rows") or metrics.get("append_parsed_rows"))
     append_candidates = dashboard_int(live_tail.get("append_score_candidate_events") or metrics.get("append_score_candidate_events"))
+    append_total_tokens = dashboard_int(live_tail.get("append_total_tokens") or metrics.get("append_total_tokens"))
     append_accepts = dashboard_int(live_tail.get("append_unique_cpu_accepts_over_exact_cache") or metrics.get("append_unique_cpu_accepts_over_exact_cache"))
     append_tokens = dashboard_int(live_tail.get("append_tokens_saved") or metrics.get("append_tokens_saved"))
     append_false = dashboard_int(live_tail.get("append_false_accepts") or metrics.get("append_false_accepts"))
@@ -1631,6 +1632,27 @@ def status_dashboard_html(request_path: str = "") -> str:
             "</div>"
         )
 
+    def funnel_step(
+        title: str,
+        count: int,
+        total: int,
+        hint: str,
+        css: str = "watch",
+    ) -> str:
+        pct = 0.0 if total <= 0 else min(100.0, max(0.0, count * 100 / total))
+        return (
+            f"<div class='funnel-step {html.escape(css)}'>"
+            "<div class='funnel-head'>"
+            f"<span>{html.escape(title)}</span>"
+            f"<b>{dashboard_metric_text(count, lang)}</b>"
+            "</div>"
+            "<div class='funnel-bar'>"
+            f"<i style='width:{pct:.2f}%'></i>"
+            "</div>"
+            f"<small>{pct:.1f}% · {html.escape(hint)}</small>"
+            "</div>"
+        )
+
     def table_rows(rows: list[tuple[str, str, str, str]]) -> str:
         return "".join(
             "<tr>"
@@ -1683,6 +1705,12 @@ def status_dashboard_html(request_path: str = "") -> str:
         ]
     )
 
+    total_observed_rows = max(codex_session_rows, stable_rows, append_rows, edge_rows)
+    cpu_accept_rows = product_hot_accepts if product_hot_accepts > 0 else append_accepts
+    candidate_rows = append_candidates if append_candidates > 0 else stable_candidates
+    fallback_rows = max(0, append_rows - cpu_accept_rows)
+    false_rows = active_false + serving_false + edge_false
+
     decision_rows = table_rows(
         [
             (
@@ -1699,15 +1727,15 @@ def status_dashboard_html(request_path: str = "") -> str:
             ),
             (
                 "miner serving window",
-                f"{n(clean_accepts)} accepts",
-                f"{n(clean_saved)} / {n(clean_total)} tokens",
-                f"rows {n(clean_rows)}, false {n(serving_false)}",
+                f"{n(product_hot_accepts or clean_accepts)} accepts",
+                f"{n(product_hot_tokens or clean_saved)} / {n(append_total_tokens or clean_total)} tokens",
+                f"rows {n(append_rows or clean_rows)}, hot false {n(active_false or serving_false)}",
             ),
             (
-                "shadow risk",
+                t("shadow diagnostics", "shadow diagnostics"),
                 f"{n(stable_candidates)} candidates",
                 f"clean rows {n(shadow_clean_rows)}",
-                f"historical false {n(stable_shadow_false)}, clean false {n(shadow_false)}",
+                f"historical shadow false {n(stable_shadow_false)}, not product false",
             ),
             (
                 "active clean tail",
@@ -1790,6 +1818,16 @@ def status_dashboard_html(request_path: str = "") -> str:
     .flow-step.ok {{ border-left-color: #58d68d; }}
     .flow-step.watch {{ border-left-color: #f5b041; }}
     .flow-step.bad {{ border-left-color: #ff6b6b; }}
+    .funnel-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }}
+    .funnel-step {{ min-width: 0; padding: 11px; background: #111519; border: 1px solid #252e36; border-radius: 8px; }}
+    .funnel-head {{ display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }}
+    .funnel-head span {{ color: #9aa7b2; font-size: 12px; font-weight: 760; line-height: 1.2; }}
+    .funnel-head b {{ color: #fff; font-size: 20px; line-height: 1.05; overflow-wrap: anywhere; text-align: right; }}
+    .funnel-bar {{ height: 8px; margin: 10px 0 8px; background: #242c33; border-radius: 999px; overflow: hidden; }}
+    .funnel-bar i {{ display: block; height: 100%; background: #f5b041; border-radius: inherit; }}
+    .funnel-step.ok .funnel-bar i {{ background: #58d68d; }}
+    .funnel-step.bad .funnel-bar i {{ background: #ff6b6b; }}
+    .funnel-step small {{ display: block; color: #9aa7b2; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }}
     .status-line {{ display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; color: #9aa7b2; font-size: 13px; }}
     .status-line b {{ color: #fff; font-size: 15px; }}
     .cpu-live-list {{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }}
@@ -1863,8 +1901,21 @@ def status_dashboard_html(request_path: str = "") -> str:
 
   {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, verifier_blocked_rows=verifier_blocked_rows, verifier_blocked_tokens=verifier_blocked_tokens, verifier_blocked_phase_seen=verifier_blocked_phase_seen, nonzero_verifier_blocked_rows=nonzero_verifier_blocked_rows, nonzero_verifier_blocked_tokens=nonzero_verifier_blocked_tokens, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=trust_filtered, symbiosis_filtered=symbiosis_filtered, mixed_accepts=mixed_accepts, lang=lang)}
 
+  <section class="panel wide-panel">
+    <h2>{t("1. Весь поток: от входа до CPU", "1. Full Flow: Ingress To CPU")}</h2>
+    <p>{t("Главный продуктовый вопрос: из всего потока, который Nando видит, сколько событий уже можно безопасно выполнить на CPU.", "Main product question: from all traffic Nando sees, how many events can already be safely executed on CPU.")}</p>
+    <div class="funnel-grid">
+      {funnel_step(t("захвачено", "captured"), total_observed_rows, total_observed_rows, f"Codex/session/stable frame, provider boundary: {n(boundary_rows)}", "ok" if total_observed_rows > 0 else "watch")}
+      {funnel_step(t("разобрано miner-ом", "parsed by miner"), append_rows, total_observed_rows, f"append rows, skipped unhandled: {n(codex_skipped_unhandled)}", "ok" if append_rows > 0 else "watch")}
+      {funnel_step("candidate", candidate_rows, max(1, append_rows), f"phase-center candidates from parsed rows", "ok" if candidate_rows > 0 else "watch")}
+      {funnel_step(t("CPU accepted", "CPU accepted"), cpu_accept_rows, max(1, append_rows), f"tokens {n(product_hot_tokens or append_tokens)}, false {n(false_rows)}", "ok" if cpu_accept_rows > 0 and false_rows == 0 else ("bad" if false_rows > 0 else "watch"))}
+      {funnel_step("fallback / verifier", fallback_rows, max(1, append_rows), f"verifier blocked {n(verifier_blocked_rows)}, nonzero {n(nonzero_verifier_blocked_rows)}", "watch" if fallback_rows > 0 else "ok")}
+      {funnel_step("auto recovery", recovery_events, max(1, append_rows), f"tokens {n(recovery_tokens)}, observes {n(recovery_observes)}", "ok" if recovery_events > 0 else "watch")}
+    </div>
+  </section>
+
   <section class="panel">
-    <h2>{t("1. Входящий поток", "1. Incoming Flow")}</h2>
+    <h2>{t("2. Входящий поток", "2. Incoming Flow")}</h2>
     <table>
       <thead><tr><th>{t("слой", "layer")}</th><th>{t("объём", "volume")}</th><th>{t("решение", "decision")}</th><th>{t("сигнал", "signal")}</th></tr></thead>
       <tbody>{traffic_rows}</tbody>
@@ -1872,7 +1923,7 @@ def status_dashboard_html(request_path: str = "") -> str:
   </section>
 
   <section class="panel">
-    <h2>{t("2. Развилка решений", "2. Decision Split")}</h2>
+    <h2>{t("3. Развилка решений", "3. Decision Split")}</h2>
     <table>
       <thead><tr><th>{t("ветка", "branch")}</th><th>{t("accepts", "accepts")}</th><th>tokens</th><th>false / risk</th></tr></thead>
       <tbody>{decision_rows}</tbody>
@@ -1880,7 +1931,7 @@ def status_dashboard_html(request_path: str = "") -> str:
   </section>
 
   <section class="panel">
-    <h2>{t("3. Майнер и горячая память", "3. Miner And Hot Memory")}</h2>
+    <h2>{t("4. Майнер и горячая память", "4. Miner And Hot Memory")}</h2>
     <div class="flow-grid">
       {flow_step("stable frame", f"{n(stable_rows)} rows", f"{n(stable_tokens)} tokens", "ok" if stable_rows > 0 else "watch")}
       {flow_step("phase candidates", n(stable_candidates), f"shadow false {n(stable_shadow_false)}", "watch" if stable_shadow_false > 0 else "ok")}
@@ -1896,7 +1947,7 @@ def status_dashboard_html(request_path: str = "") -> str:
   {dashboard_history_chart(history_rows, lang)}
 
   <section class="panel">
-    <h2>{t("4. Что чинить дальше", "4. What To Fix Next")}</h2>
+    <h2>{t("5. Что чинить дальше", "5. What To Fix Next")}</h2>
     <table>
       <thead><tr><th>P</th><th>{t("место", "place")}</th><th>{t("сигнал", "signal")}</th><th>{t("смысл", "meaning")}</th></tr></thead>
       <tbody>{problem_rows}</tbody>
@@ -1905,7 +1956,7 @@ def status_dashboard_html(request_path: str = "") -> str:
   </section>
 
   <section class="panel">
-    <h2>{t("5. Классы операторов", "5. Operator Classes")}</h2>
+    <h2>{t("6. Классы операторов", "6. Operator Classes")}</h2>
     <table>
       <thead><tr><th>{t("класс", "class")}</th><th>profiles</th><th>accepts</th><th>tokens / false</th></tr></thead>
       <tbody>{top_class_rows}</tbody>
@@ -1913,7 +1964,7 @@ def status_dashboard_html(request_path: str = "") -> str:
   </section>
 
   <section class="panel">
-    <h2>{t("6. Лучшие профили", "6. Top Profiles")}</h2>
+    <h2>{t("7. Лучшие профили", "7. Top Profiles")}</h2>
     <table>
       <thead><tr><th>profile</th><th>kind</th><th>accepts</th><th>tokens / status</th></tr></thead>
       <tbody>{top_profile_rows}</tbody>

@@ -21,7 +21,7 @@ pub(super) fn live_store_architecture_versions() -> PhaseStreamArchitectureVersi
         online_miner: "online_phase_center_miner_v1",
         live_tail_daemon: "append_live_tail_shadow_daemon_v6",
         hot_runtime: "phase_center_hot_runtime_v1",
-        auto_subcenter_discovery: "auto_subcenter_discovery_v2_hidden_first",
+        auto_subcenter_discovery: "auto_subcenter_discovery_v3_recovery_frontier",
         hidden_state_profile: "hidden_state_cross_layer_profile_v1",
         profile_attribution: "profile_attribution_disjoint_v1",
         operator_power_gate: "operator_power_richness_v1_cold_survivor_gate",
