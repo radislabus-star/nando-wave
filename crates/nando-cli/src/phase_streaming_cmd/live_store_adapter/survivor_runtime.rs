@@ -7,8 +7,6 @@ use nando_core::wave::PhaseCenterOnlineBucket;
 use super::defaults::DEFAULT_HOT_PATH_DAEMON_APPEND_LIVE_TAIL_CANDIDATE_FRONTIER_LIMIT;
 use super::state::LiveStoreProductHotRegistryRuntimeBundle;
 
-const LIVE_STORE_PRODUCT_HOT_MAX_TRUST_DRIFT_MICRO: i64 = 100_000;
-
 pub(super) fn live_store_clean_candidate_frontier(
     store: &PhaseCenterLiveOperatorStore,
     quarantined_profile_ids: &BTreeSet<u32>,
@@ -341,7 +339,7 @@ pub(super) fn live_store_product_hot_profile_phase_trusted(
         && !bucket.rejected
         && bucket.false_accepts == 0
         && bucket.trust_false_risk_micro == 0
-        && bucket.trust_drift_micro <= LIVE_STORE_PRODUCT_HOT_MAX_TRUST_DRIFT_MICRO
+        && bucket.trust_quality_micro > 0
         && bucket.tokens_saved > 0
         && bucket.unique_cpu_accepts_over_exact_cache > 0
 }

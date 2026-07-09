@@ -6495,3 +6495,34 @@ Boundary:
   temporarily reduce accepts, because dirty broad centers are forced back into
   automatic subcenter discovery. It does not introduce `.nwrb`, lookup,
   target/proof authority, manual local_out_t, or a manual profile allow-list.
+
+## 2026-07-09 Phase-Trust Drift Correction
+
+Finding:
+  The first phase-trust gate treated high `trust_drift_micro` as unsafe.
+  That was too conservative: drift is computed as `abs(margin - learned_threshold)`,
+  so a very strong positive margin can also produce high drift.
+
+Change:
+  Product-hot trust no longer rejects solely on high drift. The trust gate now
+  keeps the real safety checks:
+    shadow-ready candidate,
+    false_accepts=0,
+    trust_false_risk_micro=0,
+    trust_quality_micro > 0,
+    positive unique accepts/tokens over exact cache.
+
+Live verification:
+  After deploy, fresh live frame recovered accepts without false accepts:
+    rows=22,
+    candidates=10,
+    CPU accepts=8,
+    tokens_saved=3613,
+    product_hot_false=0,
+    trust_filtered=0,
+    recovery_events=722.
+
+Boundary:
+  This is not a manual threshold loosening. The learned threshold and false-risk
+  estimator remain authoritative. The fix removes an incorrect interpretation
+  of positive-margin spread as danger.
