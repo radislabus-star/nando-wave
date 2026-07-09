@@ -63,6 +63,12 @@ PROVIDER_EXPORT_WATCH_REPORT = Path(
         "/var/lib/nando-wave/streaming/provider-export-watch.report.json",
     )
 )
+APPENDER_REPORT_JSON = Path(
+    os.environ.get(
+        "NANDO_APPENDER_REPORT",
+        "/var/lib/nando-wave/streaming/phase-center-appender.report.json",
+    )
+)
 
 
 def now_iso() -> str:
@@ -235,6 +241,29 @@ def line_points(
     return " ".join(points)
 
 
+def line_points_from_values(
+    values: list[float],
+    *,
+    width: int,
+    height: int,
+    left: int,
+    right: int,
+    top: int,
+    bottom: int,
+    max_value: float,
+) -> str:
+    chart_w = width - left - right
+    chart_h = height - top - bottom
+    count = len(values)
+    points: list[str] = []
+    for index, raw in enumerate(values):
+        value = max(0.0, min(max_value, raw))
+        x = left + (chart_w * index / max(1, count - 1))
+        y = top + chart_h - (chart_h * value / max_value)
+        points.append(f"{x:.1f},{y:.1f}")
+    return " ".join(points)
+
+
 def dashboard_history_chart(rows: list[dict[str, Any]], lang: str) -> str:
     is_en = lang == "en"
 
@@ -250,90 +279,103 @@ def dashboard_history_chart(rows: list[dict[str, Any]], lang: str) -> str:
         )
 
     width = 920
-    height = 230
-    left = 46
-    right = 14
-    top = 18
-    bottom = 34
-    chart_h = height - top - bottom
+    height = 74
+    left = 8
+    right = 8
+    top = 8
+    bottom = 12
     clean_rows = rows[-DASHBOARD_HISTORY_MAX_POINTS:]
     latest = clean_rows[-1]
-    latest_pct = dashboard_float(latest.get("clean_compression_pct"))
-    saved = dashboard_int(latest.get("clean_saved_tokens"))
-    total = dashboard_int(latest.get("clean_total_tokens"))
-    accepts = dashboard_int(latest.get("clean_cpu_accepts"))
+    saved = dashboard_int(latest.get("edge_saved_tokens", latest.get("edge_serving_cpu_tokens", latest.get("clean_saved_tokens"))))
+    accepts = dashboard_int(latest.get("edge_serving_cpu_accepts", latest.get("clean_cpu_accepts")))
+    false_accepts = dashboard_int(latest.get("edge_serving_cpu_false_accepts", latest.get("active_false_accepts")))
+    clean_total = dashboard_int(latest.get("clean_total_tokens"))
+    clean_saved = dashboard_int(latest.get("clean_saved_tokens"))
     active_false_accepts = dashboard_int(latest.get("active_false_accepts"))
     shadow_false_accepts = dashboard_int(
         latest.get("shadow_false_accepts", latest.get("clean_false_accepts"))
     )
     first_label = html.escape(str(clean_rows[0].get("timestamp") or "")[11:19])
     last_label = html.escape(str(clean_rows[-1].get("timestamp") or "")[11:19])
-    grid = []
-    for pct in (0, 25, 50, 75, 100):
-        y = top + chart_h - (chart_h * pct / 100)
-        grid.append(
-            f"<line x1='{left}' y1='{y:.1f}' x2='{width - right}' y2='{y:.1f}' class='chart-grid'/>"
-            f"<text x='8' y='{y + 4:.1f}' class='chart-label'>{pct}%</text>"
+
+    def row_float(row: dict[str, Any], *keys: str) -> float:
+        for key in keys:
+            if key in row:
+                return dashboard_float(row.get(key))
+        return 0.0
+
+    saved_values = [
+        row_float(row, "edge_saved_tokens", "edge_serving_cpu_tokens", "clean_saved_tokens")
+        for row in clean_rows
+    ]
+    accept_values = [
+        row_float(row, "edge_serving_cpu_accepts", "clean_cpu_accepts")
+        for row in clean_rows
+    ]
+    false_values = [
+        row_float(row, "edge_serving_cpu_false_accepts", "active_false_accepts")
+        for row in clean_rows
+    ]
+
+    def spark_row(label: str, value: int, values: list[float], color_class: str, unit: str) -> str:
+        max_value = max(1.0, max(values))
+        points = line_points_from_values(
+            values,
+            width=width,
+            height=height,
+            left=left,
+            right=right,
+            top=top,
+            bottom=bottom,
+            max_value=max_value,
         )
+        return (
+            "<div class='spark-row'>"
+            "<div class='spark-meta'>"
+            f"<b>{html.escape(label)}</b>"
+            f"<span>{dashboard_metric_text(value, lang)} {html.escape(unit)} · max {dashboard_metric_text(int(max_value), lang)}</span>"
+            "</div>"
+            f"<svg class='spark-svg' viewBox='0 0 {width} {height}' role='img' aria-label='{html.escape(label)}'>"
+            f"<polyline class='chart-line {html.escape(color_class)}' points='{points}'/>"
+            "</svg>"
+            "</div>"
+        )
+
     caption = t(
-        f"Последние {len(clean_rows)} точек, сейчас {latest_pct:.1f}% · {saved} / {total} токенов, {accepts} accepts, active false {active_false_accepts}, shadow risk {shadow_false_accepts}",
-        f"Last {len(clean_rows)} points, now {latest_pct:.1f}% · {saved} / {total} tokens, {accepts} accepts, active false {active_false_accepts}, shadow risk {shadow_false_accepts}",
+        f"Последние {len(clean_rows)} точек. Реальный edge сейчас: {saved} saved tokens, {accepts} accepts, false {false_accepts}. Miner clean-window отдельно: {clean_saved} / {clean_total}, shadow risk {shadow_false_accepts}.",
+        f"Last {len(clean_rows)} points. Real edge now: {saved} saved tokens, {accepts} accepts, false {false_accepts}. Miner clean-window separately: {clean_saved} / {clean_total}, shadow risk {shadow_false_accepts}.",
     )
-    compression_line = line_points(
-        clean_rows,
-        "clean_compression_pct",
-        width=width,
-        height=height,
-        left=left,
-        right=right,
-        top=top,
-        bottom=bottom,
-        max_value=100.0,
+    saved_chart = spark_row(
+        t("реальные CPU saved tokens", "real CPU saved tokens"),
+        saved,
+        saved_values,
+        "chart-green",
+        "tokens",
     )
-    max_accepts = max(1.0, max(dashboard_float(row.get("clean_cpu_accepts")) for row in clean_rows))
-    accepts_line = line_points(
-        clean_rows,
-        "clean_cpu_accepts",
-        width=width,
-        height=height,
-        left=left,
-        right=right,
-        top=top,
-        bottom=bottom,
-        max_value=max_accepts,
+    accepts_chart = spark_row(
+        t("реальные CPU accepts", "real CPU accepts"),
+        accepts,
+        accept_values,
+        "chart-blue",
+        "accepts",
     )
-    false_max = max(
-        1.0,
-        max(dashboard_float(row.get("active_false_accepts")) for row in clean_rows),
-    )
-    false_line = line_points(
-        clean_rows,
-        "active_false_accepts",
-        width=width,
-        height=height,
-        left=left,
-        right=right,
-        top=top,
-        bottom=bottom,
-        max_value=false_max,
+    false_chart = spark_row(
+        t("false accepts", "false accepts"),
+        false_accepts,
+        false_values,
+        "chart-red",
+        "false",
     )
     return f"""
   <section class="panel chart-panel">
     <h2>{html.escape(title)}</h2>
     <p>{html.escape(caption)}</p>
-    <div class="legend">
-      <span><i class="legend-green"></i>{html.escape(t('сжатие токенов', 'token compression'))}</span>
-      <span><i class="legend-blue"></i>{html.escape(t('CPU accepts', 'CPU accepts'))}</span>
-      <span><i class="legend-red"></i>{html.escape(t('active false accepts', 'active false accepts'))}</span>
+    <div class="spark-stack">
+      {saved_chart}
+      {accepts_chart}
+      {false_chart}
     </div>
-    <svg class="chart-svg" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">
-      {''.join(grid)}
-      <polyline class="chart-line chart-green" points="{compression_line}"/>
-      <polyline class="chart-line chart-blue" points="{accepts_line}"/>
-      <polyline class="chart-line chart-red" points="{false_line}"/>
-      <text x="{left}" y="{height - 8}" class="chart-label">{first_label}</text>
-      <text x="{width - right - 48}" y="{height - 8}" class="chart-label">{last_label}</text>
-    </svg>
+    <p class="hint">{first_label} → {last_label}</p>
   </section>"""
 
 
@@ -1340,13 +1382,11 @@ def status_dashboard_html(request_path: str = "") -> str:
 
     metrics = read_json_file(METRICS_JSON)
     status = read_json_file(STATUS_JSON)
-    provider_watch = read_json_file(PROVIDER_EXPORT_WATCH_REPORT)
+    appender = read_json_file(APPENDER_REPORT_JSON)
     history_rows = read_dashboard_history(DASHBOARD_HISTORY_MAX_POINTS)
     bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
-    scorecard = status.get("scorecard") if isinstance(status.get("scorecard"), dict) else {}
     verify = status.get("verify") if isinstance(status.get("verify"), dict) else {}
     summary = status.get("summary") if isinstance(status.get("summary"), dict) else {}
-    evidence = status.get("provider_evidence") if isinstance(status.get("provider_evidence"), dict) else {}
 
     clean_saved = serving_cpu_metric(
         metrics, "stable_serving_cpu_clean_suffix_tokens_saved", "stable_clean_token_compression_saved_tokens"
@@ -1369,6 +1409,49 @@ def status_dashboard_html(request_path: str = "") -> str:
     edge_false = dashboard_int(metrics.get("edge_serving_cpu_false_accepts"))
     stable_rows = dashboard_int(metrics.get("stable_decision_log_rows"))
     stable_tokens = dashboard_int(metrics.get("stable_decision_log_total_tokens"))
+    stable_candidates = dashboard_int(metrics.get("stable_decision_log_score_candidate_events"))
+    stable_shadow_false = dashboard_int(metrics.get("stable_decision_log_false_accepts"))
+    shadow_clean_rows = dashboard_int(metrics.get("stable_decision_log_clean_suffix_rows"))
+    codex_session_rows = dashboard_int(appender.get("rows_written"))
+    codex_session_active_files = dashboard_int(appender.get("active_session_files"))
+    codex_session_files_seen = dashboard_int(appender.get("session_files_seen"))
+    codex_json_rows_seen = dashboard_int(appender.get("json_rows_seen"))
+    codex_tool_status_seen = dashboard_int(appender.get("tool_status_events_seen"))
+    codex_pass_rows = dashboard_int(appender.get("pass_rows"))
+    codex_fail_rows = dashboard_int(appender.get("fail_rows"))
+    codex_skipped_unhandled = dashboard_int(appender.get("skipped_unhandled_payload"))
+    codex_idle_ms = dashboard_int(appender.get("idle_elapsed_ms"))
+    codex_verdict = str(appender.get("verdict") or "unknown")
+    gateway_rows = dashboard_int(metrics.get("gateway_decision_window_rows"))
+    gateway_accepts = dashboard_int(metrics.get("gateway_local_accept_events"))
+    gateway_tokens = dashboard_int(metrics.get("gateway_tokens_saved_estimated"))
+    gateway_false = dashboard_int(metrics.get("gateway_false_accepts"))
+    provider_rows = dashboard_int(metrics.get("provider_bridge_decision_window_rows"))
+    provider_local_accepts = dashboard_int(metrics.get("provider_bridge_local_accept_events"))
+    provider_tokens = dashboard_int(metrics.get("provider_bridge_tokens_saved_estimated"))
+    provider_false = dashboard_int(metrics.get("provider_bridge_false_accepts"))
+    provider_v2_accepts = dashboard_int(metrics.get("provider_bridge_v2_local_accept_events"))
+    provider_v2_tokens = dashboard_int(metrics.get("provider_bridge_v2_tokens_saved_estimated"))
+    provider_v2_false = dashboard_int(metrics.get("provider_bridge_v2_false_accepts"))
+    boundary_rows = dashboard_int(metrics.get("provider_bridge_boundary_window_rows"))
+    boundary_tokens = dashboard_int(metrics.get("provider_bridge_boundary_total_tokens"))
+    append_rows = dashboard_int(metrics.get("append_parsed_rows"))
+    append_candidates = dashboard_int(metrics.get("append_score_candidate_events"))
+    append_accepts = dashboard_int(metrics.get("append_unique_cpu_accepts_over_exact_cache"))
+    append_tokens = dashboard_int(metrics.get("append_tokens_saved"))
+    append_false = dashboard_int(metrics.get("append_false_accepts"))
+    active_clean_calls = dashboard_int(metrics.get("active_clean_calls_saved"))
+    active_clean_tokens = dashboard_int(metrics.get("active_clean_tokens_saved"))
+    product_hot_profiles = dashboard_int(metrics.get("product_hot_score_only_active_profile_count"))
+    final_hot_profiles = dashboard_int(metrics.get("final_hot_profile_count"))
+    product_hot_candidates = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_score_candidate_events"))
+    product_hot_accepts = dashboard_int(metrics.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache"))
+    product_hot_tokens = dashboard_int(metrics.get("product_hot_score_only_tokens_saved"))
+    recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
+    recovery_tokens = dashboard_int(metrics.get("quarantine_recovery_discovery_tokens"))
+    recovery_observes = dashboard_int(metrics.get("quarantine_recovery_auto_subcenter_observe_events"))
+    miner_sleep_ms = dashboard_int(metrics.get("miner_saturation_last_sleep_ms"))
+    miner_batch = dashboard_int(metrics.get("miner_active_batch_rows"))
     class_rows = normalized_rows(metrics.get("operator_class_token_ranking"))
     profile_rows = normalized_rows(metrics.get("operator_profile_token_ranking"))
     quarantined_rows = normalized_rows(metrics.get("quarantined_profile_token_ranking"))
@@ -1386,20 +1469,173 @@ def status_dashboard_html(request_path: str = "") -> str:
         "</nav>"
     )
 
-    claim_state = "ok" if verify.get("compression_claim_allowed") else "watch"
     clean_rows = serving_cpu_metric(
         metrics, "stable_serving_cpu_clean_suffix_rows", "stable_decision_log_clean_suffix_rows"
     )
-    stable_saved = dashboard_int(metrics.get("stable_decision_log_tokens_saved"))
-    stable_accepts = dashboard_int(metrics.get("stable_decision_log_unique_cpu_accepts_over_exact_cache"))
-    stable_shadow_false = dashboard_int(metrics.get("stable_decision_log_false_accepts"))
+    edge_rows = gateway_rows + provider_rows
+    edge_fallback_rows = max(0, edge_rows - edge_accepts)
+    gateway_fallback_rows = max(0, gateway_rows - gateway_accepts)
+    provider_fallback_rows = max(0, provider_rows - provider_local_accepts)
     clean_coverage = dashboard_pct(clean_total, stable_tokens)
-    capture_state = (
-        t("полный provider frame подключён", "full provider frame joined")
-        if bool(bridge.get("upstream_configured"))
-        and dashboard_int(metrics.get("provider_bridge_boundary_window_rows")) > 0
-        else t("частичный Nando-frame, не весь provider-трафик", "partial Nando frame, not full provider traffic")
+    upstream_configured = bool(bridge.get("upstream_configured"))
+    provider_boundary_state = (
+        t("provider boundary активен", "provider boundary active")
+        if boundary_rows > 0
+        else (
+            t("нет API key: работаем через Codex session stream", "no API key: using Codex session stream")
+            if not upstream_configured
+            else t("provider boundary пока пуст", "provider boundary empty")
+        )
     )
+    server_state = "OK" if bridge.get("health_ok") and edge_false == 0 else "WATCH"
+    server_state_class = "ok" if server_state == "OK" else "watch"
+
+    def n(value: Any) -> str:
+        return dashboard_metric_text(value, lang)
+
+    def state_class(ok: bool, watch: bool = False) -> str:
+        if ok:
+            return "ok"
+        return "watch" if watch else "bad"
+
+    def flow_step(title: str, value: str, hint: str, css: str = "watch") -> str:
+        return (
+            f"<div class='flow-step {html.escape(css)}'>"
+            f"<span>{html.escape(title)}</span>"
+            f"<b>{html.escape(value)}</b>"
+            f"<small>{html.escape(hint)}</small>"
+            "</div>"
+        )
+
+    def table_rows(rows: list[tuple[str, str, str, str]]) -> str:
+        return "".join(
+            "<tr>"
+            f"<td>{html.escape(left)}</td>"
+            f"<td>{html.escape(mid)}</td>"
+            f"<td>{html.escape(right)}</td>"
+            f"<td>{html.escape(note)}</td>"
+            "</tr>"
+            for left, mid, right, note in rows
+        )
+
+    traffic_rows = table_rows(
+        [
+            (
+                "codex session stream",
+                f"{n(codex_session_rows)} rows",
+                f"active files {n(codex_session_active_files)} / seen {n(codex_session_files_seen)}",
+                f"tool status {n(codex_tool_status_seen)}, pass {n(codex_pass_rows)}, fail {n(codex_fail_rows)}",
+            ),
+            (
+                "gateway",
+                f"{n(gateway_rows)} rows",
+                f"CPU {n(gateway_accepts)} / fallback {n(gateway_fallback_rows)}",
+                f"tokens {n(gateway_tokens)}, false {n(gateway_false)}",
+            ),
+            (
+                "provider bridge",
+                f"{n(provider_rows)} rows",
+                f"local {n(provider_local_accepts)} / v2 {n(provider_v2_accepts)} / fallback {n(provider_fallback_rows)}",
+                f"tokens v2 {n(provider_v2_tokens)}, false {n(provider_v2_false)}",
+            ),
+            (
+                "provider boundary",
+                f"{n(boundary_rows)} rows",
+                f"{n(boundary_tokens)} tokens",
+                provider_boundary_state,
+            ),
+            (
+                "stable miner frame",
+                f"{n(stable_rows)} rows",
+                f"{n(stable_tokens)} tokens",
+                f"candidates {n(stable_candidates)}, shadow false {n(stable_shadow_false)}",
+            ),
+            (
+                "append tail",
+                f"{n(append_rows)} rows",
+                f"accepts {n(append_accepts)}, tokens {n(append_tokens)}",
+                f"candidates {n(append_candidates)}, false {n(append_false)}",
+            ),
+        ]
+    )
+
+    decision_rows = table_rows(
+        [
+            (
+                t("реальный CPU edge", "real CPU edge"),
+                f"{n(edge_accepts)} accepts",
+                f"{n(edge_tokens)} tokens",
+                f"false {n(edge_false)}",
+            ),
+            (
+                "product hot",
+                f"{n(product_hot_accepts)} accepts",
+                f"{n(product_hot_tokens)} tokens",
+                f"profiles {n(product_hot_profiles)}, false {n(active_false)}",
+            ),
+            (
+                "miner serving window",
+                f"{n(clean_accepts)} accepts",
+                f"{n(clean_saved)} / {n(clean_total)} tokens",
+                f"rows {n(clean_rows)}, false {n(serving_false)}",
+            ),
+            (
+                "shadow risk",
+                f"{n(stable_candidates)} candidates",
+                f"clean rows {n(shadow_clean_rows)}",
+                f"historical false {n(stable_shadow_false)}, clean false {n(shadow_false)}",
+            ),
+            (
+                "active clean tail",
+                f"{n(active_clean_calls)} accepts",
+                f"{n(active_clean_tokens)} tokens",
+                f"append false {n(append_false)}",
+            ),
+        ]
+    )
+
+    top_class_rows = table_rows(
+        [
+            (
+                str(row.get("class") or row.get("kind") or "unknown"),
+                f"{n(row.get('profiles'))} profiles",
+                f"{n(row.get('unique_cpu_accepts_over_exact_cache'))} accepts",
+                f"{n(row.get('tokens_saved'))} tokens, false {n(row.get('false_accepts'))}",
+            )
+            for row in class_rows[:8]
+        ]
+    ) or f"<tr><td colspan='4'>{html.escape(t('нет классов', 'no classes'))}</td></tr>"
+
+    top_profile_rows = table_rows(
+        [
+            (
+                str(row.get("profile_id") or "unknown"),
+                str(row.get("kind") or row.get("status") or "unknown"),
+                f"{n(row.get('unique_cpu_accepts_over_exact_cache'))} accepts",
+                f"{n(row.get('tokens_saved'))} tokens, status {row.get('status') or 'unknown'}",
+            )
+            for row in profile_rows[:8]
+        ]
+    ) or f"<tr><td colspan='4'>{html.escape(t('нет профилей', 'no profiles'))}</td></tr>"
+
+    problem_items: list[tuple[str, str, str, str]] = []
+    if codex_session_rows == 0:
+        problem_items.append(("P0", "codex session stream", "0 rows", t("нет живого потока из Codex sessions", "no live Codex session stream")))
+    elif codex_skipped_unhandled > codex_session_rows:
+        problem_items.append(("P1", "codex adapter coverage", f"skipped={codex_skipped_unhandled}", t("много событий пока не превращаются в phase atoms", "many events are not phase atoms yet")))
+    if boundary_rows == 0 and upstream_configured:
+        problem_items.append(("P1", "provider boundary", "0 rows", t("upstream включён, но boundary ещё пустой", "upstream is enabled but boundary is empty")))
+    if edge_false > 0 or serving_false > 0 or active_false > 0:
+        problem_items.append(("P0", "false accepts", f"edge={edge_false}, serving={serving_false}, active={active_false}", t("сначала quarantine/split", "quarantine/split first")))
+    if stable_shadow_false > 0:
+        problem_items.append(("P1", "shadow risk", str(stable_shadow_false), t("это обучающий риск, не реальная CPU ошибка", "training risk, not real CPU failure")))
+    if not quarantined_rows and stable_shadow_false > 0:
+        problem_items.append(("P1", "recovery visibility", "queue empty", t("нужна причина: всё очищено или очередь не наполнена", "needs reason: clean or queue not populated")))
+    if provider_rows > 0 and provider_v2_accepts == 0:
+        problem_items.append(("P1", "provider v2", "0 accepts", t("проверить маршруты v2", "check v2 routes")))
+    if not problem_items:
+        problem_items.append(("OK", "flow", "clean", t("явных P0/P1 проблем нет", "no obvious P0/P1 issues")))
+    problem_rows = table_rows(problem_items)
 
     return f"""<!doctype html>
 <html lang="{lang}">
@@ -1411,54 +1647,41 @@ def status_dashboard_html(request_path: str = "") -> str:
   <style>
     :root {{ color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
     body {{ margin: 0; background: #0f1113; color: #edf1f5; }}
-    main {{ width: min(1120px, calc(100vw - 28px)); margin: 0 auto; padding: 24px 0 36px; }}
-    header {{ display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 16px; }}
-    h1 {{ font-size: 26px; line-height: 1.05; margin: 0; letter-spacing: 0; }}
+    main {{ width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 34px; }}
+    header {{ display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 14px; }}
+    h1 {{ font-size: 25px; line-height: 1.08; margin: 0; letter-spacing: 0; }}
     .subtitle, .stamp, .hint {{ color: #9aa7b2; font-size: 13px; line-height: 1.35; }}
     .header-actions {{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; text-align: right; }}
     .lang-switch {{ display: inline-flex; gap: 4px; padding: 3px; background: #171b1f; border: 1px solid #28313a; border-radius: 8px; }}
     .lang-switch a {{ color: #9aa7b2; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 9px; border-radius: 6px; }}
     .lang-switch a.active {{ color: #0f1113; background: #edf1f5; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }}
-    .hero {{ grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }}
-    .card, .panel {{ background: #171b1f; border: 1px solid #28313a; border-radius: 8px; }}
-    .card {{ padding: 14px; min-height: 92px; }}
-    .card h2, .panel h2 {{ color: #a8b3bd; font-size: 13px; font-weight: 650; margin: 0 0 8px; letter-spacing: 0; }}
-    .card strong {{ display: block; font-size: 25px; line-height: 1.08; color: #fff; overflow-wrap: anywhere; }}
-    .card p {{ margin: 8px 0 0; color: #9aa7b2; font-size: 12px; line-height: 1.35; }}
-    .panel {{ margin-top: 12px; padding: 14px; overflow-x: auto; }}
+    .panel {{ margin-top: 12px; padding: 14px; background: #171b1f; border: 1px solid #28313a; border-radius: 8px; overflow-x: auto; }}
+    .panel h2 {{ color: #a8b3bd; font-size: 13px; font-weight: 700; margin: 0 0 10px; letter-spacing: 0; }}
     .panel p {{ margin: 6px 0; color: #d7dde3; line-height: 1.4; }}
-    .big {{ font-size: clamp(30px, 5vw, 56px); line-height: .95; color: #fff; font-weight: 800; margin: 2px 0 10px; }}
-    .kv {{ display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }}
-    .kv span {{ color: #9aa7b2; font-size: 13px; line-height: 1.35; }}
-    .kv b {{ color: #fff; font-size: 15px; }}
-    .flow {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: #d7dde3; }}
-    .flow code {{ background: #111519; border: 1px solid #252e36; border-radius: 6px; padding: 6px 8px; }}
-    .pipeline-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px; }}
-    .pipeline-step {{ min-height: 104px; padding: 11px; background: #111519; border: 1px solid #252e36; border-left-width: 4px; border-radius: 8px; display: grid; gap: 7px; }}
-    .pipeline-step h3 {{ margin: 0; color: #a8b3bd; font-size: 13px; line-height: 1.25; letter-spacing: 0; }}
-    .pipeline-step b {{ color: #fff; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }}
-    .pipeline-step small {{ color: #9aa7b2; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }}
-    .stage-ok {{ border-left-color: #58d68d; }}
-    .stage-watch {{ border-left-color: #f5b041; }}
-    .stage-bad {{ border-left-color: #ff6b6b; }}
-    .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; align-items: start; }}
-    .charts {{ display: block; }}
-    .metric-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }}
-    .metric {{ display: grid; gap: 5px; min-height: 78px; padding: 10px; background: #111519; border: 1px solid #252e36; border-radius: 8px; }}
-    .metric span {{ color: #8e9aa5; font-size: 12px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }}
-    .metric b {{ color: #fff; font-size: 20px; line-height: 1.05; overflow-wrap: anywhere; }}
-    .metric small {{ color: #9aa7b2; font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }}
-    .metric-wide {{ grid-column: 1 / -1; }}
-    .metric-wide b {{ font-size: 13px; line-height: 1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; word-break: break-word; }}
+    .flow-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }}
+    .flow-step {{ min-height: 88px; display: grid; gap: 6px; align-content: start; padding: 11px; background: #111519; border: 1px solid #252e36; border-left: 4px solid #f5b041; border-radius: 8px; }}
+    .flow-step span {{ color: #9aa7b2; font-size: 12px; font-weight: 750; line-height: 1.2; }}
+    .flow-step b {{ color: #fff; font-size: 21px; line-height: 1.05; overflow-wrap: anywhere; }}
+    .flow-step small {{ color: #9aa7b2; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }}
+    .flow-step.ok {{ border-left-color: #58d68d; }}
+    .flow-step.watch {{ border-left-color: #f5b041; }}
+    .flow-step.bad {{ border-left-color: #ff6b6b; }}
+    .status-line {{ display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; color: #9aa7b2; font-size: 13px; }}
+    .status-line b {{ color: #fff; font-size: 15px; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th, td {{ text-align: left; border-bottom: 1px solid #28313a; padding: 9px 8px; white-space: nowrap; }}
     th {{ color: #a8b3bd; font-weight: 650; }}
     .ok {{ color: #58d68d; }}
     .watch {{ color: #f5b041; }}
     .bad {{ color: #ff6b6b; }}
-    .chart-panel p, .split-panel p {{ margin: 0 0 9px; color: #9aa7b2; font-size: 13px; }}
+    .chart-panel p {{ margin: 0 0 9px; color: #9aa7b2; font-size: 13px; }}
     .chart-svg {{ display: block; width: 100%; height: 220px; }}
+    .spark-stack {{ display: grid; gap: 8px; }}
+    .spark-row {{ display: grid; grid-template-columns: minmax(160px, 230px) 1fr; gap: 10px; align-items: center; }}
+    .spark-meta {{ display: grid; gap: 3px; }}
+    .spark-meta b {{ color: #fff; font-size: 13px; line-height: 1.2; }}
+    .spark-meta span {{ color: #9aa7b2; font-size: 12px; line-height: 1.25; }}
+    .spark-svg {{ display: block; width: 100%; height: 56px; background: #111519; border: 1px solid #252e36; border-radius: 8px; }}
     .chart-grid {{ stroke: #29323a; stroke-width: 1; }}
     .chart-line {{ fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }}
     .chart-green {{ stroke: #58d68d; }}
@@ -1472,16 +1695,12 @@ def status_dashboard_html(request_path: str = "") -> str:
     .legend-blue {{ background: #5dade2; }}
     .legend-red {{ background: #ff6b6b; }}
     .legend-yellow {{ background: #f5b041; }}
-    .split-bar {{ display: flex; width: 100%; height: 12px; overflow: hidden; border-radius: 6px; background: #29323a; margin-bottom: 12px; }}
-    .split-q {{ background: #f5b041; }}
-    .split-e {{ background: #5dade2; }}
-    .split-f {{ background: #58d68d; }}
     code {{ color: #d6e4ff; overflow-wrap: anywhere; }}
     @media (max-width: 860px) {{
       header {{ align-items: flex-start; flex-direction: column; }}
       .header-actions {{ align-items: flex-start; text-align: left; }}
-      .charts {{ grid-template-columns: 1fr; }}
       th, td {{ white-space: normal; }}
+      .spark-row {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -1490,7 +1709,7 @@ def status_dashboard_html(request_path: str = "") -> str:
   <header>
     <div>
       <h1>NANDA CPU v2</h1>
-      <div class="subtitle">{t("компактный рантайм скрытых переходов", "compact latent transition runtime")}</div>
+      <div class="subtitle">{t("карта движения трафика через CPU runtime", "traffic-flow map through the CPU runtime")}</div>
     </div>
     <div class="header-actions">
       {lang_switch}
@@ -1499,100 +1718,77 @@ def status_dashboard_html(request_path: str = "") -> str:
   </header>
 
   <section class="panel">
-    <h2>{t("Состояние сервера", "Server State")}</h2>
-    <div class="big">{'OK' if bridge.get('health_ok') else 'WATCH'}</div>
-    <div class="kv">
+    <h2>{t("0. Состояние", "0. State")}</h2>
+    <div class="flow-grid">
+      {flow_step("health", server_state, f"local_accept={dashboard_bool(bridge.get('local_accept_enabled'), lang)}", server_state_class)}
+      {flow_step(t("реальный CPU", "real CPU"), f"{n(edge_accepts)} accepts", f"tokens {n(edge_tokens)}, false {n(edge_false)}", state_class(edge_false == 0, edge_accepts > 0))}
+      {flow_step("Codex stream", f"{n(codex_session_rows)} rows", f"files {n(codex_session_active_files)}, idle {n(codex_idle_ms)} ms", "ok" if codex_session_rows > 0 else "watch")}
+      {flow_step(t("видимый edge-поток", "visible edge flow"), f"{n(edge_rows)} rows", f"gateway {n(gateway_rows)}, provider {n(provider_rows)}", "ok" if edge_rows > 0 else "watch")}
+    </div>
+    <div class="status-line">
       <span>local_accept <b>{dashboard_bool(bridge.get('local_accept_enabled'), lang)}</b></span>
       <span>client_allow <b>{dashboard_bool(bridge.get('client_allow_local_accept'), lang)}</b></span>
       <span>safety <b>{html.escape(str(bridge.get('safety_policy') or 'unknown'))}</b></span>
       <span>upstream <b>{dashboard_bool(bridge.get('upstream_configured'), lang)}</b></span>
-      <span>{t("метрики", "metrics")} <b>{generated_age}</b></span>
     </div>
   </section>
 
   <section class="panel">
-    <h2>{t("Покрытие трафика", "Traffic Coverage")}</h2>
-    <div class="big">{dashboard_metric_text(stable_tokens, lang)} tokens</div>
-    <p><b>{html.escape(capture_state)}</b></p>
-    <div class="kv">
-      <span>{t("rows во frame", "frame rows")} <b>{stable_rows}</b></span>
-      <span>gateway <b>{dashboard_int(metrics.get("gateway_decision_window_rows"))}</b></span>
-      <span>provider bridge <b>{dashboard_int(metrics.get("provider_bridge_decision_window_rows"))}</b></span>
-      <span>provider boundary <b>{dashboard_int(metrics.get("provider_bridge_boundary_window_rows"))}</b></span>
-      <span>{t("stable accepts", "stable accepts")} <b>{stable_accepts}</b></span>
-      <span>{t("stable saved", "stable saved")} <b>{dashboard_metric_text(stable_saved, lang)}</b></span>
-      <span>{t("stable shadow false", "stable shadow false")} <b class="{'ok' if stable_shadow_false == 0 else 'watch'}">{stable_shadow_false}</b></span>
-    </div>
+    <h2>{t("1. Входящий поток", "1. Incoming Flow")}</h2>
+    <table>
+      <thead><tr><th>{t("слой", "layer")}</th><th>{t("объём", "volume")}</th><th>{t("решение", "decision")}</th><th>{t("сигнал", "signal")}</th></tr></thead>
+      <tbody>{traffic_rows}</tbody>
+    </table>
   </section>
 
   <section class="panel">
-    <h2>{t("CPU serving сейчас", "CPU Serving Now")}</h2>
-    <div class="big">{dashboard_metric_text(edge_accepts, lang)} accepts</div>
-    <div class="kv">
-      <span>edge tokens <b>{dashboard_metric_text(edge_tokens, lang)}</b></span>
-      <span>edge false <b class="{'ok' if edge_false == 0 else 'bad'}">{edge_false}</b></span>
-      <span>miner serving-window <b>{clean_saved} / {clean_total}</b> tokens</span>
-      <span>{t("miner coverage от frame", "miner coverage of frame")} <b>{clean_coverage}</b></span>
-      <span>{t("clean rows", "clean rows")} <b>{clean_rows}</b></span>
-      <span>{t("CPU accepts", "CPU accepts")} <b>{clean_accepts}</b></span>
-      <span>serving false <b class="{'ok' if serving_false == 0 else 'bad'}">{serving_false}</b></span>
-      <span>active false <b class="{'ok' if active_false == 0 else 'bad'}">{active_false}</b></span>
-      <span>shadow risk <b class="{'ok' if shadow_false == 0 else 'watch'}">{shadow_false}</b></span>
-      <span>{t("claim", "claim")} <b class="{claim_state}">{dashboard_bool(verify.get('compression_claim_allowed'), lang)}</b></span>
-    </div>
+    <h2>{t("2. Развилка решений", "2. Decision Split")}</h2>
+    <table>
+      <thead><tr><th>{t("ветка", "branch")}</th><th>{t("accepts", "accepts")}</th><th>tokens</th><th>false / risk</th></tr></thead>
+      <tbody>{decision_rows}</tbody>
+    </table>
   </section>
 
   <section class="panel">
-    <h2>{t("Накопленный .nwpc итог", "Accumulated .nwpc Total")}</h2>
-    <div class="big">{dashboard_metric_text(active_manifest["tokens"], lang)} tokens</div>
-    <div class="kv">
-      <span>profiles <b>{active_manifest['promoted']}</b></span>
-      <span>accepts <b>{active_manifest['accepts']}</b></span>
-      <span>false <b class="{'ok' if active_manifest['false_accepts'] == 0 else 'bad'}">{active_manifest['false_accepts']}</b></span>
-      <span>parity <b>{active_manifest['parity']}</b></span>
-      <span>allowed <b class="{'ok' if active_manifest['allowed'] else 'watch'}">{dashboard_bool(active_manifest['allowed'], lang)}</b></span>
-      <span>hot profiles <b>{dashboard_int(metrics.get("final_hot_profile_count"))}</b></span>
+    <h2>{t("3. Майнер и горячая память", "3. Miner And Hot Memory")}</h2>
+    <div class="flow-grid">
+      {flow_step("stable frame", f"{n(stable_rows)} rows", f"{n(stable_tokens)} tokens", "ok" if stable_rows > 0 else "watch")}
+      {flow_step("phase candidates", n(stable_candidates), f"shadow false {n(stable_shadow_false)}", "watch" if stable_shadow_false > 0 else "ok")}
+      {flow_step("final_hot", f"{n(final_hot_profiles)} profiles", f"product hot accepts {n(product_hot_accepts)}", "ok" if final_hot_profiles > 0 else "watch")}
+      {flow_step("auto recovery", f"{n(recovery_events)} events", f"{n(recovery_tokens)} tokens, observes {n(recovery_observes)}", "ok" if recovery_events > 0 else "watch")}
+      {flow_step("daemon", t("активен", "active") if metrics.get("miner_saturation_active") else t("пауза", "paused"), f"sleep {n(miner_sleep_ms)} ms, batch {n(miner_batch)}", "ok")}
+      {flow_step(".nwpc total", f"{n(active_manifest['tokens'])} tokens", f"profiles {n(active_manifest['promoted'])}, false {n(active_manifest['false_accepts'])}", "ok" if active_manifest["false_accepts"] == 0 else "bad")}
     </div>
   </section>
 
-  <section class="panel">
-    <h2>{t("Как работает", "How It Works")}</h2>
-    <div class="flow">
-      <code>{t("поток событий", "event stream")}</code>
-      <span>→</span>
-      <code>online phase-center miner</code>
-      <span>→</span>
-      <code>.nwpc</code>
-      <span>→</span>
-      <code>{t("CPU accept или fallback", "CPU accept or fallback")}</code>
-    </div>
-    <p class="hint">{t("Боевой accept разрешён только при verifier/gate и active false = 0.", "Product accept is allowed only with verifier/gate and active false = 0.")}</p>
-  </section>
-
-  {traffic_frame_panel(status, metrics, active_manifest, lang)}
-  {decision_pipeline_panel(status, metrics, active_manifest, lang)}
   {recovery_backlog_panel(metrics, quarantined_rows, lang)}
 
   {dashboard_history_chart(history_rows, lang)}
-  {dashboard_pool_chart(history_rows, lang)}
 
   <section class="panel">
-    <h2>{t("Все важные показатели", "All Key Indicators")}</h2>
-    <table><tbody>
-      <tr><th>{t("server health", "server health")}</th><td>{'OK' if bridge.get('health_ok') else 'WATCH'}</td></tr>
-      <tr><th>blockers</th><td><code>{html.escape(blocker_text)}</code></td></tr>
-      <tr><th>miner</th><td>{t("пауза", "paused") if not metrics.get("miner_saturation_active") else t("активен", "active")} · sleep_ms={dashboard_int(metrics.get('miner_saturation_last_sleep_ms'))} · batch={dashboard_int(metrics.get('miner_active_batch_rows'))}</td></tr>
-      <tr><th>candidates</th><td>stable={dashboard_int(metrics.get('stable_decision_log_score_candidate_events'))} · clean={dashboard_int(metrics.get('stable_decision_log_clean_suffix_score_candidate_events'))} · append={dashboard_int(metrics.get('append_score_candidate_events'))}</td></tr>
-      <tr><th>provider</th><td>v2_accepts={dashboard_int(metrics.get('provider_bridge_v2_local_accept_events'))} · false={dashboard_int(metrics.get('provider_bridge_v2_false_accepts'))} · boundary_rows={dashboard_int(metrics.get('provider_bridge_boundary_window_rows'))}</td></tr>
-      <tr><th>gateway</th><td>accepts={dashboard_int(metrics.get('gateway_local_accept_events'))} · false={dashboard_int(metrics.get('gateway_false_accepts'))}</td></tr>
-      <tr><th>history</th><td>{len(history_rows)} points · compact limit {DASHBOARD_HISTORY_COMPACT_MAX_BYTES} bytes</td></tr>
-      <tr><th>next</th><td><code>{html.escape(str(summary.get('next_action') or metrics.get('product_hot_compression_claim_blocker') or 'none'))}</code></td></tr>
-    </tbody></table>
+    <h2>{t("4. Что чинить дальше", "4. What To Fix Next")}</h2>
+    <table>
+      <thead><tr><th>P</th><th>{t("место", "place")}</th><th>{t("сигнал", "signal")}</th><th>{t("смысл", "meaning")}</th></tr></thead>
+      <tbody>{problem_rows}</tbody>
+    </table>
+    <p class="hint">blockers: <code>{html.escape(blocker_text)}</code> · next: <code>{html.escape(str(summary.get('next_action') or metrics.get('product_hot_compression_claim_blocker') or 'none'))}</code></p>
   </section>
 
-  {split_panel(metrics, lang)}
-  {promotion_blocker_panel(lang)}
-  {live_miner_panels(status, metrics, class_rows, profile_rows, quarantined_rows, lang)}
+  <section class="panel">
+    <h2>{t("5. Классы операторов", "5. Operator Classes")}</h2>
+    <table>
+      <thead><tr><th>{t("класс", "class")}</th><th>profiles</th><th>accepts</th><th>tokens / false</th></tr></thead>
+      <tbody>{top_class_rows}</tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>{t("6. Лучшие профили", "6. Top Profiles")}</h2>
+    <table>
+      <thead><tr><th>profile</th><th>kind</th><th>accepts</th><th>tokens / status</th></tr></thead>
+      <tbody>{top_profile_rows}</tbody>
+    </table>
+  </section>
 </main>
 </body>
 </html>"""

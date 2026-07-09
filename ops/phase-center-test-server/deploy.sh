@@ -116,8 +116,9 @@ if [[ -d "${ROOT_DIR}/data/real_traffic" ]]; then
 else
   "${SUDO[@]}" mkdir -p "${PREFIX}/data/real_traffic"
 fi
-"${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server/bin" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod 0755 {} \;
+"${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server/bin" -type f \( -name '*.sh' -o -name '*.py' -o -name 'nando-codex' \) -exec chmod 0755 {} \;
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-llm-gateway.sh" "${INSTALL_BIN_DIR}/nando-llm-gateway"
+"${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-codex" "${INSTALL_BIN_DIR}/nando-codex"
 
 ENV_FILE="${ENV_DIR}/phase-center.env"
 tmp_env="$(mktemp)"

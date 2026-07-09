@@ -630,6 +630,22 @@ This mode reads server policy from `/etc` and writes gateway telemetry under:
 
 It does not require `/etc` or `/var/lib` permissions.
 
+`nando-codex` is guarded fail-open. It preserves the original OpenAI
+environment, checks `http://127.0.0.1:8787/v2/health`, and routes Codex through
+the local OpenAI-compatible bridge only when the bridge is healthy and upstream
+is configured. Otherwise it restores the original environment and starts the
+real Codex CLI directly.
+
+Control knobs:
+
+```text
+NANDO_CODEX_PROVIDER_BRIDGE=auto  # default guarded mode
+NANDO_CODEX_REQUIRE_UPSTREAM=1    # default: do not route broad traffic into Nando unless upstream is ready
+NANDO_CODEX_HEALTH_TIMEOUT_MS=300
+NANDO_CODEX_ALIAS=0               # emergency bypass
+NANDO_OFFLOAD=0                   # emergency bypass
+```
+
 Default safety policy:
 
 ```text

@@ -61,6 +61,7 @@ append_dashboard_history_snapshot() {
         gateway_accepts: (.gateway_local_accept_events // 0),
         provider_v2_accepts: (.provider_bridge_v2_local_accept_events // 0),
         edge_serving_cpu_accepts: (.edge_serving_cpu_local_accept_events // 0),
+        edge_saved_tokens: (.edge_serving_cpu_tokens_saved_estimated // 0),
         edge_serving_cpu_tokens: (.edge_serving_cpu_tokens_saved_estimated // 0),
         edge_serving_cpu_false_accepts: (.edge_serving_cpu_false_accepts // 0),
         quarantined_tokens: (ct("hidden_state:quarantined") + ct("observable_subcenter:quarantined")),

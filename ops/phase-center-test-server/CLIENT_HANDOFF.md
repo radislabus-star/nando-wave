@@ -159,6 +159,22 @@ timeout / miss / daemon error / broad prompt -> normal provider command
 
 This is the safer default while upstream readiness is not PASS.
 
+For Codex windows use `nando-codex`, not a blind `OPENAI_BASE_URL` export, when
+work continuity matters. The launcher checks `/v2/health` with a short timeout
+and chooses:
+
+```text
+health ok + upstream configured -> OPENAI_BASE_URL=http://127.0.0.1:8787/v2
+health down / upstream missing -> original direct Codex/OpenAI environment
+```
+
+The emergency bypass stays:
+
+```bash
+export NANDO_CODEX_ALIAS=0
+export NANDO_OFFLOAD=0
+```
+
 ## Safety Boundary
 
 Client windows do not decide production safety. Server policy controls it:
@@ -205,6 +221,10 @@ local_accept_enabled: true
 export OPENAI_BASE_URL=http://127.0.0.1:8787/v2
 export OPENAI_API_KEY=nando-local
 export NANDO_CPU_API_VERSION=v2
+
+Внимание: ручной OPENAI_BASE_URL не умеет сам откатиться, если локальный bridge
+умрёт. Для Codex по умолчанию используйте nando-codex: он fail-open и не
+переключает полный OpenAI-трафик на Nando, пока upstream не настроен.
 
 Endpoint:
 

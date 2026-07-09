@@ -62,6 +62,37 @@ no local_accept without verifier and false_accepts = 0
 no synthetic-only market claim
 ```
 
+## Current Traffic Boundary: No OpenAI API Key
+
+```text
+timestamp: 2026-07-09
+
+fact:
+  user has Codex plan access, but no OpenAI API key.
+
+decision:
+  do not build product claims around OpenAI upstream proxy / provider-boundary.
+  Codex OAuth/session tokens are not API keys and must not be used as upstream
+  credentials.
+
+active traffic path:
+  Codex normal channel
+    -> ~/.codex/sessions
+    -> nando-phase-center-appender.service
+    -> live-agent-phase-atom-append-v1.jsonl
+    -> nando-phase-center-live-tail.service
+    -> miner / .nwpc / dashboard
+
+server guard:
+  nando-codex is fail-open. It routes through /v2 only when health is OK and
+  upstream auth is available; otherwise it restores the original OpenAI env and
+  launches real Codex directly.
+
+dashboard:
+  primary incoming flow is Codex session stream.
+  provider boundary with 0 rows is not a P0 while upstream/API key is absent.
+```
+
 ## Current Checkpoint: V2 NANDA CPU Bridge
 
 ```text
