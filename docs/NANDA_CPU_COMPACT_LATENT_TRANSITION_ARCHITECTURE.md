@@ -2,6 +2,18 @@
 
 Status: architecture north star, not a product claim by itself.
 
+Unified transferable-operator doctrine:
+
+```text
+docs/TRANSFERABLE_OPERATORS_UNIFIED_V1.md
+```
+
+Current promotion/admission contract:
+
+```text
+docs/HYBRID_SYMBIOTIC_OPERATOR_PROMOTION_CONTRACT.md
+```
+
 NANDA CPU is not a cache and not a small LLM.
 
 It is an executable memory of hidden state transitions.

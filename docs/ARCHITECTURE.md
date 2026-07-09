@@ -6,6 +6,18 @@ Current architecture overlay, 2026-07-06:
 docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
 ```
 
+Unified transferable-operator doctrine:
+
+```text
+docs/TRANSFERABLE_OPERATORS_UNIFIED_V1.md
+```
+
+Current promotion/admission contract:
+
+```text
+docs/HYBRID_SYMBIOTIC_OPERATOR_PROMOTION_CONTRACT.md
+```
+
 Current active implementation frame:
 
 ```text

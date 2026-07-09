@@ -1,6 +1,6 @@
 # Nando Wave Project Progress Tree
 
-Дата среза: 2026-07-06
+Дата среза: 2026-07-09
 
 Назначение: короткая карта текущего положения проекта без stale PASS.
 
@@ -8,6 +8,7 @@
 
 ```text
 docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+docs/HYBRID_SYMBIOTIC_OPERATOR_PROMOTION_CONTRACT.md
 ```
 
 Current truth:
@@ -28,6 +29,8 @@ TREE
 +-- L4 streaming selector/router/admission              [P0 NEXT]
 |   |
 |   +-- choose classes by marginal denominator delta
+|   +-- classify every selected profile
+|   +-- promote only hybrid symbiotic verified operators
 |   +-- manage hot/warm/cold operator memory
 |   +-- do not become answer authority
 |
@@ -48,6 +51,7 @@ TREE
     |
     +-- requires verifier-bound promotion
     +-- requires future-window proof
+    +-- requires negative memory / false_accepts = 0
     +-- requires false_accepts = 0
 ```
 

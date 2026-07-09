@@ -23,6 +23,7 @@ Reference:
 ```text
 docs/NE_BUSY_ARCHITECTURE.md
 docs/NANDA_CPU_COMPACT_LATENT_TRANSITION_ARCHITECTURE.md
+docs/HYBRID_SYMBIOTIC_OPERATOR_PROMOTION_CONTRACT.md
 ```
 
 Active miner direction:
@@ -33,6 +34,32 @@ L2 -> hidden state split
 L3 -> phase-center operator
 L4 -> portfolio survivor selector
 verifier -> admission / quarantine
+```
+
+Current promotion rule:
+
+```text
+Do not promote fat buckets directly.
+Every selected profile must be classified as:
+  latent_candidate
+  utility_reflex
+  checked_rule
+  quarantined_broad_parent
+  hybrid_symbiotic_verified_operator
+  portable_operator_chain
+
+Product-safe promotion requires:
+  hidden center
+  + observable evidence
+  + verifier binding
+  + negative memory
+  + false_accepts = 0
+  + future shadow clean
+
+operator_power_* is allowed only as cold precursor signal:
+  operator_power_score_milli helps priority
+  profile_class decides admission
+  verifier/negative/future window decides promotion
 ```
 
 Client/server handoff:
@@ -119,6 +146,53 @@ boundary:
   these rows do not count as saved calls or saved tokens. They keep feeding the
   phase-center miner and auto-split pressure, but local accept still requires
   verifier safety and false_accepts=0.
+```
+
+## Current Miner Work: Operator-Power Survivor Gate
+
+```text
+timestamp: 2026-07-09T23:20+03:00
+
+goal:
+  stop treating token volume as operator strength. Product-hot profiles must be
+  portable phase-center operators or useful clean subcenters, not broad parents
+  or thin exit-code reflexes.
+
+change:
+  live_store_adapter/operator_power.rs adds cold-path:
+    operator_power_score_milli
+    operator_power_class
+    operator_power_blocker
+    operator_power_next_auto_action
+    operator_power_negative_memory
+
+change:
+  survivor_runtime now applies operator_power before product-hot survivor
+  inclusion. active manifest scoring/credit also requires the same gate.
+
+boundary:
+  hot score-loop is unchanged. This is selector/promotion/report logic only.
+  no .nwrb, no manual class list, no local_accept without verifier and
+  false_accepts=0.
+
+evidence:
+  cargo fmt --check: PASS
+  cargo check -p nando-cli: PASS
+  rust-action-memory diagnose: WATCH/no_diagnostic
+  operator richness latest: 1309 rows, 691 accepted, 1 raw false row
+  transferability lab: stable_profile_count 72, dangerous top20 clean split 20/20
+  deployed /opt/nando-wave/bin/nando-cli: PASS
+  live /v2 health: OK
+  live-tail RSS after restart: 31.5 MiB
+  live product-hot after restart/refresh: active_profiles 74, accepts 14,
+    tokens 9747, post_quarantine_false_accepts 0
+  product compression claim: blocked by append_window_below_min_rows until
+    the fresh clean suffix grows again
+  live clean_candidate_reports expose operator_power_* fields
+
+deploy note:
+  deployed through ops/phase-center-test-server/deploy.sh using target/release/nando-cli.
+  system services are active: appender, live-tail, provider bridge.
 ```
 
 ## Current Runtime Work: Portable Hot .nwpc Package ABI

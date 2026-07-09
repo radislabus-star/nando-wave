@@ -5,6 +5,9 @@ use nando_core::PhaseCenterLiveOperatorStore;
 use nando_core::wave::PhaseCenterOnlineBucket;
 
 use super::defaults::DEFAULT_HOT_PATH_DAEMON_APPEND_LIVE_TAIL_CANDIDATE_FRONTIER_LIMIT;
+use super::operator_power::{
+    live_store_operator_power_allows_product_hot, live_store_operator_power_report,
+};
 use super::state::LiveStoreProductHotRegistryRuntimeBundle;
 
 pub(super) fn live_store_clean_candidate_frontier(
@@ -48,13 +51,20 @@ pub(super) fn live_store_clean_candidate_value_reports(
             let active = bucket.is_active(min_bucket_events);
             let shadow_ready = bucket.is_shadow_ready(min_bucket_events, min_bucket_events);
             let final_hot = final_hot_profile_ids.contains(profile_id);
-            let exportable = !quarantined;
+            let kind = known_profile_kinds
+                .get(profile_id)
+                .copied()
+                .unwrap_or("unknown");
+            let operator_power = live_store_operator_power_report(bucket, kind, min_bucket_events);
+            let exportable = !quarantined && operator_power.portable_operator_ready;
+            let auto_recovery_running = active
+                && !final_hot
+                && (quarantined
+                    || !operator_power.portable_operator_ready
+                    || operator_power.blocker != "none");
             Some(serde_json::json!({
                 "profile_id": profile_id,
-                "kind": known_profile_kinds
-                    .get(profile_id)
-                    .copied()
-                    .unwrap_or("unknown"),
+                "kind": kind,
                 "route_id": route_id,
                 "quarantined": quarantined,
                 "exportable": exportable,
@@ -62,9 +72,10 @@ pub(super) fn live_store_clean_candidate_value_reports(
                 "candidate": bucket.is_candidate(),
                 "active": active,
                 "shadow_ready": shadow_ready,
-                "auto_recovery_running": quarantined && active,
+                "auto_recovery_running": auto_recovery_running,
                 "promotion_blocker": live_store_candidate_promotion_blocker(
                     bucket,
+                    operator_power.blocker,
                     quarantined,
                     active,
                     shadow_ready,
@@ -73,6 +84,7 @@ pub(super) fn live_store_clean_candidate_value_reports(
                 ),
                 "next_auto_action": live_store_candidate_next_auto_action(
                     bucket,
+                    operator_power.next_auto_action,
                     quarantined,
                     active,
                     shadow_ready,
@@ -80,6 +92,12 @@ pub(super) fn live_store_clean_candidate_value_reports(
                     final_hot,
                 ),
                 "best_split_candidate": live_store_candidate_best_split_candidate(bucket),
+                "operator_power_score_milli": operator_power.score_milli,
+                "operator_power_class": operator_power.class,
+                "operator_power_blocker": operator_power.blocker,
+                "operator_power_next_auto_action": operator_power.next_auto_action,
+                "operator_power_negative_memory": operator_power.negative_memory_status,
+                "operator_power_portable_ready": operator_power.portable_operator_ready,
                 "recovery_retry_after_events": live_store_candidate_recovery_retry_after_events(
                     bucket,
                     active,
@@ -109,6 +127,7 @@ pub(super) fn live_store_clean_candidate_value_reports(
 
 fn live_store_candidate_promotion_blocker(
     bucket: &PhaseCenterOnlineBucket,
+    operator_power_blocker: &'static str,
     quarantined: bool,
     active: bool,
     shadow_ready: bool,
@@ -117,6 +136,8 @@ fn live_store_candidate_promotion_blocker(
 ) -> &'static str {
     if final_hot {
         "none_final_hot"
+    } else if operator_power_blocker != "none" {
+        operator_power_blocker
     } else if bucket.rejected || bucket.false_accepts > 0 {
         "false_accept_or_rejected"
     } else if !active {
@@ -142,13 +163,20 @@ fn live_store_candidate_promotion_blocker(
 
 fn live_store_candidate_next_auto_action(
     bucket: &PhaseCenterOnlineBucket,
+    operator_power_next_auto_action: &'static str,
     quarantined: bool,
     active: bool,
     shadow_ready: bool,
     exportable: bool,
     final_hot: bool,
 ) -> &'static str {
-    if final_hot || exportable && !quarantined {
+    if final_hot {
+        "none"
+    } else if operator_power_next_auto_action != "keep_hot_and_monitor_drift"
+        && operator_power_next_auto_action != "keep_hot_and_collect_negative_memory"
+    {
+        operator_power_next_auto_action
+    } else if exportable && !quarantined {
         "none"
     } else if bucket.rejected || bucket.false_accepts > 0 {
         "isolate_false_accept_atoms_and_split_deeper"
@@ -312,6 +340,27 @@ pub(super) fn live_store_product_hot_subcenter_priority_bucket_ids(
     ordered_ids
 }
 
+pub(super) fn live_store_power_allowed_hot_profile_count(
+    store: &PhaseCenterLiveOperatorStore,
+    hot_runtime: &nando_core::PhaseCenterHotRuntime,
+    known_profile_kinds: &BTreeMap<u32, &'static str>,
+    quarantined_profile_ids: &BTreeSet<u32>,
+    min_bucket_events: usize,
+) -> usize {
+    (0..hot_runtime.profile_count())
+        .filter_map(|index| hot_runtime.profile_id_at(index))
+        .filter(|profile_id| {
+            live_store_product_hot_score_candidate_allowed(
+                store,
+                known_profile_kinds,
+                quarantined_profile_ids,
+                *profile_id,
+                min_bucket_events,
+            )
+        })
+        .count()
+}
+
 pub(super) fn live_store_product_hot_subcenter_candidate_allowed(
     store: &PhaseCenterLiveOperatorStore,
     known_profile_kinds: &BTreeMap<u32, &'static str>,
@@ -319,11 +368,34 @@ pub(super) fn live_store_product_hot_subcenter_candidate_allowed(
     bucket_id: u32,
     min_bucket_events: usize,
 ) -> bool {
-    matches!(
-        known_profile_kinds.get(&bucket_id).copied(),
-        Some("observable_subcenter" | "hidden_state")
-    ) && !quarantined_profile_ids.contains(&bucket_id)
+    live_store_product_hot_score_candidate_allowed(
+        store,
+        known_profile_kinds,
+        quarantined_profile_ids,
+        bucket_id,
+        min_bucket_events,
+    )
+}
+
+pub(super) fn live_store_product_hot_score_candidate_allowed(
+    store: &PhaseCenterLiveOperatorStore,
+    known_profile_kinds: &BTreeMap<u32, &'static str>,
+    quarantined_profile_ids: &BTreeSet<u32>,
+    bucket_id: u32,
+    min_bucket_events: usize,
+) -> bool {
+    let Some(kind) = known_profile_kinds.get(&bucket_id).copied() else {
+        return false;
+    };
+    if !matches!(kind, "observable_subcenter" | "hidden_state") {
+        return false;
+    }
+    let Some(bucket) = store.miner().bucket(bucket_id) else {
+        return false;
+    };
+    !quarantined_profile_ids.contains(&bucket_id)
         && live_store_product_hot_profile_phase_trusted(store, bucket_id, min_bucket_events)
+        && live_store_operator_power_allows_product_hot(bucket, kind, min_bucket_events)
 }
 
 pub(super) fn live_store_product_hot_profile_phase_trusted(

@@ -28,6 +28,7 @@ mod hot_path_eval;
 mod hot_path_gates;
 mod numeric_false_accept_split_audit;
 mod numeric_future_package;
+mod operator_power;
 mod paths;
 mod persistence;
 mod policy_json;
@@ -6381,9 +6382,12 @@ where
                         }
                     }
                     if !product_hot_registry_runtime.as_ref().is_some_and(|bundle| {
-                        live_store_active_hot_profile_count(
+                        live_store_power_allowed_hot_profile_count(
+                            &store,
                             &bundle.hot_runtime,
+                            &append_profile_kind_by_id,
                             &product_hot_score_only_quarantined_profile_ids,
+                            min_bucket_events,
                         ) > 0
                     }) {
                         if let Some(survivor_runtime) =
@@ -6449,9 +6453,12 @@ where
                     snapshot_hot_profile_count,
                     snapshot_hot_route_profile_edges,
                 ) = if let Some(bundle) = product_hot_registry_runtime.as_ref().filter(|bundle| {
-                    live_store_active_hot_profile_count(
+                    live_store_power_allowed_hot_profile_count(
+                        &store,
                         &bundle.hot_runtime,
+                        &append_profile_kind_by_id,
                         &product_hot_score_only_quarantined_profile_ids,
+                        min_bucket_events,
                     ) > 0
                 }) {
                     (
@@ -6976,13 +6983,15 @@ where
                     product_hot_score_only_runtime_active: product_hot_registry_runtime
                         .as_ref()
                         .is_some_and(|bundle| {
-                            live_store_active_hot_profile_count(
+                            live_store_power_allowed_hot_profile_count(
+                                &store,
                                 &bundle.hot_runtime,
+                                &append_profile_kind_by_id,
                                 &product_hot_score_only_quarantined_profile_ids,
+                                min_bucket_events,
                             ) > 0
                         }),
-                    product_hot_score_only_active_manifest_disabled:
-                        product_hot_score_only_active_manifest_disabled,
+                    product_hot_score_only_active_manifest_disabled,
                     product_hot_score_only_active_manifest_disable_reason:
                         product_hot_score_only_active_manifest_disable_reason.clone(),
                     product_hot_score_only_quarantined:
@@ -7009,9 +7018,12 @@ where
                     product_hot_score_only_active_profile_count: product_hot_registry_runtime
                         .as_ref()
                         .map_or(0, |bundle| {
-                            live_store_active_hot_profile_count(
+                            live_store_power_allowed_hot_profile_count(
+                                &store,
                                 &bundle.hot_runtime,
+                                &append_profile_kind_by_id,
                                 &product_hot_score_only_quarantined_profile_ids,
+                                min_bucket_events,
                             )
                         }),
                     product_hot_score_only_quarantined_profile_count:
@@ -7289,9 +7301,12 @@ where
         if product_hot_registry_runtime
             .as_ref()
             .filter(|bundle| {
-                live_store_active_hot_profile_count(
+                live_store_power_allowed_hot_profile_count(
+                    &store,
                     &bundle.hot_runtime,
+                    &append_profile_kind_by_id,
                     &product_hot_score_only_quarantined_profile_ids,
+                    min_bucket_events,
                 ) > 0
             })
             .is_some_and(|bundle| {
@@ -7330,9 +7345,12 @@ where
             }
         }
         if let Some(bundle) = product_hot_registry_runtime.as_ref().filter(|bundle| {
-            live_store_active_hot_profile_count(
+            live_store_power_allowed_hot_profile_count(
+                &store,
                 &bundle.hot_runtime,
+                &append_profile_kind_by_id,
                 &product_hot_score_only_quarantined_profile_ids,
+                min_bucket_events,
             ) > 0
         }) {
             append_hot_view_available_events += 1;
@@ -7361,13 +7379,13 @@ where
                     .iter()
                     .copied()
                     .filter(|decision| {
-                        !product_hot_score_only_quarantined_profile_ids
-                            .contains(&decision.profile_id)
-                            && live_store_product_hot_profile_phase_trusted(
-                                &store,
-                                decision.profile_id,
-                                min_bucket_events,
-                            )
+                        live_store_product_hot_score_candidate_allowed(
+                            &store,
+                            &append_profile_kind_by_id,
+                            &product_hot_score_only_quarantined_profile_ids,
+                            decision.profile_id,
+                            min_bucket_events,
+                        )
                     })
                     .collect::<Vec<_>>();
                 let trusted_score_candidate_seen = active_decisions
@@ -7375,10 +7393,10 @@ where
                     .any(|decision| decision.score_candidate);
                 if relevant_product_hot_decisions.iter().any(|decision| {
                     decision.score_candidate
-                        && !product_hot_score_only_quarantined_profile_ids
-                            .contains(&decision.profile_id)
-                        && !live_store_product_hot_profile_phase_trusted(
+                        && !live_store_product_hot_score_candidate_allowed(
                             &store,
+                            &append_profile_kind_by_id,
+                            &product_hot_score_only_quarantined_profile_ids,
                             decision.profile_id,
                             min_bucket_events,
                         )
@@ -7724,10 +7742,10 @@ where
                     };
                     let untrusted_score_candidate_seen = relevant_decisions.iter().any(|decision| {
                         decision.score_candidate
-                            && !product_hot_score_only_quarantined_profile_ids
-                                .contains(&decision.profile_id)
-                            && !live_store_product_hot_profile_phase_trusted(
+                            && !live_store_product_hot_score_candidate_allowed(
                                 &store,
+                                &append_profile_kind_by_id,
+                                &product_hot_score_only_quarantined_profile_ids,
                                 decision.profile_id,
                                 min_bucket_events,
                             )
@@ -7735,10 +7753,10 @@ where
                     let mut decisions = relevant_decisions
                         .into_iter()
                         .filter(|decision| {
-                        !product_hot_score_only_quarantined_profile_ids
-                            .contains(&decision.profile_id)
-                            && live_store_product_hot_profile_phase_trusted(
+                            live_store_product_hot_score_candidate_allowed(
                                 &store,
+                                &append_profile_kind_by_id,
+                                &product_hot_score_only_quarantined_profile_ids,
                                 decision.profile_id,
                                 min_bucket_events,
                             )
@@ -7860,9 +7878,12 @@ where
             append_eval.false_accepts > row_eval_false_accepts_before;
         let stable_clean_hot_runtime_available =
             product_hot_registry_runtime.as_ref().is_some_and(|bundle| {
-                live_store_active_hot_profile_count(
+                live_store_power_allowed_hot_profile_count(
+                    &store,
                     &bundle.hot_runtime,
+                    &append_profile_kind_by_id,
                     &product_hot_score_only_quarantined_profile_ids,
+                    min_bucket_events,
                 ) > 0
                     && product_hot_score_only_post_quarantine_false_accepts == 0
                     && product_hot_score_only_quarantine_false_accepts == 0
@@ -8217,9 +8238,12 @@ where
         mut final_hot_profile_count,
         mut final_hot_route_profile_edges,
     ) = if let Some(bundle) = product_hot_registry_runtime.as_ref().filter(|bundle| {
-        live_store_active_hot_profile_count(
+        live_store_power_allowed_hot_profile_count(
+            &store,
             &bundle.hot_runtime,
+            &append_profile_kind_by_id,
             &product_hot_score_only_quarantined_profile_ids,
+            min_bucket_events,
         ) > 0
     }) {
         (
@@ -8868,16 +8892,17 @@ where
         product_hot_score_only_runtime_loaded: product_hot_registry_runtime.is_some(),
         product_hot_score_only_runtime_active: product_hot_registry_runtime.as_ref().is_some_and(
             |bundle| {
-                live_store_active_hot_profile_count(
+                live_store_power_allowed_hot_profile_count(
+                    &store,
                     &bundle.hot_runtime,
+                    &append_profile_kind_by_id,
                     &product_hot_score_only_quarantined_profile_ids,
+                    min_bucket_events,
                 ) > 0
             },
         ),
-        product_hot_score_only_active_manifest_disabled:
-            product_hot_score_only_active_manifest_disabled,
-        product_hot_score_only_active_manifest_disable_reason:
-            product_hot_score_only_active_manifest_disable_reason,
+        product_hot_score_only_active_manifest_disabled,
+        product_hot_score_only_active_manifest_disable_reason,
         product_hot_score_only_quarantined: !product_hot_score_only_quarantined_profile_ids
             .is_empty(),
         product_hot_score_only_quarantine_reason,
@@ -8901,9 +8926,12 @@ where
         product_hot_score_only_active_profile_count: product_hot_registry_runtime.as_ref().map_or(
             0,
             |bundle| {
-                live_store_active_hot_profile_count(
+                live_store_power_allowed_hot_profile_count(
+                    &store,
                     &bundle.hot_runtime,
+                    &append_profile_kind_by_id,
                     &product_hot_score_only_quarantined_profile_ids,
+                    min_bucket_events,
                 )
             },
         ),

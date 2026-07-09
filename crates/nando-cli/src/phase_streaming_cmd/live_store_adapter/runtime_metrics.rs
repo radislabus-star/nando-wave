@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use nando_core::{
     PhaseCenterHotRouteTable, PhaseCenterHotRuntime, PhaseCenterRuntimeBudgetSnapshot,
 };
@@ -16,16 +14,6 @@ pub(super) fn live_store_hot_profile_ids(hot_runtime: &PhaseCenterHotRuntime) ->
     (0..hot_runtime.profile_count())
         .filter_map(|index| hot_runtime.profile_id_at(index))
         .collect()
-}
-
-pub(super) fn live_store_active_hot_profile_count(
-    hot_runtime: &PhaseCenterHotRuntime,
-    quarantined_profile_ids: &BTreeSet<u32>,
-) -> usize {
-    (0..hot_runtime.profile_count())
-        .filter_map(|index| hot_runtime.profile_id_at(index))
-        .filter(|profile_id| !quarantined_profile_ids.contains(profile_id))
-        .count()
 }
 
 pub(super) fn live_store_per_thousand(numerator: usize, denominator: usize) -> usize {
