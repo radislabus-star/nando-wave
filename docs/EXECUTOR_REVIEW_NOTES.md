@@ -6464,3 +6464,34 @@ Live verification:
 
 Boundary:
   Dashboard remains observability-only. No miner/runtime scoring logic changed.
+
+## 2026-07-09 Phase-Trust Hot Accept Guard
+
+Request:
+  CPU traffic must grow through phase-center grokking, not through a table of
+  manually allowed profiles.
+
+Changes:
+  - Product-hot accept now requires live phase-center trust:
+      candidate bucket, shadow-ready, not rejected, false_accepts=0,
+      trust_false_risk_micro=0, trust_drift_micro <= 100000, positive tokens,
+      and unique accepts over exact cache.
+  - Untrusted product-hot score candidates are not accepted. They are sampled
+    back into discovery/recovery, so the miner must form cleaner subcenters
+    instead of relying on a broad old center.
+  - Added `product_hot_phase_trust_filtered_events` to decisions, reports,
+    metrics snapshot, Prometheus output, and dashboard status.
+
+Live verification:
+  - Services active after deploy: provider bridge, appender, live-tail miner.
+  - `/v2/health`: OK, local_accept_enabled=true, client_allow_local_accept=true.
+  - Fresh post-restart frame: 28 append rows, 5 candidates, 2 CPU accepts,
+    596 tokens saved, false_accepts=0.
+  - New trust gate fired: product_hot_phase_trust_filtered_events=13.
+  - Recovery is active: quarantine_recovery_auto_subcenter_observe_events=940.
+
+Boundary:
+  This is a safety/grokking gate, not a compression win by itself. It may
+  temporarily reduce accepts, because dirty broad centers are forced back into
+  automatic subcenter discovery. It does not introduce `.nwrb`, lookup,
+  target/proof authority, manual local_out_t, or a manual profile allow-list.

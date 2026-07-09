@@ -838,6 +838,80 @@ def dashboard_metric_panel(title: str, rows: list[tuple[str, str, str]], lang: s
     )
 
 
+def codex_cpu_traffic_panel(
+    *,
+    codex_session_rows: int,
+    append_rows: int,
+    append_candidates: int,
+    append_accepts: int,
+    append_tokens: int,
+    append_false: int,
+    product_hot_accepts: int,
+    product_hot_tokens: int,
+    active_false: int,
+    trust_filtered: int,
+    lang: str,
+) -> str:
+    is_en = lang == "en"
+
+    def t(ru: str, en: str) -> str:
+        return en if is_en else ru
+
+    cpu_accepts = product_hot_accepts if product_hot_accepts > 0 else append_accepts
+    cpu_tokens = product_hot_tokens if product_hot_tokens > 0 else append_tokens
+    cpu_false = active_false if product_hot_accepts > 0 or product_hot_tokens > 0 else append_false
+    append_share = dashboard_pct(cpu_accepts, append_rows)
+    captured_share = dashboard_pct(cpu_accepts, codex_session_rows)
+    candidate_share = dashboard_pct(append_candidates, append_rows)
+    rows = [
+        (
+            t("Захвачено из Codex session stream", "Captured from Codex session stream"),
+            f"{dashboard_metric_text(codex_session_rows, lang)} {t('событий', 'events')}",
+        ),
+        (
+            t("В append/miner frame разобрано", "Parsed in append/miner frame"),
+            f"{dashboard_metric_text(append_rows, lang)} rows",
+        ),
+        (
+            t("CPU реально принял", "CPU really accepted"),
+            dashboard_metric_text(cpu_accepts, lang),
+        ),
+        (
+            t("CPU-доля", "CPU share"),
+            f"{dashboard_metric_text(cpu_accepts, lang)} / {dashboard_metric_text(append_rows, lang)} = {append_share}",
+        ),
+        (
+            t("Если считать от всего захваченного Codex stream", "If counted from the whole captured Codex stream"),
+            f"{dashboard_metric_text(cpu_accepts, lang)} / {dashboard_metric_text(codex_session_rows, lang)} = {captured_share}",
+        ),
+        (
+            "Candidate zone",
+            f"{dashboard_metric_text(append_candidates, lang)} / {dashboard_metric_text(append_rows, lang)} = {candidate_share}",
+        ),
+        (
+            t("Сэкономлено токенов оценочно", "Estimated tokens saved"),
+            dashboard_metric_text(cpu_tokens, lang),
+        ),
+        (
+            t("Автофильтр phase-trust", "Auto phase-trust filter"),
+            f"{dashboard_metric_text(trust_filtered, lang)} {t('событий отправлено обратно в майнер', 'events sent back to miner')}",
+        ),
+        ("False accepts", dashboard_metric_text(cpu_false, lang)),
+    ]
+    items = "".join(
+        "<li>"
+        f"<span>{html.escape(label)}</span>"
+        f"<b>{html.escape(value)}</b>"
+        "</li>"
+        for label, value in rows
+    )
+    return (
+        f"<section class='panel cpu-traffic-panel'><h2>{html.escape(t('CPU трафик сейчас', 'CPU Traffic Now'))}</h2>"
+        f"<ul class='cpu-live-list'>{items}</ul>"
+        "</section>"
+    )
+
+
 def traffic_frame_panel(
     status: dict[str, Any],
     metrics: dict[str, Any],
@@ -1325,6 +1399,7 @@ def live_miner_panels(
                 ("active_false_accepts", dashboard_metric_text(active_false, lang), "post-quarantine hot path"),
                 ("shadow_risk_events", dashboard_metric_text(shadow_false, lang), "stable diagnostic window"),
                 ("post_quarantine_false", dashboard_metric_first(metrics, ("product_hot_score_only_post_quarantine_false_accepts",), lang, default="0"), "hot score only"),
+                ("trust_filtered", dashboard_metric_first(metrics, ("product_hot_phase_trust_filtered_events",), lang, default="0"), "sent back to miner"),
                 ("gateway_false", dashboard_metric_first(metrics, ("gateway_false_accepts", "provider_bridge_v2_false_accepts"), lang, default="0"), "HTTP bridge"),
                 ("quarantined_buckets", dashboard_metric_text(len(quarantined_rows), lang), "needs split"),
                 ("wrong_wins", dashboard_metric_first(metrics, ("wrong_wins",), lang, default="-"), "phase judge"),
@@ -1668,6 +1743,10 @@ def status_dashboard_html(request_path: str = "") -> str:
     .flow-step.bad {{ border-left-color: #ff6b6b; }}
     .status-line {{ display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; color: #9aa7b2; font-size: 13px; }}
     .status-line b {{ color: #fff; font-size: 15px; }}
+    .cpu-live-list {{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }}
+    .cpu-live-list li {{ display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 10px 11px; background: #111519; border: 1px solid #252e36; border-radius: 8px; }}
+    .cpu-live-list span {{ color: #9aa7b2; font-size: 13px; line-height: 1.25; }}
+    .cpu-live-list b {{ color: #fff; font-size: 16px; line-height: 1.1; text-align: right; white-space: nowrap; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th, td {{ text-align: left; border-bottom: 1px solid #28313a; padding: 9px 8px; white-space: nowrap; }}
     th {{ color: #a8b3bd; font-weight: 650; }}
@@ -1732,6 +1811,8 @@ def status_dashboard_html(request_path: str = "") -> str:
       <span>upstream <b>{dashboard_bool(bridge.get('upstream_configured'), lang)}</b></span>
     </div>
   </section>
+
+  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=dashboard_int(metrics.get("product_hot_phase_trust_filtered_events")), lang=lang)}
 
   <section class="panel">
     <h2>{t("1. Входящий поток", "1. Incoming Flow")}</h2>

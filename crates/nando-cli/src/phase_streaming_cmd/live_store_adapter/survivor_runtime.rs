@@ -7,6 +7,8 @@ use nando_core::wave::PhaseCenterOnlineBucket;
 use super::defaults::DEFAULT_HOT_PATH_DAEMON_APPEND_LIVE_TAIL_CANDIDATE_FRONTIER_LIMIT;
 use super::state::LiveStoreProductHotRegistryRuntimeBundle;
 
+const LIVE_STORE_PRODUCT_HOT_MAX_TRUST_DRIFT_MICRO: i64 = 100_000;
+
 pub(super) fn live_store_clean_candidate_frontier(
     store: &PhaseCenterLiveOperatorStore,
     quarantined_profile_ids: &BTreeSet<u32>,
@@ -205,16 +207,7 @@ pub(super) fn live_store_trusted_clean_candidate_profile_ids(
         .iter()
         .copied()
         .filter(|profile_id| {
-            let Some(bucket) = store.miner().bucket(*profile_id) else {
-                return false;
-            };
-            bucket.is_candidate()
-                && bucket.is_shadow_ready(min_bucket_events, min_bucket_events)
-                && !bucket.rejected
-                && bucket.false_accepts == 0
-                && bucket.trust_false_risk_micro == 0
-                && bucket.tokens_saved > 0
-                && bucket.unique_cpu_accepts_over_exact_cache > 0
+            live_store_product_hot_profile_phase_trusted(store, *profile_id, min_bucket_events)
         })
         .collect()
 }
@@ -226,12 +219,14 @@ pub(super) fn live_store_clean_candidate_survivor_runtime_from_store(
     quarantined_profile_ids: &BTreeSet<u32>,
     priority_bucket_ids: &[u32],
     known_profile_kinds: &BTreeMap<u32, &'static str>,
+    min_bucket_events: usize,
 ) -> Result<Option<LiveStoreProductHotRegistryRuntimeBundle>, String> {
     let subcenter_priority_bucket_ids = live_store_product_hot_subcenter_priority_bucket_ids(
         store,
         known_profile_kinds,
         quarantined_profile_ids,
         priority_bucket_ids,
+        min_bucket_events,
     );
     let excluded_profile_ids = live_store_product_hot_excluded_profile_ids(
         quarantined_profile_ids,
@@ -266,6 +261,7 @@ pub(super) fn live_store_product_hot_subcenter_priority_bucket_ids(
     known_profile_kinds: &BTreeMap<u32, &'static str>,
     quarantined_profile_ids: &BTreeSet<u32>,
     priority_bucket_ids: &[u32],
+    min_bucket_events: usize,
 ) -> Vec<u32> {
     let mut ids = Vec::new();
     for bucket_id in priority_bucket_ids {
@@ -274,6 +270,7 @@ pub(super) fn live_store_product_hot_subcenter_priority_bucket_ids(
             known_profile_kinds,
             quarantined_profile_ids,
             *bucket_id,
+            min_bucket_events,
         ) {
             ids.push(*bucket_id);
         }
@@ -287,6 +284,7 @@ pub(super) fn live_store_product_hot_subcenter_priority_bucket_ids(
                 known_profile_kinds,
                 quarantined_profile_ids,
                 *bucket_id,
+                min_bucket_events,
             )
             .then_some(*bucket_id)
         })
@@ -321,15 +319,31 @@ pub(super) fn live_store_product_hot_subcenter_candidate_allowed(
     known_profile_kinds: &BTreeMap<u32, &'static str>,
     quarantined_profile_ids: &BTreeSet<u32>,
     bucket_id: u32,
+    min_bucket_events: usize,
 ) -> bool {
     matches!(
         known_profile_kinds.get(&bucket_id).copied(),
         Some("observable_subcenter" | "hidden_state")
     ) && !quarantined_profile_ids.contains(&bucket_id)
-        && store
-            .miner()
-            .bucket(bucket_id)
-            .is_some_and(|bucket| bucket.is_candidate())
+        && live_store_product_hot_profile_phase_trusted(store, bucket_id, min_bucket_events)
+}
+
+pub(super) fn live_store_product_hot_profile_phase_trusted(
+    store: &PhaseCenterLiveOperatorStore,
+    bucket_id: u32,
+    min_bucket_events: usize,
+) -> bool {
+    let Some(bucket) = store.miner().bucket(bucket_id) else {
+        return false;
+    };
+    bucket.is_candidate()
+        && bucket.is_shadow_ready(min_bucket_events, min_bucket_events)
+        && !bucket.rejected
+        && bucket.false_accepts == 0
+        && bucket.trust_false_risk_micro == 0
+        && bucket.trust_drift_micro <= LIVE_STORE_PRODUCT_HOT_MAX_TRUST_DRIFT_MICRO
+        && bucket.tokens_saved > 0
+        && bucket.unique_cpu_accepts_over_exact_cache > 0
 }
 
 pub(super) fn live_store_product_hot_excluded_profile_ids(

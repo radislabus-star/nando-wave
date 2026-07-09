@@ -291,6 +291,7 @@ pub(super) fn write_live_store_clean_survivor_call_token_promotion_manifest(
         known_profile_kinds,
         quarantined_profile_ids,
         &[],
+        store.miner().config().min_bucket_events,
     );
     let excluded_profile_ids = live_store_product_hot_excluded_profile_ids(
         quarantined_profile_ids,
