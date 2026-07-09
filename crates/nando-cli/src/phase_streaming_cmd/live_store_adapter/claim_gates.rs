@@ -172,6 +172,40 @@ pub(super) fn live_store_append_compression_claim_blocker(
     }
 }
 
+pub(super) fn live_store_serving_cpu_compression_claim_blocker(
+    rows: usize,
+    false_accepts: usize,
+    local_accept_events: usize,
+    unique_cpu_accepts_over_exact_cache: usize,
+    tokens_saved: u64,
+    token_cost_denominator_present: bool,
+    final_hot_runtime_available: bool,
+    runtime_source_claim_ready: bool,
+    min_rows: usize,
+) -> &'static str {
+    if rows == 0 {
+        "serving_no_rows"
+    } else if false_accepts != 0 {
+        "serving_false_accepts_nonzero"
+    } else if local_accept_events == 0 {
+        "serving_local_accepts_zero"
+    } else if !final_hot_runtime_available {
+        "serving_no_final_hot_runtime"
+    } else if !runtime_source_claim_ready {
+        "serving_runtime_source_not_claim_ready"
+    } else if rows < min_rows {
+        "serving_window_below_min_rows"
+    } else if unique_cpu_accepts_over_exact_cache == 0 {
+        "serving_unique_accepts_zero"
+    } else if tokens_saved == 0 {
+        "serving_tokens_saved_zero"
+    } else if !token_cost_denominator_present {
+        "serving_token_cost_denominator_missing"
+    } else {
+        "none"
+    }
+}
+
 pub(super) fn live_store_product_hot_runtime_source_claim_ready(source: &str) -> bool {
     matches!(
         source,

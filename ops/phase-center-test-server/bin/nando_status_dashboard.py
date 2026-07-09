@@ -165,6 +165,12 @@ def dashboard_metric_first(metrics: dict[str, Any], keys: tuple[str, ...], lang:
     return default if default is not None else ("unknown" if lang == "en" else "неизвестно")
 
 
+def serving_cpu_metric(metrics: dict[str, Any], key: str, fallback_key: str) -> int:
+    if key in metrics:
+        return dashboard_int(metrics.get(key))
+    return dashboard_int(metrics.get(fallback_key))
+
+
 def dashboard_card(title: str, value: str, hint: str = "") -> str:
     return (
         "<section class='card'>"
@@ -556,6 +562,9 @@ def architecture_knee_scores(
     )
     gateway_accepts = dashboard_int(metrics.get("gateway_local_accept_events"))
     provider_accepts = dashboard_int(metrics.get("provider_bridge_v2_local_accept_events"))
+    edge_accepts = dashboard_int(metrics.get("edge_serving_cpu_local_accept_events"))
+    edge_tokens = dashboard_int(metrics.get("edge_serving_cpu_tokens_saved_estimated"))
+    edge_false = dashboard_int(metrics.get("edge_serving_cpu_false_accepts"))
     stable_rows = dashboard_int(metrics.get("stable_decision_log_rows"))
     stable_candidates = dashboard_int(metrics.get("stable_decision_log_score_candidate_events"))
     append_rows = dashboard_int(metrics.get("append_parsed_rows"))
@@ -804,11 +813,24 @@ def traffic_frame_panel(
     stable_saved = dashboard_int(metrics.get("stable_decision_log_tokens_saved"))
     stable_accepts = dashboard_int(metrics.get("stable_decision_log_unique_cpu_accepts_over_exact_cache"))
     stable_false = dashboard_int(metrics.get("stable_decision_log_false_accepts"))
-    clean_rows = dashboard_int(metrics.get("stable_decision_log_clean_suffix_rows"))
-    clean_tokens = dashboard_int(metrics.get("stable_clean_token_compression_total_tokens"))
-    clean_saved = dashboard_int(metrics.get("stable_clean_token_compression_saved_tokens"))
-    clean_accepts = dashboard_int(metrics.get("stable_clean_token_compression_unique_cpu_accepts_over_exact_cache"))
-    clean_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
+    clean_rows = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_rows", "stable_decision_log_clean_suffix_rows"
+    )
+    clean_tokens = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_total_tokens", "stable_clean_token_compression_total_tokens"
+    )
+    clean_saved = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_tokens_saved", "stable_clean_token_compression_saved_tokens"
+    )
+    clean_accepts = serving_cpu_metric(
+        metrics,
+        "stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache",
+        "stable_clean_token_compression_unique_cpu_accepts_over_exact_cache",
+    )
+    clean_false = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_false_accepts", "stable_clean_token_compression_false_accepts"
+    )
+    shadow_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
     score_candidates = dashboard_int(metrics.get("stable_decision_log_score_candidate_events"))
     clean_score_candidates = dashboard_int(metrics.get("stable_decision_log_clean_suffix_score_candidate_events"))
     append_rows = dashboard_int(metrics.get("append_parsed_rows"))
@@ -837,7 +859,7 @@ def traffic_frame_panel(
             t("текущий clean suffix", "current clean suffix"),
             f"{clean_rows} rows",
             f"{clean_tokens} tokens",
-            f"{clean_accepts} accepts / {clean_saved} saved / shadow risk {clean_false} / {clean_token_coverage} tokens of frame",
+            f"{clean_accepts} accepts / {clean_saved} saved / serving false {clean_false} / shadow risk {shadow_false} / {clean_token_coverage} tokens of frame",
         ),
         (
             t("кандидаты майнера", "miner candidates"),
@@ -908,13 +930,24 @@ def decision_pipeline_panel(
     hot_accepts = dashboard_int(metrics.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache"))
     hot_tokens = dashboard_int(metrics.get("product_hot_score_only_tokens_saved"))
     hot_false = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_false_accepts"))
-    clean_rows = dashboard_int(metrics.get("stable_decision_log_clean_suffix_rows"))
-    clean_accepts = dashboard_int(
-        metrics.get("stable_clean_token_compression_unique_cpu_accepts_over_exact_cache")
+    clean_rows = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_rows", "stable_decision_log_clean_suffix_rows"
     )
-    clean_saved = dashboard_int(metrics.get("stable_clean_token_compression_saved_tokens"))
-    clean_total = dashboard_int(metrics.get("stable_clean_token_compression_total_tokens"))
-    clean_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
+    clean_accepts = serving_cpu_metric(
+        metrics,
+        "stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache",
+        "stable_clean_token_compression_unique_cpu_accepts_over_exact_cache",
+    )
+    clean_saved = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_tokens_saved", "stable_clean_token_compression_saved_tokens"
+    )
+    clean_total = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_total_tokens", "stable_clean_token_compression_total_tokens"
+    )
+    clean_false = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_false_accepts", "stable_clean_token_compression_false_accepts"
+    )
+    shadow_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
     recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
     recovery_tokens = dashboard_int(metrics.get("quarantine_recovery_discovery_tokens"))
     recovery_observe = dashboard_int(metrics.get("quarantine_recovery_auto_subcenter_observe_events"))
@@ -956,9 +989,9 @@ def decision_pipeline_panel(
         ),
         (
             "bad" if clean_false > 0 else ("ok" if clean_accepts > 0 else "watch"),
-            t("5. Clean safety window", "5. Clean safety window"),
+            t("5. CPU serving window", "5. CPU serving window"),
             f"rows={clean_rows}, accepts={clean_accepts}",
-            f"tokens={clean_saved}/{clean_total}, shadow false={clean_false}",
+            f"tokens={clean_saved}/{clean_total}, serving false={clean_false}, shadow risk={shadow_false}",
         ),
         (
             "bad" if hot_false > 0 else ("ok" if gateway_accepts + provider_accepts > 0 else "watch"),
@@ -1090,15 +1123,27 @@ def live_miner_panels(
     bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
     verify = status.get("verify") if isinstance(status.get("verify"), dict) else {}
     scorecard = status.get("scorecard") if isinstance(status.get("scorecard"), dict) else {}
-    clean_saved = dashboard_int(metrics.get("stable_clean_token_compression_saved_tokens"))
-    clean_total = dashboard_int(metrics.get("stable_clean_token_compression_total_tokens"))
-    clean_accepts = dashboard_int(
-        metrics.get("stable_clean_token_compression_unique_cpu_accepts_over_exact_cache")
+    clean_saved = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_tokens_saved", "stable_clean_token_compression_saved_tokens"
+    )
+    clean_total = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_total_tokens", "stable_clean_token_compression_total_tokens"
+    )
+    clean_accepts = serving_cpu_metric(
+        metrics,
+        "stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache",
+        "stable_clean_token_compression_unique_cpu_accepts_over_exact_cache",
     )
     if clean_accepts == 0:
         clean_accepts = dashboard_int(scorecard.get("unique_cpu_accepts_over_exact_cache"))
     active_false = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_false_accepts"))
     shadow_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
+    serving_false = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_false_accepts", "stable_clean_token_compression_false_accepts"
+    )
+    edge_accepts = dashboard_int(metrics.get("edge_serving_cpu_local_accept_events"))
+    edge_tokens = dashboard_int(metrics.get("edge_serving_cpu_tokens_saved_estimated"))
+    edge_false = dashboard_int(metrics.get("edge_serving_cpu_false_accepts"))
     call_denominator = (
         dashboard_int(metrics.get("stable_decision_log_rows"))
         or dashboard_int(metrics.get("append_parsed_rows"))
@@ -1130,11 +1175,11 @@ def live_miner_panels(
                 str(metrics.get("product_hot_compression_claim_blocker") or "window_missing"),
             )
         )
-    if active_false != 0:
+    if active_false != 0 or serving_false != 0:
         recovery_items.append(
             (
                 "P0",
-                "false_accepts",
+                "serving false_accepts",
                 t("quarantine before promotion", "quarantine before promotion"),
             )
         )
@@ -1223,7 +1268,9 @@ def live_miner_panels(
             [
                 ("calls_saved_pct", dashboard_pct(clean_accepts, call_denominator), f"{clean_accepts} / {call_denominator}"),
                 ("tokens_saved_pct", dashboard_pct(clean_saved, clean_total), f"{clean_saved} / {clean_total}"),
-                ("tokens_saved", dashboard_metric_text(clean_saved or dashboard_int(scorecard.get("tokens_saved")), lang), "verified clean window"),
+                ("edge_accepts", dashboard_metric_text(edge_accepts, lang), "gateway + provider v2"),
+                ("edge_tokens", dashboard_metric_text(edge_tokens, lang), f"edge false={edge_false}"),
+                ("miner_tokens_saved", dashboard_metric_text(clean_saved or dashboard_int(scorecard.get("tokens_saved")), lang), "miner serving window"),
                 ("exact_cache_hits", dashboard_metric_first(metrics, ("exact_cache_hits",), lang, default="-"), "baseline"),
                 ("incremental_accepts", dashboard_metric_text(clean_accepts, lang), "over exact cache"),
                 ("local_accept_mode", dashboard_bool(bridge.get("local_accept_enabled"), lang), "server policy"),
@@ -1301,13 +1348,25 @@ def status_dashboard_html(request_path: str = "") -> str:
     summary = status.get("summary") if isinstance(status.get("summary"), dict) else {}
     evidence = status.get("provider_evidence") if isinstance(status.get("provider_evidence"), dict) else {}
 
-    clean_saved = dashboard_int(metrics.get("stable_clean_token_compression_saved_tokens"))
-    clean_total = dashboard_int(metrics.get("stable_clean_token_compression_total_tokens"))
-    clean_accepts = dashboard_int(
-        metrics.get("stable_clean_token_compression_unique_cpu_accepts_over_exact_cache")
+    clean_saved = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_tokens_saved", "stable_clean_token_compression_saved_tokens"
+    )
+    clean_total = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_total_tokens", "stable_clean_token_compression_total_tokens"
+    )
+    clean_accepts = serving_cpu_metric(
+        metrics,
+        "stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache",
+        "stable_clean_token_compression_unique_cpu_accepts_over_exact_cache",
     )
     active_false = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_false_accepts"))
     shadow_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
+    serving_false = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_false_accepts", "stable_clean_token_compression_false_accepts"
+    )
+    edge_accepts = dashboard_int(metrics.get("edge_serving_cpu_local_accept_events"))
+    edge_tokens = dashboard_int(metrics.get("edge_serving_cpu_tokens_saved_estimated"))
+    edge_false = dashboard_int(metrics.get("edge_serving_cpu_false_accepts"))
     stable_rows = dashboard_int(metrics.get("stable_decision_log_rows"))
     stable_tokens = dashboard_int(metrics.get("stable_decision_log_total_tokens"))
     class_rows = normalized_rows(metrics.get("operator_class_token_ranking"))
@@ -1328,7 +1387,9 @@ def status_dashboard_html(request_path: str = "") -> str:
     )
 
     claim_state = "ok" if verify.get("compression_claim_allowed") else "watch"
-    clean_rows = dashboard_int(metrics.get("stable_decision_log_clean_suffix_rows"))
+    clean_rows = serving_cpu_metric(
+        metrics, "stable_serving_cpu_clean_suffix_rows", "stable_decision_log_clean_suffix_rows"
+    )
     stable_saved = dashboard_int(metrics.get("stable_decision_log_tokens_saved"))
     stable_accepts = dashboard_int(metrics.get("stable_decision_log_unique_cpu_accepts_over_exact_cache"))
     stable_shadow_false = dashboard_int(metrics.get("stable_decision_log_false_accepts"))
@@ -1465,13 +1526,16 @@ def status_dashboard_html(request_path: str = "") -> str:
   </section>
 
   <section class="panel">
-    <h2>{t("Безопасное сжатие сейчас", "Safe Compression Now")}</h2>
-    <div class="big">{dashboard_pct(clean_saved, clean_total)}</div>
+    <h2>{t("CPU serving сейчас", "CPU Serving Now")}</h2>
+    <div class="big">{dashboard_metric_text(edge_accepts, lang)} accepts</div>
     <div class="kv">
-      <span>clean-window <b>{clean_saved} / {clean_total}</b> tokens</span>
-      <span>{t("coverage от frame", "coverage of frame")} <b>{clean_coverage}</b></span>
+      <span>edge tokens <b>{dashboard_metric_text(edge_tokens, lang)}</b></span>
+      <span>edge false <b class="{'ok' if edge_false == 0 else 'bad'}">{edge_false}</b></span>
+      <span>miner serving-window <b>{clean_saved} / {clean_total}</b> tokens</span>
+      <span>{t("miner coverage от frame", "miner coverage of frame")} <b>{clean_coverage}</b></span>
       <span>{t("clean rows", "clean rows")} <b>{clean_rows}</b></span>
       <span>{t("CPU accepts", "CPU accepts")} <b>{clean_accepts}</b></span>
+      <span>serving false <b class="{'ok' if serving_false == 0 else 'bad'}">{serving_false}</b></span>
       <span>active false <b class="{'ok' if active_false == 0 else 'bad'}">{active_false}</b></span>
       <span>shadow risk <b class="{'ok' if shadow_false == 0 else 'watch'}">{shadow_false}</b></span>
       <span>{t("claim", "claim")} <b class="{claim_state}">{dashboard_bool(verify.get('compression_claim_allowed'), lang)}</b></span>

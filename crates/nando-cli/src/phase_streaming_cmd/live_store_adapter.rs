@@ -6047,6 +6047,15 @@ where
             &decision_log_path,
             &architecture_version_key,
         )?;
+    let mut stable_serving_cpu_window = live_store_stable_decision_log_serving_window_from_path(
+        &decision_log_path,
+        &architecture_version_key,
+    )?;
+    let mut stable_serving_cpu_clean_suffix =
+        live_store_stable_decision_log_serving_clean_suffix_from_path(
+            &decision_log_path,
+            &architecture_version_key,
+        )?;
     let mut decision_log = io::BufWriter::new(
         OpenOptions::new()
             .create(true)
@@ -6581,6 +6590,43 @@ where
                     stable_decision_log_clean_suffix.window.tokens_saved,
                     stable_decision_log_clean_suffix.window.total_tokens,
                 );
+                let stable_serving_cpu_claim_blocker =
+                    live_store_serving_cpu_compression_claim_blocker(
+                        stable_serving_cpu_window.rows,
+                        stable_serving_cpu_window.false_accepts,
+                        stable_serving_cpu_window.local_accept_events,
+                        stable_serving_cpu_window.unique_cpu_accepts_over_exact_cache,
+                        stable_serving_cpu_window.tokens_saved,
+                        stable_serving_cpu_window.total_tokens > 0
+                            && stable_serving_cpu_window.total_cost_microusd > 0,
+                        snapshot_hot_runtime_available,
+                        snapshot_product_hot_runtime_source_claim_ready,
+                        live_store_append_compression_claim_min_rows(),
+                    )
+                    .to_owned();
+                let stable_serving_cpu_claim_allowed = stable_serving_cpu_claim_blocker == "none";
+                let stable_serving_cpu_clean_suffix_claim_blocker =
+                    live_store_serving_cpu_compression_claim_blocker(
+                        stable_serving_cpu_clean_suffix.window.rows,
+                        stable_serving_cpu_clean_suffix.window.false_accepts,
+                        stable_serving_cpu_clean_suffix.window.local_accept_events,
+                        stable_serving_cpu_clean_suffix
+                            .window
+                            .unique_cpu_accepts_over_exact_cache,
+                        stable_serving_cpu_clean_suffix.window.tokens_saved,
+                        stable_serving_cpu_clean_suffix.window.total_tokens > 0
+                            && stable_serving_cpu_clean_suffix.window.total_cost_microusd > 0,
+                        snapshot_hot_runtime_available,
+                        snapshot_product_hot_runtime_source_claim_ready,
+                        live_store_append_compression_claim_min_rows(),
+                    )
+                    .to_owned();
+                let stable_serving_cpu_clean_suffix_claim_allowed =
+                    stable_serving_cpu_clean_suffix_claim_blocker == "none";
+                let stable_serving_cpu_clean_suffix_saved_milli = live_store_milli(
+                    stable_serving_cpu_clean_suffix.window.tokens_saved,
+                    stable_serving_cpu_clean_suffix.window.total_tokens,
+                );
                 let miner_saturation_snapshot = LiveStoreMinerSaturationSnapshot {
                     append_parsed_rows,
                     score_events: append_eval.score_events,
@@ -6823,6 +6869,43 @@ where
                     stable_clean_token_compression_false_accepts: stable_decision_log_clean_suffix
                         .window
                         .false_accepts,
+                    stable_serving_cpu_rows: stable_serving_cpu_window.rows,
+                    stable_serving_cpu_score_candidate_events: stable_serving_cpu_window
+                        .score_candidate_events,
+                    stable_serving_cpu_local_accept_events: stable_serving_cpu_window
+                        .local_accept_events,
+                    stable_serving_cpu_unique_cpu_accepts_over_exact_cache:
+                        stable_serving_cpu_window.unique_cpu_accepts_over_exact_cache,
+                    stable_serving_cpu_tokens_saved: stable_serving_cpu_window.tokens_saved,
+                    stable_serving_cpu_total_tokens: stable_serving_cpu_window.total_tokens,
+                    stable_serving_cpu_false_accepts: stable_serving_cpu_window.false_accepts,
+                    stable_serving_cpu_claim_allowed,
+                    stable_serving_cpu_claim_blocker,
+                    stable_serving_cpu_clean_suffix_rows: stable_serving_cpu_clean_suffix
+                        .window
+                        .rows,
+                    stable_serving_cpu_clean_suffix_score_candidate_events:
+                        stable_serving_cpu_clean_suffix
+                            .window
+                            .score_candidate_events,
+                    stable_serving_cpu_clean_suffix_local_accept_events:
+                        stable_serving_cpu_clean_suffix.window.local_accept_events,
+                    stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache:
+                        stable_serving_cpu_clean_suffix
+                            .window
+                            .unique_cpu_accepts_over_exact_cache,
+                    stable_serving_cpu_clean_suffix_tokens_saved: stable_serving_cpu_clean_suffix
+                        .window
+                        .tokens_saved,
+                    stable_serving_cpu_clean_suffix_total_tokens: stable_serving_cpu_clean_suffix
+                        .window
+                        .total_tokens,
+                    stable_serving_cpu_clean_suffix_false_accepts: stable_serving_cpu_clean_suffix
+                        .window
+                        .false_accepts,
+                    stable_serving_cpu_clean_suffix_saved_milli,
+                    stable_serving_cpu_clean_suffix_claim_allowed,
+                    stable_serving_cpu_clean_suffix_claim_blocker,
                     append_total_tokens: append_denominator.total_tokens,
                     append_total_cost_microusd: append_denominator.total_cost_microusd,
                     append_exact_cache_hits: append_denominator.exact_cache_hits,
@@ -7887,6 +7970,16 @@ where
             &decision_line,
             &architecture_version_key,
         );
+        live_store_observe_stable_decision_log_serving_row(
+            &mut stable_serving_cpu_window,
+            &decision_line,
+            &architecture_version_key,
+        );
+        live_store_observe_stable_decision_log_serving_clean_suffix_row(
+            &mut stable_serving_cpu_clean_suffix,
+            &decision_line,
+            &architecture_version_key,
+        );
         serde_json::to_writer(&mut decision_log, &decision_line).map_err(|error| {
             format!(
                 "failed to write append live-tail decision '{}': {error}",
@@ -8280,6 +8373,42 @@ where
         stable_decision_log_clean_suffix.window.tokens_saved,
         stable_decision_log_clean_suffix.window.total_tokens,
     );
+    let stable_serving_cpu_claim_blocker = live_store_serving_cpu_compression_claim_blocker(
+        stable_serving_cpu_window.rows,
+        stable_serving_cpu_window.false_accepts,
+        stable_serving_cpu_window.local_accept_events,
+        stable_serving_cpu_window.unique_cpu_accepts_over_exact_cache,
+        stable_serving_cpu_window.tokens_saved,
+        stable_serving_cpu_window.total_tokens > 0
+            && stable_serving_cpu_window.total_cost_microusd > 0,
+        final_hot_runtime_available,
+        final_product_hot_runtime_source_claim_ready,
+        live_store_append_compression_claim_min_rows(),
+    )
+    .to_owned();
+    let stable_serving_cpu_claim_allowed = stable_serving_cpu_claim_blocker == "none";
+    let stable_serving_cpu_clean_suffix_claim_blocker =
+        live_store_serving_cpu_compression_claim_blocker(
+            stable_serving_cpu_clean_suffix.window.rows,
+            stable_serving_cpu_clean_suffix.window.false_accepts,
+            stable_serving_cpu_clean_suffix.window.local_accept_events,
+            stable_serving_cpu_clean_suffix
+                .window
+                .unique_cpu_accepts_over_exact_cache,
+            stable_serving_cpu_clean_suffix.window.tokens_saved,
+            stable_serving_cpu_clean_suffix.window.total_tokens > 0
+                && stable_serving_cpu_clean_suffix.window.total_cost_microusd > 0,
+            final_hot_runtime_available,
+            final_product_hot_runtime_source_claim_ready,
+            live_store_append_compression_claim_min_rows(),
+        )
+        .to_owned();
+    let stable_serving_cpu_clean_suffix_claim_allowed =
+        stable_serving_cpu_clean_suffix_claim_blocker == "none";
+    let stable_serving_cpu_clean_suffix_saved_milli = live_store_milli(
+        stable_serving_cpu_clean_suffix.window.tokens_saved,
+        stable_serving_cpu_clean_suffix.window.total_tokens,
+    );
     let miner_saturation_last_snapshot = miner_saturation.last_snapshot();
     let report = PhaseStreamHotPathDaemonAppendLiveTailReport {
         report_kind: "phase_stream_hot_path_daemon_append_live_tail_v1",
@@ -8476,6 +8605,39 @@ where
         stable_clean_token_compression_false_accepts: stable_decision_log_clean_suffix
             .window
             .false_accepts,
+        stable_serving_cpu_rows: stable_serving_cpu_window.rows,
+        stable_serving_cpu_score_candidate_events: stable_serving_cpu_window.score_candidate_events,
+        stable_serving_cpu_local_accept_events: stable_serving_cpu_window.local_accept_events,
+        stable_serving_cpu_unique_cpu_accepts_over_exact_cache: stable_serving_cpu_window
+            .unique_cpu_accepts_over_exact_cache,
+        stable_serving_cpu_tokens_saved: stable_serving_cpu_window.tokens_saved,
+        stable_serving_cpu_total_tokens: stable_serving_cpu_window.total_tokens,
+        stable_serving_cpu_false_accepts: stable_serving_cpu_window.false_accepts,
+        stable_serving_cpu_claim_allowed,
+        stable_serving_cpu_claim_blocker,
+        stable_serving_cpu_clean_suffix_rows: stable_serving_cpu_clean_suffix.window.rows,
+        stable_serving_cpu_clean_suffix_score_candidate_events: stable_serving_cpu_clean_suffix
+            .window
+            .score_candidate_events,
+        stable_serving_cpu_clean_suffix_local_accept_events: stable_serving_cpu_clean_suffix
+            .window
+            .local_accept_events,
+        stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache:
+            stable_serving_cpu_clean_suffix
+                .window
+                .unique_cpu_accepts_over_exact_cache,
+        stable_serving_cpu_clean_suffix_tokens_saved: stable_serving_cpu_clean_suffix
+            .window
+            .tokens_saved,
+        stable_serving_cpu_clean_suffix_total_tokens: stable_serving_cpu_clean_suffix
+            .window
+            .total_tokens,
+        stable_serving_cpu_clean_suffix_false_accepts: stable_serving_cpu_clean_suffix
+            .window
+            .false_accepts,
+        stable_serving_cpu_clean_suffix_saved_milli,
+        stable_serving_cpu_clean_suffix_claim_allowed,
+        stable_serving_cpu_clean_suffix_claim_blocker,
         append_total_tokens: append_denominator.total_tokens,
         append_total_cost_microusd: append_denominator.total_cost_microusd,
         append_exact_cache_hits: append_denominator.exact_cache_hits,

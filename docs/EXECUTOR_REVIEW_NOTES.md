@@ -283,6 +283,47 @@ boundary:
   quarantined parents deeper.
 ```
 
+## Current CPU Traffic Goal: Serving vs Shadow Split
+
+```text
+timestamp: 2026-07-09
+
+goal:
+  maximize real traffic handled on CPU without weakening verifier/safety.
+
+finding:
+  stable/live-tail decision log is a shadow/miner surface. Its score_candidate
+  false events must keep driving quarantine, but they are not the same as
+  real provider/gateway local_accept failures.
+
+change:
+  added separate stable_serving_cpu_* windows that count false_accepts only
+  when a decision actually has local_accept=true.
+
+change:
+  metrics/dashboard now expose edge_serving_cpu_* from gateway + provider v2:
+    edge_serving_cpu_local_accept_events
+    edge_serving_cpu_tokens_saved_estimated
+    edge_serving_cpu_false_accepts
+
+live after deploy:
+  /v2 health ok
+  dashboard /v2/status returns 200
+  services active: appender, live-tail, provider-bridge
+  edge_serving_cpu_local_accept_events: 724
+  edge_serving_cpu_tokens_saved_estimated: 2986
+  edge_serving_cpu_false_accepts: 0
+  gateway_local_accept_events: 550
+  provider_bridge_v2_local_accept_events: 174
+  product_hot_score_only_post_quarantine_false_accepts: 0
+  stable shadow false_accepts: 0
+
+boundary:
+  edge_serving_cpu is the actual local CPU serving layer.
+  stable_clean/shadow metrics remain diagnostic pressure for quarantine and
+  miner recovery, not the user-facing "CPU processed traffic" denominator.
+```
+
 ## Latest Production Canary Checkpoint
 
 ```text
