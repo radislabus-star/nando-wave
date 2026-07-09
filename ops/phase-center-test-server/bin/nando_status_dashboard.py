@@ -33,6 +33,12 @@ METRICS_JSON = Path(
         "/var/lib/nando-wave/streaming/metrics/nando-phase-center.metrics.json",
     )
 )
+LIVE_TAIL_REPORT_JSON = Path(
+    os.environ.get(
+        "NANDO_LIVE_TAIL_REPORT",
+        "/var/lib/nando-wave/streaming/nando-phase-live-miner-tail.report.json",
+    )
+)
 DASHBOARD_HISTORY_JSONL = Path(
     os.environ.get(
         "NANDO_STATUS_DASHBOARD_HISTORY_JSONL",
@@ -850,6 +856,8 @@ def codex_cpu_traffic_panel(
     product_hot_tokens: int,
     active_false: int,
     trust_filtered: int,
+    symbiosis_filtered: int,
+    mixed_accepts: int,
     lang: str,
 ) -> str:
     is_en = lang == "en"
@@ -895,6 +903,14 @@ def codex_cpu_traffic_panel(
         (
             t("Автофильтр phase-trust", "Auto phase-trust filter"),
             f"{dashboard_metric_text(trust_filtered, lang)} {t('событий отправлено обратно в майнер', 'events sent back to miner')}",
+        ),
+        (
+            t("Симбиотический hidden+observable accept", "Symbiotic hidden+observable accept"),
+            dashboard_metric_text(mixed_accepts, lang),
+        ),
+        (
+            t("Автофильтр symbiosis", "Auto symbiosis filter"),
+            f"{dashboard_metric_text(symbiosis_filtered, lang)} {t('событий отправлено обратно в майнер', 'events sent back to miner')}",
         ),
         ("False accepts", dashboard_metric_text(cpu_false, lang)),
     ]
@@ -1400,6 +1416,8 @@ def live_miner_panels(
                 ("shadow_risk_events", dashboard_metric_text(shadow_false, lang), "stable diagnostic window"),
                 ("post_quarantine_false", dashboard_metric_first(metrics, ("product_hot_score_only_post_quarantine_false_accepts",), lang, default="0"), "hot score only"),
                 ("trust_filtered", dashboard_metric_first(metrics, ("product_hot_phase_trust_filtered_events",), lang, default="0"), "sent back to miner"),
+                ("symbiosis_filtered", dashboard_metric_text(symbiosis_filtered, lang), "hidden+observable required"),
+                ("mixed_accepts", dashboard_metric_text(mixed_accepts, lang), "hidden+observable"),
                 ("gateway_false", dashboard_metric_first(metrics, ("gateway_false_accepts", "provider_bridge_v2_false_accepts"), lang, default="0"), "HTTP bridge"),
                 ("quarantined_buckets", dashboard_metric_text(len(quarantined_rows), lang), "needs split"),
                 ("wrong_wins", dashboard_metric_first(metrics, ("wrong_wins",), lang, default="-"), "phase judge"),
@@ -1456,6 +1474,7 @@ def status_dashboard_html(request_path: str = "") -> str:
         return en if is_en else ru
 
     metrics = read_json_file(METRICS_JSON)
+    live_tail = read_json_file(LIVE_TAIL_REPORT_JSON)
     status = read_json_file(STATUS_JSON)
     appender = read_json_file(APPENDER_REPORT_JSON)
     history_rows = read_dashboard_history(DASHBOARD_HISTORY_MAX_POINTS)
@@ -1510,18 +1529,20 @@ def status_dashboard_html(request_path: str = "") -> str:
     provider_v2_false = dashboard_int(metrics.get("provider_bridge_v2_false_accepts"))
     boundary_rows = dashboard_int(metrics.get("provider_bridge_boundary_window_rows"))
     boundary_tokens = dashboard_int(metrics.get("provider_bridge_boundary_total_tokens"))
-    append_rows = dashboard_int(metrics.get("append_parsed_rows"))
-    append_candidates = dashboard_int(metrics.get("append_score_candidate_events"))
-    append_accepts = dashboard_int(metrics.get("append_unique_cpu_accepts_over_exact_cache"))
-    append_tokens = dashboard_int(metrics.get("append_tokens_saved"))
-    append_false = dashboard_int(metrics.get("append_false_accepts"))
+    append_rows = dashboard_int(live_tail.get("append_parsed_rows") or metrics.get("append_parsed_rows"))
+    append_candidates = dashboard_int(live_tail.get("append_score_candidate_events") or metrics.get("append_score_candidate_events"))
+    append_accepts = dashboard_int(live_tail.get("append_unique_cpu_accepts_over_exact_cache") or metrics.get("append_unique_cpu_accepts_over_exact_cache"))
+    append_tokens = dashboard_int(live_tail.get("append_tokens_saved") or metrics.get("append_tokens_saved"))
+    append_false = dashboard_int(live_tail.get("append_false_accepts") or metrics.get("append_false_accepts"))
     active_clean_calls = dashboard_int(metrics.get("active_clean_calls_saved"))
     active_clean_tokens = dashboard_int(metrics.get("active_clean_tokens_saved"))
     product_hot_profiles = dashboard_int(metrics.get("product_hot_score_only_active_profile_count"))
     final_hot_profiles = dashboard_int(metrics.get("final_hot_profile_count"))
-    product_hot_candidates = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_score_candidate_events"))
-    product_hot_accepts = dashboard_int(metrics.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache"))
-    product_hot_tokens = dashboard_int(metrics.get("product_hot_score_only_tokens_saved"))
+    product_hot_candidates = dashboard_int(live_tail.get("product_hot_score_only_post_quarantine_score_candidate_events") or metrics.get("product_hot_score_only_post_quarantine_score_candidate_events"))
+    product_hot_accepts = dashboard_int(live_tail.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache") or metrics.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache"))
+    product_hot_tokens = dashboard_int(live_tail.get("product_hot_score_only_tokens_saved") or metrics.get("product_hot_score_only_tokens_saved"))
+    symbiosis_filtered = dashboard_int(live_tail.get("product_hot_phase_symbiosis_filtered_events") or metrics.get("product_hot_phase_symbiosis_filtered_events"))
+    mixed_accepts = dashboard_int(live_tail.get("append_mixed_profile_unique_cpu_accepts_over_exact_cache") or metrics.get("append_mixed_profile_unique_cpu_accepts_over_exact_cache"))
     recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
     recovery_tokens = dashboard_int(metrics.get("quarantine_recovery_discovery_tokens"))
     recovery_observes = dashboard_int(metrics.get("quarantine_recovery_auto_subcenter_observe_events"))
@@ -1812,7 +1833,7 @@ def status_dashboard_html(request_path: str = "") -> str:
     </div>
   </section>
 
-  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=dashboard_int(metrics.get("product_hot_phase_trust_filtered_events")), lang=lang)}
+  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=dashboard_int(metrics.get("product_hot_phase_trust_filtered_events")), symbiosis_filtered=symbiosis_filtered, mixed_accepts=mixed_accepts, lang=lang)}
 
   <section class="panel">
     <h2>{t("1. Входящий поток", "1. Incoming Flow")}</h2>

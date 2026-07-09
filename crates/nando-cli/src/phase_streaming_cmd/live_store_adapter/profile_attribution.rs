@@ -28,6 +28,12 @@ pub(super) fn live_store_profile_attribution(
     attribution
 }
 
+pub(super) fn live_store_profile_attribution_is_symbiotic(
+    attribution: LiveStoreProfileAttribution,
+) -> bool {
+    attribution.hidden_state_score_candidate && attribution.observable_score_candidate
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn live_store_update_profile_attribution_counters(
     attribution: LiveStoreProfileAttribution,

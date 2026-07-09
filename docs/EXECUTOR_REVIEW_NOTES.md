@@ -6555,3 +6555,45 @@ Boundary:
   This is not a manual profile allow-list. It is a generic success-state safety
   split around phase-center transfer: successful state transitions may transfer
   route-wide; failure/nonzero states cannot.
+
+## 2026-07-09 Symbiotic Hidden/Observable Product-Hot Gate
+
+Finding:
+  The current live CPU accepts were already behaving like a two-layer
+  symbiosis: hidden_state centers supplied the transferable transition signal,
+  while observable_subcenter centers supplied the visible safety/shape guard.
+  The report showed mixed-profile accepts, with hidden-only and observable-only
+  accepts at zero.
+
+Change:
+  Product-hot live-tail accept now requires hidden+observable agreement. A
+  score candidate from only one side is not credited as CPU accept; it is
+  sampled back into miner discovery via `product_hot_phase_symbiosis_filtered`.
+  This turns the symbiosis from a dashboard observation into a runtime gate.
+
+Live verification:
+  After deploy:
+    rows=17,
+    candidates=16,
+    CPU accepts=9,
+    tokens_saved=4332,
+    false_accepts=0,
+    product_hot_false=0,
+    mixed_profile_accepts=9,
+    hidden_only_accepts=0,
+    observable_only_accepts=0,
+    phase_trust_filtered=11,
+    phase_symbiosis_filtered=0.
+
+Dashboard:
+  The RU/ENG status page now shows:
+    `Симбиотический hidden+observable accept`,
+    `Автофильтр symbiosis`.
+  These values are read from the full live-tail report, not only the shorter
+  metrics snapshot.
+
+Boundary:
+  This is not a lookup/table/manual profile allow-list. The gate is generic:
+  a product-hot local accept requires a trusted hidden phase center and a
+  trusted observable phase center on the same event. Single-sided candidates
+  stay in shadow/discovery until the miner grows a clean paired center.
