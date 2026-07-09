@@ -881,6 +881,189 @@ def traffic_frame_panel(
     )
 
 
+def decision_pipeline_panel(
+    status: dict[str, Any],
+    metrics: dict[str, Any],
+    active_manifest: dict[str, Any],
+    lang: str,
+) -> str:
+    is_en = lang == "en"
+
+    def t(ru: str, en: str) -> str:
+        return en if is_en else ru
+
+    bridge = status.get("bridge") if isinstance(status.get("bridge"), dict) else {}
+    gateway_rows = dashboard_int(metrics.get("gateway_decision_window_rows"))
+    provider_rows = dashboard_int(metrics.get("provider_bridge_decision_window_rows"))
+    boundary_rows = dashboard_int(metrics.get("provider_bridge_boundary_window_rows"))
+    append_rows = dashboard_int(metrics.get("append_parsed_rows"))
+    append_candidates = dashboard_int(metrics.get("append_score_candidate_events"))
+    stable_rows = dashboard_int(metrics.get("stable_decision_log_rows"))
+    stable_candidates = dashboard_int(metrics.get("stable_decision_log_score_candidate_events"))
+    hot_profiles = dashboard_int(
+        metrics.get("product_hot_score_only_active_profile_count")
+        or metrics.get("final_hot_profile_count")
+    )
+    hot_candidates = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_score_candidate_events"))
+    hot_accepts = dashboard_int(metrics.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache"))
+    hot_tokens = dashboard_int(metrics.get("product_hot_score_only_tokens_saved"))
+    hot_false = dashboard_int(metrics.get("product_hot_score_only_post_quarantine_false_accepts"))
+    clean_rows = dashboard_int(metrics.get("stable_decision_log_clean_suffix_rows"))
+    clean_accepts = dashboard_int(
+        metrics.get("stable_clean_token_compression_unique_cpu_accepts_over_exact_cache")
+    )
+    clean_saved = dashboard_int(metrics.get("stable_clean_token_compression_saved_tokens"))
+    clean_total = dashboard_int(metrics.get("stable_clean_token_compression_total_tokens"))
+    clean_false = dashboard_int(metrics.get("stable_clean_token_compression_false_accepts"))
+    recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
+    recovery_tokens = dashboard_int(metrics.get("quarantine_recovery_discovery_tokens"))
+    recovery_observe = dashboard_int(metrics.get("quarantine_recovery_auto_subcenter_observe_events"))
+    gateway_accepts = dashboard_int(metrics.get("gateway_local_accept_events"))
+    provider_accepts = dashboard_int(metrics.get("provider_bridge_v2_local_accept_events"))
+    blocker = str(metrics.get("product_hot_compression_claim_blocker") or "none")
+
+    def stage_class(kind: str) -> str:
+        return {
+            "ok": "stage-ok",
+            "watch": "stage-watch",
+            "bad": "stage-bad",
+        }.get(kind, "stage-watch")
+
+    steps = [
+        (
+            "ok" if gateway_rows + provider_rows + append_rows + stable_rows > 0 else "watch",
+            t("1. Вход", "1. Ingress"),
+            f"gateway={gateway_rows}, provider={provider_rows}, boundary={boundary_rows}",
+            f"append={append_rows}, stable={stable_rows}",
+        ),
+        (
+            "ok" if append_candidates > 0 and stable_candidates > 0 else "watch",
+            t("2. Atoms → candidates", "2. Atoms -> candidates"),
+            f"append candidates={append_candidates}",
+            f"stable candidates={stable_candidates}",
+        ),
+        (
+            "bad" if hot_false > 0 else ("ok" if hot_candidates > 0 and hot_profiles > 0 else "watch"),
+            t("3. Hot score", "3. Hot score"),
+            f"profiles={hot_profiles}, score events={hot_candidates}",
+            f"accepts={hot_accepts}, tokens={hot_tokens}, false={hot_false}",
+        ),
+        (
+            "ok" if recovery_events > 0 else "watch",
+            t("4. Recovery split", "4. Recovery split"),
+            f"events={recovery_events}, tokens={recovery_tokens}",
+            f"subcenter observes={recovery_observe}",
+        ),
+        (
+            "bad" if clean_false > 0 else ("ok" if clean_accepts > 0 else "watch"),
+            t("5. Clean safety window", "5. Clean safety window"),
+            f"rows={clean_rows}, accepts={clean_accepts}",
+            f"tokens={clean_saved}/{clean_total}, shadow false={clean_false}",
+        ),
+        (
+            "bad" if hot_false > 0 else ("ok" if gateway_accepts + provider_accepts > 0 else "watch"),
+            t("6. Решение", "6. Decision"),
+            f"gateway accepts={gateway_accepts}, provider v2 accepts={provider_accepts}",
+            f".nwpc accepts={active_manifest['accepts']}, blocker={blocker}, local_accept={dashboard_bool(bridge.get('local_accept_enabled'), lang)}",
+        ),
+    ]
+    cards = "".join(
+        "<div class='pipeline-step {css}'>"
+        "<h3>{title}</h3>"
+        "<b>{main}</b>"
+        "<small>{hint}</small>"
+        "</div>".format(
+            css=stage_class(state),
+            title=html.escape(title),
+            main=html.escape(main),
+            hint=html.escape(hint),
+        )
+        for state, title, main, hint in steps
+    )
+    return (
+        f"<section class='panel pipeline-panel'><h2>{html.escape(t('Поток решений', 'Decision Pipeline'))}</h2>"
+        f"<p>{html.escape(t('Сверху видно, что входит в сервер, где становится кандидатом, где скорится, что уходит в recovery, и где появляется accept/fallback.', 'This shows what enters the server, where it becomes a candidate, where it is scored, what goes to recovery, and where accept/fallback happens.'))}</p>"
+        f"<div class='pipeline-grid'>{cards}</div></section>"
+    )
+
+
+def recovery_backlog_panel(
+    metrics: dict[str, Any],
+    quarantined_rows: list[dict[str, Any]],
+    lang: str,
+) -> str:
+    is_en = lang == "en"
+
+    def t(ru: str, en: str) -> str:
+        return en if is_en else ru
+
+    def stuck_reason(row: dict[str, Any]) -> str:
+        if bool(row.get("rejected")) or dashboard_int(row.get("false_accepts")) > 0:
+            return t("false/rejected: держать в quarantine", "false/rejected: keep quarantined")
+        if not bool(row.get("shadow_ready")):
+            return t("мало shadow-доказательства", "not enough shadow evidence")
+        if dashboard_int(row.get("trust_drift_micro")) > 100_000:
+            return t("высокий drift: нужен более узкий split", "high drift: needs narrower split")
+        if dashboard_int(row.get("negative_events")) > 0:
+            return t("смешаны positive/negative события", "mixed positive/negative events")
+        if not bool(row.get("exportable")):
+            return t("ждёт promotion gate", "waiting for promotion gate")
+        return t("наблюдать", "watch")
+
+    def next_action(row: dict[str, Any]) -> str:
+        if bool(row.get("rejected")) or dashboard_int(row.get("false_accepts")) > 0:
+            return t("авто-изоляция и deeper split", "auto-isolate and split deeper")
+        if not bool(row.get("shadow_ready")):
+            return t("копить будущий поток", "collect future stream")
+        if dashboard_int(row.get("trust_drift_micro")) > 100_000:
+            return t("искать child subcenter", "search child subcenter")
+        if dashboard_int(row.get("negative_events")) > 0:
+            return t("развести отрицательные атомы", "separate negative atoms")
+        return t("promotion audit", "promotion audit")
+
+    rows = []
+    for row in quarantined_rows[:10]:
+        false_accepts = dashboard_int(row.get("false_accepts"))
+        drift = dashboard_int(row.get("trust_drift_micro"))
+        css = "bad" if false_accepts > 0 or bool(row.get("rejected")) else "watch"
+        flags = []
+        for name in ("active", "candidate", "shadow_ready", "exportable", "final_hot", "rejected"):
+            if bool(row.get(name)):
+                flags.append(name)
+        rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(row.get('profile_id') or 'unknown'))}</code></td>"
+            f"<td>{html.escape(str(row.get('kind') or 'unknown'))}</td>"
+            f"<td>{dashboard_metric_text(row.get('tokens_saved'), lang)}</td>"
+            f"<td>{dashboard_metric_text(row.get('unique_cpu_accepts_over_exact_cache'), lang)}</td>"
+            f"<td>{dashboard_metric_text(row.get('events_seen'), lang)}</td>"
+            f"<td>{dashboard_metric_text(row.get('negative_events'), lang)}</td>"
+            f"<td><b class='{css}'>{false_accepts}</b></td>"
+            f"<td>{dashboard_metric_text(drift, lang)}</td>"
+            f"<td><code>{html.escape(','.join(flags) or '-')}</code></td>"
+            f"<td>{html.escape(stuck_reason(row))}</td>"
+            f"<td>{html.escape(next_action(row))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append(
+            f"<tr><td colspan='11'>{html.escape(t('quarantine backlog пуст', 'quarantine backlog is empty'))}</td></tr>"
+        )
+    recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
+    recovery_tokens = dashboard_int(metrics.get("quarantine_recovery_discovery_tokens"))
+    recovery_observe = dashboard_int(metrics.get("quarantine_recovery_auto_subcenter_observe_events"))
+    return (
+        f"<section class='panel wide-panel'><h2>{html.escape(t('Где застряло: Recovery Backlog', 'Where It Is Stuck: Recovery Backlog'))}</h2>"
+        f"<p>{html.escape(t('Это не ручной список задач: это очередь автоматического recovery. Если bucket здесь, майнер уже видит ценность, но ещё не имеет безопасного promotion.', 'This is not a manual todo list: it is the automatic recovery queue. If a bucket is here, the miner sees value but does not yet have safe promotion evidence.'))}</p>"
+        f"<p>recovery events: <b>{recovery_events}</b> · tokens: <b>{recovery_tokens}</b> · subcenter observes: <b>{recovery_observe}</b></p>"
+        "<table><thead><tr>"
+        "<th>bucket</th><th>kind</th><th>tokens</th><th>accepts</th><th>events</th><th>negative</th><th>false</th><th>drift</th><th>flags</th>"
+        f"<th>{html.escape(t('почему stuck', 'why stuck'))}</th><th>{html.escape(t('следующее auto-действие', 'next auto action'))}</th>"
+        "</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></section>"
+    )
+
+
 def live_miner_panels(
     status: dict[str, Any],
     metrics: dict[str, Any],
@@ -1180,6 +1363,14 @@ def status_dashboard_html(request_path: str = "") -> str:
     .kv b {{ color: #fff; font-size: 15px; }}
     .flow {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: #d7dde3; }}
     .flow code {{ background: #111519; border: 1px solid #252e36; border-radius: 6px; padding: 6px 8px; }}
+    .pipeline-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px; }}
+    .pipeline-step {{ min-height: 104px; padding: 11px; background: #111519; border: 1px solid #252e36; border-left-width: 4px; border-radius: 8px; display: grid; gap: 7px; }}
+    .pipeline-step h3 {{ margin: 0; color: #a8b3bd; font-size: 13px; line-height: 1.25; letter-spacing: 0; }}
+    .pipeline-step b {{ color: #fff; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }}
+    .pipeline-step small {{ color: #9aa7b2; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }}
+    .stage-ok {{ border-left-color: #58d68d; }}
+    .stage-watch {{ border-left-color: #f5b041; }}
+    .stage-bad {{ border-left-color: #ff6b6b; }}
     .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; align-items: start; }}
     .charts {{ display: block; }}
     .metric-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }}
@@ -1303,6 +1494,10 @@ def status_dashboard_html(request_path: str = "") -> str:
     </div>
     <p class="hint">{t("Боевой accept разрешён только при verifier/gate и active false = 0.", "Product accept is allowed only with verifier/gate and active false = 0.")}</p>
   </section>
+
+  {traffic_frame_panel(status, metrics, active_manifest, lang)}
+  {decision_pipeline_panel(status, metrics, active_manifest, lang)}
+  {recovery_backlog_panel(metrics, quarantined_rows, lang)}
 
   {dashboard_history_chart(history_rows, lang)}
   {dashboard_pool_chart(history_rows, lang)}

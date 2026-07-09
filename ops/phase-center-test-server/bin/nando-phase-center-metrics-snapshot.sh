@@ -275,12 +275,25 @@ jq --arg source_report "${REPORT}" \
       {
         profile_id,
         kind,
+        route_id: (.route_id // null),
+        active: (.active // false),
+        candidate: (.candidate // false),
+        shadow_ready: (.shadow_ready // false),
+        rejected: (.rejected // false),
+        exportable: (.exportable // false),
+        final_hot: (.final_hot // false),
         unique_cpu_accepts_over_exact_cache: (.unique_cpu_accepts_over_exact_cache // 0),
         tokens_saved: (.tokens_saved // 0),
         events_seen: (.events_seen // 0),
         false_accepts: (.false_accepts // 0),
         negative_events: (.negative_events // 0),
-        learned_threshold_micro: (.learned_threshold_micro // 0)
+        learned_threshold_micro: (.learned_threshold_micro // 0),
+        calibration_events_seen: (.calibration_events_seen // 0),
+        max_calibration_false_margin_micro: (.max_calibration_false_margin_micro // 0),
+        trust_drift_micro: (.trust_drift_micro // 0),
+        trust_false_risk_micro: (.trust_false_risk_micro // 0),
+        trust_quality_micro: (.trust_quality_micro // 0),
+        trust_token_value_micro: (.trust_token_value_micro // 0)
       }
     ] | sort_by(-.tokens_saved) | .[:20]) as $quarantined_profile_token_ranking |
   ([ $local[] | (.tokens_saved_estimated // 0) ] | add // 0) as $gateway_tokens_saved |
