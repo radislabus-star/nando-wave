@@ -5804,6 +5804,8 @@ where
     let mut product_hot_score_only_post_quarantine_score_candidate_events = 0usize;
     let mut product_hot_score_only_post_quarantine_false_accepts = 0usize;
     let mut product_hot_phase_trust_filtered_events = 0usize;
+    let mut product_hot_phase_trust_lost_events = 0usize;
+    let mut product_hot_phase_trust_lost_tokens = 0u64;
     let mut product_hot_phase_symbiosis_filtered_events = 0usize;
     let mut product_hot_score_only_credit_rows = Vec::<LiveStoreProductHotCreditRow>::new();
     let mut active_clean_calls_saved = 0usize;
@@ -6960,6 +6962,8 @@ where
                     product_hot_score_only_post_quarantine_score_candidate_events,
                     product_hot_score_only_post_quarantine_false_accepts,
                     product_hot_phase_trust_filtered_events,
+                    product_hot_phase_trust_lost_events,
+                    product_hot_phase_trust_lost_tokens,
                     product_hot_phase_symbiosis_filtered_events,
                     product_hot_score_only_unique_cpu_accepts_over_exact_cache,
                     product_hot_score_only_tokens_saved,
@@ -7239,6 +7243,7 @@ where
         let mut disable_product_hot_runtime_after_score = false;
         let mut rebuild_product_hot_survivors_after_score = false;
         let mut row_product_hot_phase_trust_filtered = false;
+        let mut row_product_hot_phase_trust_lost = false;
         let mut row_product_hot_phase_symbiosis_filtered = false;
         let row_eval_score_events_before = append_eval.score_events;
         let row_eval_unique_accepts_before = append_eval.unique_cpu_accepts_over_exact_cache;
@@ -7334,6 +7339,9 @@ where
                             )
                     })
                     .collect::<Vec<_>>();
+                let trusted_score_candidate_seen = active_decisions
+                    .iter()
+                    .any(|decision| decision.score_candidate);
                 if relevant_product_hot_decisions.iter().any(|decision| {
                     decision.score_candidate
                         && !product_hot_score_only_quarantined_profile_ids
@@ -7347,6 +7355,16 @@ where
                     row_product_hot_phase_trust_filtered = true;
                     product_hot_phase_trust_filtered_events =
                         product_hot_phase_trust_filtered_events.saturating_add(1);
+                    if !trusted_score_candidate_seen
+                        && adapter_event.verified_safe_accept
+                        && !adapter_event.exact_cache_hit
+                    {
+                        row_product_hot_phase_trust_lost = true;
+                        product_hot_phase_trust_lost_events =
+                            product_hot_phase_trust_lost_events.saturating_add(1);
+                        product_hot_phase_trust_lost_tokens = product_hot_phase_trust_lost_tokens
+                            .saturating_add(adapter_event.tokens);
+                    }
                 }
                 let attribution = live_store_profile_attribution(
                     &adapter_event,
@@ -7668,23 +7686,12 @@ where
                             scratch,
                         )
                         .map_err(|error| format!("failed append live-tail hot score: {error:?}"))?;
-                    let mut decisions = if route_wide_phase_transfer_allowed {
+                    let relevant_decisions = if route_wide_phase_transfer_allowed {
                         decisions.to_vec()
                     } else {
                         live_store_relevant_bucket_decisions(&decisions, &relevant_online_bucket_ids)
-                    }
-                    .into_iter()
-                    .filter(|decision| {
-                        !product_hot_score_only_quarantined_profile_ids
-                            .contains(&decision.profile_id)
-                            && live_store_product_hot_profile_phase_trusted(
-                                &store,
-                                decision.profile_id,
-                                min_bucket_events,
-                            )
-                    })
-                    .collect::<Vec<_>>();
-                    if decisions.iter().any(|decision| {
+                    };
+                    let untrusted_score_candidate_seen = relevant_decisions.iter().any(|decision| {
                         decision.score_candidate
                             && !product_hot_score_only_quarantined_profile_ids
                                 .contains(&decision.profile_id)
@@ -7693,10 +7700,36 @@ where
                                 decision.profile_id,
                                 min_bucket_events,
                             )
-                    }) {
+                    });
+                    let mut decisions = relevant_decisions
+                        .into_iter()
+                        .filter(|decision| {
+                        !product_hot_score_only_quarantined_profile_ids
+                            .contains(&decision.profile_id)
+                            && live_store_product_hot_profile_phase_trusted(
+                                &store,
+                                decision.profile_id,
+                                min_bucket_events,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let trusted_score_candidate_seen =
+                        decisions.iter().any(|decision| decision.score_candidate);
+                    if untrusted_score_candidate_seen {
                         row_product_hot_phase_trust_filtered = true;
                         product_hot_phase_trust_filtered_events =
                             product_hot_phase_trust_filtered_events.saturating_add(1);
+                        if !trusted_score_candidate_seen
+                            && adapter_event.verified_safe_accept
+                            && !adapter_event.exact_cache_hit
+                        {
+                            row_product_hot_phase_trust_lost = true;
+                            product_hot_phase_trust_lost_events =
+                                product_hot_phase_trust_lost_events.saturating_add(1);
+                            product_hot_phase_trust_lost_tokens =
+                                product_hot_phase_trust_lost_tokens
+                                    .saturating_add(adapter_event.tokens);
+                        }
                     }
                     let attribution = live_store_profile_attribution(
                         &adapter_event,
@@ -8004,6 +8037,7 @@ where
             "learning_false_accept": learning_decision.false_accept,
             "learning_bucket_rejected_after_update": learning_bucket_rejected_after_update,
             "product_hot_phase_trust_filtered": row_product_hot_phase_trust_filtered,
+            "product_hot_phase_trust_lost": row_product_hot_phase_trust_lost,
             "product_hot_phase_symbiosis_filtered": row_product_hot_phase_symbiosis_filtered,
             "route_wide_phase_transfer_allowed": route_wide_phase_transfer_allowed,
             "decisions": decision_rows
@@ -8771,6 +8805,8 @@ where
         product_hot_score_only_post_quarantine_score_candidate_events,
         product_hot_score_only_post_quarantine_false_accepts,
         product_hot_phase_trust_filtered_events,
+        product_hot_phase_trust_lost_events,
+        product_hot_phase_trust_lost_tokens,
         product_hot_phase_symbiosis_filtered_events,
         product_hot_score_only_unique_cpu_accepts_over_exact_cache,
         product_hot_score_only_tokens_saved,

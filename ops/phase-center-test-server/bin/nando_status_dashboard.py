@@ -1415,7 +1415,8 @@ def live_miner_panels(
                 ("active_false_accepts", dashboard_metric_text(active_false, lang), "post-quarantine hot path"),
                 ("shadow_risk_events", dashboard_metric_text(shadow_false, lang), "stable diagnostic window"),
                 ("post_quarantine_false", dashboard_metric_first(metrics, ("product_hot_score_only_post_quarantine_false_accepts",), lang, default="0"), "hot score only"),
-                ("trust_filtered", dashboard_metric_first(metrics, ("product_hot_phase_trust_filtered_events",), lang, default="0"), "sent back to miner"),
+                ("trust_filtered", dashboard_metric_text(trust_filtered, lang), "shadow noise + miner material"),
+                ("trust_lost", dashboard_metric_text(trust_lost, lang), f"lost tokens={dashboard_metric_text(trust_lost_tokens, lang)}"),
                 ("symbiosis_filtered", dashboard_metric_text(symbiosis_filtered, lang), "hidden+observable required"),
                 ("mixed_accepts", dashboard_metric_text(mixed_accepts, lang), "hidden+observable"),
                 ("gateway_false", dashboard_metric_first(metrics, ("gateway_false_accepts", "provider_bridge_v2_false_accepts"), lang, default="0"), "HTTP bridge"),
@@ -1541,6 +1542,9 @@ def status_dashboard_html(request_path: str = "") -> str:
     product_hot_candidates = dashboard_int(live_tail.get("product_hot_score_only_post_quarantine_score_candidate_events") or metrics.get("product_hot_score_only_post_quarantine_score_candidate_events"))
     product_hot_accepts = dashboard_int(live_tail.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache") or metrics.get("product_hot_score_only_unique_cpu_accepts_over_exact_cache"))
     product_hot_tokens = dashboard_int(live_tail.get("product_hot_score_only_tokens_saved") or metrics.get("product_hot_score_only_tokens_saved"))
+    trust_filtered = dashboard_int(live_tail.get("product_hot_phase_trust_filtered_events") or metrics.get("product_hot_phase_trust_filtered_events"))
+    trust_lost = dashboard_int(live_tail.get("product_hot_phase_trust_lost_events") or metrics.get("product_hot_phase_trust_lost_events"))
+    trust_lost_tokens = dashboard_int(live_tail.get("product_hot_phase_trust_lost_tokens") or metrics.get("product_hot_phase_trust_lost_tokens"))
     symbiosis_filtered = dashboard_int(live_tail.get("product_hot_phase_symbiosis_filtered_events") or metrics.get("product_hot_phase_symbiosis_filtered_events"))
     mixed_accepts = dashboard_int(live_tail.get("append_mixed_profile_unique_cpu_accepts_over_exact_cache") or metrics.get("append_mixed_profile_unique_cpu_accepts_over_exact_cache"))
     recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
@@ -1833,7 +1837,7 @@ def status_dashboard_html(request_path: str = "") -> str:
     </div>
   </section>
 
-  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=dashboard_int(metrics.get("product_hot_phase_trust_filtered_events")), symbiosis_filtered=symbiosis_filtered, mixed_accepts=mixed_accepts, lang=lang)}
+  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=trust_filtered, symbiosis_filtered=symbiosis_filtered, mixed_accepts=mixed_accepts, lang=lang)}
 
   <section class="panel">
     <h2>{t("1. Входящий поток", "1. Incoming Flow")}</h2>

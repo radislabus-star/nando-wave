@@ -1102,6 +1102,8 @@ pub(super) struct PhaseStreamHotPathDaemonAppendLiveTailReport {
     pub(super) product_hot_score_only_post_quarantine_score_candidate_events: usize,
     pub(super) product_hot_score_only_post_quarantine_false_accepts: usize,
     pub(super) product_hot_phase_trust_filtered_events: usize,
+    pub(super) product_hot_phase_trust_lost_events: usize,
+    pub(super) product_hot_phase_trust_lost_tokens: u64,
     pub(super) product_hot_phase_symbiosis_filtered_events: usize,
     pub(super) product_hot_score_only_unique_cpu_accepts_over_exact_cache: usize,
     pub(super) product_hot_score_only_tokens_saved: u64,

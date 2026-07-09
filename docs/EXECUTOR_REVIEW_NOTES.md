@@ -6597,3 +6597,40 @@ Boundary:
   a product-hot local accept requires a trusted hidden phase center and a
   trusted observable phase center on the same event. Single-sided candidates
   stay in shadow/discovery until the miner grows a clean paired center.
+
+## 2026-07-09 Phase-Trust Lost-Vs-Noise Split
+
+Finding:
+  The first reading of `product_hot_phase_trust_filtered_events=11` was too
+  coarse. Live decision audit showed:
+    filtered rows=11,
+    accepted non-exact verified rows=8,
+    exact-cache rows=3,
+    lost non-exact verified rows=0.
+  So those 11 events were not a compression loss; they were untrusted
+  side-candidates/noise beside an already accepted trusted symbiotic path.
+
+Change:
+  Added explicit product-hot lost counters:
+    `product_hot_phase_trust_lost_events`,
+    `product_hot_phase_trust_lost_tokens`.
+  The old `product_hot_phase_trust_filtered_events` remains as miner material /
+  shadow noise. Only `phase_trust_lost` is the real CPU-compression debt.
+
+Live verification:
+  After deploy:
+    rows=20,
+    candidates=17,
+    CPU accepts=13,
+    tokens_saved=6817,
+    false_accepts=0,
+    phase_trust_filtered=0,
+    phase_trust_lost=0,
+    phase_trust_lost_tokens=0,
+    symbiotic_accepts=13.
+
+Boundary:
+  Do not chase `phase_trust_filtered` as a product-loss metric. The miner should
+  prioritize `phase_trust_lost > 0`, `symbiosis_filtered > 0`, quarantine loss,
+  or real false accepts. Filtered-only side noise is useful discovery material,
+  not evidence that compression was lost.
