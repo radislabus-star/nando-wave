@@ -72,7 +72,7 @@ fn cue_pair_token(left: u32, right: u32) -> u32 {
 
 fn cue_surface_token(kind: &str, value: &str) -> u32 {
     let mut hash = 0xC6A4_A793_5BD1_E995u64;
-    for byte in kind.bytes().chain([b':']).chain(value.bytes()) {
+    for byte in kind.bytes().chain(*b":").chain(value.bytes()) {
         hash ^= u64::from(byte).wrapping_mul(0x9E37_79B9_7F4A_7C15);
         hash = hash.rotate_left(27);
     }

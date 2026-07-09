@@ -7,8 +7,12 @@
 pub const PHASE_CENTER_RUNTIME_PACKAGE_MAGIC: [u8; 8] = *b"NWPCF001";
 pub const PHASE_CENTER_RUNTIME_PACKAGE_FINGERPRINT_PERSONAL: [u8; 8] = *b"nwpcpkg1";
 pub const PHASE_CENTER_RUNTIME_PACKAGE_HEADER_BYTES: usize = 16;
+pub const PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC: [u8; 8] = *b"NWPCH001";
+pub const PHASE_CENTER_HOT_RUNTIME_PACKAGE_FINGERPRINT_PERSONAL: [u8; 8] = *b"nwpchot1";
+pub const PHASE_CENTER_HOT_RUNTIME_PACKAGE_HEADER_BYTES: usize = 56;
 pub const PHASE_CENTER_DEFAULT_OFFLOAD_MARGIN_THRESHOLD_MICRO: i64 = 300_000;
 const PHASE_CENTER_DEFAULT_HOT_ATOM_ROW_CACHE: usize = 64;
+const PHASE_CENTER_FIXED_CELL_SCALE: i64 = 16_384;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PhaseCenterCell {
@@ -580,6 +584,40 @@ pub struct PhaseCenterRuntimePackageInfo {
     pub fingerprint64: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhaseCenterHotPackagePolicyDefaults {
+    pub local_accept_enabled: bool,
+    pub require_verifier: bool,
+    pub require_false_accepts_zero: bool,
+    pub shadow_only: bool,
+    pub min_margin_threshold_micro: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhaseCenterHotRuntimePackageInfo {
+    pub magic: [u8; PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC.len()],
+    pub cells: usize,
+    pub profile_count: usize,
+    pub route_count: usize,
+    pub route_profile_edges: usize,
+    pub serialized_len: usize,
+    pub payload_bytes: usize,
+    pub fingerprint64: u64,
+    pub verifier_binding: PhaseCenterVerifierBinding,
+    pub policy_defaults: PhaseCenterHotPackagePolicyDefaults,
+    pub hot_runtime_bytes_estimate: usize,
+    pub hot_route_table_bytes_estimate: usize,
+    pub hot_scratch_bytes_estimate: usize,
+    pub hot_bytes_estimate: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PhaseCenterHotRuntimePackage {
+    pub info: PhaseCenterHotRuntimePackageInfo,
+    pub hot_runtime: PhaseCenterHotRuntime,
+    pub route_table: PhaseCenterHotRouteTable,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct PhaseCenterCompiler {
     cells: usize,
@@ -775,6 +813,270 @@ impl PhaseCenterOffloadRuntime {
     }
 }
 
+impl Default for PhaseCenterHotPackagePolicyDefaults {
+    fn default() -> Self {
+        Self {
+            local_accept_enabled: false,
+            require_verifier: true,
+            require_false_accepts_zero: true,
+            shadow_only: true,
+            min_margin_threshold_micro: PHASE_CENTER_DEFAULT_OFFLOAD_MARGIN_THRESHOLD_MICRO,
+        }
+    }
+}
+
+impl PhaseCenterHotPackagePolicyDefaults {
+    const LOCAL_ACCEPT_ENABLED: u32 = 1 << 0;
+    const REQUIRE_VERIFIER: u32 = 1 << 1;
+    const REQUIRE_FALSE_ACCEPTS_ZERO: u32 = 1 << 2;
+    const SHADOW_ONLY: u32 = 1 << 3;
+
+    #[must_use]
+    const fn to_flags(self) -> u32 {
+        (if self.local_accept_enabled {
+            Self::LOCAL_ACCEPT_ENABLED
+        } else {
+            0
+        }) | (if self.require_verifier {
+            Self::REQUIRE_VERIFIER
+        } else {
+            0
+        }) | (if self.require_false_accepts_zero {
+            Self::REQUIRE_FALSE_ACCEPTS_ZERO
+        } else {
+            0
+        }) | (if self.shadow_only {
+            Self::SHADOW_ONLY
+        } else {
+            0
+        })
+    }
+
+    #[must_use]
+    const fn from_flags(flags: u32, min_margin_threshold_micro: i64) -> Self {
+        Self {
+            local_accept_enabled: flags & Self::LOCAL_ACCEPT_ENABLED != 0,
+            require_verifier: flags & Self::REQUIRE_VERIFIER != 0,
+            require_false_accepts_zero: flags & Self::REQUIRE_FALSE_ACCEPTS_ZERO != 0,
+            shadow_only: flags & Self::SHADOW_ONLY != 0,
+            min_margin_threshold_micro,
+        }
+    }
+}
+
+impl PhaseCenterHotRuntimePackage {
+    pub fn from_runtime(
+        hot_runtime: PhaseCenterHotRuntime,
+        route_table: PhaseCenterHotRouteTable,
+        verifier_binding: PhaseCenterVerifierBinding,
+        policy_defaults: PhaseCenterHotPackagePolicyDefaults,
+    ) -> Result<Self, PhaseCenterRuntimeError> {
+        let info = hot_runtime_package_info_for_runtime(
+            &hot_runtime,
+            &route_table,
+            verifier_binding,
+            policy_defaults,
+            0,
+            0,
+        )?;
+        Ok(Self {
+            info,
+            hot_runtime,
+            route_table,
+        })
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, PhaseCenterRuntimeError> {
+        let cells = u32::try_from(self.hot_runtime.cells())
+            .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+        let profile_count = u32::try_from(self.hot_runtime.profile_count())
+            .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+        let route_count = u32::try_from(self.route_table.route_count())
+            .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+        let route_profile_edges = u32::try_from(self.route_table.profile_edge_count())
+            .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+        let false_accept_threshold =
+            u32::try_from(self.info.verifier_binding.false_accept_threshold)
+                .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+        let serialized_len = hot_runtime_package_len(
+            self.hot_runtime.cells(),
+            self.hot_runtime.profile_count(),
+            self.route_table.route_count(),
+            self.route_table.profile_edge_count(),
+        )
+        .ok_or(PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+
+        let mut bytes = Vec::with_capacity(serialized_len);
+        bytes.extend_from_slice(&PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC);
+        bytes.extend_from_slice(&cells.to_le_bytes());
+        bytes.extend_from_slice(&profile_count.to_le_bytes());
+        bytes.extend_from_slice(&route_count.to_le_bytes());
+        bytes.extend_from_slice(&route_profile_edges.to_le_bytes());
+        bytes.extend_from_slice(&self.info.verifier_binding.verifier_id.to_le_bytes());
+        bytes.extend_from_slice(&self.info.verifier_binding.verifier_version.to_le_bytes());
+        bytes.extend_from_slice(
+            &self
+                .info
+                .verifier_binding
+                .verifier_input_kind_id
+                .to_le_bytes(),
+        );
+        bytes.extend_from_slice(
+            &self
+                .info
+                .verifier_binding
+                .verifier_evidence_source_id
+                .to_le_bytes(),
+        );
+        bytes.extend_from_slice(&false_accept_threshold.to_le_bytes());
+        bytes.extend_from_slice(&self.info.policy_defaults.to_flags().to_le_bytes());
+        bytes.extend_from_slice(
+            &self
+                .info
+                .policy_defaults
+                .min_margin_threshold_micro
+                .to_le_bytes(),
+        );
+        for profile in self.hot_runtime.profiles.iter() {
+            bytes.extend_from_slice(&profile.profile_id.to_le_bytes());
+            bytes.extend_from_slice(&profile.threshold_micro.to_le_bytes());
+            write_phase_center_cells(&mut bytes, &profile.center_delta);
+        }
+        for plan in self.route_table.plans.iter() {
+            let edge_count = u32::try_from(plan.profile_count())
+                .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+            bytes.extend_from_slice(&plan.route_id().to_le_bytes());
+            bytes.extend_from_slice(&edge_count.to_le_bytes());
+            for &profile_index in plan.profile_indexes() {
+                let profile_index_u32 = u32::try_from(profile_index)
+                    .map_err(|_| PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+                bytes.extend_from_slice(&profile_index_u32.to_le_bytes());
+            }
+        }
+        Ok(bytes)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PhaseCenterRuntimeError> {
+        let info = Self::inspect_bytes(bytes)?;
+        let mut offset = PHASE_CENTER_HOT_RUNTIME_PACKAGE_HEADER_BYTES;
+        let mut profiles = Vec::with_capacity(info.profile_count);
+        for _ in 0..info.profile_count {
+            let profile_id = read_u32_le_at(bytes, &mut offset)?;
+            let threshold_micro = read_i64_le_at(bytes, &mut offset)?;
+            if threshold_micro <= 0 {
+                return Err(PhaseCenterRuntimeError::InvalidOffloadThreshold);
+            }
+            let center_delta = read_phase_center_cells(bytes, &mut offset, info.cells)?;
+            profiles.push(PhaseCenterHotProfile {
+                profile_id,
+                threshold_micro,
+                center_delta,
+            });
+        }
+        let hot_runtime = PhaseCenterHotRuntime {
+            cells: info.cells,
+            profiles: profiles.into_boxed_slice(),
+        };
+
+        let mut plans = Vec::with_capacity(info.route_count);
+        let mut observed_edges = 0usize;
+        for _ in 0..info.route_count {
+            let route_id = read_u32_le_at(bytes, &mut offset)?;
+            let edge_count = read_u32_le_at(bytes, &mut offset)? as usize;
+            observed_edges = observed_edges.saturating_add(edge_count);
+            let mut profile_indexes = Vec::with_capacity(edge_count);
+            for _ in 0..edge_count {
+                let profile_index = read_u32_le_at(bytes, &mut offset)? as usize;
+                if profile_index >= hot_runtime.profile_count() {
+                    return Err(PhaseCenterRuntimeError::ProgramIndexOutOfBounds);
+                }
+                profile_indexes.push(profile_index);
+            }
+            if let Some(plan) = PhaseCenterHotRoutePlan::new(route_id, profile_indexes)? {
+                plans.push(plan);
+            }
+        }
+        if observed_edges != info.route_profile_edges || offset != bytes.len() {
+            return Err(PhaseCenterRuntimeError::InvalidRuntimePackage);
+        }
+        let route_table = PhaseCenterHotRouteTable::from_plans(plans)?;
+        if route_table.route_count() != info.route_count {
+            return Err(PhaseCenterRuntimeError::InvalidRuntimePackage);
+        }
+        Ok(Self {
+            info,
+            hot_runtime,
+            route_table,
+        })
+    }
+
+    pub fn inspect_bytes(
+        bytes: &[u8],
+    ) -> Result<PhaseCenterHotRuntimePackageInfo, PhaseCenterRuntimeError> {
+        if bytes.len() < PHASE_CENTER_HOT_RUNTIME_PACKAGE_HEADER_BYTES {
+            return Err(PhaseCenterRuntimeError::InvalidRuntimePackage);
+        }
+        if bytes[..PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC.len()]
+            != PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC
+        {
+            return Err(PhaseCenterRuntimeError::InvalidRuntimePackage);
+        }
+        let cells = read_u32_le(bytes, 8)? as usize;
+        let profile_count = read_u32_le(bytes, 12)? as usize;
+        let route_count = read_u32_le(bytes, 16)? as usize;
+        let route_profile_edges = read_u32_le(bytes, 20)? as usize;
+        if cells == 0 || profile_count == 0 || route_count == 0 || route_profile_edges == 0 {
+            return Err(PhaseCenterRuntimeError::EmptyRuntime);
+        }
+        let verifier_binding = PhaseCenterVerifierBinding {
+            verifier_id: read_u32_le(bytes, 24)?,
+            verifier_version: read_u32_le(bytes, 28)?,
+            verifier_input_kind_id: read_u32_le(bytes, 32)?,
+            verifier_evidence_source_id: read_u32_le(bytes, 36)?,
+            false_accept_threshold: read_u32_le(bytes, 40)? as usize,
+        };
+        let policy_flags = read_u32_le(bytes, 44)?;
+        let min_margin_threshold_micro = read_i64_le(bytes, 48)?;
+        if min_margin_threshold_micro <= 0 {
+            return Err(PhaseCenterRuntimeError::InvalidOffloadThreshold);
+        }
+        let serialized_len =
+            hot_runtime_package_len(cells, profile_count, route_count, route_profile_edges)
+                .ok_or(PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+        if bytes.len() != serialized_len {
+            return Err(PhaseCenterRuntimeError::InvalidRuntimePackage);
+        }
+        hot_runtime_package_info(
+            cells,
+            profile_count,
+            route_count,
+            route_profile_edges,
+            verifier_binding,
+            PhaseCenterHotPackagePolicyDefaults::from_flags(
+                policy_flags,
+                min_margin_threshold_micro,
+            ),
+            serialized_len,
+            hot_runtime_package_fingerprint64(bytes),
+        )
+    }
+
+    pub fn into_worker(self) -> Result<PhaseCenterHotWorker, PhaseCenterRuntimeError> {
+        PhaseCenterHotWorker::new(self.hot_runtime, self.route_table)
+    }
+}
+
+impl PhaseCenterHotRuntimePackageInfo {
+    #[must_use]
+    pub fn server_policy_allows_local_accept(self) -> bool {
+        self.policy_defaults.local_accept_enabled
+            && self.policy_defaults.require_verifier
+            && self.policy_defaults.require_false_accepts_zero
+            && self.verifier_binding.is_bound()
+            && self.verifier_binding.false_accept_threshold == 0
+    }
+}
+
 impl PhaseCenterOffloadDecision {
     #[must_use]
     pub const fn is_local_operator(self) -> bool {
@@ -898,6 +1200,22 @@ impl PhaseCenterHotScratch {
             + self.atom_rows.capacity()
                 * (std::mem::size_of::<PhaseCenterHotAtomRow>()
                     + self.cells() * std::mem::size_of::<PhaseCenterCell>())
+    }
+
+    #[must_use]
+    pub const fn bytes_estimate_for(
+        cells: usize,
+        candidate_capacity: usize,
+        atom_cache_capacity: usize,
+    ) -> usize {
+        std::mem::size_of::<Self>()
+            + cells * std::mem::size_of::<PhaseCenterCell>()
+            + candidate_capacity * std::mem::size_of::<PhaseCenterHotCandidateDecision>()
+            + candidate_capacity * std::mem::size_of::<f64>()
+            + atom_cache_capacity * std::mem::size_of::<usize>()
+            + atom_cache_capacity
+                * (std::mem::size_of::<PhaseCenterHotAtomRow>()
+                    + cells * std::mem::size_of::<PhaseCenterCell>())
     }
 
     fn ensure_atom_row(
@@ -1650,7 +1968,7 @@ impl PhaseCenterOperatorMemory {
             for (route_index, route) in self.routes.iter().enumerate() {
                 for (profile_index, profile) in route.profiles.iter().enumerate() {
                     let key = (profile.value_score, profile.last_seen_tick);
-                    if evict_key.map_or(true, |current| key < current) {
+                    if evict_key.is_none_or(|current| key < current) {
                         evict_key = Some(key);
                         evict_route_index = Some(route_index);
                         evict_profile_index = Some(profile_index);
@@ -1935,6 +2253,7 @@ impl PhaseCenterOnlineMiner {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn observe_atoms<'a, I>(
         &mut self,
         encoder: &mut PhaseCenterAtomEncoder,
@@ -1959,6 +2278,7 @@ impl PhaseCenterOnlineMiner {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn observe_atom_ids<I>(
         &mut self,
         encoder: &mut PhaseCenterAtomEncoder,
@@ -2673,6 +2993,7 @@ impl PhaseCenterLiveOperatorStore {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn observe_atom_ids<I>(
         &mut self,
         encoder: &mut PhaseCenterAtomEncoder,
@@ -3379,6 +3700,43 @@ impl PhaseCenterHotRuntime {
             return Err(PhaseCenterRuntimeError::VectorWidthMismatch);
         }
         self.score_profile_unchecked(profile_index, vector)
+    }
+
+    pub fn score_profile_fixed_micro(
+        &self,
+        profile_index: usize,
+        vector: &[PhaseCenterCell],
+    ) -> Result<i64, PhaseCenterRuntimeError> {
+        if vector.len() != self.cells {
+            return Err(PhaseCenterRuntimeError::VectorWidthMismatch);
+        }
+        let Some(profile) = self.profiles.get(profile_index) else {
+            return Err(PhaseCenterRuntimeError::ProgramIndexOutOfBounds);
+        };
+        let mut score = 0i128;
+        for (cell, delta) in vector.iter().zip(profile.center_delta.iter()) {
+            score += i128::from(phase_component_to_fixed(cell.re))
+                * i128::from(phase_component_to_fixed(delta.re));
+            score += i128::from(phase_component_to_fixed(cell.im))
+                * i128::from(phase_component_to_fixed(delta.im));
+        }
+        fixed_phase_score_to_micro(score, self.cells)
+    }
+
+    pub fn score_profile_fixed(
+        &self,
+        profile_index: usize,
+        vector: &[PhaseCenterCell],
+    ) -> Result<PhaseCenterHotDecision, PhaseCenterRuntimeError> {
+        let margin_micro = self.score_profile_fixed_micro(profile_index, vector)?;
+        let Some(profile) = self.profiles.get(profile_index) else {
+            return Err(PhaseCenterRuntimeError::ProgramIndexOutOfBounds);
+        };
+        Ok(PhaseCenterHotDecision {
+            profile_id: profile.profile_id,
+            margin_micro,
+            local_operator: margin_micro >= profile.threshold_micro,
+        })
     }
 
     pub fn score_route_plan_into(
@@ -4113,6 +4471,29 @@ pub fn phase_margin_to_micro(margin: f64) -> Result<i64, PhaseCenterRuntimeError
     Ok(scaled as i64)
 }
 
+fn phase_component_to_fixed(value: f64) -> i32 {
+    let clamped = value.clamp(-2.0, 2.0);
+    (clamped * PHASE_CENTER_FIXED_CELL_SCALE as f64).round() as i32
+}
+
+fn fixed_phase_score_to_micro(score: i128, cells: usize) -> Result<i64, PhaseCenterRuntimeError> {
+    if cells == 0 {
+        return Err(PhaseCenterRuntimeError::EmptyRuntime);
+    }
+    let denominator = i128::from(PHASE_CENTER_FIXED_CELL_SCALE)
+        * i128::from(PHASE_CENTER_FIXED_CELL_SCALE)
+        * cells as i128;
+    let numerator = score
+        .checked_mul(1_000_000)
+        .ok_or(PhaseCenterRuntimeError::InvalidMargin)?;
+    let rounded = if numerator >= 0 {
+        (numerator + denominator / 2) / denominator
+    } else {
+        (numerator - denominator / 2) / denominator
+    };
+    i64::try_from(rounded).map_err(|_| PhaseCenterRuntimeError::InvalidMargin)
+}
+
 #[must_use]
 fn summarize_repeated_offload_decisions_into<F>(
     decision_count: usize,
@@ -4432,8 +4813,115 @@ fn runtime_package_len(cells: usize, records: usize) -> Option<usize> {
         .checked_add(PHASE_CENTER_RUNTIME_PACKAGE_HEADER_BYTES)
 }
 
+fn hot_runtime_package_len(
+    cells: usize,
+    profile_count: usize,
+    route_count: usize,
+    route_profile_edges: usize,
+) -> Option<usize> {
+    let profile_bytes = profile_count
+        .checked_mul(std::mem::size_of::<u32>() + std::mem::size_of::<i64>())?
+        .checked_add(
+            profile_count
+                .checked_mul(cells)?
+                .checked_mul(2)?
+                .checked_mul(std::mem::size_of::<f64>())?,
+        )?;
+    let route_bytes = route_count
+        .checked_mul(2)?
+        .checked_mul(std::mem::size_of::<u32>())?
+        .checked_add(route_profile_edges.checked_mul(std::mem::size_of::<u32>())?)?;
+    PHASE_CENTER_HOT_RUNTIME_PACKAGE_HEADER_BYTES
+        .checked_add(profile_bytes)?
+        .checked_add(route_bytes)
+}
+
+fn hot_runtime_package_info_for_runtime(
+    hot_runtime: &PhaseCenterHotRuntime,
+    route_table: &PhaseCenterHotRouteTable,
+    verifier_binding: PhaseCenterVerifierBinding,
+    policy_defaults: PhaseCenterHotPackagePolicyDefaults,
+    serialized_len: usize,
+    fingerprint64: u64,
+) -> Result<PhaseCenterHotRuntimePackageInfo, PhaseCenterRuntimeError> {
+    let serialized_len = if serialized_len == 0 {
+        hot_runtime_package_len(
+            hot_runtime.cells(),
+            hot_runtime.profile_count(),
+            route_table.route_count(),
+            route_table.profile_edge_count(),
+        )
+        .ok_or(PhaseCenterRuntimeError::RuntimePackageTooLarge)?
+    } else {
+        serialized_len
+    };
+    hot_runtime_package_info(
+        hot_runtime.cells(),
+        hot_runtime.profile_count(),
+        route_table.route_count(),
+        route_table.profile_edge_count(),
+        verifier_binding,
+        policy_defaults,
+        serialized_len,
+        fingerprint64,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn hot_runtime_package_info(
+    cells: usize,
+    profile_count: usize,
+    route_count: usize,
+    route_profile_edges: usize,
+    verifier_binding: PhaseCenterVerifierBinding,
+    policy_defaults: PhaseCenterHotPackagePolicyDefaults,
+    serialized_len: usize,
+    fingerprint64: u64,
+) -> Result<PhaseCenterHotRuntimePackageInfo, PhaseCenterRuntimeError> {
+    let expected_len =
+        hot_runtime_package_len(cells, profile_count, route_count, route_profile_edges)
+            .ok_or(PhaseCenterRuntimeError::RuntimePackageTooLarge)?;
+    if serialized_len != expected_len {
+        return Err(PhaseCenterRuntimeError::InvalidRuntimePackage);
+    }
+    let hot_runtime_bytes_estimate =
+        PhaseCenterHotRuntime::bytes_estimate_for(profile_count, cells);
+    let hot_route_table_bytes_estimate =
+        PhaseCenterHotRouteTable::bytes_estimate_for(route_count, route_profile_edges);
+    let hot_scratch_bytes_estimate = PhaseCenterHotScratch::bytes_estimate_for(
+        cells,
+        route_profile_edges.max(1),
+        PHASE_CENTER_DEFAULT_HOT_ATOM_ROW_CACHE,
+    );
+    Ok(PhaseCenterHotRuntimePackageInfo {
+        magic: PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC,
+        cells,
+        profile_count,
+        route_count,
+        route_profile_edges,
+        serialized_len,
+        payload_bytes: serialized_len - PHASE_CENTER_HOT_RUNTIME_PACKAGE_HEADER_BYTES,
+        fingerprint64,
+        verifier_binding,
+        policy_defaults,
+        hot_runtime_bytes_estimate,
+        hot_route_table_bytes_estimate,
+        hot_scratch_bytes_estimate,
+        hot_bytes_estimate: hot_runtime_bytes_estimate
+            .saturating_add(hot_route_table_bytes_estimate)
+            .saturating_add(hot_scratch_bytes_estimate),
+    })
+}
+
 fn runtime_package_fingerprint64(bytes: &[u8]) -> u64 {
     blake2b8_personalized(bytes, &PHASE_CENTER_RUNTIME_PACKAGE_FINGERPRINT_PERSONAL)
+}
+
+fn hot_runtime_package_fingerprint64(bytes: &[u8]) -> u64 {
+    blake2b8_personalized(
+        bytes,
+        &PHASE_CENTER_HOT_RUNTIME_PACKAGE_FINGERPRINT_PERSONAL,
+    )
 }
 
 fn write_phase_center_cells(bytes: &mut Vec<u8>, cells: &[PhaseCenterCell]) {
@@ -4466,6 +4954,27 @@ fn read_u32_le(bytes: &[u8], offset: usize) -> Result<u32, PhaseCenterRuntimeErr
     let mut out = [0u8; 4];
     out.copy_from_slice(chunk);
     Ok(u32::from_le_bytes(out))
+}
+
+fn read_u32_le_at(bytes: &[u8], offset: &mut usize) -> Result<u32, PhaseCenterRuntimeError> {
+    let value = read_u32_le(bytes, *offset)?;
+    *offset += std::mem::size_of::<u32>();
+    Ok(value)
+}
+
+fn read_i64_le(bytes: &[u8], offset: usize) -> Result<i64, PhaseCenterRuntimeError> {
+    let chunk = bytes
+        .get(offset..offset + std::mem::size_of::<i64>())
+        .ok_or(PhaseCenterRuntimeError::InvalidRuntimePackage)?;
+    let mut out = [0u8; 8];
+    out.copy_from_slice(chunk);
+    Ok(i64::from_le_bytes(out))
+}
+
+fn read_i64_le_at(bytes: &[u8], offset: &mut usize) -> Result<i64, PhaseCenterRuntimeError> {
+    let value = read_i64_le(bytes, *offset)?;
+    *offset += std::mem::size_of::<i64>();
+    Ok(value)
 }
 
 fn read_f64_le(bytes: &[u8], offset: usize) -> Result<f64, PhaseCenterRuntimeError> {
@@ -7474,6 +7983,142 @@ mod tests {
         assert!(positive_decision.margin_micro > 0);
         assert!(!negative_decision.local_operator);
         assert!(negative_decision.margin_micro < positive_decision.margin_micro);
+    }
+
+    #[test]
+    fn hot_runtime_portable_package_roundtrips_into_worker_without_cold_path() {
+        let atom_ids = [42_u64, 7, 9];
+        let wrong_atom_ids = [42_u64, 7, 99];
+        let positive = phase_vector_from_atom_ids(atom_ids, 16);
+        let negative = phase_vector_from_atom_ids(wrong_atom_ids, 16);
+        let flat = PhaseCenterFlatRuntime::new(
+            16,
+            vec![
+                PhaseCenterFlatRecord {
+                    positive_center: positive.clone().into_boxed_slice(),
+                    negative_center: negative.clone().into_boxed_slice(),
+                },
+                PhaseCenterFlatRecord {
+                    positive_center: phase_vector_from_atoms(
+                        ["family:git_status", "state:clean", "result:summary"],
+                        16,
+                    )
+                    .into_boxed_slice(),
+                    negative_center: phase_vector_from_atoms(
+                        ["family:git_status", "state:dirty", "result:summary"],
+                        16,
+                    )
+                    .into_boxed_slice(),
+                },
+            ],
+        )
+        .expect("valid flat runtime");
+        let hot = PhaseCenterHotRuntime::from_flat_runtime(&flat, &[42, 77], &[1, 1])
+            .expect("valid hot runtime");
+        let route_plan = hot
+            .route_plan_from_profile_ids(11, [42])
+            .expect("route plan builds")
+            .expect("route plan exists");
+        let second_route_plan = hot
+            .route_plan_from_profile_ids(12, [77])
+            .expect("route plan builds")
+            .expect("route plan exists");
+        let route_table = PhaseCenterHotRouteTable::from_plans([route_plan, second_route_plan])
+            .expect("route table builds");
+        let policy = PhaseCenterHotPackagePolicyDefaults {
+            local_accept_enabled: false,
+            require_verifier: true,
+            require_false_accepts_zero: true,
+            shadow_only: true,
+            min_margin_threshold_micro: 1,
+        };
+        let package = PhaseCenterHotRuntimePackage::from_runtime(
+            hot,
+            route_table,
+            test_verifier_binding(),
+            policy,
+        )
+        .expect("package builds");
+        let bytes = package.to_bytes().expect("package serializes");
+        let info = PhaseCenterHotRuntimePackage::inspect_bytes(&bytes).expect("package inspects");
+
+        assert_eq!(info.magic, PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC);
+        assert_eq!(info.cells, 16);
+        assert_eq!(info.profile_count, 2);
+        assert_eq!(info.route_count, 2);
+        assert_eq!(info.route_profile_edges, 2);
+        assert_eq!(info.serialized_len, bytes.len());
+        assert_ne!(info.fingerprint64, 0);
+        assert_eq!(info.verifier_binding, test_verifier_binding());
+        assert_eq!(info.policy_defaults, policy);
+        assert!(info.hot_runtime_bytes_estimate > 0);
+        assert!(info.hot_route_table_bytes_estimate > 0);
+        assert!(info.hot_scratch_bytes_estimate > 0);
+        assert!(info.hot_bytes_estimate >= info.hot_runtime_bytes_estimate);
+        assert!(!info.server_policy_allows_local_accept());
+
+        let loaded =
+            PhaseCenterHotRuntimePackage::from_bytes(&bytes).expect("package loads from bytes");
+        assert_eq!(loaded.info, info);
+        let mut worker = loaded.into_worker().expect("worker owns loaded package");
+        let route_index = worker.resolve_route_index(11).expect("route index");
+        assert_eq!(worker.cells(), 16);
+        assert_eq!(worker.profile_count(), 2);
+        assert_eq!(worker.route_count(), 2);
+        assert_eq!(worker.route_profile_edge_count(), 2);
+        let decisions = worker
+            .score_atom_ids(PhaseCenterHotRequest::new(route_index, &atom_ids))
+            .expect("loaded worker scores");
+        assert_eq!(decisions.len(), 1);
+        let decision = decisions[0];
+
+        assert_eq!(decision.profile_id, 42);
+        assert!(decision.score_candidate);
+        assert!(decision.verifier_required);
+        assert!(!decision.local_accept);
+
+        let wrong_decision = worker
+            .score_atom_ids(PhaseCenterHotRequest::new(route_index, &wrong_atom_ids))
+            .expect("loaded worker scores wrong")
+            .first()
+            .copied()
+            .expect("wrong decision exists");
+        assert!(!wrong_decision.score_candidate);
+    }
+
+    #[test]
+    fn hot_runtime_fixed_point_score_matches_float_decision_for_clear_margin() {
+        let atom_ids = [42_u64, 7, 9];
+        let wrong_atom_ids = [42_u64, 7, 99];
+        let positive = phase_vector_from_atom_ids(atom_ids, 16);
+        let negative = phase_vector_from_atom_ids(wrong_atom_ids, 16);
+        let flat = PhaseCenterFlatRuntime::new(
+            16,
+            vec![PhaseCenterFlatRecord {
+                positive_center: positive.clone().into_boxed_slice(),
+                negative_center: negative.clone().into_boxed_slice(),
+            }],
+        )
+        .expect("valid flat runtime");
+        let hot = PhaseCenterHotRuntime::from_flat_runtime(&flat, &[42], &[1])
+            .expect("valid hot runtime");
+
+        let float_positive = hot.score_profile(0, &positive).expect("float positive");
+        let fixed_positive = hot
+            .score_profile_fixed(0, &positive)
+            .expect("fixed positive");
+        let float_negative = hot.score_profile(0, &negative).expect("float negative");
+        let fixed_negative = hot
+            .score_profile_fixed(0, &negative)
+            .expect("fixed negative");
+
+        assert_eq!(fixed_positive.profile_id, float_positive.profile_id);
+        assert_eq!(fixed_positive.local_operator, float_positive.local_operator);
+        assert_eq!(fixed_negative.local_operator, float_negative.local_operator);
+        assert!((fixed_positive.margin_micro - float_positive.margin_micro).abs() <= 50);
+        assert!((fixed_negative.margin_micro - float_negative.margin_micro).abs() <= 50);
+        assert!(fixed_positive.margin_micro > 0);
+        assert!(fixed_negative.margin_micro < fixed_positive.margin_micro);
     }
 
     #[test]

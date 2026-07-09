@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use nando_core::{
-    PHASE_CENTER_DEFAULT_OFFLOAD_MARGIN_THRESHOLD_MICRO, PHASE_CENTER_RUNTIME_PACKAGE_MAGIC,
-    PhaseCenterCell, PhaseCenterCompiler, PhaseCenterEvalTask, PhaseCenterFlatRuntime,
-    PhaseCenterOffloadAction, PhaseCenterOffloadDecision, PhaseCenterOffloadPolicy,
-    PhaseCenterOffloadRuntime, PhaseCenterOffloadSummary, phase_vector_from_atoms,
+    PHASE_CENTER_DEFAULT_OFFLOAD_MARGIN_THRESHOLD_MICRO, PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC,
+    PHASE_CENTER_RUNTIME_PACKAGE_MAGIC, PhaseCenterCell, PhaseCenterCompiler, PhaseCenterEvalTask,
+    PhaseCenterFlatRuntime, PhaseCenterHotRuntimePackage, PhaseCenterOffloadAction,
+    PhaseCenterOffloadDecision, PhaseCenterOffloadPolicy, PhaseCenterOffloadRuntime,
+    PhaseCenterOffloadSummary, phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
 
@@ -272,6 +273,9 @@ pub(crate) fn run_phase_package_inspect(args: impl Iterator<Item = String>) -> R
             config.package_path.display()
         )
     })?;
+    if package_bytes.starts_with(&PHASE_CENTER_HOT_RUNTIME_PACKAGE_MAGIC) {
+        return run_phase_hot_package_inspect(&config, &package_bytes);
+    }
     let package_info =
         PhaseCenterFlatRuntime::inspect_bytes(&package_bytes).map_err(format_runtime_error)?;
     let runtime =
@@ -330,6 +334,117 @@ pub(crate) fn run_phase_package_inspect(args: impl Iterator<Item = String>) -> R
         return Err(String::from(
             "phase package manifest reports forbidden shortcut usage",
         ));
+    }
+    Ok(())
+}
+
+fn run_phase_hot_package_inspect(
+    config: &PhasePackageInspectConfig,
+    package_bytes: &[u8],
+) -> Result<(), String> {
+    let package_info =
+        PhaseCenterHotRuntimePackage::inspect_bytes(package_bytes).map_err(format_runtime_error)?;
+    let package =
+        PhaseCenterHotRuntimePackage::from_bytes(package_bytes).map_err(format_runtime_error)?;
+    let manifest = read_manifest(&config.manifest_path).ok();
+    let forbidden_used = manifest
+        .as_ref()
+        .is_some_and(|manifest| manifest.forbidden_flags.any_forbidden_used());
+    let inspect_pass = package_info.verifier_binding.is_bound()
+        && package_info.verifier_binding.false_accept_threshold == 0
+        && package_info.policy_defaults.require_verifier
+        && package_info.policy_defaults.require_false_accepts_zero
+        && !package_info.server_policy_allows_local_accept()
+        && !forbidden_used;
+
+    println!("nando_phase_hot_package_inspect:");
+    println!(
+        "  verdict: {}",
+        if inspect_pass {
+            "PHASE_HOT_PACKAGE_INSPECT_PASS"
+        } else {
+            "PHASE_HOT_PACKAGE_INSPECT_WATCH"
+        }
+    );
+    println!("  package_path: {}", config.package_path.display());
+    println!("  manifest_path: {}", config.manifest_path.display());
+    println!("  package_magic: {:?}", package_info.magic);
+    println!("  cells: {}", package_info.cells);
+    println!("  hot_profiles: {}", package_info.profile_count);
+    println!("  hot_routes: {}", package_info.route_count);
+    println!(
+        "  hot_route_profile_edges: {}",
+        package_info.route_profile_edges
+    );
+    println!("  package_bytes: {}", package_bytes.len());
+    println!("  inspected_payload_bytes: {}", package_info.payload_bytes);
+    println!("  package_fingerprint64: {}", package_info.fingerprint64);
+    println!(
+        "  hot_runtime_bytes_estimate: {}",
+        package_info.hot_runtime_bytes_estimate
+    );
+    println!(
+        "  hot_route_table_bytes_estimate: {}",
+        package_info.hot_route_table_bytes_estimate
+    );
+    println!(
+        "  hot_scratch_bytes_estimate: {}",
+        package_info.hot_scratch_bytes_estimate
+    );
+    println!("  hot_bytes_estimate: {}", package_info.hot_bytes_estimate);
+    println!(
+        "  loaded_hot_profiles: {}",
+        package.hot_runtime.profile_count()
+    );
+    println!("  loaded_hot_routes: {}", package.route_table.route_count());
+    println!(
+        "  verifier_id: {}",
+        package_info.verifier_binding.verifier_id
+    );
+    println!(
+        "  verifier_version: {}",
+        package_info.verifier_binding.verifier_version
+    );
+    println!(
+        "  verifier_false_accept_threshold: {}",
+        package_info.verifier_binding.false_accept_threshold
+    );
+    println!(
+        "  local_accept_default_enabled: {}",
+        package_info.policy_defaults.local_accept_enabled
+    );
+    println!(
+        "  shadow_only_default: {}",
+        package_info.policy_defaults.shadow_only
+    );
+    println!(
+        "  require_verifier: {}",
+        package_info.policy_defaults.require_verifier
+    );
+    println!(
+        "  require_false_accepts_zero: {}",
+        package_info.policy_defaults.require_false_accepts_zero
+    );
+    println!(
+        "  min_margin_threshold_micro: {}",
+        package_info.policy_defaults.min_margin_threshold_micro
+    );
+    println!(
+        "  server_policy_allows_local_accept: {}",
+        package_info.server_policy_allows_local_accept()
+    );
+    println!("  manifest_read: {}", manifest.is_some());
+    if let Some(manifest) = manifest {
+        println!("  manifest_schema_version: {}", manifest.schema_version);
+        println!("  manifest_verdict: {}", manifest.verdict);
+        println!(
+            "  manifest_forbidden_flags_used: {}",
+            manifest.forbidden_flags.any_forbidden_used()
+        );
+    }
+
+    if !inspect_pass {
+        return Err(String::from("phase hot package inspect gate failed"));
     }
     Ok(())
 }

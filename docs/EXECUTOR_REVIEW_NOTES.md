@@ -121,6 +121,71 @@ boundary:
   verifier safety and false_accepts=0.
 ```
 
+## Current Runtime Work: Portable Hot .nwpc Package ABI
+
+```text
+timestamp: 2026-07-09T15:51Z
+
+goal:
+  make NANDA CPU portable as a boxed hot runtime package, not only as a cold
+  manifest plus flat .nwpc records.
+
+change:
+  nando-core now has NWPCH001 hot package ABI:
+    PhaseCenterHotRuntimePackage
+    PhaseCenterHotRuntimePackageInfo
+    PhaseCenterHotPackagePolicyDefaults
+
+contents:
+  profile centers
+  numeric route -> profile edges
+  verifier binding
+  local_accept / shadow policy defaults
+  hot runtime / route table / scratch memory estimates
+  package fingerprint
+
+proof:
+  cargo test -p nando-core hot_runtime_ -- --nocapture
+    4 passed, 1 ignored
+
+  cargo test -p nando-core --test phase_center_offload_sdk_public -- --nocapture
+    3 passed
+
+  cargo check -p nando-cli
+    PASS
+
+  cargo clippy -p nando-core -- -D warnings
+    PASS
+
+  cargo fmt --check
+    PASS
+
+  git diff --check
+    PASS
+
+rust-action-memory:
+  doctor: PASS
+  selector-report: WATCH only because diagnostics_count=0 and no repair
+  candidates exist; quarantined_candidates=0 and workspace_mutated=false.
+
+boxed deploy:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260709T154936Z.tar.gz
+  sha256: b7193cf2a1b49c3c8f7af01aa31e404bb4cc7d9da4f64efaefe05b802e0d8d6c
+  package report:
+    target/nando-wave/deploy/nando-phase-center-test-server-20260709T154936Z.package.json
+  rust-action-memory release_allowed: true
+
+boundary:
+  NWPCH001 is a portable hot runtime package with verifier/policy metadata.
+  Default package policy keeps local_accept disabled/shadow-only.
+  No .nwrb path, role-binding backend, lookup authority, target/proof authority,
+  concrete_x lookup, or manual local_out_t was added.
+
+known debt:
+  repo-wide nando-cli clippy -D warnings is still red on old streaming CLI lint
+  debt; scoped nando-core clippy and cargo check are clean.
+```
+
 ## Current Checkpoint: V2 NANDA CPU Bridge
 
 ```text
