@@ -88,6 +88,25 @@ fn live_store_route_wide_phase_transfer_allowed(event: &LiveStoreParsedAtomEvent
         .any(|atom| atom == "state_exit_code_band:zero")
 }
 
+fn live_store_nonzero_exit_state_kind(event: &LiveStoreParsedAtomEvent) -> Option<&str> {
+    event
+        .selected_bucket_atoms
+        .iter()
+        .chain(event.auto_subcenter_atoms.iter())
+        .find_map(|atom| {
+            if let Some(kind) = atom.strip_prefix("state_exit_code_band:") {
+                return (kind != "zero").then_some(kind);
+            }
+            if atom.contains("state_exit_code_band:positive_nonzero") {
+                return Some("positive_nonzero");
+            }
+            if atom.contains("state_exit_code_band:nonzero") {
+                return Some("nonzero");
+            }
+            None
+        })
+}
+
 pub(crate) fn run_phase_stream_live_store_adapter_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -5807,6 +5826,12 @@ where
     let mut product_hot_phase_trust_lost_events = 0usize;
     let mut product_hot_phase_trust_lost_tokens = 0u64;
     let mut product_hot_phase_symbiosis_filtered_events = 0usize;
+    let mut append_verifier_blocked_non_exact_rows = 0usize;
+    let mut append_verifier_blocked_non_exact_tokens = 0u64;
+    let mut append_verifier_blocked_phase_seen_events = 0usize;
+    let mut append_verifier_blocked_phase_seen_tokens = 0u64;
+    let mut append_nonzero_verifier_blocked_rows = 0usize;
+    let mut append_nonzero_verifier_blocked_tokens = 0u64;
     let mut product_hot_score_only_credit_rows = Vec::<LiveStoreProductHotCreditRow>::new();
     let mut active_clean_calls_saved = 0usize;
     let mut active_clean_tokens_saved = 0u64;
@@ -6800,6 +6825,12 @@ where
                     append_estimated_total_cost_microusd,
                     append_estimated_cost_saved_microusd,
                     append_false_accepts: append_eval.false_accepts,
+                    append_verifier_blocked_non_exact_rows,
+                    append_verifier_blocked_non_exact_tokens,
+                    append_verifier_blocked_phase_seen_events,
+                    append_verifier_blocked_phase_seen_tokens,
+                    append_nonzero_verifier_blocked_rows,
+                    append_nonzero_verifier_blocked_tokens,
                     append_compression_claim_min_rows: live_store_append_compression_claim_min_rows(
                     ),
                     append_compression_claim_allowed,
@@ -7955,6 +7986,33 @@ where
         let row_local_accepts = append_eval
             .local_accept_events
             .saturating_sub(row_eval_local_accepts_before);
+        let row_verifier_blocked_non_exact =
+            !adapter_event.verified_safe_accept && !adapter_event.exact_cache_hit;
+        let row_verifier_blocked_phase_seen = row_verifier_blocked_non_exact
+            && (scored_before_update
+                || row_score_events > 0
+                || learning_decision.active_before_update);
+        let row_nonzero_exit_state_kind = live_store_nonzero_exit_state_kind(&adapter_event);
+        let row_nonzero_verifier_blocked =
+            row_verifier_blocked_non_exact && row_nonzero_exit_state_kind.is_some();
+        if row_verifier_blocked_non_exact {
+            append_verifier_blocked_non_exact_rows =
+                append_verifier_blocked_non_exact_rows.saturating_add(1);
+            append_verifier_blocked_non_exact_tokens =
+                append_verifier_blocked_non_exact_tokens.saturating_add(adapter_event.tokens);
+        }
+        if row_verifier_blocked_phase_seen {
+            append_verifier_blocked_phase_seen_events =
+                append_verifier_blocked_phase_seen_events.saturating_add(1);
+            append_verifier_blocked_phase_seen_tokens =
+                append_verifier_blocked_phase_seen_tokens.saturating_add(adapter_event.tokens);
+        }
+        if row_nonzero_verifier_blocked {
+            append_nonzero_verifier_blocked_rows =
+                append_nonzero_verifier_blocked_rows.saturating_add(1);
+            append_nonzero_verifier_blocked_tokens =
+                append_nonzero_verifier_blocked_tokens.saturating_add(adapter_event.tokens);
+        }
         if row_false_accepts > 0 {
             append_clean_suffix_rows = 0;
             append_clean_suffix_score_events = 0;
@@ -8062,6 +8120,22 @@ where
             object.insert(
                 "row_false_accepts".to_owned(),
                 serde_json::Value::from(row_false_accepts as u64),
+            );
+            object.insert(
+                "verifier_blocked_non_exact".to_owned(),
+                serde_json::Value::from(row_verifier_blocked_non_exact),
+            );
+            object.insert(
+                "verifier_blocked_phase_seen".to_owned(),
+                serde_json::Value::from(row_verifier_blocked_phase_seen),
+            );
+            object.insert(
+                "nonzero_verifier_blocked".to_owned(),
+                serde_json::Value::from(row_nonzero_verifier_blocked),
+            );
+            object.insert(
+                "nonzero_exit_state_kind".to_owned(),
+                serde_json::Value::from(row_nonzero_exit_state_kind.unwrap_or("none")),
             );
             object.insert(
                 "append_clean_suffix_rows".to_owned(),
@@ -8653,6 +8727,12 @@ where
         append_estimated_total_cost_microusd,
         append_estimated_cost_saved_microusd,
         append_false_accepts: append_eval.false_accepts,
+        append_verifier_blocked_non_exact_rows,
+        append_verifier_blocked_non_exact_tokens,
+        append_verifier_blocked_phase_seen_events,
+        append_verifier_blocked_phase_seen_tokens,
+        append_nonzero_verifier_blocked_rows,
+        append_nonzero_verifier_blocked_tokens,
         append_compression_claim_min_rows: live_store_append_compression_claim_min_rows(),
         append_compression_claim_allowed,
         append_compression_claim_blocker,

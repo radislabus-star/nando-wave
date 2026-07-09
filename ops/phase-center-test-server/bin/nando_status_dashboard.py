@@ -852,6 +852,11 @@ def codex_cpu_traffic_panel(
     append_accepts: int,
     append_tokens: int,
     append_false: int,
+    verifier_blocked_rows: int,
+    verifier_blocked_tokens: int,
+    verifier_blocked_phase_seen: int,
+    nonzero_verifier_blocked_rows: int,
+    nonzero_verifier_blocked_tokens: int,
     product_hot_accepts: int,
     product_hot_tokens: int,
     active_false: int,
@@ -895,6 +900,18 @@ def codex_cpu_traffic_panel(
         (
             "Candidate zone",
             f"{dashboard_metric_text(append_candidates, lang)} / {dashboard_metric_text(append_rows, lang)} = {candidate_share}",
+        ),
+        (
+            t("Verifier заблокировал", "Verifier blocked"),
+            f"{dashboard_metric_text(verifier_blocked_rows, lang)} {t('событий', 'events')} / {dashboard_metric_text(verifier_blocked_tokens, lang)} {t('токенов', 'tokens')}",
+        ),
+        (
+            t("Майнер увидел unsafe phase", "Miner saw unsafe phase"),
+            f"{dashboard_metric_text(verifier_blocked_phase_seen, lang)} {t('событий', 'events')}",
+        ),
+        (
+            t("Nonzero/failure fallback", "Nonzero/failure fallback"),
+            f"{dashboard_metric_text(nonzero_verifier_blocked_rows, lang)} {t('событий', 'events')} / {dashboard_metric_text(nonzero_verifier_blocked_tokens, lang)} {t('токенов', 'tokens')}",
         ),
         (
             t("Сэкономлено токенов оценочно", "Estimated tokens saved"),
@@ -1418,6 +1435,8 @@ def live_miner_panels(
                 ("trust_filtered", dashboard_metric_text(trust_filtered, lang), "shadow noise + miner material"),
                 ("trust_lost", dashboard_metric_text(trust_lost, lang), f"lost tokens={dashboard_metric_text(trust_lost_tokens, lang)}"),
                 ("symbiosis_filtered", dashboard_metric_text(symbiosis_filtered, lang), "hidden+observable required"),
+                ("verifier_blocked", dashboard_metric_text(verifier_blocked_rows, lang), f"tokens={dashboard_metric_text(verifier_blocked_tokens, lang)}"),
+                ("nonzero_blocked", dashboard_metric_text(nonzero_verifier_blocked_rows, lang), f"tokens={dashboard_metric_text(nonzero_verifier_blocked_tokens, lang)}"),
                 ("mixed_accepts", dashboard_metric_text(mixed_accepts, lang), "hidden+observable"),
                 ("gateway_false", dashboard_metric_first(metrics, ("gateway_false_accepts", "provider_bridge_v2_false_accepts"), lang, default="0"), "HTTP bridge"),
                 ("quarantined_buckets", dashboard_metric_text(len(quarantined_rows), lang), "needs split"),
@@ -1535,6 +1554,11 @@ def status_dashboard_html(request_path: str = "") -> str:
     append_accepts = dashboard_int(live_tail.get("append_unique_cpu_accepts_over_exact_cache") or metrics.get("append_unique_cpu_accepts_over_exact_cache"))
     append_tokens = dashboard_int(live_tail.get("append_tokens_saved") or metrics.get("append_tokens_saved"))
     append_false = dashboard_int(live_tail.get("append_false_accepts") or metrics.get("append_false_accepts"))
+    verifier_blocked_rows = dashboard_int(live_tail.get("append_verifier_blocked_non_exact_rows") or metrics.get("append_verifier_blocked_non_exact_rows"))
+    verifier_blocked_tokens = dashboard_int(live_tail.get("append_verifier_blocked_non_exact_tokens") or metrics.get("append_verifier_blocked_non_exact_tokens"))
+    verifier_blocked_phase_seen = dashboard_int(live_tail.get("append_verifier_blocked_phase_seen_events") or metrics.get("append_verifier_blocked_phase_seen_events"))
+    nonzero_verifier_blocked_rows = dashboard_int(live_tail.get("append_nonzero_verifier_blocked_rows") or metrics.get("append_nonzero_verifier_blocked_rows"))
+    nonzero_verifier_blocked_tokens = dashboard_int(live_tail.get("append_nonzero_verifier_blocked_tokens") or metrics.get("append_nonzero_verifier_blocked_tokens"))
     active_clean_calls = dashboard_int(metrics.get("active_clean_calls_saved"))
     active_clean_tokens = dashboard_int(metrics.get("active_clean_tokens_saved"))
     product_hot_profiles = dashboard_int(metrics.get("product_hot_score_only_active_profile_count"))
@@ -1837,7 +1861,7 @@ def status_dashboard_html(request_path: str = "") -> str:
     </div>
   </section>
 
-  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=trust_filtered, symbiosis_filtered=symbiosis_filtered, mixed_accepts=mixed_accepts, lang=lang)}
+  {codex_cpu_traffic_panel(codex_session_rows=codex_session_rows, append_rows=append_rows, append_candidates=append_candidates, append_accepts=append_accepts, append_tokens=append_tokens, append_false=append_false, verifier_blocked_rows=verifier_blocked_rows, verifier_blocked_tokens=verifier_blocked_tokens, verifier_blocked_phase_seen=verifier_blocked_phase_seen, nonzero_verifier_blocked_rows=nonzero_verifier_blocked_rows, nonzero_verifier_blocked_tokens=nonzero_verifier_blocked_tokens, product_hot_accepts=product_hot_accepts, product_hot_tokens=product_hot_tokens, active_false=active_false, trust_filtered=trust_filtered, symbiosis_filtered=symbiosis_filtered, mixed_accepts=mixed_accepts, lang=lang)}
 
   <section class="panel">
     <h2>{t("1. Входящий поток", "1. Incoming Flow")}</h2>

@@ -93,6 +93,34 @@ dashboard:
   provider boundary with 0 rows is not a P0 while upstream/API key is absent.
 ```
 
+## Current Miner Work: Verifier-Blocked Fallback Recognition
+
+```text
+timestamp: 2026-07-09
+
+goal:
+  make the miner explain and learn unsafe missed traffic automatically, without
+  pretending verifier-blocked rows are CPU savings.
+
+change:
+  live-tail now marks non-exact rows with verified_safe_accept=false as
+  verifier_blocked_non_exact.
+
+change:
+  nonzero/failure rows are split out with nonzero_verifier_blocked and
+  nonzero_exit_state_kind from phase atoms such as state_exit_code_band:*.
+
+change:
+  dashboard exposes verifier_blocked, phase_seen, and nonzero_blocked next to
+  CPU accepts, so the remaining gap is visible as fallback/negative mining
+  material rather than a silent miss.
+
+boundary:
+  these rows do not count as saved calls or saved tokens. They keep feeding the
+  phase-center miner and auto-split pressure, but local accept still requires
+  verifier safety and false_accepts=0.
+```
+
 ## Current Checkpoint: V2 NANDA CPU Bridge
 
 ```text
