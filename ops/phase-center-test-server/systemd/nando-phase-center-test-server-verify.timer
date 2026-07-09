@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando phase-center test-server verify
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=20s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

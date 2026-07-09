@@ -1,0 +1,15 @@
+[Unit]
+Description=Nando phase-center provider export watch snapshot
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStartPre=/usr/bin/mkdir -p ${NANDO_PROVIDER_EXPORT_DROP_DIR} ${NANDO_PROVIDER_EXPORT_WORK_DIR}
+ExecStart=/usr/bin/env /opt/nando-wave/bin/nando-cli phase-stream-online-miner-portfolio-provider-export-watch-v1 ${NANDO_PROVIDER_EXPORT_WATCH_REPORT} ${NANDO_PROVIDER_EXPORT_DROP_DIR} ${NANDO_PROVIDER_EXPORT_WORK_DIR} ${NANDO_PROVIDER_WATCH_CYCLES} ${NANDO_PROVIDER_WATCH_SLEEP_MS} ${NANDO_PROVIDER_WATCH_MAX_CANDIDATES} ${NANDO_PROVIDER_EXPORT_WATCH_RUNTIME_REPLAY_REPORT} ${NANDO_PROVIDER_EXPORT_WATCH_BILLING_REQUEST_REPORT} ${NANDO_PROVIDER_EXPORT_WATCH_BILLING_REQUEST_JSONL} ${NANDO_PROVIDER_EXPORT_WATCH_BILLING_CONTRACT_REPORT}
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

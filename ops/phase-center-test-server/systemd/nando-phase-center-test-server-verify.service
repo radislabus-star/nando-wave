@@ -1,0 +1,16 @@
+[Unit]
+Description=Nando phase-center test-server verify
+After=network.target nando-phase-center-readiness-snapshot.service
+Wants=nando-phase-center-readiness-snapshot.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStartPre=/usr/bin/mkdir -p ${NANDO_METRICS_DIR}
+ExecStart=/usr/bin/env /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

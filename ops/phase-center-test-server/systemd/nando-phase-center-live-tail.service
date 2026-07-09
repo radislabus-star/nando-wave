@@ -1,0 +1,23 @@
+[Unit]
+Description=Nando phase-center live-tail shadow miner
+After=network.target nando-phase-center-appender.service
+Wants=nando-phase-center-appender.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStartPre=/usr/bin/mkdir -p ${NANDO_STATE_DIR} ${NANDO_LOG_DIR}
+ExecStart=/usr/bin/env /opt/nando-wave/bin/nando-cli phase-stream-hot-path-daemon-append-live-tail-v1 ${NANDO_LIVE_TAIL_REPORT} ${NANDO_DECISIONS_JSONL} ${NANDO_CELLS} ${NANDO_MIN_BUCKET_EVENTS} ${NANDO_IDLE_SLEEP_MS} ${NANDO_LIVE_TAIL_MAX_IDLE_MS} ${NANDO_MAX_APPEND_EVENTS} ${NANDO_WATERMARK_TRACE_JSONL} ${NANDO_APPEND_JSONL}
+Restart=always
+RestartSec=2
+CPUQuota=50%
+MemoryHigh=256M
+MemoryMax=512M
+MemorySwapMax=0
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

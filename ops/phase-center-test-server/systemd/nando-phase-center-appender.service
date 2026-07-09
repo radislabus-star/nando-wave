@@ -1,0 +1,22 @@
+[Unit]
+Description=Nando phase-center Codex session appender
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStartPre=/usr/bin/mkdir -p ${NANDO_STATE_DIR} ${NANDO_LOG_DIR}
+ExecStart=/usr/bin/env /opt/nando-wave/bin/nando-cli phase-stream-codex-sessions-live-append-v1 ${NANDO_APPENDER_REPORT} ${NANDO_APPEND_JSONL} ${NANDO_CODEX_SESSIONS_DIR} ${NANDO_POLL_MS} ${NANDO_APPENDER_MAX_IDLE_MS} ${NANDO_APPENDER_MAX_ROWS} ${NANDO_MAX_RECENT_FILES}
+Restart=always
+RestartSec=2
+CPUQuota=25%
+MemoryHigh=64M
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

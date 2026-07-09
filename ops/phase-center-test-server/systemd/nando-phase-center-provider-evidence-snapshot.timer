@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando phase-center provider evidence snapshot
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

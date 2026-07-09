@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando phase-center readiness snapshot
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=20s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

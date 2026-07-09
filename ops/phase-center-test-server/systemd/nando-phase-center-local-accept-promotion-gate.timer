@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando phase-center local-accept promotion gate
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

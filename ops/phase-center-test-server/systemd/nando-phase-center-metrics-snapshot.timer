@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando phase-center metrics snapshot
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=15s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
