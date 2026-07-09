@@ -81,6 +81,13 @@ fn live_store_append_compression_claim_min_rows() -> usize {
     .max(1)
 }
 
+fn live_store_route_wide_phase_transfer_allowed(event: &LiveStoreParsedAtomEvent) -> bool {
+    event
+        .selected_bucket_atoms
+        .iter()
+        .any(|atom| atom == "state_exit_code_band:zero")
+}
+
 pub(crate) fn run_phase_stream_live_store_adapter_smoke_v1<I>(mut args: I) -> Result<(), String>
 where
     I: Iterator<Item = String>,
@@ -7237,6 +7244,8 @@ where
         let row_eval_false_accepts_before = append_eval.false_accepts;
         let row_eval_local_accepts_before = append_eval.local_accept_events;
         let relevant_online_bucket_ids = live_store_relevant_online_bucket_ids(&adapter_event);
+        let route_wide_phase_transfer_allowed =
+            live_store_route_wide_phase_transfer_allowed(&adapter_event);
         let mut online_shadow_ready_relevant_bucket_ids = Vec::<u32>::new();
         if product_hot_registry_runtime
             .as_ref()
@@ -7304,8 +7313,11 @@ where
                     .map_err(|error| {
                         format!("failed append live-tail product-hot score: {error:?}")
                     })?;
-                let relevant_product_hot_decisions =
-                    live_store_relevant_bucket_decisions(&decisions, &relevant_online_bucket_ids);
+                let relevant_product_hot_decisions = if route_wide_phase_transfer_allowed {
+                    decisions.to_vec()
+                } else {
+                    live_store_relevant_bucket_decisions(&decisions, &relevant_online_bucket_ids)
+                };
                 let active_decisions = relevant_product_hot_decisions
                     .iter()
                     .copied()
@@ -7638,10 +7650,11 @@ where
                             scratch,
                         )
                         .map_err(|error| format!("failed append live-tail hot score: {error:?}"))?;
-                    let decisions = live_store_relevant_bucket_decisions(
-                        decisions,
-                        &relevant_online_bucket_ids,
-                    )
+                    let decisions = if route_wide_phase_transfer_allowed {
+                        decisions.to_vec()
+                    } else {
+                        live_store_relevant_bucket_decisions(&decisions, &relevant_online_bucket_ids)
+                    }
                     .into_iter()
                     .filter(|decision| {
                         !product_hot_score_only_quarantined_profile_ids
@@ -7962,6 +7975,7 @@ where
             "learning_false_accept": learning_decision.false_accept,
             "learning_bucket_rejected_after_update": learning_bucket_rejected_after_update,
             "product_hot_phase_trust_filtered": row_product_hot_phase_trust_filtered,
+            "route_wide_phase_transfer_allowed": route_wide_phase_transfer_allowed,
             "decisions": decision_rows
         });
         if let Some(object) = decision_line.as_object_mut() {

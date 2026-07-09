@@ -6526,3 +6526,32 @@ Boundary:
   This is not a manual threshold loosening. The learned threshold and false-risk
   estimator remain authoritative. The fix removes an incorrect interpretation
   of positive-margin spread as danger.
+
+## 2026-07-09 Route-Wide Zero-State Phase Transfer
+
+Finding:
+  Product-hot compression was limited by an overly narrow bucket match. Clean
+  phase-centers could recognize the transition at route scope, but the daemon
+  only credited current bucket/subcenter matches.
+
+Change:
+  Allow route-wide trusted phase-center transfer only when the event state is a
+  successful tool state: `state_exit_code_band:zero`. Nonzero/failure states
+  keep the old narrow bucket/subcenter scope and continue to fallback/recovery.
+
+Live verification:
+  Pre-change simulation on the live tail:
+    all route score candidates: 67 accepts / 9 false accepts,
+    route-wide zero-state only: 67 accepts / 0 false accepts.
+  Post-deploy fresh live frame:
+    rows=26,
+    candidates=19,
+    CPU accepts=15,
+    tokens_saved=4946,
+    false_accepts=0,
+    product_hot_false=0.
+
+Boundary:
+  This is not a manual profile allow-list. It is a generic success-state safety
+  split around phase-center transfer: successful state transitions may transfer
+  route-wide; failure/nonzero states cannot.
