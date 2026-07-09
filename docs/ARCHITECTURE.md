@@ -1,5 +1,33 @@
 # Nando Wave Architecture v2
 
+Current architecture overlay, 2026-07-06:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current active implementation frame:
+
+```text
+L1/L2: source-neutral safe atoms and event shape
+L4: streaming selector/router/admission/goal-state layer
+L3: drifting phase-center operator memory
+Hot runtime: bounded PhaseCenterHotRuntime score path
+Verifier: promotion/local-accept gate
+```
+
+Current proof boundary:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
 Этот документ заменяет первый черновик архитектуры. Причина переписывания:
 последние promoted-holdout контроли показали, что простые centroid-переносы по
 snapshot, active Cell32 ids и короткой фазовой траектории слишком плоские.

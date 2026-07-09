@@ -1,0 +1,183 @@
+{
+  "task_id": "phase-center-v27-online-miner-daemon-v1",
+  "domain": "code",
+  "query": "Verify that V27 online miner daemon scans a real append-like phase-atom trace, compiles quarantine .nwpc checkpoints online, scores future events only, and does not enable local accept, market claim, or legacy backend.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "online_miner_daemon_v27",
+      "relation": "report_kind",
+      "object": "phase_stream_online_miner_daemon_v1",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "report_kind",
+      "route": "online_daemon"
+    },
+    {
+      "id": "t2",
+      "subject": "online_miner_daemon_v27",
+      "relation": "verdict",
+      "object": "PHASE_STREAM_ONLINE_MINER_DAEMON_V1_PASS_SHADOW_ONLY",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/verdict",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "verdict",
+      "route": "online_daemon"
+    },
+    {
+      "id": "t3",
+      "subject": "online_miner_stream_contract_v27",
+      "relation": "append_only_input",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/stream_contract/append_only_input",
+      "confidence": 1.0,
+      "subject_role": "stream_contract",
+      "object_role": "stream_flag",
+      "route": "online_daemon"
+    },
+    {
+      "id": "t4",
+      "subject": "online_miner_stream_contract_v27",
+      "relation": "score_before_train",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/stream_contract/score_before_train",
+      "confidence": 1.0,
+      "subject_role": "stream_contract",
+      "object_role": "stream_flag",
+      "route": "online_daemon"
+    },
+    {
+      "id": "t5",
+      "subject": "online_miner_stream_contract_v27",
+      "relation": "future_only_shadow_scoring",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/stream_contract/future_only_shadow_scoring",
+      "confidence": 1.0,
+      "subject_role": "stream_contract",
+      "object_role": "stream_flag",
+      "route": "online_daemon"
+    },
+    {
+      "id": "t6",
+      "subject": "online_miner_stream_contract_v27",
+      "relation": "periodic_quarantine_nwpc_compile",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/stream_contract/periodic_quarantine_nwpc_compile",
+      "confidence": 1.0,
+      "subject_role": "stream_contract",
+      "object_role": "package_flag",
+      "route": "nwpc_quarantine"
+    },
+    {
+      "id": "t7",
+      "subject": "online_miner_daemon_v27",
+      "relation": "compiled_checkpoint_count",
+      "object": "76",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/compiled_checkpoint_count",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "checkpoint_count",
+      "route": "nwpc_quarantine"
+    },
+    {
+      "id": "t8",
+      "subject": "online_miner_daemon_v27",
+      "relation": "future_shadow_events",
+      "object": "313",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/future_shadow_events",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "future_shadow_count",
+      "route": "future_shadow"
+    },
+    {
+      "id": "t9",
+      "subject": "online_miner_daemon_v27",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "2",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "shadow_accept_count",
+      "route": "future_shadow"
+    },
+    {
+      "id": "t10",
+      "subject": "online_miner_daemon_v27",
+      "relation": "runtime_margin_parity_mismatches",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/runtime_margin_parity_mismatches",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "parity_count",
+      "route": "runtime_parity"
+    },
+    {
+      "id": "t11",
+      "subject": "online_miner_daemon_v27",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "false_accept_count",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t12",
+      "subject": "online_miner_daemon_v27",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "runtime_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "online_miner_daemon_v27",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "market_claim_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t14",
+      "subject": "online_miner_forbidden_flags_v27",
+      "relation": "nwrb_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/forbidden_flags/nwrb_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_flags",
+      "object_role": "legacy_backend_guard",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "online_miner_forbidden_flags_v27",
+      "relation": "role_binding_backend_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/forbidden_flags/role_binding_backend_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_flags",
+      "object_role": "legacy_backend_guard",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "online_miner_daemon_v27",
+      "relation": "skipped_no_verifier_label",
+      "object": "16626",
+      "evidence": "target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json#/skipped_no_verifier_label",
+      "confidence": 1.0,
+      "subject_role": "daemon_report",
+      "object_role": "verifier_coverage_gap",
+      "route": "next_work"
+    }
+  ]
+}

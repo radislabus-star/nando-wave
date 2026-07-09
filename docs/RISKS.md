@@ -1,5 +1,33 @@
 # Nando Wave Risks
 
+Current risk overlay:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current biggest risks:
+
+```text
+1. Treating shadow compression as product local accept.
+2. Treating placeholder token/cost estimates as market money.
+3. Selecting pretty buckets instead of marginal denominator delta.
+4. Reintroducing source-specific hardcode into generic core.
+5. Letting HOT memory become an unbounded operator scan.
+6. Forgetting synthetic/non_synthetic row accounting in compression reports.
+```
+
+Current proof boundary:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+still not product local accept.
+```
+
 Этот документ нужен, чтобы заранее видеть тупики. Если риск не назвать, проект
 легко начнет доказывать красивую идею вместо проверки реальности.
 

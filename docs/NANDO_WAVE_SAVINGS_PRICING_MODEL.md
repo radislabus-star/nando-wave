@@ -1,3 +1,28 @@
+# Nando Wave Savings Pricing Model
+
+Current technical contract:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Commercial boundary on 2026-07-06:
+
+```text
+Current best internal shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+But:
+  local_accept_enabled: false
+  market_money_claim_allowed: false
+  provider billing proof is still missing
+```
+
+Therefore pricing can be discussed as a model, but sales claims must be based
+on verified provider-billing savings over the customer's baseline.
+
 Да. Надо быть адекватными: брать не “лицензию из воздуха”, а долю от проверенной дополнительной экономии.
 
   Формула:

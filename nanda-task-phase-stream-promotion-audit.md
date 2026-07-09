@@ -1,0 +1,41 @@
+# NANDA Triad Worksheet
+
+task_id: phase-stream-promotion-audit
+domain: code
+query: verify promotion eligibility audit is not product promotion or market savings claim
+
+## triads
+
+| id | subject | relation | object | evidence | confidence | subject_role | object_role | route | group | layer | owner | entrypoint | output | evidence_path | scope |
+|----|---------|----------|--------|----------|------------|--------------|-------------|-------|-------|-------|-------|------------|--------|---------------|-------|
+| t1 | promotion_audit | runs_as | offline_promotion_audit_only | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:5 | 1.0 | report | mode | promotion_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t2 | promotion_eligible_review | does_not_enable | product_promotion | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:97-98 | 1.0 | eligibility_state | forbidden_effect | promotion_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t3 | promotion_audit | does_not_enable | product_promotion | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:94-98 | 1.0 | report | forbidden_effect | promotion_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t5 | promotion_audit | does_not_allow | market_money_claim | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:101 | 1.0 | report | claim_boundary | promotion_audit | economics_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t6 | token_cost_meter | uses | estimated_tokens_and_prices | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:57-69 | 1.0 | meter | estimate_source | promotion_audit | economics_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t9 | candidate_package | remains | quarantine_candidate_not_serving | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:11-20 | 1.0 | package | boundary_state | promotion_audit | package_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t13 | promotion_audit | does_not_allow | raw_output_claim | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:12,29,31 | 1.0 | report | forbidden_claim | promotion_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| t14 | metadata_status_claim | remains | offline_review_only | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:5,10-12,96-102 | 1.0 | claim_scope | boundary_state | promotion_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+
+## candidate_triads
+
+| id | subject | relation | object | evidence | confidence | subject_role | object_role | route | group | layer | owner | entrypoint | output | evidence_path | scope |
+|----|---------|----------|--------|----------|------------|--------------|-------------|-------|-------|-------|-------|------------|--------|---------------|-------|
+| c1 | promotion_audit | runs_as | offline_promotion_audit_only | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:5 | 1.0 | report | mode | promotion_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c2 | promotion_eligible_review | does_not_enable | product_promotion | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:97-98 | 1.0 | eligibility_state | forbidden_effect | promotion_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c3 | promotion_audit | does_not_enable | product_promotion | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:94-98 | 1.0 | report | forbidden_effect | promotion_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c5 | promotion_audit | does_not_allow | market_money_claim | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:101 | 1.0 | report | claim_boundary | promotion_audit | economics_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c6 | token_cost_meter | uses | estimated_tokens_and_prices | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:57-69 | 1.0 | meter | estimate_source | promotion_audit | economics_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c9 | candidate_package | remains | quarantine_candidate_not_serving | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:11-20 | 1.0 | package | boundary_state | promotion_audit | package_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c13 | promotion_audit | does_not_allow | raw_output_claim | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:12,29,31 | 1.0 | report | forbidden_claim | promotion_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+| c14 | metadata_status_claim | remains | offline_review_only | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json:5,10-12,96-102 | 1.0 | claim_scope | boundary_state | promotion_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-tool-output-state-v1.promotion-audit.json | current |
+
+## notes
+
+- Boundary gate only: promotion eligibility must not be confused with product promotion, serving local accept, or market money claim.
+- Cost is estimated because trace rows do not carry provider billing token counts.
+- Even future real billing evidence must not unlock market_money_claim_allowed inside offline_promotion_audit_only.
+- Current proof scope is tool-output status metadata; raw stdout/stderr parsing remains closed.
+- Detail metrics remain in the JSON reports, not in this structural gate packet:
+  product_local_accept=false, false_accepts=0, billing_evidence_real=false,
+  unique_cpu_accepts_projection=23, and proof_scope=tool_output_state_metadata_parse.

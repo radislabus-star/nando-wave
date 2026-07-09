@@ -998,6 +998,9 @@ def recovery_backlog_panel(
         return en if is_en else ru
 
     def stuck_reason(row: dict[str, Any]) -> str:
+        blocker = str(row.get("promotion_blocker") or "")
+        if blocker and blocker != "unknown":
+            return blocker
         if bool(row.get("rejected")) or dashboard_int(row.get("false_accepts")) > 0:
             return t("false/rejected: держать в quarantine", "false/rejected: keep quarantined")
         if not bool(row.get("shadow_ready")):
@@ -1011,6 +1014,9 @@ def recovery_backlog_panel(
         return t("наблюдать", "watch")
 
     def next_action(row: dict[str, Any]) -> str:
+        action = str(row.get("next_auto_action") or "")
+        if action and action != "unknown":
+            return action
         if bool(row.get("rejected")) or dashboard_int(row.get("false_accepts")) > 0:
             return t("авто-изоляция и deeper split", "auto-isolate and split deeper")
         if not bool(row.get("shadow_ready")):
@@ -1030,6 +1036,8 @@ def recovery_backlog_panel(
         for name in ("active", "candidate", "shadow_ready", "exportable", "final_hot", "rejected"):
             if bool(row.get(name)):
                 flags.append(name)
+        if bool(row.get("auto_recovery_running")):
+            flags.append("auto_recovery")
         rows.append(
             "<tr>"
             f"<td><code>{html.escape(str(row.get('profile_id') or 'unknown'))}</code></td>"
@@ -1041,24 +1049,26 @@ def recovery_backlog_panel(
             f"<td><b class='{css}'>{false_accepts}</b></td>"
             f"<td>{dashboard_metric_text(drift, lang)}</td>"
             f"<td><code>{html.escape(','.join(flags) or '-')}</code></td>"
+            f"<td><code>{html.escape(str(row.get('best_split_candidate') or 'unknown'))}</code></td>"
             f"<td>{html.escape(stuck_reason(row))}</td>"
             f"<td>{html.escape(next_action(row))}</td>"
+            f"<td>{dashboard_metric_text(row.get('recovery_retry_after_events'), lang)}</td>"
             "</tr>"
         )
     if not rows:
         rows.append(
-            f"<tr><td colspan='11'>{html.escape(t('quarantine backlog пуст', 'quarantine backlog is empty'))}</td></tr>"
+            f"<tr><td colspan='13'>{html.escape(t('quarantine backlog пуст', 'quarantine backlog is empty'))}</td></tr>"
         )
     recovery_events = dashboard_int(metrics.get("quarantine_recovery_discovery_events"))
     recovery_tokens = dashboard_int(metrics.get("quarantine_recovery_discovery_tokens"))
     recovery_observe = dashboard_int(metrics.get("quarantine_recovery_auto_subcenter_observe_events"))
     return (
-        f"<section class='panel wide-panel'><h2>{html.escape(t('Где застряло: Recovery Backlog', 'Where It Is Stuck: Recovery Backlog'))}</h2>"
-        f"<p>{html.escape(t('Это не ручной список задач: это очередь автоматического recovery. Если bucket здесь, майнер уже видит ценность, но ещё не имеет безопасного promotion.', 'This is not a manual todo list: it is the automatic recovery queue. If a bucket is here, the miner sees value but does not yet have safe promotion evidence.'))}</p>"
+        f"<section class='panel wide-panel'><h2>{html.escape(t('Auto Recovery Backlog', 'Auto Recovery Backlog'))}</h2>"
+        f"<p>{html.escape(t('Это не ручной список задач: это очередь автоматического recovery. Майнер сам режет жирные quarantined buckets на более узкие phase-center subcenters и показывает, почему promotion пока запрещён.', 'This is not a manual todo list: it is the automatic recovery queue. The miner splits fat quarantined buckets into narrower phase-center subcenters and shows why promotion is still blocked.'))}</p>"
         f"<p>recovery events: <b>{recovery_events}</b> · tokens: <b>{recovery_tokens}</b> · subcenter observes: <b>{recovery_observe}</b></p>"
         "<table><thead><tr>"
         "<th>bucket</th><th>kind</th><th>tokens</th><th>accepts</th><th>events</th><th>negative</th><th>false</th><th>drift</th><th>flags</th>"
-        f"<th>{html.escape(t('почему stuck', 'why stuck'))}</th><th>{html.escape(t('следующее auto-действие', 'next auto action'))}</th>"
+        f"<th>{html.escape(t('лучший split', 'best split'))}</th><th>{html.escape(t('blocker', 'blocker'))}</th><th>{html.escape(t('следующее auto-действие', 'next auto action'))}</th><th>{html.escape(t('retry через событий', 'retry after events'))}</th>"
         "</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></section>"
     )
@@ -1103,17 +1113,17 @@ def live_miner_panels(
     selected_false = dashboard_int(top_profile.get("false_accepts"))
     selected_threshold = dashboard_metric_text(top_profile.get("learned_threshold_micro"), lang, default="-")
     selected_risk = "safe" if selected_false == 0 else "quarantine"
-    debt_items: list[tuple[str, str, str]] = []
+    recovery_items: list[tuple[str, str, str]] = []
     if quarantined_rows:
-        debt_items.append(
+        recovery_items.append(
             (
                 "P0",
-                t("разрезать самый жирный quarantined bucket", "split the fattest quarantined bucket"),
+                t("auto-split самый жирный quarantined bucket", "auto-split the fattest quarantined bucket"),
                 str(top_quarantine.get("profile_id") or top_quarantine.get("class") or "unknown"),
             )
         )
     if dashboard_int(metrics.get("product_hot_score_only_post_quarantine_score_candidate_events")) == 0:
-        debt_items.append(
+        recovery_items.append(
             (
                 "P0",
                 t("дать miner живое post-quarantine окно", "feed miner a live post-quarantine window"),
@@ -1121,7 +1131,7 @@ def live_miner_panels(
             )
         )
     if active_false != 0:
-        debt_items.append(
+        recovery_items.append(
             (
                 "P0",
                 "false_accepts",
@@ -1129,7 +1139,7 @@ def live_miner_panels(
             )
         )
     elif shadow_false != 0:
-        debt_items.append(
+        recovery_items.append(
             (
                 "P1",
                 t("shadow risk events", "shadow risk events"),
@@ -1137,28 +1147,28 @@ def live_miner_panels(
             )
         )
     if not profile_rows:
-        debt_items.append(
+        recovery_items.append(
             (
                 "P1",
                 t("нет top safe profiles", "no top safe profiles"),
                 t("нужен selector export", "selector export needed"),
             )
         )
-    if not debt_items:
-        debt_items.append(
+    if not recovery_items:
+        recovery_items.append(
             (
                 "P2",
                 t("расширять окно без ослабления verifier", "widen the window without weakening verifier"),
                 "false_accepts=0",
             )
         )
-    debt_rows = "".join(
+    recovery_rows = "".join(
         "<tr>"
         f"<td><b>{html.escape(priority)}</b></td>"
         f"<td>{html.escape(title)}</td>"
         f"<td><code>{html.escape(detail)}</code></td>"
         "</tr>"
-        for priority, title, detail in debt_items
+        for priority, title, detail in recovery_items
     )
 
     top_bucket_rows = []
@@ -1265,9 +1275,9 @@ def live_miner_panels(
             f"<tbody>{''.join(top_bucket_rows)}</tbody></table></section>"
         ),
         (
-            f"<section class='panel'><h2>{html.escape(t('Debt Queue', 'Debt Queue'))}</h2>"
-            f"<table><thead><tr><th>P</th><th>{html.escape(t('что чинить', 'fix'))}</th><th>{html.escape(t('сигнал', 'signal'))}</th></tr></thead>"
-            f"<tbody>{debt_rows}</tbody></table></section>"
+            f"<section class='panel'><h2>{html.escape(t('Auto Recovery Queue', 'Auto Recovery Queue'))}</h2>"
+            f"<table><thead><tr><th>P</th><th>{html.escape(t('auto-действие', 'auto action'))}</th><th>{html.escape(t('сигнал', 'signal'))}</th></tr></thead>"
+            f"<tbody>{recovery_rows}</tbody></table></section>"
         ),
     ]
     return "".join(panels)

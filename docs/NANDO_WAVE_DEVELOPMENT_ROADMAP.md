@@ -1,5 +1,39 @@
 # Nando Wave Development Roadmap
 
+## Current Authoritative Contract
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current roadmap status:
+
+```text
+CPU10 shadow: crossed earlier.
+CPU20 shadow: crossed on compatible local frontier.
+
+best current shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+  local_accept_enabled: false
+
+next roadmap target:
+  automatic streaming process, not more manual bucket picking.
+```
+
+Immediate product roadmap:
+
+```text
+1. Add synthetic/non_synthetic row accounting to compression reports.
+2. Build L4 opportunity board over the live stream.
+3. Train/select by marginal denominator delta, not pretty local bucket score.
+4. Keep HOT profile set bounded by bytes, route top-K, latency, and false risk.
+5. Shadow selected profiles on future events.
+6. Promote only verifier-bound zero-false-accept profiles.
+7. Join real provider billing before any market money claim.
+```
+
 ## Goal
 
 ```text

@@ -1,6 +1,40 @@
 # Nando Wave Product Trajectory
 
-Date: 2026-07-01
+Date: 2026-07-06 docs-sync
+
+Current authoritative contract:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current product trajectory:
+
+```text
+LLM discovers.
+Nando Wave observes the stream.
+L4 selects repeated verifiable transitions.
+L3 phase centers compress them into CPU operators.
+Hot runtime scores cheaply.
+Verifier-bound promotion decides whether shadow becomes local accept.
+```
+
+Current proof snapshot:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+hot runtime:
+  hot_bytes_estimate: 592
+  direct benchmark PASS
+
+business boundary:
+  no product local_accept yet
+  no market money claim without provider billing
+```
 
 ## Core Position
 

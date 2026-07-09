@@ -1,0 +1,238 @@
+{
+  "task_id": "phase-center-v26-auto-subcenter-discovery-v1",
+  "domain": "code",
+  "query": "Verify that V26 auto-subcenter discovery is a batch bridge that generates quarantine phase-center candidates, measures compatible denominator delta, and does not enable local accept, market claim, or legacy backend.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "auto_subcenter_discovery_v26",
+      "relation": "report_kind",
+      "object": "phase_stream_auto_subcenter_discovery_v1",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "discovery_report",
+      "object_role": "report_kind",
+      "route": "auto_subcenter_discovery"
+    },
+    {
+      "id": "t2",
+      "subject": "auto_subcenter_discovery_v26",
+      "relation": "selected_candidates",
+      "object": "48",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/selected_candidates",
+      "confidence": 1.0,
+      "subject_role": "discovery_report",
+      "object_role": "candidate_count",
+      "route": "auto_subcenter_discovery"
+    },
+    {
+      "id": "t3",
+      "subject": "auto_subcenter_discovery_v26",
+      "relation": "rejected_candidates",
+      "object": "90",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/rejected_candidates",
+      "confidence": 1.0,
+      "subject_role": "discovery_report",
+      "object_role": "candidate_count",
+      "route": "auto_subcenter_discovery"
+    },
+    {
+      "id": "t4",
+      "subject": "auto_subcenter_discovery_v26",
+      "relation": "candidate_trace_rows_written",
+      "object": "109300",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/candidate_trace_rows_written",
+      "confidence": 1.0,
+      "subject_role": "discovery_report",
+      "object_role": "row_count",
+      "route": "background_negatives"
+    },
+    {
+      "id": "t5",
+      "subject": "auto_subcenter_discovery_v26",
+      "relation": "candidate_positive_rows_written",
+      "object": "54650",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/candidate_positive_rows_written",
+      "confidence": 1.0,
+      "subject_role": "discovery_report",
+      "object_role": "positive_count",
+      "route": "background_negatives"
+    },
+    {
+      "id": "t6",
+      "subject": "auto_subcenter_discovery_v26",
+      "relation": "candidate_background_rows_written",
+      "object": "54650",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/candidate_background_rows_written",
+      "confidence": 1.0,
+      "subject_role": "discovery_report",
+      "object_role": "negative_count",
+      "route": "background_negatives"
+    },
+    {
+      "id": "t7",
+      "subject": "auto_subcenter_automation_contract_v26",
+      "relation": "ranked_candidate_split_atoms",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/automation_contract/ranked_candidate_split_atoms",
+      "confidence": 1.0,
+      "subject_role": "automation_contract",
+      "object_role": "automation_flag",
+      "route": "auto_subcenter_discovery"
+    },
+    {
+      "id": "t8",
+      "subject": "auto_subcenter_automation_contract_v26",
+      "relation": "selected_background_negatives",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/auto-subcenter-discovery-v26.report.json#/automation_contract/selected_background_negatives",
+      "confidence": 1.0,
+      "subject_role": "automation_contract",
+      "object_role": "automation_flag",
+      "route": "background_negatives"
+    },
+    {
+      "id": "t9",
+      "subject": "auto_subcenter_mining_v26",
+      "relation": "report_kind",
+      "object": "phase_atom_live_self_mining_loop_v1",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v26-auto-subcenter-top128.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "report_kind",
+      "route": "quarantine_mining"
+    },
+    {
+      "id": "t10",
+      "subject": "auto_subcenter_mining_v26",
+      "relation": "compiled_quarantine_candidates",
+      "object": "32",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v26-auto-subcenter-top128.report.json#/compiled_quarantine_candidates",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "candidate_count",
+      "route": "quarantine_mining"
+    },
+    {
+      "id": "t11",
+      "subject": "auto_subcenter_mining_v26",
+      "relation": "shadow_accepted_candidates",
+      "object": "25",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v26-auto-subcenter-top128.report.json#/shadow_accepted_candidates",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "candidate_count",
+      "route": "quarantine_mining"
+    },
+    {
+      "id": "t12",
+      "subject": "auto_subcenter_mining_v26",
+      "relation": "aggregate_unique_cpu_accepts_over_exact_cache",
+      "object": "1643",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v26-auto-subcenter-top128.report.json#/aggregate_unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "shadow_accept_count",
+      "route": "quarantine_mining"
+    },
+    {
+      "id": "t13",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "report_kind",
+      "object": "phase_atom_compatible_denominator_shadow_v1",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "report_kind",
+      "route": "compatible_denominator"
+    },
+    {
+      "id": "t14",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "denominator_total_rows",
+      "object": "109300",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/denominator/total_rows",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "row_count",
+      "route": "compatible_denominator"
+    },
+    {
+      "id": "t15",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "328",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "deduped_accept_count",
+      "route": "compatible_denominator"
+    },
+    {
+      "id": "t16",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "false_accept_count",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t17",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "runtime_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t18",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "market_claim_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t19",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "legacy_backend_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/forbidden_flags/role_binding_backend_used",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "legacy_backend_guard",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t20",
+      "subject": "auto_subcenter_denominator_v26",
+      "relation": "verdict",
+      "object": "PHASE_ATOM_COMPATIBLE_DENOMINATOR_SHADOW_V1_PASS_SHADOW_ONLY",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v26-auto-subcenter.report.json#/verdict",
+      "confidence": 1.0,
+      "subject_role": "denominator_report",
+      "object_role": "verdict",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t21",
+      "subject": "auto_subcenter_v26_doc",
+      "relation": "claim_boundary",
+      "object": "batch_bridge_not_final_streaming_miner",
+      "evidence": "docs/PHASE_CENTER_AUTO_SUBCENTER_DISCOVERY_V26.md#verdict",
+      "confidence": 1.0,
+      "subject_role": "doc_claim",
+      "object_role": "claim_boundary",
+      "route": "claim_boundary"
+    }
+  ]
+}

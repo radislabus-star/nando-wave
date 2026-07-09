@@ -1,5 +1,25 @@
 # Nando Wave North Star
 
+Текущий инженерный контракт проекта:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current product-facing interpretation:
+
+```text
+Nando Wave studies reasoning as verified transferable state transitions.
+The current implementation path is phase-center operator memory:
+  real stream -> L4 selector/router -> L3 phase centers -> CPU shadow/runtime.
+
+Best current shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+  local_accept_enabled: false
+```
+
 Этот документ отвечает на главный вопрос: куда идет проект и что нельзя
 потерять, даже если первые эксперименты будут маленькими и сухими.
 

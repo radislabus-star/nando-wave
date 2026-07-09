@@ -1,11 +1,48 @@
 # Nando Wave Product Runtime Task
 
-Date: 2026-07-04
+Date: 2026-07-06 docs-sync
+
+Current authoritative contract:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
 
 Status:
 
 ```text
-REAL_TRAFFIC_CPU_ROUTABILITY_REVIEW_8_OF_1000_CURRENT_DEFAULT
+PHASE_CENTER_STREAMING_RUNTIME_ACTIVE
+```
+
+Current top-line status:
+
+```text
+best compatible shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  unique_cpu_accepts_over_exact_cache: 6_644 / 29_770
+  false_accepts: 0
+  local_accept_enabled: false
+
+hot runtime benchmark:
+  HOT_PATH_BENCHMARK_PASS
+  hot_bytes_estimate: 592
+  false_accepts: 0
+
+live-store adapter:
+  WATCH because false_accepts = 2
+```
+
+Current product task:
+
+```text
+Stop optimizing old .nwrb profile serving.
+Build the phase-center streaming product path:
+  automatic L4 opportunity board
+  marginal-denominator selector
+  bounded hot operator memory
+  future-window shadow proof
+  verifier-bound promotion
 ```
 
 ## Goal

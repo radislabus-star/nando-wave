@@ -1,4 +1,5 @@
 /target/
+crates/*/target/
 
 # Local editor and OS noise
 *~

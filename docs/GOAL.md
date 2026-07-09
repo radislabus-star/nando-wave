@@ -1,5 +1,28 @@
 # Nando Wave Goal
 
+Текущий практический goal синхронизирован здесь:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Short current goal:
+
+```text
+Build Nando Wave as a live self-tuning CPU operator layer:
+  stream -> safe atoms -> L4 opportunity selector -> L3 phase centers
+  -> hot runtime shadow/proof -> verifier-bound local accept later.
+
+Current best shadow frontier:
+  22.3177% calls saved
+  72.0541% tokens saved
+  false_accepts: 0
+
+Current boundary:
+  product local_accept is still disabled.
+  market-money claim is still blocked.
+```
+
 Этот документ - главный goal проекта. Он нужен, чтобы Nando Wave не расползался
 в бесконечные красивые эксперименты и не превращался в обычный набор
 hardcoded-подсказок.

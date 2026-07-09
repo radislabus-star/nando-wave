@@ -29,6 +29,7 @@ write_atomic_file() {
   local tmp
   tmp="$(mktemp "${target}.tmp.XXXXXX")"
   cat > "${tmp}"
+  chmod 0644 "${tmp}" 2>/dev/null || true
   mv "${tmp}" "${target}"
 }
 
@@ -293,7 +294,12 @@ jq --arg source_report "${REPORT}" \
         trust_drift_micro: (.trust_drift_micro // 0),
         trust_false_risk_micro: (.trust_false_risk_micro // 0),
         trust_quality_micro: (.trust_quality_micro // 0),
-        trust_token_value_micro: (.trust_token_value_micro // 0)
+        trust_token_value_micro: (.trust_token_value_micro // 0),
+        auto_recovery_running: (.auto_recovery_running // false),
+        promotion_blocker: (.promotion_blocker // "unknown"),
+        next_auto_action: (.next_auto_action // "unknown"),
+        best_split_candidate: (.best_split_candidate // "unknown"),
+        recovery_retry_after_events: (.recovery_retry_after_events // 0)
       }
     ] | sort_by(-.tokens_saved) | .[:20]) as $quarantined_profile_token_ranking |
   ([ $local[] | (.tokens_saved_estimated // 0) ] | add // 0) as $gateway_tokens_saved |

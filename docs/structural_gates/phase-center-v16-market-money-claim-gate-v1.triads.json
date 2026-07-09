@@ -1,0 +1,194 @@
+{
+  "task_id": "phase-center-v16-market-money-claim-gate-v1",
+  "domain": "code",
+  "query": "Verify that v22 adds an explicit market money claim gate that allows internal estimated cost math but blocks external money claims until provider billing or user-approved non-placeholder price evidence is present.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "market_money_claim_gate_v22",
+      "relation": "claim_status",
+      "object": "INTERNAL_ESTIMATE_ONLY",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/claim_status",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "claim_status",
+      "route": "claim_gate"
+    },
+    {
+      "id": "t2",
+      "subject": "market_money_claim_gate_v22",
+      "relation": "money_claim_gate_passed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/money_claim_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "gate_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t3",
+      "subject": "market_money_claim_gate_v22",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "permission_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t4",
+      "subject": "market_money_claim_gate_v22",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t5",
+      "subject": "compatible_shadow_in_claim_gate_v22",
+      "relation": "shadow_gate_passed",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/compatible_shadow/shadow_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_evidence",
+      "object_role": "shadow_gate_state",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t6",
+      "subject": "compatible_shadow_in_claim_gate_v22",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/compatible_shadow/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_evidence",
+      "object_role": "safety_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t7",
+      "subject": "compatible_shadow_in_claim_gate_v22",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "4537",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/compatible_shadow/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_evidence",
+      "object_role": "shadow_accept_count",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t8",
+      "subject": "compatible_shadow_in_claim_gate_v22",
+      "relation": "nando_cpu_cost_saved_microusd",
+      "object": "2308568",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/compatible_shadow/nando_cpu_cost_saved_microusd",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_evidence",
+      "object_role": "internal_estimated_cost_metric",
+      "route": "internal_estimate"
+    },
+    {
+      "id": "t9",
+      "subject": "compatible_shadow_in_claim_gate_v22",
+      "relation": "accepted_cost_evidence_missing_events",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/compatible_shadow/accepted_cost_evidence_missing_events",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_evidence",
+      "object_role": "missing_cost_evidence_count",
+      "route": "internal_estimate"
+    },
+    {
+      "id": "t10",
+      "subject": "cost_audit_in_claim_gate_v22",
+      "relation": "provider_cost_events",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/cost_audit/provider_cost_events",
+      "confidence": 1.0,
+      "subject_role": "cost_audit_evidence",
+      "object_role": "provider_cost_rows",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t11",
+      "subject": "cost_audit_in_claim_gate_v22",
+      "relation": "estimated_cost_events",
+      "object": "18833",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/cost_audit/estimated_cost_events",
+      "confidence": 1.0,
+      "subject_role": "cost_audit_evidence",
+      "object_role": "estimated_cost_rows",
+      "route": "internal_estimate"
+    },
+    {
+      "id": "t12",
+      "subject": "price_evidence_v22",
+      "relation": "price_source_is_placeholder",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/price_evidence/price_source_is_placeholder",
+      "confidence": 1.0,
+      "subject_role": "price_evidence",
+      "object_role": "placeholder_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "price_evidence_v22",
+      "relation": "provider_billing_evidence_file_present",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/price_evidence/provider_billing_evidence_file_present",
+      "confidence": 1.0,
+      "subject_role": "price_evidence",
+      "object_role": "provider_billing_file_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t14",
+      "subject": "price_evidence_v22",
+      "relation": "user_approved_price_gate_passed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/price_evidence/user_approved_price_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "price_evidence",
+      "object_role": "user_approval_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "market_money_claim_gate_v22",
+      "relation": "blocker",
+      "object": "price_source_is_placeholder_or_estimate",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/blockers/0",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "blocker",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "market_money_claim_gate_v22",
+      "relation": "blocker",
+      "object": "no_provider_billing_evidence_file_provider_row_cost_or_user_approved_price_config",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/blockers/1",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "blocker",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t17",
+      "subject": "market_money_claim_gate_v22_forbidden_flags",
+      "relation": "forbidden_paths_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v22-placeholder-blocked.report.json#/forbidden_flags",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

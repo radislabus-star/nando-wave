@@ -1,5 +1,32 @@
 # Nando Wave Roadmap
 
+Current roadmap overlay:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current active product path:
+
+```text
+real stream
+-> L4 opportunity selector/router
+-> L3 drifting phase-center operators
+-> bounded hot runtime
+-> verifier-bound promotion
+```
+
+Current status:
+
+```text
+CPU20 shadow crossed on compatible local frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+Product local accept is still disabled.
+```
+
 Цель дорожной карты - довести идею до проверяемого Rust-стенда на T480, не
 провалившись сразу в невозможную цель "сделать GPT".
 

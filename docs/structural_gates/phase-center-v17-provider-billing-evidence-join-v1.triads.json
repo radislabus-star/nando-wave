@@ -1,0 +1,205 @@
+{
+  "task_id": "phase-center-v17-provider-billing-evidence-join-v1",
+  "domain": "code",
+  "query": "Verify that v23 adds a provider billing evidence join adapter while keeping empty/unmatched billing from unlocking market money claims or local accept.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "provider_billing_join_v23",
+      "relation": "report_kind",
+      "object": "provider_billing_evidence_join_v1",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "report_kind",
+      "route": "provider_billing_join"
+    },
+    {
+      "id": "t2",
+      "subject": "provider_billing_join_v23",
+      "relation": "billing_rows",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/billing_rows",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "billing_input_count",
+      "route": "empty_billing_smoke"
+    },
+    {
+      "id": "t3",
+      "subject": "provider_billing_join_v23",
+      "relation": "billing_rows_with_provider_cost",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/billing_rows_with_provider_cost",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "provider_cost_count",
+      "route": "empty_billing_smoke"
+    },
+    {
+      "id": "t4",
+      "subject": "provider_billing_join_v23",
+      "relation": "rows_with_shadow_request",
+      "object": "18833",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/rows_with_shadow_request",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "scoreable_trace_count",
+      "route": "trace_enrichment"
+    },
+    {
+      "id": "t5",
+      "subject": "provider_billing_join_v23",
+      "relation": "matched_rows",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/matched_rows",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "billing_match_count",
+      "route": "empty_billing_smoke"
+    },
+    {
+      "id": "t6",
+      "subject": "provider_billing_join_v23",
+      "relation": "rows_enriched_provider_cost",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/rows_enriched_provider_cost",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "provider_cost_enrichment_count",
+      "route": "empty_billing_smoke"
+    },
+    {
+      "id": "t7",
+      "subject": "provider_billing_join_v23",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "market_claim_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t8",
+      "subject": "provider_billing_join_v23",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "billing_join_report",
+      "object_role": "local_accept_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t9",
+      "subject": "provider_billing_enriched_cost_audit_v23",
+      "relation": "provider_cost_events",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/real-traffic-cost-evidence-audit-v23-empty-provider-billing-enriched.report.json#/provider_cost_events",
+      "confidence": 1.0,
+      "subject_role": "cost_audit_report",
+      "object_role": "provider_cost_count",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t10",
+      "subject": "provider_billing_enriched_cost_audit_v23",
+      "relation": "estimated_cost_events",
+      "object": "18833",
+      "evidence": "target/nando-wave/streaming/real-traffic-cost-evidence-audit-v23-empty-provider-billing-enriched.report.json#/estimated_cost_events",
+      "confidence": 1.0,
+      "subject_role": "cost_audit_report",
+      "object_role": "estimated_cost_count",
+      "route": "internal_estimate"
+    },
+    {
+      "id": "t11",
+      "subject": "market_money_claim_gate_v23_empty_billing",
+      "relation": "claim_status",
+      "object": "INTERNAL_ESTIMATE_ONLY",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v23-empty-provider-billing-blocked.report.json#/claim_status",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "claim_status",
+      "route": "claim_gate"
+    },
+    {
+      "id": "t12",
+      "subject": "market_money_claim_gate_v23_empty_billing",
+      "relation": "money_claim_gate_passed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v23-empty-provider-billing-blocked.report.json#/money_claim_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "gate_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "market_money_claim_gate_v23_empty_billing",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v23-empty-provider-billing-blocked.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_report",
+      "object_role": "market_claim_permission",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t14",
+      "subject": "market_money_claim_gate_v23_empty_billing_price_evidence",
+      "relation": "provider_billing_evidence_file_present",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v23-empty-provider-billing-blocked.report.json#/price_evidence/provider_billing_evidence_file_present",
+      "confidence": 1.0,
+      "subject_role": "price_evidence",
+      "object_role": "billing_file_presence",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "market_money_claim_gate_v23_empty_billing_price_evidence",
+      "relation": "provider_billing_file_gate_passed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v23-empty-provider-billing-blocked.report.json#/price_evidence/provider_billing_file_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "price_evidence",
+      "object_role": "billing_file_gate_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "market_money_claim_gate_v23_empty_billing_gates",
+      "relation": "provider_billing_file_gate_passed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-market-money-claim-gate-v23-empty-provider-billing-blocked.report.json#/gates/provider_billing_file_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "claim_gate_subgates",
+      "object_role": "billing_file_gate_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t17",
+      "subject": "provider_billing_join_v23_forbidden_flags",
+      "relation": "legacy_backend_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/forbidden_flags/legacy_backend_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "legacy_backend_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t18",
+      "subject": "provider_billing_join_v23_forbidden_flags",
+      "relation": "manual_local_out_t_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/provider-billing-evidence-join-v23-empty.report.json#/forbidden_flags/manual_local_out_t_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "manual_timing_shortcut_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

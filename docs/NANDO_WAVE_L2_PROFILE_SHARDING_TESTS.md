@@ -1,6 +1,36 @@
 # Nando Wave L2 Profile Sharding Tests
 
-Date: 2026-07-03
+Date: 2026-07-06 docs-sync
+
+Current architecture contract:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current interpretation:
+
+```text
+This file started from old profile-sharding evidence.
+The active product sharding target is now phase-center HOT/WARM/COLD memory:
+  HOT: bounded top-K PhaseCenterHotRuntime profiles
+  WARM: bounded process registry
+  COLD: reports/.nwpc snapshots/audit artifacts
+
+The old .nwrb profile numbers below are historical sizing evidence only.
+They are not the active backend.
+```
+
+Current hot-runtime sizing proof:
+
+```text
+artifact: target/nando-wave/streaming/phase-stream-hot-path-benchmark-v1-release.report.json
+hot_runtime_bytes_estimate: 544
+hot_route_table_bytes_estimate: 48
+hot_bytes_estimate: 592
+warm_metadata_bytes_estimate: 39_136
+product_runtime_budget_passed: true
+```
 
 Purpose:
 

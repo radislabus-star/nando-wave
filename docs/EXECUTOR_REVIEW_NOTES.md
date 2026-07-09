@@ -1,19474 +1,6394 @@
-# Executor Review Notes
+# EXECUTOR REVIEW NOTES
 
-## 2026-07-05 - CPU10: Broad Control Routes Are Not Safe Savings Yet
+Status: active handoff only.
 
-Verdict:
+Full archived history:
 
 ```text
-CLEAN_CPU10_NOT_ACHIEVED
-AGENT_CONTROL_VOLUME_FOUND_BUT_UNSAFE
-AGENT_CONTINUE_VOLUME_FOUND_BUT_UNSEPARATED
-NEXT_REQUIRED_MECHANISM_ACTIVE_TURN_STATE
+docs/archive/EXECUTOR_REVIEW_NOTES_2026-07-08_precompact.md
 ```
 
-Measured current5k:
+Rule:
 
 ```text
-clean Nando CPU incremental accepts: 120 / 5000 = 2.4%
-clean CPU10 target: 500 / 5000
-gap: 380 unique accepts
-
-agent_continue_execute:
-  scoreable_payload_events: 313
-  artifact_progress verifier true/false: 74 / 223
-  best prompt/state robust safe policy: 0
-  only request_starts_continue_or_next isolates 10 true / 0 false
-
-agent_control:
-  scoreable_payload_events: 539
-  intents: continue=19, short_ack=272, stop=248
-  output verifier true/false: 35 / 439
-  robust safe policy: 0
-
-after current5k companion-path fix:
-  feedback operator_candidate_calls: 3768
-  feedback scoreable_candidate_calls: 444
-  clean Nando CPU incremental accepts: still 120 / 5000
-```
-
-Decision:
-
-```text
-Do not promote broad agent_control, short_context_chatter, or
-agent_continue_execute as CPU savings. They have the traffic volume needed for
-CPU10, but current request-side text features do not separate safe local accepts
-from false accepts.
-```
-
-Next high-value mechanism:
-
-```text
-Build active_turn_state / tool-state verifier channel:
-  previous agent state
-  pending action type
-  last tool result
-  mutation/no-mutation state
-  user control intent
-  deterministic verifier outcome
-
-Only then re-test control/continue routes. Without that state channel, lowering
-thresholds would be a fake 10% and would violate false_accepts=0.
-```
-
-## 2026-07-05 - CPU80: Serving-Ops Route-Leak Fix And Catalog Downgrade
-
-Verdict:
-
-```text
-SERVING_OPS_ROUTE_LEAK_FIXED
-STALE_TINY_ACCEPT_REMOVED
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-The current5k serving_ops row looked like a tiny PROVEN profile, but manual
-inspection showed that the request-side payload builder admitted browser, URL,
-and account-management prompts. Those rows are not daemon/LB/worker serving
-runtime operations and must not count as server-ops savings.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-crates/nando-cli/src/role_binding_runtime_cmd/serving_ops.rs
-
-serving_ops payload extraction now requires a strong serving signal:
-score, core_score, worker_score, load_balancer, daemon, worker, HostWorld,
-VPS, nginx, systemd, p99/p90, latency, RSS, QPS, health, metrics endpoint,
-profile worker, LB replay, serving runtime, or serving stack.
-
-Generic `http` no longer qualifies a prompt as serving_ops.
-The CPU catalog now reads the current5k serving_ops calibration companion
-instead of stale non-window calibration when current5k artifacts are used.
-```
-
-Measured current5k after narrowing:
-
-```text
-serving_ops payload:
-  serving_ops_candidate_events: 73
-  payload_ready_events: 39
-  payload_built_events: 8
-  scoreable_payload_events: 8
-
-serving_ops evidence:
-  output_evidence_matched_events: 8
-  verified_true_events: 4
-  verified_false_events: 4
-
-serving_ops calibration:
-  safe_policy_found: false
-  best_safe_true_accepts: 0
-
-serving_ops shadow/audit:
-  nando_shadow_accepts: 0
-  verified_safe_accepts: 0
-  false_accepts: 0
-  market_claim_allowed: false
-```
-
-Current5k feedback/catalog after rerun:
-
-```text
-feedback report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
-
-total_llm_calls: 5000
-exact_cache_hits: 452
-verified_cpu_accept_unique_request_fingerprints: 122
-incremental_cpu_accept_unique_request_fingerprints: 120
-incremental_unique_gap_to_80_calls: 3880
-nando_cpu_tokens_saved: 29406
-nando_cpu_cost_saved_microusd: 88218
-nando_calls_saved_pct: 2.4
-nando_tokens_saved_pct: 4.831903776003155
-nando_cost_saved_pct: 4.831903776003155
-
-catalog report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-
-current_verified_cpu_accepts: 122
-current_incremental_unique_cpu_accepts_over_exact_cache: 120
-business_value_gate_passed_rows: 6
-proven_profile_rows: 6
-serving_ops route_gap_family: WATCH
-serving_ops existing_profile_route: CANDIDATE
-serving_ops expected_unique_cpu_accepts_over_exact_cache: 0
-```
-
-Boundary:
-
-```text
-Allowed claim:
-  serving_ops now has a stricter request-side candidate builder and no current5k
-  local-accept policy. The stale one-row server-ops savings claim was removed.
-
-Forbidden claim:
-  serving_ops is PROVEN on current5k.
-  Browser/URL/account-management rows are serving runtime operations.
-  Candidate, payload-ready, or scoreable rows are savings.
-  CPU80 is achieved.
-```
-
-## 2026-07-05 - CPU80: Metrics-Report Triple-Feature Admission Refresh
-
-Verdict:
-
-```text
-METRICS_REPORT_SAFE_POLICY_CURRENT5K_REFRESH
-TRIPLE_FEATURE_P99_READOUT_SIDECAR_PROMOTED
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-metrics_report_readout was the next high ready-cost route after git_control:
-the current5k route-gap readiness report shows 104 candidates, 66 payload-ready
-events, and 164484 payload-ready cost microusd.
-
-The previous metrics-report current5k promote counted only 3 verified accepts.
-The admission calibration now includes bounded 2/3-term request-side feature
-conjunctions. That exposed a narrow p99 readout sidecar with 11 verified true
-accepts and no false or unverified accepts.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-metrics_report_admission_policy_reports now evaluates generated feature
-conjunctions using positive and no_* request-side feature terms.
-
-metrics_report_admission_policy_accepts can replay those conjunction policies
-during promotion, so the selected policy is not just an offline report row.
-```
-
-Selected current5k policy:
-
-```text
-has_p99_terms AND no_has_report_terms AND no_concise_request
-plus active_fringe_min_66 and first_slot_threshold_278528
-
-request_side_policy_accept_rows: 11
-policy_accept_verified_true_rows: 11
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-```
-
-Measured shadow/audit:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.shadow-report.json
-
-nando_shadow_accepts: 11
-verified_safe_accepts: 11
-false_accepts: 0
-p99_shadow_score_latency_ns: 288107
-
-verification audit:
-  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json
-
-operator_candidate_calls: 11
-scoreable_candidate_calls: 11
-verification_hook_ready_events: 11
-verified_cpu_accept_eligible_events: 11
-market_claim_allowed: true
-```
-
-Current5k feedback/catalog after full companion rerun:
-
-```text
-feedback report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
-
-total_llm_calls: 5000
-verified_cpu_accept_unique_request_fingerprints: 123
-incremental_cpu_accept_unique_request_fingerprints: 121
-incremental_unique_gap_to_80_calls: 3879
-nando_cpu_tokens_saved: 29458
-nando_cpu_cost_saved_microusd: 88374
-nando_calls_saved_pct: 2.42
-nando_tokens_saved_pct: 4.840448256597325
-nando_cost_saved_pct: 4.840448256597325
-
-catalog report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-
-current_verified_cpu_accepts: 123
-current_incremental_unique_cpu_accepts_over_exact_cache: 121
-metrics_report expected_unique_cpu_accepts_over_exact_cache: 11
-```
-
-Boundary:
-
-```text
-Allowed claim:
-  metrics_report current5k is a tiny PROVEN p99/latency readout sidecar with
-  11 verified unique incremental CPU accepts and false_accepts=0.
-
-Forbidden claim:
-  CPU80 is achieved.
-  Broad report interpretation is solved.
-  Generic metrics/report summaries can local-accept.
-  Candidate/payload-ready rows are savings.
-```
-
-Verification:
-
-```text
-jq empty docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.triads.json: PASS
-nanda-check --triads docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.triads.json --format text: PASS
-  complexity_score: 44
-  agent_action: SAFE_TO_EDIT
-cargo fmt --check: PASS
-cargo check -p nando-cli: PASS
-cargo clippy -p nando-cli -- -D warnings: PASS
-git diff --check: PASS
-```
-
-## 2026-07-05 - CPU80: Git-Control Triple-Feature Safe Policy Refresh
-
-Verdict:
-
-```text
-GIT_CONTROL_SAFE_POLICY_V3_CURRENT5K_REFRESH
-TRIPLE_FEATURE_REQUEST_SIDE_POLICY_PROMOTED
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-The cost-aware route-gap readiness step selected git_control as the next
-ready-cost family, but the existing pair-feature admission audit was exhausted
-at 3 verified unique accepts.
-
-The git-control admission audit now tests 3-feature request-side conjunctions
-in addition to singles and pairs. This exposed a larger safe subfamily without
-changing serving scoring math or enabling workspace mutation.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-git_control_admission_policy_candidates now includes non-contradictory
-3-feature conjunctions from the existing top feature set.
-```
-
-Selected current5k policy:
-
-```text
-no_mutation_verbs AND no_file_path_terms AND has_push_terms AND energy >= 967680
-
-request_side_policy_accept_rows: 12
-policy_accept_verified_true_rows: 6
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-```
-
-Measured shadow/audit:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json
-
-nando_shadow_accepts: 6
-verified_safe_accepts: 6
-false_accepts: 0
-p99_shadow_score_latency_ns: 443316
-
-verification audit:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
-
-operator_candidate_calls: 12
-scoreable_candidate_calls: 12
-verification_hook_ready_events: 12
-verified_cpu_accept_eligible_events: 6
-market_claim_allowed: true
-```
-
-Current5k feedback/catalog after full companion rerun:
-
-```text
-feedback report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
-
-total_llm_calls: 5000
-verified_cpu_accept_unique_request_fingerprints: 115
-incremental_cpu_accept_unique_request_fingerprints: 113
-incremental_unique_gap_to_80_calls: 3887
-nando_cpu_tokens_saved: 24182
-nando_cpu_cost_saved_microusd: 72546
-nando_calls_saved_pct: 2.26
-nando_tokens_saved_pct: 3.9735643440710384
-nando_cost_saved_pct: 3.9735643440710384
-
-catalog report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-
-current_verified_cpu_accepts: 115
-current_incremental_unique_cpu_accepts_over_exact_cache: 113
-git_control expected_unique_cpu_accepts_over_exact_cache: 6
-```
-
-Boundary:
-
-```text
-Allowed claim:
-  git_control v3 current5k is a tiny PROVEN route with 6 verified unique
-  incremental CPU accepts and false_accepts=0.
-
-Forbidden claim:
-  CPU80 is achieved.
-  Broad git_control is solved.
-  Workspace git mutation execution is allowed.
-  Candidate/payload-ready rows are savings.
-```
-
-Verification:
-
-```text
-jq empty docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json: PASS
-nanda-check --triads docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json --format text: PASS
-  complexity_score: 46
-  agent_action: SAFE_TO_EDIT
-cargo fmt --check: PASS
-cargo check -p nando-cli: PASS
-cargo clippy -p nando-cli -- -D warnings: PASS
-git diff --check: PASS
-```
-
-## 2026-07-05 - CPU80: Cost-Aware Route-Gap Readiness
-
-Verdict:
-
-```text
-COST_AWARE_ROUTE_GAP_READINESS_V1
-COUNT_ONLY_ROUTE_PRIORITY_REJECTED
-NEXT_CPU80_WORK_FAMILY: git_control
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-After the token/cost meter, route priority must not be chosen by raw call
-count alone. The broad project_context_dialogue family remains
-REJECT_FOR_NOW even though it has the largest count gap.
-
-The new route-gap readiness reports rank under-routed traffic by
-payload-ready token/cost pressure, so the next engineering work is aimed at a
-route that has request-side payload shape plus meaningful estimated cost.
-```
-
-Current5k evidence:
-
-```text
-route_gap_payload_readiness report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json
-
-sampled_llm_calls: 5000
-existing_route_candidate_events: 1432
-no_candidate_events: 3568
-payload_ready_events: 807
-top_payload_ready_family: git_control
-
-git_control:
-  candidate_events: 126
-  payload_ready_events: 90
-  candidate_tokens: 102424
-  candidate_cost_microusd: 307272
-  payload_ready_tokens: 94932
-  payload_ready_cost_microusd: 284796
-```
-
-Catalog bridge:
-
-```text
-cpu_operator_catalog report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-
-route_gap_top_payload_ready_family: git_control
-route_gap_top_payload_ready_tokens: 94932
-route_gap_top_payload_ready_cost_microusd: 284796
-current_incremental_unique_cpu_accepts_over_exact_cache: 110
-```
-
-Boundary:
-
-```text
-Allowed claim:
-  git_control is the next highest ready-cost route family to improve.
-
-Forbidden claim:
-  ready-cost rows are verified CPU savings.
-  broad project_context_dialogue can be promoted whole.
-  CPU80 is achieved.
-```
-
-Verification:
-
-```text
-jq empty docs/structural_gates/cost-aware-route-gap-readiness-v1.triads.json: PASS
-nanda-check --triads docs/structural_gates/cost-aware-route-gap-readiness-v1.triads.json --format text: PASS
-  complexity_score: 51
-  agent_action: SAFE_TO_EDIT
-cargo fmt --check: PASS
-cargo check -p nando-cli: PASS
-cargo clippy -p nando-cli -- -D warnings: PASS
-```
-
-## 2026-07-05 - Executor Integration: Test Output Parse Runtime Command Split
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_ROUTE_COMMAND_SPLIT
-NO_RUNTIME_BEHAVIOR_CHANGE
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-role_binding_runtime_cmd.rs is still the active real-traffic command surface,
-but the proven test_output_parse route had become a large coherent command
-block inside the monolith.
-
-The split keeps the same Rust module scope through include!, so private helper
-types/functions remain in the parent module and no CLI dispatch/help behavior
-changes. This is a boundary-cleanup step only, not a new CPU80 result.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-crates/nando-cli/src/role_binding_runtime_cmd/test_output_parse.rs
-```
-
-What changed:
-
-```text
-Moved 1632 lines of test_output_parse public real-traffic command handlers into
-role_binding_runtime_cmd/test_output_parse.rs.
-
-The parent module now includes that file at the original route position:
-  include!("role_binding_runtime_cmd/test_output_parse.rs");
-
-No main.rs command dispatch, help text, runtime scoring, admission policy,
-verifier authority, profile registry, or report schema was changed.
-```
-
-Current CPU80 boundary remains:
-
-```text
-total_llm_calls: 5000
-current_verified_cpu_accepts: 112
-current_incremental_unique_cpu_accepts_over_exact_cache: 110
-business_value_gate_passed_rows: 7
-proven_profile_rows: 7
-candidate_profile_rows: 1
-watch_profile_rows: 16
-rejected_profile_rows: 5
-
-CPU80 remains not achieved.
-```
-
-Verification:
-
-```text
-nanda-self-check: PASS
-cargo fmt --check: PASS
-cargo check -p nando-cli: PASS
-cargo clippy -p nando-cli -- -D warnings: PASS
-git diff --check: PASS
-```
-
-Boundary note:
-
-```text
-nanda-boundary-economics crates/nando-cli/src --find-refactors --format json
-still reports broad refactor pressure as KEEP / no_size_only_split. Therefore
-this step intentionally avoids a larger API/module split and only performs a
-route-owned include extraction.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/test-output-parse-command-split-v1.md
-verdict: PASS
-complexity_score: 54
-trace_path: /tmp/nanda-structural-gate/test-output-parse-command-split-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Edit Safe-Policy V2 Promoted On Current5k And Runtime Command Split
-
-Verdict:
-
-```text
-EDIT_SAFE_POLICY_V2_CURRENT5K_TINY_PROVEN
-ROLE_BINDING_RUNTIME_CMD_EDIT_ROUTE_SPLIT
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-The current5k edit_marker_length route had a robust request-side admission
-candidate, but it could not count as savings until a promoted registry/trace,
-shadow run, verification audit, feedback loop, and catalog refresh all agreed.
-
-That chain now exists for the narrow prompt-side policy:
-  code_diff_and_question_mark
-
-The policy uses only request-side features:
-  has_code_diff_lines && has_question_mark
-
-It does not read response text, target labels, proof labels, expected answers,
-or proof_rule_id authority. Local accepts remain shadow/audit gated.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-crates/nando-cli/src/role_binding_runtime_cmd/edit_safe_policy.rs
-crates/nando-cli/src/main.rs
-crates/nando-cli/src/help.rs
-```
-
-What changed:
-
-```text
-role-binding-real-traffic-edit-safe-policy-promote-v2 writes a full-window
-promoted edit trace and registry from a robust request-side admission policy.
-
-role-binding-real-traffic-feedback-loop-v1 now resolves the current-window
-edit safe-policy audit report, so current5k feedback counts the promoted v2
-edit route instead of stale/default edit evidence.
-
-role-binding-real-traffic-cpu-operator-catalog-v1 now reports
-role_binding_edit_marker_length_seed0 as a tiny PROVEN row when current-window
-shadow/audit evidence shows incremental unique verified accepts over exact
-cache with false_accepts=0.
-
-The monolithic role_binding_runtime_cmd.rs was cut by route: the edit
-safe-policy/admission command block now lives in
-role_binding_runtime_cmd/edit_safe_policy.rs and is included from the original
-module. This is a preparatory boundary cut only; private runtime types remain
-in one Rust module and CLI behavior is unchanged.
-```
-
-Measured edit safe-policy v2 promote:
-
-```text
-verdict: EDIT_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
-request_side_policy_name: code_diff_and_question_mark
-selected_policy_threshold: 7680
-request_side_policy_accept_rows: 5
-policy_accept_rows: 3
-policy_accept_verified_true_rows: 3
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-raw_prompt_text_written: false
-raw_response_text_written: false
-target_labels_used_for_runtime: false
-proof_labels_used_for_runtime: false
-```
-
-Measured promoted shadow/audit:
-
-```text
-shadow verdict: REAL_TRAFFIC_SHADOW_V1_PASS
-total_requests: 5000
-total_llm_calls: 5000
-exact_cache_hits: 453
-nando_shadow_accepts: 3
-verified_safe_accepts: 3
-false_accepts: 0
-incremental_savings_over_exact_cache: 3
-p99_shadow_score_latency_ns: 863057
-
-audit verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-operator_candidate_calls: 5
-scoreable_candidate_calls: 5
-verification_hook_ready_events: 4
-verified_cpu_accept_eligible_events: 3
-market_claim_allowed: true
-```
-
-Measured current5k feedback/catalog after the refresh:
-
-```text
-total_llm_calls: 5000
-operator_candidate_calls: 3549
-scoreable_candidate_calls: 554
-verification_hook_ready_events: 301
-verified_cpu_routability_milli: 22
-verified_gap_to_80_calls: 3886
-unique_verified_cpu_accepts: 112
-unique_verified_gap_to_80_calls: 3888
-incremental_unique_cpu_accepts: 110
-incremental_unique_gap_to_80_calls: 3890
-
-catalog current_verified_cpu_accepts: 112
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 110
-catalog business_value_gate_passed_rows: 7
-catalog proven_profile_rows: 7
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 16
-catalog rejected_profile_rows: 5
-```
-
-Measured edit catalog row:
-
-```text
-role_binding_edit_marker_length_seed0:
-  current_status: PROVEN
-  verified_cpu_accept_eligible_events: 3
-  incremental_cpu_accept_unique_request_fingerprints: 3
-  expected_unique_cpu_accepts_over_exact_cache: 3
-  false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS
-  next_action: improve edit evidence/payload coverage or split a higher-value
-    artifact-backed edit subfamily; do not widen broad edit.
-```
-
-Decision:
-
-```text
-Count only 3 incremental unique current5k edit accepts. Do not widen the broad
-edit route, do not claim CPU80, and do not turn the isolated edit v2 market
-claim flag into a global sales claim. The next valid CPU80 work must still
-follow BUSINESS_VALUE_GATE and maximize incremental verified accepts over exact
-cache at false_accepts=0.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/edit-safe-policy-v2-current5k-and-split-v1.md
-triads: docs/structural_gates/edit-safe-policy-v2-current5k-and-split-v1.triads.json
-verdict: PASS
-complexity_score: 59
-trace_path: /tmp/nanda-structural-gate/edit-safe-policy-v2-current5k-and-split-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Edit Marker-Length Request-Side Admission Candidate Found
-
-Verdict:
-
-```text
-EDIT_ADMISSION_CODE_DIFF_QUESTION_MARK_POLICY_FOUND
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-The current5k edit_marker_length route had real traffic but no safe request-side
-admission policy in the catalog, so it stayed WATCH with expected_unique=0.
-
-A current5k calibration over the existing verifier-labeled edit evidence found
-a narrow request-side policy:
-  code_diff_and_question_mark
-
-This policy uses only prompt-side features:
-  has_code_diff_lines && has_question_mark
-
-It does not read response text, target labels, proof labels, or expected
-answers. It is a candidate for a future promoted shadow/audit, not a local
-accept authority.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-What changed:
-
-```text
-role-binding-real-traffic-edit-admission-calibration-v1 now evaluates the
-code_diff_and_question_mark policy for edit_marker_length admission.
-
-role-binding-real-traffic-cpu-operator-catalog-v1 now records the correct
-next_action when current5k edit admission has a robust candidate:
-  build a separate promoted shadow trace/registry,
-  rerun shadow/audit/feedback with provider cost,
-  keep local accepts disabled until false_accepts=0 is verified.
-```
-
-Measured current5k edit admission calibration:
-
-```text
-verdict: EDIT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
-hook_ready_rows: 42
-label_true_rows: 14
-label_false_rows: 28
-robust_safe_policy_found: true
-best_robust_true_accepts: 4
-
-policy code_diff_and_question_mark:
-  accepts: 4
-  true_accepts: 4
-  false_accepts: 0
-  missed_true: 10
-  robust_safe: true
-
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_features: false
-target_labels_used_for_runtime: false
-proof_labels_used_for_runtime: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Measured current5k feedback/catalog after the refresh:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-scoreable_candidate_calls: 549
-verification_hook_ready_events: 297
-verified_cpu_accept_eligible_events: 111
-incremental_cpu_accept_unique_request_fingerprints: 107
-incremental_unique_gap_to_80_calls: 3893
-
-role_binding_edit_marker_length_seed0:
-  current_status: WATCH
-  edit_admission_best_robust_true_accepts: 4
-  edit_admission_no_safe_policy: false
-  expected_unique_cpu_accepts_over_exact_cache: 0
-  false_accept_risk: UNKNOWN_NO_DETERMINISTIC_VERIFIER_YET
-  next_action: build separate promoted shadow/audit before counting savings
-```
-
-Decision:
-
-```text
-Do not count the 4 robust admission rows as CPU savings yet.
-Do not enable edit local accepts from calibration alone.
-Next valid work is a separate promoted shadow trace/registry for exactly this
-request-side policy, followed by shadow/audit/feedback with provider cost,
-false_accepts=0, and catalog refresh.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/edit-admission-code-diff-question-mark-current5k-v1.md
-triads: docs/structural_gates/edit-admission-code-diff-question-mark-current5k-v1.triads.json
-verdict: PASS
-complexity_score: 41
-trace_path: /tmp/nanda-structural-gate/edit-admission-code-diff-question-mark-current5k-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Agent-Control Current5k Admission Evidence Replaces Stale V2 Support
-
-Verdict:
-
-```text
-AGENT_CONTROL_CURRENT5K_NO_SAFE_POLICY_RECORDED
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-The current5k feedback loop was already reportable, but agent_control catalog
-diagnostics still read the older default 1000-window v2 admission/audit path.
-That path showed 11 robust stop/control true accepts and made the catalog look
-like it should keep chasing the exhausted old stop policy.
-
-The real current5k calibration says the opposite:
-  hook_ready_rows: 476
-  label_true_rows: 35
-  label_false_rows: 441
-  robust_safe_policy_found: false
-  best_robust_true_accepts: 0
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-What changed:
-
-```text
-role-binding-real-traffic-feedback-loop-v1 and
-role-binding-real-traffic-cpu-operator-catalog-v1 now resolve the
-agent_control admission calibration through the current-window companion when
-running current5k reports.
-
-For current5k, the active source is now:
-  agent-control-admission-calibration-v1-5k.report.json
-
-If current5k calibration exists, it overrides stale v2 audit authority for
-agent_control catalog rows. Old v2 support can no longer surface as
-best_robust_true_accepts=11 in the current5k catalog.
-```
-
-Measured full current5k feedback/catalog after the fix:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-scoreable_candidate_calls: 549
-verification_hook_ready_events: 297
-verified_cpu_accept_eligible_events: 111
-verified_cpu_accept_unique_request_fingerprints: 109
-incremental_cpu_accept_unique_request_fingerprints: 107
-exact_cache_overlap_verified_cpu_accepts: 2
-
-catalog business_value_gate_passed_rows: 6
-catalog proven_profile_rows: 6
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 17
-catalog rejected_profile_rows: 5
-```
-
-Measured agent_control catalog rows:
-
-```text
-role_binding_agent_control_seed0:
-  current_status: WATCH
-  business_value_gate_failure_reason:
-    missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,false_accept_risk_unknown
-  agent_control_admission_best_robust_true_accepts: 0
-  agent_control_current_policy_event_support_exhausted: false
-  expected_unique_cpu_accepts_over_exact_cache: 0
-
-agent_control_stop:
-  current_status: WATCH
-  agent_control_admission_best_robust_true_accepts: 0
-  agent_control_current_policy_event_support_exhausted: false
-  expected_unique_cpu_accepts_over_exact_cache: 0
-```
-
-Decision:
-
-```text
-Do not promote or repair the old broad agent_control stop route.
-Do not reuse the old 1000-window v2 support as current5k evidence.
-Next valid work is a narrower tool-state/control subfamily with deterministic
-verifier evidence, and only after BUSINESS_VALUE_GATE shows expected unique CPU
-accepts over exact cache.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/agent-control-current5k-admission-gate-v1.md
-triads: docs/structural_gates/agent-control-current5k-admission-gate-v1.triads.json
-verdict: PASS
-complexity_score: 55
-trace_path: /tmp/nanda-structural-gate/agent-control-current5k-admission-gate-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Metrics-Report Safe Policy Loaded Into Current5k Feedback
-
-Verdict:
-
-```text
-METRICS_REPORT_SAFE_POLICY_CURRENT5K_INTEGRATED
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-metrics_report_readout already had a 5k promoted safe-policy shadow/audit with
-3 verified accepts and 0 false accepts. The feedback loop still loaded the
-default metrics safe-policy audit path, so the current5k catalog did not count
-the existing 5k safe-policy sidecar.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-What changed:
-
-```text
-role-binding-real-traffic-feedback-loop-v1 now resolves
-DEFAULT_METRICS_REPORT_SAFE_POLICY_AUDIT_REPORT through
-current_window_companion_report_path when running a current5k window.
-
-This makes the feedback loop load:
-  metrics-report-safe-policy-v1-5k.verification-hook-audit.report.json
-instead of the default 1000-call audit.
-
-The same current-window companion resolution was also applied to
-DEFAULT_SERVING_OPS_SAFE_POLICY_AUDIT_REPORT. It does not change the current5k
-count, but it makes provenance point at:
-  serving-ops-safe-policy-v1-current5k.verification-hook-audit.report.json
-```
-
-Measured metrics-report safe-policy artifacts:
-
-```text
-promote request_side_policy_accept_rows: 11
-promote policy_accept_rows: 3
-promote policy_accept_verified_true_rows: 3
-promote policy_accept_verified_false_rows: 0
-promote policy_accept_unverified_rows: 0
-promote runtime_acceptance_mismatches: 0
-
-shadow verdict: REAL_TRAFFIC_SHADOW_V1_PASS
-shadow total_llm_calls: 5000
-shadow operator_candidate_calls: 63
-shadow nando_shadow_accepts: 3
-shadow verified_safe_accepts: 3
-shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 5009784
-
-audit verification_hook_ready_events: 51
-audit verified_cpu_accept_eligible_events: 3
-audit provider_cost_events: 63
-audit market_claim_allowed: true
-```
-
-Measured full current5k feedback/catalog after integration:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-scoreable_candidate_calls: 549
-verification_hook_ready_events: 297
-verified_cpu_accept_eligible_events: 111
-verified_cpu_accept_unique_request_fingerprints: 109
-incremental_cpu_accept_unique_request_fingerprints: 107
-exact_cache_overlap_verified_cpu_accepts: 2
-incremental_unique_gap_to_80_calls: 3893
-
-catalog business_value_gate_passed_rows: 6
-catalog proven_profile_rows: 6
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 17
-catalog rejected_profile_rows: 5
-```
-
-Measured metrics_report catalog row:
-
-```text
-current_status: PROVEN
-business_value_gate_passed: true
-business_value_gate_failure_reason: PASSED
-false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS
-verified_cpu_accept_unique_request_fingerprints: 3
-incremental_cpu_accept_unique_request_fingerprints: 3
-expected_unique_cpu_accepts_over_exact_cache: 3
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Count metrics_report_readout as a tiny PROVEN current5k CPU support row.
-Do not widen it into broad report interpretation.
-Do not claim market savings from the isolated route; only the full current5k
-catalog number is the active product metric.
-
-Next valid metrics work:
-  improve numeric report evidence or split a stronger metrics subfamily before
-  another promotion attempt.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.md
-triads: docs/structural_gates/metrics-report-safe-policy-current5k-catalog-v1.triads.json
-verdict: PASS
-complexity_score: 43
-trace_path: /tmp/nanda-structural-gate/metrics-report-safe-policy-current5k-catalog-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Git-Control V3 Promoted Safe Policy Counted In Current5k Catalog
-
-Verdict:
-
-```text
-GIT_CONTROL_SAFE_POLICY_V3_PROMOTED_TRACE_INTEGRATED
-CPU80_NOT_ACHIEVED
-```
-
-Why:
-
-```text
-The request-side admission audit found a tiny safe git_control subfamily, but
-the previous feedback loop did not load the current5k v3 audit path. That made
-the catalog correctly refuse savings, but it also hid the promoted v3 shadow
-trace from the full current5k attribution.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-crates/nando-cli/src/main.rs
-crates/nando-cli/src/help.rs
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-git-control-safe-policy-promote-v3.
-
-The v3 promotion uses the admission-audit safe request-side feature
-conjunction plus the selected energy threshold. It writes a promoted registry
-and trace, but executes no git command and still requires shadow/audit/feedback.
-
-role-binding-real-traffic-feedback-loop-v1 now loads current-window
-git-control safe-policy companion reports, including:
-  git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
-
-The CPU catalog now marks the proven-but-exhausted git_control row as:
-  LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED
-instead of incorrectly calling it a missing policy.
-```
-
-Generated:
-
-```text
-target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v3-current5k.json
-target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.trace.jsonl
-target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.report.json
-target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.shadow-report.json
-target/nando-wave/real-traffic-shadow/git-control-safe-policy-v3-current5k.verification-hook-audit.report.json
-target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
-target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.md
-docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json
-```
-
-Measured v3 promote result:
-
-```text
-selected_policy:
-  no_mutation_verbs AND has_push_terms AND energy >= 1386496
-request_side_policy_accept_rows: 22
-policy_accept_rows: 3
-policy_accept_verified_true_rows: 3
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-runtime_acceptance_mismatches: 0
-provider_cost_events_written: 22
-market_claim_allowed: false
-```
-
-Measured v3 shadow/audit:
-
-```text
-shadow verdict: REAL_TRAFFIC_SHADOW_V1_PASS
-nando_shadow_accepts: 3
-verified_safe_accepts: 3
-false_accepts: 0
-p99_shadow_score_latency_ns: 386418
-
-audit operator_candidate_calls: 22
-audit scoreable_candidate_calls: 22
-audit verification_hook_ready_events: 21
-audit verified_cpu_accept_eligible_events: 3
-audit provider_cost_events: 22
-audit market_claim_allowed: true
-```
-
-Measured full current5k feedback/catalog after integration:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-verified_cpu_accept_eligible_events: 108
-verified_cpu_accept_unique_request_fingerprints: 106
-incremental_cpu_accept_unique_request_fingerprints: 104
-exact_cache_overlap_verified_cpu_accepts: 2
-incremental_unique_gap_to_80_calls: 3896
-
-catalog business_value_gate_passed_rows: 5
-catalog proven_profile_rows: 5
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 18
-catalog rejected_profile_rows: 5
-```
-
-Measured git_control catalog row:
-
-```text
-current_status: PROVEN
-business_value_gate_passed: true
-business_value_gate_failure_reason: PASSED
-false_accept_risk: LOW_VERIFIED_POLICY_ZERO_FALSE_ACCEPTS_SUPPORT_EXHAUSTED
-verified_cpu_accept_unique_request_fingerprints: 3
-incremental_cpu_accept_unique_request_fingerprints: 3
-expected_unique_cpu_accepts_over_exact_cache: 3
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Count git_control as a tiny PROVEN current5k CPU support row, but do not widen
-it. The broad git_control route remains unsolved: old local calibration failed,
-and the safe request-side policy has exhausted current support at 3 true
-accepts.
-
-Do not execute workspace mutations.
-Do not lower thresholds.
-Do not claim CPU80.
-
-Next valid git_control step:
-  improve command outcome evidence or split a new git subfamily before another
-  promote attempt.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.md
-triads: docs/structural_gates/git-control-safe-policy-v3-current5k-catalog-v1.triads.json
-verdict: PASS
-complexity_score: 46
-trace_path: /tmp/nanda-structural-gate/git-control-safe-policy-v3-current5k-catalog-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Git-Control Request-Side Admission Split Found Tiny Safe Candidate
-
-Verdict:
-
-```text
-GIT_CONTROL_REQUEST_SIDE_SAFE_SUBFAMILY_FOUND
-NO_NEW_CPU_ACCEPTS_PROMOTED
-```
-
-Why:
-
-```text
-The current5k git_control route had real traffic and verifier hooks, but the
-catalog still treated it as a generic no-safe-policy candidate. The admission
-audit only used coarse git/status/diff/commit/push features, so it could not
-distinguish read-only command-outcome checks from mutation-shaped prompts.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-What changed:
-
-```text
-git_control admission audit now adds richer request-side features:
-  command_kind_*
-  read-only vs mutation intent
-  no_* complements for git command families
-  log/show/remote/worktree/hash-shape signals
-  composite read-only git subfamily markers
-
-The CPU catalog now reports a git_control safe admission candidate as
-POLICY_PENDING_PROMOTE instead of incorrectly calling it safe_policy_missing.
-```
-
-Generated:
-
-```text
-target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json
-target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-```
-
-Measured git_control admission result:
-
-```text
-scoreable_candidate_rows: 90
-hook_ready_rows: 74
-label_true_rows: 35
-label_false_rows: 39
-unverified_rows: 16
-safe_policy_found: true
-best_safe_true_accepts: 3
-best policy family:
-  no_mutation_verbs AND has_push_terms AND energy >= 1386496
-  accepts: 3
-  true_accepts: 3
-  false_accepts: 0
-  unverified_accepts: 0
-```
-
-Measured CPU catalog result after refresh:
-
-```text
-current_incremental_unique_cpu_accepts_over_exact_cache: 104
-business_value_gate_passed_rows: 5
-proven_profile_rows: 5
-candidate_profile_rows: 3
-watch_profile_rows: 16
-rejected_profile_rows: 5
-
-git_control existing_profile_route:
-  current_status: CANDIDATE
-  expected_unique_cpu_accepts_over_exact_cache: 0
-  git_control_admission_best_safe_true_accepts: 3
-  false_accept_risk: MEDIUM_VERIFIER_READY_POLICY_PENDING_PROMOTE
-  business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy
-```
-
-Decision:
-
-```text
-Do not count the 3 admission-safe rows as CPU savings yet.
-Do not enable git local accepts.
-Do not execute workspace mutations.
-
-Next valid git_control step:
-  build a separate promoted shadow trace/registry for this exact
-  request-side policy, rerun shadow/audit/feedback with provider cost, and only
-  then count verified unique accepts if false_accepts=0.
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/git-control-request-side-safe-subfamily-v1.md
-triads: docs/structural_gates/git-control-request-side-safe-subfamily-v1.triads.json
-verdict: PASS
-complexity_score: 44
-trace_path: /tmp/nanda-structural-gate/git-control-request-side-safe-subfamily-v1.trace.json
-```
-
-## 2026-07-05 - Executor Integration: Git/Serving Current5k Evidence Routed Into Feedback Loop
-
-Verdict:
-
-```text
-GIT_SERVING_CURRENT5K_EVIDENCE_WIRED
-NO_NEW_CPU_ACCEPTS_PROMOTED
-```
-
-Why:
-
-```text
-git_control and serving_ops already had current5k dry-run, verification-audit,
-and local-accept calibration artifacts. The feedback loop still read the
-default companion filenames for these routes, so the CPU catalog could drift
-between old companion evidence and the current5k window.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-What changed:
-
-```text
-role-binding-real-traffic-feedback-loop-v1 now uses current-window companion
-reports for git_control and serving_ops when the forecast/edit/feedback inputs
-are a current5k window.
-```
-
-Current5k companion artifacts now read by the feedback loop:
-
-```text
-git-control-payload-dry-run-v1-current5k.report.json
-git-control-output-evidence-v1-current5k.verification-hook-audit.report.json
-git-control-local-accept-calibration-v1-current5k.report.json
-serving-ops-payload-dry-run-v1-current5k.report.json
-serving-ops-output-evidence-v1-current5k.verification-hook-audit.report.json
-serving-ops-local-accept-calibration-v1-current5k.report.json
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/git-serving-current5k-feedback-catalog-v1.md
-verdict: PASS
-complexity_score: 77
-trace_path: /tmp/nanda-structural-gate/git-serving-current5k-feedback-catalog-v1.trace.json
-```
-
-Measured feedback-loop result:
-
-```text
-total_llm_calls: 5000
-scoreable_candidate_calls: 599
-verification_hook_ready_events: 392
-verified_cpu_accept_eligible_events: 108
-verified_cpu_accept_unique_request_fingerprints: 106
-incremental_cpu_accept_unique_request_fingerprints: 104
-```
-
-Measured route rows:
-
-```text
-git_control:
-  candidate_events: 123
-  scoreable_payload_events: 90
-  verification_hook_ready_events: 74
-  verified_cpu_accept_eligible_events: 0
-  false_accepts: 0
-  stage: local_accept_calibration_failed
-
-serving_ops:
-  candidate_events: 74
-  scoreable_payload_events: 40
-  verification_hook_ready_events: 33
-  verified_cpu_accept_eligible_events: 1
-  false_accepts: 0
-  stage: verified_cpu_accept_eligible
-```
-
-Catalog boundary:
-
-```text
-git_control:
-  current_status: CANDIDATE
-  business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
-
-serving_ops:
-  current_status: PROVEN
-  business_value_gate_failure_reason: PASSED
-  expected_unique_cpu_accepts_over_exact_cache: 1
-```
-
-Decision:
-
-```text
-Do not promote git_control. It has real current5k evidence, but no safe policy.
-Do not widen serving_ops. It has one verified accept and remains tiny support
-only; daemon mutations stay disabled and a non-synthetic soak is required
-before any market claim.
-```
-
-## 2026-07-04 - Executor Integration: Project Context Current5k Evidence Routed Into Feedback Loop
-
-Verdict:
-
-```text
-PROJECT_CONTEXT_CURRENT5K_EVIDENCE_WIRED
-NO_NEW_CPU_ACCEPTS_PROMOTED
-```
-
-Why:
-
-```text
-The broad project_context_dialogue family is one of the largest real-traffic
-gaps, but it must not be promoted as a broad route. A current5k
-artifact-backed subfamily already had payload, workspace evidence, and
-calibration artifacts. The feedback loop was still reading non-current default
-project-context reports, so the CPU catalog under-reported that evidence as
-missing verifier work.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-What changed:
-
-```text
-role-binding-real-traffic-feedback-loop-v1 now uses current-window companion
-reports for project_context when the forecast/edit/feedback inputs are a
-current5k window.
-
-current_window_companion_report_path now also recognizes:
-  *-current5k.verification-hook-audit.report.json
-  *-5k.verification-hook-audit.report.json
-```
-
-Current5k project-context artifacts:
-
-```text
-project-context-payload-dry-run-v1-current5k.report.json
-project-context-output-evidence-v1-current5k.verification-hook-audit.report.json
-project-context-local-accept-calibration-v1-current5k.report.json
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/project-context-current5k-feedback-catalog-v1.md
-verdict: PASS
-complexity_score: 47
-trace_path: /tmp/nanda-structural-gate/project-context-current5k-feedback-catalog-v1.trace.json
-```
-
-Measured project-context feedback-loop result:
-
-```text
-route_key: project_context_dialogue
-candidate_events: 1314
-payload_ready_events: 15
-payload_built_events: 8
-scoreable_payload_events: 8
-verification_hook_ready_events: 8
-verified_cpu_accept_eligible_events: 0
-local_accept_safe_policy_found: true
-local_accept_best_safe_true_accepts: 1
-local_accept_minimum_true_support: 3
-local_accept_support_qualified: false
-false_accepts: 0
-stage: local_accept_calibration_support_insufficient
-```
-
-Catalog row result:
-
-```text
-project_context_dialogue:
-  current_status: REJECT_FOR_NOW
-  business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,broad_route_requires_split,safe_policy_support_insufficient
-```
-
-Decision:
-
-```text
-Do not promote broad project_context_dialogue. The artifact-backed project
-state split is real, but current support is singleton-only. The next valid work
-is to collect more verifier-true workspace-artifact rows or split an even
-narrower artifact-backed subfamily; local accepts remain disabled.
-```
-
-## 2026-07-04 - Executor Integration: Edit Admission Audit Routed Into CPU Catalog
-
-Verdict:
-
-```text
-EDIT_ADMISSION_NO_SAFE_POLICY_WIRED
-NO_NEW_CPU_ACCEPTS_PROMOTED
-```
-
-Why:
-
-```text
-The edit_marker_length route is the largest narrow non-broad candidate, but
-the current5k request-side admission audit already found no safe policy. The
-CPU call catalog now reads that audit directly so this route is not recycled as
-"just improve admission" work.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-Catalog artifact:
-
-```text
-target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/edit-admission-no-safe-policy-catalog-v1.md
-verdict: PASS
-complexity_score: 35
-trace_path: /tmp/nanda-structural-gate/edit-admission-no-safe-policy-catalog-v1.trace.json
-```
-
-Input audit:
-
-```text
-target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1-current5k.report.json
-```
-
-Measured edit admission result:
-
-```text
-hook_ready_rows: 42
-label_true_rows: 14
-label_false_rows: 28
-robust_safe_policy_found: false
-singleton_safe_policy_found: false
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 0
-```
-
-Catalog row result:
-
-```text
-role_binding_edit_marker_length_seed0:
-  current_status: CANDIDATE
-  edit_admission_no_safe_policy: true
-  business_value_gate_failure_reason:
-    expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,no_safe_request_side_policy,safe_policy_missing
-```
-
-Decision:
-
-```text
-Do not lower edit thresholds. Do not promote edit_marker_length from the
-current request-side policy. The only valid next work is a narrower
-artifact-backed edit split or stronger verifier evidence that changes the
-BUSINESS_VALUE_GATE facts.
-```
-
-## 2026-07-04 - Executor Integration: Business Value Gate Failure Reasons
-
-Verdict:
-
-```text
-CPU_CALL_CATALOG_BVG_FAILURE_REASONS_RECORDED
-NO_NEW_CPU_ACCEPTS_PROMOTED
-```
-
-Why:
-
-```text
-The current catalog had enough numeric evidence to rank routes, but not enough
-machine-readable explanation for why attractive routes should not be worked
-again. This made routes such as agent_control_stop and git_control look
-tempting despite exhausted support or no safe request-side policy.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/cpu-call-catalog-bvg-failure-reasons-v1.md
-first attempt: VETO
-reason: one broad report-file evidence pointer supported too many role fillers
-
-repair: use field/row-specific evidence pointers for each triad
-
-final verdict: PASS
-complexity_score: 37
-trace_path: /tmp/nanda-structural-gate/cpu-call-catalog-bvg-failure-reasons-v1.trace.json
-```
-
-What changed:
-
-```text
-RoleBindingCpuOperatorCatalogRow now includes:
-  business_value_gate_failure_reason
-
-The field is diagnostic only. It does not change admission, does not enable
-local accepts, and does not count savings.
-```
-
-Measured current5k examples:
-
-```text
-role_binding_agent_control_seed0:
-  missing_deterministic_verifier_hook,current_support_exhausted
-
-agent_control_stop:
-  missing_deterministic_verifier_hook,expected_unique_cpu_accepts_zero,current_support_exhausted,false_accept_risk_unknown
-
-git_control:
-  expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
-
-role_binding_edit_marker_length_seed0:
-  expected_unique_cpu_accepts_zero,no_safe_local_accept_policy,safe_policy_missing
-```
-
-CPU80 counter after refresh:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-current_verified_cpu_accepts: 106
-current_incremental_unique_cpu_accepts_over_exact_cache: 104
-business_value_gate_passed_rows: 5
-```
-
-Decision:
-
-```text
-Do not keep cycling on high-candidate routes unless the next step adds new
-verifier evidence, a narrower artifact-backed split, or a real expected unique
-accept path over exact cache.
-```
-
-## 2026-07-04 - Executor Integration: Metrics Report Admission Unverified Guard
-
-Verdict:
-
-```text
-METRICS_REPORT_ADMISSION_UNVERIFIED_GUARD_RECORDED
-NO_NEW_CPU_ACCEPTS_PROMOTED
-```
-
-Why:
-
-```text
-The metrics-report request-side split briefly looked promising on labeled rows:
-p99_terms_not_concise had 12 verifier-true rows and 0 verifier-false rows.
-Promotion correctly failed because the full trace also had unverified rows with
-the same request-side shape. Unknown verification state must be unsafe for
-BUSINESS_VALUE_GATE.
-```
-
-Code change:
-
-```text
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-```
-
-Structural gate:
-
-```text
-packet: docs/structural_gates/metrics-report-admission-unverified-guard-v1.md
-verdict: PASS
-complexity_score: 32
-trace_path: /tmp/nanda-structural-gate/metrics-report-admission-unverified-guard-v1.trace.json
-```
-
-What changed:
-
-```text
-metrics_report_admission_calibration now includes unverified profile rows in
-policy selection and counts them as unsafe accepts, while reporting
-unverified_rows separately.
-
-cpu_operator_catalog current5k now prefers current-window companion artifacts
-when they exist:
-  git-control-admission-audit-v1-current5k.report.json
-  metrics-report-admission-calibration-v1-5k.report.json
-```
-
-Measured result:
-
-```text
-metrics_report hook_ready_rows: 63
-metrics_report label_true_rows: 31
-metrics_report label_false_rows: 20
-metrics_report unverified_rows: 12
-metrics_report robust_safe_policy_found: false
-metrics_report best_robust_true_accepts: 0
-
-p99_terms_not_concise:
-  accepts: 14
-  true_accepts: 12
-  unsafe_false_or_unverified_accepts: 2
-```
-
-CPU80 counter after refresh:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-current_verified_cpu_accepts: 106
-current_incremental_unique_cpu_accepts_over_exact_cache: 104
-incremental_unique_gap_to_80_calls: 3896
-```
-
-Decision:
-
-```text
-Do not promote the metrics p99 split. It is a useful discovery, not a safe
-profile. Next work is either attach missing output evidence for the unverified
-metrics rows, or move to the next BUSINESS_VALUE_GATE route with real expected
-unique accepts and a deterministic verifier.
-```
-
-## 2026-07-04 - Executor Integration: Business Value Gate V2 / CPU Call Catalog Discipline
-
-Verdict:
-
-```text
-CPU_CALL_CATALOG_BUSINESS_VALUE_GATE_V2_RECORDED
-NO_NEW_PROFILE_PROMOTED
-```
-
-Why:
-
-```text
-The current risk is no longer "can we build CPU/L3 profiles?" The risk is
-building many technically attractive profiles that add almost no unique
-verified savings on real traffic. The working rule is now: every new operator
-profile must pass BUSINESS_VALUE_GATE before payload/profile/admission work.
+Keep this file short.
+Do not append long historical logs here.
+Archive old detail blocks and leave only current state, current task, and next blocker.
 ```
 
-Updated:
+## Current Architecture Direction
 
-```text
-docs/CPU_CALL_CATALOG.md
-docs/structural_gates/cpu-call-catalog-business-value-gate-v2.md
-```
-
-Structural gate:
-
-```text
-first attempt: VETO
-reason: one packet mixed product identity, discovery, current5k triage, and
-candidate rejections under one broad evidence route.
-
-repair: shrink the packet to one coherent gate route:
-  per-runtime catalog
-  complete eight-field BUSINESS_VALUE_GATE
-  no candidate rows as savings
-  broad routes split before promotion
-  auto-discovery cannot auto-accept without verifier
-
-final verdict: PASS
-complexity_score: 29
-trace_path: /tmp/nanda-structural-gate/cpu-call-catalog-business-value-gate-v2.trace.json
-```
-
-Current hard filter:
-
-```text
-call_class found in real trace
-traffic_count / traffic_share measured
-exact-cache overlap known
-verifier or explicitly checkable external fact exists
-expected unique CPU accepts over exact cache estimated
-false_accept risk named
-expected savings named
-only then build/improve payload/profile/admission
-```
-
-Current5k facts:
-
-```text
-total_llm_calls: 5000
-exact_cache_hits: 452
-verified_cpu_accept_unique_request_fingerprints: 106
-incremental_cpu_accept_unique_request_fingerprints: 104
-incremental_unique_gap_to_80_calls: 3896
-```
+Reference:
 
-Discovery triage:
-
-```text
-manual discovery:
-  ime_input_state_debug:
-    16 candidates, 6 payload-ready, 5 evidence rows, 3 true, 2 false
-    robust_safe_policy_found: false
-    decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
-
-  document_stamp_layout_edit:
-    5 candidates, 4 payload-ready
-    decision: WATCH until document/file verifier evidence exists
-
-  resource_pressure_budget:
-    7 manual candidates, 3 payload-ready, current scoreable support 1
-    decision: WATCH until verifier-true support exists
-
-broad split discovery:
-  file_path_evidence_answer:
-    146 candidates, 44 scoreable, 16 true, 23 false
-    robust_safe_policy_found: false
-    decision: WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY
-
-  test_output_parse:
-    broad route split still exists, but the bounded previous-tool-output route
-    is already PROVEN and contributes the main current value.
-
-  metric_from_report / git_status_summary / report_sync:
-    candidate splits exist, but need narrower verifier-backed evidence before
-    engineering work is justified.
-```
-
-Decision:
-
 ```text
-Do not create or promote another profile from technical interest. The next
-engineering target must be the highest expected unique CPU accepts over exact
-cache at false_accepts=0. Broad answer/project/continue routes remain blocked
-as whole routes. Online operator discovery may nominate repeated action
-centers, but auto-accept without verifier remains forbidden.
+docs/NE_BUSY_ARCHITECTURE.md
+docs/NANDA_CPU_COMPACT_LATENT_TRANSITION_ARCHITECTURE.md
 ```
 
-## 2026-07-04 - Executor Integration: Current5k Business Value Gate Catalog
+Active miner direction:
 
-Verdict:
-
 ```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-ROUTE_GAP_CATALOG_V1_REVIEW
-ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND
-CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW
+L1 -> surface atoms
+L2 -> hidden state split
+L3 -> phase-center operator
+L4 -> portfolio survivor selector
+verifier -> admission / quarantine
 ```
 
-What changed:
+Client/server handoff:
 
 ```text
-Updated:
-  docs/CPU_CALL_CATALOG.md
-
-Added:
-  docs/structural_gates/cpu-catalog-current5k-business-value-v1.md
-
-Generated:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-current5k.report.json
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json
+ops/phase-center-test-server/CLIENT_HANDOFF.md
+OpenAI-compatible local URL: http://127.0.0.1:8787/v2
+health: curl -s http://127.0.0.1:8787/health
 ```
 
-Why:
+Core product rule:
 
 ```text
-The user clarified the main product risk: building many elegant CPU/L3 profiles
-that add only tiny real-traffic savings. This stage turns BUSINESS_VALUE_GATE
-into the working filter for current5k evidence: a profile must show real trace
-traffic, cache overlap, verifier support, expected unique accepts over exact
-cache, false_accept risk, and expected savings before more profile work.
+bad profile -> quarantine
+clean sibling profiles -> stay hot
+local_accept remains disabled until explicitly proven
 ```
 
-Commands:
+Hard bans:
 
 ```text
-cargo run -p nando-cli -- role-binding-real-traffic-route-gap-catalog-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-current5k.report.json \
-  5000
-
-cargo run -p nando-cli -- role-binding-real-traffic-route-gap-payload-readiness-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json \
-  5000
-
-cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1 \
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-current5k.combined.report.json \
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-current5k.report.json \
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-current5k.combined.report.json \
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-current5k.report.json
+no .nwrb revival
+no source-agent hardcode in generic core
+no manual class list as product logic
+no provider billing in hot path
+no local_accept without verifier and false_accepts = 0
+no synthetic-only market claim
 ```
 
-Measured result:
+## Current Checkpoint: V2 NANDA CPU Bridge
 
 ```text
-current5k total_llm_calls: 5000
-current5k exact_cache_hits: 452
-route_candidates: 1439
-route_gap_no_candidate_events: 3561
-route_gap_payload_ready_events: 807
+timestamp: 2026-07-08T14:28Z
 
-feedback operator_candidate_calls: 2490
-feedback scoreable_candidate_calls: 485
-feedback verification_hook_ready_events: 289
-feedback verified_cpu_accept_eligible_events: 105
-feedback verified_cpu_accept_unique_request_fingerprints: 103
-feedback incremental_cpu_accept_unique_request_fingerprints: 101
-feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 20
-feedback incremental_unique_gap_to_80_calls: 3899
+default client endpoint:
+  http://127.0.0.1:8787/v2
 
-catalog current_verified_cpu_accepts: 103
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 101
-catalog business_value_gate_passed_rows: 4
-catalog proven_profile_rows: 4
-catalog candidate_profile_rows: 2
-catalog watch_profile_rows: 18
-catalog rejected_profile_rows: 5
-```
+compatibility:
+  /v1 remains available for old clients
 
-Profile decisions:
+live v2 health:
+  ok: true
+  default_client_api_version: v2
+  v2_architecture: compact_latent_transition_runtime
+  upstream_configured: false
 
-```text
-test_output_parse:
-  status: PROVEN
-  candidate_events: 95
-  verified_cpu_accept_eligible_events: 95
-  incremental_unique_accepts: 91
+live v2 local route:
+  prompt: nando compression
+  local_accept: true
+  api_version: v2
+  transition_runtime: true
+  architecture: compact_latent_transition_runtime
+  route: nando_compression_status
+  tokens_saved: 352157
   false_accepts: 0
 
-metrics_report_readout:
-  status: PROVEN, small-support sidecar only
-  candidate_events: 99
-  scoreable_payload_events: 63
-  verification_hook_ready_events: 51
-  verified_cpu_accept_eligible_events: 3
-  incremental_unique_accepts: 3
+live v2 broad route:
+  prompt: ordinary broad prompt
+  local_accept: false
+  error.type: upstream_missing
+  fallback_reason: verifier_required_not_ok
+
+live scorecard after v2 dogfood:
+  stable_rows: 981
+  unique_cpu_accepts_over_exact_cache: 350
+  tokens_saved: 353905
   false_accepts: 0
 
-serving_ops:
-  status: PROVEN, tiny support only
-  candidate_events: 74
-  scoreable_payload_events: 40
-  verification_hook_ready_events: 33
-  verified_cpu_accept_eligible_events: 1
-  incremental_unique_accepts: 1
-  false_accepts: 0
+provider bridge v1/v2 metrics window:
+  provider_bridge_decision_window_rows: 98
+  provider_bridge_local_accept_events: 98
+  provider_bridge_tokens_saved_estimated: 449
+  provider_bridge_false_accepts: 0
+  provider_bridge_v1_local_accept_events: 88
+  provider_bridge_v1_tokens_saved_estimated: 402
+  provider_bridge_v1_false_accepts: 0
+  provider_bridge_v2_local_accept_events: 10
+  provider_bridge_v2_tokens_saved_estimated: 47
+  provider_bridge_v2_false_accepts: 0
+  provider_bridge_v2_transition_runtime_events: 10
+
+bridge smoke:
+  verdict: NANDO_PROVIDER_BRIDGE_SMOKE_PASS
+  case_count: 8
+  passed_count: 8
+  failed_count: 0
+
+upstream smoke:
+  verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_SMOKE_PASS
+  case_count: 5
+  passed_count: 5
+  upstream_hit_count: 2
+  provider_boundary_event_count: 2
+  provider_boundary_total_tokens: 20
+
+client env:
+  OPENAI_BASE_URL=http://127.0.0.1:8787/v2
+  NANDO_CPU_API_VERSION=v2
+
+boxed package:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T142837Z.tar.gz
+  sha256: 72569965f2ce4074c782cf6841efb50bd97ce3543feb0bcba86a5bb9ee5710e7
+
+rust-action-memory:
+  doctor: PASS
+  version: 0.3.0
+  stage: R23_RELEASE_CANDIDATE
+  gate.release_allowed: true
+  gate.quarantined_candidates: 0
+
+boundary:
+  v2 is a product surface / API boundary, not a proof that the full new
+  hidden-state transition miner is complete.
+  money claim remains blocked until real provider evidence exists.
+```
+
+## Current Error Work: False Accept Discipline
+
+```text
+timestamp: 2026-07-09
+
+finding:
+  raw false accepts are concentrated in agent_continue_execute continuations
+  after nonzero tool results, especially positive_nonzero / cargo_101.
+
+interpretation:
+  this is an unsafe continuation boundary. Failed/nonzero tool results must
+  not be treated as repeatable safe continuation unless a narrower recovery
+  subcenter proves itself.
+
+core change:
+  PhaseCenterOnlineMiner now quarantines the bucket on a verified false accept:
+    raw_local_operator && verified_safe_accept=false -> bucket.rejected=true
+
+effect:
+  the rejected bucket keeps learning from future events, but cannot emit
+  raw_local_operator, local_operator_shadow_decision, candidate runtime, or hot
+  export. Clean sibling/subcenter profiles stay eligible.
+
+verified:
+  cargo fmt --check: pass
+  cargo test -p nando-core false_accept -- --nocapture: pass
+  cargo check -p nando-core: pass
+  cargo check -p nando-cli: pass
+  rust-action-memory selector-report: no diagnostics, no safe apply needed
+  ops/phase-center-test-server/deploy.sh: pass
+
+live after deploy:
+  /v2 health ok
+  test-server verify false_accepts=0
+  stable clean compression false_accepts=0
+
+boundary:
+  stable_decision_log_false_accepts / append_false_accepts can include old raw
+  history. Product claims must use clean windows or post-quarantine windows.
+```
+
+## Current Miner Work: Token-First Quarantine Recovery
+
+```text
+timestamp: 2026-07-09
+
+goal:
+  recover token-heavy quarantined profiles by automatic split/subcenter mining;
+  do not lower thresholds.
+
+change:
+  PhaseCenterOnlineMiner candidate ranking is now token-first:
+    tokens_saved -> unique accepts -> cost -> bucket_id
+
+change:
+  product-hot survivor selector also ranks clean siblings/subcenters token-first.
+
+change:
+  live-tail now forces discovery sampling when the current event touches a
+  quarantined primary/subcenter profile. These events bypass discovery
+  throttling but remain bounded.
+
+change:
+  quarantined parent subcenters now spawn bounded recovery child buckets:
+    quarantine_recovery(parent_profile, split_atom)
+  using only safe split atoms. This is automatic streaming split pressure, not
+  manual class selection and not threshold lowering.
+
+new metrics:
+  quarantine_recovery_discovery_events
+  quarantine_recovery_discovery_tokens
+  quarantine_recovery_auto_subcenter_observe_events
+
+verified:
+  cargo fmt --check: pass
+  cargo test -p nando-core online_miner_ranks_candidate_recovery_by_tokens_before_call_count -- --nocapture: pass
+  cargo check -p nando-core: pass
+  cargo check -p nando-cli: pass
+  rust-action-memory selector-report: diagnostics=0, quarantined_candidates=0
+  ops/phase-center-test-server/deploy.sh: pass
+
+live after deploy:
+  /v2 health ok
+  services active: appender, live-tail, provider-bridge
+  stable clean window:
+    rows: 435
+    saved_tokens: 270640
+    total_tokens: 335877
+    saved_milli: 805
+    false_accepts: 0
+  append_false_accepts: 0
+  product_hot_post_quarantine_false_accepts: 0
+  quarantine_recovery_discovery_events: 12
+  quarantine_recovery_discovery_tokens: 11718
+  quarantine_recovery_auto_subcenter_observe_events: 244
+  top quarantined token profiles:
+    4084164558 hidden_state tokens_saved=367680 false_accepts=0
+    1215237470 hidden_state tokens_saved=336307 false_accepts=0
+    1648691765 hidden_state tokens_saved=158805 false_accepts=0
+
+late fix:
+  product-hot eval now intersects runtime decisions with current event
+  relevant_online_bucket_ids before scoring active decisions. This prevents
+  unrelated same-route profiles from producing fresh append false accepts.
+
+multi-split:
+  quarantine recovery now generates bounded parent+split and parent+split_pair
+  recovery children. This gives mixed quarantined profiles deeper automatic
+  subcenters without manual classes and without lowering threshold.
+
+trust filter:
+  PhaseCenterOnlineBucket now keeps miner-only EWMA trust telemetry:
+    trust_quality_micro
+    trust_false_risk_micro
+    trust_drift_micro
+    trust_token_value_micro
+  It is O(1), not in hot runtime scoring, and is intended for promote /
+  quarantine / split-deeper / sleep control.
+  first live top quarantine profile:
+    profile_id: 4084164558
+    trust_quality_micro: 138872
+    trust_false_risk_micro: 0
+    trust_drift_micro: 143687
+    trust_token_value_micro: 347
+
+boundary:
+  this proves the miner is now applying automatic token-first recovery pressure.
+  It does not yet prove those fattest quarantined parents have all recovered
+  into final hot subcenters. Current active hot profile count is still 1, while
+  hidden_state:quarantined holds roughly 1.4M token opportunity. Next work:
+  use trust telemetry to promote clean low-risk children and split high-drift
+  quarantined parents deeper.
+```
+
+## Latest Production Canary Checkpoint
+
+```text
+timestamp: 2026-07-08
+
+boxed deploy:
+  ops/phase-center-test-server/deploy.sh: pass
+
+systemd:
+  nando-phase-center-appender.service: active
+  nando-phase-center-live-tail.service: active
+  nando-provider-bridge.service: active
+
+resource guards:
+  nando-provider-bridge.service:
+    MemoryCurrent: ~13.3 MB
+    MemoryPeak: ~19.0 MB
+    MemoryHigh: 64 MB
+    MemoryMax: 256 MB
+    MemorySwapMax: 0
+    MemorySwapCurrent: 0
+    CPUQuota: 100%
+  nando-phase-center-appender.service:
+    MemoryCurrent: ~0.6 MB
+    MemoryPeak: ~2.3 MB
+    MemoryHigh: 64 MB
+    MemoryMax: 256 MB
+    MemorySwapMax: 0
+    MemorySwapCurrent: 0
+    CPUQuota: 25%
+  nando-phase-center-live-tail.service:
+    MemoryCurrent: ~4.7 MB
+    MemoryPeak: ~4.9 MB after swap-guarded redeploy
+    MemoryHigh: 256 MB
+    MemoryMax: 512 MB
+    MemorySwapMax: 0
+    MemorySwapCurrent: 0
+    CPUQuota: 50%
+
+server policy:
+  NANDO_LOCAL_ACCEPT_ENABLED=1
+  NANDO_CLIENT_ALLOW_LOCAL_ACCEPT=1
+  NANDO_CLIENT_SAFETY_POLICY=guarded_verified_routes
+  NANDO_CLIENT_TIER=canary_verified
+  NANDO_CLIENT_REQUIRE_VERIFIER=1
+  NANDO_CLIENT_REQUIRE_FALSE_ACCEPTS_ZERO=1
+
+local executor routes now verifier-bound:
+  nando health
+  nando status / nando server
+  nando compression
+  nando readiness
+  nando promotion
+
+cold snapshot refresh:
+  script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-refresh-snapshots.sh
+  report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.refresh-snapshots.json
+  verdict: NANDO_PHASE_CENTER_REFRESH_SNAPSHOTS_PASS
+  failed_count: 0
+  boundary: cold reports only; not used in hot request scoring
+
+boxed gateway canary smoke:
+  script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-gateway-canary-smoke.sh
+  report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.gateway-canary-smoke.json
+  verdict: NANDO_GATEWAY_CANARY_SMOKE_PASS
+  case_count: 6
+  passed_count: 6
+  failed_count: 0
+
+gateway smoke:
+  nando compression -> local_accept
+  nando readiness -> local_accept
+  nando promotion -> local_accept
+  ordinary broad prompt -> provider fallback
 
-mixed_map:
-  status: PROVEN, small support
-  candidate_events: 477
-  scoreable_payload_events: 11
-  verification_hook_ready_events: 11
-  verified_cpu_accept_eligible_events: 6
-  incremental_unique_accepts: 6
-  false_accepts: 0
-
-agent_control:
-  status: WATCH / NO_SAFE_POLICY
-  scoreable_payload_events: 540
-  output_evidence_matched_events: 476
-  verified_true_events: 35
-  verified_false_events: 441
-  robust_safe_policy_found: false
-```
-
-Decision:
-
-```text
-Current5k is now the active commercial filter. CPU80 is still not proven:
-incremental unique reduction is 20 milli and the gap to 80% is 3899 calls.
-The next profile must be chosen by BUSINESS_VALUE_GATE, not by architecture
-interest. Broad routes remain blocked as whole routes; only narrow,
-artifact-backed splits may move forward.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/cpu-catalog-current5k-business-value-v1.md
-verdict: PASS
-complexity_score: 51
-note: source-only audit packet; candidate-route version was rejected as too
-wide, so this gate records the coherent current5k claim boundary without
-splicing unrelated profile routes.
-```
-
-## 2026-07-04 - Executor Integration: Git Control Current5k Business Gate Probe
-
-Verdict:
-
-```text
-GIT_CONTROL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-GIT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-GIT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-GIT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_REQUEST_SUBFAMILY
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-After current5k BUSINESS_VALUE_GATE, git_control looked like the next narrow
-artifact-backed candidate: 123 real events and 90 scoreable payloads. This
-stage checks whether it can be safely promoted. It cannot: verifier evidence is
-available, but true and false rows do not separate under readout or admission.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-git-control-payload-dry-run-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.report.json \
-  5000
-
-cargo run -p nando-cli -- role-binding-real-traffic-git-control-profile-v1 \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/git-control-seed0-current5k.nwrb \
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1-current5k.json \
-  target/nando-wave/real-traffic-shadow/git-control-profile-v1-current5k.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-git-control-output-evidence-v1 \
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1-current5k.trace.jsonl \
-  /home/ubu/.codex/sessions \
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-git-control-local-accept-calibration-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1-current5k.json \
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1-current5k.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-git-control-admission-audit-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1-current5k.json \
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1-current5k.trace.jsonl \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1-current5k.report.json
-```
-
-Measured result:
-
-```text
-git_control_candidate_events: 123
-payload_ready_events: 90
-payload_built_events: 90
-scoreable_payload_events: 90
-edge_count: 8
-output_evidence_matched_events: 74
-verified_true_events: 35
-verified_false_events: 39
-unverified_rows: 16
-
-local_accept_calibration safe_policy_found: false
-local_accept_calibration best_safe_true_accepts: 0
-admission_audit safe_policy_found: false
-admission_audit best_safe_true_accepts: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 452
-shadow nando_shadow_accepts: 0
-shadow verified_safe_accepts: 0
-shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 539917
-
-verification_hook_ready_events: 74
-verified_cpu_accept_eligible_events: 0
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Keep git_control on WATCH / NO_SAFE_POLICY_CURRENT5K. It has real traffic and
-verifier evidence, but current geometry mixes 35 true with 39 false rows and no
-safe readout/admission policy exists. Do not lower thresholds and do not promote
-workspace mutation routes. The next git work must split to a narrower
-command-outcome subfamily before any new safe-policy attempt.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/git-control-current5k-no-safe-policy-v1.md
-verdict: PASS
-complexity_score: 30
-```
-
-## 2026-07-04 - Executor Integration: Serving Ops Current5k Tiny Safe Policy
-
-Verdict:
-
-```text
-SERVING_OPS_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-SERVING_OPS_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-SERVING_OPS_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-SERVING_OPS_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-After git_control failed safe-policy calibration, serving_ops was the next
-artifact-backed candidate with real current5k traffic and service-health
-verifier shape. It produced a tiny safe policy: only one verified accept, but
-false_accepts=0 and no server mutation path.
-```
-
-Measured result:
-
-```text
-serving_ops_candidate_events: 74
-payload_ready_events: 40
-payload_built_events: 40
-scoreable_payload_events: 40
-edge_count: 8
-output_evidence_matched_events: 33
-verified_true_events: 21
-verified_false_events: 12
-
-local_accept_calibration safe_policy_found: true
-local_accept_calibration best_safe_true_accepts: 6
-promoted policy_accept_rows: 1
-promoted policy_accept_verified_true_rows: 1
-promoted policy_accept_verified_false_rows: 0
-promoted policy_accept_unverified_rows: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 452
-shadow nando_shadow_accepts: 1
-shadow verified_safe_accepts: 1
-shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 371226
-
-verification_hook_ready_events: 33
-verified_cpu_accept_eligible_events: 1
-market_claim_allowed: true
-```
-
-Decision:
-
-```text
-serving_ops is now PROVEN on current5k, but only as a tiny support row. It adds
-one verified CPU accept and keeps false_accepts=0. This is useful as a proof of
-the BUSINESS_VALUE_GATE path, not as CPU80 progress. Keep daemon/server actions
-disabled and split a stronger service-health subfamily before another promote.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/serving-ops-current5k-tiny-safe-policy-v1.md
-verdict: PASS
-complexity_score: 33
-```
-
-## 2026-07-04 - Executor Integration: Edit Marker Length Current5k No Safe Policy
-
-Verdict:
-
-```text
-EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-EDIT_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-edit_marker_length had the largest non-broad candidate count after the current
-PROVEN rows, so it was the next BUSINESS_VALUE_GATE probe. It produced some
-request-side payloads and verifier evidence, but the true/false split is unsafe
-and no safe policy exists.
-```
-
-Measured result:
-
-```text
-edit_route_candidate_events: 505
-payload_ready_events: 50
-payload_built_events: 50
-scoreable_payload_events: 50
-output_evidence_matched_events: 42
-verified_true_events: 14
-verified_false_events: 28
-
-local_accept_calibration safe_policy_found: false
-local_accept_calibration best_safe_true_accepts: 0
-admission_calibration robust_safe_policy_found: false
-admission_calibration singleton_safe_policy_found: false
-admission_calibration best_robust_true_accepts: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 453
-shadow nando_shadow_accepts: 0
-shadow verified_safe_accepts: 0
-shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 1213283
-
-verification_hook_ready_events: 42
-verified_cpu_accept_eligible_events: 0
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Keep edit_marker_length on WATCH / NO_SAFE_POLICY_CURRENT5K. The route is
-visible in real traffic, but current evidence mixes 14 true with 28 false rows
-and no readout/admission policy separates safe accepts. Do not lower thresholds.
-Next edit work must split by concrete external edit evidence before promotion.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/edit-marker-current5k-no-safe-policy-v1.md
-verdict: PASS
-complexity_score: 30
-```
-
-## 2026-07-04 - Executor Integration: Mixed Map Current5k Safe Policy
-
-Verdict:
-
-```text
-MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-MIXED_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND
-MIXED_SAFE_POLICY_PROMOTE_V3_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-mixed_map was the next high-frequency non-broad profile after edit_marker_length.
-Unlike edit, it produced a request-side safe subfamily: the promoted v3 policy
-accepts only rows matching a prompt-side conjunction plus runtime energy
-threshold, and it keeps false_accepts=0.
-```
-
-Measured result:
-
-```text
-mixed_route_candidate_events: 478
-payload_ready_events: 37
-payload_built_events: 37
-scoreable_payload_events: 37
-output_evidence_matched_events: 34
-verified_true_events: 25
-verified_false_events: 9
-
-local_accept_calibration safe_policy_found: true
-local_accept_calibration best_safe_true_accepts: 7
-admission_audit safe_policy_found: true
-admission_audit best_safe_true_accepts: 6
-
-promoted request_side_policy_name: no_question_mark AND has_map_terms AND energy >= 237568
-promoted request_side_policy_accept_rows: 11
-promoted policy_accept_rows: 6
-promoted policy_accept_verified_true_rows: 6
-promoted policy_accept_verified_false_rows: 0
-promoted policy_accept_unverified_rows: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 453
-shadow nando_shadow_accepts: 6
-shadow verified_safe_accepts: 6
-shadow false_accepts: 0
-shadow incremental_reduction_vs_exact_cache_milli: 1
-shadow p99_shadow_score_latency_ns: 448249
-
-verification_hook_ready_events: 11
-verified_cpu_accept_eligible_events: 6
-market_claim_allowed: true
-```
-
-Decision:
-
-```text
-mixed_map is now PROVEN on current5k with 6 incremental unique CPU accepts and
-false_accepts=0. This is real progress but still small: total current5k
-incremental unique coverage is 101/5000, or 20 milli. Do not widen thresholds;
-improve by splitting stronger map subfamilies or better verifier geometry.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/mixed-map-current5k-safe-policy-v1.md
-verdict: PASS
-complexity_score: 33
-```
-
-## 2026-07-04 - Executor Integration: Conditional Current5k Tiny Safe Policy
-
-Verdict:
-
-```text
-CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
-CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-CONDITIONAL_ADMISSION_AUDIT_V1_REVIEW_SAFE_SUBFAMILY_CANDIDATE_FOUND
-CONDITIONAL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-conditional_branch was still high-frequency on current5k, but the old catalog
-row had no current-window accepts. This stage reran the whole route on the
-5000-call Codex history window. The broad readout policy remains unsafe, but a
-very small request-side v2 subfamily passes shadow/audit with false_accepts=0.
-```
-
-Measured result:
-
-```text
-conditional_route_candidate_events: 456
-payload_ready_events: 147
-payload_built_events: 147
-scoreable_payload_events: 147
-output_evidence_matched_events: 134
-verified_true_events: 36
-verified_false_events: 98
-
-local_accept_calibration safe_policy_found: false
-local_accept_calibration best_safe_true_accepts: 0
-admission_audit safe_policy_found: true
-admission_audit best_safe_true_accepts: 5
-
-promoted request_side_policy_name: conditional_gate_digit_terms
-promoted selected_policy_threshold: 8192
-promoted request_side_policy_accept_rows: 58
-promoted runtime_policy_accept_rows: 3
-promoted runtime_policy_verified_true_rows: 3
-promoted runtime_policy_verified_false_rows: 0
-promoted runtime_policy_unverified_rows: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 453
-shadow nando_shadow_accepts: 3
-shadow verified_safe_accepts: 3
-shadow false_accepts: 0
-shadow incremental_reduction_vs_exact_cache_milli: 0
-shadow p99_shadow_score_latency_ns: 719583
-
-verification_hook_ready_events: 53
-verified_cpu_accept_eligible_events: 3
-market_claim_allowed: true
-```
-
-Updated current5k scoreboard:
-
-```text
-feedback operator_candidate_calls: 2490
-feedback scoreable_candidate_calls: 593
-feedback verification_hook_ready_events: 384
-feedback verified_cpu_accept_eligible_events: 108
-feedback verified_cpu_accept_unique_request_fingerprints: 106
-feedback incremental_cpu_accept_unique_request_fingerprints: 104
-feedback incremental_cpu_accept_unique_reduction_milli: 20
-feedback incremental_unique_gap_to_80_calls: 3896
-
-catalog current_verified_cpu_accepts: 106
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 104
-catalog business_value_gate_passed_rows: 5
-catalog proven_profile_rows: 5
-catalog candidate_profile_rows: 3
-catalog watch_profile_rows: 16
-catalog rejected_profile_rows: 5
-```
-
-Decision:
-
-```text
-conditional_branch is now PROVEN only as a tiny request-side v2 subset. It adds
-3 incremental unique CPU accepts over exact cache and keeps false_accepts=0.
-Do not widen broad conditional_branch: route-wide local readout is still unsafe
-against 36 true / 98 false evidence rows. The next conditional work must split
-a stronger, artifact-backed branch family instead of lowering thresholds.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/conditional-current5k-tiny-safe-policy-v1.md
-verdict: PASS
-complexity_score: 38
-```
-
-## 2026-07-04 - Executor Integration: File Path Evidence Current5k Split Probe
-
-Verdict:
-
-```text
-BROAD_ROUTE_SPLIT_DISCOVERY_V1_REVIEW_SPLITS_FOUND
-FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-FILE_PATH_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-FILE_PATH_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-After the current5k catalog left broad answer/project routes rejected, the next
-safe move was split discovery, not broad route improvement. The top split was
-file_path_evidence_answer, an artifact-backed answer class with a deterministic
-source/path/URL presence verifier.
-```
-
-Measured result:
-
-```text
-broad_split sampled_llm_calls: 5000
-broad_split broad_candidate_events: 3325
-broad_split non_exact_broad_candidate_events: 3087
-broad_split top_split_key: file_path_evidence_answer
-
-file_path_evidence_candidate_events: 146
-non_exact_candidate_events: 144
-payload_ready_events: 122
-payload_built_events: 44
-scoreable_payload_events: 44
-profile_registered: false
-local_accepts_enabled: false
-
-profile edge_count: 7
-profile median_energy_margin: 1123328
-profile unexpected_local_accepts_under_disabled_threshold: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 453
-shadow nando_shadow_accepts: 0
-shadow verified_safe_accepts: 0
-shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 436908
-
-output_evidence_matched_events: 39
-verified_true_events: 16
-verified_false_events: 23
-
-admission hook_ready_rows: 39
-admission rows_with_prompt_features: 39
-admission robust_safe_policy_found: false
-admission best_robust_true_accepts: 0
-admission singleton_safe_policy_found: true
-admission best_singleton_true_accepts: 1
-
-verification_hook_ready_events: 39
-verified_cpu_accept_eligible_events: 0
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Keep file_path_evidence_answer on WATCH / SINGLETON_ONLY_NO_ROBUST_POLICY.
-It is the right kind of artifact-backed split, but current prompt-side features
-do not separate 16 true rows from 23 false rows. Do not write a promote path
-for singleton support. The next work is either collect more verifier-true rows
-or split file-path evidence into a stricter source/path/URL subfamily.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/file-path-evidence-current5k-watch-v1.md
-verdict: PASS
-complexity_score: 48
-```
-
-## 2026-07-04 - Executor Integration: Project Context Current5k Singleton Watch
-
-Verdict:
-
-```text
-PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_REVIEW_ACTIONABLE_SUBSET_FOUND
-PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-PROJECT_CONTEXT_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_WORKSPACE_EVIDENCE_TRUE_LABELS_FOUND
-PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-Why:
-
-```text
-The broad project_context_dialogue route is rejected as a whole, but the
-subfamily audit found a narrow artifact_backed_project_state subset. This stage
-tests that subset without enabling local accepts.
-```
-
-Measured result:
-
-```text
-project_context_candidate_events: 1313
-subfamily artifact_backed_project_state candidate_events: 14
-subfamily artifact_backed_project_state payload_ready_events: 14
-
-payload_ready_events: 14
-payload_built_events: 7
-scoreable_payload_events: 7
-profile_registered: false
-local_accepts_enabled: false
-
-profile edge_count: 8
-profile median_energy_margin: 1138688
-profile unexpected_local_accepts_under_disabled_threshold: 0
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 453
-shadow nando_shadow_accepts: 0
-shadow verified_safe_accepts: 0
-shadow false_accepts: 0
-shadow p99_shadow_score_latency_ns: 498287
-
-artifact_evidence_matched_events: 7
-verified_true_events: 1
-verified_false_events: 6
-tool_call_fingerprint_events: 1
-
-local_accept_calibration hook_ready_rows: 7
-local_accept_calibration label_true_rows: 1
-local_accept_calibration label_false_rows: 6
-local_accept_calibration safe_policy_found: true
-local_accept_calibration best_safe_true_accepts: 1
-
-verification_hook_ready_events: 7
-verified_cpu_accept_eligible_events: 0
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Keep project_context artifact_backed_project_state on WATCH /
-SINGLETON_ONLY_BELOW_MIN_SUPPORT. The split is correct in shape, but current
-evidence has only 1 true row and 6 false rows. Do not promote broad
-project_context_dialogue or the singleton safe policy. Collect more
-workspace-artifact verifier-true rows or split again before any accept path.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/project-context-current5k-singleton-watch-v1.md
-verdict: PASS
-complexity_score: 50
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse 5k Window Attribution
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_V1_REVIEW_FULL_WINDOW_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FORECAST_V1_REVIEW
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added:
-  docs/structural_gates/test-output-parse-5k-window-v1.md
-```
-
-Why:
-
-```text
-The 1000-call feedback denominator had only 10 matching `test_output_parse`
-rows, while the route-specific proof had 97/104 accepts. The 5k Codex
-route-candidate window already existed as events-jsonl, so this stage makes the
-trace reader accept event rows as trace input, normalizes the schema only inside
-the reader, and builds a separate 5k attribution path without replacing the
-canonical 1000-window catalog.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-safe-policy-window-v1 \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.events.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-cpu-route-forecast-v1 \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.report.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1-5k.report.json \
-  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1-5k.test-output-window.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.events.jsonl \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.shadow-report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.events.jsonl \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.shadow-report.json \
-  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1-5k.route-candidates.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 \
-  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1-5k.test-output-window.report.json \
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json \
-  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1-5k.route-candidates.report.json \
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-5k.test-output-window.report.json \
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.report.json \
-  target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json \
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json \
-  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json \
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.verification-hook-audit.report.json \
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.verification-hook-audit.report.json \
-  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.report.json \
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json \
-  target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json \
-  target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1-5k.verification-hook-audit.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1 \
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1-5k.test-output-window.report.json \
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-5k.report.json \
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1-5k.test-output-window.report.json \
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-5k.report.json
-```
-
-Measured result:
-
-```text
-window base_window_rows: 5000
-window promoted_route_rows: 104
-window promoted_rows_inserted: 97
-window forced_fallback_rows: 4903
-window missing_base_match_rows: 0
-window exact_cache_overlap_promoted_rows: 2
-
-shadow total_llm_calls: 5000
-shadow exact_cache_hits: 459
-shadow operator_candidate_calls: 97
-shadow nando_shadow_accepts: 97
-shadow verified_safe_accepts: 97
-shadow false_accepts: 0
-shadow incremental_savings_over_exact_cache: 95
-shadow incremental_reduction_vs_exact_cache_milli: 20
-
-audit operator_candidate_calls: 97
-audit scoreable_candidate_calls: 97
-audit verification_hook_ready_events: 97
-audit verified_cpu_accept_eligible_events: 97
-audit verified_true_events: 97
-audit verified_false_events: 0
-audit market_claim_allowed: true
-
-feedback total_llm_calls: 5000
-feedback exact_cache_hits: 459
-feedback operator_candidate_calls: 2312
-feedback scoreable_candidate_calls: 345
-feedback verification_hook_ready_events: 122
-feedback verified_cpu_accept_eligible_events: 97
-feedback verified_cpu_accept_unique_request_fingerprints: 95
-feedback incremental_cpu_accept_unique_request_fingerprints: 93
-feedback exact_cache_overlap_verified_cpu_accepts: 2
-feedback incremental_cpu_accept_unique_reduction_milli: 18
-feedback incremental_unique_gap_to_80_calls: 3907
-
-catalog total_llm_calls: 5000
-catalog exact_cache_hits: 459
-catalog current_verified_cpu_accepts: 95
-catalog current_incremental_unique_cpu_accepts_over_exact_cache: 93
-catalog business_value_gate_passed_rows: 1
-catalog proven_profile_rows: 1
-catalog candidate_profile_rows: 1
-catalog watch_profile_rows: 22
-catalog rejected_profile_rows: 5
-```
-
-Decision:
-
-```text
-The larger 5k window confirms `test_output_parse` is a real value profile:
-97 verified accepts, 95 unique request fingerprints, 93 incremental over exact
-cache, and false_accepts=0. The 5k catalog has only one PROVEN row, so the next
-growth target must add a new narrow artifact-backed verified profile rather
-than polish broad routes. This is still not CPU80: verified unique coverage is
-19 milli and incremental unique reduction is 18 milli. The canonical 1000-window
-catalog remains the current operator catalog; the 5k catalog is recorded as
-sidecar evidence for larger-window priority planning.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-5k-window-v1.md
-verdict: PASS
-complexity_score: 77
-```
-
-## 2026-07-04 - Executor Integration: CPU Operator Catalog Refresh After Test Output Parse
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW
-AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  docs/CPU_CALL_CATALOG.md
-
-Regenerated:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-  target/nando-wave/real-traffic-shadow/agent-loop-profile-registry-v1.report.json
-```
-
-Why:
-
-```text
-The full-window `test_output_parse` route was integrated into feedback, but the
-old business-value report path still showed 7 proven rows and did not rank
-`test_output_parse`. The canonical catalog command already consumes
-`cpu-route-feedback-loop-v1.report.json`; rerunning it refreshes the business
-gate without adding code or changing local-accept policy.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1
-cargo run -p nando-cli -- role-binding-real-traffic-agent-loop-profile-registry-v1
-```
-
-Measured result:
-
-```text
-cpu_operator_catalog total_llm_calls: 1000
-cpu_operator_catalog exact_cache_hits: 53
-cpu_operator_catalog current_verified_cpu_accepts: 36
-cpu_operator_catalog current_incremental_unique_cpu_accepts_over_exact_cache: 35
-cpu_operator_catalog business_value_gate_passed_rows: 8
-cpu_operator_catalog proven_profile_rows: 8
-cpu_operator_catalog candidate_profile_rows: 4
-cpu_operator_catalog watch_profile_rows: 12
-cpu_operator_catalog rejected_profile_rows: 6
-
-test_output_parse priority_rank: 1
-test_output_parse candidate_events: 10
-test_output_parse non_exact_candidate_calls: 10
-test_output_parse expected_unique_cpu_accepts_over_exact_cache: 10
-test_output_parse false_accepts: 0
-test_output_parse current_status: PROVEN
-test_output_parse business_value_gate_passed: true
-
-agent_loop_profile_registry top_next_profile_key: null
-agent_loop_profile_registry verified_current_profiles: 8
-agent_loop_profile_registry admission_blocked_profiles: 2
-```
-
-Decision:
-
-```text
-The navigation instrument is now synchronized with feedback: `test_output_parse`
-is the top PROVEN row, but it is already counted and must not be double-counted.
-The next growth step remains a sibling split/profile with new verified unique
-accepts; current registry does not expose a safe top_next_profile_key.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/cpu-operator-catalog-refresh-after-test-output-parse.md
-verdict: PASS
-complexity_score: 38
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Full-Window Attribution V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_SAFE_POLICY_WINDOW_V1_REVIEW_MISSING_BASE_MATCHES
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-safe-policy-window-v1
-```
-
-Why:
-
-```text
-The route-specific safe-policy proof had 97/104 accepts, but CPU80 must be
-counted on the current 1000-call feedback denominator. This stage builds an
-isolated full-window trace from the 1000-row Codex route-candidate window,
-injects only matching verified test_output_parse rows by request fingerprint,
-and clears all other Nando shadow requests so attribution remains single-route.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-safe-policy-window-v1 \
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-shadow-v1.report.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-window-v1.verification-hook-audit.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1
-```
-
-Measured result:
-
-```text
-window base_window_rows: 1000
-window promoted_route_rows: 104
-window promoted_rows_inserted: 10
-window forced_fallback_rows: 990
-window missing_base_match_rows: 85
-window exact_cache_overlap_promoted_rows: 0
-
-shadow total_llm_calls: 1000
-shadow exact_cache_hits: 53
-shadow operator_candidate_calls: 10
-shadow nando_shadow_accepts: 10
-shadow verified_safe_accepts: 10
-shadow false_accepts: 0
-shadow incremental_savings_over_exact_cache: 10
-shadow incremental_reduction_vs_exact_cache_milli: 10
-shadow p99_shadow_score_latency_ns: 484968
-
-audit operator_candidate_calls: 10
-audit scoreable_candidate_calls: 10
-audit verification_hook_ready_events: 10
-audit verified_cpu_accept_eligible_events: 10
-audit verified_true_events: 10
-audit verified_false_events: 0
-audit market_claim_allowed: true
-
-feedback total_llm_calls: 1000
-feedback exact_cache_hits: 53
-feedback operator_candidate_calls: 1000
-feedback operator_candidate_route_sum_events: 1029
-feedback scoreable_candidate_calls: 184
-feedback verification_hook_ready_events: 153
-feedback verified_cpu_accept_eligible_events: 42
-feedback verified_cpu_routability_milli: 42
-feedback unique_verified_cpu_accepts: 36
-feedback incremental_unique_cpu_accepts: 35
-
-feedback test_output_parse candidate_events: 10
-feedback test_output_parse verified_cpu_accept_eligible_events: 10
-feedback test_output_parse false_accepts: 0
-feedback test_output_parse incremental_verified_request_fingerprints: 10
-```
-
-Decision:
-
-```text
-`test_output_parse` remains PROVEN, but only as a narrow full-window route
-delta of 10/1000 for the current feedback denominator. The stronger 97/104
-route-specific proof is preserved as route evidence, not counted as CPU80
-progress in this window. This fixes the previous attribution debt without
-promoting broad answer/explain behavior.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-safe-policy-window-v1.md
-verdict: PASS
-complexity_score: 57
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Safe Policy V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-safe-policy-promote-v1
-```
-
-Why:
-
-```text
-The disabled profile showed strong margins but no accepts. This stage creates a
-separate promoted registry/trace for only known-status previous-tool-output
-rows, then proves shadow accept + verifier audit. The base disabled profile is
-not modified.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-safe-policy-promote-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.report.json \
-  100
-
-cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-safe-policy-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-shadow-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-shadow-v1.report.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-safe-policy-v1.verification-hook-audit.report.json
-```
-
-Measured result:
-
-```text
-selected_policy_threshold: 1196032
-policy_accept_rows: 97
-policy_accept_verified_true_rows: 97
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-provider_cost_events_written: 97
-runtime_acceptance_mismatches: 0
-
-shadow total_llm_calls: 104
-shadow exact_cache_hits: 2
-shadow nando_shadow_accepts: 97
-shadow verified_safe_accepts: 97
-shadow unverified_shadow_accepts: 0
-shadow false_accepts: 0
-shadow incremental_savings_over_exact_cache: 95
-shadow incremental_reduction_vs_exact_cache_milli: 931
-shadow p99_shadow_score_latency_ns: 531326
-shadow synthetic_trace_used: false
-
-verification_hook_ready_events: 97
-verified_cpu_accept_eligible_events: 97
-verified_true_events: 97
-verified_false_events: 0
-market_claim_allowed: true
-```
-
-Decision:
-
-```text
-This promotes `test_output_parse` from CANDIDATE to a narrow PROVEN route for
-request-time previous-tool-output status parsing. It does not widen
-answer/explain and does not prove CPU80 by itself, because the full 1000-call
-feedback window has not been regenerated with this promoted safe-policy trace.
-Next debt: route this pass into CPU feedback/unique attribution and keep the
-BUSINESS_VALUE_GATE per call_class.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-safe-policy-v1.md
-verdict: PASS
-complexity_score: 62
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Profile V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-profile-v1
-```
-
-Why:
-
-```text
-The tool-state payload stage produced 97 scoreable test_output_parse payloads.
-This stage compiles those payloads into a disabled-threshold .nwrb profile and
-overlay registry so shadow scoring can measure margins/latency without enabling
-local accepts.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-profile-v1 \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-seed0.nwrb \
-  target/nando-wave/real-traffic-shadow/profile-registry-test-output-parse-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-profile-v1.report.json
-```
-
-Measured profile result:
-
-```text
-profile_id: route_gap_test_output_parse_profile_v1
-package_bytes: 128
-edge_count: 7
-runtime_bytes_estimate: 32972
-threshold: 2147483647
-trace_rows_read: 104
-scoreable_payload_events: 97
-package_training_requests: 97
-changed_edges: 112
-positive_margin_rows: 97
-strict_ordered_pass_rows: 97
-unexpected_local_accepts_under_disabled_threshold: 0
-median_energy_margin: 1196032
-min_slot_margin: 393216
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed: false
-```
-
-Shadow/audit:
-
-```text
-role-binding-real-traffic-shadow-v1:
-  operator_candidate_calls: 97
-  nando_shadow_accepts: 0
-  nando_shadow_fallbacks: 97
-  verified_safe_accepts: 0
-  false_accepts: 0
-  p99_shadow_score_latency_ns: 484436
-  synthetic_trace_used: false
-
-role-binding-real-traffic-verification-hook-audit-v1:
-  verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-  scoreable_candidate_calls: 97
-  verification_hook_ready_events: 0
-  verified_cpu_accept_eligible_events: 0
-  candidates_missing_explicit_verification: 97
-  market_claim_allowed: false
-```
-
-Decision:
-
-```text
-The profile is ready for shadow scoring, and disabled-threshold safety holds:
-0 unexpected accepts and 0 false accepts. This is still not a CPU savings claim.
-The next debt is explicit deterministic verification/admission for these 97
-scoreable rows; do not lower the threshold from profile margins alone.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-profile-v1.md
-verdict: PASS
-complexity_score: 56
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Tool-State Payload V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_TOOL_STATE_PAYLOAD_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-tool-state-payload-v1
-```
-
-Why:
-
-```text
-The tool-output state stage showed that all 104 test_output_parse candidates
-have previous tool-output state and 97 have deterministic command status. This
-stage turns those pass/fail rows into scoreable Nando shadow payloads without
-reading raw prompt text, raw tool output, final answers, target labels, or proof
-labels. Unknown-status rows remain fallback/review.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-tool-state-payload-v1 \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-state-payload-v1.report.json
-```
-
-Measured result:
-
-```text
-operator_candidate_calls: 104
-non_exact_candidate_events: 102
-exact_cache_overlap_events: 2
-tool_output_state_matched_events: 104
-command_status_detected_events: 97
-payload_ready_events: 97
-payload_built_events: 97
-scoreable_payload_events: 97
-builder_rejected_events: 7
-profile_registered: false
-shadow_score_ready: false
-expected_unique_cpu_accepts_over_exact_cache: 0
-expected_savings_milli: 0
-false_accepts: 0
-raw_prompt_text_written: false
-raw_tool_output_text_written: false
-raw_response_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-The scoreable support bottleneck moved from 3/104 to 97/104 without answer
-leakage. This still proves no savings because the profile is not registered and
-local accepts are disabled. Next step is a disabled-threshold
-test_output_parse profile from this payload trace, followed by shadow/admission
-audit before counting any verified unique CPU accepts.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-tool-state-payload-v1.md
-verdict: PASS
-complexity_score: 58
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Tool-Output State V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_TOOL_OUTPUT_STATE_V1_REVIEW_TOOL_STATE_ATTACHED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-tool-output-state-v1
-```
-
-Why:
-
-```text
-The previous test_output_parse dry-run found 104 real candidates, but only 3
-scoreable request-side payloads. This stage measures whether those candidates
-can be connected to request-time agent-loop tool-output state, using only the
-previous command-output fingerprint/status visible before the user request.
-It writes no raw prompt/tool-output/response text and does not enable local
-accepts.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-tool-output-state-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
-  /home/ubu/.codex/sessions \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-tool-output-state-v1.report.json \
-  5000
-```
-
-Measured result:
-
-```text
-test_output_parse_candidate_events: 104
-non_exact_candidate_events: 102
-exact_cache_overlap_events: 2
-session_ids_requested: 9
-session_files_scanned: 9
-codex_turns_indexed: 104
-tool_outputs_indexed: 145578
-tool_output_state_matched_events: 104
-command_status_detected_events: 97
-pass_status_events: 90
-fail_status_events: 7
-warning_status_events: 0
-unknown_status_events: 7
-raw_prompt_text_written: false
-raw_tool_output_text_written: false
-raw_response_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-The bottleneck is no longer "no agent-loop state": all 104 candidates have a
-previous tool-output fingerprint, and 97/104 have deterministic command status.
-This is still not a savings claim. The next debt is to turn this previous
-tool-output state into scoreable test_output_parse payloads without using final
-answers, then train/compile a disabled profile and run admission/shadow.
-```
-
-Operational note:
-
-```text
-The session scan is offline and can be slow on large rollout JSONL files. The
-route now prints per-session progress. Do not confuse this offline scan cost
-with product hot-path latency.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-tool-output-state-v1.md
-verdict: PASS
-complexity_score: 66
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Output Evidence V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-output-evidence-v1
-```
-
-Why:
-
-```text
-The test_output_parse payload dry-run found only 3 scoreable rows. This stage
-joins those scoreable rows back to local Codex session final-answer evidence
-and attaches conservative test-status verifier labels, without writing raw
-prompt/response text and without enabling local accepts.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-output-evidence-v1 \
-  target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.trace.jsonl \
-  /home/ubu/.codex/sessions \
-  target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-output-evidence-v1.report.json
-```
-
-Measured result:
-
-```text
-operator_candidate_calls: 3
-scoreable_candidate_calls: 3
-session_ids_requested: 2
-session_files_scanned: 2
-codex_turns_indexed: 3
-output_evidence_matched_events: 3
-no_session_output_match_events: 0
-deterministic_verification_events: 3
-verifier_not_applicable_events: 0
-verified_true_events: 3
-verified_false_events: 0
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-The verifier works on the current scoreable subset: 3/3 rows are true and
-false=0. This is still not a CPU savings claim. The limiting factor is support:
-only 3 scoreable rows out of 104 candidates. Next step is either a
-disabled-threshold test_output_parse profile plus shadow/audit for these rows,
-or, preferably for CPU80, agent-loop tool-output state capture so many more
-test_output_parse candidates become scoreable from real command-output context.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-output-evidence-v1.md
-verdict: PASS
-complexity_score: 44
-```
-
-## 2026-07-04 - Executor Integration: Test Output Parse Payload Dry-Run V1
-
-Verdict:
-
-```text
-TEST_OUTPUT_PARSE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added CLI route:
-  role-binding-real-traffic-test-output-parse-payload-dry-run-v1
-```
-
-Why:
-
-```text
-The broad-route split report shows `test_output_parse` as a real narrow
-candidate inside blocked broad routes. This stage builds request-side
-active_fringe/slots for that split only, without reading raw responses, target
-labels, proof labels, or enabling local accepts.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-test-output-parse-payload-dry-run-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
-  target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/test-output-parse-payload-dry-run-v1.report.json \
-  5000
-```
-
-Measured result:
-
-```text
-test_output_parse_candidate_events: 104
-non_exact_candidate_events: 102
-exact_cache_overlap_events: 2
-payload_ready_events: 3
-payload_built_events: 3
-scoreable_payload_events: 3
-profile_registered: false
-shadow_score_ready: false
-expected_unique_cpu_accepts_over_exact_cache: 0
-expected_savings_milli: 0
-false_accepts: 0
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-`test_output_parse` has real traffic density, but current request-side payload
-readiness is too narrow: only 3 scoreable rows out of 104 candidates. Do not
-compile/promote accepts yet. Next debt is tool-output evidence and a deterministic
-test_status_and_error_excerpt verifier; only after verifier labels exist should
-we build the disabled-threshold profile and calibrate admission.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/test-output-parse-payload-dry-run-v1.md
-verdict: PASS
-complexity_score: 60
-```
-
-## 2026-07-04 - Executor Integration: File Path Evidence Admission Calibration V1
-
-Verdict:
-
-```text
-FILE_PATH_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added CLI route:
-  role-binding-real-traffic-file-path-evidence-admission-calibration-v1
-```
-
-Why:
-
-```text
-The file_path_evidence_answer split now has verifier labels, but enabling local
-accepts would still be unsafe unless request-side features separate verifier-true
-rows from verifier-false rows without reading the answer. This stage calibrates
-that admission boundary and remains review-only.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-admission-calibration-v1 \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-admission-calibration-v1.report.json
-```
-
-Measured admission result:
-
-```text
-hook_ready_rows: 39
-rows_with_prompt_features: 39
-history_prompt_missing_rows: 0
-label_true_rows: 15
-label_false_rows: 24
-minimum_true_support: 3
-robust_safe_policy_found: false
-singleton_safe_policy_found: true
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 1
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_features: false
-target_labels_used_for_runtime: false
-proof_labels_used_for_runtime: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-file_path_evidence_answer is not ready for promotion. The best zero-false policy
-has only singleton support, so it is not a robust admission rule. Keep local
-accepts disabled and move this split to WATCH until more verifier-true
-non-synthetic rows or a narrower artifact-backed split exists.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/file-path-evidence-admission-calibration-v1.md
-verdict: PASS
-complexity_score: 73
-```
-
-## 2026-07-04 - Executor Integration: File Path Evidence Output Evidence V1
-
-Verdict:
-
-```text
-FILE_PATH_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added CLI route:
-  role-binding-real-traffic-file-path-evidence-output-evidence-v1
-```
-
-Why:
-
-```text
-The file_path_evidence profile could score request-side payloads, but it had
-no deterministic verifier labels. This stage attaches final-answer fingerprints
-and source_path_or_url_presence verifier status from local Codex session
-evidence, without writing raw prompts or raw responses.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-output-evidence-v1 \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
-  /home/ubu/.codex/sessions \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-shadow-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-shadow-v1.report.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-output-evidence-v1.verification-hook-audit.report.json
-```
-
-Measured output evidence:
-
-```text
-operator_candidate_calls: 44
-scoreable_candidate_calls: 44
-session_ids_requested: 9
-session_files_scanned: 9
-codex_turns_indexed: 39
-output_evidence_matched_events: 39
-no_session_output_match_events: 5
-deterministic_verification_events: 39
-verifier_not_applicable_events: 0
-verified_true_events: 15
-verified_false_events: 24
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Measured shadow/audit:
-
-```text
-operator_candidate_calls: 44
-nando_shadow_accepts: 0
-nando_shadow_fallbacks: 44
-verified_safe_accepts: 0
-unverified_shadow_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 320643
-
-verification_hook_ready_events: 39
-verified_cpu_accept_eligible_events: 0
-candidates_missing_explicit_verification: 5
-candidates_missing_output_evidence: 5
-provider_cost_events: 0
-```
-
-Decision:
-
-```text
-file_path_evidence_answer now has verifier labels: 15 true, 24 false, 5 missing.
-It still adds zero CPU80 savings because the disabled profile accepts nothing.
-The next step is request-side admission calibration against these labels.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/file-path-evidence-output-evidence-v1.md
-verdict: PASS
-```
-
-## 2026-07-04 - Executor Integration: File Path Evidence Disabled Profile V1
-
-Verdict:
-
-```text
-FILE_PATH_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added CLI route:
-  role-binding-real-traffic-file-path-evidence-profile-v1
-```
-
-Why:
-
-```text
-The previous stage produced 44 scoreable request-side payloads for the narrow
-file_path_evidence_answer split, but shadow could not score them because no
-profile existed. This stage compiles a dedicated disabled-threshold .nwrb
-package and registry overlay for that split only.
-
-This is not a local accept promotion and not a market claim.
-```
-
-Commands:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-profile-v1 \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-seed0.nwrb \
-  target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-shadow-v1 \
-  target/nando-wave/real-traffic-shadow/profile-registry-file-path-evidence-v1.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-shadow-v1.report.json
-
-cargo run -p nando-cli -- role-binding-real-traffic-verification-hook-audit-v1 \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-shadow-v1.report.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-profile-v1.verification-hook-audit.report.json
-```
-
-Measured profile result:
-
-```text
-profile_id: split_file_path_evidence_answer_profile_v1
-package_bytes: 128
-edge_count: 7
-runtime_bytes_estimate: 32972
-threshold: 2147483647
-trace_rows_read: 5000
-scoreable_payload_events: 44
-package_training_requests: 44
-positive_updates: 3096
-negative_updates: 3168
-changed_edges: 277
-positive_margin_rows: 44
-strict_ordered_pass_rows: 44
-unexpected_local_accepts_under_disabled_threshold: 0
-median_energy_margin: 1123328
-p10_energy_margin: 1011712
-min_energy_margin: 992256
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed: false
-```
-
-Measured shadow/audit result:
-
-```text
-total_requests: 5000
-total_llm_calls: 5000
-operator_candidate_calls: 44
-exact_cache_hits: 456
-nando_shadow_accepts: 0
-nando_shadow_fallbacks: 44
-verified_safe_accepts: 0
-unverified_shadow_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 259065
-
-verification_hook_ready_events: 0
-verified_cpu_accept_eligible_events: 0
-candidates_missing_explicit_verification: 44
-candidates_missing_output_evidence: 44
-provider_cost_events: 0
-```
-
-Decision:
-
-```text
-file_path_evidence_answer now has a scoreable disabled profile and shadow path.
-It still does not count toward CPU80 savings because all rows fallback and no
-source_path_or_url_presence verifier evidence exists.
-```
-
-Next route debt:
-
-```text
-attach source_path_or_url_presence_verifier_v1 output evidence
-calibrate request-side admission on verifier labels
-only then consider a safe-policy promote
-feed verified unique accepts back into CPU_CALL_CATALOG
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/file-path-evidence-profile-v1.md
-verdict: PASS
-```
-
-## 2026-07-04 - Executor Integration: File Path Evidence Payload Dry-Run V1
-
-Verdict:
-
-```text
-FILE_PATH_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Added CLI route:
-  role-binding-real-traffic-file-path-evidence-payload-dry-run-v1
-```
-
-Why:
-
-```text
-Broad answer/project/continue routes are blocked as whole routes. The previous
-broad-route split discovery found file_path_evidence_answer as the densest
-artifact-backed narrow class, so this stage builds request-side payloads for
-that split only.
-
-This is not a local accept profile and not a market claim.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-file-path-evidence-payload-dry-run-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/file-path-evidence-payload-dry-run-v1.report.json \
-  5000
-```
-
-Measured result:
-
-```text
-sampled_history_rows: 5000
-file_path_evidence_candidate_events: 146
-non_exact_candidate_events: 144
-exact_cache_overlap_events: 2
-payload_ready_events: 122
-payload_built_events: 44
-scoreable_payload_events: 44
-builder_rejected_events: 78
-readiness_rejected_events: 24
-profile_registered: false
-shadow_score_ready: false
-expected_unique_cpu_accepts_over_exact_cache: 0
-expected_savings_milli: 0
-false_accepts: 0
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Parent-route provenance:
-
-```text
-answer_or_explain: 79
-project_context_dialogue: 65
-agent_continue_execute: 2
-```
-
-Decision:
-
-```text
-file_path_evidence_answer now has 44 scoreable request-side payloads from
-non-synthetic real Codex history and broad-route split discovery.
-
-It does not count toward CPU80 savings. It stays CANDIDATE until a disabled
-profile, source_path_or_url_presence verifier, admission audit, shadow, feedback,
-and CPU catalog prove false_accepts=0 and unique value over exact cache.
-```
-
-Next route debt:
-
-```text
-compile disabled-threshold file_path_evidence .nwrb profile
-attach source_path_or_url_presence_verifier_v1 output evidence
-calibrate request-side admission
-run shadow/audit and feed CPU_CALL_CATALOG
-only then consider expected_unique_cpu_accepts_over_exact_cache > 0
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/file-path-evidence-payload-dry-run-v1.md
-verdict: PASS
-```
-
-## 2026-07-04 - Executor Integration: Broad Route Split Discovery V1
-
-Verdict:
-
-```text
-BROAD_ROUTE_SPLIT_DISCOVERY_V1_REVIEW_SPLITS_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-  docs/CPU_CALL_CATALOG.md
-
-Generated:
-  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json
-```
-
-Why:
-
-```text
-CPU80 cannot be reached by improving broad answer/project/continue routes as a
-whole. They need to be split into narrow artifact-backed CPU call classes with
-traffic count, exact-cache overlap, verifier shape, and expected unique value
-before any new profile work.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-broad-route-split-discovery-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json \
-  target/nando-wave/real-traffic-shadow/broad-route-split-discovery-v1.report.json \
-  5000
-```
-
-Measured result:
-
-```text
-sampled_llm_calls: 5000
-broad_candidate_events: 3330
-non_exact_broad_candidate_events: 3089
-candidate_split_rows: 11
-watch_split_rows: 6
-rejected_split_rows: 3
-business_value_gate_passed_rows: 0
-raw_text_written: false
-local_accepts_enabled: false
-```
-
-Top candidate splits:
-
-```text
-answer_or_explain / file_path_evidence_answer: candidates=79, non_exact=79, payload=70, verifier=70
-project_context_dialogue / file_path_evidence_answer: candidates=65, non_exact=63, payload=51, verifier=52
-answer_or_explain / test_output_parse: candidates=57, non_exact=57, payload=3, verifier=35
-answer_or_explain / metric_from_report: candidates=27, non_exact=27, payload=14, verifier=14
-answer_or_explain / git_status_summary: candidates=10, non_exact=10, payload=5, verifier=10
-agent_continue_execute / git_status_summary: candidates=8, non_exact=8, payload=4, verifier=8
-```
-
-Still blocked:
-
-```text
-project_context_dialogue / broad_reasoning_requires_llm: non_exact=1216
-answer_or_explain / broad_reasoning_requires_llm: non_exact=1029
-agent_continue_execute / artifact_progress: WATCH, high stateful singleton risk
-```
-
-Decision:
-
-```text
-Broad routes remain REJECT_FOR_NOW as whole routes.
-
-Next build should start from a narrow deterministic split, not from the broad
-route:
-  file_path_evidence_answer
-  test_output_parse
-  metric_from_report
-  git_status_summary
-
-Discovery rows are not savings. They keep expected_unique_cpu_accepts_over_exact_cache=0
-until payload builder, verifier, shadow/audit, feedback, and CPU catalog prove
-false_accepts=0 and unique value over exact cache.
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/broad-route-split-discovery-v1.md
-verdict: PASS
-```
-
-## 2026-07-04 - Executor Integration: CPU Call Catalog Business Value Gate V1
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_BUSINESS_VALUE_GATE_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Added:
-  docs/CPU_CALL_CATALOG.md
-
-Generated:
-  target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.report.json
-  target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.nanda.txt
-```
-
-Why:
-
-```text
-CPU80 cannot be reached by building many attractive but low-value profiles.
-Every operator profile now has to pass BUSINESS_VALUE_GATE before more work:
-real trace count, non-exact candidate calls, deterministic verifier evidence,
-expected unique CPU accepts over exact cache, expected savings, and
-false_accepts=0.
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-cpu-operator-catalog-v1 \
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v5.post-ime-current.report.json \
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-5k.report.json \
-  target/nando-wave/real-traffic-shadow/cpu-call-catalog-business-value-v1.report.json \
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-5k.report.json
-```
-
-Measured result:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 53
-current_verified_cpu_accepts: 26
-current_incremental_unique_cpu_accepts_over_exact_cache: 25
-business_value_gate_passed_rows: 7
-proven_profile_rows: 7
-candidate_profile_rows: 4
-watch_profile_rows: 12
-rejected_profile_rows: 6
-```
-
-PROVEN rows:
-
-```text
-role_binding_mixed_map_seed0: expected_unique=7
-role_binding_agent_control_seed0: expected_unique=5
-git_control: expected_unique=4
-role_binding_conditional_branch_seed0: expected_unique=3
-metrics_report_readout: expected_unique=3
-serving_ops: expected_unique=3
-role_binding_edit_marker_length_seed0: expected_unique=1
-```
-
-CANDIDATE rows:
-
-```text
-uncatalogued / resource_pressure_budget
-read_inspect
-style_brevity
-resource_pressure_budget
-```
-
-REJECT_FOR_NOW rows:
-
-```text
-answer_or_explain
-project_context_dialogue
-agent_continue_execute
-```
-
-Decision:
-
-```text
-Do not build the next profile because it is interesting.
-Build only when a row can show expected unique CPU accepts over exact cache,
-or when a deterministic verifier/split can plausibly raise that number.
-
-Broad routes stay blocked as full routes. Work only narrow artifact-backed
-subfamilies.
-
-The next safe directions are:
-  metrics_report_readout split
-  git_control split
-  serving_ops split
-  read_inspect verifier/evidence
-  test_output_parse if found in real trace
-```
-
-Structural gate:
-
-```text
-docs/structural_gates/cpu-call-catalog-business-value-v1.md
-verdict: PASS
-```
-
-## 2026-07-04 - Executor Integration: Document Stamp Layout Payload Dry-Run V1
-
-Verdict:
-
-```text
-DOCUMENT_STAMP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-document-stamp-payload-dry-run-v1
-```
-
-Why:
-
-```text
-IME admission did not produce a robust safe policy, and resource_pressure has
-verifier false evidence. The next narrow real-traffic subfamily from 5k manual
-discovery is document_stamp_layout_edit.
-
-This stage builds request-side active_fringe/slot payloads only. It does not
-compile a profile, attach output evidence, enable local accepts, or claim
-market savings.
-```
-
-Run artifact:
-
-```text
-target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.trace.jsonl
-target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.report.json
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-document-stamp-payload-dry-run-v1 \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json \
-  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1-5k.report.json \
-  target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.trace.jsonl \
-  target/nando-wave/real-traffic-shadow/document-stamp-payload-dry-run-v1.report.json \
-  5000
-```
-
-Measured result:
-
-```text
-document_stamp_candidate_events: 5
-payload_ready_events: 4
-payload_built_events: 3
-scoreable_payload_events: 3
-builder_rejected_events: 1
-readiness_rejected_events: 1
-profile_registered: false
-shadow_score_ready: false
-active_fringe_centers_total: 385
-slots_total: 9
-positive_impulses_total: 216
-negative_impulses_total: 216
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-document_stamp_layout_edit now has request-side scoreable payloads.
-It is not CPU savings and must not be counted toward CPU80.
-
-Next route debt:
-  attach document_position_and_attachment_verifier_v1
-  compile disabled-threshold document_stamp .nwrb profile only if verifier-true
-  rows exist
-  keep local accepts disabled until shadow/audit proves false_accepts=0
-```
-
-## 2026-07-04 - Executor Integration: Post-IME Current Feedback Snapshot
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-Run artifact:
-
-```text
-target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v5.post-ime-current.report.json
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-feedback-loop-v1 \
-  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json \
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json \
-  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json \
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v5.post-ime-current.report.json
-```
-
-Measured result:
-
-```text
-total_llm_calls: 1000
-operator_candidate_calls: 1000
-operator_candidate_route_sum_events: 1019
-scoreable_candidate_calls: 174
-verification_hook_ready_events: 143
-verified_cpu_routability_milli: 32
-verified_gap_to_80_calls: 768
-unique_verified_cpu_accepts: 26
-unique_verified_gap_to_80_calls: 774
-incremental_unique_cpu_accepts: 25
-incremental_unique_gap_to_80_calls: 775
-```
-
-Decision:
-
-```text
-IME admission audit added no verified CPU accepts, as intended.
-The current consistent 1000-call window remains at 26 unique verified CPU
-accepts and 25 incremental unique accepts over exact cache.
-
-Do not count scoreable/profile rows as savings.
-Do not count IME singleton policies as savings.
-Next growth must come from either promoted existing narrow profiles with
-non-synthetic soak or new narrow profiles with deterministic verifiers.
-```
-
-## 2026-07-04 - Executor Integration: IME Input-State Admission Audit V1
-
-Verdict:
-
-```text
-IME_INPUT_STATE_ADMISSION_AUDIT_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-ime-input-state-admission-audit-v1
-```
-
-Why:
-
-```text
-The disabled IME/input-state profile can score real request-side payloads, but
-profile scoring is not permission to local-accept. This stage audits whether
-request-side features can safely separate verifier-true IME diagnostic rows
-from verifier-false rows before any safe-policy promotion.
-
-This is a quick profile audit, not a new sandbox. If no robust policy exists,
-the route stays disabled and the CPU80 work moves to higher-yield narrow
-agent-loop profiles.
-```
-
-Run artifact:
-
-```text
-target/nando-wave/real-traffic-shadow/ime-input-state-admission-audit-v1.report.json
-```
-
-Command:
-
-```text
-cargo run -p nando-cli -- role-binding-real-traffic-ime-input-state-admission-audit-v1 \
-  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.trace.jsonl \
-  /home/ubu/.codex/history.jsonl \
-  target/nando-wave/real-traffic-shadow/ime-input-state-admission-audit-v1.report.json
-```
-
-Measured result:
-
-```text
-hook_ready_rows: 5
-rows_with_prompt_features: 5
-label_true_rows: 3
-label_false_rows: 2
-robust_safe_policy_found: false
-singleton_safe_policy_found: true
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 1
-
-policy examples:
-  all_hook_ready_rows: true=3 false=2
-  ime_terms: true=3 false=1
-  ime_and_artifact: true=3 false=1
-  input_state_terms: true=1 false=0
-```
-
-Decision:
-
-```text
-IME input-state does not have a robust request-side admission policy.
-The only safe-looking policies are singleton support, so they are not enough
-to enable local accept.
-
-Do not promote this route now.
-Do not count IME toward CPU80 savings.
-Do not spend another long loop on IME until more non-synthetic verifier-true
-rows exist or the route is split into a narrower debug-artifact subfamily.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-No raw prompt text is written.
-No raw response text is written.
-Verifier labels are used only for offline policy evaluation.
-No target labels are used.
-No proof labels are used.
-Local accepts remain disabled.
-Broad answer_or_explain remains fallback-only.
-```
-
-Next CPU80 priority:
-
-```text
-metric_from_report / report_sync
-git_status_summary
-test_output_parse
-resource_pressure_budget
-edit_patch_small
-document_stamp_layout_edit
-```
-
-## 2026-07-04 - Executor Integration: IME Input-State Disabled Profile V1
-
-Verdict:
-
-```text
-IME_INPUT_STATE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-ime-input-state-profile-v1
-```
-
-Why:
-
-```text
-The previous IME stage produced real request-side payloads and verifier
-evidence, but shadow still saw profile_registered=false. This stage compiles a
-dedicated ime_input_state_debug .nwrb package and overlay registry with
-threshold=i32::MAX, so the profile can be scored in shadow while local accepts
-remain disabled.
-
-This is not a broad answer route and not a market claim. It is one narrow
-deterministic profile rung for agent-loop coverage.
-```
-
-Run artifacts:
-
-```text
-Profile:
-  target/nando-wave/real-traffic-shadow/ime-input-state-seed0.nwrb
-  target/nando-wave/real-traffic-shadow/profile-registry-ime-input-state-v1.json
-  target/nando-wave/real-traffic-shadow/ime-input-state-profile-v1.report.json
-
-Shadow/audit:
-  target/nando-wave/real-traffic-shadow/ime-input-state-profile-shadow-v1.report.json
-  target/nando-wave/real-traffic-shadow/ime-input-state-profile-v1.verification-hook-audit.report.json
-```
-
-Measured result:
-
-```text
-profile:
-  edge_count: 8
-  scoreable_payload_events: 6
-  package_training_requests: 6
-  positive_updates: 419
-  negative_updates: 432
-  changed_edges: 154
-  package_bytes: 140
-  runtime_bytes_estimate: 33000
-  threshold: 2147483647
-  median_energy_margin: 1447936
-  p10_energy_margin: 1120256
-  min_energy_margin: 1120256
-  median_min_slot_margin: 365568
-  unexpected_local_accepts_under_disabled_threshold: 0
-  local_accepts_enabled_on_real_traffic: false
-
-shadow:
-  total_llm_calls: 5000
-  exact_cache_hits: 459
-  operator_candidate_calls: 6
-  nando_shadow_accepts: 0
-  nando_shadow_fallbacks: 6
-  verified_safe_accepts: 0
-  false_accepts: 0
-  incremental_reduction_vs_exact_cache_milli: 0
-  p99_shadow_score_latency_ns: 311500
-
-verification_audit:
-  operator_candidate_calls: 6
-  scoreable_candidate_calls: 6
-  verification_hook_ready_events: 5
-  verified_cpu_accept_eligible_events: 0
-  market_claim_allowed: false
-```
-
-Decision:
-
-```text
-IME input-state now has a real profile package and registry overlay:
-  profile_registered path is available
-  scoring telemetry is available
-  false_accepts remain 0
-
-But this is still not CPU savings:
-  nando_shadow_accepts=0
-  verified_cpu_accept_eligible_events=0
-  threshold remains i32::MAX
-
-The next step for this route is admission audit / safe policy only if verifier
-support can add verified unique CPU accepts over exact cache with false_accepts=0.
-Otherwise move to the next narrow profile, not a broad answer route.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-No raw prompt text is written.
-No raw response text is written.
-No target labels are used.
-No proof labels are used.
-Local accepts remain disabled.
-```
-
-## 2026-07-04 - Executor Integration: IME Input-State Payload + Evidence V1
-
-Verdict:
-
-```text
-IME_INPUT_STATE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI routes:
-  role-binding-real-traffic-ime-input-state-payload-dry-run-v1
-  role-binding-real-traffic-ime-input-state-output-evidence-v1
-```
-
-Why:
-
-```text
-The 5k manual route discovery split identified ime_input_state_debug as the top
-narrow, privacy-safe next profile:
-  ime_input_state_debug: 16 events, 6 payload-ready
-
-This stage turns that subfamily into request-side scoreable payloads and joins
-Codex final-answer fingerprints through a conservative deterministic verifier.
-It does not compile a .nwrb profile and does not enable local accepts.
-```
-
-Run artifacts:
-
-```text
-Payload dry-run:
-  target/nando-wave/real-traffic-shadow/ime-input-state-payload-dry-run-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/ime-input-state-payload-dry-run-v1.report.json
-
-Output evidence:
-  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.report.json
-
-Shadow/audit:
-  target/nando-wave/real-traffic-shadow/ime-input-state-shadow-v1.report.json
-  target/nando-wave/real-traffic-shadow/ime-input-state-output-evidence-v1.verification-hook-audit.report.json
-```
-
-Measured result:
-
-```text
-payload:
-  ime_input_state_candidate_events: 16
-  payload_ready_events: 6
-  payload_built_events: 6
-  scoreable_payload_events: 6
-  profile_registered: false
-
-output_evidence:
-  session_ids_requested: 2
-  session_files_scanned: 2
-  codex_turns_indexed: 5
-  output_evidence_matched_events: 5
-  deterministic_verification_events: 5
-  verified_true_events: 3
-  verified_false_events: 2
-  no_session_output_match_events: 1
-
-shadow:
-  total_llm_calls: 5000
-  exact_cache_hits: 459
-  operator_candidate_calls: 6
-  nando_shadow_accepts: 0
-  nando_shadow_fallbacks: 6
-  false_accepts: 0
-  p99_shadow_score_latency_ns: 3042
-
-verification_audit:
-  verification_hook_ready_events: 5
-  verified_cpu_accept_eligible_events: 0
-  market_claim_allowed: false
-```
-
-Decision:
-
-```text
-IME now has real request-side payload support and real verifier evidence:
-  6 scoreable payloads
-  5 verification-hook-ready rows
-  3 verifier-true rows
-
-But this is not CPU savings yet:
-  profile_registered=false
-  nando_shadow_accepts=0
-  verified_cpu_accept_eligible_events=0
-
-The next step for this route is a disabled-threshold IME .nwrb profile and
-admission audit. Do not promote local accepts from payload/evidence alone.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-No raw prompt text is written.
-No raw response text is written.
-No target labels are used.
-No proof labels are used.
-Local accepts remain disabled.
-```
-
-## 2026-07-04 - Executor Integration: Manual Route Discovery 5k Taxonomy Split
-
-Verdict:
-
-```text
-MANUAL_ROUTE_DISCOVERY_V1_REVIEW_SUBFAMILIES_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Added privacy-safe manual route discovery subfamilies:
-  ime_input_state_debug
-  document_stamp_layout_edit
-  product_price_certification_table
-  business_party_identity_address
-  gravity_material_physics_question
-  nando_capacity_benchmark_state
-```
-
-Why:
-
-```text
-After the 1000-call registry was exhausted, a 5000-call real Codex history
-window was run into separate diagnostic artifacts:
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1-5k.report.json
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1-5k.report.json
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1-5k.report.json
-  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1-5k.report.json
-
-The first 5k manual discovery pass left too much uncatalogued traffic in
-manual_review_required:
-  manual_review_required: 78 events, 18 payload-ready
-
-Local frequency inspection showed repeated privacy-safe route families rather
-than one-off raw prompts.
-```
-
-5k result after taxonomy split:
-
-```text
-sampled_llm_calls: 5000
-existing_route_candidate_events: 1457
-no_candidate_events: 3543
-route_gap_payload_ready_events: 803
-
-manual_discovery_uncatalogued_events: 116
-manual_discovery_payload_ready_events: 27
-top_subfamily: ime_input_state_debug
-
-Top discovered subfamilies:
-  ime_input_state_debug: 16 events, 6 payload-ready
-  document_stamp_layout_edit: 5 events, 4 payload-ready
-  product_price_certification_table: 7 events, 3 payload-ready
-  resource_pressure_budget: 7 events, 3 payload-ready
-  business_party_identity_address: 6 events, 3 payload-ready
-  manual_review_required: 39 events, 2 payload-ready
-  wave_architecture_layout_decision: 7 events, 2 payload-ready
-  gravity_material_physics_question: 6 events, 2 payload-ready
-```
-
-Decision:
-
-```text
-This is route visibility only.
-No local accepts are enabled.
-No raw prompt text is written.
-No CPU savings are claimed.
-
-The useful next profile candidate from 5k is not a broad answer route. It is
-ime_input_state_debug, followed by document_stamp_layout_edit and
-product_price_certification_table, but each still needs request-side payload,
-deterministic verifier, shadow/audit, provider-cost evidence where relevant,
-and false_accepts=0 before any promotion.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-```
-
-## 2026-07-04 - Executor Integration: Agent Loop Registry Audit Rerank
-
-Verdict:
-
-```text
-AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The agent-loop registry now reads, when present:
-  target/nando-wave/real-traffic-shadow/read-inspect-admission-audit-v1.report.json
-  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.report.json
-  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.verification-hook-audit.report.json
-
-and applies it before profile ranking.
-```
-
-Why:
-
-```text
-The previous registry still selected read_context_path as top_next_profile_key
-after the read-inspect admission audit had already proven:
-  robust_safe_policy_found: false
-  singleton_safe_policy_found: false
-  best_robust_true_accepts: 0
-  best_singleton_true_accepts: 0
-
-That made the worklist loop back into a route whose current request-side
-features cannot safely separate 1 verifier-true row from 8 verifier-false rows.
-
-After that fix, resource_budget_extract became top_next_profile_key, but its
-only hook-ready row was already verified false:
-  verified_true_events: 0
-  verified_false_events: 1
-  verified_cpu_accept_eligible_events: 0
-  provider_cost_events: 0
-```
-
-Reranked result:
-
-```text
-admission_blocked_profiles: 2
-exhausted_current_support_profiles: 13
-top_next_profile_key: null
-
-read_context_path:
-  readiness_state: admission_audit_no_safe_policy
-  admission_blocked_by_audit: true
-  priority_rank: 11
-
-resource_budget_extract:
-  readiness_state: verification_audit_no_true_resource_budget_rows
-  admission_blocked_by_audit: true
-  priority_rank: 12
-
-response_shape_brevity:
-  readiness_state: support_exhausted_or_singleton_only
-  current_support_exhausted: true
-```
-
-Decision:
-
-```text
-Do not return to read_context_path until a split path/excerpt subfamily or
-richer request-side serving state/evidence exists.
-
-Do not return to resource_budget_extract from the current evidence: its only
-hook-ready row is verifier-false and has no provider-cost evidence.
-
-Do not promote response_shape_brevity as CPU80 growth from current evidence:
-the catalog marks style-brevity verifier true support as zero.
-
-The current 1000-call trace has no safe top_next_profile_key left after audit
-blocks and support-exhaustion guards.
-
-Next real work:
-  1. collect more real trace traffic, especially test/tool/report/git paths, or
-  2. split exhausted profiles into narrower sibling subprofiles with new
-     verifier-true rows.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-The rerank changes the worklist only. It writes no raw prompt text, no raw
-response text, no target labels, no proof labels, and enables no local accepts.
-```
-
-## 2026-07-04 - Executor Integration: Read Inspect Admission Audit V1
-
-Verdict:
-
-```text
-READ_INSPECT_ADMISSION_AUDIT_V1_REVIEW_NO_SAFE_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-read-inspect-admission-audit-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl
-  /home/ubu/.codex/history.jsonl
-
-and writes:
-  target/nando-wave/real-traffic-shadow/read-inspect-admission-audit-v1.report.json
-```
-
-Why:
-
-```text
-The agent-loop registry selected read_context_path as the next narrow profile.
-The current read_inspect score geometry had 9 verifier-hook-ready rows, but
-only 1 verifier-true row and 8 verifier-false rows.
-
-This audit checks whether request-side prompt features can separate the one
-true read-only path/excerpt row from the false rows before any local accept
-promotion.
-```
-
-Audit result:
-
-```text
-hook_ready_rows: 9
-rows_with_prompt_features: 9
-label_true_rows: 1
-label_false_rows: 8
-minimum_true_support: 3
-robust_safe_policy_found: false
-singleton_safe_policy_found: false
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 0
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Do not lower the read_inspect threshold.
-Do not promote read_context_path from current request-side features.
-Do not count read_inspect savings.
-
-The next safe work is not broad answer_or_explain and not a generic read route.
-It must be either:
-  1. split read_context_path into a narrower path/excerpt subfamily, or
-  2. capture richer request-side serving state/evidence before scoring.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-The audit writes fingerprints, boolean features, counts, and policy scores
-only. It writes no raw prompt text, no raw response text, no target labels, no
-proof labels, and enables no local accepts.
-```
-
-## 2026-07-04 - Executor Integration: Agent Loop Profile Registry V1
-
-Verdict:
-
-```text
-AGENT_LOOP_PROFILE_REGISTRY_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-agent-loop-profile-registry-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-and writes:
-  target/nando-wave/real-traffic-shadow/agent-loop-profile-registry-v1.report.json
-```
-
-Why:
-
-```text
-CPU Routability 80 will not be reached by promoting one broad route.
-The agent loop has to be split into narrow deterministic CPU profiles:
-  metric_from_report
-  git_status_summary
-  test_output_parse
-  report_sync
-  edit_patch_small
-  artifact_progress
-  failure_triage-style branch profiles
-
-This report converts the current feedback/catalog evidence into that
-microprofile worklist without enabling accepts or re-counting old support.
-```
-
-Registry result:
-
-```text
-total_llm_calls: 1000
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls: 774
-microprofile_count: 16
-microprofiles_observed: 15
-verified_current_profiles: 7
-hook_ready_profiles: 15
-scoreable_profiles: 15
-blocked_wide_route_profiles: 3
-exhausted_current_support_profiles: 12
-top_next_profile_key: read_context_path
-market_claim_allowed: false
-```
-
-Decision:
-
-```text
-Do not improve answer_or_explain, project_context_dialogue, or
-agent_continue_execute as broad routes.
-
-The next narrow route is read_context_path:
-  source_route_key: read_inspect
-  candidate_events: 27
-  scoreable_payload_events: 12
-  verification_hook_ready_events: 9
-  unique_verified_request_fingerprints: 0
-  readiness_state: verifier_hook_ready_needs_safe_admission
-
-Next safe work:
-  improve read_context_path admission/verifier geometry,
-  require false_accepts=0,
-  provider-cost evidence,
-  and unique attribution before any local accept.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-The registry writes no raw prompt text, no raw response text, no target labels,
-no proof labels, and enables no local accepts. It is a worklist, not a market
-savings claim.
-```
-
-## 2026-07-04 - Executor Integration: Agent Continue State Admission Audit V1
-
-Verdict:
-
-```text
-AGENT_CONTINUE_EXECUTE_STATE_ADMISSION_AUDIT_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-agent-continue-execute-state-admission-audit-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.trace.jsonl
-  /home/ubu/.codex/sessions
-
-and writes:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-state-admission-audit-v1.report.json
-```
-
-Why:
-
-```text
-agent_continue_execute prompt-only admission was inseparable:
-  25 hook-ready rows
-  6 verifier-true rows
-  19 verifier-false rows
-  robust_safe_policy_found=false
-
-This audit checks whether the previous assistant state before the user prompt
-can safely separate real artifact-progress continuation from false continuation
-rows. It writes only fingerprints/features/counts.
-```
-
-State admission result:
-
-```text
-hook_ready_rows: 25
-rows_with_state_features: 25
-previous_state_missing_rows: 0
-label_true_rows: 6
-label_false_rows: 19
-minimum_true_support: 3
-robust_safe_policy_found: false
-singleton_safe_policy_found: true
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 1
-```
-
-Feedback/catalog result:
-
-```text
-feedback agent_continue_execute:
-  stage: local_accept_calibration_failed
-  verification_hook_ready_events: 25
-  verified_cpu_accept_eligible_events: 0
-  next_action: state admission singleton-only; collect more verifier-true rows or split
-
-catalog existing_profile_route agent_continue_execute:
-  agent_continue_state_admission_best_robust_true_accepts: 0
-  agent_continue_state_admission_best_singleton_true_accepts: 1
-  next_action: do not promote; singleton-only support
-```
-
-Decision:
-
-```text
-Do not enable local accepts for agent_continue_execute.
-Do not count the singleton as CPU savings.
-Do not lower thresholds.
-
-The previous-state signal is useful as diagnostics, but still not robust.
-The next safe work is either:
-  1. collect more verifier-true continuation rows; or
-  2. split agent_continue_execute into a narrower stateful subroute; or
-  3. capture richer structured serving state instead of mining free-form text.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-
-The command uses previous assistant text only to derive privacy-safe boolean
-features at analysis time. It writes no raw prompt text, no raw response text,
-no target labels, no proof labels, and enables no local accepts.
-```
-
-## 2026-07-04 - Executor Integration: Answer Evidence Admission Calibration V1
-
-Verdict:
-
-```text
-ANSWER_EVIDENCE_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-answer-evidence-admission-calibration-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.trace.jsonl
-  /home/ubu/.codex/history.jsonl
-
-and writes:
-  target/nando-wave/real-traffic-shadow/answer-evidence-admission-calibration-v1.report.json
-```
-
-Why:
-
-```text
-answer_or_explain has 216 route candidates, 9 scoreable grounded-evidence
-payloads, and 9 verifier-hook-ready rows. The score/readout calibration did
-not find a safe local accept policy, so this step checks whether request-side
-prompt features can safely split verifier-true grounded evidence from
-verifier-false broad answer rows.
-```
-
-Admission calibration result:
-
-```text
-hook_ready_rows: 9
-rows_with_prompt_features: 9
-label_true_rows: 3
-label_false_rows: 6
-minimum_true_support: 3
-robust_safe_policy_found: false
-singleton_safe_policy_found: true
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 1
-```
-
-Policy finding:
-
-```text
-concise_grounded_question:
-  true_accepts: 1
-  false_accepts: 0
-  robust_safe: false
-```
-
-Catalog result:
-
-```text
-answer_or_explain existing_profile_route:
-  answer_evidence_admission_singleton_only: true
-  answer_evidence_admission_best_singleton_true_accepts: 1
-  next_action: collect more verifier-true grounded evidence rows or split the subfamily
-
-answer_or_explain route_gap_family:
-  answer_evidence_admission_singleton_only: true
-  next_action: collect more verifier-true grounded rows or split the route
-```
-
-Decision:
-
-```text
-Do not promote answer_or_explain from this report.
-Do not lower answer-evidence thresholds.
-The broad route remains fallback-first. The next safe work is collecting more
-verifier-true grounded evidence rows or splitting a narrower grounded-answer
-subfamily with deterministic evidence.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-current_verified_cpu_accepts remains 26.
-verified_gap_to_80_calls remains 774.
-market_claim_allowed remains false.
-The command writes fingerprints/features/counts only; no raw prompt text,
-raw response text, target labels, proof labels, or local accepts.
-```
-
-## 2026-07-04 - Executor Integration: Agent Continue Admission Feedback/Catalog V1
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The feedback-loop and CPU-operator catalog now auto-load:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-admission-calibration-v1.report.json
-
-The admission result is now authoritative for agent_continue_execute route
 promotion:
-  robust_safe_policy_found: false
-  singleton_safe_policy_found: false
-  best_robust_true_accepts: 0
-  best_singleton_true_accepts: 0
-```
-
-Result:
-
-```text
-feedback agent_continue_execute:
-  stage: local_accept_calibration_failed
-  local_accept_safe_policy_found: false
-  local_accept_best_safe_true_accepts: 0
-  verification_hook_ready_events: 25
-  verified_cpu_accept_eligible_events: 0
-
-catalog existing_profile_route agent_continue_execute:
-  agent_continue_admission_no_safe_policy: true
-  next_action: split agent_continue_execute or capture richer request-side state
-
-catalog route_gap_family agent_continue_execute:
-  agent_continue_admission_no_safe_policy: true
-  next_action: do not promote this route-gap row
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-unique_verified_cpu_accepts remains 26.
-incremental_unique_cpu_accepts remains 25.
-market_claim_allowed remains false.
-```
-
-Decision:
-
-```text
-Do not keep chasing the old agent_continue_execute singleton/local-margin hint.
-The current prompt-side features are inseparable. The next safe work is route
-split or richer request-side state capture before any promotion attempt.
-```
-
-## 2026-07-04 - Executor Integration: Agent Continue Admission Calibration V1
-
-Verdict:
-
-```text
-AGENT_CONTINUE_EXECUTE_ADMISSION_CALIBRATION_V1_REVIEW_NO_SAFE_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-agent-continue-execute-admission-calibration-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-artifact-progress-v1.trace.jsonl
-  /home/ubu/.codex/history.jsonl
-
-and writes:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-admission-calibration-v1.report.json
-```
-
-Why:
-
-```text
-agent_continue_execute had 25 verifier-hook-ready rows and a weak margin-only
-local accept candidate, but local score geometry could not safely separate true
-artifact-progress rows from verifier-false continuation rows. This step checks
-whether request-side prompt features can supply a safer admission gate before
-any accept path is promoted.
-```
-
-Admission calibration result:
-
-```text
-hook_ready_rows: 25
-rows_with_prompt_features: 25
-history_prompt_missing_rows: 0
-label_true_rows: 6
-label_false_rows: 19
-minimum_true_support: 3
-robust_safe_policy_found: false
-singleton_safe_policy_found: false
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 0
-```
-
-Policy findings:
-
-```text
-all_hook_ready_rows:
-  true_accepts: 6
-  false_accepts: 19
-
-direct_action_words:
-  true_accepts: 6
-  false_accepts: 19
-
-nando_wave_terms:
-  true_accepts: 0
-  false_accepts: 1
-
-direct_action_project_or_nando_no_failure:
-  true_accepts: 0
-  false_accepts: 1
-```
-
-Decision:
-
-```text
-Do not enable local accepts for agent_continue_execute.
-Do not lower the disabled threshold.
-Do not promote a prompt-feature policy from this report.
-
-The route remains valuable as a candidate zone, but current prompt-side
-features are inseparable: the same direct-action shape covers both real
-artifact progress and false continuation rows. The next route work must either
-split agent_continue_execute into narrower subroutes or capture richer
-request-side state before verification.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-No market savings claim is allowed.
-The command writes fingerprints/features/counts only; no raw prompt text,
-raw response text, target labels, proof labels, or local accepts.
-```
-
-## 2026-07-04 - Executor Integration: Resource Pressure Feedback Loop V1
-
-Verdict:
-
-```text
-RESOURCE_PRESSURE_FEEDBACK_LOOP_V1_REVIEW_ROUTE_VISIBLE_NO_ACCEPTS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The feedback-loop report now auto-loads:
-  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.report.json
-  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.verification-hook-audit.report.json
-
-and emits a separate route row:
-  route_key: resource_pressure_budget
-  profile_id: route_gap_resource_pressure_budget_profile_v1
-```
-
-Why:
-
-```text
-Resource Pressure Output Evidence V1 made one scoreable resource-pressure row
-verification-hook-ready, but the CPU feedback loop did not expose it as a
-route. That hid the stage transition from scoreable-only to hook-ready.
-```
-
-Feedback-loop result:
-
-```text
-route_count: 15
-operator_candidate_route_sum_events: 1019
-operator_candidate_calls: 1000
-scoreable_candidate_calls: 174
-verification_hook_ready_events: 143
-verified_cpu_accept_eligible_events: 32
-verified_gap_to_80_calls: 768
-unique_verified_cpu_accepts: 26
-unique_verified_gap_to_80_calls: 774
-market_claim_allowed: false
-
-resource_pressure_budget row:
-  candidate_events: 3
-  payload_ready_events: 1
-  payload_built_events: 1
-  scoreable_payload_events: 1
-  verification_hook_ready_events: 1
-  verified_cpu_accept_eligible_events: 0
-  false_accepts: 0
-  stage: verification_hook_ready_waiting_local_accept
-```
-
-Catalog after regeneration:
-
-```text
-existing_operator_candidate_calls: 1000
-existing_operator_candidate_route_sum_events: 1019
-no_candidate_calls: 0
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls: 774
-```
-
-Decision:
-
-```text
-Do not count resource_pressure_budget as CPU savings.
-Do not enable local accepts.
-Do not promote a normal accepting profile from verifier-false / provider-cost
-missing evidence.
-
-This step is report integration only: resource_pressure_budget is now visible
-in the feedback loop, but it contributes 0 verified CPU accepts.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-CPU Routability 80 remains open:
-
-  current unique verified CPU accepts: 26
-  unique verified gap to 80: 774
-
-market_claim_allowed=false.
-```
-
-## 2026-07-04 - Executor Integration: Resource Pressure Output Evidence V1
-
-Verdict:
-
-```text
-RESOURCE_PRESSURE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-resource-pressure-output-evidence-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.trace.jsonl
-  /home/ubu/.codex/sessions
-
-and writes:
-  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/resource-pressure-output-evidence-v1.report.json
-```
-
-Why:
-
-```text
-Resource Pressure Payload Dry Run V1 proved one request-side scoreable payload,
-but it still had no response/tool evidence and no deterministic verifier hook.
-This step attaches conservative final-answer evidence through
-write_rate_or_resource_budget_verifier_v1 without enabling local accepts.
-```
-
-Output evidence result:
-
-```text
-operator_candidate_calls: 1
-scoreable_candidate_calls: 1
-output_evidence_matched_events: 1
-deterministic_verification_events: 1
-verified_true_events: 0
-verified_false_events: 1
-
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Shadow/audit result:
-
-```text
-shadow report:
-  total_llm_calls: 1000
-  exact_cache_hits: 53
-  nando_shadow_accepts: 0
-  verified_safe_accepts: 0
-  false_accepts: 0
-  p99_shadow_score_latency_ns: 6893
-
-verification-hook audit:
-  operator_candidate_calls: 1
-  scoreable_candidate_calls: 1
-  verification_hook_ready_events: 1
-  verified_cpu_accept_eligible_events: 0
-  candidates_missing_provider_cost: 1
-  market_claim_allowed: false
-```
-
-Catalog after regeneration:
-
-```text
-top row:
-  route_or_family_key: uncatalogued
-  manual_route_discovery_top_subfamily: resource_pressure_budget
-  candidate_events: 13
-  payload_ready_events: 3
-  scoreable_payload_events: 1
-  verification_hook_ready_events: 1
-  verified_cpu_accept_eligible_events: 0
-
-next_action:
-  resource_pressure_budget has 1 verifier-hook-ready rows and 0 verifier-true
-  rows, but 0 verified CPU accepts. Compile only a disabled-threshold
-  resource_pressure .nwrb profile and rerun shadow/audit with provider cost;
-  keep local accepts disabled until false_accepts=0 and calibrated safe policy
-  exist.
-```
-
-Decision:
-
-```text
-Do not count this route as CPU savings.
-Do not enable local accepts.
-Do not compile a normal accepting profile from one verifier-false row.
-
-The hook is valuable because it closes the previous "no verifier hook" gap:
-resource_pressure_budget moved from scoreable-only to hook-ready-but-not-safe.
-The next concrete debt is disabled-threshold resource_pressure .nwrb scoring
-profile only if more verifier-true evidence appears, plus provider-cost
-evidence before any market claim.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-CPU Routability 80 remains open:
-
-  current_verified_cpu_accepts: 26
-  verified_gap_to_80_calls: 774
-
-market_claim_allowed=false.
-```
-
-## 2026-07-04 - Executor Integration: Resource Pressure Payload Dry Run V1
-
-Verdict:
-
-```text
-RESOURCE_PRESSURE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-resource-pressure-payload-dry-run-v1
-
-The command reads:
-  /home/ubu/.codex/history.jsonl
-  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.report.json
-
-and writes:
-  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.report.json
-
-The CPU operator catalog now auto-loads that dry-run report when present and
-carries resource_pressure scoreable payload progress into the uncatalogued row.
-```
-
-Why:
-
-```text
-Manual Route Discovery V1 found the top uncatalogued subfamily:
-
-  resource_pressure_budget
-
-but that was only a backlog label. We needed to prove whether the route can
-actually build request-side active_fringe/slots from prompt text without using
-the response, target labels, proof_rule_id, or raw prompt output.
-```
-
-Dry-run result:
-
-```text
-resource_pressure_candidate_events: 3
-payload_ready_events: 1
-payload_built_events: 1
-scoreable_payload_events: 1
-active_fringe_centers: 124
-slots: 3
-positive_impulses: 72
-negative_impulses: 72
-
-profile_registered: false
-shadow_score_ready: false
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Catalog after regeneration:
-
-```text
-top row:
-  route_or_family_key: uncatalogued
-  manual_route_discovery_top_subfamily: resource_pressure_budget
-  candidate_events: 13
-  payload_ready_events: 3
-  scoreable_payload_events: 1
-  verified_cpu_accept_eligible_events: 0
-
-next_action:
-  Attach write_rate_or_resource_budget_verifier_v1 and keep local accepts
-  disabled until deterministic verifier evidence, shadow/audit, provider cost,
-  and false_accepts=0.
-```
-
-Decision:
-
-```text
-Do not compile/promote a resource_pressure .nwrb profile yet.
-Do not count the one scoreable payload as CPU savings.
-Do not treat resource/budget prompts as locally safe without measured
-write-rate/resource-budget evidence.
-
-The next concrete debt is:
-  real response/tool-call evidence
-  + write_rate_or_resource_budget_verifier_v1
-  + only then disabled-threshold profile work if verifier-true support exists.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-CPU Routability 80 remains open:
-
-  current_verified_cpu_accepts: 26
-  verified_gap_to_80_calls: 774
-
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/resource-pressure-payload-dry-run-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/resource-pressure-payload-dry-run-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 32
-note: narrow claim-boundary check only: resource_pressure_budget has one
-      scoreable request-side payload, but zero verified CPU accepts and no
-      market claim. The gate packet intentionally keeps the non-claim core
-      instead of duplicating every JSON guard field.
-```
-
-## 2026-07-04 - Executor Integration: Manual Route Discovery V1
-
-Verdict:
-
-```text
-MANUAL_ROUTE_DISCOVERY_V1_REVIEW_SUBFAMILIES_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-manual-route-discovery-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
-
-and writes:
-  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.report.json
-
-The CPU operator catalog now auto-loads that manual discovery report when
-present and carries the top uncatalogued subfamily into the uncatalogued row.
-```
-
-Why:
-
-```text
-After style_brevity was correctly blocked, the top catalog row became:
-
-  route_or_family_key: uncatalogued
-  candidate_events: 13
-  payload_ready_events: 3
-  scoreable_payload_events: 0
-
-That was too vague to guide CPU80 work. We needed a privacy-safe route backlog
-that says which concrete route family should be built next, without enabling
-local accepts or writing raw prompt text.
-```
-
-Discovery run:
-
-```text
-uncatalogued_events: 13
-payload_ready_events: 3
-missing_history_rows: 0
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-
-top_subfamily:
-  resource_pressure_budget
-```
-
-Discovered subfamilies:
-
-```text
-1. resource_pressure_budget
-   events: 3
-   payload_ready: 1
-   builder: resource_pressure_payload_builder_v1
-   verifier: write_rate_or_resource_budget_verifier_v1
-
-2. wave_architecture_layout_decision
-   events: 2
-   payload_ready: 1
-   builder: architecture_layout_delta_payload_builder_v1
-   verifier: typed_layout_budget_and_invariant_verifier_v1
-
-3. business_logistics_route_constraint
-   events: 1
-   payload_ready: 1
-   builder: business_logistics_route_payload_builder_v1
-   verifier: named_party_route_constraint_verifier_v1
-
-Remaining one-off review families:
-  claim_boundary_definition
-  affective_rejection_control
-  implementation_cost_objection
-  project_synthesis_summary
-  research_theory_gap
-  skill_route_split_advice
-```
-
-Catalog after regeneration:
-
-```text
-top row:
-  route_or_family_key: uncatalogued
-  manual_route_discovery_top_subfamily: resource_pressure_budget
-  manual_route_discovery_top_subfamily_events: 3
-  manual_route_discovery_payload_ready_events: 1
-  priority_score: 1065
-
-next_action:
-  Build resource_pressure_payload_builder_v1
-  + write_rate_or_resource_budget_verifier_v1;
-  keep local accepts disabled until false_accepts=0 is proven.
-```
-
-Decision:
-
-```text
-Do not treat uncatalogued as a CPU accept route.
-Do not merge these rows into broad answer_or_explain or project_context_dialogue
-just to inflate routability.
-
-The next concrete route candidate is resource_pressure_budget, because it is
-the top discovered uncatalogued subfamily and has at least one payload-ready
-row.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-CPU Routability 80 remains open:
-
-  current_verified_cpu_accepts: 26
-  verified_gap_to_80_calls: 774
-
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/manual-route-discovery-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/manual-route-discovery-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 31
-note: narrow claim-boundary check only: manual discovery identifies
-      resource_pressure_budget as the top uncatalogued subfamily, but enables
-      no local accepts and no CPU-savings claim.
-```
-
-## 2026-07-04 - Executor Integration: Style Brevity Evidence Hook V1
-
-Verdict:
-
-```text
-STYLE_BREVITY_OUTPUT_EVIDENCE_V1_REVIEW_VERIFIER_FALSE_NO_PROMOTION
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-style-brevity-output-evidence-v1
-
-The style_brevity route now has a response-shape evidence join using:
-  response_length_and_format_verifier_v1
-
-The feedback-loop also auto-loads:
-  target/nando-wave/real-traffic-shadow/style-brevity-output-evidence-v1.verification-hook-audit.report.json
-```
-
-Why:
-
-```text
-Before this step, style_brevity was scoreable but had no verification hook:
-
-  candidate_events: 3
-  scoreable_payload_events: 3
-  verification_hook_ready_events: 0
-
-The CPU operator catalog therefore ranked it as the top next row even though
-no deterministic evidence existed.
-```
-
-Evidence run:
-
-```text
-style-brevity output evidence:
-  session_ids_requested: 1
-  session_files_scanned: 1
-  codex_turns_indexed: 1
-  output_evidence_matched_events: 1
-  verified_true_events: 0
-  verified_false_events: 1
-  raw_prompt_text_written: false
-  raw_response_text_written: false
-
-style-brevity shadow:
-  total_llm_calls: 1000
-  nando_shadow_accepts: 0
-  verified_safe_accepts: 0
-  false_accepts: 0
-  p99_shadow_score_latency_ns: 222178
-
-style-brevity verification audit:
-  operator_candidate_calls: 3
-  scoreable_candidate_calls: 3
-  verification_hook_ready_events: 1
-  verified_cpu_accept_eligible_events: 0
-  verified_true_events: 0
-  verified_false_events: 1
-  market_claim_allowed: false
-```
-
-Catalog correction:
-
-```text
-Before:
-  top_catalog_row: style_brevity (existing_profile_route)
-
-After:
-  top_catalog_row: uncatalogued (route_gap_family)
-
-style_brevity existing profile:
-  priority_rank: 23
-  style_brevity_verifier_true_events: 0
-  style_brevity_verifier_false_events: 1
-  style_brevity_verifier_true_support_zero: true
-  priority_score: -158090
-```
-
-Decision:
-
-```text
-Do not run local-accept calibration for style_brevity yet.
-Do not count style_brevity as CPU savings.
-Do not treat a response-style policy as a semantic task solver.
-
-The route needs better matching style-only samples or tighter admission before
-promotion. Current verifier evidence is negative.
-```
-
-Claim boundary:
-
-```text
-No verified CPU accepts were added.
-CPU Routability 80 remains open:
-
-  verified_cpu_routability_milli: 32
-  verified_gap_to_80_calls: 768
-  unique_verified_cpu_accepts: 26
-  incremental_unique_cpu_accepts: 25
-
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/style-brevity-evidence-hook-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/style-brevity-evidence-hook-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 37
-note: narrow claim-boundary check only: style_brevity has verifier evidence,
-      but the verifier found 0 true / 1 false rows, so the route remains
-      blocked from local-accept calibration and CPU-savings claims.
-```
-
-## 2026-07-04 - Executor Integration: Short Decision Ack Prior Blocker V1
-
-Verdict:
-
-```text
-SHORT_DECISION_ACK_PRIOR_BLOCKER_V1_REVIEW_STANDALONE_ACK_ROUTE_BLOCKED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The CPU operator catalog now reads:
-  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json
-
-and carries prior short_ack false-accept evidence into the
-`short_decision_ack` route-gap row.
-```
-
-Why:
-
-```text
-The catalog had promoted short_decision_ack to the top actionable row because
-it had 19 route-gap candidates and no explicit profile route.
-
-That was misleading. Prior agent-control admission evidence already showed:
-
-  short_ack_intent:
-    true_accepts: 1
-    false_accepts: 48
-
-So a standalone "ok/yes/да" route is unsafe without explicit previous-turn
-decision-state evidence.
-```
-
-Catalog after regeneration:
-
-```text
-short_decision_ack:
-  priority_rank: 23
-  short_decision_ack_prior_blocked: true
-  short_decision_ack_prior_true_accepts: 1
-  short_decision_ack_prior_false_accepts: 48
-
-top_catalog_row:
-  style_brevity (existing_profile_route)
-```
-
-Decision:
-
-```text
-Do not build a standalone short_ack route.
-
-The only acceptable future version is:
-  explicit previous-turn decision-state evidence
-  + active_turn_state_transition_verifier_v1
-  + false_accepts=0
-  + no task-content inference
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created.
-CPU Routability 80 remains open.
-
-This change improves route selection quality only: it prevents the catalog from
-spending engineering effort on a known false-accept-prone short-ack route.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/short-decision-ack-prior-blocker-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/short-decision-ack-prior-blocker-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 41
-note: narrow catalog-routing check only: short_decision_ack is blocked by
-      prior false-accept evidence and must not be treated as a standalone
-      safe CPU promotion route.
-```
-
-## 2026-07-04 - Executor Integration: Answer Evidence Local-Accept Calibration Feedback V1
-
-Verdict:
-
-```text
-ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The feedback-loop now reads:
-  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.report.json
-
-and applies it to the `answer_or_explain` route row even though that row is
-currently injected from the answer-evidence side path rather than from the
-primary forecast route list.
-```
-
-Calibration result:
-
-```text
-hook_ready_rows:          9
-scored_rows:              9
-label_true_rows:          3
-label_false_rows:         6
-safe_policy_found:    false
-best_safe_true_accepts:   0
-local_accepts_enabled: false
-market_claim_allowed:  false
-```
-
-Policy audit:
-
-```text
-energy_positive_no_slot_order:
-  accepts: 9
-  true_accepts: 3
-  false_accepts: 6
-
-strict_positive_slots_and_energy_positive:
-  accepts: 9
-  true_accepts: 3
-  false_accepts: 6
-
-evidence_slot_positive_only:
-  accepts: 9
-  true_accepts: 3
-  false_accepts: 6
-
-boundary_slot_positive_only:
-  accepts: 9
-  true_accepts: 3
-  false_accepts: 6
-
-best threshold policies:
-  best_safe_true_accepts: 0
-```
-
-Margin collision:
-
-```text
-energy_margin:
-  min_true_margin: 1123328
-  false_rows_at_or_above_min_true_margin: 5
-
-min_slot_margin:
-  min_true_margin: 361472
-  false_rows_at_or_above_min_true_margin: 6
-
-marker_slot_margin:
-  min_true_margin: 393216
-  false_rows_at_or_above_min_true_margin: 5
-
-end_slot_margin:
-  min_true_margin: 368640
-  false_rows_at_or_above_min_true_margin: 6
-```
-
-Feedback/catalog after regeneration:
-
-```text
-feedback answer_or_explain:
-  stage: local_accept_calibration_failed
-  local_accept_calibration_ran: true
-  local_accept_safe_policy_found: false
-  local_accept_best_safe_true_accepts: 0
-  verified_cpu_accept_eligible_events: 0
+  promotion_allowed: true
+  blocker: none
+  runtime_canary_active: true
+  runtime_canary_safe: true
+
+clean token compression scorecard:
+  stable_rows: 627
+  unique_cpu_accepts_over_exact_cache: 209
+  tokens_saved: 215108
   false_accepts: 0
 
-catalog:
-  answer_or_explain existing-profile row is no longer treated as
-  waiting-for-calibration. It is marked local_accept_calibration_failed and
-  deprioritized until request-side admission, verifier evidence, or payload
-  geometry improves.
+actual gateway canary:
+  gateway_local_accept_events: 110
+  gateway_tokens_saved_estimated: 439
+  gateway_false_accepts: 0
+  gateway_local_route_count: 6
+
+HTTP provider bridge:
+  service: nando-provider-bridge.service
+  bind: 127.0.0.1:8787
+  health: ok
+  smoke: NANDO_PROVIDER_BRIDGE_SMOKE_PASS
+  cases: 4
+  passed: 4
+  failed: 0
+  /health: ok
+  /v1/chat/completions "nando compression": local_accept
+  /v1/responses "nando readiness": local_accept
+  broad prompt: upstream_missing while upstream is unset
+
+HTTP provider bridge upstream transport smoke:
+  script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-provider-bridge-upstream-smoke.sh
+  report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-bridge-upstream-smoke.json
+  verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_SMOKE_PASS
+  failed_count: 0
+  upstream_hit_count: 1
+  provider_boundary_event_count: 1
+  provider_boundary_total_tokens: 10
+  proof:
+    "nando compression" stays local nando-local
+    ordinary broad prompt reaches fake upstream exactly once
+    fake upstream response writes one metadata-only provider boundary event
+
+provider boundary capture:
+  path: /var/lib/nando-wave/streaming/nando-provider-bridge.provider-boundary-events.jsonl
+  production_current_rows: 0 while real upstream is unset
+  smoke_boundary_rows: isolated temp path only; not counted as market evidence
+  boundary: records upstream request hash, provider ids, and usage tokens when
+    real upstream traffic flows through bridge; cost remains blocked without
+    real provider cost evidence
+
+provider boundary evidence snapshot:
+  script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-evidence-snapshot.sh
+  report: /var/lib/nando-wave/streaming/provider-evidence/provider-evidence-snapshot.report.json
+  coverage_report: /var/lib/nando-wave/streaming/provider-evidence/provider-boundary-capture-coverage.report.json
+  current_status: no_provider_bridge_boundary_rows while real upstream is unset
+  market_money_claim_allowed: false
+  boundary: cold provider-boundary metadata coverage only; does not create
+    provider billing evidence, local_accept, or money claims
+
+HTTP provider bridge upstream readiness:
+  script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-provider-bridge-upstream-readiness.sh
+  report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-bridge-upstream-readiness.json
+  verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+  upstream_configured: false
+  real_probe_attempted: false
+  ready_for_broad_provider_traffic: false
+  boundary: default readiness does not call a real upstream provider; optional
+    real probe requires NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_ALLOW_REAL_CALL=1
+
+HTTP provider bridge upstream config:
+  script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-provider-bridge-upstream-config.sh
+  status:
+    upstream_configured: false
+    api_key_present: false
+    api_key_value_printed: false
+  use:
+    printf '%s\n' "$OPENAI_API_KEY" | sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-provider-bridge-upstream-config.sh /etc/nando-wave/phase-center.env set --base-url https://api.openai.com --api-key-stdin --provider openai
+  boundary: server-side secret tool only; provider keys are never printed and
+    must not be passed to client windows
+
+actual HTTP bridge canary:
+  provider_bridge_local_accept_events: 29
+  provider_bridge_tokens_saved_estimated: 132
+  provider_bridge_false_accepts: 0
+  provider_bridge_local_route_count: 2
+
+money:
+  market_money_claim_allowed: false
+  blocker: external_provider_export_missing
+
+server verify:
+  report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.test-server-verify.json
+  verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+  install_ready: true
+  shadow_metrics_ready: true
+  upstream broad provider traffic: not ready until server upstream is configured
+
+boundary:
+  This is real verifier-bound canary local_accept for narrow artifact-backed
+  routes. Broad provider traffic through the HTTP bridge fails open to upstream
+  when configured, writes metadata-only provider boundary events, or returns
+  upstream_missing while upstream is unset. Full Codex provider transport
+  interception remains separate production work.
 ```
 
-Decision:
+## Latest 10-Knee Scorecard Checkpoint
 
 ```text
-Do not promote answer_or_explain.
-Do not lower thresholds.
-Do not count scoreable/hook-ready answer rows as savings.
+timestamp: 2026-07-09T00:41+03:00
 
-The current grounded answer-evidence readout does not separate true grounded
-answers from verifier-false rows. This is a payload/readout geometry failure,
-not a missing calibration run.
+scorecard:
+  average: 9.7/10
+  token_compression: 77.3%
+  cpu_accepts: 174
+  false_accepts: 0
+
+10/10 knees:
+  L1 Surface Capture
+  L2 Hidden State Packer
+  Online Miner
+  Subcenter Split
+  Candidate Lifecycle
+  Shadow / Promotion Gate
+  .nwpc Package
+  Hot Runtime
+
+remaining non-10 knees:
+  Event Sources: 9/10, upstream_configured=false
+  Server / Dashboard: 8/10, money_evidence=false
+
+changes:
+  metrics snapshot now treats clean-promotion-manifest safe promoted profiles
+  as exportable for observability scorecards.
+  metrics snapshot writes JSON/prom files atomically.
+  shared clean registry admission budget was widened to 16 profiles per route/worker;
+  false_accepts, parity, budget, verifier gates remain mandatory.
+
+boundary:
+  token claim is allowed.
+  market money claim remains blocked until provider billing/export evidence exists.
 ```
 
-Claim boundary:
+## Current Spectral Budget Debt
+
+Reference:
 
 ```text
-No new verified CPU accepts were created.
-CPU Routability 80 remains open:
-
-  verified_cpu_accept_eligible_events: 32 / 1000
-  verified_gap_to_80_calls: 768
-
-market_claim_allowed=false.
+docs/NANDO_WAVE_SPECTRAL_BUDGET_AUDIT.md
 ```
 
-Structural gate:
+Current P0 split targets:
 
 ```text
-packet:
-  docs/structural_gates/answer-evidence-local-accept-feedback-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-feedback-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 42
-note: narrow claim-boundary check only: answer_or_explain local-accept
-      calibration failed, feedback marks the route failed, local accepts remain
-      disabled, and verified CPU savings stay unchanged.
+phase_streaming_cmd.rs
+live_store_adapter.rs
+phase_package_cmd.rs
+phase_center_runtime.rs
+online_miner_daemon.rs
+phase_daemon_cmd.rs
 ```
 
-## 2026-07-04 - Executor Integration: Agent Continue Execute Local-Accept Calibration V1
-
-Verdict:
+Current budget snapshot:
 
 ```text
-AGENT_CONTINUE_EXECUTE_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SINGLETON_OR_WEAK_SAFE_POLICY_CANDIDATE
+phase_streaming_cmd.rs                                             24226 lines
+phase_package_cmd.rs                                               16408 lines
+live_store_adapter.rs                                              10802 lines
+phase_center_runtime.rs                                             7656 lines
+online_miner_daemon.rs                                              7190 lines
+phase_daemon_cmd.rs                                                 5320 lines
 ```
 
-What changed:
+User directive:
 
 ```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI route:
-  role-binding-real-traffic-agent-continue-execute-local-accept-calibration-v1
-
-The agent_continue_execute route now has a review-only local-accept calibration
-report against the tool-backed artifact-progress/no-drift verifier labels.
-The feedback-loop report also records the calibration artifact path.
+live_store_adapter.rs is still too fat.
+Keep it as a first-class spectral-budget refactor target until it is no
+longer a mixed source/miner/report/runtime monolith.
+After each budget pass, rescan all active files and update the audit.
 ```
 
-Calibration result:
+Rule:
+
+```text
+move-only refactor first; no scoring, threshold, verifier, miner, promotion,
+or compression-claim behavior changes during budget cuts.
+```
+
+Latest budget refresh:
+
+```text
+2026-07-08 full active-file scan refreshed.
+Data corpora/lexicons are data-budget artifacts, not Rust refactor targets.
+Rust P0 remains command/runtime/miner files, with live_store_adapter.rs kept as
+the user-flagged first-class split target.
+```
+
+Latest move-only cut:
+
+```text
+live_store_adapter/numeric_false_accept_split_audit.rs added
+live_store_adapter.rs false-accept split audit route moved out:
+  run_phase_stream_hot_path_daemon_numeric_false_accept_split_audit_v1
+live_store_adapter.rs reduced 11285 -> 10802
+behavior change: none
+checks:
+  cargo fmt --check
+  RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+  git diff --check
+  rust-action-memory review --workspace .
+```
+
+Latest value-pass denominator smoke:
 
 ```text
 report:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-local-accept-calibration-v1.report.json
+  target/nando-wave/streaming/phase-stream-online-miner-value-pass-denominator-smoke.report.json
 
-hook_ready_rows:              25
-scored_rows:                  25
-label_true_rows:               6
-label_false_rows:             19
-safe_policy_found:          true
-best_safe_true_accepts:        1
-local_accepts_enabled:     false
-market_claim_allowed:      false
+total_rows: 754
+exact_cache_hits: 612
+non_exact_rows: 142
+total_tokens_seen: 872321
+total_cost_microusd_seen: 0
+estimated_total_cost_microusd_seen: 872321
+product_hot_candidate_upper_bound_unique_accepts_over_exact_cache: 62
+product_hot_candidate_upper_bound_estimated_cost_saved_microusd: 35279
+product_hot_candidate_upper_bound_estimated_cost_saved_milli_over_estimated_total_cost: 40
+market_money_claim_allowed: false
+market_money_claim_blocker: provider_cost_missing_estimate_only
+estimated_money_claim_allowed: false
+estimated_money_claim_blocker: estimate_only_not_market_claim
 ```
 
-Policy audit:
+## Production Server Checkpoint
+
+Latest boxed server deploy:
 
 ```text
-current_disabled_profile_policy:
-  accepts: 0
-  false_accepts: 0
+ops/phase-center-test-server/deploy.sh
 
-energy_positive_no_slot_order:
-  accepts: 25
-  true_accepts: 6
-  false_accepts: 19
+installed:
+  /opt/nando-wave
+  /etc/nando-wave/phase-center.env
+  /var/lib/nando-wave/streaming
+  /var/log/nando-wave
+  /usr/local/bin/nando-llm-gateway
 
-strict_positive_slots_and_energy_positive:
-  accepts: 25
-  true_accepts: 6
-  false_accepts: 19
+systemd:
+  nando-phase-center-appender.service: active
+  nando-phase-center-live-tail.service: active
+  nando-phase-center-* timers: active
 
-next_action_slot_positive_only:
-  accepts: 25
-  true_accepts: 6
-  false_accepts: 19
+server policy:
+  NANDO_LOCAL_ACCEPT_ENABLED=0
+  NANDO_CLIENT_ALLOW_LOCAL_ACCEPT=0
+  NANDO_CLIENT_SAFETY_POLICY=shadow_only
+  NANDO_CLIENT_REQUIRE_VERIFIER=1
+  NANDO_CLIENT_REQUIRE_FALSE_ACCEPTS_ZERO=1
 
-evidence_slot_positive_only:
-  accepts: 25
-  true_accepts: 6
-  false_accepts: 19
+verification:
+  cargo fmt --check: pass
+  RUSTFLAGS='-D warnings' cargo check -q -p nando-cli: pass
+  rust-action-memory review --workspace .: diagnostics 0
+  systemd_verify_pass: true
+  install_ready: true
 
-best_energy_margin_threshold_request_side_only:
-  threshold: 1114112
-  accepts: 1
-  true_accepts: 1
-  false_accepts: 0
+gateway:
+  shadow mode falls back to provider command
+  canary-health policy accepts only exact built-in health/status route
+  broad prompt still falls back
 
-best_evidence_slot_margin_threshold_request_side_only:
-  threshold: 720896
-  accepts: 1
-  true_accepts: 1
-  false_accepts: 0
+current readiness blocker:
+  product_hot_post_quarantine_window_missing
+  market_money_claim_blocked
+  local_accept_promotion_blocked
 ```
 
-Feedback/catalog after regeneration:
-
-```text
-feedback:
-  total_llm_calls:                       1000
-  scoreable_candidate_calls:              173
-  verification_hook_ready_events:         142
-  verified_cpu_accept_eligible_events:     32
-  verified_cpu_routability_milli:          32
-  verified_gap_to_80_calls:               768
-
-agent_continue_execute route row:
-  stage: local_accept_calibration_support_insufficient
-  local_accept_calibration_ran: true
-  local_accept_safe_policy_found: true
-  local_accept_support_qualified: false
-  local_accept_best_safe_true_accepts: 1
-  verified_cpu_accept_eligible_events: 0
-  false_accepts: 0
-
-catalog:
-  agent_continue_execute existing-profile row is now deprioritized as
-  local_accept_support_insufficient, not treated as a promotion candidate.
-```
-
-Decision:
-
-```text
-Do not promote this route.
-Do not lower the disabled threshold.
-Do not count the singleton safe policy as savings.
-
-The weak safe candidate proves the scoring path is measurable, but support is
-below the minimum true-support gate. The route needs more verifier-true rows or
-better request-side admission/payload geometry before promotion.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created.
-CPU Routability 80 remains open:
-
-  verified_cpu_accept_eligible_events: 32 / 1000
-  verified_gap_to_80_calls: 768
-
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/agent-continue-execute-local-accept-calibration-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-local-accept-calibration-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 43
-note: narrow claim-boundary check only: agent_continue_execute has weak
-      request-side local-accept calibration, but support is insufficient,
-      local accepts remain disabled, and verified CPU savings stay unchanged.
-```
-
-## 2026-07-04 - Executor Integration: Agent Continue Execute Payload/Profile V1
-
-Verdict:
-
-```text
-AGENT_CONTINUE_EXECUTE_ROUTE_V1_REVIEW_SCOREABLE_AND_HOOK_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added CLI routes:
-  role-binding-real-traffic-agent-continue-execute-payload-dry-run-v1
-  role-binding-real-traffic-agent-continue-execute-profile-v1
-  role-binding-real-traffic-agent-continue-execute-output-evidence-v1
-  role-binding-real-traffic-agent-continue-execute-artifact-progress-v1
-
-The agent_continue_execute route now has a request-side payload builder,
-a disabled-threshold .nwrb profile, final-answer fingerprint attachment, and
-tool-backed artifact-progress/no-drift verification surface.
-```
-
-Real Codex window:
-
-```text
-total_llm_calls:                         1000
-exact_cache_hits:                          53
-route-only operator candidates:           422
-agent_continue_execute candidates:         32
-agent_continue_execute payload_ready:      28
-agent_continue_execute scoreable:          28
-agent_continue_execute hook_ready:         25
-artifact verifier true rows:                6
-artifact verifier false rows:              19
-tool_call_fingerprint_events:              20
-```
-
-Profile/shadow:
-
-```text
-profile_id: route_gap_agent_continue_execute_profile_v1
-package: target/nando-wave/real-traffic-shadow/agent-continue-execute-seed0.nwrb
-edge_count: 8
-threshold: 2147483647
-median_energy_margin: 835584
-unexpected_local_accepts_under_disabled_threshold: 0
-
-agent route shadow:
-  nando_shadow_accepts: 0
-  verified_safe_accepts: 0
-  false_accepts: 0
-  incremental_reduction_vs_exact_cache_milli: 0
-  p99_shadow_score_latency_ns: 240540
-```
-
-Feedback-loop after regeneration:
-
-```text
-scoreable_candidate_calls:              173
-verification_hook_ready_events:         142
-verified_cpu_accept_eligible_events:     32
-verified_cpu_routability_milli:          32
-verified_gap_to_80_calls:               768
-
-agent_continue_execute route row:
-  candidate_events:                       32
-  non_exact_candidate_calls:              22
-  scoreable_payload_events:               28
-  verification_hook_ready_events:         25
-  verified_cpu_accept_eligible_events:     0
-  false_accepts:                           0
-```
-
-Decision:
-
-```text
-This route is now measurable and verifier-hook-ready, but it is not a CPU
-savings route yet. The profile intentionally uses threshold=i32::MAX and keeps
-local accepts disabled.
-
-Do not count:
-  agent_continue_execute candidates,
-  scoreable payloads,
-  hook-ready rows,
-  artifact verifier true rows,
-  or disabled-profile margins
-
-as verified CPU savings.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-
-  verified_cpu_accept_eligible_events: 32 / 1000
-  verified_gap_to_80_calls: 768
-
-market_claim_allowed=false.
-```
-
-Next debt:
-
-```text
-Run local-accept calibration only after there is enough verifier-true support.
-If no safe policy exists, improve request-side admission or payload features.
-Never lower the disabled threshold just to create savings.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/agent-continue-execute-payload-profile-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/agent-continue-execute-payload-profile-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 38
-note: narrow claim-boundary check only: agent_continue_execute is scoreable
-      and hook-ready, but local accepts remain disabled and verified CPU
-      accept eligible count stays 0 for this route.
-```
-
-## 2026-07-04 - Executor Integration: CPU Route Feedback Loop Integration Audit
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_INTEGRATION_AUDIT_V1_REVIEW_NEXT_ROUTE_HITLIST_READY
-```
-
-What was checked:
-
-```text
-The earlier review note that the feedback loop was unfinished is stale in the
-current tree.
-
-Confirmed current code:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-    feedback_route_stage(...)
-    feedback_route_next_action(...)
-
-  crates/nando-cli/src/main.rs
-    role-binding-real-traffic-feedback-loop-v1 dispatch is present
-
-  crates/nando-cli/src/help.rs
-    role-binding-real-traffic-feedback-loop-v1 help text is present
-
-Confirmed current artifact:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-```
-
-Current feedback loop:
-
-```text
-total_llm_calls:                       1000
-operator_candidate_calls:              1000
-scoreable_candidate_calls:              145
-verification_hook_ready_events:         117
-verified_cpu_accept_eligible_events:     32
-verified_cpu_routability_milli:          32
-verified_gap_to_80_calls:               768
-false_accepts:                            0
-```
-
-CPU route hitlist:
-
-```text
-answer_or_explain:
-  candidates: 216
-  scoreable: 9
-  hook_ready: 9
-  verified_cpu_accept_eligible: 0
-  status: profile + hook exist, but local-accept calibration found no safe
-          readout policy. Do not lower threshold.
-  next: improve request-side admission or payload geometry.
-
-project_context_dialogue:
-  candidates: 211
-  scoreable: 2
-  hook_ready: 2
-  verified_cpu_accept_eligible: 0
-  status: only the artifact-backed subset is real; 180/211 are short context
-          chatter and must not be promoted as project-state operators.
-  next: keep broad dialogue fallback-only; expand only when an active
-        goal/artifact state channel exists.
-
-role_binding_agent_control_seed0:
-  candidates: 143
-  scoreable: 11
-  hook_ready: 11
-  verified_cpu_accept_eligible: 11
-  status: current robust stop/control support is exhausted.
-  next: split broader agent-state/tool-state subfamilies; do not repeat the
-        same stop promotion.
-
-role_binding_conditional_branch_seed0:
-  candidates: 166
-  scoreable: 53
-  hook_ready: 40
-  verified_cpu_accept_eligible: 3
-  status: payload path exists but support is exhausted by current admission.
-  next: split a stronger conditional subfamily or improve payload geometry.
-
-metrics_report_readout:
-  candidates: 55
-  scoreable: 3
-  hook_ready: 3
-  verified_cpu_accept_eligible: 3
-  status: numeric report path has safe support but it is already exhausted.
-  next: split a stronger numeric-evidence report subfamily.
-
-agent_continue_execute:
-  candidates: 31
-  scoreable: 0
-  hook_ready: 0
-  verified_cpu_accept_eligible: 0
-  status: next new route-gap family worth building because it is a real
-          state-transition operator, not broad chat.
-  next: build active_goal_next_step_payload_builder_v1 plus
-        artifact_progress_and_no_drift_verifier_v1; accepts disabled until
-        deterministic verification exists.
-```
-
-Decision:
-
-```text
-The feedback-loop integration debt is closed in the current source tree. The
-remaining CPU Routability 80 debt is not command wiring; it is route quality:
-request-side payload builders, deterministic verifier hooks, and safe local
-accept calibration on non-synthetic traffic.
-
-Do not count:
-  route candidates,
-  payload-ready rows,
-  scoreable rows,
-  verification-hook-ready rows,
-  disabled-profile scores,
-  or final-answer labels
-
-as verified CPU savings.
-
-Only hook-backed local accepts with false_accepts=0, provider cost evidence,
-and non-synthetic trace evidence can count toward market savings.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created by this audit. CPU Routability 80
-remains open:
-
-  verified_cpu_accept_eligible_events: 32 / 1000
-  verified_gap_to_80_calls: 768
-
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/cpu-route-feedback-loop-integration-audit-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-integration-audit-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 35
-note: narrow claim-boundary check only: command wiring present and current
-      32/1000 verified CPU eligible telemetry is not market savings or CPU
-      Routability 80 completion.
-```
-
-## 2026-07-04 - Executor Integration: Answer-Evidence Local Accept Calibration V1
-
-Verdict:
-
-```text
-ANSWER_EVIDENCE_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-ANSWER_EVIDENCE_SAFE_POLICY_PROMOTE_V1_REJECTED_NO_SUPPORTED_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-answer-evidence-local-accept-calibration-v1
-  role-binding-real-traffic-answer-evidence-safe-policy-promote-v1
-  docs/structural_gates/answer-evidence-local-accept-calibration-v1.md
-
-The answer_or_explain route now has a review-only local-accept calibration
-surface and a guarded safe-policy promotion command. The promotion command
-requires robust support and refuses to write a promoted accept path when the
-calibration is not separable.
-```
-
-Calibration:
+Latest live-tail claim blocker fix:
 
 ```text
 report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.report.json
+  target/nando-wave/streaming/live-tail-claim-blocker-source-ready-fix.seeded.report.json
 
-hook_ready_rows: 9
-label_true_rows: 3
-label_false_rows: 6
-safe_policy_found: false
-best_safe_true_accepts: 0
-local_accepts_enabled: false
-market_claim_allowed: false
+stable_decision_log_rows: 1809
+stable_decision_log_clean_suffix_rows: 407
+stable_decision_log_clean_suffix_false_accepts: 0
+stable_decision_log_clean_suffix_unique_cpu_accepts_over_exact_cache: 80
+stable_decision_log_clean_suffix_tokens_saved: 111228
+product_hot_score_only_runtime_source: live_store_clean_candidate_survivors
+product_hot_score_only_runtime_loaded: true
+product_hot_score_only_runtime_active: true
+final_hot_runtime_available: true
+stable_decision_log_clean_suffix_claim_allowed: false
+stable_decision_log_clean_suffix_claim_blocker: append_runtime_source_not_claim_ready
+local_accept_enabled: false
 ```
 
-Promotion guard:
+Meaning:
+
+```text
+The previous append_no_final_hot_runtime blocker was misleading for clean
+suffix windows. Runtime exists, but the runtime source is an in-memory clean
+survivor view, not a claim-ready promoted manifest/registry source. Next high
+value step: package or promote clean survivors through a verifier-bound
+claim-ready source, still with false_accepts=0 and local_accept disabled.
+```
+
+Latest cut:
+
+```text
+live_store_adapter/defaults.rs added
+live_store_adapter.rs default paths/limits moved out
+live_store_adapter/architecture.rs added
+live_store_adapter.rs architecture-version report/key moved out
+live_store_adapter/reports.rs added
+live_store_adapter.rs report schema groups moved out:
+  budget/direct-hot/route/bucket/candidate/manifest/future-shadow
+  prepared-hot
+  clean-manifest shadow
+  worker report schemas
+  append live-tail report schema
+  numeric package/future/false-accept audit report schemas
+  live_store_adapter/source_events.rs added
+live_store_adapter.rs source extraction helpers moved out:
+  parsed event structs
+  safe atoms / leak filter
+  adaptive bucket policy
+  route key / bucket selector / refinement blocker
+  full row-to-parsed-atom-event adapter
+live_store_adapter/hidden_state.rs added
+live_store_adapter.rs L2 hidden-state / auto-subcenter construction moved out:
+  hidden_state atoms
+  observable subcenter atoms
+  pair/combo subcenter bucket IDs
+live_store_adapter/state.rs added
+live_store_adapter.rs state/type bundles moved out:
+  stable decision-log window
+  product-hot credit rows
+  false-accept atom accumulator
+  future billing/provider artifact summaries
+  persisted product-hot quarantine state
+  registry shadow reports
+  clean/product-hot runtime bundles
+  direct-hot snapshot bank/eval
+live_store_adapter/persistence.rs added
+live_store_adapter.rs persistence helpers moved out:
+  persisted product-hot quarantine report loader
+live_store_adapter/paths.rs added
+live_store_adapter.rs path/key helpers moved out:
+  route key from bucket key
+  registry-relative package path resolver
+  hot-path review/policy report paths
+  append-tail promotion manifest/package paths
+  numeric future package/portfolio report paths
+live_store_adapter/runtime_registry.rs added
+live_store_adapter.rs runtime registry helpers moved out:
+  clean promotion manifest .nwpc runtime loader
+  product-hot registry .nwpc runtime loader
+  call/token active manifest runtime loader
+  call/token quarantine detector
+  product-hot route-index resolver
+  call/token active manifest disable helper
+live_store_adapter/profile_attribution.rs added
+live_store_adapter.rs L4 profile-attribution helpers moved out:
+  observable/hidden/unknown profile classification
+  call/token/cost attribution counters
+live_store_adapter/bucket_decisions.rs added
+live_store_adapter.rs bucket decision selectors moved out:
+  exact bucket decisions
+  union score-candidate decision
+  relevant online bucket IDs / decisions
+live_store_adapter/diagnostics.rs added
+live_store_adapter.rs diagnostics accumulators/builders moved out:
+  route/bucket counters
+  route/bucket report builders
+live_store_adapter/candidate_packages.rs added
+live_store_adapter.rs candidate package IO moved out:
+  verifier binding
+  verifier-bound .nwpc candidate package writer
+live_store_adapter/hot_path_gates.rs added
+live_store_adapter.rs hot-path blocker helpers moved out:
+  prepared-pack blocker
+  memory/thread worker blockers
+live_store_adapter/survivor_runtime.rs added
+live_store_adapter.rs clean survivor runtime helpers moved out:
+  candidate frontier
+  candidate value reports
+  clean survivor hot runtime builder
+  hidden-state/observable-subcenter priority selectors
+  quarantined/observable-primary exclusion set
+live_store_adapter/quarantine.rs added
+live_store_adapter.rs stable decision-log quarantine helpers moved out:
+  decision-log architecture filters
+  non-exact false profile-id extraction
+  stable decision-log window aggregation
+  score-candidate/local-accept counters excluding quarantined profiles
+live_store_adapter/policy_json.rs added
+live_store_adapter.rs JSON policy helpers moved out:
+  u32 vector extraction
+  forbidden flag parsing
+live_store_adapter/runtime_metrics.rs added
+live_store_adapter.rs runtime metric helpers moved out:
+  hot route/profile IDs
+  active profile counts
+  milli/permille helpers
+  provider/estimated cost row checks
+  runtime budget report mapping
+live_store_adapter/claim_gates.rs added
+live_store_adapter.rs claim/blocker helpers moved out:
+  hot-path benchmark blocker
+  promotion/admission blocker names
+  append compression claim blocker
+  product-hot runtime source claim readiness
+live_store_adapter/source_readers.rs added
+live_store_adapter.rs source/queue helpers moved out:
+  score source adapter reader
+  queue and threaded source readers
+  direct store event collection
+  append shadow event collection
+  live-loop budget event observation
+  worker batch send/flush
+live_store_adapter/hot_path_eval.rs added
+live_store_adapter.rs hot-path eval helpers moved out:
+  direct-hot snapshot capture/select/eval
+  prepared hot-path row builder
+  runtime parity checks
+  denominator and candidate-decision eval counters
+behavior change: none
+checks:
+  cargo fmt --check
+  RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+  git diff --check
+  rust-action-memory review --workspace .
+phase_streaming_cmd/defaults.rs added
+phase_streaming_cmd.rs report/default path constants moved out
+live_store_adapter/promotion_manifests.rs added
+live_store_adapter.rs promotion manifest handoff moved out:
+  clean promotion manifest writer
+  call/token promotion manifest summary
+  call/token promotion manifest writer
+  call/token manifest blockers
+  candidate runtime parity helpers
+live_store_adapter/provider_evidence.rs added
+live_store_adapter.rs provider evidence handoff moved out:
+  future-shadow billing request JSONL writer
+  provider export signature helpers
+  provider money claim blocker
+  cold provider evidence artifact refresh
+live_store_adapter/future_shadow_registry.rs extended
+live_store_adapter.rs future-shadow refresh/observe moved out:
+  live_store_refresh_future_shadow_summary
+  observe_live_store_future_shadow
+live_store_adapter.rs reduced 11556 -> 11285
+live_store_adapter/hot_path_eval.rs extended
+live_store_adapter.rs direct-hot eval report moved out:
+  direct mutable-store hot runtime report helper
+  direct-hot blocker helper
+behavior change: none
+checks so far:
+  cargo fmt
+  RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+  git diff --check
+rust-action-memory review --workspace .
+```
+
+## 2026-07-08 - Reviewer Check: One-Command Server Status
+
+CHANGE:
+
+```text
+Added operator-facing status command:
+  ops/phase-center-test-server/bin/nando-phase-center-status.sh
+
+Installed command:
+  /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh
+
+Purpose:
+  one JSON view for bridge health, verify, readiness, upstream readiness,
+  provider evidence, metrics, scorecard, and key systemd services.
+```
+
+BOUNDARY:
+
+```text
+Status command is read-only by default.
+It does not mine, score, call provider, mutate policy, or print secrets.
+--refresh only refreshes existing snapshots/verify reports.
+```
+
+LIVE STATUS:
 
 ```text
 command:
-  role-binding-real-traffic-answer-evidence-safe-policy-promote-v1
+  /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
 
-result:
-  rejected: answer-evidence calibration report has no supported robust
-  energy-threshold policy
+summary.canary_local_accept_ready: true
+summary.broad_provider_traffic_ready: false
+summary.money_claim_ready: false
+summary.next_action: configure_provider_upstream
+
+scorecard.stable_rows: 765
+scorecard.unique_cpu_accepts_over_exact_cache: 262
+scorecard.tokens_saved: 319806
+scorecard.false_accepts: 0
+
+bridge.health_ok: true
+bridge.local_accept_enabled: true
+bridge.client_allow_local_accept: true
+bridge.safety_policy: guarded_verified_routes
+bridge.upstream_configured: false
+
+upstream.verdict:
+  NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+
+services active:
+  nando-phase-center-appender.service
+  nando-phase-center-live-tail.service
+  nando-provider-bridge.service
 ```
 
-Decision:
+BOXED PACKAGE:
 
 ```text
-Do not enable answer_or_explain local accepts from the current grounded-answer
-profile. The verifier hook is present, but the score geometry accepts true and
-false rows together. This route stays at verification-hook-ready only until
-request-side admission or payload geometry creates false_accept=0 separation.
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T111100Z.tar.gz
+
+sha256:
+  39d53dfd03d27cb418e5bb5bf2e18e8165cde35a208775d0b22529bbb1f23ecd
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T111100Z.package.json
+
+package includes:
+  nando-phase-center-status.sh
+  rust-action-memory-gate.json
+  install-from-bundle.sh
 ```
 
-Structural gate:
+RUST ACTION MEMORY:
 
 ```text
-packet:
-  docs/structural_gates/answer-evidence-local-accept-calibration-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-local-accept-calibration-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 30
-note: narrow route-swap check only: calibration/promotion review artifacts are
-      not local accept, verified CPU saving, or market claim.
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
 ```
 
-## 2026-07-04 - Executor Integration: Answer-Evidence Output Evidence Hook V1
-
-Verdict:
+CONTROL:
 
 ```text
-ANSWER_EVIDENCE_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
+git diff --check
+bash -n scripts + ops bin
+systemd-analyze verify ops units
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+bundle sha256 check
+bundle install-only smoke
 ```
 
-What changed:
+## 2026-07-08 - Reviewer Check: Continuous Status Timer
+
+CHANGE:
 
 ```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
+Added continuous status snapshot units:
+  ops/phase-center-test-server/systemd/nando-phase-center-status.service
+  ops/phase-center-test-server/systemd/nando-phase-center-status.timer
 
-Added:
-  role-binding-real-traffic-answer-evidence-output-evidence-v1
+Deploy now enables:
+  nando-phase-center-status.timer
 
-The answer_or_explain route can now join offline Codex final-answer evidence
-to the disabled-profile shadow trace. The command writes response fingerprints
-and deterministic verifier status only. It writes no raw prompt or response
-text and does not enable local accepts.
+Verify now requires:
+  nando-phase-center-status.service
+  nando-phase-center-status.timer
 ```
 
-Output evidence:
+PURPOSE:
 
 ```text
-trace:
-  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.trace.jsonl
+Keep one always-fresh operator status file:
+  /var/lib/nando-wave/streaming/metrics/nando-phase-center.status.json
 
-report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.report.json
-
-output_evidence_matched_events: 9
-verified_true_events: 3
-verified_false_events: 6
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
+This avoids manual multi-file JSON inspection for:
+  bridge health
+  local_accept policy
+  compression scorecard
+  upstream readiness
+  money-claim readiness
+  service states
 ```
 
-Shadow and verification audit:
+LIVE SYSTEMD:
 
 ```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.shadow-report.json
+nando-phase-center-status.timer: active
+nando-phase-center-status.service: oneshot success
+Mem peak: 5M
+CPU: about 115ms
+```
 
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
+LIVE STATUS SNAPSHOT:
+
+```text
+generated_utc: 2026-07-08T11:19:36Z
+canary_local_accept_ready: true
+broad_provider_traffic_ready: false
+money_claim_ready: false
+next_action: configure_provider_upstream
+
+stable_rows: 827
+unique_cpu_accepts_over_exact_cache: 292
+tokens_saved: 327650
 false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 214912
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-v1.verification-hook-audit.report.json
-
-operator_candidate_calls: 9
-scoreable_candidate_calls: 9
-verification_hook_ready_events: 9
-verified_cpu_accept_eligible_events: 0
-candidates_missing_provider_cost: 9
-market_claim_allowed: false
-```
-
-Feedback loop:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-total_llm_calls: 1000
-operator_candidate_calls: 1000
-operator_candidate_route_sum_events: 1025
-scoreable_candidate_calls: 145
-verification_hook_ready_events: 117
-verified_cpu_routability_milli: 32
-unique_verified_cpu_accepts: 26
-incremental_unique_cpu_accepts: 25
-
-answer_or_explain:
-  candidate_events: 216
-  payload_ready_events: 17
-  scoreable_payload_events: 9
-  verification_hook_ready_events: 9
-  verified_cpu_accept_eligible_events: 0
-  false_accepts: 0
-  stage: verification_hook_ready_waiting_local_accept
-```
-
-Catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-top_catalog_row: answer_or_explain (existing_profile_route)
-existing_operator_candidate_calls: 1000
-existing_operator_candidate_route_sum_events: 1025
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls: 774
-recommended_payload_builder: answer_evidence_payload_builder_v1
-recommended_verifier: grounded_answer_evidence_verifier_v1
-```
-
-Decision:
-
-```text
-This closes the "verification hook missing" gap for the nine scoreable
-answer_or_explain rows. It does not create verified CPU accepts or market
-savings. The next engineering step is request-side local-accept calibration
-and provider-cost evidence, with false_accepts=0 still required.
-```
-
-Claim boundary:
-
-```text
-candidate coverage is capped at total_llm_calls. Route overlap is reported
-separately as operator_candidate_route_sum_events. No market claim is allowed:
-answer_evidence has 0 shadow accepts, 0 verified CPU eligible accepts, and
-missing provider cost on all 9 hook-ready rows.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/answer-evidence-output-evidence-hook-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-output-evidence-hook-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 22
-note: narrow route-swap check only: verification-hook-ready telemetry is not
-      local accept, verified CPU saving, or market claim.
-```
-
-## 2026-07-04 - Executor Integration: Answer-Evidence Disabled Profile V1
-
-Verdict:
-
-```text
-ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-ANSWER_EVIDENCE_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-answer-evidence-profile-v1
-
-The answer_or_explain grounded-evidence subset now has a disabled-threshold
-.nwrb profile and registry overlay. The profile is generated from request-side
-dry-run payloads only. It writes no raw prompt text, uses no response text, no
-target labels, and no proof labels. The profile threshold is i32::MAX, so it
-can produce score/margin telemetry but cannot locally accept.
-```
-
-Payload dry-run:
-
-```text
-trace:
-  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.report.json
-
-answer_evidence_candidate_events: 216
-payload_ready_events: 17
-payload_built_events: 9
-scoreable_payload_events: 9
-profile_registered: false
-shadow_score_ready: false
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Disabled profile:
-
-```text
-package:
-  target/nando-wave/real-traffic-shadow/answer-evidence-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-answer-evidence-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-profile-v1.report.json
-
-profile_id: route_gap_answer_evidence_profile_v1
-package_bytes: 116
-edge_count: 6
-runtime_bytes_estimate: 32944
-threshold: 2147483647
-trace_rows_read: 1000
-scoreable_payload_events: 9
-package_training_requests: 9
-positive_updates: 648
-negative_updates: 648
-changed_edges: 130
-positive_margin_rows: 9
-strict_ordered_pass_rows: 9
-unexpected_local_accepts_under_disabled_threshold: 0
-median_energy_margin: 1123328
-p10_energy_margin: 1106944
-min_energy_margin: 1106944
-median_min_slot_margin: 361472
-p10_min_slot_margin: 361472
-min_slot_margin: 361472
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed: false
-```
-
-Shadow:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-profile-v1.shadow-report.json
-
-total_requests: 1000
-total_llm_calls: 1000
-exact_cache_hits: 53
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 233725
-```
-
-Catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-answer_or_explain:
-  priority_rank: 1
-  candidate_events: 216
-  payload_ready_events: 17
-  scoreable_payload_events: 9
-  recommended_payload_builder: answer_evidence_payload_builder_v1
-  recommended_verifier: grounded_answer_evidence_verifier_v1
-  next_action: run shadow/audit next, but keep local accepts disabled until
-               grounded_answer_evidence_verifier_v1 proves false_accepts=0.
-```
-
-Decision:
-
-```text
-This closes the "profile missing" gap for the narrow grounded-evidence subset
-of answer_or_explain. It does not create local accepts, verified CPU accepts,
-or market savings. The next engineering step is grounded_answer_evidence_verifier_v1
-over the disabled-profile shadow trace.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-26/1000 unique verified accepts, gap 774.
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/answer-evidence-disabled-profile-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-disabled-profile-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 31
-note: narrow role-swap check only: disabled answer-evidence profile ready is not
-      a verifier, local accept, verified CPU saving, or market claim.
-```
-
-## 2026-07-04 - Executor Integration: Answer-Evidence Payload Dry-Run V1
-
-Verdict:
-
-```text
-ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND
-ANSWER_EVIDENCE_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-answer-evidence-payload-dry-run-v1
-
-The answer_or_explain route-gap family now has a request-side grounded-evidence
-payload dry-run. It builds active_fringe/slot/impulse payloads only from local
-Codex prompt-side signals and writes fingerprints/counters only. It does not
-use response text, target labels, proof labels, or raw prompt text as runtime
-authority. Local accepts remain disabled.
-```
-
-Route-gap readiness:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
-
-sampled_llm_calls: 1000
-existing_route_candidate_events: 334
-no_candidate_events: 666
-payload_ready_events: 122
-top_payload_ready_family: metrics_report_readout
-
-answer_or_explain:
-  candidate_events: 216
-  payload_ready_events: 17
-  payload_ready_rate_milli: 78
-  request_signal_events: 198
-  context_signal_events: 19
-  evidence_signal_events: 22
-  verifier_signal_events: 22
-  readiness: low_needs_knowledge_evidence
-```
-
-Answer-evidence dry-run:
-
-```text
-trace:
-  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.report.json
-
-answer_evidence_candidate_events: 216
-payload_ready_events: 17
-payload_built_events: 9
-scoreable_payload_events: 9
-builder_rejected_events: 8
-readiness_rejected_events: 199
-profile_registered: false
-shadow_score_ready: false
-active_fringe_centers_total: 1130
-slots_total: 27
-positive_impulses_total: 648
-negative_impulses_total: 648
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Feedback/catalog:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-total_llm_calls: 1000
-operator_candidate_calls: 809
-scoreable_candidate_calls: 136
-verification_hook_ready_events: 108
-verified_cpu_routability_milli: 32
-unique_verified_cpu_accepts: 26
-unique_verified_gap_to_80_calls: 774
-incremental_unique_cpu_accepts: 25
-incremental_unique_gap_to_80_calls: 775
-
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-answer_or_explain catalog row:
-  priority_rank: 1
-  candidate_events: 216
-  payload_ready_events: 17
-  scoreable_payload_events: 9
-  recommended_payload_builder: answer_evidence_payload_builder_v1
-  recommended_verifier: grounded_answer_evidence_verifier_v1
-  next_action: compile disabled-threshold answer-evidence .nwrb profile,
-               then attach grounded verifier; broad answer_or_explain stays
-               fallback-only.
-```
-
-Decision:
-
-```text
-This closes the "payload missing" gap for a narrow grounded-evidence subset of
-answer_or_explain. It does not create local accepts, verified CPU accepts, or
-market savings. The next engineering step is an answer-evidence disabled
-profile plus grounded_answer_evidence_verifier_v1.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-26/1000 unique verified accepts, gap 774.
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/answer-evidence-payload-dry-run-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/answer-evidence-payload-dry-run-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 28
-note: narrow role-swap check only: scoreable answer-evidence payloads are not a
-      registered profile, verification hook, local accept, verified CPU saving,
-      or market claim.
-```
-
-## 2026-07-04 - Executor Integration: Project-Context Workspace Evidence Hook V1
-
-Verdict:
-
-```text
-PROJECT_CONTEXT_OUTPUT_EVIDENCE_V1_REVIEW_WORKSPACE_EVIDENCE_TRUE_LABELS_FOUND
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-PROJECT_CONTEXT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-project-context-output-evidence-v1
-  role-binding-real-traffic-project-context-local-accept-calibration-v1
-
-The project_context scoreable rows now have a deterministic workspace artifact
-or goal-state evidence hook. The hook reads Codex session tool-call evidence and
-writes only fingerprints/counters. It does not write raw prompt text, raw
-response text, or raw tool outputs. Local accepts stay disabled unless a later
-request-side admission path has enough verifier-true support.
-```
-
-Output evidence:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.trace.jsonl
-
-artifact_evidence_matched_events: 2
-verified_true_events: 1
-verified_false_events: 1
-tool_call_fingerprint_events: 1
-raw_prompt_text_written: false
-raw_response_text_written: false
-tool_outputs_written: false
-market_claim_allowed: false
-```
-
-Shadow/audit:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/project-context-output-evidence-v1.verification-hook-audit.report.json
-
-total_llm_calls: 1000
-operator_candidate_calls: 2
-scoreable_candidate_calls: 2
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-p99_shadow_score_latency_ns: 204714
-verification_hook_ready_events: 2
-verified_cpu_accept_eligible_events: 0
-candidates_missing_output_evidence: 0
-candidates_missing_provider_cost: 2
-market_claim_allowed: false
-```
-
-Local-accept calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/project-context-local-accept-calibration-v1.report.json
-
-hook_ready_rows: 2
-label_true_rows: 1
-label_false_rows: 1
-no_score_rows: 0
-safe_policy_found: true
-best_safe_true_accepts: 1
-minimum_true_support_required_by_feedback: 3
-support_qualified: false
-market_claim_allowed: false
-```
-
-Feedback/catalog:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-overall:
-  total_llm_calls:                 1000
-  operator_candidate_calls:         809
-  scoreable_candidate_calls:        136
-  verification_hook_ready_events:   108
-  verified_cpu_accept_eligible_events: 32
-  verified_cpu_routability_milli:    32
-  unique_verified_cpu_accepts:       26
-  unique_verified_gap_to_80_calls:  774
-  incremental_unique_cpu_accepts:    25
-  incremental_unique_gap_to_80_calls: 775
-
-project_context_dialogue:
-  candidate_events:                    211
-  payload_ready_events:                  2
-  scoreable_payload_events:              2
-  verification_hook_ready_events:        2
-  local_accept_calibration_ran:       true
-  local_accept_safe_policy_found:     true
-  local_accept_minimum_true_support:     3
-  local_accept_support_qualified:    false
-  local_accept_best_safe_true_accepts:   1
-  verified_cpu_accept_eligible_events:   0
-  false_accepts:                         0
-  stage: local_accept_calibration_support_insufficient
-  next_action: Collect more verifier-true rows or raise admission quality
-               before promotion; low-support safe policies stay review-only.
-```
-
-Catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-top_catalog_row:
-  answer_or_explain (route_gap_family)
-
-project_context_dialogue existing_profile_route:
-  priority_rank:                 9
-  verification_hook_ready:       2
-  local_accept_support_insufficient: true
-  verified_cpu_accepts:          0
-  recommended_verifier:          workspace_artifact_or_goal_state_verifier_v1
-  market_claim_allowed:          false
-```
-
-Decision:
-
-```text
-This closes the verification-hook-missing gap for the narrow project_context
-scoreable subset. It does not create verified CPU accepts because shadow accepts
-remain zero and the calibration has only one verifier-true support row.
-
-project_context now moves from:
-  scoreable_payload_missing_verification_hook
-
-to:
-  local_accept_calibration_support_insufficient
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-26/1000 unique verified accepts, gap 774.
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/project-context-workspace-evidence-hook-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/project-context-workspace-evidence-hook-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 36
-note: narrow role-swap check only: project-context workspace evidence hook
-      ready != local accept, verified CPU savings, or market claim.
-```
-
-## 2026-07-04 - Executor Integration: Project-Context Disabled Profile V1
-
-Verdict:
-
-```text
-PROJECT_CONTEXT_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-project-context-profile-v1
-
-The command compiles the artifact-backed project_context dry-run payloads into
-a disabled-threshold .nwrb profile and writes a profile-registry overlay. The
-threshold is i32::MAX, so shadow scoring is measurable but local accepts remain
-impossible until workspace_artifact_or_goal_state_verifier_v1 exists.
-```
-
-Fresh profile:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/project-context-profile-v1.report.json
-
-package:
-  target/nando-wave/real-traffic-shadow/project-context-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-project-context-v1.json
-
-scoreable_payload_events: 2
-package_training_requests: 2
-edge_count: 7
-package_bytes: 128
-runtime_bytes_estimate: 32972
-threshold: 2147483647
-positive_margin_rows: 2
-strict_ordered_pass_rows: 2
-median_energy_margin: 1155072
-unexpected_local_accepts_under_disabled_threshold: 0
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed: false
-```
-
-Dry-run after registry overlay:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json
-
-project_context_candidate_events: 211
-payload_ready_events: 2
-payload_built_events: 2
-scoreable_payload_events: 2
-profile_registered: true
-shadow_score_ready: true
-local_accepts_enabled: false
-market_claim_allowed: false
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-```
-
-Shadow/audit:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/project-context-profile-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/project-context-profile-v1.verification-hook-audit.report.json
-
-operator_candidate_calls: 2
-scoreable_candidate_calls: 2
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-p99_shadow_score_latency_ns: 195244
-verification_hook_ready_events: 0
-market_claim_allowed: false
-```
-
-Feedback/catalog:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-project_context_dialogue:
-  priority_rank:                       7
-  stage:                               scoreable_payload_missing_verification_hook
-  candidate_events:                    211
-  payload_ready_events:                2
-  scoreable_payload_events:            2
-  verification_hook_ready_events:      0
-  verified_cpu_accept_eligible_events: 0
-  false_accepts:                       0
-  next_action:                         Attach response/tool-call evidence and
-                                       deterministic output verification.
-
-overall:
-  operator_candidate_calls:         809
-  scoreable_candidate_calls:        136
-  unique_verified_cpu_accepts:       26
-  unique_verified_gap_to_80_calls:  774
-```
-
-Catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-project_context_dialogue existing_profile_route:
-  priority_rank:              1
-  candidate_events:           211
-  payload_ready_events:       2
-  scoreable_payload_events:   2
-  verification_hook_ready:    0
-  verified_cpu_accepts:       0
-  recommended_verifier:       workspace_artifact_or_goal_state_verifier_v1
-
-project_context_dialogue route_gap_family:
-  priority_rank: 12
-  next_action:   project_context_dialogue already has 2 scoreable dry-run
-                 payloads in feedback-loop; continue with
-                 workspace_artifact_or_goal_state_verifier_v1 and keep local
-                 accepts disabled until deterministic verification exists.
-```
-
-Decision:
-
-```text
-This closes the profile-missing gap for the narrow artifact-backed subset of
-project_context. It deliberately does not promote broad project dialogue:
-209 of 211 candidates remain fallback-only until explicit workspace artifact
-or goal-state evidence exists. The current result is a route-prioritization
-instrument, not a market savings claim.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-26/1000 unique verified accepts, gap 774.
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/project-context-disabled-profile-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/project-context-disabled-profile-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 42
-note: narrow role-swap check only: disabled project-context profile /
-      artifact-backed scoreable path != verified CPU accept.
-```
-
-## 2026-07-04 - Executor Integration: Style-Brevity Disabled Profile V1
-
-Verdict:
-
-```text
-STYLE_BREVITY_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-STYLE_BREVITY_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PROFILE_READY
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-style-brevity-profile-v1
-
-The command compiles the existing request-side style_brevity dry-run payloads
-into a disabled-threshold .nwrb profile and writes a profile-registry overlay.
-The threshold is i32::MAX, so serving/shadow can measure score/margins but
-cannot local-accept real traffic.
-```
-
-Fresh profile:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.report.json
-
-package:
-  target/nando-wave/real-traffic-shadow/style-brevity-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-style-brevity-v1.json
-
-scoreable_payload_events: 3
-package_training_requests: 3
-edge_count: 6
-package_bytes: 116
-runtime_bytes_estimate: 32944
-threshold: 2147483647
-positive_margin_rows: 3
-strict_ordered_pass_rows: 3
-median_energy_margin: 1196032
-unexpected_local_accepts_under_disabled_threshold: 0
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed: false
-```
-
-Dry-run after registry overlay:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/style-brevity-payload-dry-run-v1.report.json
-
-style_brevity_candidate_events: 3
-payload_ready_events: 3
-payload_built_events: 3
-scoreable_payload_events: 3
-profile_registered: true
-shadow_score_ready: true
-local_accepts_enabled: false
-market_claim_allowed: false
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-```
-
-Shadow/audit:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/style-brevity-profile-v1.verification-hook-audit.report.json
-
-operator_candidate_calls: 3
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-p99_shadow_score_latency_ns: 319154
-verification_hook_ready_events: 0
-market_claim_allowed: false
-```
-
-Feedback/catalog:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-style_brevity:
-  priority_rank:                       7
-  stage:                               scoreable_payload_missing_verification_hook
-  candidate_events:                    3
-  scoreable_payload_events:            3
-  verification_hook_ready_events:      0
-  verified_cpu_accept_eligible_events: 0
-  false_accepts:                       0
-  next_action:                         Attach response/tool-call evidence and
-                                       deterministic output verification.
-
-overall:
-  unique_verified_cpu_accepts:      26
-  unique_verified_gap_to_80_calls: 774
-```
-
-Catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-style_brevity existing_profile_route:
-  priority_rank:              5
-  candidate_events:           3
-  scoreable_payload_events:   3
-  verification_hook_ready:    0
-  verified_cpu_accepts:       0
-  recommended_verifier:       route_specific_deterministic_verifier_required
-
-style_brevity route_gap_family:
-  priority_rank: 15
-  next_action:   style_brevity already has 3 scoreable dry-run payloads in
-                 feedback-loop; continue with
-                 response_length_and_format_verifier_v1.
-```
-
-Decision:
-
-```text
-This closes the profile-missing gap for style_brevity without creating fake
-savings. The route now has scoreable payloads, a package, registry overlay,
-shadow-score readiness, and a missing-hook audit. It still cannot count toward
-CPU Routability until response_length_and_format_verifier_v1, calibration,
-provider-cost evidence, and false_accepts=0 are all present.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-26/1000 unique verified accepts, gap 774.
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/style-brevity-disabled-profile-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/style-brevity-disabled-profile-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 31
-note: first broader packet was VETO because it mixed profile, shadow, audit,
-      catalog, and CPU80 summary too widely; repaired to the narrow role-swap
-      check: disabled profile / scoreable path != verified CPU accept.
-```
-
-## 2026-07-04 - Executor Integration: Style-Brevity Payload Dry-Run V1
-
-Verdict:
-
-```text
-STYLE_BREVITY_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_STYLE_BREVITY_SCOREABLE_NO_ACCEPTS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added a narrow request-side style_brevity payload dry-run:
-  role-binding-real-traffic-style-brevity-payload-dry-run-v1
-
-The route builds active_fringe/slots only for pure brevity/style-control prompts.
-It writes fingerprints/counts only, no raw prompt text, no response text, no
-target labels, no proof labels, and local accepts stay disabled.
-
-Feedback-loop now auto-loads the default style-brevity dry-run artifact and
-adds a route row when the route is scoreable but lacks deterministic output
-verification.
-
-CPU operator catalog now downranks the duplicate raw route-gap builder row when
-a matching scoreable feedback row already exists. This prevents looping on
-"build builder" after the builder is already present.
-```
-
-Fresh style-brevity dry-run:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/style-brevity-payload-dry-run-v1.report.json
-
-candidate_events:         3
-payload_ready_events:     3
-payload_built_events:     3
-scoreable_payload_events: 3
-profile_registered:       false
-local_accepts_enabled:    false
-market_claim_allowed:     false
-raw_text_written:         false
-response_text_used:       false
-target_labels_used:       false
-proof_labels_used:        false
-```
-
-Feedback-loop row:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-style_brevity:
-  stage:                               scoreable_payload_missing_verification_hook
-  candidate_events:                    3
-  scoreable_payload_events:            3
-  verification_hook_ready_events:      0
-  verified_cpu_accept_eligible_events: 0
-  false_accepts:                       0
-  next_action:                         Attach response/tool-call evidence and
-                                       deterministic output verification.
-
-overall:
-  operator_candidate_calls:             598
-  scoreable_candidate_calls:            134
-  verified_cpu_accept_eligible_events:   32
-  unique_verified_cpu_accepts:           26
-  unique_verified_gap_to_80_calls:      774
-```
-
-Catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-style_brevity scoreable row:
-  priority_rank:             5
-  source_kind:               existing_profile_route
-  candidate_events:          3
-  scoreable_payload_events:  3
-  next_action:               Attach response/tool-call evidence and deterministic output verification.
-
-style_brevity route-gap family row:
-  priority_rank: 15
-  next_action:   style_brevity already has 3 scoreable dry-run payloads in
-                 feedback-loop; continue with response_length_and_format_verifier_v1.
-```
-
-Decision:
-
-```text
-This is useful progress but not savings. The style-brevity route has crossed
-the request-side payload barrier and is now visible in the CPU80 feedback
-ladder, but it cannot count as CPU savings until a disabled-threshold profile,
-response_length_and_format_verifier_v1, shadow/audit, safe-policy calibration,
-provider-cost evidence, and false_accepts=0 are all present.
-```
-
-Claim boundary:
-
-```text
-No new verified CPU accepts were created. CPU Routability 80 remains open:
-26/1000 unique verified accepts, gap 774.
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/style-brevity-payload-dry-run-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/style-brevity-payload-dry-run-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 32
-note: first broader packet was VETO because candidate triads were too abstract
-      and mixed route/report roles; repaired to the narrow role-swap check:
-      scoreable_payload_events != verified_cpu_accept_eligible_events.
-```
-
-## 2026-07-04 - Executor Integration: Local-Accept Calibration Anti-Loop V1
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_REVIEW_LOCAL_ACCEPT_FAILURES_AND_LOW_SUPPORT_DOWNRANKED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The CPU operator catalog now distinguishes two non-promotable local-accept
-states:
-
-  local_accept_calibration_failed:
-    calibration ran, but no zero-false safe policy exists.
-
-  local_accept_support_insufficient:
-    a zero-false policy exists, but true support is below the minimum support
-    gate and must stay review-only.
-
-Both states now receive priority penalties. This prevents the catalog from
-looping on routes whose current score geometry cannot produce robust verified
-CPU savings.
-```
-
-Fresh read-inspect calibration:
-
-```text
-calibration_report:
-  target/nando-wave/real-traffic-shadow/read-inspect-local-accept-calibration-v1.report.json
-
-hook_ready_rows:       9
-label_true_rows:      1
-label_false_rows:     8
-safe_policy_found: false
-best_safe_true_accepts: 0
-
-margin collision:
-  energy_margin false rows at/above true row:      7
-  min_slot_margin false rows at/above true row:    7
-  path_slot_margin false rows at/above true row:   7
-  request_slot_margin false rows at/above true row: 8
-```
-
-Fresh catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls:    774
-
-penalized rows:
-  read_inspect:
-    rank: 15
-    local_accept_calibration_failed: true
-    next_action: improve request-side admission, verifier evidence, or payload
-                 geometry before another promote.
-
-  planning_next_step:
-    rank: 11
-    local_accept_support_insufficient: true
-    best safe support: 1 true row
-
-  retrieval_lookup:
-    rank: 13
-    local_accept_support_insufficient: true
-```
-
-Decision:
-
-```text
-Do not lower thresholds for read_inspect. Current margins do not separate
-verifier-true from verifier-false rows.
-
-Do not promote singleton/low-support planning_next_step or retrieval_lookup
-policies as product savings. They need more verifier-true support or better
-request-side admission before promotion.
-
-The next actionable work shifts to route-gap families that need real builders
-and deterministic verifiers instead of more threshold passes:
-  agent_continue_execute
-  retrieval_lookup route-gap
-  short_decision_ack
-  style_brevity
-```
-
-Claim boundary:
-
-```text
-This is route-selection instrumentation only. It adds no verified CPU accepts.
-CPU Routability 80 remains at 26/1000 unique verified accepts, with
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/local-accept-calibration-anti-loop-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/local-accept-calibration-anti-loop-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 39
-note: first packet was VETO because a generic catalog evidence label was reused
-      across unrelated metric fillers; repaired with route-specific evidence
-      labels.
-```
-
-## 2026-07-04 - Executor Integration: Route-Gap Exhaustion Alignment V1
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_REVIEW_EXHAUSTED_GAP_FAMILIES_RERANKED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Route-gap payload readiness now uses the same base profile registry as the
-route-gap catalog by default. This prevents the readiness pass from hiding
-base-registry no-candidate families after later overlay profiles are generated.
-
-The readiness analyzer now treats clean agent_control_stop prompts as
-request-side payload-ready control surfaces, but the CPU operator catalog
-also carries exhaustion signals from existing safe-policy audits into matching
-route-gap families. Exhausted stop, metrics, git, and serving gap rows are
-downranked instead of being rediscovered as fresh work.
-```
-
-Fresh route-gap readiness:
-
-```text
-readiness_report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
-
-sampled_llm_calls:              1000
-existing_route_candidate_events:  334
-no_candidate_events:              666
-payload_ready_events:             105
-top_payload_ready_family:         metrics_report_readout
-
-agent_control_stop:
-  candidate_events:     36
-  payload_ready_events: 31
-  payload_ready_rate:   861 milli
-```
-
-Fresh catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls:    774
-top_catalog_row:             read_inspect (existing_profile_route)
-
-exhausted gap families now downranked:
-  metrics_report_readout route_gap_family: rank 21
-  agent_control_stop     route_gap_family: rank 22
-  serving_ops            route_gap_family: rank 23
-  git_control            route_gap_family: rank 24
-```
-
-Decision:
-
-```text
-Do not repeat threshold-only promotes for agent_control_stop, metrics-report,
-git-control, or serving-ops from the current request geometry. Their safe
-support is already covered by current incremental unique accepts.
-
-The next highest-priority row is now:
-  read_inspect existing_profile_route
-
-Recommended next action:
-  improve read_inspect request-side admission or payload geometry, then attach
-  a deterministic read-only path/excerpt verifier before any local accept.
-```
-
-Claim boundary:
-
-```text
-This is route-selection instrumentation only. It adds no verified CPU accepts.
-CPU Routability 80 remains at 26/1000 unique verified accepts, with
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/route-gap-exhaustion-alignment-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/route-gap-exhaustion-alignment-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 28
-note: narrow packet checks the risky role swap only:
-      agent_control_stop payload-ready does not imply a fresh savings route
-      while existing strict stop support is exhausted.
-```
-
-## 2026-07-04 - Executor Integration: Catalog Exhaustion Rerank V1
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_REVIEW_EXHAUSTED_ROUTES_RERANKED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The CPU operator catalog now treats exhausted safe-policy support as a first
-class routing signal. Metrics-report, serving-ops, and edit existing-profile
-routes are downranked when their best safe calibration support is already
-covered by current incremental unique verified accepts. The exhaustion penalty
-was centralized as CPU_OPERATOR_EXHAUSTED_SUPPORT_PRIORITY_PENALTY.
-```
-
-Fresh catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls:    774
-top_catalog_row:             planning_next_step (route_gap_family)
-
-metrics_report_readout existing route:
-  rank:                                  26
-  incremental_unique_accepts:             3
-  metrics_report_best_robust_true_accepts: 3
-  metrics_report_current_support_exhausted: true
-
-serving_ops existing route:
-  serving_ops_best_safe_true_accepts: 3
-  serving_ops_current_support_exhausted: true
-
-edit existing route:
-  edit_best_safe_true_accepts: 1
-  edit_current_support_exhausted: true
-```
-
-Decision:
-
-```text
-Do not spend the next CPU80 step on another threshold-only pass for
-metrics-report, serving-ops, or edit. Their current request/score geometry has
-already captured its safe support in the 1000-call window.
-
-The next highest-priority route is now:
-  planning_next_step route_gap_family
-
-Recommended next action:
-  build or improve goal_state_transition_payload_builder_v1
-  plus plan_step_artifact_progress_verifier_v1
-  while keeping local accepts disabled until deterministic verification exists.
-```
-
-Claim boundary:
-
-```text
-This is route-selection instrumentation only. It adds no verified CPU accepts.
-CPU Routability 80 remains at 26/1000 unique verified accepts, with
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/catalog-exhaustion-rerank-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/catalog-exhaustion-rerank-v1.nanda.txt
-
-verdict: PASS
-complexity_score: 34
-note: route-specific evidence labels are required; the first packet reused
-      generic incremental-unique evidence labels across routes and NANDA
-      correctly rejected that as a role-filler conflict
-```
-
-## 2026-07-04 - Executor Integration: Mixed Safe Policy V3
-
-Verdict:
-
-```text
-MIXED_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND
-MIXED_SAFE_POLICY_PROMOTE_V3_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-mixed-admission-audit-v1
-  role-binding-real-traffic-mixed-safe-policy-promote-v3
-
-The admission audit scores mixed-map request-side feature conjunctions plus
-energy thresholds against real verification labels. The v3 promoter reads the
-best safe audit candidate, rewrites a promoted trace, and keeps runtime
-authority limited to prompt-side features plus .nwrb score threshold. It writes
-no raw prompt/response text and does not use target/proof labels as serving
-authority.
-```
-
-Fresh mixed admission audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/mixed-admission-audit-v1.report.json
-
-scoreable_candidate_rows: 14
-hook_ready_rows:         13
-label_true_rows:         10
-label_false_rows:         3
-unverified_rows:          1
-safe_policy_found:     true
-best_safe_true_accepts:   7
-
-best safe candidate:
-  no_question_mark AND no_goal_terms AND energy >= 204800
-  accepts:            7
-  true_accepts:       7
-  false_accepts:      0
-  unverified_accepts: 0
-```
-
-Fresh v3 promotion + shadow:
-
-```text
-promote_report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.report.json
-
-promoted_registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v3.json
-
-promoted_trace:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.trace.jsonl
-
-request_side_policy_accept_rows:      9
-policy_accept_rows:                   7
-policy_accept_verified_true_rows:     7
-policy_accept_verified_false_rows:    0
-policy_accept_unverified_rows:        0
-
-shadow_report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.shadow-report.json
-
-total_llm_calls:                       1000
-exact_cache_hits:                        53
-nando_shadow_accepts:                     7
-verified_safe_accepts:                    7
-false_accepts:                            0
-incremental_reduction_vs_exact_cache:     7 milli
-p99_shadow_score_latency_ns:         220096
-
-verification_hook_audit:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.verification-hook-audit.report.json
-
-operator_candidate_calls:        9
-scoreable_candidate_calls:       9
-verification_hook_ready_events:  9
-verified_cpu_accept_eligible:    7
-market_claim_allowed:         true
-```
-
-Fresh global CPU80 feedback:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-total_llm_calls:                                      1000
-operator_candidate_calls:                              595
-scoreable_candidate_calls:                             131
-verification_hook_ready_events:                        106
-verified_cpu_accept_unique_request_fingerprints:        26
-incremental_cpu_accept_unique_request_fingerprints:     25
-unique_verified_gap_to_80_calls:                       774
-market_claim_allowed:                                false
-```
-
-Fresh catalog after mixed v3:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-current_verified_cpu_accepts: 26
-verified_gap_to_80_calls:    774
-top_catalog_row:             metrics_report_readout
-
-mixed row:
-  rank:                                  15
-  verified_cpu_accept_eligible_events:    7
-  incremental_unique_accepts:             7
-  false_accepts:                          0
-  mixed_admission_best_safe_true_accepts: 7
-  mixed_current_support_exhausted:     true
-```
-
-Decision:
-
-```text
-Mixed v3 is a real improvement over v2 for the mixed-map route:
-  previous promoted mixed accepts: 3
-  v3 promoted mixed accepts:       7
-
-The current request-side mixed support is now exhausted. Another mixed-map
-threshold/policy pass is not the next move; the next mixed work must improve
-payload/evidence geometry or split a new subfamily.
-
-Global CPU Routability 80 is still not achieved:
-  unique verified accepts: 26 / 1000
-  unique gap to 80%:      774 calls
-  market_claim_allowed:   false
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/mixed-safe-policy-v3.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v3.nanda.txt
-
-verdict: PASS
-complexity_score: 25
-note: route-local metric-value packet used; the broader global market claim
-      boundary stays in the feedback/catalog reports instead of being merged
-      into this structural route
-```
-
-## 2026-07-04 - Executor Integration: Git-Control Admission Audit V1
-
-Verdict:
-
-```text
-GIT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_SAFE_REQUEST_SUBFAMILY_FOUND
-CPU_OPERATOR_CATALOG_V1_REVIEW_GIT_CONTROL_SUPPORT_EXHAUSTED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-git-control-admission-audit-v1
-
-The audit scores git-control request-side feature conjunctions plus energy
-thresholds against real verification labels. Unverified rows are treated as
-unsafe for promotion. It writes no raw prompt/response text, enables no local
-accepts, and cannot count as savings.
-```
-
-Fresh git-control admission audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1.report.json
-
-scoreable_candidate_rows: 12
-hook_ready_rows:         10
-label_true_rows:          6
-label_false_rows:         4
-unverified_rows:          2
-safe_policy_found:     true
-best_safe_true_accepts:   4
-
-best safe candidate:
-  has_digit AND energy >= 1190912
-  accepts:            4
-  true_accepts:       4
-  false_accepts:      0
-  unverified_accepts: 0
-```
-
-Decision:
-
-```text
-Do not promote another git-control policy from the current request-side
-features. The audit found only 4 market-safe accepts, already covered by the
-current git-control v2 incremental unique support.
-
-The apparent calibration support of 5 is not market-safe once request-side
-admission and unverified rows are included.
-```
-
-Fresh catalog after git-control exhaustion awareness:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-top_catalog_row: role_binding_mixed_map_seed0
-
-git_control row:
-  rank: 26
-  incremental_unique: 4
-  git_control_admission_best_safe_true_accepts: 4
-  git_control_current_support_exhausted: true
-```
-
-Claim boundary:
-
-```text
-This is route-selection instrumentation only. It adds no verified CPU accepts.
-CPU Routability 80 remains at 22/1000 unique verified accepts, with
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/git-control-admission-audit-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/git-control-admission-audit-v1.nanda.json
-
-verdict: PASS
-complexity_score: 27
-note: minimal metric-value packet used to check the rerank claim only
-```
-
-## 2026-07-04 - Executor Integration: Agent-Control Admission Audit V1
-
-Verdict:
-
-```text
-AGENT_CONTROL_ADMISSION_AUDIT_V1_REVIEW_CURRENT_POLICY_SUPPORT_EXHAUSTED
-CPU_OPERATOR_CATALOG_V1_REVIEW_AGENT_CONTROL_SUPPORT_EXHAUSTED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-agent-control-admission-audit-v1
-
-The audit joins the existing agent-control admission calibration summary with
-feedback-loop unique attribution. It writes no raw prompt/response text, enables
-no local accepts, and cannot count as savings.
-```
-
-Fresh agent-control admission audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.report.json
-
-candidate_events:                         143
-scoreable_payload_events:                  11
-verification_hook_ready_events:            11
-label_true_rows:                           12
-label_false_rows:                         112
-best_robust_true_accepts:                  11
-robust_remaining_true_rows:                 1
-verified_cpu_accept_eligible_events:       11
-unique_verified_request_fingerprints:       6
-incremental_verified_request_fingerprints:  5
-exact_cache_overlap:                        1
-duplicate_verified_route_hits:              5
-
-current_policy_event_support_exhausted: true
-unique_contribution_constrained:         true
-```
-
-Decision:
-
-```text
-Do not keep ranking agent_control first from the current stop/control policy.
-The robust request-side policy has already captured its current event support,
-and unique contribution is constrained by duplicates and exact-cache overlap.
-
-Next agent-control work must split broader agent-state/tool-state subfamilies
-or add stronger request-side evidence before another promote.
-```
-
-Fresh catalog after agent-control exhaustion awareness:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-top_catalog_row: git_control
-
-agent_control row:
-  current_policy_event_support_exhausted: true
-  unique_contribution_constrained: true
-  best_robust_true_accepts: 11
-```
-
-Claim boundary:
-
-```text
-This is route-selection instrumentation only. It adds no verified CPU accepts.
-CPU Routability 80 remains at 22/1000 unique verified accepts, with
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/agent-control-admission-audit-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/agent-control-admission-audit-v1.nanda.json
-
-verdict: PASS
-complexity_score: 36
-note: metric-value packet form used; evidence labels were made field-specific
-      after NANDA rejected generic attribution labels as incompatible fillers
-```
-
-## 2026-07-04 - Executor Integration: Conditional Admission Audit V1
-
-Verdict:
-
-```text
-CONDITIONAL_ADMISSION_AUDIT_V1_REVIEW_SAFE_SUBFAMILY_CANDIDATE_FOUND
-CPU_OPERATOR_CATALOG_V1_REVIEW_CONDITIONAL_SUPPORT_EXHAUSTED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-conditional-admission-audit-v1
-
-The audit joins request fingerprints back to local Codex prompt text at
-analysis time, writes no raw prompt/response text, and evaluates only:
-  request-side feature conjunctions
-  .nwrb energy thresholds
-  deterministic verifier labels
-
-It enables no local accepts and cannot be counted as savings.
-```
-
-Fresh conditional admission audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/conditional-admission-audit-v1.report.json
-
-hook_ready_rows:        63
-label_true_rows:        17
-label_false_rows:       46
-safe_policy_found:    true
-best_safe_true_accepts:  3
-
-best safe candidate:
-  has_digit AND has_gate_terms AND energy >= 0
-  accepts:       3
-  true_accepts:  3
-  false_accepts: 0
-  missed_true:  14
-```
-
-Decision:
-
-```text
-Do not promote another broad conditional policy from the current geometry.
-The only safe request-side subfamily found by the audit has support=3, which
-is already covered by the current conditional-safe-policy-v2 incremental
-unique accepts.
-
-The CPU operator catalog now auto-loads this audit and deprioritizes the
-conditional row when:
-  conditional_admission_best_safe_true_accepts
-    <= incremental unique accepts already credited to the route.
-```
-
-Fresh catalog after conditional exhaustion awareness:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-top_catalog_row: role_binding_agent_control_seed0
-
-conditional row:
-  rank: 7
-  route_sum: 3
-  unique: 3
-  incremental_unique: 3
-  conditional_admission_best_safe_true_accepts: 3
-  conditional_admission_current_support_exhausted: true
-  next_action:
-    improve conditional payload geometry or split a stronger subfamily
-    before another promote
-```
-
-Claim boundary:
-
-```text
-This is route-selection instrumentation only. It adds no verified CPU accepts.
-CPU Routability 80 remains at 22/1000 unique verified accepts, with
-market_claim_allowed=false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/conditional-admission-audit-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/conditional-admission-audit-v1.nanda.json
-
-verdict: PASS
-complexity_score: 36
-note: compact metric-value packet form used after the first larger packet VETOed
-      the catalog-top-row binding as a weak composite
-```
-
-## 2026-07-04 - Executor Integration: CPU Operator Catalog Unique Priority V1
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_REVIEW_UNIQUE_PRIORITY_INSTRUMENTED
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The CPU operator catalog row now exposes:
-  verified_cpu_accept_eligible_events          (route-sum diagnostic)
-  verified_cpu_accept_unique_request_fingerprints
-  incremental_cpu_accept_unique_request_fingerprints
-  exact_cache_overlap_verified_cpu_accepts
-  duplicate_verified_route_hits
-  cross_route_overlap_verified_request_fingerprints
-  priority_verified_accept_events
-
-Existing profile rows are prioritized by incremental unique verified accepts,
-not by route-sum duplicate accepts.
-```
-
-Fresh catalog after unique-priority rerank:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-total_llm_calls:                         1000
-current_verified_cpu_accepts:              22
-incremental_unique_cpu_accepts:            21
-verified_gap_to_80_calls:                 778
-top_catalog_row: role_binding_conditional_branch_seed0
-
-top rows:
-  role_binding_conditional_branch_seed0:
-    route_sum: 3
-    unique:    3
-    incremental_unique: 3
-    priority_verified_accept_events: 3
-
-  role_binding_agent_control_seed0:
-    route_sum: 11
-    unique:     6
-    incremental_unique: 5
-    exact_cache_overlap: 1
-    duplicate_route_hits: 5
-    priority_verified_accept_events: 5
-
-  git_control:
-    route_sum: 4
-    unique:    4
-    incremental_unique: 4
-    cross_route_overlap: 1
-    priority_verified_accept_events: 4
-```
-
-Decision:
-
-```text
-Do not rank the next CPU80 route by route-sum accepts. Route-sum is diagnostic
-only. Operator ranking must prefer unique/incremental contribution and must
-surface exact-cache overlap and duplicate route hits.
-```
-
-Claim boundary:
-
-```text
-This improves route accounting and next-route selection only. It does not add
-new verified CPU accepts and does not change market_claim_allowed=false.
-CPU Routability 80 is still not achieved.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/cpu-operator-catalog-unique-priority-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-unique-priority-v1.nanda.json
-
-verdict: PASS
-complexity_score: 35
-note: compact metric-value packet form used after the first larger packet VETOed
-      weak composite numeric bindings
-```
-
-## 2026-07-04 - Executor Integration: CPU Route Feedback Unique Contribution V1
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_UNIQUE_CONTRIBUTION_V1_REVIEW_INSTRUMENTED
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-RETRIEVAL_LOOKUP_WINDOW5000_REVIEW_NO_SAFE_POLICY
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Feedback-loop report now separates:
-  route-sum verified accepts
-  route-local unique request fingerprints
-  global unique request fingerprints
-  conservative incremental unique request fingerprints
-  duplicate hits inside one route
-  cross-route overlaps
-```
-
-Fresh feedback after uniqueness instrumentation:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-total_llm_calls:                                      1000
-operator_candidate_calls:                              595
-scoreable_candidate_calls:                             133
-verification_hook_ready_events:                        108
-route_sum_verified_cpu_eligible_hits:                   28
-route_unique_sum_request_fingerprints:                  23
-global_unique_verified_cpu_accepts:                     22
-conservative_incremental_unique_cpu_accepts:            21
-exact_cache_overlap_verified_cpu_accepts:                1
-duplicate_within_route_verified_hits:                    5
-cross_route_overlap_verified_request_fingerprints:       1
-duplicate_route_hits_total:                              6
-unique_verified_gap_to_80_calls:                       778
-incremental_unique_gap_to_80_calls:                    779
-```
-
-Route-level unique contribution:
-
-```text
-conditional:
-  route_sum: 3
-  unique:    3
-  cross_route_overlap: 1
-  exclusive: 2
-
-edit:
-  route_sum: 1
-  unique:    1
-  exclusive: 1
-
-mixed:
-  route_sum: 3
-  unique:    3
-  exclusive: 3
-
-metrics_report:
-  route_sum: 3
-  unique:    3
-  exclusive: 3
-
-agent_control:
-  route_sum: 11
-  unique:     6
-  conservative_incremental_unique: 5
-  exact_cache_overlap_unique:      1
-  duplicate_hits_inside_route:     5
-
-git_control:
-  route_sum: 4
-  unique:    4
-  cross_route_overlap: 1
-  exclusive: 3
-
-serving_ops:
-  route_sum: 3
-  unique:    3
-  exclusive: 3
-```
-
-Retrieval wider-window diagnostic:
-
-```text
-artifacts:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-window5000-payload-dry-run.report.json
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-window5000-output-evidence.report.json
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-window5000-local-accept-calibration.report.json
-
-window:                         5000 real Codex events
-retrieval_lookup_candidates:       91
-scoreable_payload_events:           7
-output_evidence_matched:            6
-verified_true_events:               5
-verified_false_events:              1
-safe_policy_found:              false
-```
-
-Decision:
-
-```text
-Do not promote retrieval_lookup. The wider window found a false row at the
-same energy scale as true rows, so retrieval remains red. This is useful
-negative evidence, not a failure of the feedback loop.
-```
-
-Claim boundary:
-
-```text
-The route-sum number is diagnostic only. The current honest CPU80 state is
-22/1000 global unique verified CPU accepts, or 21/1000 conservative
-incremental unique accepts over exact cache. CPU Routability 80 is not
-achieved and market_claim_allowed remains false.
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/cpu-route-feedback-unique-contribution-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-unique-contribution-v1.nanda.json
-
-verdict: PASS
-complexity_score: 39
-note: metric-value packet form used for numeric report bindings
-```
-
-## 2026-07-04 - Executor Integration: Conditional Safe-Policy Promote V2
-
-Verdict:
-
-```text
-CONDITIONAL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Completed existing command path:
-  role-binding-real-traffic-conditional-safe-policy-promote-v2
-```
-
-Fresh promotion artifact:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.report.json
-
-promoted_registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-conditional-safe-policy-v2.json
-
-promoted_trace:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.trace.jsonl
-
-request_side_policy_name:
-  conditional_gate_digit_terms
-
-selected_acceptance_policy:          energy_nonnegative
-selected_policy_threshold:           0
-registry_runtime_threshold:          1
-request_side_policy_accept_rows:     53
-runtime_policy_accept_rows:           3
-runtime_policy_verified_true_rows:    3
-runtime_policy_verified_false_rows:   0
-runtime_policy_unverified_rows:       0
-provider_cost_events_written:        53
-market_claim_allowed:             false
-```
-
-Fresh conditional v2 shadow:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.shadow-report.json
-
-total_llm_calls:                        1000
-exact_cache_hits:                         53
-nando_shadow_accepts:                      3
-verified_safe_accepts:                     3
-false_accepts:                             0
-unverified_shadow_accepts:                 0
-incremental_savings_over_exact_cache:      3
-p99_shadow_score_latency_ns:          255062
-synthetic_trace_used:                  false
-```
-
-Fresh conditional v2 verification audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v2.verification-hook-audit.report.json
-
-operator_candidate_calls:                 53
-scoreable_candidate_calls:                53
-verification_hook_ready_events:           40
-verified_cpu_accept_eligible_events:       3
-shadow_false_accepts:                      0
-market_claim_allowed:                   true
-```
-
-Fresh default feedback after conditional v2 audit wiring:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-route_sum_verified_cpu_eligible_hits:      28
-unique_verified_cpu_accepts:               22 / 1000
-verified_cpu_accept_unique_routability_milli: 22
-unique_verified_gap_to_80_calls:          778
-incremental_cpu_accept_unique_request_fingerprints: 22
-
-conditional route row:
-  stage: verified_cpu_accept_eligible
-  candidate_events:                        166
-  scoreable_payload_events:                 53
-  verification_hook_ready_events:           40
-  verified_cpu_accept_eligible_events:       3
-  false_accepts:                             0
-```
-
-Claim boundary:
-
-```text
-This is a narrow route-local conditional v2 promoted trace PASS: 3 verified
-safe accepts, 0 false accepts, and 0 unverified accepts. It completes the
-previously unfinished conditional-safe-policy-promote-v2 integration.
-
-This is not CPU Routability 80 and does not improve the unique global feedback
-count: unique verified CPU accepts remain 22/1000. The route-sum count is 28,
-but route-sum can contain overlapping request fingerprints and must not be used
-as the market claim.
-
-The policy is intentionally low-margin: serving admission is request-side
-gate/digit terms plus energy_nonnegative. The .nwrb registry still keeps a
-positive runtime threshold field for package loading, but the acceptance policy
-uses the explicit nonnegative energy rule. Treat this as a small safe pocket,
-not as a broad conditional operator proof.
-```
-
-## 2026-07-04 - Executor Integration: Git-Control Safe-Policy Promote V2
-
-Verdict:
-
-```text
-GIT_CONTROL_SAFE_POLICY_PROMOTE_V2_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-git-control-safe-policy-promote-v2
-
-Added feedback wiring:
-  git_control_safe_policy_v2_verification_audit_report_path
-```
-
-Implementation note:
-
-```text
-The current code diff also contains a conditional-safe-policy-promote-v2 command
-and optional feedback wiring from the open working set. It is not counted in
-this promoted result because no conditional v2 default audit artifact exists in
-the feedback window. The current PASS claim is git_control v2 only.
-```
-
-Fresh promotion artifact:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.report.json
-
-promoted_registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v2.json
-
-promoted_trace:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.trace.jsonl
-
-request_side_policy_name:
-  git_control_digit_count_ge_1
-
-selected_acceptance_policy:          energy_threshold_only
-selected_policy_threshold:           1190912
-request_side_policy_accept_rows:          9
-policy_accept_rows:                       4
-policy_accept_verified_true_rows:         4
-policy_accept_verified_false_rows:        0
-policy_accept_unverified_rows:            0
-provider_cost_events_written:             9
-market_claim_allowed:                 false
-```
-
-Fresh git_control shadow:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.shadow-report.json
-
-total_llm_calls:                        1000
-exact_cache_hits:                         53
-nando_shadow_accepts:                      4
-verified_safe_accepts:                     4
-false_accepts:                             0
-unverified_shadow_accepts:                 0
-incremental_savings_over_exact_cache:      4
-p99_shadow_score_latency_ns:          207390
-synthetic_trace_used:                  false
-```
-
-Fresh git_control verification audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v2.verification-hook-audit.report.json
-
-operator_candidate_calls:                  9
-scoreable_candidate_calls:                 9
-verification_hook_ready_events:            9
-verified_cpu_accept_eligible_events:       4
-shadow_false_accepts:                      0
-market_claim_allowed:                   true
-```
-
-Fresh default feedback after safe-policy v2 audit wiring:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-route_sum_verified_cpu_eligible_hits:      27
-unique_verified_cpu_accepts:               22 / 1000
-verified_cpu_accept_unique_routability_milli: 22
-unique_verified_gap_to_80_calls:          778
-incremental_cpu_accept_unique_request_fingerprints: 22
-
-git_control route row:
-  stage: verified_cpu_accept_eligible
-  candidate_events:                         18
-  payload_ready_events:                     12
-  payload_built_events:                     12
-  scoreable_payload_events:                  9
-  verification_hook_ready_events:            9
-  verified_cpu_accept_eligible_events:       4
-  false_accepts:                             0
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/git-control-safe-policy-promote-v2.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-promote-v2.nanda.json
-
-verdict: PASS
-complexity_score: 39
-agent_action: SAFE_TO_EDIT
-```
-
-Claim boundary:
-
-```text
-This is a narrow non-synthetic git_control promoted trace PASS: 4 verified
-safe accepts, 0 false accepts, 0 unverified accepts, and 4 incremental accepts
-over exact cache inside the current 1000-call trace window.
-
-This is not CPU Routability 80. The full feedback loop is now 22/1000 unique
-verified CPU accepts, with 778 unique calls still missing to reach the 80%
-target. Workspace mutation execution remains disabled; this route only scores
-and audits shadow local accepts.
-```
-
-## 2026-07-04 - Executor Integration: Metrics-Report Admission Safe-Policy Promote V1
-
-Verdict:
-
-```text
-METRICS_REPORT_ADMISSION_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-metrics-report-admission-safe-policy-promote-v1
-
-Added feedback wiring:
-  metrics_report_safe_policy_verification_audit_report_path
-```
-
-Fresh promotion artifact:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.report.json
-
-promoted_registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-safe-policy-v1.json
-
-promoted_trace:
-  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.trace.jsonl
-
-request_side_policy_name:
-  false_accept_terms_no_failure_active_fringe_min_99
-
-selected_acceptance_policy:          first_slot_threshold
-selected_policy_threshold:           278528
-policy_accept_rows:                       3
-policy_accept_verified_true_rows:         3
-policy_accept_verified_false_rows:        0
-policy_accept_unverified_rows:            0
-provider_cost_events_written:             3
-market_claim_allowed:                 false
-```
-
-Fresh metrics_report shadow:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.shadow-report.json
-
-total_llm_calls:                        1000
-nando_shadow_accepts:                      3
-verified_safe_accepts:                     3
-unverified_shadow_accepts:                 0
-false_accepts:                             0
-incremental_savings_over_exact_cache:      3
-p99_shadow_score_latency_ns:          260899
-synthetic_trace_used:                  false
-```
-
-Fresh metrics_report verification audit:
-
-```text
-audit_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-safe-policy-v1.verification-hook-audit.report.json
-
-operator_candidate_calls:                  3
-scoreable_candidate_calls:                 3
-verification_hook_ready_events:            3
-verified_cpu_accept_eligible_events:       3
-shadow_false_accepts:                      0
-market_claim_allowed:                   true
-```
-
-Fresh default feedback after safe-policy audit wiring:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-verified_cpu_accept_unique_request_fingerprints: 19
-verified_cpu_accept_unique_routability_milli:    19
-unique_verified_gap_to_80_calls:                781
-incremental_cpu_accept_unique_request_fingerprints: 19
-
-metrics_report route row:
-  stage: verified_cpu_accept_eligible
-  candidate_events:                         55
-  payload_ready_events:                     42
-  payload_built_events:                     42
-  scoreable_payload_events:                  3
-  verification_hook_ready_events:            3
-  verified_cpu_accept_eligible_events:       3
-  false_accepts:                             0
-```
-
-Fresh operator catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-existing_operator_candidate_calls:        595
-no_candidate_calls:                       405
-current_verified_cpu_accepts:              19
-verified_gap_to_80_calls:                 781
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/metrics-report-admission-safe-policy-promote-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-admission-safe-policy-promote-v1.nanda.json
-
-verdict: PASS
-complexity_score: 33
-agent_action: SAFE_TO_EDIT
-```
-
-Claim boundary:
-
-```text
-This is a narrow non-synthetic metrics_report promoted trace PASS: 3 verified
-safe accepts, 0 false accepts, 0 unverified accepts, and 3 incremental accepts
-over exact cache inside the current 1000-call trace window.
-
-This is not CPU Routability 80. The full feedback loop is now 19/1000 unique
-verified CPU accepts, with 781 calls still missing to reach the 80% target.
-```
-
-## 2026-07-04 - Executor Integration: Metrics-Report Admission Calibration + Feedback Wiring V1
-
-Verdict:
-
-```text
-METRICS_REPORT_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-metrics-report-admission-calibration-v1
-```
-
-Fresh metrics_report admission calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/metrics-report-admission-calibration-v1.report.json
-
-hook_ready_rows:                         32
-rows_with_prompt_features:               32
-history_prompt_missing_rows:              0
-label_true_rows:                         18
-label_false_rows:                        14
-minimum true-support gate:                3
-robust_safe_policy_found:              true
-best_robust_true_accepts:                 3
-
-best robust policy:
-  false_accept_terms_no_failure
-  true_accepts:                            3
-  false_accepts:                           0
-
-raw_prompt_text_written:              false
-raw_response_text_written:            false
-response_text_used_for_features:      false
-target_labels_used_for_runtime:       false
-proof_labels_used_for_runtime:        false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Fresh default feedback after wiring metrics_report admission:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:                 595 / 1000
-scoreable_candidate_calls:                177 / 1000
-verification_hook_ready_events:           138
-verified_cpu_accept_eligible_events:       21 route-sum
-unique_verified_cpu_accepts:               16
-unique_verified_gap_to_80_calls:          784
-
-metrics_report route row:
-  candidate_events:                        55
-  payload_ready_events:                    42
-  payload_built_events:                    42
-  scoreable_payload_events:                42
-  verification_hook_ready_events:          32
-  local_accept_calibration_ran:          true
-  local_accept_safe_policy_found:        true
-  local_accept_support_qualified:        true
-  local_accept_best_safe_true_accepts:      3
-  verified_cpu_accept_eligible_events:      0
-  false_accepts:                            0
-  stage: local_accept_calibration_safe_policy_candidate
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/metrics-report-admission-calibration-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-admission-calibration-v1.nanda.json
-
-verdict: PASS
-complexity_score: 36
-agent_action: SAFE_TO_EDIT
-```
-
-Claim boundary:
-
-```text
-metrics_report now has a request-side admission candidate with enough support
-for the minimum 3-row safe-policy gate, but it adds zero verified CPU accepts.
-This is not promoted runtime savings and not a market claim. Current CPU
-Routability remains 16/1000 unique requests, not 80%.
-
-Next step: promote only through a separate shadow trace rewrite with provider
-cost, rollback, unverified_shadow_accepts=0, false_accepts=0, and no answer or
-label leak.
-```
-
-## 2026-07-04 - Executor Integration: Retrieval-Lookup Calibration + Feedback Wiring V1
-
-Verdict:
-
-```text
-RETRIEVAL_LOOKUP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SUPPORT_INSUFFICIENT
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-retrieval-lookup-local-accept-calibration-v1
-```
-
-Fresh retrieval_lookup calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-local-accept-calibration-v1.report.json
-
-hook_ready_rows:                         2
-scored_rows:                             2
-label_true_rows:                         2
-label_false_rows:                        0
-safe_policy_found:                    true
-best_safe_true_accepts:                  2
-minimum true-support gate:               3
-local_accepts_enabled:               false
-market_claim_allowed:                false
-```
-
-Decision:
-
-```text
-A safe-looking retrieval_lookup margin policy exists on the current two
-verifier-true rows, but support is below the minimum true-support gate. It must
-remain review-only. Do not lower the disabled threshold or count it as savings.
-```
-
-Fresh default feedback after wiring retrieval_lookup:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:                 595 / 1000
-scoreable_candidate_calls:                177 / 1000
-verification_hook_ready_events:           138
-verified_cpu_accept_eligible_events:       21 route-sum
-unique_verified_cpu_accepts:               16
-unique_verified_gap_to_80_calls:          784
-
-retrieval_lookup route row:
-  candidate_events:                        25
-  payload_ready_events:                     2
-  payload_built_events:                     2
-  scoreable_payload_events:                 2
-  verification_hook_ready_events:           2
-  local_accept_calibration_ran:          true
-  local_accept_safe_policy_found:        true
-  local_accept_support_qualified:       false
-  verified_cpu_accept_eligible_events:      0
-  false_accepts:                            0
-  stage: local_accept_calibration_support_insufficient
-```
-
-Fresh operator catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-existing_operator_candidate_calls:        595
-no_candidate_calls:                       405
-current_verified_cpu_accepts:             16
-verified_gap_to_80_calls:                 784
-
-retrieval_lookup existing-profile row:
-  priority_rank:                           15
-  candidate_events:                        25
-  scoreable_payload_events:                 2
-  verification_hook_ready_events:           2
-  verified_cpu_accept_eligible_events:      0
-```
-
-Structural gate:
-
-```text
-packet:
-  docs/structural_gates/retrieval-lookup-feedback-wiring-v1.md
-
-gate_report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-feedback-wiring-v1.nanda.json
-
-verdict: PASS
-complexity_score: 37
-route_coherence retrieval_lookup: 0.9214
-```
-
-Claim boundary:
-
-```text
-retrieval_lookup is now visible in the main CPU80 feedback ladder and catalog,
-but it adds zero verified CPU accepts. Current CPU Routability remains
-16/1000 unique requests, not 80%. The next retrieval step is broader
-request-side admission/evidence coverage, not promotion.
-```
-
-## 2026-07-04 - Executor Integration: Retrieval-Lookup Profile + Evidence V1
-
-Verdict:
-
-```text
-RETRIEVAL_LOOKUP_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-RETRIEVAL_LOOKUP_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added commands:
-  role-binding-real-traffic-retrieval-lookup-profile-v1
-  role-binding-real-traffic-retrieval-lookup-output-evidence-v1
-```
-
-Fresh profile:
-
-```text
-package:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-retrieval-lookup-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-profile-v1.report.json
-
-scoreable_payload_events:                       2
-package_training_requests:                      2
-edge_count:                                     7
-runtime_bytes_estimate:                     32972
-threshold:                             2147483647
-positive_margin_rows:                           2
-strict_ordered_pass_rows:                       2
-unexpected_local_accepts_under_disabled_threshold: 0
-median_energy_margin:                     1181696
-local_accepts_enabled_on_real_traffic:      false
-market_claim_allowed:                       false
-```
-
-Fresh output evidence:
-
-```text
-trace:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.report.json
-
-total_trace_rows:                         1000
-operator_candidate_calls:                    2
-scoreable_candidate_calls:                   2
-output_evidence_matched_events:              2
-deterministic_verification_events:           2
-verifier_not_applicable_events:              0
-verified_true_events:                        2
-verified_false_events:                       0
-raw_response_text_written:               false
-response_text_used_for_verification:      true
-local_accepts_enabled:                   false
-market_claim_allowed:                    false
-```
-
-Fresh shadow + audit:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.shadow-report.json
-
-audit_report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-output-evidence-v1.verification-hook-audit.report.json
-
-shadow total_llm_calls:                    1000
-shadow exact_cache_hits:                     53
-shadow nando_shadow_accepts:                  0
-shadow verified_safe_accepts:                 0
-shadow false_accepts:                         0
-shadow incremental_reduction_vs_exact_cache_milli: 0
-shadow p99_shadow_score_latency_ns:      250185
-
-audit operator_candidate_calls:               2
-audit scoreable_candidate_calls:              2
-audit verification_hook_ready_events:         2
-audit verified_cpu_accept_eligible_events:    0
-audit market_claim_allowed:               false
-```
-
-Decision:
-
-```text
-retrieval_lookup now has a complete disabled route rung:
-request-side payload -> .nwrb profile -> source/path/URL evidence hook -> shadow/audit.
-It still does not affect the current CPU scoreboard because the profile threshold is
-i32::MAX and local accepts remain disabled. This is the correct side of the line:
-verified evidence exists for 2 rows, but verified CPU savings are still 0.
-```
-
-Next engineering debt:
-
-```text
-Do not promote retrieval_lookup to local accept yet. First run calibration with
-enough verifier-true and verifier-false support, or broaden the request-side
-payload builder to more real retrieval rows without answer leaks. External
-freshness/free-form lookup still requires concrete source/path/URL verification.
-```
-
-## 2026-07-04 - Executor Integration: Retrieval-Lookup Payload Dry-Run V1
-
-Verdict:
-
-```text
-RETRIEVAL_LOOKUP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-retrieval-lookup-payload-dry-run-v1
-```
-
-Fresh dry-run:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-payload-dry-run-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/retrieval-lookup-payload-dry-run-v1.trace.jsonl
-
-retrieval_lookup_candidate_events: 25 / 1000
-payload_ready_events:              2
-payload_built_events:              2
-scoreable_payload_events:          2
-active_fringe_centers_total:     246
-slots_total:                       6
-positive_impulses_total:         144
-negative_impulses_total:         144
-profile_registered:            false
-shadow_score_ready:            false
-raw_text_written:              false
-response_text_used:            false
-target_labels_used:            false
-proof_labels_used:             false
-local_accepts_enabled:         false
-market_claim_allowed:          false
-```
-
-Decision:
-
-```text
-retrieval_lookup now has a request-side payload path for its strict-ready
-subset, but it is still profile-missing and verifier-missing. It must not be
-merged with read_inspect and must not affect the 16/1000 CPU scoreboard.
-```
-
-Next engineering debt:
-
-```text
-Compile a disabled-threshold retrieval_lookup .nwrb profile, attach
-source_path_or_url_presence_verifier_v1 from Codex final-answer/tool evidence,
-then run shadow/audit/calibration. Do not local-accept external freshness or
-free-form answer lookup without a concrete source/path/URL verifier.
-```
-
-## 2026-07-04 - Executor Integration: Project-Context Subfamily Audit V1
-
-Verdict:
-
-```text
-PROJECT_CONTEXT_SUBFAMILY_AUDIT_V1_REVIEW_ACTIONABLE_SUBSET_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-project-context-subfamily-audit-v1
-```
-
-Fresh audit:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/project-context-subfamily-audit-v1.report.json
-
-project_context_candidate_events: 211 / 1000
-payload_ready_events:             2
-payload_ready_rate_milli:         9
-request_signal_events:            20
-context_signal_events:            11
-evidence_signal_events:           10
-verifier_signal_events:           12
-raw_text_written:                 false
-response_text_used:               false
-target_labels_used:               false
-proof_labels_used:                false
-local_accepts_enabled:            false
-market_claim_allowed:             false
-```
-
-Subfamily split:
-
-```text
-artifact_backed_project_state:                 2 candidates, 2 ready
-short_context_chatter:                       180 candidates, 0 ready
-request_only_project_dialogue:                17 candidates, 0 ready
-context_evidence_missing_request_or_verifier:  8 candidates, 0 ready
-broad_project_context_dialogue:                3 candidates, 0 ready
-request_context_missing_evidence_or_verifier:  1 candidate,  0 ready
-```
-
-Decision:
-
-```text
-Do not treat all project_context_dialogue rows as CPU routability surface.
-Most of this family is short context/chatter without request/context/evidence
-structure. The only safe project-state branch right now is the 2-row
-artifact_backed_project_state subset.
-```
-
-Next engineering debt:
-
-```text
-Either:
-  1. build the small artifact_backed_project_state branch into a disabled
-     project_context profile + workspace_artifact_or_goal_state_verifier; or
-  2. move to the next route-gap family with clearer verifier economics
-     (retrieval_lookup / answer_or_explain with grounded evidence).
-
-Do not lower evidence requirements to inflate project_context coverage.
-```
-
-## 2026-07-04 - Executor Integration: Project-Context Payload Dry-Run V1
-
-Verdict:
-
-```text
-PROJECT_CONTEXT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-project-context-payload-dry-run-v1
-```
-
-Fresh dry-run:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/project-context-payload-dry-run-v1.trace.jsonl
-
-project_context_candidate_events:  211 / 1000
-payload_ready_events:                2
-payload_built_events:                2
-scoreable_payload_events:            2
-active_fringe_centers_total:       231
-slots_total:                         6
-positive_impulses_total:           133
-negative_impulses_total:           144
-profile_registered:              false
-shadow_score_ready:              false
-raw_text_written:                false
-response_text_used:              false
-target_labels_used:              false
-proof_labels_used:               false
-local_accepts_enabled:           false
-market_claim_allowed:            false
-```
-
-Claim boundary:
-
-```text
-This is a request-side dry-run only. It proves that the top route-gap family can
-emit scoreable active_fringe/slot payloads for the strict artifact-backed subset,
-but it does not prove savings and must not change the current 16/1000 CPU
-Routability scoreboard.
-```
-
-Next engineering debt:
-
-```text
-Build a disabled-threshold project_context .nwrb profile and workspace
-artifact / goal-state verifier before any calibration. If the route remains
-2/211 under strict evidence, split project_context into safer subfamilies
-instead of lowering verifier requirements.
-```
-
-## 2026-07-04 - Executor Integration: Post-16 Route Triage
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_POST_16_TRIAGE_NO_THRESHOLD_SHORTCUT
-```
-
-Current scoreboard:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-verified_cpu_accept_route_sum_events:             21 / 1000
-verified_cpu_accept_unique_request_fingerprints:  16 / 1000
-verified_cpu_accept_duplicate_route_hits:         5
-exact_cache_overlap_verified_cpu_accepts:         1
-unique_verified_gap_to_80_calls:                  784
-false_accepts:                                    0
-```
-
-Route triage:
-
-```text
-conditional_branch:
-  candidate_events:                 166
-  verification_hook_ready_events:    40
-  verified_cpu_accept_eligible:       2
-  blocker: calibration says score/readout geometry does not separate 17 true from 46 false.
-  decision: do not lower threshold; improve branch extraction/admission first.
-
-metrics_report_readout:
-  default_1000_window:
-    hook_ready_rows:                  32
-    label_true_rows:                  18
-    label_false_rows:                 14
-    best_safe_true_accepts:            2
-    minimum_true_support:              3
-    decision: keep review-only in default feedback.
-  separate_5000_soak:
-    audit: metrics-report-soak-v1/metrics-report-safe-policy-v1.verification-hook-audit.report.json
-    total_llm_calls:                5000
-    verified_cpu_accept_eligible:      3
-    shadow_false_accepts:              0
-    market_claim_allowed:           true
-    decision: valid narrow soak, but excluded from the 1000-row feedback denominator.
-
-agent_control:
-  candidate_events:                 143
-  verified_true_rows:                12
-  current_safe_policy_true_accepts:  11
-  false_accepts:                      0
-  finding: the remaining true row is short_ack-shaped; no clean request-side conjunction
-           over current features captures 12/12 without false rows.
-  decision: keep strict_control_stop_forms at 11/0.
-
-git_control:
-  calibration_best_safe_true_accepts: 5
-  promoted_safe_policy_accepts:       1
-  reason: lower threshold would admit unverified rows in the promoted trace.
-  decision: need more tool-output evidence, not a lower threshold.
-```
-
-Next engineering cut:
-
-```text
-Build a new route-gap operator instead of squeezing thresholds:
-  1. project_context_dialogue -> active_project_state_payload_builder_v1
-  2. answer_or_explain       -> grounded_answer_evidence_verifier_v1
-  3. retrieval_lookup        -> local_path_or_link_lookup_payload_builder_v1
-
-Keep local accepts disabled until deterministic verifier + shadow audit pass.
-```
-
-## 2026-07-04 - Executor Integration: Mixed V2 Default Promotion
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_MIXED_V2_DEFAULT_ACTIVE
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Default mixed-map feedback audit now points to:
-  mixed-safe-policy-v2.verification-hook-audit.report.json
-```
-
-Why this is allowed:
-
-```text
-mixed-safe-policy-v2.verification-hook-audit.report.json:
-  total_llm_calls:                      1000
-  operator_candidate_calls:             11
-  scoreable_candidate_calls:            11
-  verification_hook_ready_events:       11
-  verified_cpu_accept_eligible_events:  3
-  shadow_false_accepts:                 0
-  shadow_incremental_savings_over_exact_cache: 3
-  market_claim_allowed:                 true
-```
-
-Fresh default feedback:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:                         570 / 1000
-no_candidate_calls:                               430 / 1000
-scoreable_candidate_calls:                        175 / 1000
-verification_hook_ready_events:                   136 / 1000
-verified_cpu_accept_eligible_events:              21
-verified_cpu_accept_route_sum_events:             21
-verified_cpu_accept_unique_request_fingerprints:  16
-incremental_cpu_accept_unique_request_fingerprints: 16
-verified_cpu_accept_duplicate_route_hits:         5
-exact_cache_overlap_verified_cpu_accepts:         1
-unique_verified_gap_to_80_calls:                  784
-false_accepts:                                    0
-```
-
-Fresh catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-current-feedback-v1.report.json
-
-current_verified_cpu_accepts:                     16
-verified_cpu_accept_route_sum_events:             21
-verified_cpu_accept_duplicate_route_hits:         5
-route_gap_feedback_no_candidate_mismatch:         true
-```
-
-Claim boundary:
-
-```text
-Default feedback now reaches the previous v3 diagnostic level: 16 unique
-request-fingerprint accepts on the same 1000-row non-synthetic Codex trace.
-This is still not CPU Routability 80.
-```
-
-## 2026-07-04 - Executor Integration: Agent-Control V2 Default Promotion
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_AGENT_CONTROL_V2_DEFAULT_ACTIVE
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Default agent-control artifacts now point to the existing v2 safe-policy set:
-  agent-control-admission-calibration-v2.report.json
-  agent-control-safe-policy-v2.trace.jsonl
-  agent-control-safe-policy-v2.report.json
-  agent-control-safe-policy-v2.verification-hook-audit.report.json
-
-Catalog summary now treats unique request-fingerprint accepts as the CPU
-Routability scoreboard. Route-sum accepts are exposed separately.
-```
-
-Why this is allowed:
-
-```text
-agent-control-safe-policy-v2.verification-hook-audit.report.json:
-  total_llm_calls:                      1000
-  operator_candidate_calls:             11
-  scoreable_candidate_calls:            11
-  verification_hook_ready_events:       11
-  verified_cpu_accept_eligible_events:  11
-  shadow_false_accepts:                 0
-  shadow_incremental_savings_over_exact_cache: 6
-  market_claim_allowed:                 true
-```
-
-Fresh default feedback:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:                         570 / 1000
-no_candidate_calls:                               430 / 1000
-scoreable_candidate_calls:                        178 / 1000
-verification_hook_ready_events:                   138 / 1000
-verified_cpu_accept_eligible_events:              20
-verified_cpu_accept_route_sum_events:             20
-verified_cpu_accept_unique_request_fingerprints:  15
-incremental_cpu_accept_unique_request_fingerprints: 15
-verified_cpu_accept_duplicate_route_hits:         5
-exact_cache_overlap_verified_cpu_accepts:         1
-unique_verified_gap_to_80_calls:                  785
-false_accepts:                                    0
-```
-
-Fresh catalog:
-
-```text
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-current-feedback-v1.report.json
-
-current_verified_cpu_accepts:                     15
-verified_cpu_accept_route_sum_events:             20
-verified_cpu_accept_duplicate_route_hits:         5
-route_gap_feedback_no_candidate_mismatch:         true
-
-interpretation:
-  CPU Routability scoreboard is now unique accepts, not route-sum. The route-gap
-  side can be stale relative to feedback and is explicitly marked when its
-  no-candidate count differs from feedback.no_candidate_calls.
-```
-
-Claim boundary:
-
-```text
-This is real progress from 12 unique accepts to 15 unique accepts on the same
-1000-row non-synthetic Codex trace. It is still not CPU Routability 80.
-```
-
-## 2026-07-04 - Executor Integration: Feedback-Loop Unique Accept Dedupe
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_UNIQUE_ACCEPT_DEDUPE_ACTIVE
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-Also fixed:
-  agent-control route is now exposed as its own feedback-loop route row when
-  the forecast did not already contain it. Previously agent-control accepts
-  could contribute to totals while the route row/candidate coverage stayed
-  hidden.
-
-Added feedback-loop report fields:
-  verified_cpu_accept_route_sum_events
-  verified_cpu_accept_unique_request_fingerprints
-  verified_cpu_accept_unique_routability_milli
-  incremental_cpu_accept_unique_request_fingerprints
-  incremental_cpu_accept_unique_reduction_milli
-  unique_verified_gap_to_80_calls
-  incremental_unique_gap_to_80_calls
-  exact_cache_overlap_verified_cpu_accepts
-  verified_cpu_accept_duplicate_route_hits
-  verified_cpu_accept_missing_request_fingerprint_rows
-  unique_accept_shadow_reports
-```
-
-Default 1000-row feedback after dedupe:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:                         570 / 1000
-no_candidate_calls:                               430 / 1000
-scoreable_candidate_calls:                        170 / 1000
-verification_hook_ready_events:                   130 / 1000
-verified_cpu_accept_eligible_events:              12
-verified_cpu_accept_route_sum_events:             12
-verified_cpu_accept_unique_request_fingerprints:  12
-incremental_cpu_accept_unique_request_fingerprints: 12
-unique_verified_gap_to_80_calls:                  788
-incremental_unique_gap_to_80_calls:               788
-verified_cpu_accept_duplicate_route_hits:         0
-audit_window_mismatches:                          []
-
-newly visible route row:
-  route_key:                                      role_binding_agent_control_seed0
-  candidate_events:                              143
-  scoreable_payload_events:                       3
-  verification_hook_ready_events:                 3
-  verified_cpu_accept_eligible_events:            3
-  false_accepts:                                  0
-```
-
-Historical v3 same-window dedupe check:
-
-```text
-diagnostic_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.dedup-check.report.json
-
-route_sum_verified_accepts:                       21
-unique_verified_request_fingerprints:             16
-incremental_unique_request_fingerprints:          16
-exact_cache_overlap_verified_cpu_accepts:         1
-duplicate_verified_route_hits:                    5
-unique_verified_gap_to_80_calls:                  784
-incremental_unique_gap_to_80_calls:               784
-
-excluded_mismatch:
-  planning-next-step-artifact-progress-v3 audit has 12000 total_llm_calls
-  while the forecast window has 1000 total_llm_calls.
-```
-
-Claim boundary:
-
-```text
-Feedback-loop totals now expose route-sum and unique request-fingerprint counts
-separately. CPU Routability progress must be read from unique accepted real
-requests, not from a raw route-sum. The current default 12/1000 is not
-duplicated; the historical v3 21 route-sum collapses to 16 unique accepted
-requests. CPU Routability 80 is still not achieved.
-```
-
-Next engineering debt:
-
-```text
-Use unique request-fingerprint accepts as the scoreboard for all future route
-promotions. The next route work should increase incremental unique accepts,
-not merely add overlapping route hits.
-```
-
-## 2026-07-04 - Executor Integration: Feedback-Loop Window Guard
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW_WINDOW_GUARD_ACTIVE
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added report field:
-  audit_window_mismatches
-```
-
-Window-guard proof:
-
-```text
-negative_test_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-metrics-soak-window-guard-v1.report.json
-
-forecast_total_llm_calls:             1000
-metrics_soak_audit_total_llm_calls:   5000
-excluded_route_keys:                  [metrics_report_readout]
-excluded_from_feedback:               true
-verified_cpu_accept_eligible_events:  12
-verified_cpu_routability_milli:       12
-verified_gap_to_80_calls:             788
-```
-
-Default feedback after guard:
-
-```text
-feedback_report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-total_llm_calls:                      1000
-verified_cpu_accept_eligible_events:  12
-audit_window_mismatches:              []
-```
-
-Claim boundary:
-
-```text
-Feedback-loop aggregation now excludes route-specific verification audits whose
-total_llm_calls differ from the forecast window. The 5000-row metrics-report
-soak PASS can no longer be accidentally counted into the default 1000-row CPU
-Routability report. CPU Routability 80 is still not achieved.
-```
-
-## 2026-07-04 - Executor Integration: Metrics-Report 5000-Row Safe-Policy Soak
-
-Verdict:
-
-```text
-REAL_TRAFFIC_SHADOW_V1_PASS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-metrics-report-safe-policy-promote-v1
-
-Added soak artifacts under ignored target path:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/
-```
-
-5000-row metrics-report soak:
-
-```text
-payload_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-payload-dry-run-v1.report.json
-
-trace_rows_written:                   5000
-metrics_report_candidate_events:      98
-payload_ready_events:                 63
-scoreable_payload_events:             63
-```
-
-Evidence and calibration:
-
-```text
-evidence_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-output-evidence-v1.report.json
-
-output_evidence_matched_events:       51
-verified_true_events:                 31
-verified_false_events:                20
-raw_prompt_text_written:              false
-raw_response_text_written:            false
-
-calibration_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-local-accept-calibration-v1.report.json
-
-safe_policy_found:                    true
-best_safe_true_accepts:               3
-best policy:                          best_metric_slot_margin_threshold
-best threshold:                       393216
-```
-
-Promoted shadow attempt:
-
-```text
-promote_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.report.json
-
-selected_policy_name:                 market_safe_metric_slot_margin_threshold_with_active_fringe_min
-selected_policy_source:               evidence_trace_metric_slot_safe_threshold_plus_active_fringe_min
-selected_acceptance_policy:           first_slot_threshold_active_fringe_min_114
-request_side_policy_name:             metrics_report_active_fringe_min_114
-selected_policy_threshold:            393216
-request_side_policy_evaluated_rows:   63
-request_side_policy_accept_rows:      11
-request_side_policy_reject_rows:      52
-policy_accept_rows:                   3
-policy_accept_verified_true_rows:     3
-policy_accept_verified_false_rows:    0
-policy_accept_unverified_rows:        0
-runtime_acceptance_mismatches:        0
-provider_cost_events_written:         63
-```
-
-Shadow/audit:
-
-```text
-shadow_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.shadow-report.json
-
-verdict:                              REAL_TRAFFIC_SHADOW_V1_PASS
-total_llm_calls:                      5000
-operator_candidate_calls:             63
-nando_shadow_accepts:                 3
-verified_safe_accepts:                3
-unverified_shadow_accepts:            0
-false_accepts:                        0
-p99_shadow_score_latency_ns:          272859
-synthetic_trace_used:                 false
-
-audit_report:
-  target/nando-wave/real-traffic-shadow/metrics-report-soak-v1/metrics-report-safe-policy-v1.verification-hook-audit.report.json
-
-verified_cpu_accept_eligible_events:  3
-market_claim_allowed:                 true
-```
-
-Claim boundary:
-
-```text
-This is a narrow promoted route PASS for the separate 5000-row non-synthetic
-metrics-report soak. The unverified accept was removed by a request-side
-active-fringe admission gate, not by reading the answer: runtime now requires
-first_slot_margin >= 393216 and active_fringe_len >= 114 for this promoted
-metrics_report profile.
-
-Do not add these 3 accepts to the current 1000-row feedback total until the
-overall feedback window is regenerated with the same denominator. CPU
-Routability 80 is still not achieved.
-```
-
-Next engineering debt:
-
-```text
-Regenerate the overall real-traffic feedback loop on a single consistent
-window if metrics_report should be counted beside git_control, serving_ops,
-mixed, edit, and conditional routes.
-```
-
-## 2026-07-04 - Executor Integration: Git-Control Tool-Output Safe-Policy Promotion
-
-Verdict:
-
-```text
-REAL_TRAFFIC_SHADOW_V1_PASS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-git-control-safe-policy-promote-v1
-
-Added promoted artifacts:
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-safe-policy-v1.json
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.report.json
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.shadow-report.json
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.verification-hook-audit.report.json
-```
-
-Tool-output evidence:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json
-
-output_evidence_matched_events:       10
-deterministic_verification_events:    10
-verified_true_events:                 6
-verified_false_events:                4
-tool_call_fingerprint_events:         5
-verification_source:
-  codex_session_tool_output_fingerprint_plus_deterministic_git_command_outcome_verifier_v1
-raw_prompt_text_written:              false
-raw_response_text_written:            false
-raw_tool_output_written:              false
-workspace_mutation_enabled:           false
-```
-
-Git-control safe-policy promotion:
-
-```text
-selected_policy_name:                 market_safe_energy_margin_threshold
-selected_policy_source:               evidence_trace_market_safe_threshold
-selected_policy_threshold:            1505280
-policy_accept_rows:                   1
-policy_accept_verified_true_rows:     1
-policy_accept_verified_false_rows:    0
-policy_accept_unverified_rows:        0
-provider_cost_events_written:         12
-market_claim_allowed:                 false
-```
-
-Promoted shadow:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.shadow-report.json
-
-verdict:                              REAL_TRAFFIC_SHADOW_V1_PASS
-total_llm_calls:                      1000
-operator_candidate_calls:             12
-nando_shadow_accepts:                 1
-verified_safe_accepts:                1
-unverified_shadow_accepts:            0
-false_accepts:                        0
-incremental_savings_over_exact_cache: 1
-incremental_reduction_vs_exact_cache_milli: 1
-p99_shadow_score_latency_ns:          273719
-synthetic_trace_used:                 false
-```
-
-Verification audit:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/git-control-safe-policy-v1.verification-hook-audit.report.json
-
-operator_candidate_calls:             12
-scoreable_candidate_calls:            12
-verification_hook_ready_events:       10
-tool_call_fingerprint_events:         5
-verified_cpu_accept_eligible_events:  1
-market_claim_allowed:                 true
-false_accepts:                        0
-```
-
-Feedback loop after promoted git-control audit:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             427 / 1000
-scoreable_candidate_calls:            167 / 1000
-verification_hook_ready_events:       130 / 1000
-verified_cpu_accept_eligible_events:  12 / 1000
-verified_cpu_routability_milli:       12
-verified_gap_to_80_calls:             788
-
-git_control route row:
-  stage:                              verified_cpu_accept_eligible
-  candidate_events:                   18
-  scoreable_payload_events:           12
-  verification_hook_ready_events:     10
-  local_accept_best_safe_true_accepts: 5
-  verified_cpu_accept_eligible_events: 1
-  false_accepts:                      0
-```
-
-Claim boundary:
-
-```text
-This is the first promoted git_control shadow artifact backed by tool-output
-fingerprints and deterministic git command outcome verification. It does not
-run git, does not mutate the workspace, does not write raw tool output, and
-does not enable a live daemon mutation path.
-
-It counts as 1 verified CPU accept in the current 1000-call non-synthetic Codex
-trace window. It still does not prove CPU Routability 80. Current default
-routability is 12/1000, gap to 80% is 788 calls.
-```
-
-Next engineering debt:
-
-```text
-Grow verified routes by adding real verifier-backed accepts, not by relaxing
-the safe policy. The next highest-value blockers remain:
-  metrics_report_readout: support insufficient
-  read_inspect: calibration failed
-  planning_next_step: support insufficient
-  serving_ops/git_control: need larger non-synthetic soak before external
-    market claim
-```
-
-## 2026-07-04 - Executor Integration: Serving-Ops Safe-Policy Promotion
-
-Verdict:
-
-```text
-REAL_TRAFFIC_SHADOW_V1_PASS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-serving-ops-safe-policy-promote-v1
-
-Added promoted artifacts:
-  target/nando-wave/real-traffic-shadow/profile-registry-serving-ops-safe-policy-v1.json
-  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.report.json
-  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.shadow-report.json
-  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.verification-hook-audit.report.json
-```
-
-Serving-ops safe-policy promotion:
-
-```text
-selected_policy_name:                 market_safe_energy_margin_threshold
-selected_policy_source:               evidence_trace_market_safe_threshold
-selected_policy_threshold:            1392640
-policy_accept_rows:                   3
-policy_accept_verified_true_rows:     3
-policy_accept_verified_false_rows:    0
-policy_accept_unverified_rows:        0
-provider_cost_events_written:         8
-market_claim_allowed:                 false
-```
-
-Promoted shadow:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.shadow-report.json
-
-verdict:                              REAL_TRAFFIC_SHADOW_V1_PASS
-total_llm_calls:                      1000
-operator_candidate_calls:             8
-nando_shadow_accepts:                 3
-verified_safe_accepts:                3
-unverified_shadow_accepts:            0
-false_accepts:                        0
-incremental_savings_over_exact_cache: 3
-incremental_reduction_vs_exact_cache_milli: 3
-estimated_cost_saved_microusd:        300
-p99_shadow_score_latency_ns:          156653
-synthetic_trace_used:                 false
-```
-
-Verification audit:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/serving-ops-safe-policy-v1.verification-hook-audit.report.json
-
-operator_candidate_calls:             8
-scoreable_candidate_calls:            8
-verification_hook_ready_events:       7
-verified_cpu_accept_eligible_events:  3
-market_claim_allowed:                 true
-```
-
-Feedback loop after promoted serving-ops audit:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             427 / 1000
-scoreable_candidate_calls:            167 / 1000
-verification_hook_ready_events:       130 / 1000
-verified_cpu_accept_eligible_events:  11 / 1000
-verified_cpu_routability_milli:       11
-verified_gap_to_80_calls:             789
-
-serving_ops route row:
-  stage:                              verified_cpu_accept_eligible
-  candidate_events:                   25
-  scoreable_payload_events:           8
-  verification_hook_ready_events:     7
-  verified_cpu_accept_eligible_events: 3
-  false_accepts:                      0
-```
-
-Claim boundary:
-
-```text
-This is the first promoted serving_ops shadow artifact that passes shadow and
-verification audit with provider cost, false_accepts=0, and
-unverified_shadow_accepts=0. It counts as 3 verified CPU accepts in the current
-1000-call non-synthetic Codex trace window.
-
-It still does not prove CPU Routability 80, does not touch a server, does not
-restart daemons, and does not enable any real daemon/server mutation path.
-Routability remains 11/1000, gap to 80% is 789 calls.
-```
-
-Next engineering debt:
-
-```text
-Grow verified routes from isolated safe-policy pockets to broader real-traffic
-coverage. Highest current blockers:
-  planning_next_step: support insufficient
-  read_inspect: calibration failed
-  metrics_report_readout: support insufficient
-  git_control: needs real tool-output/status verifier
-  serving_ops: needs larger non-synthetic soak before external market claim
-```
-
-## 2026-07-04 - Executor Integration: Serving-Ops Route Payload/Profile/Evidence
-
-Verdict:
-
-```text
-SERVING_OPS_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added commands:
-  role-binding-real-traffic-serving-ops-payload-dry-run-v1
-  role-binding-real-traffic-serving-ops-profile-v1
-  role-binding-real-traffic-serving-ops-output-evidence-v1
-  role-binding-real-traffic-serving-ops-local-accept-calibration-v1
-
-Added route/profile:
-  route_key: serving_ops
-  profile_id: route_gap_serving_ops_profile_v1
-
-Added verifier:
-  deterministic_serving_ops_output_verification
-  verification_source:
-    codex_session_final_answer_fingerprint_plus_deterministic_service_health_metric_verifier_v1
-```
-
-Serving-ops request-side payload dry-run:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/serving-ops-payload-dry-run-v1.trace.jsonl
-
-serving_ops_candidate_events:         25
-payload_ready_events:                 8
-payload_built_events:                 8
-scoreable_payload_events:             8
-profile_registered:                   false
-raw_text_written:                     false
-response_text_used:                   false
-target_labels_used:                   false
-proof_labels_used:                    false
-server_mutation_enabled:              false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Serving-ops profile:
-
-```text
-package:
-  target/nando-wave/real-traffic-shadow/serving-ops-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-serving-ops-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/serving-ops-profile-v1.report.json
-
-scoreable_payload_events:             8
-package_training_requests:            8
-edge_count:                           8
-package_bytes:                        140
-runtime_bytes_estimate:               33000
-median_energy_margin:                 1359872
-p10_energy_margin:                    720896
-unexpected_local_accepts_under_disabled_threshold: 0
-server_mutation_enabled:              false
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed:                 false
-```
-
-Serving-ops output evidence:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1.report.json
-
-verification audit:
-  target/nando-wave/real-traffic-shadow/serving-ops-output-evidence-v1.verification-hook-audit.report.json
-
-output_evidence_matched_events:       7
-deterministic_verification_events:    7
-verifier_not_applicable_events:       0
-verified_true_events:                 5
-verified_false_events:                2
-verification_hook_ready_events:       7
-verified_cpu_accept_eligible_events:  0
-raw_prompt_text_written:              false
-raw_response_text_written:            false
-response_text_used_for_verification:  true
-server_mutation_enabled:              false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Serving-ops local accept calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/serving-ops-local-accept-calibration-v1.report.json
-
-hook_ready_rows:                      7
-scored_rows:                          7
-label_true_rows:                      5
-label_false_rows:                     2
-safe_policy_found:                    true
-best_safe_true_accepts:               3
-minimum_true_support:                 3
-local_accept_support_qualified:       true
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Feedback loop after serving-ops integration:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             427 / 1000
-scoreable_candidate_calls:            167 / 1000
-verification_hook_ready_events:       130 / 1000
-verified_cpu_accept_eligible_events:  8 / 1000
-verified_cpu_routability_milli:       8
-verified_gap_to_80_calls:             792
-market_claim_allowed:                 false
-
-serving_ops route row:
-  candidate_events:                   25
-  scoreable_payload_events:           8
-  verification_hook_ready_events:     7
-  local_accept_calibration_ran:       true
-  local_accept_safe_policy_found:     true
-  local_accept_support_qualified:     true
-  local_accept_best_safe_true_accepts: 3
-  verified_cpu_accept_eligible_events: 0
-  false_accepts:                      0
-  stage:                              local_accept_calibration_safe_policy_candidate
-  next_action:                        Promote the safe policy only through a separate shadow trace rewrite with provider cost, rollback, and false_accepts=0.
-```
-
-Route-gap after registering serving-ops:
-
-```text
-catalog:
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-serving-ops-v1.report.json
-
-readiness:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-serving-ops-v1.report.json
-
-existing_route_candidate_events:      520 / 1000
-no_candidate_events:                  480 / 1000
-payload_ready_events:                 10
-top_payload_ready_family:             uncatalogued
-```
-
-Claim boundary:
-
-```text
-This moves serving_ops from route-gap into a scoreable registered service /
-daemon / HTTP metric readout profile with deterministic final-answer evidence
-labels. It does not touch a server, does not restart daemons, does not enable
-local accepts, and does not prove savings.
-
-The route has a safe readout candidate with enough support for a separate
-promotion artifact, but verified CPU accepts remain 0 for serving_ops until a
-promoted shadow trace carries provider cost and passes false_accepts=0 /
-unverified_shadow_accepts=0. Red gates stay red.
-```
-
-Next engineering debt:
-
-```text
-Build serving_ops safe-policy promotion artifact:
-  registry threshold/policy must come from calibration;
-  trace rewrite must stay request-side only;
-  provider_cost_microusd must be attached before savings;
-  run shadow + verification-hook audit;
-  require false_accepts=0 and unverified_shadow_accepts=0 before counting
-  serving_ops verified CPU accepts.
-```
-
-## 2026-07-04 - Executor Integration: Git-Control Local Accept Calibration
-
-Verdict:
-
-```text
-GIT_CONTROL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_FINAL_ANSWER_SAFE_POLICY_CANDIDATE
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-git-control-local-accept-calibration-v1
-```
-
-Calibration:
-
-```text
-input_trace:
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl
-
-registry_config:
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/git-control-local-accept-calibration-v1.report.json
-
-hook_ready_rows:       10
-scored_rows:           10
-label_true_rows:       4
-label_false_rows:      6
-no_score_rows:         0
-safe_policy_found:     true
-best_safe_true_accepts: 3
-local_accepts_enabled: false
-market_claim_allowed:  false
-```
-
-Feedback loop after calibration:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:            402 / 1000
-scoreable_candidate_calls:           159 / 1000
-verification_hook_ready_events:      123
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli:      8
-verified_gap_to_80_calls:            792
-market_claim_allowed:                false
-
-git_control route row:
-  candidate_events:                   18
-  scoreable_payload_events:           12
-  verification_hook_ready_events:     10
-  local_accept_calibration_ran:       true
-  local_accept_safe_policy_found:     true
-  local_accept_support_qualified:     true
-  local_accept_best_safe_true_accepts: 3
-  verified_cpu_accept_eligible_events: 0
-  false_accepts:                      0
-  stage:                              local_accept_calibration_needs_stronger_verifier
-  next_action:                        Attach a real tool-output/status verifier before safe-policy promotion; final-answer labels are review-only.
-```
-
-Claim boundary:
-
-```text
-The calibration is useful as a score/readout probe, but its labels come from
-conservative final-answer command-outcome evidence. It does not execute git,
-does not inspect real command status/output, does not mutate the workspace,
-does not enable local accepts, and does not prove savings.
-
-Git-control remains REVIEW with 0 verified CPU accepts until a real
-tool-output/status verifier proves the policy on non-synthetic trace rows.
-```
-
-## 2026-07-04 - Executor Integration: Git-Control Output Evidence Verifier
-
-Verdict:
-
-```text
-GIT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-git-control-output-evidence-v1
-```
-
-Git-control output evidence:
-
-```text
-input_trace:
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.trace.jsonl
-
-output_trace:
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.report.json
-
-total_trace_rows:                    1000
-operator_candidate_calls:            12
-scoreable_candidate_calls:           12
-session_ids_requested:               4
-session_files_scanned:               4
-output_evidence_matched_events:      10
-no_session_output_match_events:      2
-deterministic_verification_events:   10
-verifier_not_applicable_events:      0
-verified_true_events:                4
-verified_false_events:               6
-raw_prompt_text_written:             false
-raw_response_text_written:           false
-response_text_used_for_verification: true
-target_labels_used:                  false
-proof_labels_used:                   false
-workspace_mutation_enabled:          false
-local_accepts_enabled:               false
-market_claim_allowed:                false
-```
-
-Git-control shadow/audit:
-
-```text
-shadow:
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.shadow-report.json
-
-audit:
-  target/nando-wave/real-traffic-shadow/git-control-output-evidence-v1.verification-hook-audit.report.json
-
-shadow_total_llm_calls:              1000
-shadow_exact_cache_hits:             53
-nando_shadow_accepts:                0
-verified_safe_accepts:               0
-false_accepts:                       0
-incremental_savings_over_exact_cache: 0
-p99_shadow_score_latency_ns:         217673
-synthetic_trace_used:                false
-
-audit_operator_candidate_calls:       12
-audit_scoreable_candidate_calls:      12
-verification_hook_ready_events:       10
-verified_cpu_accept_eligible_events:  0
-audit_market_claim_allowed:           false
-```
-
-Feedback loop after git-control output evidence:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             402 / 1000
-scoreable_candidate_calls:            159 / 1000
-verification_hook_ready_events:       123
-verified_cpu_accept_eligible_events:  8
-verified_cpu_routability_milli:       8
-verified_gap_to_80_calls:             792
-market_claim_allowed:                 false
-
-git_control route row:
-  candidate_events:                   18
-  scoreable_payload_events:           12
-  verification_hook_ready_events:     10
-  verified_cpu_accept_eligible_events: 0
-  false_accepts:                      0
-  stage:                              verification_hook_ready_waiting_local_accept
-  next_action:                        Run local-accept calibration; if no safe policy exists, improve request-side admission or payload features.
-```
-
-Claim boundary:
-
-```text
-This attaches conservative final-answer command-outcome evidence to the
-git_control route and moves it out of missing_verification_hook. It does not
-execute git, does not read raw prompt/response into reports, does not mutate
-the workspace, does not enable local accepts, and does not prove savings.
-
-The next required debt is a real tool-output/status verifier plus local-accept
-calibration. Until then git_control remains REVIEW with 0 verified CPU accepts.
-```
-
-## 2026-07-04 - Executor Integration: Git-Control Route Payload/Profile
-
-Verdict:
-
-```text
-GIT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added commands:
-  role-binding-real-traffic-git-control-payload-dry-run-v1
-  role-binding-real-traffic-git-control-profile-v1
-
-Added route/profile:
-  route_key: git_control
-  profile_id: route_gap_git_control_profile_v1
-```
-
-Git-control request-side payload dry-run:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/git-control-payload-dry-run-v1.trace.jsonl
-
-git_control_candidate_events:         18
-payload_ready_events:                 12
-payload_built_events:                 12
-scoreable_payload_events:             12
-profile_registered:                   false
-raw_text_written:                     false
-response_text_used:                   false
-target_labels_used:                   false
-proof_labels_used:                    false
-workspace_mutation_enabled:           false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Git-control profile:
-
-```text
-package:
-  target/nando-wave/real-traffic-shadow/git-control-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-git-control-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/git-control-profile-v1.report.json
-
-scoreable_payload_events:             12
-package_training_requests:            12
-edge_count:                           8
-package_bytes:                        140
-runtime_bytes_estimate:               33000
-median_energy_margin:                 1240064
-p10_energy_margin:                    906240
-unexpected_local_accepts_under_disabled_threshold: 0
-workspace_mutation_enabled:           false
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed:                 false
-```
-
-Feedback loop after git-control profile shadow:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             402 / 1000
-scoreable_candidate_calls:            159 / 1000
-verification_hook_ready_events:       113
-verified_cpu_accept_eligible_events:  8
-verified_cpu_routability_milli:       8
-verified_gap_to_80_calls:             792
-market_claim_allowed:                 false
-
-git_control route row:
-  candidate_events:                   18
-  scoreable_payload_events:           12
-  verification_hook_ready_events:     0
-  verified_cpu_accept_eligible_events: 0
-  stage:                              scoreable_payload_missing_verification_hook
-  next_action:                        Attach response/tool-call evidence and deterministic output verification.
-```
-
-Route-gap after registering git-control profile:
-
-```text
-catalog:
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-git-control-v1.report.json
-
-readiness:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-git-control-v1.report.json
-
-existing_route_candidate_events:      507 / 1000
-no_candidate_events:                  493 / 1000
-payload_ready_events:                 13
-top_payload_ready_family:             serving_ops
-```
-
-Claim boundary:
-
-```text
-This moves git_control from route-gap into a scoreable registered workspace
-command profile. It does not run git, does not mutate the workspace, does not
-enable local accepts, and does not prove savings.
-
-The next required debt is git_status_and_command_outcome_verifier_v1. Until that
-exists, git_control must remain scoreable_payload_missing_verification_hook.
-```
-
-## 2026-07-04 - Executor Integration: Read-Inspect Local Accept Calibration
-
-Verdict:
-
-```text
-READ_INSPECT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
 ```
 
-What changed:
+VERIFY:
 
 ```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-read-inspect-local-accept-calibration-v1
-```
-
-Read-inspect local accept calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/read-inspect-local-accept-calibration-v1.report.json
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl
-
-hook_ready_rows:                      9
-scored_rows:                          9
-label_true_rows:                      1
-label_false_rows:                     8
-no_score_rows:                        0
-safe_policy_found:                    false
-best_safe_true_accepts:               0
-minimum_true_support:                 3
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Feedback loop after read-inspect calibration:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             384 / 1000
-scoreable_candidate_calls:            147 / 1000
-verification_hook_ready_events:       113
-verified_cpu_accept_eligible_events:  8
-verified_cpu_routability_milli:       8
-verified_gap_to_80_calls:             792
-market_claim_allowed:                 false
-
-read_inspect route row:
-  candidate_events:                   27
-  scoreable_payload_events:           12
-  verification_hook_ready_events:     9
-  local_accept_calibration_ran:       true
-  local_accept_safe_policy_found:     false
-  local_accept_minimum_true_support:  3
-  local_accept_support_qualified:     false
-  local_accept_best_safe_true_accepts: 0
-  verified_cpu_accept_eligible_events: 0
-  stage:                              local_accept_calibration_failed
-  next_action:                        Improve request-side admission or payload geometry before enabling local accepts.
-```
-
-Claim boundary:
-
-```text
-This closes the read_inspect calibration integration debt, but it is a red
-route gate. The current read_inspect score/readout geometry does not separate
-the single verifier-true row from eight verifier-false rows. Do not enable local
-accepts for this route and do not count read_inspect as savings.
-
-Verified CPU accepts remain 8/1000 on the fresh default artifact base. Red gate
-stays red.
-```
-
-## 2026-07-04 - Executor Integration: Metrics-Report Route Payload/Profile/Evidence
-
-Verdict:
-
-```text
-METRICS_REPORT_ROUTE_V1_REVIEW_HOOKS_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added commands:
-  role-binding-real-traffic-metrics-report-payload-dry-run-v1
-  role-binding-real-traffic-metrics-report-profile-v1
-  role-binding-real-traffic-metrics-report-output-evidence-v1
-  role-binding-real-traffic-metrics-report-local-accept-calibration-v1
-
-Added route/profile:
-  route_key: metrics_report_readout
-  profile_id: route_gap_metrics_report_profile_v1
-
-Added verifier:
-  deterministic_metrics_report_output_verification
-  verification_source:
-    codex_session_final_answer_fingerprint_plus_deterministic_numeric_report_field_verifier_v1
-```
-
-Metrics-report request-side payload dry-run:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/metrics-report-payload-dry-run-v1.trace.jsonl
-
-metrics_report_candidate_events:      55
-payload_ready_events:                 42
-payload_built_events:                 42
-scoreable_payload_events:             42
-profile_registered:                   false
-raw_text_written:                     false
-response_text_used:                   false
-target_labels_used:                   false
-proof_labels_used:                    false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Metrics-report profile:
-
-```text
-package:
-  target/nando-wave/real-traffic-shadow/metrics-report-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-metrics-report-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/metrics-report-profile-v1.report.json
-
-scoreable_payload_events:             42
-package_training_requests:            42
-edge_count:                           8
-package_bytes:                        140
-runtime_bytes_estimate:               33000
-median_energy_margin:                 1105920
-p10_energy_margin:                    835584
-unexpected_local_accepts_under_disabled_threshold: 0
-local_accepts_enabled_on_real_traffic: false
-```
-
-Metrics-report output evidence:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.report.json
-
-verification audit:
-  target/nando-wave/real-traffic-shadow/metrics-report-output-evidence-v1.verification-hook-audit.report.json
-
-output_evidence_matched_events:       32
-deterministic_verification_events:    32
-verifier_not_applicable_events:       0
-verified_true_events:                 18
-verified_false_events:                14
-candidates_missing_output_evidence:   10
-candidates_missing_explicit_verification: 10
-verified_cpu_accept_eligible_events:  0
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Metrics-report local accept calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/metrics-report-local-accept-calibration-v1.report.json
-
-hook_ready_rows:                      32
-scored_rows:                          32
-label_true_rows:                      18
-label_false_rows:                     14
-safe_policy_found:                    true
-best_safe_true_accepts:               2
-minimum_true_support:                 3
-local_accept_support_qualified:       false
-
-best policy:
-  policy_name:                        best_metric_slot_margin_threshold
-  threshold:                          393216
-  accepts:                            2
-  true_accepts:                       2
-  false_accepts:                      0
-
-interpretation:
-  Real safe score separation exists, but support is too small for promotion.
-  Do not enable local accepts from this route yet.
-```
-
-Feedback loop after metrics-report evidence:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             384 / 1000
-scoreable_candidate_calls:            147 / 1000
-verification_hook_ready_events:       113
-verified_cpu_accept_eligible_events:  8
-verified_cpu_routability_milli:       8
-verified_gap_to_80_calls:             792
-market_claim_allowed:                 false
-
-metrics_report_readout route row:
-  candidate_events:                   55
-  scoreable_payload_events:           42
-  verification_hook_ready_events:     32
-  local_accept_calibration_ran:       true
-  local_accept_safe_policy_found:     true
-  local_accept_minimum_true_support:  3
-  local_accept_support_qualified:     false
-  local_accept_best_safe_true_accepts: 2
-  verified_cpu_accept_eligible_events: 0
-  stage:                              local_accept_calibration_support_insufficient
-```
-
-Catalog default refresh:
-
-```text
-role-binding-real-traffic-cpu-operator-catalog-v1 now defaults to:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json
-
-It no longer silently prefers older conditional/agent-control feedback or
-route-gap reports when no explicit paths are passed. For a specific current
-route base, pass all report paths explicitly.
-```
-
-Route-gap after registering metrics-report:
-
-```text
-readiness report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-metrics-report-v1.report.json
-
-existing_route_candidate_events:      499
-no_candidate_events:                  501
-payload_ready_events:                 17
-top_payload_ready_family:             git_control
-
-next deterministic route candidates:
-  git_control
-  serving_ops
-  retrieval_lookup
-```
-
-Claim boundary:
-
-```text
-This moves metrics_report_readout from route-gap into a scoreable registered
-profile with deterministic output evidence labels. It does not enable local
-accepts and does not prove savings.
-
-The route has 18 verifier-true rows and 14 verifier-false rows. Calibration found
-a 2-row safe score pocket, but the minimum promotion support is 3 true rows.
-All 42 scoreable rows still run under disabled/REVIEW policy. Verified CPU
-accepts remain 8/1000 on the fresh default artifact base. Red gate stays red.
-```
-
-## 2026-07-04 - Executor Integration: Read-Inspect Output Evidence Verifier
-
-Verdict:
-
-```text
-READ_INSPECT_OUTPUT_EVIDENCE_V1_REVIEW_HOOKS_READY_ACCEPTS_DISABLED
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added command:
-  role-binding-real-traffic-read-inspect-output-evidence-v1
-
-Added verifier:
-  deterministic_read_inspect_output_verification
-  verification_source:
-    codex_session_final_answer_fingerprint_plus_deterministic_read_only_path_and_excerpt_verifier_v1
-
-Feedback-loop default read_inspect audit path now points to:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json
-```
-
-Read-inspect output evidence:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.report.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.trace.jsonl
-
-input trace:
-  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.trace.jsonl
-
-output_evidence_matched_events:       9
-deterministic_verification_events:    8
-verifier_not_applicable_events:       1
-verified_true_events:                 1
-verified_false_events:                8
-raw_prompt_text_written:              false
-raw_response_text_written:            false
-response_text_used_for_verification:  true
-target_labels_used:                   false
-proof_labels_used:                    false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
-```
-
-Read-inspect shadow and audit after output evidence:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.shadow-report.json
-
-verification audit:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.verification-hook-audit.report.json
-
-total_llm_calls:                      1000
-exact_cache_hits:                     53
-operator_candidate_calls:             12
-scoreable_candidate_calls:            12
-verification_hook_ready_events:       9
-verified_cpu_accept_eligible_events:  0
-candidates_missing_output_evidence:   3
-candidates_missing_explicit_verification: 3
-nando_shadow_accepts:                 0
-verified_safe_accepts:                0
-false_accepts:                        0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns:          249929
-market_claim_allowed:                 false
-```
-
-Feedback loop after read_inspect output evidence:
-
-```text
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-
-operator_candidate_calls:             314
-scoreable_candidate_calls:            105
-verification_hook_ready_events:       81
-verified_cpu_accept_eligible_events:  8
-verified_cpu_routability_milli:       8
-verified_gap_to_80_calls:             792
-market_claim_allowed:                 false
-```
-
-Claim boundary:
-
-```text
-This closes the missing read_only_path_and_excerpt_verifier_v1 integration debt
-for read_inspect output evidence. It does not enable read_inspect local accepts
-and does not prove savings.
-
-The read_inspect route now has verifier labels:
-  true:  1
-  false: 8
-
-But all 12 read_inspect scoreable rows still have local accepts disabled, so
-verified_cpu_accept_eligible_events remains 0 for this route.
-
-The current default feedback bundle reports 8/1000 verified CPU accepts on its
-own artifact base. The historical mixed-v2 bundle remains the stronger 17/1000
-snapshot. Do not mix these numbers as a single claim.
-```
-
-Next engineering debt:
-
-```text
-Calibrate read_inspect local accept only after verifier-true support is large
-enough. Singleton true support is not enough to promote a policy.
-
-Next route-gap families remain:
-  metrics_report_readout
-  retrieval_lookup
-
-Also refresh stale extended feedback/catalog defaults that still point at older
-schema artifacts.
-```
-
-NANDA structural gate:
-
-```text
-task_id:
-  read-inspect-output-evidence-v1
-
-packet:
-  docs/structural_gates/read-inspect-output-evidence-v1.md
-
-report:
-  target/nando-wave/real-traffic-shadow/read-inspect-output-evidence-v1.nanda.json
-
 verdict:
-  VETO
+  NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
 
-complexity_score:
-  89
-
-explanation:
-  weak route coherence / weak composite-mode support / task should be split
-
-interpretation:
-  proof_shape_debt_not_runtime_failure
-
-Do not use this packet as structural PASS. JSON reports are the numeric
-authority for route/profile/evidence measurements.
+install_ready: true
+missing_units: []
+missing_scripts: []
+local_accept_enabled: true
+upstream_configured: false
+ready_for_broad_provider_traffic: false
 ```
 
-## 2026-07-04 - Executor Integration: Read-Inspect Route Payload/Profile
-
-Verdict:
+BOXED PACKAGE:
 
 ```text
-READ_INSPECT_ROUTE_V1_REVIEW_SCOREABLE_NO_VERIFIER
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T111956Z.tar.gz
+
+sha256:
+  3200b35af354a14596a6f015acb4e8feeeae10338aa94ecfedc488282743c0c8
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T111956Z.package.json
+
+package includes:
+  nando-phase-center-status.service
+  nando-phase-center-status.timer
+  nando-phase-center-status.sh
+  rust-action-memory-gate.json
 ```
 
-What changed:
+CONTROL:
 
 ```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added commands:
-  role-binding-real-traffic-read-inspect-payload-dry-run-v1
-  role-binding-real-traffic-read-inspect-profile-v1
-
-CodexHistoryRouteCatalog now recognizes read_inspect profiles whose
-operator_classes contain:
-  read_only_inspection
-  path_evidence
+git diff --check
+bash -n ops bin + scripts
+systemd-analyze verify ops units
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+bundle sha256 check
+bundle install-only smoke
 ```
 
-Read-inspect dry-run:
+Latest proof-denominator update:
 
 ```text
-report:
-  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.report.json
+online_miner_daemon value-pass report now includes real denominator fields:
+  exact_cache_hits
+  non_exact_rows
+  total_tokens_seen
+  total_cost_microusd_seen
+  token_denominator_present
+  cost_denominator_present
+  token_cost_denominator_present
+  market_money_claim_blocker
+  upper-bound calls/tokens/cost saved milli over total denominators
 
-trace:
-  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.trace.jsonl
+smoke report:
+  target/nando-wave/streaming/phase-stream-online-miner-value-pass-denominator-smoke.report.json
 
-history window:                       1000 local Codex rows
-read_inspect_candidate_events:        27
-payload_ready_events:                 12
-payload_built_events:                 12
-scoreable_payload_events:             12
-raw_text_written:                     false
-response_text_used:                   false
-target_labels_used:                   false
-proof_labels_used:                    false
-local_accepts_enabled:                false
-market_claim_allowed:                 false
+smoke snapshot:
+  total_rows: 754
+  exact_cache_hits: 612
+  non_exact_rows: 142
+  total_tokens_seen: 872321
+  total_cost_microusd_seen: 0
+  token_denominator_present: true
+  cost_denominator_present: false
+  token_cost_denominator_present: false
+  product_hot_candidate_upper_bound_unique_accepts_over_exact_cache: 62
+  product_hot_candidate_upper_bound_calls_saved_milli_over_total_rows: 82
+  product_hot_candidate_upper_bound_tokens_saved_milli_over_total_tokens: 40
+  product_hot_candidate_upper_bound_cost_saved_milli_over_total_cost: 0
+  local_accept_enabled: false
+  market_money_claim_allowed: false
+  market_money_claim_blocker: cost_denominator_missing
+
+boundary:
+  selector upper-bound only; token denominator exists, cost denominator is missing, so no money claim.
 ```
 
-Read-inspect profile:
+## Current Live Miner State
+
+Latest archived checkpoint:
 
 ```text
-package:
-  target/nando-wave/real-traffic-shadow/read-inspect-seed0.nwrb
-
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-read-inspect-v1.json
-
-report:
-  target/nando-wave/real-traffic-shadow/read-inspect-profile-v1.report.json
-
-scoreable_payload_events:             12
-package_training_requests:            12
-edge_count:                           8
-package_bytes:                        140
-runtime_bytes_estimate:               33000
-median_energy_margin:                 1456128
-p10_energy_margin:                    1345536
-unexpected_local_accepts_under_disabled_threshold: 0
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed:                 false
-```
-
-Read-inspect shadow and audit:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.shadow-report.json
-
-verification audit:
-  target/nando-wave/real-traffic-shadow/read-inspect-payload-dry-run-v1.verification-hook-audit.report.json
-
-operator_candidate_calls:             12
-scoreable_candidate_calls:            12
-verification_hook_ready_events:       0
-verified_cpu_accept_eligible_events:  0
-candidates_missing_output_evidence:   12
-candidates_missing_explicit_verification: 12
-shadow_accepts:                       0
-false_accepts:                        0
-market_claim_allowed:                 false
-```
-
-Current route map after registering read_inspect:
-
-```text
-route candidate report:
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-read-inspect-v1.report.json
-
-route-gap catalog:
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-read-inspect-v1.report.json
-
-route-gap readiness:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-read-inspect-v1.report.json
-
-forecast:
-  target/nando-wave/real-traffic-shadow/cpu-route-forecast-read-inspect-v1.report.json
-
-feedback:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v4.read-inspect-current.report.json
-
-operator catalog:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v5.read-inspect.report.json
-
-existing_route_candidate_events:      489
-no_candidate_events:                  511
-route_gap_payload_ready_events:       23
-top_payload_ready_family:             metrics_report_readout
-read_inspect route candidates:        33
-read_inspect scoreable payloads:      12
-read_inspect stage:                   scoreable_payload_missing_verification_hook
-```
-
-Claim boundary:
-
-```text
-This is route/payload/profile progress, not verified CPU savings.
-
-The read_inspect profile is scoreable and registered, but its local accept
-threshold remains disabled and all 12 scoreable rows are missing output
-evidence / explicit verification.
-
-The rebuilt current feedback bundle reports 9 verified CPU accepts because it
-uses a fresh route-only forecast artifact set. The previous mixed-v2
-feedback bundle remains the historical 17/1000 verified-accept snapshot until
-all promoted/audit artifacts are regenerated on one unified route base.
-Do not mix these two numbers as a single claim.
-```
-
-Next engineering debt:
-
-```text
-Build read_only_path_and_excerpt_verifier_v1:
-  request path must match a read-only local file/path intent;
-  response/tool evidence must include path/excerpt fingerprint;
-  no raw prompt/response text is written to reports;
-  local accept may be calibrated only after verifier true/false labels exist;
-  false_accepts must remain 0.
-
-Next route-gap families after read_inspect moved into existing routes:
-  metrics_report_readout: 10 candidates / 6 payload-ready
-  retrieval_lookup:      25 candidates / 2 payload-ready
-```
-
-NANDA structural gate:
-
-```text
-task_id:
-  read-inspect-route-v1
-
-packet:
-  docs/structural_gates/read-inspect-route-v1.md
-
-report:
-  target/nando-wave/real-traffic-shadow/read-inspect-route-v1.nanda.json
-
-verdict:
-  VETO
-
-interpretation:
-  proof_shape_debt_not_runtime_failure
-
-details:
-  complexity_score: 74
-  reason: candidate group weak under composite-mode support
-
-Do not use this packet as structural PASS. JSON reports are the numeric
-authority for route/profile measurements; the packet is retained as review
-evidence until the NANDA proof shape is improved.
-```
-
-## 2026-07-04 - Executor Integration: Current Route-Gap Mining After Planning Profile
-
-Verdict:
-
-```text
-CURRENT_ROUTE_GAP_MINING_V1_REVIEW_NEXT_ROUTE_READ_INSPECT
+2026-07-08 - Reviewer Check: Clean Survivor Runtime Keeps Portfolio Alive
 ```
 
 What changed:
 
 ```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-CodexHistoryRouteCatalog now recognizes profiles whose operator_classes contain:
-  project_planning
-  state_transition
-  route_gap
-
-Those profiles are classified through the planning_next_step route family
-instead of being left in the no-candidate zone.
-```
-
-Why this matters:
-
-```text
-The old route-gap catalog was stale after planning_next_step was added.
-It counted planning-shaped calls as route gaps even though the current feedback
-loop already accounts for the planning profile separately.
-
-The new current route-gap run uses:
-  target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v3.json
-```
-
-Current route-gap catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-current-v1.report.json
-
-sampled_llm_calls:                   1000
-existing_route_candidate_events:     462
-no_candidate_events:                 538
-top_gap_family:                      answer_or_explain
-raw_text_written:                    false
-local_accepts_enabled:               false
-```
-
-Current route-gap payload readiness:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-current-v1.report.json
-
-existing_route_candidate_events:     462
-no_candidate_events:                 538
-payload_ready_events:                35
-top_payload_ready_family:            read_inspect
-
-read_inspect:
-  candidate_events:                  27
-  payload_ready_events:              12
-  recommended_payload_builder:       read_inspect_request_payload_builder_v1
-  recommended_verifier:              read_only_path_and_excerpt_verifier_v1
-
-metrics_report_readout:
-  candidate_events:                  10
-  payload_ready_events:              6
-
-retrieval_lookup:
-  candidate_events:                  25
-  payload_ready_events:              2
-```
-
-Current CPU operator catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v4.current-route-gap.report.json
-
-current_verified_cpu_accepts:        17
-verified_gap_to_80_calls:            783
-existing_operator_candidate_calls:   457
-no_candidate_calls:                  538
-route_gap_payload_ready_events:      35
-market_claim_allowed:                false
-```
-
-Claim boundary:
-
-```text
-This is measurement progress, not verified CPU savings.
-No local accepts were enabled by the route-gap mining run.
-
-The next deterministic route should be read_inspect because it is the top
-payload-ready no-candidate family after planning is removed from the gap.
-Do not rebuild planning as a duplicate route.
-```
-
-NANDA structural gate:
-
-```text
-task_id:
-  route-gap-current-v1
-
-packet:
-  docs/structural_gates/route-gap-current-v1.md
-
-report:
-  target/nando-wave/real-traffic-shadow/route-gap-current-v1.nanda.json
-
-verdict:
-  VETO
-
-interpretation:
-  proof_shape_debt_not_runtime_failure
-
-details:
-  route_coherence: 1.0
-  conflicts: []
-  evidence_gaps: []
-  reason: candidate rows still weak under composite-mode support
-
-Do not use this packet as structural PASS. JSON reports are the numeric
-authority for the route-gap measurement. The packet is retained as review
-evidence until the NANDA proof shape is improved.
-```
-
-## 2026-07-04 - Executor Integration: Mixed-Map Safe Policy V2
-
-Verdict:
-
-```text
-MIXED_SAFE_POLICY_V2_REVIEW_VERIFIED_GAIN
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-mixed-safe-policy-promote-v2
-
-The v2 promotion keeps the same mixed-map `.nwrb` score path and adds a
-request-side admission gate:
-  mixed_no_goal_control_prompt
-
-Goal/control prompts are forced to fallback before energy threshold selection.
-This prevents an unverified meta-goal row from raising the mixed-map runtime
-threshold and blocking verified safe rows.
-```
-
-V2 promotion:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.report.json
-
-request_side_policy_name:             mixed_no_goal_control_prompt
-selected_policy_threshold:            393216
-selected_policy_accepts:              3
-selected_policy_true_accepts:         3
-selected_policy_false_accepts:        0
-selected_policy_unverified_accepts:   0
-request_side_policy_accept_rows:      11
-request_side_policy_reject_rows:      3
-policy_accept_rows:                   3
-policy_accept_verified_true_rows:     3
-policy_accept_verified_false_rows:    0
-policy_accept_unverified_rows:        0
-runtime_acceptance_mismatches:        0
-```
-
-V2 shadow:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.shadow-report.json
-
-nando_shadow_accepts:                 3
-verified_safe_accepts:                3
-unverified_shadow_accepts:            0
-false_accepts:                        0
-incremental_savings_over_exact_cache: 3
-p99_shadow_score_latency_ns:          214688
-synthetic_trace_used:                 false
-```
-
-V2 verification audit:
-
-```text
-audit report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.verification-hook-audit.report.json
-
-operator_candidate_calls:             11
-scoreable_candidate_calls:            11
-verification_hook_ready_events:       11
-verified_cpu_accept_eligible_events:  3
-false_accepts:                        0
-market_claim_allowed:                 true for the route-specific audit only
-```
-
-Unified feedback with mixed v2 + agent-control v2 + planning v3:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v3.mixed-v2-agent-control-planning-v3.report.json
-
-total_llm_calls:                      1000
-exact_cache_hits:                     53
-operator_candidate_calls:             457
-scoreable_candidate_calls:            136
-verification_hook_ready_events:       100
-verified_cpu_accept_eligible_events:  17
-verified_cpu_routability_milli:       17
-verified_gap_to_80_calls:             783
-market_claim_allowed:                 false
-
-mixed-map row:
-  candidate_events:                   37
-  scoreable_payload_events:           11
-  verification_hook_ready_events:     11
-  local_accept_best_safe_true_accepts: 4
-  local_accept_support_qualified:     true
-  verified_cpu_accept_eligible_events: 3
-  false_accepts:                      0
-```
-
-Operator catalog:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v3.mixed-v2-agent-control-planning-v3.report.json
-
-current_verified_cpu_accepts:         17
-verified_gap_to_80_calls:             783
-top_catalog_row:                      role_binding_agent_control_seed0
-```
-
-Claim boundary:
-
-```text
-This is real verified progress, not CPU Routability 80.
-The project moved from 16/1000 to 17/1000 verified CPU accepts on the current
-1000-call Codex trace window.
-
-The mixed route-specific audit is market-claim-eligible for that route packet,
-but the unified market-wide CPU Routability claim remains closed while
-verified_cpu_routability_milli is 17.
-
-Conditional branch remains blocked by prompt/score collisions:
-  verifier true rows:  17
-  verifier false rows: 46
-  safe prompt+energy accepts found: 2
-
-No response text, target labels, proof labels, concrete lookup, or manual
-local_out_t are used by the serving policy.
-```
-
-NANDA structural gate:
-
-```text
-task_id:
-  mixed-safe-policy-v2
-
-packet:
-  docs/structural_gates/mixed-safe-policy-v2.md
-
-report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v2.nanda.json
-
-verdict:
-  VETO
-
-interpretation:
-  proof_shape_debt_not_runtime_failure
-
-details:
-  route_coherence: 1.0
-  conflicts: []
-  evidence_gaps: []
-  exact_candidate_matches: 16
-  reason: candidate rows still weak under composite-mode support
-
-Do not use this packet as a structural PASS. The JSON runtime/shadow/audit
-reports are the numeric authority for the route-specific mixed v2 gain.
-The NANDA packet is retained as review evidence and must be improved before
-any public structural claim.
-```
-
-## 2026-07-04 - Executor Integration: Agent-Control Strict Control Forms V2
-
-Verdict:
-
-```text
-AGENT_CONTROL_STRICT_CONTROL_FORMS_V2_REVIEW_VERIFIED_GAIN
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added agent-control admission features:
-  one_token_lowercase_stop
-  stop_uppercase_goal_control
-
-Added request-side policy:
-  strict_control_stop_forms
-
-Extended role-binding-real-traffic-feedback-loop-v1 with optional explicit
-agent-control artifact paths:
-  agent-control admission calibration report
-  agent-control safe-policy verification audit report
-```
-
-Why this was needed:
-
-```text
-The broad agent-control route is unsafe as a local accept policy:
-  verifier true rows:  12
-  verifier false rows: 112
-
-The previous hard-stop policy was safe but small:
-  true_accepts:  3
-  false_accepts: 0
-
-The new policy keeps broad agent-control blocked and admits only narrow
-control-plane forms: strict hard-stop forms, explicit pause request, uppercase
-GOAL stop control, and one-token lowercase stop.
-```
-
-V2 calibration:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v2.report.json
-
-hook_ready_rows:          124
-label_true_rows:          12
-label_false_rows:         112
-selected policy candidate:
-  strict_control_stop_forms
-  accepts:                11
-  true_accepts:           11
-  false_accepts:          0
-  missed_true:            1
-  robust_safe:            true
-```
-
-V2 promoted shadow:
-
-```text
-promoted trace:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.trace.jsonl
-
-shadow report:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.shadow-report.json
-
-nando_shadow_accepts:                  11
-verified_safe_accepts:                 11
-unverified_shadow_accepts:             0
-false_accepts:                         0
-incremental_savings_over_exact_cache:  6
-incremental_reduction_vs_exact_cache:  6 milli
-p99_shadow_score_latency_ns:           23783
-synthetic_trace_used:                  false
-```
-
-V2 verification audit:
-
-```text
-audit report:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v2.verification-hook-audit.report.json
-
-verification_hook_ready_events:        11
-verified_cpu_accept_eligible_events:   11
-shadow_accepts:                        11
-shadow_false_accepts:                  0
-market_claim_allowed:                  true
-```
-
-Unified feedback with agent-control v2 + planning v3:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v2.agent-control-planning-v3.report.json
-
-total_llm_calls:                       1000
-exact_cache_hits:                      53
-operator_candidate_calls:              457
-scoreable_candidate_calls:             139
-verification_hook_ready_events:        102
-verified_cpu_accept_eligible_events:   16
-verified_cpu_routability_milli:        16
-verified_gap_to_80_calls:              784
-market_claim_allowed:                  false
-
-agent-control row:
-  candidate_events:                    143
-  scoreable_payload_events:            11
-  verification_hook_ready_events:      11
-  local_accept_best_safe_true_accepts: 11
-  local_accept_support_qualified:      true
-  verified_cpu_accept_eligible_events: 11
-  false_accepts:                       0
-```
-
-Operator catalog v2:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v2.agent-control-planning-v3.report.json
-
-current_verified_cpu_accepts:          16
-verified_gap_to_80_calls:              784
-top_catalog_row:                       role_binding_agent_control_seed0
-```
-
-Claim boundary:
-
-```text
-This is real verified progress, not CPU Routability 80.
-The project moved from 8/1000 to 16/1000 verified CPU accepts on the current
-1000-call Codex trace window.
-
-Broad agent-control remains blocked. Only the strict request-side policy is
-promoted into the v2 trace.
-
-No market-wide savings claim is allowed from the unified feedback report while
-verified_cpu_routability_milli is 16.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: agent-control-strict-control-safe-policy-v2
-packet:
-  docs/structural_gates/agent-control-strict-control-safe-policy-v2.md
-report:
-  target/nando-wave/real-traffic-shadow/agent-control-strict-control-safe-policy-v2.nanda.json
-
-Treat VETO as the CPU Routability 80 promotion guard, not as a route failure.
-```
-
-## 2026-07-04 - Executor Integration: Planning Next-Step Admission Calibration V1/V3
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-Added:
-  role-binding-real-traffic-planning-next-step-admission-calibration-v1
-
-The command calibrates request-side prompt features against
-planning_next_step artifact-progress verifier labels without writing raw
-prompt text and without enabling local accepts.
-```
-
-V2 lesson:
-
-```text
-The first v2 admission split looked promising, but it was not enough. On the
-full v3 artifact window the direct-action + project-artifact policy admitted:
-
-  accepts:       4
-  true_accepts:  2
-  false_accepts: 2
-
-The two false collisions were goal-control/meta-workflow prompts, not real
-artifact-progress execution prompts.
-```
-
-V3 diagnostic result:
-
-```text
-hook_ready_rows:              29
-rows_with_prompt_features:    29
-label_true_rows:              2
-label_false_rows:             27
-minimum_true_support:         2
-robust_safe_policy_found:     true
-best_robust_true_accepts:     2
-market_claim_allowed:         false
-local_accepts_enabled:        false
-response_text_used_for_features: false
-target_labels_used_for_runtime:  false
-proof_labels_used_for_runtime:   false
-
-policy:
-  direct_action_project_no_goal_control_no_failure
-  accepts:       2
-  true_accepts:  2
-  false_accepts: 0
-  missed_true:   0
-  robust_safe:   true
-```
-
-Feedback dashboard v3 check:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.planning-v3.report.json
-
-operator_candidate_calls:              337
-scoreable_candidate_calls:             128
-verification_hook_ready_events:        94
-verified_cpu_accept_eligible_events:   8
-verified_cpu_routability_milli:        8
-verified_gap_to_80_calls:              792
-market_claim_allowed:                  false
-
-planning_next_step row:
-  candidate_events:                    49
-  payload_ready_events:                63
-  payload_built_events:                49
-  scoreable_payload_events:            49
-  verification_hook_ready_events:      29
-  local_accept_best_safe_true_accepts: 1
-  local_accept_support_qualified:      false
-  verified_cpu_accept_eligible_events: 0
-```
-
-Interpretation:
-
-```text
-The new admission split is a useful request-side diagnostic: it separates both
-known artifact-progress true rows from the goal-control false collisions.
-
-It is not a CPU savings improvement. It does not promote planning_next_step,
-does not enable local accepts, and does not change verified CPU routability.
-
-Promotion still needs a larger support window and a full shadow/audit path
-where verified_safe_accepts increase while false_accepts remain zero.
-```
-
-Claim boundary:
-
-```text
-Current global verified CPU remains 8/1000.
-The gap to the 80% goal remains 792 calls.
-This is admission calibration, not market savings.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-admission-calibration-v1
-packet:
-  docs/structural_gates/planning-next-step-admission-calibration-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-admission-calibration-v1.nanda.json
-
-Treat VETO as a promotion guard: the split is useful but still REVIEW-only.
-```
-
-## 2026-07-04 - Executor Integration: Feedback Loop Planning Artifact Args V1
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_PLANNING_ARTIFACT_ARGS_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-role-binding-real-traffic-feedback-loop-v1 now accepts explicit planning
-artifact paths after the existing 4 positional arguments:
-  planning dry-run report
-  planning local-accept calibration report
-  planning verification audit report
-
-If these arguments are omitted, the command keeps the old default v1 artifact
-paths.
-```
-
-Default v1 dashboard check:
-
-```text
-operator_candidate_calls: 302
-scoreable_candidate_calls: 93
-verification_hook_ready_events: 72
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli: 8
-verified_gap_to_80_calls: 792
-
-planning_next_step row:
-  candidate_events: 14
-  payload_ready_events: 19
-  payload_built_events: 14
-  scoreable_payload_events: 14
-  verification_hook_ready_events: 7
-  local_accept_best_safe_true_accepts: 1
-  local_accept_support_qualified: false
-  verified_cpu_accept_eligible_events: 0
-```
-
-Explicit planning v2 dashboard check:
-
-```text
-operator_candidate_calls: 319
-scoreable_candidate_calls: 110
-verification_hook_ready_events: 87
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli: 8
-verified_gap_to_80_calls: 792
-
-planning_next_step row:
-  candidate_events: 31
-  payload_ready_events: 36
-  payload_built_events: 31
-  scoreable_payload_events: 31
-  verification_hook_ready_events: 22
-  local_accept_best_safe_true_accepts: 1
-  local_accept_support_qualified: false
-  verified_cpu_accept_eligible_events: 0
-```
-
-Interpretation:
-
-```text
-The feedback dashboard can now compare route-gap artifact windows without
-overwriting the baseline. The v2 artifact set increases planning_next_step
-candidate / scoreable / hook-ready coverage, but does not increase verified CPU
-accepts because the support guard still blocks promotion.
-```
-
-Claim boundary:
-
-```text
-This is dashboard plumbing, not a savings claim.
-The default path remains v1-compatible.
-The explicit v2 path remains REVIEW because verified CPU stays 8/1000.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: feedback-loop-planning-artifact-args-v1
-packet:
-  docs/structural_gates/feedback-loop-planning-artifact-args-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/feedback-loop-planning-artifact-args-v1.nanda.json
-
-Scope:
-  The packet checks that optional planning artifacts can change dashboard
-  planning coverage while preserving v1 defaults and not promoting local
-  accepts.
-
-  Treat VETO as a promotion guard: v2 coverage is stronger, but still not
-  support-qualified.
-```
-
-## 2026-07-04 - Executor Integration: Planning Next-Step Trace Window V2
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_TRACE_WINDOW_V2_REVIEW_SUPPORT_STILL_INSUFFICIENT
-```
-
-What changed:
-
-```text
-No runtime or scoring code changed.
-
-The planning_next_step route was rerun over a wider real Codex history window:
-  max_events: 1000 -> 5000
-
-Artifacts were written under v2 names so the v1 baseline remains intact.
-```
-
-V1 -> V2 route evidence:
-
-```text
-planning candidates:           54 -> 170
-payload ready events:          19 -> 36
-payload built events:          14 -> 31
-scoreable payload events:      14 -> 31
-
-artifact evidence matches:      7 -> 22
-verified true events:           1 -> 2
-verified false events:          6 -> 20
-tool-call fingerprint events:   1 -> 3
-
-verification hook ready:        7 -> 22
-verified CPU eligible:          0 -> 0
-shadow accepts:                 0 -> 0
-shadow false accepts:           0 -> 0
-market claim allowed:           false -> false
-```
-
-Calibration result:
-
-```text
-safe_policy_found: true
-best_safe_true_accepts: 1
-minimum_true_support_for_promotion: 3
-request_side_margin_only_accepts_all_true_without_false: false
-
-The wider trace found a second verifier-true artifact-progress row, but the
-current request-side boundary-slot margin policy still safely accepts only one
-true row:
-  true_accepts: 1
-  false_accepts: 0
-  missed_true: 1
-```
-
-Margin collision diagnostics:
-
-```text
-energy_margin:
-  min_true_margin: 1213440
-  false_rows_at_or_above_min_true_margin: 2
-  safe_accepts_all_true_rows: false
-  best_safe_true_accepts: 0
-
-min_slot_margin:
-  min_true_margin: 328704
-  false_rows_at_or_above_min_true_margin: 18
-  safe_accepts_all_true_rows: false
-  best_safe_true_accepts: 0
-
-marker_slot_margin:
-  min_true_margin: 328704
-  false_rows_at_or_above_min_true_margin: 18
-  safe_accepts_all_true_rows: false
-  best_safe_true_accepts: 0
-
-end_slot_margin:
-  min_true_margin: 786432
-  false_rows_at_or_above_min_true_margin: 8
-  safe_accepts_all_true_rows: false
-  best_safe_true_accepts: 1
-```
-
-Interpretation:
-
-```text
-The route is real and growing: wider real traffic increased candidate,
-scoreable, hook-ready, and tool-backed evidence counts.
-
-The route is not promotion-ready: safe local accept support remains singleton,
-so planning_next_step must stay review-only.
-
-This is now proven not to be fixable by a single request-side margin threshold:
-accepting both verifier-true rows would admit false rows under every current
-margin family.
-```
-
-Claim boundary:
-
-```text
-This is not a CPU savings improvement.
-It proves better evidence density for planning_next_step, not verified local
-replacement of LLM calls.
-
-Current global CPU Routability remains 8/1000 until the feedback dashboard is
-fed with a support-qualified route row and verified accepts increase under
-false_accepts=0.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-trace-window-v2
-packet:
-  docs/structural_gates/planning-next-step-trace-window-v2.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-trace-window-v2.nanda.json
-
-Scope:
-  The packet checks that v2 increased real evidence while keeping local accept
-  promotion blocked by minimum support.
-
-  Treat VETO as a promotion guard and proof-shape debt. It is not a runtime
-  failure.
-```
-
-Next debt:
-
-```text
-planning_next_step_admission_split_v1:
-  compare the two verifier-true rows and twenty verifier-false rows to find a
-  request-side feature that separates both true rows without admitting false
-  rows. Candidate direction: distinguish tool-backed progress intent shape
-  before scoring, not by lowering score thresholds.
-
-planning_next_step_feedback_loop_artifact_args_v1:
-  avoid hard-wiring only v1 planning reports in the feedback loop; allow a
-  named planning artifact set or route-gap source bundle so v2 windows can feed
-  the dashboard without overwriting the baseline.
-```
-
-## 2026-07-04 - Executor Integration: Feedback Loop Planning Route-Gap Row V1
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-
-The feedback loop now auto-loads planning_next_step artifacts:
-  planning-next-step-payload-dry-run-v1.report.json
-  planning-next-step-local-accept-calibration-v1.report.json
-  planning-next-step-artifact-progress-v1.verification-hook-audit.report.json
-
-It appends planning_next_step as an explicit route-gap row even though the base
-cpu-route-forecast route list only contains conditional/edit/mixed profiles.
-```
-
-New dashboard metrics:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 302
-operator_candidate_coverage_milli: 302
-scoreable_candidate_calls: 93
-scoreable_candidate_coverage_milli: 93
-verification_hook_ready_events: 72
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli: 8
-verified_gap_to_80_calls: 792
-no_candidate_calls: 698
-```
-
-Planning route row:
-
-```text
-route_key: planning_next_step
-candidate_events: 14
-scoreable_payload_events: 14
-verification_hook_ready_events: 7
-local_accept_calibration_ran: true
-local_accept_safe_policy_found: true
-local_accept_minimum_true_support: 3
-local_accept_support_qualified: false
-local_accept_best_safe_true_accepts: 1
-verified_cpu_accept_eligible_events: 0
-false_accepts: 0
-stage: local_accept_calibration_support_insufficient
-next_action: Collect more verifier-true rows or raise admission quality before promotion; singleton safe policies stay review-only.
-```
-
-Interpretation:
-
-```text
-This fixes the global dashboard shape. Planning route-gap traffic is now counted
-as candidate and scoreable traffic, so the feedback-loop coverage picture no
-longer hides the 14 planning candidates.
-
-It does not increase verified CPU accepts. The planning singleton safe policy is
-visible, but it is blocked by minimum support:
-  local_accept_minimum_true_support: 3
-  local_accept_best_safe_true_accepts: 1
-```
-
-Claim boundary:
-
-```text
-Do not treat local_accept_safe_policy_found=true as promotion-ready. For route
-planning_next_step, support-qualified means:
-  safe_policy_found=true
-  best_safe_true_accepts >= 3
-  later promoted shadow/audit has false_accepts=0 and unverified accepts=0
-  provider cost exists before savings claims
-
-Current state remains CPU Routability 8/1000, not 80%.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: feedback-loop-planning-route-gap-row-v1
-packet:
-  docs/structural_gates/feedback-loop-planning-route-gap-row-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/feedback-loop-planning-route-gap-row-v1.nanda.json
-
-Scope:
-  The packet checks that planning route-gap traffic is counted in the feedback
-  dashboard while the singleton safe-policy candidate remains blocked.
-
-  NANDA reports no conflicts or evidence gaps, but keeps VETO because the
-  candidate-support triads are weak. Treat this as a promotion guard and proof-
-  shape debt, not as a runtime failure.
-```
-
-Next debt:
-
-```text
-planning_next_step_true_label_collection_v1:
-  collect more tool-backed planning true rows or improve request-side admission
-  until local_accept_support_qualified=true without false accepts.
-
-global_feedback_route_source_unification_v1:
-  stop treating route-gap rows as a side-channel. Fold route-gap families into
-  the same forecast/catalog layer without allowing them to bypass verifier and
-  support gates.
-```
-
-## 2026-07-04 - Executor Integration: Planning Next-Step Local Accept Calibration V1
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-planning-next-step-local-accept-calibration-v1
-
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The command evaluates request-side score/readout policies for the
-planning_next_step profile against artifact-progress labels. It writes only
-fingerprints and margins, does not use target/proof labels, does not use raw
-prompt/response/tool output as runtime features, and does not enable local
-accepts.
-```
-
-Artifacts:
-
-```text
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v1.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.trace.jsonl
-
-calibration_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.report.json
-
-hook_ready_rows: 7
-scored_rows: 7
-label_true_rows: 1
-label_false_rows: 6
-no_score_rows: 0
-safe_policy_found: true
-best_safe_true_accepts: 1
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Best request-side policy candidate:
-
-```text
-policy_name:
-  best_boundary_slot_margin_threshold_request_side_only
-
-threshold:
-  884736
-
-accepts:
-  1
-
-true_accepts:
-  1
-
-false_accepts:
-  0
-```
-
-Interpretation:
-
-```text
-This is a useful calibration smoke, not CPU savings.
-
-The planning profile can separate the single tool-backed true row from the six
-artifact-verified false rows by the boundary-slot margin in the current 7-label
-sample. That is enough to identify a possible request-side policy candidate.
-
-It is not enough to promote local accept:
-  true support is only one row;
-  provider_cost_microusd is still missing;
-  the profile registry still has threshold=i32::MAX;
-  shadow accepts remain zero;
-  verification-hook audit still reports verified_cpu_accept_eligible_events=0.
-```
-
-Claim boundary:
-
-```text
-Do not count this as market savings or CPU Routability progress. It is
-calibration fuel only. A promoted planning trace would require more non-
-synthetic true labels, provider cost, a separate registry/trace promotion,
-shadow/audit with false_accepts=0 and unverified_shadow_accepts=0, and rollback
-documentation.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-local-accept-calibration-v1
-packet:
-  docs/structural_gates/planning-next-step-local-accept-calibration-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-local-accept-calibration-v1.nanda.json
-
-Scope:
-  The packet checks that a singleton safe-policy candidate is not promoted into
-  CPU savings.
-
-  NANDA reports no conflicts, but keeps VETO because candidate support is weak.
-  Treat this as proof-shape debt and promotion guard, not as a runtime failure
-  and not as structural PASS.
-```
-
-Next debt:
-
-```text
-planning_next_step_safe_policy_promote_guarded_v1:
-  do not implement broad promotion from this singleton support alone. First
-  collect more tool-backed planning true rows or add a minimum-support guard
-  that refuses promotion below a configured true-label floor.
-
-feedback loop integration:
-  planning_next_step currently lives in route-gap artifacts and is not counted
-  by the base cpu-route-forecast route list. Add explicit planning route-gap
-  rows to the CPU feedback loop before using it as the global CPU Routability
-  dashboard.
-```
-
-## 2026-07-04 - Executor Integration: Planning Next-Step Artifact Progress V1
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_ARTIFACT_PROGRESS_V1_REVIEW_TOOL_BACKED_TRUE_LABELS_FOUND
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-planning-next-step-artifact-progress-v1
-
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The command scans local Codex rollout JSONL for planning_next_step turns and
-attaches tool-call fingerprints when the same turn contains successful
-project-progress tools. It writes no raw prompt, raw response, or raw tool
-output. It does not use target labels or proof labels.
-
-True-label rule:
-  verified_safe_accept=true is allowed only when the planning prompt is
-  request-side ready, the turn has successful nando-wave project-progress tool
-  evidence, and the final answer does not report failure.
-
-  Current progress kinds:
-    progress_apply_patch_nando_wave
-    progress_git_commit
-    progress_real_traffic_report_generation
-    progress_structural_gate_artifact
-    progress_generated_target_artifact
-
-  Validation-only tools such as cargo check, cargo clippy, cargo fmt, and
-  git diff --check are recorded as evidence, but do not by themselves become a
-  true label.
-```
-
-Artifacts:
-
-```text
-input_trace:
-  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl
-
-artifact_progress_trace:
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.trace.jsonl
-
-artifact_progress_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.report.json
-
-shadow_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.verification-hook-audit.report.json
-
-total_trace_rows: 1000
-operator_candidate_calls: 14
-scoreable_candidate_calls: 14
-session_ids_requested: 4
-session_files_scanned: 4
-codex_turns_indexed: 7
-tool_events_indexed: 1
-artifact_evidence_matched_events: 7
-no_session_artifact_match_events: 7
-verifier_not_applicable_events: 0
-verified_true_events: 1
-verified_false_events: 6
-tool_call_fingerprint_events: 1
-raw_prompt_text_written: false
-raw_response_text_written: false
-tool_outputs_written: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Shadow / audit:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 14
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-unverified_shadow_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 217288
-synthetic_trace_used: false
-
-verification_hook_ready_events: 7
-verified_cpu_accept_eligible_events: 0
-candidates_missing_output_evidence: 7
-candidates_missing_explicit_verification: 7
-candidates_missing_provider_cost: 14
-shadow_accepts: 0
-shadow_false_accepts: 0
-```
-
-Interpretation:
-
-```text
-This is the first planning_next_step rung with a tool-backed true verification
-label on real Codex traffic. It proves the verifier can distinguish a plain
-final-answer claim from project-state progress evidence.
-
-It is still not CPU savings: the planning profile threshold remains disabled,
-shadow accepts are zero, provider cost is absent, and seven scoreable planning
-rows still lack matching output/artifact evidence.
-
-Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
-792 calls.
-```
-
-Claim boundary:
-
-```text
-Tool-backed true labels are calibration fuel, not product savings. A planning
-row can count as verified CPU only after a calibrated safe policy enables a
-local shadow accept, provider cost is attached, the trace is non-synthetic,
-false_accepts=0, unverified accepts=0, and verification-hook audit reports
-verified_cpu_accept_eligible_events > 0.
-```
-
-Next debt:
-
-```text
-planning_next_step_safe_policy_calibration_v1:
-  use the artifact-progress trace to search thresholds/admission policy. Do not
-  promote if false labels would be accepted, if provider cost is missing for
-  market savings, or if the disabled threshold still masks runtime behavior.
-
-missing-output-evidence gap:
-  7 of 14 planning rows still lack matching Codex output/artifact evidence.
-  Keep them false/unverified until session matching or trace capture improves.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-artifact-progress-v1
-packet:
-  docs/structural_gates/planning-next-step-artifact-progress-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-artifact-progress-v1.nanda.json
-
-Scope:
-  The packet checks that a tool-backed planning true label is not promoted into
-  CPU local accept or market savings.
-
-  NANDA reports no conflicts, but keeps VETO because candidate route coherence
-  / composite support is weak. Treat this as proof-shape debt. It is not a
-  runtime failure and not a structural PASS.
-```
-
-## 2026-07-04 - Executor Integration: Planning Next-Step Output Evidence V1
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-planning-next-step-output-evidence-v1
-
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The command joins planning_next_step scoreable trace rows with local Codex
-final-answer evidence by request fingerprint. It writes only response
-fingerprints and explicit deterministic verifier results. It writes no raw
-prompt/response text and does not enable local accepts.
-
-Important guard:
-  deterministic_planning_next_step_output_verification intentionally refuses
-  verified_safe_accept=true from final-answer text alone. True planning accepts
-  require a later plan_step_artifact_progress_verifier_v1 that can prove
-  project-state progress through artifacts such as reports, checks, diffs, or
-  commits.
-```
-
-Artifacts:
-
-```text
-input_trace:
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.trace.jsonl
-
-evidence_trace:
-  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.trace.jsonl
-
-evidence_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.report.json
-
-shadow_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.verification-hook-audit.report.json
-
-total_trace_rows: 1000
-operator_candidate_calls: 14
-scoreable_candidate_calls: 14
-session_ids_requested: 4
-session_files_scanned: 4
-codex_turns_indexed: 7
-output_evidence_matched_events: 7
-no_session_output_match_events: 7
-deterministic_verification_events: 7
-verifier_not_applicable_events: 0
-verified_true_events: 0
-verified_false_events: 7
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Shadow / audit:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 14
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-unverified_shadow_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 212160
-synthetic_trace_used: false
-
-verification_hook_ready_events: 7
-verified_cpu_accept_eligible_events: 0
-candidates_missing_output_evidence: 7
-candidates_missing_explicit_verification: 7
-candidates_missing_provider_cost: 14
-shadow_accepts: 0
-shadow_false_accepts: 0
-```
-
-Interpretation:
-
-```text
-This closes half of the planning_next_step verification-hook debt: the route now
-has real response fingerprints and explicit false verifier labels for matched
-Codex turns. The other half remains open: seven rows still lack matching output
-evidence, no row has artifact-progress verification, provider costs are absent,
-and the profile threshold remains disabled, so verified CPU accepts stay zero.
-
-Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
-792 calls.
-```
-
-Claim boundary:
-
-```text
-Output evidence is not savings. A planning row can count as verified CPU only
-after artifact-progress verification marks verified_safe_accept=true, local
-shadow accept is enabled by a calibrated safe policy, provider cost is attached,
-the trace is non-synthetic, and false_accepts/unverified accepts remain zero.
-```
-
-Next debt:
-
-```text
-plan_step_artifact_progress_verifier_v1:
-  verify planning_next_step by real project-state progress, not by response
-  prose. Candidate evidence sources: report JSON timestamps/fingerprints,
-  generated structural-gate packets, git diff/commit facts, cargo/check/clippy
-  artifacts, and explicit tool-call fingerprints when available.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-output-evidence-v1
-packet:
-  docs/structural_gates/planning-next-step-output-evidence-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-output-evidence-v1.nanda.json
-
-Scope:
-  The packet checks that output evidence is attached without converting it into
-  verified CPU savings.
-
-  After switching to JSON-field evidence anchors, NANDA reports no conflicts,
-  but keeps VETO because candidate route coherence / composite support is weak.
-  Treat this as proof-shape debt. It is not a runtime failure and not a
-  structural PASS.
-```
-
-## 2026-07-04 - Executor Integration: Planning Next-Step Profile V1
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_PROFILE_V1_REVIEW_PROFILE_READY_ACCEPTS_DISABLED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-planning-next-step-profile-v1
-
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The command compiles the request-side planning_next_step dry-run payloads into
-a real `.nwrb` package and writes a serving registry overlay. The profile is
-registered, but its threshold is i32::MAX, so shadow can measure score/margins
-while local accepts stay disabled until a deterministic verifier exists.
-```
-
-Artifacts:
-
-```text
-package:
-  target/nando-wave/real-traffic-shadow/planning-next-step-seed0.nwrb
-
-overlay_registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-planning-next-step-v1.json
-
-profile_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.report.json
-
-shadow_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.verification-hook-audit.report.json
-
-trace_rows_read: 1000
-scoreable_payload_events: 14
-package_training_requests: 14
-edge_count: 8
-package_bytes: 140
-runtime_bytes_estimate: 33000
-changed_edges: 155
-positive_updates: 608
-negative_updates: 672
-threshold: 2147483647
-positive_margin_rows: 14
-strict_ordered_pass_rows: 14
-unexpected_local_accepts_under_disabled_threshold: 0
-median_energy_margin: 1106944
-p10_energy_margin: 873472
-min_energy_margin: 873472
-median_min_slot_margin: 366592
-p10_min_slot_margin: 316416
-min_slot_margin: 287744
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled_on_real_traffic: false
-market_claim_allowed: false
-```
-
-Shadow / audit:
-
-```text
-operator_candidate_calls: 14
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 213476
-
-verification_hook_ready_events: 0
-verified_cpu_accept_eligible_events: 0
-candidates_missing_output_evidence: 14
-candidates_missing_explicit_verification: 14
-```
-
-Interpretation:
-
-```text
-This closes the profile-missing gap for planning_next_step. The runtime now
-loads and scores the planning payload path, producing strong positive margins,
-but the disabled threshold keeps every row in fallback_to_llm. This is scoring
-telemetry, not savings.
-
-Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
-792 calls. The next engineering debt is plan_step_artifact_progress_verifier_v1
-plus safe-policy calibration before any threshold can be lowered.
-```
-
-Claim boundary:
-
-```text
-Profile-ready is not verified CPU. Planning-next-step contributes to CPU
-Routability only after deterministic output/artifact evidence verifies the
-predicted transition, verified_safe_accepts > 0, provider cost is attached,
-and false_accepts remain zero.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-profile-v1
-packet:
-  docs/structural_gates/planning-next-step-profile-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-profile-v1.nanda.json
-
-Scope:
-  The packet checks that the planning_next_step profile is registered and
-  scored while the disabled threshold prevents local accepts and market claims.
-
-  NANDA found no role conflicts, but VETOs the packet because the exact
-  candidate triads are weak under composite-mode support. Treat this as
-  proof-shape debt, not as runtime failure and not as structural PASS.
-```
-
-## 2026-07-03 - Executor Integration: Planning Next-Step Payload Dry-Run V1
-
-Verdict:
-
-```text
-PLANNING_NEXT_STEP_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_PROFILE_MISSING
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-planning-next-step-payload-dry-run-v1
-
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The command takes no-candidate real Codex prompts whose route-gap family is
-planning_next_step and builds request-side active_fringe/slots from prompt text
-only. It writes fingerprints, lane/impulse payloads, and counts; it does not
-write raw prompt text, response text, target labels, proof labels, or verified
-accepts.
-```
-
-Artifacts:
-
-```text
-dry_run_trace:
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.trace.jsonl
-
-dry_run_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.report.json
-
-shadow_report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.shadow-report.json
-
-verification_audit:
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.verification-hook-audit.report.json
-
-sampled_llm_calls: 1000
-planning_next_step_candidate_events: 54
-payload_ready_events: 19
-payload_built_events: 14
-scoreable_payload_events: 14
-builder_rejected_events: 5
-readiness_rejected_events: 35
-profile_registered: false
-shadow_score_ready: false
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Shadow / audit:
-
-```text
-operator_candidate_calls: 14
-exact_cache_hits: 53
-nando_shadow_accepts: 0
-verified_safe_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 4151
-synthetic_trace_used: false
-
-verification_hook_ready_events: 0
-verified_cpu_accept_eligible_events: 0
-candidates_missing_output_evidence: 14
-candidates_missing_explicit_verification: 14
-```
-
-Interpretation:
-
-```text
-This closes the next request-side bridge for the largest payload-ready
-route-gap family. The 14 scoreable payloads are not CPU savings yet: the
-planning profile is not registered and the deterministic plan/artifact
-verifier is missing, so shadow correctly stays REVIEW with zero accepts.
-
-Current verified CPU remains 8/1000 and the gap to CPU Routability 80 remains
-792 calls. The next engineering debt is a planning-next-step .nwrb profile plus
-plan_step_artifact_progress_verifier_v1.
-```
-
-Claim boundary:
-
-```text
-Payload is not savings. Planning-next-step contributes to CPU Routability only
-after a registered profile scores the request, deterministic output/artifact
-evidence verifies the predicted transition, verified_safe_accepts > 0, and
-false_accepts remain zero.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: planning-next-step-payload-dry-run-v1
-packet:
-  docs/structural_gates/planning-next-step-payload-dry-run-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/planning-next-step-payload-dry-run-v1.nanda.json
-
-Scope:
-  The packet checks that planning_next_step payloads are built from request-side
-  signals while local accepts and market claims stay disabled.
-
-  NANDA found no role conflicts, but VETOs the packet because the exact
-  candidate triads are weak under composite-mode support. Treat this as
-  proof-shape debt, not as runtime failure and not as structural PASS.
-```
-
-## 2026-07-03 - Executor Integration: Route-Gap Payload Readiness V1
-
-Verdict:
-
-```text
-ROUTE_GAP_PAYLOAD_READINESS_V1_REVIEW_READY_FAMILIES_FOUND
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-route-gap-payload-readiness-v1
-
-Updated:
-  role-binding-real-traffic-cpu-operator-catalog-v1
-
-The new readiness command inspects no-candidate real Codex prompts and counts
-which route-gap families have enough request-side signals to attempt a future
-payload builder. It writes fingerprints/features/counts only; no raw prompt
-text, response text, target labels, proof labels, or local accepts are used.
-
-The CPU operator catalog now consumes this readiness report when present, so
-no-candidate families are ranked by real payload-builder readiness, not only by
-traffic volume.
-```
-
-Artifacts:
-
-```text
-readiness_report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.report.json
-
-catalog_report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-sampled_llm_calls: 1000
-existing_route_candidate_events: 408
-no_candidate_events: 592
-route_gap_payload_ready_events: 54
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Top route-gap readiness:
-
-```text
-planning_next_step:
-  candidates: 54
-  payload_ready: 19
-  readiness: medium_state_transition_candidate
-  next builder: goal_state_transition_payload_builder_v1
-  next verifier: plan_step_artifact_progress_verifier_v1
-
-read_inspect:
-  candidates: 27
-  payload_ready: 12
-  readiness: medium_read_only_tool_candidate
-  next builder: read_inspect_request_payload_builder_v1
-  next verifier: read_only_path_and_excerpt_verifier_v1
-
-metrics_report_readout:
-  candidates: 10
-  payload_ready: 6
-  readiness: medium_structured_readout_candidate
-  next builder: metrics_report_payload_builder_v1
-  next verifier: numeric_report_field_verifier_v1
-
-answer_or_explain:
-  candidates: 215
-  payload_ready: 0
-  blocker: missing_evidence_signal + missing_verifier_signal
-```
-
-Interpretation:
-
-```text
-This is the first measured bridge from no-candidate traffic into request-side
-payload-builder work. It does not change verified CPU accepts: current verified
-CPU remains 8/1000 and the gap to CPU Routability 80 remains 792 calls.
-
-The next honest build target is planning_next_step because it has the largest
-payload-ready no-candidate set. read_inspect is smaller but cleaner for a
-strict deterministic verifier.
-```
-
-Claim boundary:
-
-```text
-Readiness is not savings. A route-gap family contributes to CPU Routability
-only after a real payload builder emits active_fringe/slots, deterministic
-verification attaches output/tool/artifact evidence, shadow accepts are
-verified, and false_accepts remain zero.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: route-gap-payload-readiness-v1
-packet:
-  docs/structural_gates/route-gap-payload-readiness-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/route-gap-payload-readiness-v1.nanda.json
-
-Scope:
-  The packet checks that route-gap payload readiness is measured from
-  request-side signals while local accepts and market claims stay disabled.
-
-  NANDA found no role conflicts, but VETOs the packet because the exact
-  candidate triads are weak under composite-mode support. Treat this as
-  proof-shape debt, not as runtime failure and not as structural PASS.
-```
-
-## 2026-07-03 - Executor Integration: CPU Operator Catalog V1
-
-Verdict:
-
-```text
-CPU_OPERATOR_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-cpu-operator-catalog-v1
-
-Updated:
-  crates/nando-cli/src/role_binding_runtime_cmd.rs
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The new command merges:
-  feedback-loop route stages
-  route-gap no-candidate families
-
-into one machine-readable CPU operator worklist. It ranks existing routed
-profiles and no-candidate route families by candidate volume, scoreable payload
-readiness, verification-hook readiness, verified CPU accepts, false accepts,
-and route readiness.
-```
-
-Catalog artifact:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.report.json
-
-total_llm_calls: 1000
-exact_cache_hits: 53
-existing_operator_candidate_calls: 408
-no_candidate_calls: 592
-route_gap_payload_ready_events: 54
-current_verified_cpu_accepts: 8
-target_verified_cpu_accepts: 800
-verified_gap_to_80_calls: 792
-market_claim_allowed: false
-```
-
-Top current routed profiles:
-
-```text
-role_binding_conditional_branch_seed0:
-  candidates: 150
-  scoreable: 55
-  hook_ready: 40
-  verified_cpu: 2
-
-role_binding_agent_control_seed0:
-  candidates: 143
-  scoreable: 3
-  hook_ready: 3
-  verified_cpu: 3
-
-role_binding_mixed_map_seed0:
-  candidates: 37
-  scoreable: 14
-  hook_ready: 13
-  verified_cpu: 2
-
-role_binding_edit_marker_length_seed0:
-  candidates: 78
-  scoreable: 10
-  hook_ready: 9
-  verified_cpu: 1
-```
-
-Top no-candidate families:
-
-```text
-answer_or_explain:
-  candidates: 215
-  readiness: low_needs_knowledge_evidence
-  builder: question_shape_payload_builder_v1
-  verifier: grounded_answer_evidence_verifier_v1
-
-project_context_dialogue:
-  candidates: 211
-  readiness: low_stateful_dialogue_candidate
-  builder: active_project_state_payload_builder_v1
-  verifier: workspace_artifact_or_goal_state_verifier_v1
-
-planning_next_step:
-  candidates: 54
-  payload_ready: 19
-  readiness: medium_state_transition_candidate
-  builder: goal_state_transition_payload_builder_v1
-  verifier: plan_step_artifact_progress_verifier_v1
-
-read_inspect:
-  candidates: 27
-  payload_ready: 12
-  readiness: medium_read_only_tool_candidate
-  builder: read_inspect_request_payload_builder_v1
-  verifier: read_only_path_and_excerpt_verifier_v1
-```
-
-Interpretation:
-
-```text
-The high-volume no-candidate zone is real, but answer_or_explain and
-project_context_dialogue cannot become CPU accepts without grounded evidence.
-The next honest route expansion should target a deterministic medium-readiness
-family, likely planning_next_step or read_inspect, or improve safe admission on
-existing conditional/agent-control profiles.
-```
-
-Claim boundary:
-
-```text
-The catalog writes no raw prompt/response text, enables no local accepts, and
-does not change verified CPU routability. It is an operator worklist, not a
-savings claim.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: cpu-operator-catalog-v1
-packet:
-  docs/structural_gates/cpu-operator-catalog-v1.md
-report:
-  target/nando-wave/real-traffic-shadow/cpu-operator-catalog-v1.nanda.json
-
-Scope:
-  The packet checks that the CPU operator catalog merges existing routed
-  profiles with route-gap no-candidate families while keeping local accepts and
-  market claims disabled.
-
-  NANDA found no role conflicts after the source/report/output roles were
-  split, but still VETOs the packet because most exact catalog triads are weak
-  under composite-mode support. Treat this as proof-shape debt, not as a
-  runtime safety failure and not as a structural PASS.
-```
-
-## 2026-07-03 - Executor Integration: Feedback Loop CLI Audit
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-CLI_INTEGRATION_AUDIT_PASS
-```
-
-What changed:
-
-```text
-Updated:
-  crates/nando-cli/src/main.rs
-  crates/nando-cli/src/help.rs
-
-The feedback-loop command was already implemented and wired:
-  feedback_route_stage(...)
-  feedback_route_next_action(...)
-  run_role_binding_real_traffic_feedback_loop_v1(...)
-  main.rs dispatch
-  help.rs command listing
-
-The stale CLI usage text made this look incomplete because it showed only the
-base 4 reports. The usage/help now states that conditional, agent-control, and
-mixed route reports are auto-loaded from default artifact paths when present.
-```
-
-Current feedback-loop artifact:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json
-
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 408
-scoreable_candidate_calls: 82
-verification_hook_ready_events: 65
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli: 8
-verified_gap_to_80_calls: 792
-false_accepts: 0
-```
-
-Route ladder:
-
-```text
-conditional:
-  candidates: 150
-  scoreable: 55
-  hook_ready: 40
-  verified_cpu: 2
-
-agent_control:
-  candidates: 143
-  scoreable: 3
-  hook_ready: 3
-  verified_cpu: 3
-
-edit:
-  candidates: 78
-  scoreable: 10
-  hook_ready: 9
-  verified_cpu: 1
-
-mixed:
-  candidates: 37
-  scoreable: 14
-  hook_ready: 13
-  verified_cpu: 2
-```
-
-Claim boundary:
-
-```text
-No new accepts were created by this audit. CPU Routability 80 remains open:
-8/1000 verified CPU accepts, 792 verified accepts short of the target.
-The next real engineering work is still route expansion / verifier evidence,
-not threshold relaxation.
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: feedback-loop-cli-audit-v1
-packet:
-  docs/structural_gates/feedback-loop-cli-audit-v1.md
-
-Scope:
-  The packet checks that the feedback-loop CLI command is wired, route-specific
-  reports are auto-loaded from default artifact paths, and CPU Routability 80 is
-  still not achieved.
-
-  NANDA VETOs the current packet because exact numeric candidate triads remain
-  weak under composite-mode support. Treat this as proof-shape debt, not as a
-  runtime safety failure and not as a structural PASS.
-```
-
-## 2026-07-03 - Executor Integration: Mixed Evidence Index Hardening
-
-Verdict:
-
-```text
-MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Updated:
-  build_codex_session_output_evidence_index
-
-The Codex session evidence index now has a conservative fallback for older or
-alternate session JSONL rows: when a pending user_message is followed by
-task_complete.last_agent_message, the index may attach that final answer as
-output evidence, but only if the pending request fingerprint is in the wanted
-real-traffic set.
-
-It still writes no raw prompt/response text, does not enable local accepts, and
-does not use target/proof labels for runtime.
-```
-
-Mixed route finding:
-
-```text
-calibration:
-  hook_ready_rows: 13
-  label_true_rows: 10
-  label_false_rows: 3
-  best_safe_true_accepts: 4
-  best_energy_margin_threshold: 393216
-
-promotion:
-  selected_policy_name: market_safe_energy_margin_threshold
-  selected_policy_threshold: 466944
-  policy_accept_rows: 2
-  policy_accept_verified_true_rows: 2
-  policy_accept_verified_false_rows: 0
-  policy_accept_unverified_rows: 0
-```
-
-Interpretation:
-
-```text
-The lower 393216 threshold is not promoted because it touches one scoreable
-mixed row without explicit output evidence. That row remains unverified after
-the session-index fallback, so the firewall correctly keeps the promoted
-threshold at 466944.
-
-This preserves the claim boundary: no fake accept, no inferred response, no
-market savings from calibration labels.
-```
-
-Latest mixed shadow/audit:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.shadow-report.json
-
-audit report:
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.verification-hook-audit.report.json
-
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 14
-nando_shadow_accepts: 2
-verified_safe_accepts: 2
-false_accepts: 0
-unverified_shadow_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 2
-p99_shadow_score_latency_ns: 271120
-verification_hook_ready_events: 13
-verified_cpu_accept_eligible_events: 2
-route-local market_claim_allowed: true
-```
-
-Feedback-loop status after rerun:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json
-
-total_llm_calls: 1000
-operator_candidate_calls: 408
-scoreable_candidate_calls: 82
-verification_hook_ready_events: 65
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli: 8
-verified_gap_to_80_calls: 792
-overall market_claim_allowed: false
-```
-
-Checks:
-
-```text
-cargo fmt --check
-cargo check -p nando-cli
-cargo clippy -p nando-cli -- -D warnings
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: mixed-evidence-index-hardening-v1
-packet:
-  docs/structural_gates/mixed-evidence-index-hardening-v1.md
-
-Scope:
-  The packet checks mixed evidence-index hardening, the mixed route-local
-  promoted threshold, and the still-red overall CPU Routability 80 boundary.
-
-  NANDA VETOs the current packet because the exact numeric candidate triads are
-  weak under composite-mode support. Treat this as proof-shape debt, not as a
-  runtime safety failure and not as a structural PASS.
-```
-
-Claim boundary:
-
-```text
-This hardens the real-traffic evidence join, but it does not improve total CPU
-routability. The goal remains open at 8/1000 verified CPU accepts. The next
-real route work must add deterministic output/tool-call evidence for currently
-unverified scoreable rows or build new request-side payload/verifier pairs for
-high-frequency route-gap families.
-```
-
-## 2026-07-03 - Executor Integration: Conditional Safe Policy Promotion
-
-Verdict:
-
-```text
-CONDITIONAL_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-conditional-safe-policy-promote-v1
-
-Updated:
-  role-binding-real-traffic-feedback-loop-v1
-
-The new command builds a separate conditional safe-policy registry and trace.
-It does not promote the broad conditional route. Rows rejected by the
-request-side admission gate have nando_shadow_request removed, so broad
-conditional false rows stay fallback-only.
-```
-
-Selected admission/readout:
-
-```text
-request-side policy:
-  conditional_gate_terms_prompt_len_ge_300
-
-runtime acceptance policy:
-  energy_threshold_only
-
-selected positive threshold:
-  8192
-
-selection rule:
-  offline evidence may choose the threshold;
-  serving sees only request-side prompt features plus score >= threshold.
-```
-
-Promotion artifact:
-
-```text
-registry:
-  target/nando-wave/real-traffic-shadow/profile-registry-conditional-safe-policy-v1.json
-
-trace:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.report.json
-
-conditional_candidate_rows: 79
-scoreable_candidate_calls: 79
-request_side_policy_accept_rows: 55
-runtime_policy_accept_rows: 2
-runtime_policy_verified_true_rows: 2
-runtime_policy_verified_false_rows: 0
-runtime_policy_unverified_rows: 0
-runtime_acceptance_mismatches: 0
-raw_prompt_text_written: false
-raw_response_text_written: false
-target_labels_used_for_runtime: false
-proof_labels_used_for_runtime: false
-```
-
-Shadow/audit result:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.shadow-report.json
-
-audit report:
-  target/nando-wave/real-traffic-shadow/conditional-safe-policy-v1.verification-hook-audit.report.json
-
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 55
-nando_shadow_accepts: 2
-verified_safe_accepts: 2
-unverified_shadow_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 2
-p99_shadow_score_latency_ns: 282856
-verification_hook_ready_events: 40
-verified_cpu_accept_eligible_events: 2
-route-local market_claim_allowed: true
-```
-
-Feedback-loop after conditional safe-policy audit:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-conditional-agent-control-v1.report.json
-
-total_llm_calls: 1000
-operator_candidate_calls: 408
-scoreable_candidate_calls: 82
-verification_hook_ready_events: 65
-verified_cpu_accept_eligible_events: 8
-verified_cpu_routability_milli: 8
-verified_gap_to_80_calls: 792
-overall market_claim_allowed: false
-
-conditional route:
-  stage: verified_cpu_accept_eligible
-  candidate_events: 150
-  scoreable_payload_events: 55
-  verification_hook_ready_events: 40
-  verified_cpu_accept_eligible_events: 2
-  false_accepts: 0
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: VETO
-task_id: conditional-safe-policy-v1
-packet:
-  docs/structural_gates/conditional-safe-policy-v1.md
-
-Scope:
-  The packet checks the route-local safety core for the conditional safe policy:
-  request-side admitted gate rows, positive threshold 8192, 2 verified true
-  accepts, zero false rows, zero unverified rows, zero runtime acceptance
-  mismatches, and zero shadow false/unverified accepts.
-
-  NANDA reports no conflicts, no evidence gaps, no foreign_pull, and
-  route_coherence=1.0, but VETOs the packet because most exact-match numeric
-  candidate triads are weak under composite-mode support. Treat this as a gate
-  formatting/proof-shape debt, not as a route-local runtime safety PASS.
-```
-
-Claim boundary:
-
-```text
-This is a tiny conditional route-local savings proof, not CPU Routability 80.
-The broad conditional route is still unsafe by calibration: 17 verifier-true
-rows and 46 verifier-false rows under the broad hook-ready set. The overall
-feedback loop remains REVIEW because verified CPU routability is 8/1000, not
-800/1000.
-
-Do not use route-local market_claim_allowed=true as a broad market claim. It
-only applies to the 2 admitted conditional rows in this non-synthetic trace.
-```
-
-## 2026-07-03 - Executor Integration: Agent-Control Hard-Stop Safe Policy Promotion
-
-Verdict:
-
-```text
-AGENT_CONTROL_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-agent-control-safe-policy-promote-v1
-
-Updated:
-  role-binding-real-traffic-agent-control-admission-calibration-v1
-  role-binding-real-traffic-feedback-loop-v1
-
-The new command builds a separate request-side-admitted hard-stop trace. It
-does not promote the broad agent-control .nwrb profile. Rows rejected by the
-selected request-side policy have nando_shadow_request removed, so the shadow
-runtime cannot accidentally accept the broad unsafe route.
-```
-
-Selected admission policy:
-
-```text
-policy:
-  hard_stop_exclamation_caps_or_one_token
-
-definition:
-  intent_stop
-  has_ostanov_word
-  has_exclamation
-  tokens <= 3
-  no work/action words
-  and (tokens <= 1 or all_capsish)
-
-calibration report:
-  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1.report.json
-
-hook_ready_rows: 124
-rows_with_prompt_features: 124
-label_true_rows: 12
-label_false_rows: 112
-policy_accepts: 3
-policy_true_accepts: 3
-policy_false_accepts: 0
-missed_true: 9
-robust_safe: true
-```
-
-Promotion artifact:
-
-```text
-trace:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.report.json
-
-policy_accept_rows: 3
-policy_accept_verified_true_rows: 3
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-runtime_acceptance_mismatches: 0
-profile_acceptance_policy_changed: false
-broad_agent_control_profile_promoted: false
-raw_prompt_text_written: false
-raw_response_text_written: false
-target_labels_used_for_runtime: false
-proof_labels_used_for_runtime: false
-```
-
-Shadow/audit result:
-
-```text
-shadow report:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.shadow-report.json
-
-audit report:
-  target/nando-wave/real-traffic-shadow/agent-control-safe-policy-v1.verification-hook-audit.report.json
-
-total_llm_calls: 1000
-exact_cache_hits: 53
-operator_candidate_calls: 3
-nando_shadow_accepts: 3
-verified_safe_accepts: 3
-unverified_shadow_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 3
-p99_shadow_score_latency_ns: 25829
-verified_cpu_accept_eligible_events: 3
-route-local market_claim_allowed: true
-```
-
-Feedback-loop after safe-policy audit:
-
-```text
-report:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-agent-control-v1.report.json
-
-total_llm_calls: 1000
-operator_candidate_calls: 408
-scoreable_candidate_calls: 106
-verification_hook_ready_events: 88
-verified_cpu_accept_eligible_events: 6
-verified_cpu_routability_milli: 6
-verified_gap_to_80_calls: 794
-overall market_claim_allowed: false
-
-agent-control route:
-  stage: verified_cpu_accept_eligible
-  payload_ready_events: 143
-  scoreable_payload_events: 3
-  verification_hook_ready_events: 3
-  verified_cpu_accept_eligible_events: 3
-  false_accepts: 0
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: PASS
-task_id: agent-control-hard-stop-safe-policy-v1
-packet:
-  docs/structural_gates/agent-control-hard-stop-safe-policy-v1.md
-
-Scope:
-  The gate checks the route-local safety core for the hard-stop safe policy:
-  selected policy, 3 verified true rows, zero false rows, zero unverified rows,
-  zero runtime acceptance mismatches, and zero shadow false/unverified accepts.
-  The wider CPU Routability 80 claim remains outside this PASS and stays red.
-```
-
-Claim boundary:
-
-```text
-This is a tiny hard-stop route-local savings proof, not CPU Routability 80.
-The broad agent-control route is still unsafe unless split/admission proves
-zero false accepts. The overall feedback loop remains REVIEW because verified
-CPU routability is 6/1000, not 800/1000.
-
-Do not use the route-local market_claim_allowed=true as a broad market claim.
-It only applies to the 3 admitted hard-stop rows in this non-synthetic trace.
-```
-
-## 2026-07-03 - Executor Integration: Agent-Control Admission Calibration
-
-Verdict:
-
-```text
-AGENT_CONTROL_ADMISSION_CALIBRATION_V1_REVIEW_ROBUST_POLICY_CANDIDATE_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-agent-control-admission-calibration-v1
-
-The command searches request-side agent-control admission policies against the
-evidence-enriched real Codex trace. It reads request text at analysis time, but
-writes only fingerprints, feature booleans, policy counts, and labels. It
-writes no raw prompt text and no raw response text. It enables no local accepts.
-```
-
-Calibration result:
-
-```text
-input_trace:
-  target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/agent-control-admission-calibration-v1.report.json
-
-hook_ready_rows: 124
-rows_with_prompt_features: 124
-label_true_rows: 12
-label_false_rows: 112
-minimum_true_support: 3
-robust_safe_policy_found: true
-best_robust_true_accepts: 3
-```
-
-Safe candidate:
-
-```text
-hard_stop_exclamation_len_le_3:
-  accepts: 3
-  true_accepts: 3
-  false_accepts: 0
-  missed_true: 9
-  robust_safe: true
-
-hard_stop_exclamation_len_le_4:
-  accepts: 3
-  true_accepts: 3
-  false_accepts: 0
-  missed_true: 9
-  robust_safe: true
-```
-
-Feedback-loop after calibration:
-
-```text
-agent-control route:
-  local_accept_calibration_ran: true
-  local_accept_safe_policy_found: true
-  local_accept_best_safe_true_accepts: 3
-  stage: false_accepts_block_local_policy
-  false_accepts: 112
-  verified_cpu_accept_eligible_events: 0
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: PASS
-task_id: agent-control-admission-calibration-v1
-packet:
-  target/nando-wave/structural-gates/agent-control-admission-calibration-v1.md
-
-Scope:
-  The gate checks that the hard-stop safe candidate stays separate from the
-  still-blocked broad agent-control profile.
-```
-
-Claim boundary:
-
-```text
-This is not a market savings result.
-The calibration found a tiny request-side safe admission candidate for hard
-stop/exclamation rows, but the broad agent-control profile is still unsafe and
-must not be promoted.
-
-The next step is a separate request-side-admitted shadow trace for the hard-stop
-candidate, with provider cost, false_accepts=0, unverified_shadow_accepts=0,
-and NANDA claim-boundary gate. Do not count the 3 rows until that promotion
-trace and audit pass.
-```
-
-## 2026-07-03 - Executor Integration: Agent-Control Output Evidence + False-Accept Blocker
-
-Verdicts:
-
-```text
-AGENT_CONTROL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-agent-control-output-evidence-v1
-
-Updated:
-  role-binding-real-traffic-feedback-loop-v1
-
-The new evidence command joins agent-control dry-run trace rows with local
-Codex session final-answer fingerprints and applies a deterministic
-control-plane verifier. It writes no raw prompt text and no raw response text.
-
-The feedback loop now reads the agent-control dry-run report and the
-agent-control verification audit, so the control route participates in the
-main CPU Routability ladder instead of living as a side report.
-```
-
-Agent-control output-evidence join:
-
-```text
-input_trace:
-  target/nando-wave/real-traffic-shadow/agent-control-payload-dry-run-v1.trace.jsonl
-
-output_trace:
-  target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.trace.jsonl
-
-report:
-  target/nando-wave/real-traffic-shadow/agent-control-output-evidence-v1.report.json
-
-operator_candidate_calls: 143
-scoreable_candidate_calls: 143
-output_evidence_matched_events: 124
-no_session_output_match_events: 19
-deterministic_verification_events: 124
-verified_true_events: 12
-verified_false_events: 112
-session_ids_requested: 9
-session_files_scanned: 9
-codex_turns_indexed: 395
-raw_prompt_text_written: false
-raw_response_text_written: false
-```
-
-Verifier status breakdown:
-
-```text
-verified_stop_ack_without_work_claim: 11
-verified_short_ack_without_work_claim: 1
-rejected_short_ack_response_too_long: 47
-rejected_continue_requires_live_task_execution_or_tool_state_verifier: 31
-rejected_stop_ack_absent: 19
-rejected_stop_response_claims_work: 14
-rejected_short_ack_absent: 1
-missing matching Codex final answer: 19
-```
-
-Shadow over the evidence-enriched trace:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 53
-nando_shadow_accepts: 143
-verified_safe_accepts: 12
-unverified_shadow_accepts: 19
-false_accepts: 112
-incremental_reduction_vs_exact_cache_milli: 7
-p99_shadow_score_latency_ns: 4052
-```
-
-Audit:
-
-```text
-scoreable_candidate_calls: 143
-verification_hook_ready_events: 124
-verified_cpu_accept_eligible_events: 0
-provider_cost_events: 0
-candidates_missing_provider_cost: 143
-shadow_false_accepts: 112
-market_claim_allowed: false
-```
-
-Feedback-loop with the agent-control overlay:
-
-```text
-operator_candidate_calls: 408 / 1000
-scoreable_candidate_calls: 246 / 1000
-verification_hook_ready_events: 209 / 1000
-verified_cpu_accept_eligible_events: 3 / 1000
-verified_cpu_routability_milli: 3
-verified_gap_to_80_calls: 797
-
-agent-control route:
-  candidate_events: 143
-  scoreable_payload_events: 143
-  verification_hook_ready_events: 124
-  verified_cpu_accept_eligible_events: 0
-  false_accepts: 112
-  stage: false_accepts_block_local_policy
-```
-
-Structural gate:
-
-```text
-nanda_structural_gate: PASS
-task_id: agent-control-output-evidence-v1
-packet:
-  target/nando-wave/structural-gates/agent-control-output-evidence-v1.md
-
-Scope:
-  The gate checks the coherent blocker route:
-    shadow_accepts_143
-    false_accepts_112
-    verified_cpu_accept_eligible_zero
-    false_accepts_block_local_policy
-    market_claim_allowed_false
-    must_not_promote
-
-It does not upgrade the market claim. It only verifies that the blocker and
-claim-boundary structure is not role-swapped.
-```
-
-Claim boundary:
-
-```text
-This is not a market savings result.
-The agent-control runtime path is scoreable and has output-evidence hooks, but
-the current profile is too broad: it local-accepts continue/ack/stop rows that
-the deterministic verifier rejects.
-
-Do not promote this profile.
-Do not count the 12 verified_true rows as product savings.
-Provider cost is absent, unverified accepts remain, and false_accepts are high.
-```
-
-Diagnostic read:
-
-```text
-The important finding is negative:
-  agent-control has real routable pressure, but a one-edge shared control
-  profile is not a safe local-accept policy.
-
-A quick request-side admission probe found no simple zero-false subset:
-  stop_tokens_le_2: 31 accepted -> 10 true / 14 false / 7 missing
-  stop_exact: 12 accepted -> 2 true / 10 false / 0 missing
-  short_ack_tokens_le_1: 28 accepted -> 0 true / 26 false / 2 missing
-
-So the next engineering route is not threshold tuning. It is one of:
-  split stop / ack / continue into separate profile routes;
-  attach real agent-state or tool-state evidence;
-  add a no-mutating-tool-after-stop verifier;
-  keep continue as fallback until active-goal state can prove the next step.
-```
-
-## 2026-07-03 - Executor Integration: Agent-Control Profile + Payload Dry-Run
-
-Verdicts:
-
-```text
-AGENT_CONTROL_PROFILE_V1_REVIEW_PROFILE_READY
-AGENT_CONTROL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-agent-control-profile-v1
-  role-binding-real-traffic-agent-control-payload-dry-run-v1
-
-The profile command builds a serving-only `.nwrb` control-plane overlay profile
-for short agent-control/dialogue-state intents. The dry-run command builds
-scoreable `active_fringe` + slot payloads from request text only. It writes no
-raw prompt text, uses no response text, no target labels, no proof labels, and
-does not enable verified local accepts.
-```
-
-Profile artifact:
-
-```text
-profile_id: role_binding_agent_control_seed0
-package: target/nando-wave/real-traffic-shadow/agent-control-seed0.nwrb
-registry: target/nando-wave/real-traffic-shadow/profile-registry-agent-control-v1.json
-edge_count: 1
-sample_margin: 65536
-market_claim_allowed: false
-```
-
-Fresh route funnel over the same 1000 non-synthetic Codex calls with the
-agent-control overlay:
-
-```text
-route_candidates: 408 / 1000
-no_candidate_events: 592 / 1000
-
-role_binding_agent_control_seed0: 143 candidates
-role_binding_conditional_branch_seed0: 150 candidates
-role_binding_edit_marker_length_seed0: 78 candidates
-role_binding_mixed_map_seed0: 37 candidates
-```
-
-Remaining no-candidate head after the overlay:
-
-```text
-answer_or_explain: 215
-project_context_dialogue: 211
-planning_next_step: 54
-read_inspect: 27
-retrieval_lookup: 25
-```
-
-Agent-control payload dry-run:
-
-```text
-agent_control_candidate_events: 143
-payload_built_events: 143
-scoreable_payload_events: 143
-
-intent_counts:
-  stop: 54
-  short_ack: 55
-  continue: 34
-
-active_fringe_centers_total: 286
-slots_total: 143
-positive_impulses_total: 143
-negative_impulses_total: 143
-raw_text_written: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Shadow + audit:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 53
-nando_shadow_accepts: 143
-verified_safe_accepts: 0
-unverified_shadow_accepts: 143
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p99_shadow_score_latency_ns: 10145
-
-scoreable_candidate_calls: 143
-verification_hook_ready_events: 0
-candidates_missing_output_evidence: 143
-candidates_missing_explicit_verification: 143
-provider_cost_events: 0
-verified_cpu_accept_eligible_events: 0
-```
-
-Claim boundary:
-
-```text
-This is route/payload pressure, not verified savings.
-The 143 local accepts are deliberately unverified shadow accepts.
-No market claim is allowed until a deterministic control verifier attaches
-actual agent decision/tool/output evidence and the shadow/audit path reports:
-  verified_safe_accepts > 0
-  unverified_shadow_accepts = 0 for accepted rows
-  false_accepts = 0
-  incremental_reduction_vs_exact_cache_milli > 0
-```
-
-Structural gate:
-
-```text
-NANDA agent-control claim-boundary gate: PASS
-checked:
-  profile ready is review-only
-  route candidate zone is 408/1000
-  agent-control route candidates are 143/1000
-  payload shadow accepts are unverified_shadow_accepts, not verified savings
-  verified_safe_accepts: 0
-  false_accepts: 0
-  incremental_reduction_vs_exact_cache_milli: 0
-  market_claim_allowed: false
-
-Note:
-  the gate packet is intentionally narrow. It proves the claim boundary is
-  structurally coherent; it does not prove verified savings.
-```
-
-Diagnostic read:
-
-```text
-The route candidate zone moved from 288/1000 to 408/1000 real Codex calls.
-That is useful coverage growth, but verified CPU routability did not increase
-yet because the control route has no output/tool evidence verifier.
-
-The next real engineering debt is not another classifier tweak. It is a
-deterministic agent-control verifier that can prove stop/continue/ack outcomes
-from actual agent state, tool calls, or command execution traces without
-reading target/proof labels or inventing response evidence.
-```
-
-## 2026-07-03 - Executor Integration: Real-Traffic Route-Gap Catalog
-
-Verdict:
-
-```text
-ROUTE_GAP_CATALOG_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-route-gap-catalog-v1
-
-The command reads real local Codex prompt history and the serving profile
-registry, separates already-routed calls from no-candidate calls, and writes a
-privacy-safe operator-family backlog. It writes no raw prompt text and enables
-no local accepts.
-
-Report:
-  target/nando-wave/real-traffic-shadow/route-gap-catalog-v1.report.json
-```
-
-Fresh route-gap catalog over the same 1000 non-synthetic Codex calls:
-
-```text
-sampled_llm_calls: 1000
-existing_route_candidate_events: 288
-existing_route_coverage_milli: 288
-no_candidate_events: 712
-no_candidate_coverage_milli: 712
-
-top three no-candidate families:
-  answer_or_explain: 215
-  project_context_dialogue: 211
-  planning_next_step: 82
-
-top_three_no_candidate_events: 508
-top_three_no_candidate_coverage_milli: 508
-```
-
-Full no-candidate family rank:
-
-```text
-answer_or_explain: 215
-project_context_dialogue: 211
-planning_next_step: 82
-agent_continue_execute: 36
-agent_control_stop: 36
-read_inspect: 27
-retrieval_lookup: 25
-short_decision_ack: 19
-serving_ops: 13
-uncatalogued: 13
-metrics_report_readout: 10
-git_control: 8
-research_literature: 7
-dataset_corpus: 6
-style_brevity: 3
-social_affect: 1
-```
-
-Claim boundary:
-
-```text
-This is not savings and not a market claim.
-raw_text_written: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Structural gate:
-
-```text
-NANDA route-gap catalog claim-boundary gate: PASS
-checked:
-  existing_route_candidate_events: 288
-  no_candidate_events: 712
-  top_three_no_candidate_events: 508
-  raw_text_written: false
-  local_accepts_enabled: false
-  market_claim_allowed: false
-  conditional safe_policy_found: false
-
-Note:
-  earlier broad packets VETOed because they mixed interpretation with source
-  counts. The accepted gate is intentionally narrow: counts and claim-boundary
-  only.
-```
-
-Diagnostic read:
-
-```text
-The current three runtime routes cover only 288/1000 real Codex calls, so CPU
-Routability 80 cannot be reached by tuning edit/conditional/mixed alone.
-
-The largest gap is not an edit route. It is conversational/project-state work:
-answer_or_explain + project_context_dialogue + planning_next_step account for
-508/1000 calls. Those families need separate request-side payload builders and
-deterministic verifiers, not forced promotion through conditional/mixed.
-
-Conditional remains unsafe to promote: its calibration still has no safe
-readout policy. Route-gap catalog is the correct next map for deciding which
-operator profile to build next.
-```
-
-## 2026-07-03 - Executor Integration: Route Priority + Edit Safe-Policy Promotion
-
-Verdicts:
-
-```text
-CODEX_HISTORY_ROUTE_CANDIDATES_V1_REVIEW
-EDIT_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Route priority now treats explicit validation/gate/fallback/pass requests as
-conditional unless there is a direct edit command such as fix/patch/commit.
-
-Added:
-  role-binding-real-traffic-edit-safe-policy-promote-v1
-
-The command writes:
-  target/nando-wave/real-traffic-shadow/profile-registry-edit-safe-policy-v1.json
-  target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/edit-safe-policy-v1.report.json
-```
-
-Fresh route funnel over the same 1000 non-synthetic Codex calls:
-
-```text
-route_candidates: 288 / 1000
-exact_cache_hits: 53 / 1000
-
-role_binding_conditional_branch_seed0: 166 candidates
-role_binding_edit_marker_length_seed0: 83 candidates
-role_binding_mixed_map_seed0: 39 candidates
-
-conditional scoreable payloads: 79
-conditional verification hooks: 63
-conditional safe local-accept policy: false
-
-edit scoreable payloads: 10
-edit verification hooks: 9
-edit safe local-accept policy: true
-
-mixed scoreable payloads: 14
-mixed verification hooks: 13
-mixed safe local-accept policy: true
-```
-
-Edit promoted safe policy:
-
-```text
-selected_policy_name: market_safe_energy_margin_threshold
-selected_policy_source: evidence_trace_market_safe_threshold
-selected_acceptance_policy: energy_threshold_only
-selected_policy_threshold: 9472
-policy_accept_rows: 1
-policy_accept_verified_true_rows: 1
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-runtime_acceptance_mismatches: 0
-```
-
-Edit shadow + audit:
-
-```text
-shadow_verdict: REAL_TRAFFIC_SHADOW_V1_PASS
-shadow_nando_accepts: 1
-shadow_verified_safe_accepts: 1
-shadow_unverified_shadow_accepts: 0
-shadow_false_accepts: 0
-shadow_incremental_savings_over_exact_cache: 1
-shadow_incremental_reduction_vs_exact_cache_milli: 1
-shadow_p99_score_latency_ns: 439824
-
-audit_verified_cpu_accept_eligible_events: 1
-audit_market_claim_allowed: true
-```
-
-Updated feedback-loop:
-
-```text
-scoreable_candidate_calls: 103
-verification_hook_ready_events: 85
-verified_cpu_accept_eligible_events: 3
-verified_cpu_routability_milli: 3
-verified_gap_to_80_calls: 797
-
-route stages:
-  conditional: local_accept_calibration_failed
-  edit: verified_cpu_accept_eligible
-  mixed: verified_cpu_accept_eligible
-```
-
-Structural gate:
-
-```text
-NANDA route-priority gate: PASS
-checked route:
-  direct edit commands keep edit priority
-  validation/gate/pass/fallback/margin requests route before ambient code surfaces
-  evidence uses line anchors in role_binding_runtime_cmd.rs
-
-Edit safe-policy savings counts are verified by CLI/JSON shadow/audit reports,
-not by NANDA numeric count triads.
-```
-
-Diagnostic read:
-
-```text
-This is a real but small verified-routability increase: 2 -> 3 verified CPU
-accepts per 1000 non-synthetic Codex calls. The claim boundary remains tight:
-false_accepts=0 and unverified_shadow_accepts=0 on the promoted edit and mixed
-traces.
-
-The main next lever is conditional. Route priority fixed the funnel and exposed
-79 scoreable conditional payloads with 63 verification hooks and 17 true labels,
-but the current conditional payload/readout geometry still cannot separate true
-from false rows without false accepts.
-```
-
-## 2026-07-03 - Executor Integration: Mixed Safe-Policy Promotion Shadow
-
-Verdicts:
-
-```text
-MIXED_SAFE_POLICY_PROMOTE_V1_REVIEW_PROMOTED_TRACE_READY
-REAL_TRAFFIC_SHADOW_V1_PASS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-mixed-safe-policy-promote-v1
-
-Also added profile acceptance_policy:
-  strict_ordered_energy_threshold  # default / backwards compatible
-  energy_threshold_only            # used only in promoted mixed safe-policy registry
-
-The command writes:
-  target/nando-wave/real-traffic-shadow/profile-registry-mixed-safe-policy-v1.json
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/mixed-safe-policy-v1.report.json
-```
-
-Selected safe policy:
-
-```text
-calibration_policy_name: best_energy_margin_threshold
-calibration_policy_threshold: 393216
-selected_policy_name: market_safe_energy_margin_threshold
-selected_policy_source: evidence_trace_market_safe_threshold
-selected_acceptance_policy: energy_threshold_only
-selected_policy_threshold: 466944
-promoted_profile_ids:
-  role_binding_mixed_map_seed0
-provider_cost_microusd: 100
-runtime_acceptance_mismatches: 0
-```
-
-Promoted trace result:
-
-```text
-policy_accept_rows: 2
-policy_accept_verified_true_rows: 2
-policy_accept_verified_false_rows: 0
-policy_accept_unverified_rows: 0
-```
-
-Shadow + audit over promoted registry/trace:
-
-```text
-shadow_verdict: REAL_TRAFFIC_SHADOW_V1_PASS
-shadow_nando_accepts: 2
-shadow_verified_safe_accepts: 2
-shadow_unverified_shadow_accepts: 0
-shadow_false_accepts: 0
-shadow_incremental_savings_over_exact_cache: 2
-shadow_incremental_reduction_vs_exact_cache_milli: 2
-shadow_estimated_cost_saved_microusd: 200
-shadow_p99_score_latency_ns: 270771
-
-audit_verified_cpu_accept_eligible_events: 2
-audit_provider_cost_events: 14
-audit_candidates_missing_provider_cost: 0
-audit_market_claim_allowed: true
-```
-
-Updated feedback-loop:
-
-```text
-scoreable_candidate_calls: 61
-verification_hook_ready_events: 34
-verified_cpu_accept_eligible_events: 2
-verified_cpu_routability_milli: 2
-verified_gap_to_80_calls: 798
-
-role_binding_mixed_map_seed0:
-  stage: verified_cpu_accept_eligible
-  verified_cpu_accept_eligible_events: 2
-```
-
-Structural gate:
-
-```text
-NANDA mixed-safe-policy route: PASS
-checked route:
-  promoted shadow verdict / unverified boundary
-  selected threshold
-  runtime branch = energy_margin >= threshold
-  forbidden branch = verifier label at serving time
-
-numeric accept counts are verified by CLI/JSON reports, not by NANDA, because
-the sparse triad checker VETOed raw count triads as weak composite support.
-```
-
-Diagnostic read:
-
-```text
-The old calibration threshold 393216 accepted one unverified row. The promoter
-now recomputes an evidence-trace market-safe threshold and selects 466944, which
-keeps serving score-only while suppressing unverified local accepts.
-
-This is the first non-zero verified CPU savings PASS on non-synthetic Codex
-traffic for the promoted mixed trace: 2 verified local accepts, false_accepts=0,
-unverified_shadow_accepts=0. The overall CPU Routability 80 goal remains red:
-feedback-loop routability is 2 milli and gap_to_80 is 798 calls.
-
-Next debt: grow verified route coverage, starting with edit/conditional safe
-admission or stronger mixed payload/evidence coverage, without relaxing the
-zero false/unverified accept boundary.
-```
-
-## 2026-07-03 - Executor Integration: Mixed Map Payload/Evidence/Calibration
-
-Verdicts:
-
-```text
-MIXED_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
-MIXED_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-MIXED_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-MIXED_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_SAFE_POLICY_CANDIDATE_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-mixed-payload-readiness-v1
-  role-binding-real-traffic-mixed-payload-dry-run-v1
-  role-binding-real-traffic-mixed-output-evidence-v1
-  role-binding-real-traffic-mixed-local-accept-calibration-v1
-
-The mixed commands write:
-  target/nando-wave/real-traffic-shadow/mixed-payload-readiness-v1.report.json
-  target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/mixed-payload-dry-run-v1.report.json
-  target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/mixed-output-evidence-v1.report.json
-  target/nando-wave/real-traffic-shadow/mixed-local-accept-calibration-v1.report.json
-```
-
-Privacy / anti-leak boundary:
-
-```text
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Mixed payload dry-run over the same 1000 real Codex calls:
-
-```text
-mixed_route_candidate_events: 39
-payload_ready_events: 14
-payload_built_events: 14
-scoreable_payload_events: 14
-shadow_nando_accepts: 0
-shadow_false_accepts: 0
-shadow_incremental_reduction_vs_exact_cache_milli: 0
-shadow_p99_score_latency_ns: 241947
-```
-
-Mixed output evidence and calibration:
-
-```text
-output_evidence_matched_events: 13
-deterministic_verification_events: 13
-verified_true_events: 10
-verified_false_events: 3
-
-hook_ready_rows: 13
-scored_rows: 13
-safe_policy_found: true
-best_safe_true_accepts: 4
-```
-
-Updated feedback-loop:
-
-```text
-scoreable_candidate_calls: 61 = 23 edit + 24 conditional + 14 mixed
-verification_hook_ready_events: 51 = 17 edit + 21 conditional + 13 mixed
-verified_cpu_routability_milli: 0
-verified_gap_to_80_calls: 800
-
-role_binding_mixed_map_seed0:
-  candidate_events: 39
-  payload_ready_events: 14
-  payload_built_events: 14
-  scoreable_payload_events: 14
-  verification_hook_ready_events: 13
-  local_accept_calibration_ran: true
-  local_accept_safe_policy_found: true
-  local_accept_best_safe_true_accepts: 4
-  stage: local_accept_calibration_safe_policy_candidate
-```
-
-Diagnostic read:
-
-```text
-The mixed route is no longer payload-builder missing. It now has request-side
-active_fringe/slot construction, response-backed deterministic labels, and a
-safe-policy candidate on the current 13-row hook-ready sample.
-
-This is still not verified CPU savings. Local accepts are not promoted, provider
-cost is absent, shadow accepts are 0, market_claim_allowed is false, and CPU
-Routability 80 remains red.
-```
-
-## 2026-07-03 - Executor Integration: Conditional Output Evidence Hook
-
-Verdicts:
-
-```text
-CONDITIONAL_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-conditional-output-evidence-v1
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl
-  /home/ubu/.codex/sessions
-
-and writes:
-  target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/conditional-output-evidence-v1.report.json
-```
-
-Privacy / anti-leak boundary:
-
-```text
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Conditional output evidence:
-
-```text
-operator_candidate_calls: 24
-scoreable_candidate_calls: 24
-session_ids_requested: 3
-session_files_scanned: 3
-codex_turns_indexed: 21
-output_evidence_matched_events: 21
-no_session_output_match_events: 3
-deterministic_verification_events: 21
-verified_true_events: 6
-verified_false_events: 15
-```
-
-Shadow + audit over the evidence trace:
-
-```text
-shadow_nando_accepts: 0
-shadow_verified_safe_accepts: 0
-shadow_false_accepts: 0
-shadow_incremental_reduction_vs_exact_cache_milli: 0
-shadow_p99_score_latency_ns: 169208
-
-audit_scoreable_candidate_calls: 24
-audit_response_fingerprint_events: 21
-audit_explicit_verified_safe_accept_events: 21
-audit_verification_hook_ready_events: 21
-audit_verified_cpu_accept_eligible_events: 0
-audit_provider_cost_events: 0
-audit_market_claim_allowed: false
-```
-
-Updated feedback-loop stage:
-
-```text
-role_binding_conditional_branch_seed0:
-  candidate_events: 92
-  payload_ready_events: 24
-  payload_built_events: 24
-  scoreable_payload_events: 24
-  verification_hook_ready_events: 21
-  stage: verification_hook_ready_waiting_local_accept
-
-Total verification_hook_ready_events in feedback loop:
-  38 = 17 edit + 21 conditional
-```
-
-Conditional local-accept calibration:
-
-```text
-verdict: CONDITIONAL_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-hook_ready_rows: 21
-scored_rows: 21
-label_true_rows: 6
-label_false_rows: 15
-safe_policy_found: false
-best_safe_true_accepts: 0
-
-energy_only_no_slot_order:
-  accepts: 6
-  true_accepts: 1
-  false_accepts: 5
-
-branch_slot_only_ignore_evidence_slot:
-  accepts: 6
-  true_accepts: 1
-  false_accepts: 5
-```
-
-Diagnostic read:
-
-```text
-The conditional route is no longer missing a verification hook. It now has
-21 real response-backed deterministic verification rows, including 6 true and
-15 false labels for later local-accept calibration.
-
-The first readout calibration did not find a safe policy. Local accepts remain
-disabled, provider cost is absent, shadow accepts are 0, and verified CPU
-accepts remain 0. CPU Routability 80 is still red.
-```
-
-## 2026-07-03 - Executor Integration: Conditional Payload Dry-Run
-
-Verdicts:
-
-```text
-CONDITIONAL_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
-CONDITIONAL_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added:
-  role-binding-real-traffic-conditional-payload-readiness-v1
-  role-binding-real-traffic-conditional-payload-dry-run-v1
-
-The dry-run command writes:
-  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.report.json
-
-Shadow/audit reports:
-  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.shadow-report.json
-  target/nando-wave/real-traffic-shadow/conditional-payload-dry-run-v1.verification-hook-audit.report.json
-```
-
-Privacy / anti-leak boundary:
-
-```text
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Conditional readiness over the same 1000 real Codex calls:
-
-```text
-candidate_events: 92
-payload_ready_events: 24
-payload_ready_rate_milli: 260
-missing_condition_signal: 5
-missing_branch_signal: 35
-missing_evidence_signal: 58
-missing_branch_tokens: 2
-```
-
-Conditional dry-run result:
-
-```text
-conditional_route_candidate_events: 92
-payload_ready_events: 24
-payload_built_events: 24
-scoreable_payload_events: 24
-active_fringe_centers_total: 2287
-slots_total: 36
-positive_impulses_total: 709
-negative_impulses_total: 752
-```
-
-Shadow + audit:
-
-```text
-shadow_operator_candidate_calls: 24
-shadow_nando_accepts: 0
-shadow_verified_safe_accepts: 0
-shadow_false_accepts: 0
-shadow_incremental_reduction_vs_exact_cache_milli: 0
-shadow_p99_score_latency_ns: 153389
-
-audit_scoreable_candidate_calls: 24
-audit_verification_hook_ready_events: 0
-audit_verified_cpu_accept_eligible_events: 0
-audit_market_claim_allowed: false
-```
-
-Updated feedback-loop stage:
-
-```text
-role_binding_conditional_branch_seed0:
-  candidate_events: 92
-  payload_ready_events: 24
-  payload_built_events: 24
-  scoreable_payload_events: 24
-  stage: scoreable_payload_missing_verification_hook
-  next_action: Attach response/tool-call evidence and deterministic output verification.
-
-Total scoreable_candidate_calls in feedback loop:
-  47 = 23 edit + 24 conditional
-```
-
-Diagnostic read:
-
-```text
-The conditional route is no longer payload_builder_missing. It now has a
-request-side active_fringe/slot dry-run for 24 real prompt-side rows. This is
-real funnel progress, not verified savings.
-
-Superseded by the Conditional Output Evidence Hook section above: output
-evidence is now attached for 21 conditional rows, but local accepts remain
-disabled and verified CPU accepts remain 0, so CPU Routability 80 is still red.
-```
-
-## 2026-07-03 - Executor Integration: Edit Admission Calibration
-
-Verdict:
-
-```text
-EDIT_ADMISSION_CALIBRATION_V1_REVIEW_SINGLETON_ONLY_NO_ROBUST_POLICY
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-edit-admission-calibration-v1.
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl
-  /home/ubu/.codex/history.jsonl
-
-and writes:
-  target/nando-wave/real-traffic-shadow/edit-admission-calibration-v1.report.json
-```
-
-Privacy / anti-leak boundary:
-
-```text
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_features: false
-target_labels_used_for_runtime: false
-proof_labels_used_for_runtime: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Admission population:
-
-```text
-hook_ready_rows: 17
-rows_with_prompt_features: 17
-label_true_rows: 3
-label_false_rows: 14
-minimum_true_support: 2
-robust_safe_policy_found: false
-singleton_safe_policy_found: true
-best_robust_true_accepts: 0
-best_singleton_true_accepts: 1
-```
-
-Policy read:
-
-```text
-all_hook_ready_rows:
-  accepts: 17
-  true_accepts: 3
-  false_accepts: 14
-
-starts_what:
-  accepts: 1
-  true_accepts: 1
-  false_accepts: 0
-  singleton_safe: true
-  robust_safe: false
-
-starts_goal_or_starts_what_length_lt_1800:
-  accepts: 1
-  true_accepts: 1
-  false_accepts: 0
-  singleton_safe: true
-  robust_safe: false
-
-runtime_and_length_lt_1800:
-  accepts: 2
-  true_accepts: 1
-  false_accepts: 1
-
-not_report_marker_and_length_lt_1800:
-  accepts: 3
-  true_accepts: 1
-  false_accepts: 2
-```
-
-Diagnostic read:
-
-```text
-No robust request-side admission policy exists on the current 17 hook-ready
-real edit rows. Singleton-safe gates exist, but support only 1 true row, so they
-are not product proof and must not enable local accepts.
-
-Combined with local-accept calibration, this closes the cheap edit route:
-  readout loosening is unsafe;
-  request-side admission from current features is too weak;
-  verified CPU accepts remain 0.
-
-Next debt:
-  either collect more real edit evidence and add richer edit payload/admission
-  features, or move to the larger route pool:
-    conditional_branch: 92 candidates;
-    mixed_map: 39 candidates.
-```
-
-## 2026-07-03 - Executor Integration: Edit Local Accept Calibration
-
-Verdict:
-
-```text
-EDIT_LOCAL_ACCEPT_CALIBRATION_V1_REVIEW_NO_SAFE_READOUT_POLICY
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-edit-local-accept-calibration-v1.
-
-The command reads:
-  target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json
-  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl
-
-and writes:
-  target/nando-wave/real-traffic-shadow/edit-local-accept-calibration-v1.report.json
-```
-
-Calibration population:
-
-```text
-hook_ready_rows: 17
-label_true_rows: 3
-label_false_rows: 14
-safe_policy_found: false
-best_safe_true_accepts: 0
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Policy sweep:
-
-```text
-current_strict_all_slots:
-  accepts: 0
-  true_accepts: 0
-  false_accepts: 0
-  missed_true: 3
-
-energy_only_no_slot_order:
-  accepts: 17
-  true_accepts: 3
-  false_accepts: 14
-
-marker_slot_only_ignore_end_slot:
-  accepts: 17
-  true_accepts: 3
-  false_accepts: 14
-
-strict_slots_but_ignore_zero_end_slot:
-  accepts: 17
-  true_accepts: 3
-  false_accepts: 14
-
-best_marker_slot_margin_threshold:
-  accepts: 0
-  true_accepts: 0
-  false_accepts: 0
-
-best_energy_margin_threshold:
-  accepts: 0
-  true_accepts: 0
-  false_accepts: 0
-```
-
-Diagnostic read:
-
-```text
-The end slot explains the current 0 accepts:
-  marker_slot_margin > 0 for all 17 hook-ready rows;
-  end_slot_margin = 0 for all 17 hook-ready rows.
-
-But dropping the end slot would be unsafe:
-  it would accept all 17 rows;
-  only 3 are deterministic-verifier true;
-  14 would become false accepts.
-
-Therefore the next step is not threshold/readout tuning. The current edit
-payload geometry lacks a request-side admission signal that separates
-verifier-true rows from verifier-false rows. Build a request-side admission
-gate or improve edit payload features before enabling local accepts.
-```
-
-## 2026-07-03 - Executor Integration: Edit Output Evidence Join
-
-Verdict:
-
-```text
-EDIT_OUTPUT_EVIDENCE_V1_REVIEW_EVIDENCE_ATTACHED
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-edit-output-evidence-v1.
-
-The command reads:
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl
-  /home/ubu/.codex/sessions
-
-and writes:
-  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/edit-output-evidence-v1.report.json
-```
-
-Privacy / anti-leak boundary:
-
-```text
-raw_prompt_text_written: false
-raw_response_text_written: false
-response_text_used_for_verification: true
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Real Codex output-evidence result:
-
-```text
-total_trace_rows: 1000
-operator_candidate_calls: 23
-scoreable_candidate_calls: 23
-output_evidence_matched_events: 17
-no_session_output_match_events: 6
-deterministic_verification_events: 17
-verified_true_events: 3
-verified_false_events: 14
-```
-
-Shadow + audit over evidence-enriched trace:
-
-```text
-shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-shadow_operator_candidate_calls: 23
-shadow_nando_accepts: 0
-shadow_verified_safe_accepts: 0
-shadow_false_accepts: 0
-shadow_incremental_reduction_vs_exact_cache_milli: 0
-shadow_p99_score_latency_ns: 555869
-
-audit_verdict: VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND
-audit_verification_hook_ready_events: 17
-audit_verified_cpu_accept_eligible_events: 0
-audit_market_claim_allowed: false
-```
-
-Updated feedback-loop stage:
-
-```text
-role_binding_edit_marker_length_seed0:
-  candidate_events: 154
-  scoreable_payload_events: 23
-  verification_hook_ready_events: 17
-  stage: verification_hook_ready_waiting_local_accept
-  next_action: run local-accept calibration; if no safe policy exists, improve request-side admission or payload features
-
-verified_cpu_routability_milli: 0
-verified_gap_to_80_calls: 800
-```
-
-Diagnostic read:
-
-```text
-The edit route is no longer blocked at "missing output evidence" for all
-scoreable rows. 17/23 scoreable rows now have real Codex final-answer evidence
-and explicit deterministic verification. The blocker moved forward:
-  output evidence exists;
-  local CPU runtime still accepts 0 real rows;
-  verified CPU savings are still 0.
-
-Next debt:
-  inspect the 3 verifier-true edit rows by fingerprint/metrics only, then tune
-  score/readout or the edit payload geometry so hook-backed true rows can become
-  local accepts without creating false accepts on the 14 verifier-false rows.
-```
-
-## 2026-07-03 - Executor Integration: CPU Route Feedback Loop
-
-Verdict:
-
-```text
-CPU_ROUTE_FEEDBACK_LOOP_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-feedback-loop-v1.
-
-The feedback loop reads:
-  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json
-  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json
-
-and writes:
-  target/nando-wave/real-traffic-shadow/cpu-route-feedback-loop-v1.report.json
-```
-
-Current real Codex funnel:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 54
-exact_cache_coverage_milli: 54
-operator_candidate_calls: 285
-operator_candidate_coverage_milli: 285
-scoreable_candidate_calls: 23
-scoreable_candidate_coverage_milli: 23
-verification_hook_ready_events: 0
-verification_hook_coverage_milli: 0
-verified_cpu_accept_eligible_events: 0
-verified_cpu_routability_milli: 0
-target_routability_milli: 800
-target_verified_cpu_calls: 800
-routing_gap_to_80_calls: 515
-verified_gap_to_80_calls: 800
-market_claim_allowed: false
-```
-
-Route stages:
-
-```text
-1. role_binding_edit_marker_length_seed0
-   candidate_events: 154
-   scoreable_payload_events: 23
-   stage: scoreable_payload_missing_verification_hook
-   next_action: attach response/tool-call evidence and deterministic output verification
-
-2. role_binding_conditional_branch_seed0
-   candidate_events: 92
-   stage: payload_builder_missing
-   next_action: build conditional_branch_payload_builder_v1
-
-3. role_binding_mixed_map_seed0
-   candidate_events: 39
-   stage: payload_builder_missing
-   next_action: build mixed_map_payload_builder_v1
-```
-
-Diagnostic read:
-
-```text
-The current real-traffic bottleneck is now explicit:
-  route coverage exists for 285/1000 calls;
-  executable scoreable payload exists for 23/1000 calls;
-  verified CPU eligibility is still 0/1000.
-
-The next highest-value move is not tuning score thresholds. It is either:
-  A) add edit response/tool evidence + deterministic edit verifier for the 23
-     scoreable edit rows; or
-  B) build the conditional payload builder to open the 92-call route.
-```
-
-## 2026-07-03 - Executor Integration: Verification Hook Audit
-
-Verdict:
-
-```text
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_MISSING_HOOKS
-VERIFICATION_HOOK_AUDIT_V1_REVIEW_READY_HOOKS_FOUND_ON_SYNTHETIC_CONTROL
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-verification-hook-audit-v1.
-
-The audit reads:
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json
-
-and writes:
-  target/nando-wave/real-traffic-shadow/verification-hook-audit-v1.report.json
-```
-
-Validation contract tightened:
-
-```text
-If verified_safe_accept is present, the trace/event row must also carry:
-  nando_shadow_request
-  response_fingerprint or tool_call_fingerprints
-  verification_source
-
-This prevents a raw verified_safe_accept label from becoming evidence by
-itself.
-```
-
-Real edit dry-run hook audit:
-
-```text
-total_requests: 1000
-total_llm_calls: 1000
-operator_candidate_calls: 23
-scoreable_candidate_calls: 23
-local_accepts_disabled_events: 23
-local_accepts_enabled_events: 0
-response_fingerprint_events: 0
-tool_call_fingerprint_events: 0
-verification_source_events: 1000
-explicit_verified_safe_accept_events: 0
-provider_cost_events: 0
-candidates_missing_output_evidence: 23
-candidates_missing_explicit_verification: 23
-candidates_missing_provider_cost: 23
-verification_hook_ready_events: 0
-verified_cpu_accept_eligible_events: 0
-shadow_accepts: 0
-shadow_fallbacks: 23
-shadow_false_accepts: 0
-shadow_incremental_savings_over_exact_cache: 0
-market_claim_allowed: false
-```
-
-Synthetic positive-control hook audit:
-
-```text
-total_requests: 14
-operator_candidate_calls: 14
-scoreable_candidate_calls: 14
-response_fingerprint_events: 14
-verification_source_events: 14
-explicit_verified_safe_accept_events: 14
-provider_cost_events: 14
-verification_hook_ready_events: 14
-shadow_accepts: 7
-shadow_false_accepts: 0
-shadow_incremental_savings_over_exact_cache: 7
-verified_cpu_accept_eligible_events: 0
-market_claim_allowed: false
-```
-
-Diagnostic read:
-
-```text
-The audit proves the hook logic works in both directions:
-  real Codex dry-run: scoreable payloads exist, but output evidence is missing;
-  synthetic control: output evidence exists, but synthetic source blocks market claim.
-
-Next debt:
-  attach real response/tool-call evidence and deterministic edit-output
-  verification to scoreable edit payloads before enabling any local accept.
-```
-
-## 2026-07-03 - Executor Integration: Edit Payload Dry-Run Builder
-
-Verdict:
-
-```text
-EDIT_PAYLOAD_DRY_RUN_V1_REVIEW_SCOREABLE_PAYLOADS_BUILT
-REAL_TRAFFIC_SHADOW_V1_REVIEW
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-edit-payload-dry-run-v1.
-
-The dry-run builder reads real local Codex history at analysis time, writes no
-raw prompt text, and emits scoreable edit-route payloads only for rows that
-already passed edit-payload readiness.
-
-It writes:
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.trace.jsonl
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.report.json
-  target/nando-wave/real-traffic-shadow/edit-payload-dry-run-v1.shadow-report.json
-```
-
-Dry-run payload result:
-
-```text
-trace_rows_written: 1000
-edit_route_candidate_events: 154
-payload_ready_events: 23
-payload_built_events: 23
-scoreable_payload_events: 23
-builder_rejected_events: 0
-readiness_rejected_events: 131
-active_fringe_centers_total: 11019
-slots_total: 46
-positive_impulses_total: 1077
-negative_impulses_total: 1010
-raw_text_written: false
-response_text_used: false
-target_labels_used: false
-proof_labels_used: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Shadow result over the dry-run trace:
-
-```text
-total_requests: 1000
-total_llm_calls: 1000
-operator_candidate_calls: 23
-exact_cache_hits: 54
-nando_shadow_accepts: 0
-nando_shadow_fallbacks: 23
-verified_safe_accepts: 0
-unverified_shadow_accepts: 0
-false_accepts: 0
-incremental_savings_over_exact_cache: 0
-incremental_reduction_vs_exact_cache_milli: 0
-p50_shadow_score_latency_ns: 422771
-p90_shadow_score_latency_ns: 585353
-p99_shadow_score_latency_ns: 683880
-synthetic_trace_used: false
-```
-
-Diagnostic read:
-
-```text
-The request-side path is no longer empty for the first edit route slice:
-  route/profile candidate -> active_fringe + slots works for 23 real rows.
-
-The scorer still falls back:
-  energy_margin: 6912..10752
-  min_slot_margin: 0
-
-So the next debt is not another route classifier. It is an edit verifier/output
-hook that can prove a local edit candidate safe before enabling local accepts.
-Until then, the dry-run correctly keeps verified_safe_accepts=0 and
-market_claim_allowed=false.
-```
-
-Boundary:
-
-```text
-This is a scoreable request payload proof, not savings.
-Any local accept from this command would be counted as unverified/false because
-expect_local_operator=false and verified_safe_accept=None.
-```
-
-## 2026-07-03 - Executor Integration: Real Traffic CPU Route Forecast
-
-Verdict:
-
-```text
-CPU_ROUTE_FORECAST_V1_REVIEW
-EDIT_PAYLOAD_READINESS_V1_REVIEW_READY_CANDIDATES_FOUND
-```
-
-What changed:
-
-```text
-Added role-binding-real-traffic-cpu-route-forecast-v1.
-Added role-binding-real-traffic-edit-payload-readiness-v1.
-
-The forecast reads:
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.report.json
-  target/nando-wave/real-traffic-shadow/codex-history-route-candidates-v1.shadow-report.json
-
-and writes:
-  target/nando-wave/real-traffic-shadow/cpu-route-forecast-v1.report.json
-
-The edit readiness audit reads real local Codex history at analysis time and
-writes:
-  target/nando-wave/real-traffic-shadow/edit-payload-readiness-v1.report.json
-```
-
-Current real Codex forecast:
-
-```text
-total_llm_calls: 1000
-exact_cache_hits: 54
-exact_cache_coverage_milli: 54
-operator_candidate_calls: 285
-operator_candidate_coverage_milli: 285
-current_nando_accepts: 0
-current_verified_safe_accepts: 0
-current_false_accepts: 0
-full_shadow_request_payload_built: false
-market_claim_allowed: false
-
-forecast_25_percent_additional_savings: 69
-forecast_50_percent_additional_savings: 141
-forecast_80_percent_additional_savings: 226
-forecast_25_percent_total_calls_removed: 123
-forecast_50_percent_total_calls_removed: 195
-forecast_80_percent_total_calls_removed: 280
-```
-
-Priority CPU route backlog:
-
-```text
-1. role_binding_edit_marker_length_seed0
-   candidate_events: 154
-   payload_builder: edit_marker_length_payload_builder_v1
-
-2. role_binding_conditional_branch_seed0
-   candidate_events: 92
-   exact_cache_hits_inside_route: 2
-   payload_builder: conditional_branch_payload_builder_v1
-
-3. role_binding_mixed_map_seed0
-   candidate_events: 39
-   payload_builder: mixed_map_payload_builder_v1
-```
-
-Edit payload readiness:
-
-```text
-candidate_events: 154
-payload_ready_events: 23
-payload_ready_rate_milli: 149
-missing_scope_or_file: 14
-missing_marker: 57
-missing_length_or_shape: 90
-missing_edit_intent: 119
-raw_text_written: false
-local_accepts_enabled: false
-market_claim_allowed: false
-```
-
-Boundary:
-
-```text
-This is route-zone capacity, not verified savings.
-Do not use it as market claim.
-The next debt is request-side payload builders:
-  route/profile candidate -> active_fringe + slots
-without response text, target labels, proof labels, or expected answer.
-
-The first concrete builder target is the 23 payload-ready edit-route rows, not
-all 154 edit route candidates.
-```
-
-## 2026-07-03 - Executor Integration: Real Traffic Shadow Recorder And Operator Mining
-
-Verdict:
-
-```text
-REAL_TRAFFIC_SHADOW_V1_READY
-SYNTHETIC_SMOKE_FORCES_REVIEW
-```
-
-What changed:
-
-```text
-Added three CLI commands:
-  role-binding-real-traffic-record-v1
-  role-binding-real-traffic-record-serve-v1
-  role-binding-real-traffic-ingest-events-v1
-  role-binding-real-traffic-codex-history-ingest-v1
-  role-binding-real-traffic-codex-history-route-candidates-v1
-  role-binding-real-traffic-shadow-v1
-  role-binding-real-traffic-shadow-smoke-v1
-
-The new path records JSONL trace rows without changing the live LLM flow,
-then analyzes the trace in shadow mode against serving-only `.nwrb` profiles.
-It computes exact-cache baseline, Nando routability, verified local accepts,
-fallbacks, false accepts, latency/RSS, and operator rankings.
-
-The HTTP recorder exposes GET /health, POST /trace, and GET /metrics with an
-optional request limit, so smoke/watchdog runs can stop without leaving a
-hanging daemon.
-
-The event ingester converts agent/API event JSONL into the trace contract and
-keeps synthetic/no-candidate batches in REVIEW.
-
-The Codex history ingester converts local Codex prompt history into
-privacy-safe event fingerprints. It writes no raw text and does not infer
-`nando_shadow_request`.
-
-The Codex history route-candidate adapter selects route/profile candidates from
-request-side prompt text only. It writes empty score payloads, so every candidate
-must fallback until a real `active_fringe`/slot builder exists.
-
-Bugfix: REAL_TRAFFIC_SHADOW_V1_PASS now requires `verified_safe_accepts > 0`
-and `incremental_savings_over_exact_cache > 0`. Candidate-only/no-savings traces
-stay REVIEW.
-```
-
-Key boundary:
-
-```text
-Synthetic savings are not market savings.
-Synthetic traces force REAL_TRAFFIC_SHADOW_V1_REVIEW even if reduction is high.
-Market claim requires non-synthetic real traffic with verified_safe_accept=true
-and false_local_accepts=0.
-```
-
-Local smoke:
-
-```text
-record_serve_trace: target/nando-wave/real-traffic-shadow/real-traffic-record-server-smoke.trace.jsonl
-record_serve_requests_handled: 3
-record_serve_rows_written: 1
-record_serve_bad_requests: 0
-record_serve_exited_after_request_limit: true
-ingest_events_verdict: REAL_TRAFFIC_INGEST_V1_REVIEW
-ingest_events_total_events: 1
-ingest_events_operator_candidate_events: 0
-ingest_events_synthetic_events: 1
-ingest_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-ingest_shadow_nando_shadow_accepts: 0
-codex_history_events_verdict: CODEX_HISTORY_EVENTS_V1_READY
-codex_history_total_history_rows: 12187
-codex_history_events_written: 1000
-codex_history_raw_text_written: false
-codex_history_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-codex_history_total_llm_calls: 1000
-codex_history_exact_cache_hits: 54
-codex_history_operator_candidate_calls: 0
-codex_history_incremental_reduction_vs_exact_cache_milli: 0
-codex_history_route_candidate_verdict: CODEX_HISTORY_ROUTE_CANDIDATES_V1_REVIEW
-codex_history_route_candidate_events: 285
-codex_history_route_no_candidate_events: 715
-codex_history_route_full_shadow_request_payload_built: false
-codex_history_route_counts:
-  role_binding_edit_marker_length_seed0: 154
-  role_binding_conditional_branch_seed0: 92
-  role_binding_mixed_map_seed0: 39
-codex_history_route_shadow_verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-codex_history_route_shadow_operator_candidate_calls: 285
-codex_history_route_shadow_nando_shadow_accepts: 0
-codex_history_route_shadow_incremental_reduction_vs_exact_cache_milli: 0
-trace: target/nando-wave/real-traffic-shadow/real-traffic-shadow-smoke-v1.trace.jsonl
-report: target/nando-wave/real-traffic-shadow/real-traffic-shadow-smoke-v1.product-proof.json
-rows: 28
-verdict: REAL_TRAFFIC_SHADOW_V1_REVIEW
-total_llm_calls: 28
-operator_candidate_calls: 28
-exact_cache_hits: 0
-nando_shadow_accepts: 14
-verified_safe_accepts: 14
-unverified_shadow_accepts: 0
-false_accepts: 0
-incremental_reduction_vs_exact_cache_milli: 500
-estimated_cost_saved_microusd: 1400
-p99_shadow_score_latency_ns: 144392
-synthetic_trace_used: true
-operator_rankings: 14
-```
-
-Operator ranking formula carried into report:
-
-```text
-operator_value =
-  frequency_in_real_traces
-  * local_accept_rate
-  * saved_llm_cost
-  * safety_score
-  / runtime_cost
-```
-
-Interpretation:
-
-```text
-The proof/runtime operators are not automatically the best commercial
-compression operators. This rung creates the measurement path that can discover
-the money-ranked operators from real traces. The next proof is real agent/API
-traffic in shadow mode, not another synthetic savings claim.
-
-The first local non-synthetic baseline exists now, but it has no Nando route
-candidates. That means the next engineering debt is a real route/candidate
-adapter, not more synthetic replay.
-
-The route-only adapter now finds 285/1000 real local Codex candidate events, but
-builds no executable payload and therefore saves 0 calls. The next debt is the
-request-side builder for active fringe and slot impulses.
-```
-
-No SSH was used for this rung.
-
-## 2026-07-03 - Executor Integration: Bounded LB Throughput Proof
-
-Verdict:
-
-```text
-LOCAL_ROLE_BINDING_PROFILE_LB_THROUGHPUT_V1_PASS
-HOSTWORLD_ROLE_BINDING_PROFILE_LB_THROUGHPUT_V1_FAIL
-```
-
-What changed:
-
-```text
-Added role-binding-profile-lb-throughput-v1. It runs a bounded concurrent
-POST /score pressure proof through the local LB and serving-only `.nwrb`
-workers. The proof has fixed request count, per-client progress output,
-client socket read/write timeouts, and child-process cleanup through the
-existing harness Drop guards.
-```
-
-Local result:
-
-```text
-command: cargo run --release -p nando-cli -- role-binding-profile-lb-throughput-v1
-report: target/nando-wave/role-binding-profile-runtime/profile-lb-throughput-v1.product-proof.json
-verdict: ROLE_BINDING_PROFILE_LB_THROUGHPUT_V1_PASS
-worker_count: 2
-client_threads: 4
-score_requests: 896
-local_operator_calls: 448
-fallback_to_llm_calls: 448
-false_local_accepts: 0
-missed_expected_local: 0
-unexpected_local_accepts: 0
-client_errors: 0
-throughput_requests_per_second_milli: 1510939
-client_p99_latency_ns: 3633433
-load_balancer_p99_latency_ns: 743295
-core_score_p99_latency_ns: 72666
-worker_score_p99_latency_ns: 169460
-lb_upstream_roundtrip_p99_latency_ns: 742942
-packed_score_parity_checks: 647928
-packed_score_parity_mismatches: 0
-max_worker_runtime_bytes_estimate: 492792
-```
-
-HostWorld capacity curve:
-
-```text
-hostworld 1 client:
-  verdict: ROLE_BINDING_PROFILE_LB_THROUGHPUT_V1_FAIL
-  load_balancer_p99_latency_ns: 3507669
-  lb_upstream_roundtrip_p99_latency_ns: 3507021
-  worker_score_p99_latency_ns: 643303
-  false_local_accepts: 0
-  client_errors: 0
-
-hostworld 2 clients:
-  verdict: ROLE_BINDING_PROFILE_LB_THROUGHPUT_V1_FAIL
-  load_balancer_p99_latency_ns: 3250420
-  lb_upstream_roundtrip_p99_latency_ns: 3249782
-  worker_score_p99_latency_ns: 579524
-  false_local_accepts: 0
-  client_errors: 0
-
-hostworld 4 clients:
-  verdict: ROLE_BINDING_PROFILE_LB_THROUGHPUT_V1_FAIL
-  load_balancer_p99_latency_ns: 3611864
-  lb_upstream_roundtrip_p99_latency_ns: 3610931
-  worker_score_p99_latency_ns: 577626
-  false_local_accepts: 0
-  client_errors: 0
-```
-
-Interpretation:
-
-```text
-The green replay-batch HostWorld gate remains valid, but it does not close
-individual POST /score pressure. The deployed per-score throughput gate is red
-because the cheap-VPS LB/upstream roundtrip p99 is above 3 ms even at one
-client. Safety and parity are green; the next speed debt is the per-score
-serving envelope, not the Wave score loop.
-```
-
-## 2026-07-03 - Executor Integration: Packed Hot-Path Metrics
-
-Verdict:
-
-```text
-LOCAL_PACKED_ROLE_BINDING_LB_REPLAY_PASS
-HOSTWORLD_PACKED_ROLE_BINDING_LB_REPLAY_PASS
-```
-
-What changed:
-
-```text
-The `.nwrb` role-binding runtime now has a packed edge-group score path and a
-reference score path. The CLI serving hot path prepares active centers from an
-iterator instead of collecting a temporary Vec. The load-balancer replay also
-checks packed-vs-reference score parity before accepting the product proof.
-
-Transport cleanup after the first deployed WATCH/FAIL:
-  TCP_NODELAY is enabled on accepted server sockets and client streams;
-  HTTP response reading stops at Content-Length instead of waiting for close;
-  LB -> worker uses the internal POST /score-compact response shape.
-
-Rejected experiment:
-  grouped LB -> worker POST /replay batching was tested and rejected because it
-  changes per-row latency semantics into batch latency and made p99 worse.
-```
-
-Current local result after serving packed-only split and compact worker response:
-
-```text
-command: cargo run --release -p nando-cli -- role-binding-profile-lb-replay-v1
-verdict: ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS
-worker_count: 2
-unique_sequences_replayed: 896
-exact_cache_llm_calls: 896
-exact_cache_plus_nando_llm_calls: 448
-exact_cache_incremental_reduction_milli: 500
-false_local_accepts: 0
-load_balancer_p99_latency_ns: 736030
-core_score_p99_latency_ns: 78902
-worker_score_p99_latency_ns: 167663
-lb_upstream_roundtrip_p99_latency_ns: 735692
-replay_client_wall_p99_latency_ns: 5489536
-packed_score_parity_checks: 647928
-packed_score_parity_mismatches: 0
-max_worker_runtime_bytes_estimate: 492792
-```
-
-Packed serving-only score delta against the previous reference-path local baseline:
-
-```text
-previous_reference_core_score_p99_latency_ns: 88086
-packed_serving_only_core_score_p99_latency_ns: 78902
-core_p99_delta_ns: -9184
-core_p99_reduction_milli: 104
-previous_packed_dual_max_worker_runtime_bytes_estimate: 891248
-packed_serving_only_max_worker_runtime_bytes_estimate: 492792
-runtime_bytes_delta: -398456
-runtime_bytes_reduction_milli: 447
-```
-
-Current clean HostWorld result after redeploying the serving packed-only static
-binary plus transport cleanup:
-
-```text
-command: ssh hostworld-ee 'cd /opt/nando-wave-profile-runtime-v1 && ./target/release/nando-cli role-binding-profile-lb-replay-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/slot32-role-binding/role-binding-binary-eval-pack-suite-v1.product-proof.json target/nando-wave/role-binding-profile-runtime/profile-lb-replay-hostworld-v1-clean2.product-proof.json 2 128 4'
-verdict: ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS
-worker_count: 2
-unique_sequences_replayed: 896
-exact_cache_llm_calls: 896
-exact_cache_plus_nando_llm_calls: 448
-exact_cache_incremental_reduction_milli: 500
-false_local_accepts: 0
-load_balancer_p99_latency_ns: 2744444
-core_score_p99_latency_ns: 184328
-worker_score_p99_latency_ns: 698145
-lb_upstream_roundtrip_p99_latency_ns: 2743851
-replay_client_wall_p99_latency_ns: 19478822
-packed_score_parity_checks: 647928
-packed_score_parity_mismatches: 0
-max_worker_runtime_bytes_estimate: 492792
-```
-
-Second HostWorld clean run evidence:
-
-```text
-profile-lb-replay-hostworld-v1-clean.product-proof.json:
-  verdict: ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS
-  load_balancer_p99_latency_ns: 2993688
-  core_score_p99_latency_ns: 187721
-  worker_score_p99_latency_ns: 545095
-  packed_score_parity_mismatches: 0
-  false_local_accepts: 0
-```
-
-Interpretation:
-
-```text
-The packed score path is correct and still faster than the reference-path local
-baseline at the score-loop layer. The serving packed-only split removes the
-reference table and reference HashMap from workers and cuts max runtime bytes
-from 891248 to 492792. The deployed cheap-VPS target is back inside the 3 ms
-p99 envelope on two clean runs after transport cleanup and compact LB -> worker
-responses. This is still not real Codex/API production traffic and not
-concurrent throughput proof.
-```
-
-## 2026-07-03 - Executor Integration: Historical Deployed HostWorld Replay PASS Before Packed Hot-Path
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS
-```
-
-Live remote command:
-
-```text
-ssh hostworld-ee 'cd /opt/nando-wave-profile-runtime-v1 && ./target/release/nando-cli role-binding-profile-lb-replay-v1 target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json target/nando-wave/slot32-role-binding/role-binding-binary-eval-pack-suite-v1.product-proof.json target/nando-wave/role-binding-profile-runtime/profile-lb-replay-hostworld-v1.product-proof.json 2 128 4'
-```
-
-Historical remote result:
-
-```text
-host_alias: hostworld-ee
-bundle_root: /opt/nando-wave-profile-runtime-v1
-binary: x86_64-unknown-linux-musl static nando-cli
-worker_count: 2
-total_profile_count: 7
-unique_sequences_replayed: 896
-http_replay_batches: 224
-exact_cache_llm_calls: 896
-exact_cache_plus_nando_llm_calls: 448
-exact_cache_incremental_reduction_milli: 500
-local_operator_calls: 448
-fallback_to_llm_calls: 448
-false_local_accepts: 0
-missed_expected_local: 0
-load_balancer_p50_latency_ns: 1726306
-load_balancer_p90_latency_ns: 2303526
-load_balancer_p99_latency_ns: 2834992
-load_balancer_rss_bytes: 2555904
-max_worker_runtime_bytes_estimate: 398456
-max_worker_p99_latency_ns: 587727
-all_workers_serving_only: true
-load_balancer_serving_only: true
-```
-
-Important implementation note:
-
-```text
-The first deployed attempt exposed a packaging issue: the local glibc binary
-required GLIBC_2.43. Executor rebuilt `nando-cli` as
-x86_64-unknown-linux-musl static binary.
-
-The first remote static-binary run was WATCH on latency:
-load_balancer_p99_latency_ns: 3340918.
-
-Executor removed the artificial 2 ms sleep in the HTTP client helper and
-reran. That historical deployed bundle passed at 2834992 ns p99. This section
-is kept only as provenance; the current packed hot-path deployed result is the
-WATCH/FAIL section above.
-```
-
-What this closed at that checkpoint:
-
-```text
-The historical product runtime had a deployed cheap-VPS replay proof for the
-sampled release-suite profile runtime before the current packed hot-path
-redeploy:
-  client sends replay traffic to one proxy endpoint;
-  proxy loads route-to-upstream metadata only;
-  proxy dispatches to serving-only `.nwrb` worker shards;
-  `.nwreb` is used only by the replay client;
-  false_local_accepts = 0;
-  p99 was inside the 1-3 ms cheap-VPS target envelope.
-```
-
-Boundary:
-
-```text
-This is still not real Codex/API production traffic, not concurrent throughput
-proof, and not full OPERATOR_BLUEPRINT coverage.
-```
-
-## 2026-07-03 - Executor Integration: Profile Load-Balancer Replay PASS
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS
-```
-
-Live command:
-
-```text
-cargo run --release -p nando-cli -- role-binding-profile-lb-replay-v1
-```
-
-Current result:
-
-```text
-worker_count: 2
-total_profile_count: 7
-unique_sequences_replayed: 896
-http_replay_batches: 224
-no_cache_llm_calls: 1792
-exact_cache_llm_calls: 896
-exact_cache_plus_nando_llm_calls: 448
-exact_cache_incremental_reduction_milli: 500
-local_operator_calls: 448
-fallback_to_llm_calls: 448
-false_local_accepts: 0
-missed_expected_local: 0
-load_balancer_p50_latency_ns: 474665
-load_balancer_p90_latency_ns: 580300
-load_balancer_p99_latency_ns: 736030
-core_score_p99_latency_ns: 78902
-worker_score_p99_latency_ns: 167663
-lb_upstream_roundtrip_p99_latency_ns: 735692
-replay_client_wall_p99_latency_ns: 5489536
-packed_score_parity_checks: 647928
-packed_score_parity_mismatches: 0
-load_balancer_rss_bytes: 6307840
-max_worker_runtime_bytes_estimate: 492792
-max_worker_p99_latency_ns: 167663
-all_workers_serving_only: true
-load_balancer_serving_only: true
-```
-
-What this closes:
-
-```text
-The product path now has a local external load-balancer/proxy proof:
-  client sends replay traffic to one proxy endpoint;
-  proxy loads route-to-upstream metadata only;
-  proxy dispatches to serving-only `.nwrb` worker shards;
-  `.nwreb` is used only by the replay client;
-  false_local_accepts = 0.
-```
-
-Boundary:
-
-```text
-This is the current packed hot-path local proof. The deployed HostWorld packed
-hot-path replay above is now back inside the 3 ms latency envelope. The
-remaining product proof is real Codex/API traffic replay and, separately,
-concurrent throughput under production routing.
-```
-
-## 2026-07-03 - Executor Integration: Profile Worker Replay PASS
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_WORKER_REPLAY_V1_PASS
-```
-
-Live command:
-
-```text
-cargo run --release -p nando-cli -- role-binding-profile-worker-replay-v1
-```
-
-Current result:
-
-```text
-worker_count: 2
-total_profile_count: 7
-unique_sequences_replayed: 896
-http_replay_batches: 224
-no_cache_llm_calls: 1792
-exact_cache_llm_calls: 896
-exact_cache_plus_nando_llm_calls: 448
-exact_cache_incremental_reduction_milli: 500
-local_operator_calls: 448
-fallback_to_llm_calls: 448
-false_local_accepts: 0
-missed_expected_local: 0
-max_worker_runtime_bytes_estimate: 398456
-max_worker_rss_bytes: 7135232
-max_worker_p99_latency_ns: 265277
-all_workers_serving_only: true
-```
-
-What this closes:
-
-```text
-The product path now has local sharded HTTP replay:
-  exact-cache competition across workers;
-  route-to-profile-shard dispatch in the replay client;
-  `.nwreb` used only outside serving workers;
-  serving workers load `.nwrb` only;
-  false_local_accepts = 0.
-```
-
-Boundary:
-
-```text
-This is still not real Codex/API traffic, not an external load-balancer proof,
-not concurrent throughput scaling, and not cheap-VPS deployment.
-```
-
-## 2026-07-03 - Executor Integration: Profile Worker Scaling PASS
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_WORKER_SCALING_V1_PASS
-```
-
-Live command:
-
-```text
-cargo run --release -p nando-cli -- role-binding-profile-worker-scaling-v1
-```
-
-Current result:
-
-```text
-worker_count: 2
-total_profile_count: 7
-total_local_operator_calls: 7
-total_fallback_to_llm_calls: 2
-wrong_worker_route_fallbacks: 2
-false_local_accepts: 0
-max_worker_runtime_bytes_estimate: 398456
-max_worker_rss_bytes: 6557696
-max_worker_p99_latency_ns: 6286
-all_workers_serving_only: true
-all_profile_score_pass: true
-all_wrong_worker_routes_fallback: true
-```
-
-What changed:
-
-```text
-Executor adopted and completed the previously unfinished worker-scaling branch.
-The command is wired into the CLI, writes shard registry configs, starts two
-serving-only `.nwrb` workers, checks local accept for every profile, checks
-wrong-worker route fallback, and writes a product-proof JSON report.
-```
-
-Boundary:
-
-```text
-This closes local profile-shard worker acceptance. It is not real Codex
-traffic, not an external load-balancer proof, and not throughput scaling proof.
-This historical boundary is superseded by:
-  ROLE_BINDING_PROFILE_WORKER_REPLAY_V1_PASS.
-  ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS.
-  historical deployed HostWorld pre-packed replay PASS.
-  current deployed HostWorld packed replay PASS after transport cleanup.
-Next product layer should focus on real Codex/API traffic replay and
-concurrent production-style throughput.
-```
-
-## 2026-07-03 - HARD ROLE BOUNDARY: Reviewer-Only Mode
-
-Verdict:
-
-```text
-REVIEWER_ONLY_MODE_ACTIVE
-NO_CODE_WRITES_BY_REVIEWER
-COMMUNICATION_THROUGH_THIS_FILE
-```
-
-User instruction:
-
-```text
-Reviewer must not write implementation code.
-Reviewer communicates with executor through this file only.
-Reviewer must coordinate all actions with executor before acting.
-```
-
-Important correction:
-
-```text
-The reviewer started a worker/profile-shard scaling implementation without
-explicit executor/user handoff. Treat that as NOT approved product integration.
-
-Do not treat reviewer-started worker-scaling code as authoritative.
-Executor owns the implementation path.
-Reviewer role is now:
-  inspect,
-  find gaps,
-  write notes here,
-  verify after executor integration.
-```
-
-Coordination rule:
-
-```text
-Before any non-read-only action, reviewer must first leave a proposed action in
-this file and wait for executor/user direction.
-
-This includes:
-  code edits,
-  report edits,
-  doc rewrites,
-  running heavy commands,
-  changing default constants,
-  changing product claims.
-
-Allowed without prior executor agreement:
-  read-only inspection,
-  summarizing current evidence,
-  writing a reviewer note in this file when asked by user.
-```
-
-Current known worker-scaling state:
-
-```text
-Resolved by executor-owned integration:
-  role-binding-profile-worker-scaling-v1 now passes.
-  The previous unfinished reviewer-started branch is no longer the current
-  state of the product runtime.
-```
-
-Executor-owned next product target:
-
-```text
-Build the next external proof layer:
-  real Codex/API traffic replay if a trace exists;
-  concurrent production-style throughput;
-  keep serving workers .nwrb-only;
-  keep exact-cache baseline;
-  false_local_accepts = 0;
-  report p50/p90/p99, RSS, runtime_bytes_estimate, and LLM-call reduction.
-```
-
-Reviewer will check after executor integration:
-
-```text
-cargo fmt --check
-cargo check -p nando-cli
-cargo clippy -p nando-cli -- -D warnings
-worker/profile-shard report JSON
-docs/report consistency
-no stale demo/research wording in product path
-```
-
-## 2026-07-03 - Reviewer Sync: Profile Fallback Smoke PASS
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_FALLBACK_SMOKE_V1_PASS
-```
-
-Live command:
-
-```text
-cargo run -p nando-cli -- role-binding-profile-fallback-smoke-v1
-```
-
-Current result:
-
-```text
-profile_count: 7
-local_accept_pass: true
-bad_route_fallback_pass: true
-low_margin_fallback_pass: true
-local_action: local_operator
-bad_route_fallback_reason: profile_not_found
-low_margin_fallback_reason: margin_below_threshold
-local_energy_margin: 4194304
-low_margin_energy_margin: 1024
-low_margin_threshold: 1000000
-local_operator_calls: 1
-fallback_to_llm_calls: 2
-false_local_accepts: 0
-p99_latency_ns: 24312
-runtime_bytes_estimate: 790020
-compiler_used: false
-eval_packs_loaded: false
-corpus_jsonl_loaded: false
-python_demo_used: false
-```
-
-What this closes:
-
-```text
-The serving-only `.nwrb` profile runtime now has a direct product guard for:
-  local accept on a valid high-margin profile request;
-  missing route fallback;
-  low-margin fallback;
-  zero false local accepts.
-```
-
-Boundary:
-
-```text
-This is not worker/profile-shard scaling and not real Codex traffic.
-This historical boundary is superseded by:
-  ROLE_BINDING_PROFILE_WORKER_SCALING_V1_PASS.
-  ROLE_BINDING_PROFILE_WORKER_REPLAY_V1_PASS.
-  ROLE_BINDING_PROFILE_LB_REPLAY_V1_PASS.
-  historical deployed HostWorld pre-packed replay PASS.
-  current deployed HostWorld packed replay PASS after transport cleanup.
-Next product layer should focus on real Codex/API traffic replay and
-concurrent production-style throughput.
-```
-
-## 2026-07-03 - Reviewer Sync: Profile Replay Suite PASS + Batch Boundary
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_REPLAY_SUITE_V1_PASS
-DEFAULT_REPLAY_CLI_PATH_PASS
-```
-
-Live rerun:
-
-```text
-cargo run --release -p nando-cli -- role-binding-profile-replay-suite-v1
-```
-
-Result:
-
-```text
-unique_sequences_replayed: 896
-http_replay_batches: 224
-exact_cache_llm_calls: 896
-exact_cache_plus_nando_llm_calls: 448
-exact_cache_incremental_reduction_milli: 500
-false_local_accepts: 0
-missed_expected_local: 0
-p50_latency_ns: 125821
-p90_latency_ns: 148048
-p99_latency_ns: 213509
-runtime_bytes_estimate: 790020
-rss_bytes: 8101888
-eval_packs_loaded_in_serving_worker: false
-eval_packs_used_by_replay_client: true
-corpus_jsonl_loaded_in_serving_worker: false
-python_demo_used: false
-```
-
-Important boundary:
-
-```text
-The replay-suite is now a real product-shaped step beyond smoke:
-  serving worker loads only `.nwrb`;
-  replay client uses `.nwreb` only to generate requests;
-  exact-cache baseline is measured;
-  reduction target >= 20% is exceeded at 50%;
-  false_local_accepts stays 0.
-```
-
-Found issue:
-
-```text
-The first live check exposed two default-path problems:
-
-1. batch=32 failed with:
-   HTTP POST /replay failed: status=413
-   body: HTTP request body too large
-
-2. after lowering batch, max_unique=256 replayed 1792 unique sequences and
-   failed the current p99 <= 3ms gate:
-   p99_latency_ns: 6582625
-
-Fixed in code:
-  DEFAULT_REPLAY_MAX_UNIQUE_SEQUENCES_PER_PROFILE = 128
-  DEFAULT_REPLAY_BATCH_UNIQUE_SEQUENCES = 4
-
-Default CLI rerun now passes.
-```
-
-Next executor instruction:
-
-```text
-Continue from the now-green default replay path:
-  realistic product replay mix,
-  real Codex traffic replay,
-  concurrent production-style throughput.
-
-Do not widen max_unique or batch again without a source-verified report that
-still passes p99 <= 3ms and false_local_accepts = 0.
-```
-
-## 2026-07-03 - Reviewer Sync: Product Runtime Direction Confirmed
-
-Verdict:
-
-```text
-REVIEWER_SYNC_PASS
-ROLE_BINDING_PROFILE_RUNTIME_SMOKE_LIVE_RERUN_PASS
-```
-
-I rechecked the current product-runtime direction after the handoff.
-
-Live checks:
-
-```text
-cargo fmt --check: PASS
-cargo check -p nando-cli: PASS
-cargo run -p nando-cli -- role-binding-profile-runtime-smoke-v1: PASS
-```
-
-Current live smoke result:
-
-```text
-role-binding-profile-runtime-smoke-v1:
-  ROLE_BINDING_PROFILE_RUNTIME_SMOKE_V1_PASS
-
-profile_count: 7
-runtime_bytes_estimate: 790020
-exact_cache_llm_calls: 2
-exact_cache_plus_nando_llm_calls: 1
-exact_cache_incremental_reduction_milli: 500
-false_local_accepts: 0
-p99_latency_ns: 21436
-
-compiler_used: false
-eval_packs_loaded: false
-corpus_jsonl_loaded: false
-python_demo_used: false
-```
-
-What is correct:
-
-```text
-The executor started in the right direction:
-  serving-only .nwrb runtime
-  profile registry
-  /health /profiles /score /replay /metrics
-  exact-cache comparison
-  latency/RSS/runtime-bytes reporting
-  no .nwreb eval packs in serving mode
-```
-
-Boundary:
-
-```text
-This closes a local product-shaped smoke, not real Codex traffic.
-OPERATOR_BLUEPRINT is still WATCH:
-  proven_classes: 0
-  partial_classes: 7
-  missing_classes: 2
-  missing: FIELD, FILTER_GROUP
-```
-
-Next reviewer instruction:
-
-```text
-Do not go back to research-only gates.
-Next product work should extend the serving runtime with:
-  product replay with more realistic cache-miss flow,
-  real Codex traffic replay,
-  external load-balancer / cheap-VPS proof,
-  report proving >=20% incremental reduction vs exact cache with false_local_accepts=0.
-```
-
-## 2026-07-03 - Role-Binding Product Profile Runtime PASS
-
-Verdict:
-
-```text
-ROLE_BINDING_PROFILE_REGISTRY_FROM_RELEASE_V1_PASS
-ROLE_BINDING_PROFILE_RUNTIME_SMOKE_V1_PASS
-ROLE_BINDING_OPERATOR_BLUEPRINT_GAP_V1_WATCH
-```
-
-Current evidence:
-
-```text
-registry_config: target/nando-wave/role-binding-profile-runtime/profile-registry-v1.json
-runtime_smoke_report: target/nando-wave/role-binding-profile-runtime/profile-runtime-smoke-v1.product-proof.json
-runtime_report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_PROFILE_RUNTIME_SMOKE.md
-release_suite_report: target/nando-wave/slot32-role-binding/role-binding-release-suite-v1.product-proof.json
-gap_report: target/nando-wave/slot32-role-binding/role-binding-operator-blueprint-gap-v1.product-proof.json
-
-profile_count: 7
-runtime_bytes_estimate: 790020
-package_bytes: 134912
-edge_count: 11217
-exact_cache_llm_calls: 2
-exact_cache_plus_nando_llm_calls: 1
-exact_cache_incremental_reduction_milli: 500
-false_local_accepts: 0
-p99_latency_ns: 37468
-rss_bytes: 10932224
-
-compiler_used: false
-eval_packs_loaded: false
-corpus_jsonl_loaded: false
-python_demo_used: false
-```
-
-Boundary:
-
-```text
-Serving runtime PASS is a product-shaped local smoke over `.nwrb` profiles. It
-is not real Codex production traffic, not raw-language action parsing, not
-`.nwpc` bridge proof, and not full OPERATOR_BLUEPRINT closure.
-
-OPERATOR_BLUEPRINT remains WATCH:
-  partial_classes: 7
-  missing_classes: 2
-  missing: FIELD, FILTER_GROUP
-```
-
-## 2026-07-03 - Role-Binding Release Suite With EDIT
-
-Verdict:
-
-```text
-ROLE_BINDING_RELEASE_SUITE_V1_PASS
-ROLE_BINDING_RELEASE_SUITE_VERIFY_V1_PASS
-EDIT_RELEASE_SUITE_INTEGRATION_PASS
-ROLE_BINDING_OPERATOR_BLUEPRINT_GAP_V1_WATCH
-```
-
-Current evidence:
-
-```text
-release_suite_report: target/nando-wave/slot32-role-binding/role-binding-release-suite-v1.product-proof.json
-binary_suite_report: target/nando-wave/slot32-role-binding/role-binding-binary-eval-pack-suite-v1.product-proof.json
-edit_package_log: data/rule_logic_operator_battery_v4/edit/edit_role_binding_public_sdk_package_release.log
-edit_report: data/rule_logic_operator_battery_v4/edit/EDIT_RUNTIME_BOUNDARY_REPORT.md
-
-package_count: 7
-binary_eval_pack_count: 7
-score_report_count: 7
-total_sequence_count: 27648
-total_sequence_false_local_accepts: 0
-min_sequence_strict_ordered_accuracy_milli: 1000
-
-sdk_edit_marker_length:
-  margin_threshold: 1
-  package_bytes: 1664
-  package_edge_count: 135
-  sequence_median_energy_margin: 6144
-```
-
-Boundary:
-
-```text
-EDIT is now source-verified in the `.nwrb/.nwreb` release suite, but only as
-PARTIAL OPERATOR_BLUEPRINT coverage. Do not claim full EDIT, FIELD,
-FILTER_GROUP, or full 32-slot operator battery closure.
-```
-
-## 2026-07-03 - Product Runtime Direction
-
-Verdict:
-
-```text
-PRODUCT_RUNTIME_TASK_READY
-```
-
-Next work should start from:
-
-```text
-docs/NANDO_WAVE_PRODUCT_RUNTIME_TASK.md
-docs/NANDO_WAVE_L2_PROFILE_SHARDING_TESTS.md
-```
-
-Core direction:
-
-```text
-route -> L2-sized profile shard -> local score -> fallback
-```
-
-Do not build more eval-heavy demo workers. Build a serving-only runtime:
-
-```text
-load .nwrb packages only
-no .nwreb eval packs in serving mode
-profile registry
-/health /profiles /score /replay /metrics
-exact-cache comparison
-0 false local accepts
-latency/RSS/runtime-bytes report
-```
-
-## 2026-07-03 - Operator Battery V4 EDIT Current-Source Runtime Gate
-
-Verdict:
-
-```text
-EDIT_CURRENT_SOURCE_RUNTIME_GATE_PASS
-EDIT_RELEASE_SUITE_INTEGRATION_PASS
-```
-
-What changed:
-
-```text
-Reran the EDIT marker/length runtime gate against the current Rust sources and
-overwrote the stale release log. The fresh run is stronger than the old report:
-the gate still passes, but with only 136 role_binding_edges in the current
-runtime path.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/edit/EDIT_RUNTIME_BOUNDARY_REPORT.md
-runtime_log: data/rule_logic_operator_battery_v4/edit/edit_marker_length_runtime_gate_release.log
-boundary_log: data/rule_logic_operator_battery_v4/edit/edit_runtime_boundary_gate.log
-
-runtime_command:
-  cargo test -p nando-core --release --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_edit_marker_length_must_transfer_without_lookup_or_runtime_phase_hack --nocapture
-
-boundary_command:
-  cargo test -p nando-core --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_edit_current_role_binding_runtime_boundary_must_be_explicit --nocapture
-
-runtime_result: ok, 1 passed, 40 filtered out, finished in 76.94s
-boundary_result: ok, 1 passed, 40 filtered out, finished in 0.26s
-
-train_rows: 1536
-heldout_rows: 1536
-edit_output_slot_count: 17
-edit_role_slot_count: 17
-edit_marker_role_slot: 16
-edit_slot_ordered_sequence_accuracy_milli: 1000
-edit_flat_slot_ordered_sequence_accuracy_milli: 1000
-edit_sequence_energy_accuracy_milli: 1000
-edit_sequence_energy_median_gap: 39424
-edit_sequence_energy_p10_gap: 13056
-edit_energy_pass_slot_fail: 0
-edit_output_slot_cleanup_failed_slots: 0
-flat_sequence_energy_parity_mismatches: 0
-flat_gap_parity_mismatches: 0
-state_delta_edges: 0
-role_binding_edges: 136
-
-ablation_without_binding_accuracy_milli: 0
-ablation_without_action_accuracy_milli: 0
-ablation_without_edit_demo_accuracy_milli: 0
-ablation_without_role_accuracy_milli: 0
-ablation_without_active_fringe_accuracy_milli: 0
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-```
-
-Boundary:
-
-```text
-EDIT is now a fresh current-source runtime PASS and is integrated into the
-`.nwrb/.nwreb` role-binding release suite as `sdk_edit_marker_length`. Do not
-overclaim it: OPERATOR_BLUEPRINT marks EDIT as PARTIAL because the full EDIT
-family is still not closed.
-```
-
-## 2026-07-03 - Slot32 Role-Binding Operator Blueprint Gap
-
-Verdict:
-
-```text
-ROLE_BINDING_OPERATOR_BLUEPRINT_GAP_V1_WATCH
-ROLE_BINDING_OPERATOR_BLUEPRINT_GAP_VERIFY_V1_PASS
-```
-
-What changed:
-
-```text
-Added a claim-boundary audit over the current strict 32-slot role-binding
-release suite:
-  role-binding-operator-blueprint-gap-v1
-  role-binding-operator-blueprint-gap-verify-v1
-
-The audit checks the green `.nwrb/.nwreb` release-suite evidence against
-docs/OPERATOR_BLUEPRINT.md and refuses to treat the current role-binding bundle
-as the full 32-slot operator battery.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_OPERATOR_BLUEPRINT_GAP.md
-gap_report: target/nando-wave/slot32-role-binding/role-binding-operator-blueprint-gap-v1.product-proof.json
-release_suite_report: target/nando-wave/slot32-role-binding/role-binding-release-suite-v1.product-proof.json
-
-release_suite_report_fingerprint64: 6657695271699713258
-release_suite_gate_pass: true
-release_suite_package_count: 7
-release_suite_total_sequence_count: 27648
-release_suite_min_sequence_strict_ordered_accuracy_milli: 1000
-release_suite_min_sequence_median_energy_margin: 6144
-all_forbidden_flags_false: true
-
-blueprint_required_class_count: 9
-proven_classes: 0
-partial_classes: 7
-missing_classes: 2
-coverage_gate_pass: false
-full_32_slot_operator_battery_closed: false
-report_matches_sources: true
-```
-
-Coverage:
-
-```text
-PARTIAL: SELECT, MOVE_COPY, EDIT, ORDER, CONDITION_ROUTE, COMPOSE, VERIFY_REPAIR
-MISSING: FIELD, FILTER_GROUP
-PROVEN: none against the full OPERATOR_BLUEPRINT class contract
-```
-
-Boundary:
-
-```text
-This is a WATCH claim-boundary report, not a release failure. The existing
-role-binding release suite remains green, but the full 32-slot operator battery
-remains open.
-```
-
-## 2026-07-03 - Slot32 Role-Binding Release Suite
-
-Verdict:
-
-```text
-ROLE_BINDING_RELEASE_SUITE_V1_PASS
-ROLE_BINDING_RELEASE_SUITE_VERIFY_V1_PASS
-```
-
-What changed:
-
-```text
-Added a release-suite proof bundle for the current strict 32-slot role-binding
-path:
-  role-binding-release-suite-v1
-  role-binding-release-suite-verify-v1
-
-The suite ties `.nwrb` packages, all-seed `.nwreb` eval-packs, per-row
-binary/score reports, and the aggregate binary suite into one source-verified
-product-proof report.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_RELEASE_SUITE.md
-release_suite_report: target/nando-wave/slot32-role-binding/role-binding-release-suite-v1.product-proof.json
-binary_suite_report: target/nando-wave/slot32-role-binding/role-binding-binary-eval-pack-suite-v1.product-proof.json
-
-package_count: 7
-binary_eval_pack_count: 7
-score_report_count: 7
-total_package_bytes: 134912
-total_binary_eval_pack_bytes: 369676909
-total_sequence_count: 27648
-total_expected_local_sequences: 13824
-total_expected_fallback_sequences: 13824
-total_sequence_false_local_accepts: 0
-total_sequence_missed_expected_local: 0
-min_sequence_strict_ordered_accuracy_milli: 1000
-min_sequence_median_energy_margin: 6144
-all_packages_magic_match: true
-all_packages_bytes_match_inspect: true
-all_package_fingerprints_match_suite: true
-all_eval_pack_magic_match: true
-all_eval_pack_fingerprints_match_suite: true
-all_binary_reports_match_suite_rows: true
-all_score_reports_match_suite_rows: true
-all_forbidden_flags_false: true
-report_matches_sources: true
-```
-
-Boundary:
-
-```text
-This closes a product-proof release bundle for the current strict 32-slot
-role-binding package/eval-pack set.
-
-Do not claim this closes the full 32-slot operator battery, `.nwpc` bridge,
-raw-language action parsing, broad workflow reasoning, text generation, or
-commercial license. The serving-only profile runtime is tracked separately.
-```
-
-## 2026-07-03 - Slot32 Role-Binding Binary Eval-Pack Suite
-
-Verdict:
-
-```text
-ROLE_BINDING_BINARY_EVAL_PACK_SUITE_V1_PASS
-ROLE_BINDING_BINARY_EVAL_PACK_SUITE_VERIFY_V1_PASS
-```
-
-What changed:
-
-```text
-Added all-seed `.nwreb` suite commands for the current slot32 role-binding
-package set:
-  role-binding-binary-eval-pack-suite-v1
-  role-binding-binary-eval-pack-suite-verify-v1
-
-The suite converts and scores all current seed/label corpus eval-packs through the
-serialized `.nwrb` role-binding runtime and verifies the aggregate report
-against current sources.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_BINARY_EVAL_PACK_SUITE.md
-suite_report: target/nando-wave/slot32-role-binding/role-binding-binary-eval-pack-suite-v1.product-proof.json
-
-suite_items: 7
-total_source_eval_pack_bytes: 2790622842
-total_binary_eval_pack_bytes: 369676909
-suite_size_reduction_milli: 867
-total_sequence_count: 27648
-total_expected_local_sequences: 13824
-total_expected_fallback_sequences: 13824
-total_sequence_false_local_accepts: 0
-total_sequence_missed_expected_local: 0
-min_sequence_strict_ordered_accuracy_milli: 1000
-min_sequence_median_energy_margin: 6144
-all_binary_gate_pass: true
-all_binary_reports_match_sources: true
-all_score_gate_pass: true
-all_score_reports_match_sources: true
-all_eval_pack_format_binary: true
-all_package_fingerprints_match: true
-```
-
-Boundary:
-
-```text
-This closes compact binary `.nwreb` role-binding eval-pack packaging and
-scoring for the current 32-slot role-binding package set with per-item margin
-thresholds.
-
-Do not claim this closes the full 32-slot operator battery, `.nwpc` bridge,
-raw-language action parsing, broad workflow reasoning, or text generation.
-```
-
-## 2026-07-03 - Slot32 Role-Binding Binary Eval-Pack Rung
-
-Verdict:
-
-```text
-ROLE_BINDING_EVAL_PACK_BINARY_V1_PASS
-ROLE_BINDING_PACKAGE_SCORE_V1_PASS
-ROLE_BINDING_PACKAGE_SCORE_VERIFY_V1_PASS
-```
-
-What changed:
-
-```text
-Added compact binary `.nwreb` eval-pack support for role-binding sequence
-scoring. The same `role-binding-package-score-v1` command now auto-detects JSON
-or binary eval-packs by magic/header.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_BINARY_EVAL_PACK_RUNG.md
-source_eval_pack_json: target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.corpus-eval-pack-v1.json
-binary_eval_pack: target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.corpus-eval-pack-v1.nwreb
-binary_pack_report: target/nando-wave/slot32-role-binding/role-binding-eval-pack-binary-corpus-v1.product-proof.json
-binary_score_report: target/nando-wave/slot32-role-binding/role-binding-package-score-binary-corpus-v1.product-proof.json
-
-binary_magic_text: NWRE0001
-package_fingerprint64: 365065097387925697
-sequence_count: 4096
-source_eval_pack_bytes: 455828420
-binary_eval_pack_bytes: 60587229
-size_reduction_milli: 867
-roundtrip_exact: true
-eval_pack_format: binary
-sequence_strict_ordered_accuracy_milli: 1000
-sequence_false_local_accepts: 0
-sequence_missed_expected_local: 0
-report_matches_sources: true
-```
-
-Boundary:
-
-```text
-This closes compact binary role-binding eval-pack packaging and scoring for the
-representative 32-slot conditional package.
-
-The all-seed binary eval-pack boundary is superseded by the suite section
-above. Do not claim this representative rung closes `.nwrb` daemon/registry
-routing, `.nwpc` bridge, raw-language action parsing, broad workflow reasoning,
-or text generation.
-```
-
-## 2026-07-05: Forbidden `.nwrb` Commercial Backend Removal
-
-Decision:
-
-```text
-The `.nwrb role-binding profiles -> payload builder -> verifier -> catalog`
-path is forbidden. It is not CPU80 progress, not a commercial offload backend,
-not market-savings evidence, and not a future Nando Wave architecture path.
-```
-
-Removed from active Rust path:
-
-```text
-crates/nando-cli/src/role_binding_package_cmd.rs
-crates/nando-cli/src/role_binding_runtime_cmd.rs
-crates/nando-cli/src/role_binding_runtime_cmd/edit_safe_policy.rs
-crates/nando-cli/src/role_binding_runtime_cmd/serving_ops.rs
-crates/nando-cli/src/role_binding_runtime_cmd/test_output_parse.rs
-crates/nando-core/tests/wavepredictor_binding_pressure_l3.rs
-crates/nando-core/tests/wavepredictor_role_binding_sdk_public.rs
-nando_core public re-exports for WavePredictorRoleBinding*
-nando_core `.nwrb` package/SDK/serving runtime internals
-```
-
-Current guard:
-
-```text
-nando-cli role-binding-* -> FORBIDDEN_LEGACY_NWRB_BACKEND
-```
-
-Allowed path:
-
-```text
-phase-center / phase-action package
--> flat CPU runtime
--> parity / ablation / shortcut gates
--> verifier-backed real-traffic shadow
-```
-
-Verification:
-
-```text
-cargo fmt --check
-cargo check -p nando-core
-cargo check -p nando-cli
-cargo clippy -p nando-core -- -D warnings
-cargo clippy -p nando-cli -- -D warnings
-cargo test -p nando-core --test phase_center_offload_sdk_public -- --nocapture
-cargo test -p nando-core --tests --no-run
-cargo test -p nando-cli --no-run
-nanda-check --triads docs/structural_gates/forbidden-nwrb-commercial-backend-v1.triads.json
-```
-
-## 2026-07-03 - Slot32 Role-Binding CLI Corpus Score/Verify Rung
-
-Verdict:
-
-```text
-ROLE_BINDING_PACKAGE_SCORE_V1_PASS
-ROLE_BINDING_PACKAGE_SCORE_VERIFY_V1_PASS
-```
-
-What changed:
-
-```text
-The `.nwrb` CLI score path now supports full sequence eval rows:
-  active_fringe
-  output slots
-  positive/negative impulses
-  strict ordered slot pass
-  sequence energy margin
-
-The 32-slot public SDK package gate now emits corpus eval-packs from heldout
-corpus rows, not from package edges.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_CLI_CORPUS_SCORE_RUNG.md
-package: target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.nwrb
-corpus_eval_pack: target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.corpus-eval-pack-v1.json
-score_report: target/nando-wave/slot32-role-binding/role-binding-package-score-corpus-v1.product-proof.json
-
-package_fingerprint64: 365065097387925697
-eval_pack_fingerprint64: 14754950188000667967
-margin_threshold: 1000000
-sequence_count: 4096
-expected_local_sequences: 2048
-expected_fallback_sequences: 2048
-sequence_local_operator_calls: 2048
-sequence_fallback_to_llm_calls: 2048
-sequence_false_local_accepts: 0
-sequence_missed_expected_local: 0
-sequence_strict_ordered_accuracy_milli: 1000
-sequence_median_energy_margin: 2449664
-report_matches_sources: true
-```
-
-Current-source package rerun:
-
-```text
-verdict: SLOT32_ROLE_BINDING_PUBLIC_SDK_PACKAGE_RUNG_PASS
-seeds: 3
-labels: {"sdk_conditional_branch", "sdk_mixed_map"}
-min_slot_accuracy_milli: 1000
-min_sequence_energy_accuracy_milli: 1000
-total_sdk_gap_parity_mismatches: 0
-total_sdk_sequence_energy_parity_mismatches: 0
-total_false_local_accepts: 0
-max_p99_latency_ns: 689788
-```
-
-Boundary:
-
-```text
-This closes independent corpus-emitted `.nwrb` CLI sequence scoring for one
-representative 32-slot conditional package.
-
-The JSON corpus eval-pack is huge (~456 MB for seed1 conditional; target
-slot32 dir ~2.6 GB after all six seed/label exports). Treat compact binary
-role-binding eval-pack as the next packaging debt.
-
-The next rung closed compact binary eval-pack packaging for the representative
-conditional package. Daemon registry routing, `.nwpc` bridge, raw-language
-action parsing, broad workflow reasoning, and text generation remain open.
+The live daemon can build a shadow-only product-hot runtime from clean online
+candidate survivors even when the call/token promotion manifest is blocked by
+quarantine.
 ```
 
-## 2026-07-03 - Slot32 Role-Binding CLI Score/Verify Rung
+Latest snapshot from that checkpoint:
 
-Verdict:
-
-```text
-ROLE_BINDING_PACKAGE_SCORE_V1_PASS
-ROLE_BINDING_PACKAGE_SCORE_VERIFY_V1_PASS
-```
-
-What changed:
-
-```text
-Added `.nwrb` CLI scoring commands over an explicit eval-pack interface:
-  role-binding-eval-pack-from-package-v1
-  role-binding-package-score-v1
-  role-binding-package-score-verify-v1
-
-The score path loads package bytes through the public role-binding SDK runtime,
-scores local/fallback eval rows, writes a deterministic report, and verify
-rebuilds the report from package + eval-pack.
-```
-
-Current evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_CLI_SCORE_RUNG.md
-package: target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.nwrb
-eval_pack: target/nando-wave/slot32-role-binding/role-binding-eval-pack-v1.json
-score_report: target/nando-wave/slot32-role-binding/role-binding-package-score-v1.product-proof.json
-
-package_fingerprint64: 365065097387925697
-eval_pack_fingerprint64: 14619240648419331465
-task_count: 128
-local_operator_calls: 64
-fallback_to_llm_calls: 64
-false_local_accepts: 0
-missed_expected_local: 0
-report_matches_sources: true
-```
-
-Boundary:
-
 ```text
-This closes `.nwrb` CLI scoring/verify plumbing over an explicit eval-pack.
-The generated eval-pack in this rung is package-derived and is only a scoring
-smoke, not an independent corpus proof.
+source:
+  live_store_clean_candidate_survivors
 
-Do not claim this closes independent corpus-emitted `.nwrb` eval-pack, daemon
-registry routing, `.nwpc` bridge, raw-language action parsing, broad workflow
-reasoning, or text generation.
-```
+product_hot_score_only_runtime_loaded: true
+product_hot_score_only_runtime_active: true
+product_hot_score_only_active_profile_count: 4
+product_hot_score_only_package_bytes: 2272
 
-## 2026-07-02 - Reviewer Direction: Build 32-Slot Product Rung
+append_score_candidate_events: 13
+append_unique_cpu_accepts_over_exact_cache: 10
+append_tokens_saved: 7585
+append_false_accepts: 1
 
-Verdict:
+final_hot_runtime_available: true
+final_hot_profile_count: 4
 
-```text
-BUILD_32_SLOT_PRODUCT_RUNG_NEXT
+local_accept_enabled: false
+market_money_claim_allowed: false
 ```
 
-Direction:
+Current versioning gate:
 
 ```text
-Keep the current 16-slot/C32 path as frozen baseline and demo fallback.
-Do not replace or destabilize it.
+live_tail_daemon: append_live_tail_shadow_daemon_v6
+compression_accounting: restart_safe_claimsafe_stable_window_calls_tokens_cost_milli_accounting_v4
 
-Next product-facing scaling target is 32 slots.
+New report contract:
+  append_compression_claim_min_rows
+  append_compression_claim_allowed
+  append_compression_claim_blocker
+  stable_decision_log_architecture_key
+  stable_decision_log_rows
+  stable_decision_log_claim_allowed
+  stable_decision_log_claim_blocker
+  stable_decision_log_clean_suffix_rows
+  stable_decision_log_clean_suffix_min_rows
+  stable_decision_log_clean_suffix_rows_to_min
+  stable_decision_log_clean_suffix_claim_allowed
+  stable_decision_log_clean_suffix_claim_blocker
 
 Reason:
-  16 slots prove the base transferable-action engine.
-  32 slots are needed for realistic Codex-like local offload windows:
-    file/function/symbol/import/callsite/type/error/test/condition/patch roles
-    can exceed 16 active roles quickly.
-
-Goal:
-  make 32 slots a real proof rung, not just capacity smoke.
+  visible calls/tokens/cost counters are not product claims when append
+  false_accepts, local_accept, missing denominator, missing hot runtime, or
+  post-quarantine false_accepts are present. A clean tiny window is only a
+  smoke and stays blocked by append_window_below_min_rows. Stable proof-window
+  accounting is now restart-safe and counts only decision-log rows with the
+  current architecture_version_key. Stable clean-suffix accounting separately
+  tracks the rows after the latest non-exact false accept so old quarantine
+  failures do not masquerade as current clean traffic.
 ```
 
-Required 32-slot gates:
+Latest stable clean-suffix smoke:
 
 ```text
-1. real 32-slot operator corpus, not only smoke maps
-2. strict ordered decoder must pass
-3. sequence/operator energy must pass
-4. flat/runtime parity must pass
-5. action/role/binding ablations must collapse
-6. shortcut gates must stay clean
-7. multi-seed robustness
-8. cache/offload workflow benchmark
-9. no false local accepts
-10. explicit p99 runtime target and memory/cache report
+report:
+  target/nando-wave/streaming/stable-clean-suffix-smoke.report.json
+
+stable_decision_log_rows: 1179
+stable_decision_log_false_accepts: 5
+stable_decision_log_claim_allowed: false
+stable_decision_log_claim_blocker: append_false_accepts_nonzero
+
+stable_decision_log_clean_suffix_rows: 44
+stable_decision_log_clean_suffix_min_rows: 100
+stable_decision_log_clean_suffix_rows_to_min: 56
+stable_decision_log_clean_suffix_score_candidate_events: 48
+stable_decision_log_clean_suffix_unique_cpu_accepts_over_exact_cache: 23
+stable_decision_log_clean_suffix_tokens_saved: 26342
+stable_decision_log_clean_suffix_false_accepts: 0
+stable_decision_log_clean_suffix_last_quarantine_row_index: 1135
+stable_decision_log_clean_suffix_claim_allowed: false
+stable_decision_log_clean_suffix_claim_blocker: append_no_final_hot_runtime
+
+local_accept_enabled: false
+market_money_claim_allowed: false
 ```
+
+Registry smoke:
+
+```text
+target:
+  target/nando-wave/streaming/stable-clean-suffix-smoke-with-registry.report.json
+
+result:
+  blocked before report write
+  blocker: product-hot registry budget gate is not passed
+
+Meaning:
+  false_accept suffix is clean, but product claim still needs a valid final hot
+  runtime/budget path and enough suffix rows. This is proof debt, not a pass.
+```
+
+Correct promoted .nwpc handoff smoke:
+
+```text
+manifest copied for smoke:
+  target/nando-wave/streaming/stable-clean-suffix-promoted-call-token-promotion-manifest.json
+
+report:
+  target/nando-wave/streaming/stable-clean-suffix-promoted.json
+
+product_hot_score_only_runtime_source: call_token_promotion_manifest
+product_hot_score_only_runtime_loaded: true
+product_hot_score_only_runtime_active: true
+product_hot_score_only_active_profile_count: 1
+product_hot_budget_passed: true
+final_hot_runtime_available: true
+
+stable_decision_log_clean_suffix_rows: 44
+stable_decision_log_clean_suffix_min_rows: 100
+stable_decision_log_clean_suffix_rows_to_min: 56
+stable_decision_log_clean_suffix_score_candidate_events: 48
+stable_decision_log_clean_suffix_unique_cpu_accepts_over_exact_cache: 23
+stable_decision_log_clean_suffix_tokens_saved: 26342
+stable_decision_log_clean_suffix_false_accepts: 0
+stable_decision_log_clean_suffix_claim_allowed: false
+stable_decision_log_clean_suffix_claim_blocker: append_window_below_min_rows
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
+Current next blocker:
+
+```text
+clean suffix needs >= 100 rows under promoted .nwpc runtime.
+Current suffix rows: 44.
+Need 56 more clean post-quarantine rows before product compression claim can
+advance to the next gate.
+```
+
+Current local live service:
+
+```text
+service:
+  nando-phase-live-tail-current.service
+
+command:
+  phase-stream-hot-path-daemon-append-live-tail-v1
+
+status:
+  active/running under user systemd
+
+report:
+  target/nando-wave/streaming/live-tail-daemon-current.report.json
+
+decision log:
+  target/nando-wave/streaming/nando-phase-live-miner-tail-20260707T165122.decisions.jsonl
+
+latest observed snapshot:
+  append_parsed_rows: 33
+  append_score_events_before_update: 33
+  append_score_candidate_events: 33
+  append_unique_cpu_accepts_over_exact_cache: 26
+  append_tokens_saved: 30695
+  append_false_accepts: 1
+  append_clean_suffix_rows: 9
+  append_clean_suffix_false_accepts: 0
+  stable_decision_log_rows: 1212
+  stable_decision_log_unique_cpu_accepts_over_exact_cache: 367
+  stable_decision_log_tokens_saved: 427596
+  stable_decision_log_false_accepts: 5
+  stable_decision_log_clean_suffix_rows: 77
+  stable_decision_log_clean_suffix_rows_to_min: 23
+  stable_decision_log_clean_suffix_unique_cpu_accepts_over_exact_cache: 49
+  stable_decision_log_clean_suffix_tokens_saved: 57037
+  stable_decision_log_clean_suffix_false_accepts: 0
+  final_hot_runtime_available: true
+  product_hot_score_only_runtime_source: live_store_clean_candidate_survivors
+  product_hot_score_only_runtime_active: true
+  product_hot_score_only_active_profile_count: 4
+  product_hot_score_only_quarantined: true
+  product_hot_score_only_quarantine_false_accepts: 1
+  product_hot_score_only_post_quarantine_score_candidate_events: 31
+  product_hot_score_only_post_quarantine_false_accepts: 0
+  hot_bytes_estimate: 2248
+  worker_rss_observed: about 60 MiB
+  local_accept_enabled: false
+  market_money_claim_allowed: false
+
+current interpretation:
+  shadow signal is live. One bad product-hot profile was quarantined; clean
+  sibling profiles stayed active, and post-quarantine product-hot false_accepts
+  are zero so far.
+  product/market claim remains blocked because the current hot runtime source
+  is clean survivor runtime, not a claim-ready promotion/registry source, and
+  the clean suffix is still below the 100-row proof window.
+```
+
+Latest claim-safe smoke after restart:
+
+```text
+report:
+  target/nando-wave/streaming/nando-phase-live-miner-tail-20260707T165122.report.json
+
+append_parsed_rows: 1
+append_false_accepts: 0
+append_compression_claim_min_rows: 100
+append_compression_claim_allowed: false
+append_compression_claim_blocker: append_window_below_min_rows
+active_clean_calls_saved: 1
+active_clean_tokens_saved: 479
+product_hot_score_only_post_quarantine_false_accepts: 0
+final_hot_runtime_available: true
+final_hot_profile_count: 4
+local_accept_enabled: false
+market_money_claim_allowed: false
+provider_money_claim_blocker: no_future_shadow_billing_request_rows
 
 Boundary:
-
-```text
-Do not count success from:
-  Python demo
-  lookup
-  target_id
-  proof_rule_id authority
-  concrete_x_lookup
-  manual local_out_t
-  stale logs
-  hidden hardcode
-
-Do not change architecture until a red 32-slot gate is reproduced and diagnosed.
+  small fresh tail window; valid as schema/safety smoke, not a market money
+  claim and not a stable compression claim.
 ```
 
-## 2026-07-02 - Reviewer Direction: Split Phase Package CLI
+Latest restart-safe decision-log smoke:
+
+```text
+decision_schema_version: append_live_tail_decision_v2
+decision rows carry:
+  architecture_versions
+  architecture_version_key
+
+stable_decision_log_rows: 5
+stable_decision_log_score_candidate_events: 0
+stable_decision_log_false_accepts: 0
+stable_decision_log_claim_allowed: false
+stable_decision_log_claim_blocker: append_window_below_min_rows
+
+Boundary:
+  decision log is now append-only and restart-safe, but current-version stable
+  rows have not yet reached the minimum proof window or score-candidate value.
+```
+
+Latest test-server package:
+
+```text
+package:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T012500Z.tar.gz
+package_report:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T012500Z.package.json
+sha256 sidecar:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T012500Z.tar.gz.sha256
+sha256:
+  8e40e9732ad5da0701e827167520734bf3ebe04bbe4251d3214f2e740def6eaf
+
+contents:
+  release nando-cli
+  phase-center appender systemd unit
+  phase-center live-tail shadow miner systemd unit
+  metrics snapshot systemd unit/timer
+  provider-evidence snapshot systemd unit/timer
+  provider-export contract-pack systemd unit/timer
+  readiness snapshot systemd unit/timer
+  test-server verify systemd unit/timer
+  local-accept promotion gate systemd unit/timer
+  provider-export watch systemd unit/timer
+  install/readiness verify script
+  metrics snapshot script for JSON + Prometheus text
+  deploy README and env example
+
+local snapshot from current live-tail report:
+  stable_decision_log_rows: 682
+  stable_decision_log_unique_cpu_accepts_over_exact_cache: 197
+  stable_decision_log_tokens_saved: 234042
+  stable_decision_log_false_accepts: 1
+  stable_decision_log_claim_allowed: false
+  stable_decision_log_claim_blocker: append_false_accepts_nonzero
+  product_hot_compression_claim_allowed: false
+  product_hot_compression_claim_blocker: product_hot_post_quarantine_window_missing
+  product_hot_post_quarantine_false_accepts: 0
+  product_hot_post_quarantine_score_candidate_events: 0
+  active_clean_calls_saved: 197
+  active_clean_tokens_saved: 234042
+  future_shadow_billing_request_rows: 19
+  future_shadow_billing_request_tokens: 46080
+  market_money_claim_allowed: false
+  provider_money_claim_blocker: external_provider_export_missing
+
+provider evidence snapshot smoke:
+  acquisition.billing_request_rows: 19
+  acquisition.provider_boundary_capture_request_rows: 19
+  acquisition.total_tokens_requiring_billing: 46080
+  acquisition.external_provider_collection_worklist_ready: true
+  evidence_chain.provider_billing_evidence_present: false
+  evidence_chain.market_money_claim_allowed: false
+  blocker: external_provider_export_missing
+
+provider export contract-pack smoke:
+  contract_ready: true
+  billing_request_rows: 19
+  total_tokens_requiring_billing: 46080
+  blocker: external_provider_export_missing
+  market_money_claim_allowed: false
+  local_accept_enabled: false
+
+readiness snapshot smoke:
+  compression_claim_allowed: false
+  raw_stable_compression_claim_allowed: false
+  raw_stable_compression_claim_blocker: append_false_accepts_nonzero
+  product_hot_compression_claim_allowed: false
+  product_hot_compression_claim_blocker: product_hot_post_quarantine_window_missing
+  money_evidence_ready: false
+  market_money_claim_allowed: false
+  local_accept_promotion_allowed: false
+  blocker: product_hot_post_quarantine_window_missing
+
+test-server verify smoke:
+  install_ready: true
+  shadow_metrics_ready: false
+  verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_INSTALL_WATCH_METRICS
+  blockers:
+    - product_hot_post_quarantine_window_missing
+    - market_money_claim_blocked
+    - local_accept_promotion_blocked
+
+local-accept promotion gate smoke:
+  promotion_allowed: false
+  local_accept_policy_candidate_written: true
+  local_accept_enabled: false
+  requires_manual_activation_after_review: true
+  blocker: shadow_metrics_not_ready
+  verdict: NANDO_PHASE_CENTER_LOCAL_ACCEPT_PROMOTION_GATE_BLOCKED
+
+Checks:
+  systemd-analyze verify: PASS
+  cargo build --release -p nando-cli: PASS
+  metrics snapshot script and timer unit: PASS
+  provider evidence snapshot: PASS
+  provider export contract-pack: PASS
+  readiness snapshot: PASS
+  test-server verify: PASS
+  local-accept promotion gate: PASS
+  provider export contract-pack stale guard: PASS
+  git diff --check for package files: PASS
+
+Boundary:
+  deployable test-server metric stand only. It can measure real traffic
+  compression and produce provider-evidence work, but it does not enable
+  local_accept and does not claim money until external provider export joins.
+```
 
 Verdict:
 
 ```text
-PHASE_PACKAGE_CMD_NEEDS_MECHANICAL_MODULE_SPLIT
+PASS:
+  per-profile survivor availability
+
+WATCH:
+  product compression claim
+
+Blocker:
+  live false_accepts must return to 0 on a future shadow window
 ```
 
-Why:
+## Current P0 Task
 
 ```text
-crates/nando-cli/src/phase_package_cmd.rs is now 16415 lines.
-It mixes too many concerns:
-  package build/inspect/score;
-  product proof/release/regression/freeze;
-  workflow bench/replay;
-  strict multiseed audit;
-  corpus generation;
-  coverage/shortcut gates;
-  report structs;
-  argument parsing;
-  path defaults;
-  JSON/report printing.
-
-This size makes freshness/audit review harder and increases the chance of
-touching proof-source files after a long runtime rerun.
+Make the miner keep clean survivor profiles hot while automatically splitting
+or quarantining unsafe hidden-state branches.
 ```
 
-Refactor gate first:
+Required reporting:
 
 ```text
-Do not split `phase_package_cmd.rs` by intuition or by file size alone.
-
-Use the NANDA structural-gate refactor workflow first:
-
-  /home/ubu/.codex/skills/nanda-structural-gate/scripts/nanda-self-check
-  /home/ubu/.codex/skills/nanda-structural-gate/scripts/nanda-boundary-economics . --find-refactors --format json
-  /home/ubu/.codex/skills/nanda-structural-gate/scripts/nanda-dogfood . --refactor-plan --boundary-economics --format json
-  /home/ubu/.codex/skills/nanda-structural-gate/scripts/nanda-map-code crates/nando-cli/src/phase_package_cmd.rs --format json
-
-Policy from the skill:
-  NO EVIDENCE => NO CUT
-  WATCH => unresolved, not permission to split
-  SPLIT_STRONG => mechanical split allowed after required tests
-  SPLIT_WEAK => only a small preparatory step plus human review
-  VETO => stop and repair route/owner conflict first
-
-If the global packet is too large, split into route-local checks instead of
-raising limits or pretending the global WATCH is PASS.
+active_clean_profile_count
+active_clean_calls_saved
+active_clean_tokens_saved
+quarantined_profile_count
+lost_calls_due_to_quarantine
+lost_tokens_due_to_quarantine
+append_false_accepts
+product_hot_score_only_post_quarantine_false_accepts
 ```
 
-Direction after the refactor gate allows it:
+Success target:
 
 ```text
-Do a mechanical split only. No semantic/runtime changes in the same step.
-
-Suggested shape:
-  crates/nando-cli/src/phase_package_cmd/mod.rs
-  crates/nando-cli/src/phase_package_cmd/args.rs
-  crates/nando-cli/src/phase_package_cmd/paths.rs
-  crates/nando-cli/src/phase_package_cmd/package.rs
-  crates/nando-cli/src/phase_package_cmd/action_corpus.rs
-  crates/nando-cli/src/phase_package_cmd/action_runtime.rs
-  crates/nando-cli/src/phase_package_cmd/product_proof.rs
-  crates/nando-cli/src/phase_package_cmd/release.rs
-  crates/nando-cli/src/phase_package_cmd/workflow.rs
-  crates/nando-cli/src/phase_package_cmd/strict_multiseed.rs
-  crates/nando-cli/src/phase_package_cmd/reports.rs
-
-Keep public command functions re-exported from mod.rs so main.rs changes as
-little as possible.
+final_hot_runtime_available: true
+final_hot_profile_count: >0
+append_false_accepts: 0
+product_hot_score_only_post_quarantine_false_accepts: 0
+active_clean_tokens_saved > 0
 ```
 
-Required guard:
+## P0 Implementation Checklist
+
+Baseline before edits:
 
 ```text
-After split:
-  cargo fmt --check
-  cargo check -p nando-cli
-  cargo clippy -p nando-cli -- -D warnings
-  phase-action-regression-verify-v1
-  phase-action-regression-freeze-verify-v1
-
-Do not rerun the 12 strict runtime logs until the split is done and source is
-frozen. Otherwise the proof freshness loop repeats again.
+Read the live report and preserve these fields as before/after:
+  final_hot_runtime_available
+  final_hot_profile_count
+  product_hot_score_only_runtime_loaded
+  product_hot_score_only_runtime_active
+  append_score_candidate_events
+  append_unique_cpu_accepts_over_exact_cache
+  append_tokens_saved
+  append_false_accepts
+  product_hot_score_only_post_quarantine_false_accepts
+  quarantined_profile_count / quarantined_profile_ids
 ```
 
-## 2026-07-02 - Replay-Anchored Regression/Freeze And Strict Freshness Watch
-
-Verdict:
+Step 1 - isolate runtime availability from promotion manifest:
 
 ```text
-PHASE_ACTION_REGRESSION_V1_PASS_WITH_WORKFLOW_REPLAY_ANCHOR
-PHASE_ACTION_REGRESSION_FREEZE_V1_PASS_WITH_WORKFLOW_REPLAY_ANCHOR
-STRICT_MULTI_SEED_RUST_AUDIT_BEHAVIORAL_PASS_BUT_CURRENT_SOURCE_FRESHNESS_WATCH
+If the promotion manifest is blocked because it contains a quarantined profile,
+do not disable the entire score-only runtime.
+
+Build the active runtime from clean survivor candidates:
+  all candidates
+    - quarantined_profile_ids
+    - candidates with verifier_bound = false
+    - candidates with false_accepts > 0
+    - candidates without negative/background evidence
+
+Expected behavior:
+  bad profile -> unavailable
+  clean siblings -> still scoreable
 ```
 
-What changed:
+Step 2 - make quarantine local:
 
 ```text
-`phase-action-regression-v1` and `phase-action-regression-freeze-v1` now read,
-verify, and carry the stronger multi-package workflow replay report instead of
-depending only on the small workflow-bench smoke.
+Quarantine key must be narrow enough:
+  profile_id
+  route/profile edge
+  hidden-state bucket if available
 
-This is proof-chain wiring only. It does not change runtime operator semantics.
+It must not be:
+  whole route
+  whole action_family
+  whole product-hot runtime
 ```
 
-Commands rerun:
+Step 3 - apply NE BUSY hidden-state split:
 
 ```text
-cargo run -p nando-cli --release -- phase-action-workflow-replay-v1
-cargo run -p nando-cli --release -- phase-action-workflow-replay-verify-v1
-cargo run -p nando-cli --release -- phase-action-regression-v1
-cargo run -p nando-cli --release -- phase-action-regression-verify-v1
-cargo run -p nando-cli --release -- phase-action-regression-freeze-v1
-cargo run -p nando-cli --release -- phase-action-regression-freeze-verify-v1
+Broad bucket:
+  agent_continue_execute / planning / positive_nonzero
+
+must be split by L2 hidden-state atoms before L3 scoring:
+  command_kind
+  tool_kind
+  exit_code_band
+  output_shape
+  edit_vs_inspect
+  state/result atom availability
+  verifier label availability
+  risk atoms
+
+No hand-written product class list.
+The splitter can use atom families, but candidate splits must be generated and
+ranked from stream evidence.
 ```
 
-Artifacts:
+Step 4 - L3 phase-center per hidden branch:
 
 ```text
-workflow replay:
-  target/nando-wave/action-runtime-v1-workflow-replay.product-proof.json
-
-regression:
-  target/nando-wave/action-runtime-v1-regression.product-proof.json
-
-regression freeze:
-  target/nando-wave/action-runtime-v1-regression-freeze.product-proof.json
+For each hidden-state branch:
+  build/update phase-center
+  keep positive evidence
+  keep negative/background evidence
+  compute margin
+  auto-calibrate threshold
+  reject if false_accepts > 0 after calibration
 ```
+
+Step 5 - L4 survivor portfolio selection:
+
+```text
+Select active hot profiles by marginal value, not pretty bucket count.
+
+Primary value:
+  new unique accepts over exact cache
+  new tokens saved over exact cache
+  false_accepts = 0
+  verifier_ready = true
+  hot bytes within budget
+
+Penalties:
+  overlap with already selected profile
+  low margin
+  unstable threshold
+  high lost tokens after quarantine
+  excessive hot bytes
+
+Output must say why each selected profile survived and why each rejected profile
+was rejected.
+```
+
+Step 6 - report both active and lost value:
+
+```text
+active_clean_calls_saved
+active_clean_tokens_saved
+active_clean_profile_count
+
+lost_calls_due_to_quarantine
+lost_tokens_due_to_quarantine
+quarantined_profile_count
+quarantined_profile_ids
+
+This is required because after quarantine the product number can go down, but
+the report must explain whether value was lost to safety or missing splits.
+```
+
+Step 7 - keep hot path small:
+
+```text
+Hot score loop may use:
+  numeric route/profile ids
+  prebuilt phase-center runtime
+  small scratch buffers
+  margin/threshold scoring
+
+Hot score loop must not use:
+  JSONL
+  filesystem writes
+  provider billing
+  report generation
+  heavy mining
+  string route matching as authority
+  local_accept
+```
+
+Minimum checks:
+
+```text
+cargo fmt --check
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+cargo build --release -q -p nando-cli
+git diff --check
+
+plus the live/miner command that produces:
+  target/nando-wave/streaming/nando-phase-live-miner-tail-20260707T165122.report.json
+```
+
+PASS condition for this P0:
+
+```text
+final_hot_runtime_available: true
+final_hot_profile_count: >0
+append_false_accepts: 0
+product_hot_score_only_post_quarantine_false_accepts: 0
+active_clean_tokens_saved > 0
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
+WATCH if:
+
+```text
+runtime stays alive but append_false_accepts > 0
+or active_clean_tokens_saved = 0
+or only manual split/list made it work
+```
+
+FAIL if:
+
+```text
+one quarantined profile disables all clean survivors
+or unsafe profile remains active
+or local_accept becomes true
+or hot path starts doing cold/report/provider work
+```
+
+## Why This Is Better Than Full Runtime Disable
+
+This is not a style preference. It is a better safety/product tradeoff.
+
+Current full-disable behavior:
+
+```text
+one unsafe profile
+  -> entire product-hot runtime disabled
+  -> clean profiles stop saving tokens
+  -> report shows safety but loses product value
+```
+
+Survivor-portfolio behavior:
+
+```text
+one unsafe profile
+  -> only that profile/edge is quarantined
+  -> clean verifier-bound profiles keep scoring
+  -> report separates active value from lost quarantined value
+```
+
+Why it is safer:
+
+```text
+It does not relax the verifier gate.
+It does not lower thresholds.
+It does not enable local_accept.
+It reduces blast radius of a false_accept.
+```
+
+Why it is better for product:
+
+```text
+The customer does not care that one operator failed.
+The customer cares whether the system still safely saves tokens.
+
+If 1 profile is bad and 3 profiles are clean, turning off all 4 profiles throws
+away verified value.
+```
+
+Why it is better for the miner:
+
+```text
+A false_accept becomes training signal:
+  this hidden branch is too broad
+  split it or quarantine it
+
+Instead of:
+  false_accept happened
+  kill all hot runtime
+```
+
+Expected measurable improvement:
+
+```text
+Before:
+  final_hot_runtime_available: false
+  final_hot_profile_count: 0
+
+After:
+  final_hot_runtime_available: true
+  final_hot_profile_count: clean survivors > 0
+  product_hot_score_only_post_quarantine_false_accepts: 0
+```
+
+The honest comparison is not just "more accepts".
+
+The comparison is:
+
+```text
+same or better safety
+  + nonzero active clean savings
+  + explicit lost value from quarantine
+  + smaller blast radius
+```
+
+When this idea is wrong:
+
+```text
+If clean survivors still produce false_accepts, reject them.
+If active_clean_tokens_saved stays 0, the portfolio is not useful yet.
+If survivor selection needs a manual class list, the L4 selector is not good enough.
+If hot path grows cold/report work, the implementation is wrong.
+```
+
+So the goal is not to keep profiles alive at any cost.
+
+The goal is:
+
+```text
+keep only verifier-bound clean survivors alive,
+measure their value,
+and let unsafe branches teach the splitter what to cut next.
+```
+
+## Reviewer Reminder
+
+Do not chase cosmetic cleanup while this is open.
+
+The money node is still:
+
+```text
+automatic streaming class discovery
+  -> hidden-state split
+  -> phase-center operator
+  -> clean survivor portfolio
+  -> verified CPU tokens/calls saved
+```
+
+## 2026-07-08 - Reviewer Check: NE BUSY Implementation Progress
 
 Current evidence:
 
 ```text
-workflow_replay_report_fingerprint64: 16637049491119000274
-workflow_replay_report_bytes: 5274
-workflow_replay_verify_pass: true
-workflow_replay_report_matches_sources: true
-workflow_replay_verdict: PHASE_ACTION_WORKFLOW_REPLAY_V1_PASS
-workflow_replay_package_count: 3
-workflow_replay_trace_calls: 3072
-workflow_replay_total_unique_eval_rows: 308
-workflow_replay_unique_rows: 308
-workflow_replay_exact_cache_llm_calls: 308
-workflow_replay_exact_cache_plus_nando_llm_calls: 36
-workflow_replay_incremental_llm_calls_removed_vs_cache: 272
-workflow_replay_incremental_llm_call_reduction_vs_cache_milli: 883
-workflow_replay_local_accuracy_milli: 1000
-workflow_replay_false_local_accepts: 0
-workflow_replay_max_bench_p99_latency_ns: 117
+report:
+  target/nando-wave/streaming/nando-phase-live-miner-tail-20260707T165122.report.json
 
-regression_verdict: PHASE_ACTION_REGRESSION_V1_PASS
-freeze_verdict: PHASE_ACTION_REGRESSION_FREEZE_V1_PASS
-freeze_regression_report_fingerprint64: 2002304595771295125
-freeze_regression_report_bytes: 6413
-operator_blueprint_fingerprint64: 9874423192353457577
-release_suite_report_fingerprint64: 9827723825761118426
+runtime:
+  product_hot_score_only_runtime_loaded: true
+  product_hot_score_only_runtime_active: true
+  product_hot_score_only_runtime_source: live_store_clean_candidate_survivors
+  final_hot_runtime_available: true
+  final_hot_profile_count: 4
+  hot_bytes_estimate: 2272
+
+safety:
+  append_false_accepts: 0
+  product_hot_score_only_post_quarantine_false_accepts: 0
+  local_accept_enabled: false
+  market_money_claim_allowed: false
+
+portfolio:
+  quarantined_profile_count: 18
+  clean_candidate_exportable_profile_ids: 7
 ```
-
-Strict freshness boundary:
-
-```text
-After the replay-regression/freeze wiring, `crates/nando-cli/src/phase_package_cmd.rs`
-was touched again at 2026-07-02 23:05:01 for CLI output cleanup.
-
-The previous 12 runtime logs remain behaviorally green, but their current-source
-freshness is no longer proven because the last canonical runtime log is
-2026-07-02 22:45:41.
-
-Do not claim STRICT_MULTI_SEED_RUST_AUDIT_PASS_CURRENT_SOURCE again until the
-12 canonical logs and strict audit/verify reports are rerun after the latest
-source timestamp.
-```
-
-Boundary:
-
-```text
-This closes replay anchoring inside regression/freeze for the packaged flat
-action scorer. It does not close strict current-source freshness after the
-23:05 CLI source edit, real pilot workflow, raw action parsing, text generation,
-commercial license closure, or 32-slot full corpus proof.
-```
-
-## 2026-07-02 - Fresh Current-Source Rerun After Workflow Replay Code
 
 Verdict:
 
 ```text
-STRICT_MULTI_SEED_RUST_AUDIT_PASS_CURRENT_SOURCE_AFTER_RERUN
+NE BUSY is partially implemented.
+
+PASS:
+  L3 phase-center runtime is loaded from clean survivors.
+  L4 survivor portfolio keeps runtime alive after quarantine.
+  Verifier/quarantine boundary is preserved.
+
+WATCH:
+  L1/L2 -> hot route/profile matching is not yet working in the current window.
 ```
 
-What changed:
+Current blocker:
 
 ```text
-The reviewer override below was valid: the previous green 12-log audit was
-stale against newer Rust source/test timestamps.
-
-The canonical 12 release logs were rerun after freezing the relevant Rust
-source/test files, then the strict audit and verify commands were rerun.
-
-This rerun supersedes the earlier 18:23..18:56 freshness window because
-`crates/nando-cli/src/phase_package_cmd.rs` changed again during the workflow
-replay product-gate work at 2026-07-02 21:44:10.
+append_hot_view_available_events: 34
+append_route_index_missing_events: 34
+append_scoring_started: false
+append_score_candidate_events: 0
+active_clean_tokens_saved: 0
 ```
-
-Freshness check:
-
-```text
-relevant source/test files:
-  crates/nando-core/tests/wavepredictor_binding_pressure_l3.rs
-    2026-07-02 18:11:21
-  crates/nando-core/src/wave/wavepredictor_hebbian.rs
-    2026-07-02 17:28:01
-  crates/nando-cli/src/phase_package_cmd.rs
-    2026-07-02 21:44:10
-
-fresh runtime logs:
-  logs newer than source/test: 12/12
-  first fresh runtime log: 2026-07-02 22:01:41
-  last fresh runtime log:  2026-07-02 22:45:41
-```
-
-Current proof artifact:
-
-```text
-report: target/nando-wave/strict-multiseed-rust-audit-v1.product-proof.json
-strict-multiseed-rust-audit-v1: STRICT_MULTI_SEED_RUST_AUDIT_PASS
-strict-multiseed-rust-audit-verify-v1: STRICT_MULTI_SEED_RUST_AUDIT_VERIFY_PASS
-report_matches_sources: true
-
-observed_logs: 12
-missing_logs: 0
-strict_runtime_issues: 0
-evidence_warnings: 0
-logs_fingerprint64: 2824724535851559095
-logs_total_bytes: 133299
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_logs_used: true
-```
-
-Boundary:
-
-```text
-This closes the current-source freshness debt for the v4 16-slot strict
-multi-seed Rust runtime audit.
-
-It does not close 32-slot full corpus proof, text generation, autonomous raw
-action parsing, real pilot workflow, SDK/daemon packaging, or commercial
-licensing.
-```
-
-Subchannel caveat:
-
-```text
-The required hard ablations still pass under the Rust audit.
-
-Do not overclaim every diagnostic subchannel as independently sufficient:
-  edit marker_role removal leaves energy high while strict accuracy falls to
-  500 milli;
-  conditional condition_action removal leaves energy partially high and seed 3
-  has 3 milli strict accuracy.
-
-The product claim remains the full channel proof plus required hard ablations,
-not isolated marker_role / condition_action energy claims.
-```
-
-## 2026-07-02 - Reviewer Override
-
-Verdict:
-
-```text
-WATCH_STALE_AFTER_FULL_12_LOG_RERUN
-```
-
-Reviewer finding:
-
-```text
-The executor's STRICT_MULTI_SEED_RUST_AUDIT_PASS_CURRENT_SOURCE note is not
-currently proven by filesystem freshness.
-
-Good news:
-  all 12 canonical v4 multiseed release logs exist;
-  all 12 logs ended with test result ok;
-  forbidden flags are false in all 12 logs;
-  no runtime failure/panic was found in the logs;
-  slot/flat/energy/parity/ablation metrics in the logs are green.
-
-But the current source/test timestamps are newer than the runtime logs:
-  last runtime log:
-    seed_003/composed/composed_runtime_gate_release.log
-    2026-07-02 17:24:22
-
-  newer source/test files:
-    crates/nando-core/src/wave/wavepredictor_hebbian.rs
-    2026-07-02 17:28:01
-
-    crates/nando-cli/src/phase_package_cmd.rs
-    2026-07-02 17:24:47
-
-    crates/nando-core/tests/wavepredictor_binding_pressure_l3.rs
-    2026-07-02 18:11:21
-
-Freshness counts at review:
-  logs newer than wavepredictor_hebbian.rs: 0/12
-  logs newer than wavepredictor_binding_pressure_l3.rs: 0/12
-  logs newer than phase_package_cmd.rs: 0/12
-```
-
-Boundary:
-
-```text
-This is not a model failure.
-It is a proof freshness failure.
-
-Do not call this current-source PASS until the 12 canonical logs are rerun
-after the latest relevant source/test timestamps and the strict audit/verify
-reports are regenerated after that rerun.
-```
-
-Direction for executor:
-
-```text
-Freeze source/test files first.
-Then rerun the 12 canonical v4 multiseed release logs.
-Then rerun:
-  strict-multiseed-rust-audit-v1
-  strict-multiseed-rust-audit-verify-v1
-
-If any source/test file changes after the rerun, the current-source proof
-becomes WATCH again.
-```
-
-## 2026-07-02 - Current Executor Result
-
-Verdict:
-
-```text
-STRICT_MULTI_SEED_RUST_AUDIT_PASS_CURRENT_SOURCE_AFTER_RERUN
-```
-
-Current proof artifact:
-
-```text
-report: target/nando-wave/strict-multiseed-rust-audit-v1.product-proof.json
-strict-multiseed-rust-audit-v1: STRICT_MULTI_SEED_RUST_AUDIT_PASS
-strict-multiseed-rust-audit-verify-v1: STRICT_MULTI_SEED_RUST_AUDIT_VERIFY_PASS
-report_matches_sources: true
-
-observed_logs: 12
-missing_logs: 0
-strict_runtime_issues: 0
-evidence_warnings: 0
-logs_fingerprint64: 2847134219208477714
-logs_total_bytes: 133299
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_logs_used: true
-```
-
-Fresh canonical release logs:
-
-```text
-latest_relevant_source_timestamp: 2026-07-02 23:05:01 +0300
-fresh_log_window: 2026-07-02 23:24:45 +0300 .. 2026-07-03 00:08:10 +0300
-stale_logs_vs_latest_source: 0
-
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_001/order/order_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_002/order/order_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_003/order/order_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_001/edit/edit_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_002/edit/edit_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_003/edit/edit_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_001/conditional/conditional_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_002/conditional/conditional_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_003/conditional/conditional_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_001/composed/composed_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_002/composed/composed_runtime_gate_release.log
-data/rule_logic_operator_battery_v4/diagnostics/multiseed/seed_003/composed/composed_runtime_gate_release.log
-```
-
-Runtime facts from fresh logs:
-
-```text
-order/edit/conditional/composed:
-  strict ordered slot readout: 1000
-  flat strict slot readout: 1000
-  sequence energy: 1000
-  flat gap parity mismatches: 0
-  flat sequence-energy parity mismatches: 0
-  energy_pass_slot_fail: 0
-  output_slot_cleanup_failed_slots: 0
-  slot_failure_total: 0
-
-order role_binding_edges by seed: 87952 / 87867 / 88441
-edit role_binding_edges by seed: 136 / 136 / 136
-conditional role_binding_edges by seed: 40813 / 40813 / 40858
-composed role_binding_edges by seed: 366 / 366 / 366
-```
-
-Diagnostic subchannel caveats from the same fresh logs:
-
-```text
-edit:
-  ablation_without_marker_role_accuracy_milli: 500
-  ablation_without_marker_role_energy_accuracy_milli: 1000
-
-conditional:
-  ablation_without_condition_action_accuracy_milli by seed: 0 / 0 / 3
-  ablation_without_condition_action_energy_accuracy_milli by seed: 776 / 818 / 780
-
-These are not blockers for the strict audit because the hard proof gates still
-verify binding/action/role/active_fringe collapse, flat parity, strict slot
-readout, and sequence energy. They are claim-boundary notes for future channel
-cleanup work.
-```
-
-Engineering finding:
-
-```text
-The previous seed_002/order role/filler collision is fixed by principled
-slot-scoped action filtering: scoped operator action pages must match both the
-output slot and the source role slot before they vote.
-
-This is not targeted duplication and not a manual local_out_t extension.
-The edit path also removed the raw edit action surface; edit now relies on the
-edit demo pair page plus role pages, which removes the marker/action surface
-shortcut and shrinks edit role-binding to 136 edges.
-```
-
-Boundary:
-
-```text
-This closes the current v4 16-slot strict multi-seed Rust runtime audit over
-canonical release logs.
-
-It does not close:
-  32-slot ordered decoder;
-  64-slot capacity;
-  broad product reasoning;
-  autonomous raw action parsing;
-  text generation;
-  Python demo authority.
-```
-
-## 2026-07-02 - Slot32 Capacity Smoke
-
-Verdict:
-
-```text
-SLOT32_PAGED_LAYOUT_CAPACITY_SMOKE_PASS
-```
-
-Artifact:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_PAGED_LAYOUT_CAPACITY_SMOKE.md
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_paged_layout_capacity_smoke_release.log
-```
-
-Current evidence:
-
-```text
-page_count: 64
-total_center_count: 262144
-output_slot_count: 32
-role_slot_count: 32
-role_top_l1_lanes: 64
-operator_pair_source_bits: 5
-lengths: 17..32
-
-slot_accuracy_milli: 1000
-flat_slot_accuracy_milli: 1000
-sequence_energy_accuracy_milli: 1000
-energy_pass_slot_fail: 0
-flat_gap_parity_mismatches: 0
-flat_sequence_energy_parity_mismatches: 0
-
-ablation_without_binding_accuracy_milli: 0
-ablation_without_action_accuracy_milli: 0
-ablation_without_role_accuracy_milli: 0
-ablation_without_active_fringe_accuracy_milli: 0
-
-role_binding_edges: 892
-flat_role_binding_edges: 892
-hot_bytes_estimate: 600536
-
-flat_eval_rows: 64
-flat_eval_total_ns: 9434598
-flat_eval_avg_ns_per_row: 147415
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-```
-
-Multi-seed smoke evidence:
-
-```text
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_paged_layout_multiseed_capacity_smoke_release.log
-
-verdict: SLOT32_PAGED_LAYOUT_MULTI_SEED_CAPACITY_SMOKE_PASS
-seeds: 3
-min_slot_accuracy_milli: 1000
-min_flat_slot_accuracy_milli: 1000
-min_sequence_energy_accuracy_milli: 1000
-min_sequence_energy_p10_gap: 593664
-total_energy_pass_slot_fail: 0
-total_flat_gap_parity_mismatches: 0
-total_flat_sequence_energy_parity_mismatches: 0
-max_hot_bytes_estimate: 600536
-max_flat_eval_avg_ns_per_row: 150392
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-```
-
-Flat runtime latency smoke:
-
-```text
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_flat_runtime_latency_smoke_release.log
-
-verdict: SLOT32_FLAT_RUNTIME_LATENCY_SMOKE_PASS
-seed: 0
-bench_repeats: 256
-measured_rows: 16384
-correct_rows: 16384
-flat_accuracy_milli: 1000
-p50_latency_ns: 135476
-p99_latency_ns: 245822
-max_latency_ns: 653733
-avg_latency_ns: 144066
-latency_gate_ns: 1000000
-flat_role_binding_edges: 892
-hot_bytes_estimate: 600536
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-```
-
-Important red finding before the fix:
-
-```text
-role_top_l1_lanes=32:
-  slot_accuracy_milli: 797
-  sequence_energy_accuracy_milli: 1000
-  energy_pass_slot_fail: 13
 
 Interpretation:
-  32-slot operator energy was present, but strict slot readout was
-  under-resolved. The first fix is role-lane recall capacity, not local_out_t.
-```
-
-Engineering note:
 
 ```text
-The flat readout path now prepares role strengths once per sequence row and
-uses slot-scoped action grouping. Field/flat parity remains zero; the timing
-above is a smoke-path measurement, not a p99 product latency claim.
+The hot runtime exists, but current live events do not resolve into its route
+table. This is now a route/profile coverage problem, not a survivor/quarantine
+problem.
 ```
 
-Boundary:
+Next implementation target:
 
 ```text
-This is a 32-slot paged layout capacity smoke only.
+Make the L2 hidden-state route emitted by incoming events match the route ids
+stored in the survivor runtime.
 
-It does not close:
-  full 32-slot corpus battery;
-  full 32-slot multi-seed corpus robustness;
-  packed product runtime proof;
-  product p99 latency proof;
-  64-slot capacity.
+Report before/after:
+  append_route_index_missing_events
+  append_scoring_started
+  append_score_candidate_events
+  active_clean_calls_saved
+  active_clean_tokens_saved
 ```
 
-## 2026-07-03 - Slot32 Order Corpus Rung
-
-Verdict:
+PASS target:
 
 ```text
-SLOT32_ORDER_CORPUS_RUNG_PASS
+append_route_index_missing_events decreases
+append_scoring_started: true
+append_score_candidate_events > 0
+append_false_accepts: 0
+product_hot_score_only_post_quarantine_false_accepts: 0
+active_clean_tokens_saved > 0
 ```
 
-Why this matters:
+## 2026-07-08 - Reviewer Check: Active Clean Vs Quarantine Lost Counters
+
+CHANGE:
 
 ```text
-This is the first real 32-slot order corpus rung beyond the synthetic capacity
-smoke. It keeps the same paged u32 layout and flat runtime path, but raises the
-proof pressure to a rule/surface/noise/length matrix.
+Append live-tail report now exposes explicit product-facing counters:
 
-Tokens are independent of rule_name and the same state key is reused under 8
-different rules, so input/state alone is not enough. The action/operator-pair
-channel is required.
+  active_clean_calls_saved
+  active_clean_tokens_saved
+  lost_calls_due_to_quarantine
+  lost_tokens_due_to_quarantine
+
+Definitions:
+
+  active_clean_*:
+    score_candidate=true from non-quarantined product-hot/survivor profiles
+    verified_safe_accept=true
+    exact_cache_hit=false
+
+  lost_*:
+    score_candidate=true from quarantined profiles
+    verified_safe_accept=true
+    exact_cache_hit=false
+
+Unsafe quarantined hits are not counted as lost savings. They remain quarantine
+evidence.
 ```
 
-Command:
+WHY:
 
 ```text
-cargo test -p nando-core --release --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_slot32_order_corpus_must_transfer_without_lookup_or_runtime_phase_hack --nocapture
+The daemon now separates three signals:
+
+  1. active clean savings
+  2. savings lost because a profile is quarantined
+  3. unsafe false_accept pressure
+
+This is needed for the NE BUSY L4 portfolio selector:
+  keep clean profiles hot
+  quarantine unsafe profiles
+  report the economic cost of quarantine separately
 ```
 
-Artifacts:
+LIVE SNAPSHOT AFTER RESTART:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ORDER_CORPUS_RUNG.md
-log:    data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_order_corpus_rung_release.log
+service:
+  nando-phase-live-miner-tail-20260707T165122.service
+
+pid:
+  1532552
+
+source:
+  live_store_clean_candidate_survivors
+
+append_parsed_rows: 23
+append_score_candidate_events: 5
+append_unique_cpu_accepts_over_exact_cache: 3
+append_tokens_saved: 729
+append_false_accepts: 0
+
+active_clean_calls_saved: 3
+active_clean_tokens_saved: 729
+lost_calls_due_to_quarantine: 0
+lost_tokens_due_to_quarantine: 0
+
+post_quarantine_score_candidate_events: 5
+post_quarantine_false_accepts: 0
+
+final_hot_runtime_available: true
+final_hot_profile_count: 4
+final_hot_profile_ids:
+  1065971288
+  326443327
+  569147600
+  2404847706
+
+local_accept_enabled: false
+market_money_claim_allowed: false
 ```
 
-Corpus:
+INTERPRETATION:
 
 ```text
-seed: 0
-train_rows: 1024
-heldout_rows: 1024
-unique_rules: 8
-unique_surfaces: 4
-unique_noise_types: 2
-unique_lengths: 16
-lengths: 17..32
-same_bag_rows: 1024
-max_train_state_reuse: 8
-max_heldout_state_reuse: 8
-train_tokens_overlap_heldout: 0
+The current future window is clean on safety:
+  append_false_accepts: 0
+  post_quarantine_false_accepts: 0
+
+It is now positive on calls/tokens in a live clean survivor window:
+  active_clean_calls_saved: 3
+  active_clean_tokens_saved: 729
+
+It is not yet a market-money proof:
+  provider cost evidence: still absent
 ```
 
-Runtime result:
+CHECKS:
 
 ```text
-slot_accuracy_milli: 1000
-flat_slot_accuracy_milli: 1000
-sequence_energy_accuracy_milli: 1000
-sequence_energy_p10_gap: 3110016
-energy_pass_slot_fail: 0
-
-flat_gap_parity_mismatches: 0
-flat_sequence_energy_parity_mismatches: 0
-flat_failed_rows: 0
-
-ablation_without_binding_accuracy_milli: 0
-ablation_without_action_accuracy_milli: 0
-ablation_without_role_accuracy_milli: 0
-ablation_without_active_fringe_accuracy_milli: 0
-
-role_binding_edges: 1354
-hot_bytes_estimate: 606080
-flat_eval_avg_ns_per_row: 185511
-flat_eval_latency_gate_ns: 1000000
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
+cargo fmt --check PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner_repairs_threshold_after_verified_false_accept --lib PASS
+cargo build --release -q -p nando-cli PASS
+git diff --check PASS
 ```
 
-Boundary:
+VERDICT:
 
 ```text
-This closes the first 32-slot order corpus rung.
-
-It does not close:
-  full 32-slot operator battery;
-  32-slot edit / conditional / composed gates;
-  32-slot multi-seed corpus robustness;
-  packed product runtime proof;
-  product p99 latency proof.
+PASS for active-clean/lost quarantine observability.
+PASS-shadow for live clean calls/tokens over exact cache.
+WATCH-money for market proof until provider cost evidence is present and the
+future/admission promotion gate is allowed.
 ```
 
-## 2026-07-03 - Slot32 Order Corpus Multi-Seed Rung
+## 2026-07-08 - Reviewer Check: Smart/Fast Online Miner Tail
 
-Verdict:
+CHANGE:
 
 ```text
-SLOT32_ORDER_CORPUS_MULTI_SEED_RUNG_PASS
+The online phase-center tail was changed from a mostly global top-candidate
+selector into a stream-prioritized selector:
+
+  current live event
+  -> relevant bucket ids
+  -> contrastive zero-false candidate filter
+  -> prioritized hot runtime
+  -> score before update
+
+Core phase-center math did not change.
+No .nwrb / role-binding backend was reintroduced.
 ```
 
-Command:
+DETAILS:
 
 ```text
-cargo test -p nando-core --release --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_slot32_order_corpus_multiseed_must_transfer_without_lookup_or_runtime_phase_hack --nocapture
+Core:
+  candidate_bucket ranking now uses bucket.is_candidate()
+  candidate_runtime requires contrastive evidence:
+    positive_events > 0
+    negative_events > 0
+    unique_cpu_accepts_over_exact_cache > 0
+    false_accepts = 0
+
+Live tail:
+  clean survivor runtime can prioritize relevant bucket ids from the current
+  append row.
+
+  fallback scoring path now uses:
+    candidate_hot_runtime_and_route_table_excluding_prioritized(...)
+
+  auto-subcenter discovery now includes triple combo centers:
+    combo:state_exit_code_band:*|command|shape_band
+
+  This is automatic multi-split, not a manual route/class list.
 ```
 
-Artifacts:
+CHECKS:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ORDER_CORPUS_MULTI_SEED_RUNG.md
-log:    data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_order_corpus_multiseed_rung_release.log
+cargo fmt --check PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner --lib PASS
+cargo test -q -p nando-core hot_runtime_numeric_score_path_p99_budget --lib -- --ignored --nocapture PASS
+  phase_center_hot_runtime_numeric_score_path_p99_ns: 722
+cargo build --release -q -p nando-cli PASS
+git diff --check PASS
 ```
 
-Corpus:
+LIVE SNAPSHOT AFTER MULTI-SPLIT RESTART:
 
 ```text
-seeds: 3
-rows_per_seed_train: 1024
-rows_per_seed_heldout: 1024
-unique_rules: 8
-unique_surfaces: 4
-unique_noise_types: 2
-unique_lengths: 16
-lengths: 17..32
-same_bag_rows_per_seed: 1024
-max_state_reuse_per_seed: 8
-train_tokens_overlap_heldout_per_seed: 0
+appender pid:
+  1055387
+  cpu: 0.3%
+  rss: 17900 KB
+
+tail pid:
+  1605458
+  cpu: 1.9%
+  rss: 21568 KB
+
+append_parsed_rows: 12
+append_auto_subcenter_observe_events: 100
+append_score_candidate_events: 3
+append_unique_cpu_accepts_over_exact_cache: 2
+append_tokens_saved: 8137
+append_false_accepts: 0
+
+active_clean_calls_saved: 2
+active_clean_tokens_saved: 8137
+lost_calls_due_to_quarantine: 0
+lost_tokens_due_to_quarantine: 0
+
+online_bucket_count: 317
+candidate_bucket_count: 44
+active_bucket_count: 152
+shadow_ready_bucket_count: 117
+
+final_hot_profile_count: 4
+final_hot_profile_ids:
+  1065971288
+  146661061
+  1451329680
+  550802256
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+provider_money_claim_blocker: no_future_shadow_billing_request_rows
 ```
 
-Runtime result:
+INTERPRETATION:
 
 ```text
-min_slot_accuracy_milli: 1000
-min_flat_slot_accuracy_milli: 1000
-min_sequence_energy_accuracy_milli: 1000
-min_sequence_energy_p10_gap: 2976640
-total_energy_pass_slot_fail: 0
-total_flat_gap_parity_mismatches: 0
-total_flat_sequence_energy_parity_mismatches: 0
+PASS-shadow for smart/fast online miner tail in the current live window:
+  it discovered narrower combo subcenters,
+  scored live rows before update,
+  found 2 unique CPU accepts over exact cache,
+  saved 8137 estimated tokens,
+  and kept false_accepts at 0.
 
-max_role_binding_edges: 1354
-max_hot_bytes_estimate: 606080
-max_flat_eval_avg_ns_per_row: 187982
-flat_eval_latency_gate_ns: 1000000
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
+WATCH-product:
+  local_accept remains disabled.
+  market money claim remains blocked until provider billing/export evidence is present.
 ```
 
-Boundary:
+## 2026-07-08 - Reviewer Check: Two-Profile Live Miner Attribution
+
+CHANGE:
 
 ```text
-This closes 32-slot order corpus multi-seed robustness.
+The active live-tail miner now has a second inferred profile lane:
 
-It does not close:
-  full 32-slot operator battery;
-  32-slot edit / conditional / composed gates;
-  packed product runtime proof;
-  product p99 latency proof.
+  observable profile:
+    primary bucket + visible auto-subcenter/pair/combo atoms
+
+  hidden-state profile:
+    source-neutral cross-layer atoms:
+      hidden_state:request_state:...
+      hidden_state:state_tool:...
+      hidden_state:request_tool:...
+      hidden_state:request_state_tool:...
+
+The hidden-state atoms are built from request/state/tool evidence, with route,
+source, proof, target, profile, and local_out_t style leaks blocked.
 ```
 
-## 2026-07-03 - Slot32 Mixed Map Corpus Rung
-
-Verdict:
+EVIDENCE:
 
 ```text
-SLOT32_MIXED_MAP_CORPUS_RUNG_PASS
+Checks:
+  cargo fmt PASS
+  RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+  cargo test -q -p nando-core online_miner --lib PASS
+  cargo build --release -q -p nando-cli PASS
+
+Live tail restarted with the new binary:
+  appender pid: 1055387
+  tail pid: 1668057
+  tail cpu after warmup: 3.8%
 ```
 
-Command:
+LIVE ATTRIBUTION SNAPSHOT:
 
 ```text
-cargo test -p nando-core --release --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_slot32_mixed_map_corpus_must_transfer_without_lookup_or_runtime_phase_hack --nocapture
+append_parsed_rows: 12
+active_clean_calls_saved: 7
+active_clean_tokens_saved: 2836
+append_false_accepts: 0
+
+append_hidden_state_subcenter_observe_events: 84
+
+observable profile:
+  score_candidate_events: 1
+  unique_accepts_over_exact_cache: 1
+  tokens_saved: 541
+
+hidden-state profile:
+  score_candidate_events: 4
+  unique_accepts_over_exact_cache: 4
+  tokens_saved: 1405
+
+unknown/unmapped profile:
+  score_candidate_events: 3
+  unique_accepts_over_exact_cache: 3
+  tokens_saved: 1431
+
+profile_attribution_overlap_accepts: 1
 ```
 
-Artifacts:
+INTERPRETATION:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_MIXED_MAP_CORPUS_RUNG.md
-log:    data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_mixed_map_corpus_rung_release.log
+PASS for live hidden-state presence:
+  hidden_state:* atoms are now generated in the active tail path and produce
+  score candidates before update.
+
+WATCH for full per-profile economics:
+  attribution is visible, but some product-hot/profile ids are still reported
+  as unknown/unmapped. Add persistent profile_id -> profile_kind metadata before
+  claiming exact hidden-vs-observable economics.
+
+Use active_clean_calls_saved / active_clean_tokens_saved for deduped real shadow
+compression. Candidate-level token fields can overlap and are diagnostic.
 ```
 
-Corpus:
+## 2026-07-08 - Reviewer Check: Hidden-State vs Observable Attribution Fix
+
+CHANGE:
 
 ```text
-seed: 0
-train_rows: 2048
-heldout_rows: 2048
-unique_operator_classes: 3
-unique_rules: 16
-unique_surfaces: 4
-unique_noise_types: 2
-unique_lengths: 16
-lengths: 17..32
-same_bag_rows: 1536
-edit_rows: 512
-edit_non_same_bag_rows: 512
-max_train_state_reuse: 16
-max_heldout_state_reuse: 16
-train_tokens_overlap_heldout: 0
+Live-tail attribution now keeps an in-memory profile_id -> profile_kind map.
+The map is populated from watermark, warm-history, and live append events.
+
+Kinds:
+  observable_primary
+  observable_subcenter
+  hidden_state
+
+This does not change phase-center scoring or thresholds. It only prevents
+product-hot profile ids from becoming unknown when the current event does not
+carry the exact source atom that originally created the profile.
 ```
 
-Runtime result:
+CHECKS:
 
 ```text
-slot_accuracy_milli: 1000
-flat_slot_accuracy_milli: 1000
-sequence_energy_accuracy_milli: 1000
-sequence_energy_p10_gap: 3106560
-energy_pass_slot_fail: 0
-flat_gap_parity_mismatches: 0
-flat_sequence_energy_parity_mismatches: 0
-flat_failed_rows: 0
-
-ablation_without_binding/action/role/active: 0 / 0 / 0 / 0
-state_delta_edges: 0
-role_binding_edges: 1492
-hot_bytes_estimate: 607736
-flat_eval_avg_ns_per_row: 219009
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
+cargo fmt PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner --lib PASS
+cargo build --release -q -p nando-cli PASS
+git diff --check PASS
 ```
 
-Boundary:
+LIVE SNAPSHOT AFTER RESTART:
 
 ```text
-This closes 32-slot mixed map transfer for order + edit-map + composed-map on
-one seed.
+tail pid: 1682092
+rss: 32396 KB
+cpu: about 5.1% in the sampled window
 
-It does not close:
-  32-slot conditional branch selection;
-  32-slot mixed-map multi-seed robustness;
-  full 32-slot operator battery;
-  insert-new-constant edit operators;
-  packed product runtime proof;
-  product p99 latency proof.
+append_parsed_rows: 6
+active_clean_calls_saved: 6
+active_clean_tokens_saved: 1572
+append_false_accepts: 0
+
+known_profile_kind_count: 813
+observable_known_profile_count: 331
+hidden_state_known_profile_count: 482
+
+observable profile:
+  score_candidate_events: 0
+  unique_accepts_over_exact_cache: 0
+  tokens_saved: 0
+
+hidden-state profile:
+  score_candidate_events: 6
+  unique_accepts_over_exact_cache: 6
+  tokens_saved: 1572
+
+unknown/unmapped profile:
+  score_candidate_events: 0
+  unique_accepts_over_exact_cache: 0
+  tokens_saved: 0
+
+product_hot_score_only_quarantined: true
+post_quarantine_false_accepts: 0
+local_accept_enabled: false
+market_money_claim_allowed: false
 ```
 
-## 2026-07-03 - Slot32 Conditional Branch Corpus Rung
-
-Verdict:
+INTERPRETATION:
 
 ```text
-SLOT32_CONDITIONAL_BRANCH_CORPUS_RUNG_PASS
+PASS for attribution accounting: the second hidden-state profile lane is now
+separated from ordinary observable profiles and unknown dropped to zero in the
+fresh window.
+
+WATCH for claim size: the post-restart live window is small. Use it as a clean
+mechanism check, not a market denominator.
+
+Earlier red window had append_false_accepts: 1, so the current clean number is
+post-quarantine / post-restart evidence only. No local_accept or money claim is
+allowed.
 ```
 
-Command:
+## 2026-07-08 - Reviewer Check: Disjoint Hidden-State Contribution Split
+
+CHANGE:
 
 ```text
-cargo test -p nando-core --release --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_slot32_conditional_branch_must_select_without_lookup_or_runtime_phase_hack --nocapture
+Live-tail report now separates diagnostic profile participation from disjoint
+clean contribution:
+
+  observable_only
+  hidden_state_only
+  mixed_profile
+  unknown_only
+
+This avoids double-counting when observable and hidden profiles both score the
+same accepted event. Phase-center scoring, thresholds, verifier binding, and
+local_accept policy did not change.
 ```
 
-Artifacts:
+CHECKS:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_CONDITIONAL_BRANCH_CORPUS_RUNG.md
-log:    data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_conditional_branch_corpus_rung_release.log
+cargo fmt PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner --lib PASS
+cargo build --release -q -p nando-cli PASS
+git diff --check PASS
 ```
 
-Corpus:
+LIVE SNAPSHOT AFTER DISJOINT SPLIT RESTART:
 
 ```text
-seed: 0
-train_rows: 2048
-heldout_rows: 2048
-unique_operator_classes: 1
-unique_rules: 8
-unique_surfaces: 4
-unique_noise_types: 2
-unique_lengths: 16
-lengths: 17..32
-same_bag_rows: 2048
-condition_true_rows: 1024
-condition_false_rows: 1024
-direct_operator_pair_active_centers: 0
-condition_action_active_centers: 50176
-state_condition_active_centers: 120832
-max_train_state_reuse: 16
-max_heldout_state_reuse: 16
-train_tokens_overlap_heldout: 0
+tail pid: 1689196
+rss: 33032 KB
+cpu: about 5.2% in the sampled window
+
+append_parsed_rows: 27
+active_clean_calls_saved: 12
+active_clean_tokens_saved: 5877
+append_false_accepts: 0
+
+known_profile_kind_count: 814
+observable_known_profile_count: 331
+hidden_state_known_profile_count: 483
+
+diagnostic participation:
+  observable accepts: 0
+  hidden-state accepts: 12
+  unknown accepts: 0
+  overlap accepts: 0
+
+disjoint clean contribution:
+  observable_only accepts: 0
+  hidden_state_only accepts: 12
+  mixed_profile accepts: 0
+  unknown_only accepts: 0
+
+  observable_only tokens: 0
+  hidden_state_only tokens: 5877
+  mixed_profile tokens: 0
+  unknown_only tokens: 0
+
+post_quarantine_false_accepts: 0
+local_accept_enabled: false
+market_money_claim_allowed: false
 ```
 
-Runtime result:
+INTERPRETATION:
 
 ```text
-slot_accuracy_milli: 1000
-flat_slot_accuracy_milli: 1000
-sequence_energy_accuracy_milli: 1000
-sequence_energy_p10_gap: 3122560
-energy_pass_slot_fail: 0
-flat_gap_parity_mismatches: 0
-flat_sequence_energy_parity_mismatches: 0
-flat_failed_rows: 0
+PASS for no-double-count attribution: in this fresh post-quarantine window, all
+deduped clean CPU accepts came from hidden_state_only.
 
-ablation_without_binding/action/condition-action/role/active: 0 / 0 / 0 / 0 / 0
-state_delta_edges: 0
-role_binding_edges: 2202
-hot_bytes_estimate: 681792
-flat_eval_avg_ns_per_row: 174654
-
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-direct_operator_pair_action_centers_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
+WATCH for denominator size: window is still small and must not be sold as a
+market claim. It is a mechanism/accounting proof that the second profile lane
+can be measured separately from observable profile traffic.
 ```
 
-Boundary:
+## 2026-07-08 - Reviewer Check: Architecture Version Registry In Reports
+
+CHANGE:
 
 ```text
-This closes 32-slot conditional branch selection on symbolic branch-map action
-inputs for one seed.
+Added a first-class architecture_versions block to the live-tail JSON report.
+Added docs/ARCHITECTURE_VERSION_REGISTRY.md as the active version map.
 
-It does not close:
-  full 32-slot operator battery multi-seed proof;
-  raw-language action parsing;
-  autonomous action_tree induction;
-  packed product runtime proof;
-  product p99 latency proof.
+The goal is to tie every compression snapshot to the exact miner/profile/report
+architecture that produced it.
 ```
 
-## 2026-07-02 - Manual Reviewer Update (Superseded)
-
-Verdict:
+ACTIVE VERSION BLOCK:
 
 ```text
-SUPERSEDED_BY_FRESH_CURRENT_SOURCE_RERUN
+phase_center_core: phase_center_core_v1
+online_miner: online_phase_center_miner_v1
+live_tail_daemon: append_live_tail_shadow_daemon_v3
+hot_runtime: phase_center_hot_runtime_v1
+auto_subcenter_discovery: auto_subcenter_discovery_v2_hidden_first
+hidden_state_profile: hidden_state_cross_layer_profile_v1
+profile_attribution: profile_attribution_disjoint_v1
+compression_accounting: calls_tokens_cost_milli_accounting_v1
+package_format: nwpc_v1
+forbidden_backend_policy: no_nwrb_no_lookup_no_local_accept_without_verifier_v1
 ```
 
-This note is historical. The rerun it requested is now complete; see the fresh
-current-source rerun section at the top of this file.
-
-Current evidence:
+LIVE SNAPSHOT WITH VERSIONED ACCOUNTING:
 
 ```text
-seed_003/order was refreshed and is green:
-  order_slot_ordered_sequence_accuracy_milli: 1000
-  order_flat_slot_ordered_sequence_accuracy_milli: 1000
-  order_sequence_energy_accuracy_milli: 1000
-  order_energy_pass_slot_fail: 0
-  order_output_slot_cleanup_failed_slots: 0
-  flat_gap_parity_mismatches: 0
-  flat_sequence_energy_parity_mismatches: 0
-  ablations without binding/action/role/active_fringe: 0
-  forbidden flags: false
+append_parsed_rows: 9
+append_total_tokens: 3208
+append_total_cost_microusd: 3208
 
-But it is not enough for current-source multi-seed proof:
-  wavepredictor_binding_pressure_l3.rs was updated at 2026-07-02 16:28.
-  Existing order logs are older than that latest test source timestamp.
+exact cache:
+  calls_saved_milli: 333
+  tokens_saved_milli: 85
 
-Freshness counts at this review:
-  runtime logs newer than wavepredictor_hebbian.rs: 4/12
-  runtime logs newer than wavepredictor_binding_pressure_l3.rs: 1/12
-  runtime logs newer than phase_package_cmd.rs: 4/12
+Nando active clean CPU:
+  calls_saved_milli: 444
+  tokens_saved_milli: 479
 
-Live run observed:
-  seed_001/edit release runtime gate is running.
-  It reached eval_flat_gap_parity_start after train/cleanup showed 1000/1000.
-  It is not a completed PASS until the test exits ok and final metrics print.
+combined cache + Nando:
+  calls_saved_milli: 777
+  tokens_saved_milli: 564
+
+hidden_state_only:
+  calls_saved_milli: 444
+  tokens_saved_milli: 479
+
+append_false_accepts: 0
+local_accept_enabled: false
+market_money_claim_allowed: false
+provider_money_claim_blocker: no_future_shadow_billing_request_rows
 ```
 
-Boundary:
+CHECKS:
 
 ```text
-Do not mark v4 strict multi-seed current-source proof green yet.
-
-Required close condition:
-  1. all 12 canonical runtime logs rerun after the latest relevant Rust
-     source/test timestamps;
-  2. each log exits ok and keeps parity/ablation/forbidden-flag checks clean;
-  3. strict-multiseed-rust-audit-v1 rerun;
-  4. strict-multiseed-rust-audit-verify-v1 rerun;
-  5. report source matching stays true after the rerun.
+cargo fmt --check PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner --lib PASS
+cargo build --release -q -p nando-cli PASS
+git diff --check PASS
 ```
 
-Direction for executor:
+VERDICT:
 
 ```text
-Continue the canonical current-source rerun.
-Do not switch to new architecture or new operator claims while this rerun is open.
-The useful result right now is boring but critical: fresh 12/12 logs or a real red.
+PASS for architecture-versioned live report fields.
+WATCH for market denominator and money claim: provider billing/export evidence
+is still missing.
 ```
 
-## 2026-07-02 - Reviewer Note (Superseded)
+## 2026-07-08 - Reviewer Check: Product-Hot Route Refresh + Historical False Quarantine
 
-Verdict:
+CHANGE:
 
 ```text
-SUPERSEDED_BY_FRESH_CURRENT_SOURCE_RERUN
+Fixed product-hot score-only route coverage:
+  if the active product-hot survivor runtime has profiles but does not cover the
+  current event route, the live-tail shadow miner rebuilds a clean-survivor
+  runtime prioritized by the current relevant bucket ids before scoring.
+
+Added historical non-exact false quarantine:
+  profile ids that already produced score_candidate on verified_safe_accept=false
+  and exact_cache_hit=false rows in the stable decision log are excluded from
+  product-hot survivor selection on startup.
+
+Adjusted product-hot post-quarantine false accounting:
+  post_quarantine_false_accepts only counts non-exact rows. Raw append false
+  remains strict and still quarantines unsafe profiles.
 ```
 
-This note is historical. The stale-runtime-log warning below was valid at the
-time, but the current 12-log rerun and audit/verify have now closed it.
-
-Current verified chain:
+MECHANISM CHECKS:
 
 ```text
+cargo fmt --check PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner --lib PASS
+cargo build --release -q -p nando-cli PASS
+bash -n ops/phase-center-test-server/bin/*.sh scripts/build-phase-center-test-server-package.sh PASS
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer PASS
+```
+
+BOUNDED LOCAL SNAPSHOTS:
+
+```text
+route-refresh smoke4:
+  product_hot_score_only_post_quarantine_score_candidate_events: 78
+  product_hot_score_only_post_quarantine_false_accepts: 0
+  active_clean_calls_saved: 0
+  note: mostly exact-cache rows, so not a savings window.
+
+larger smoke5:
+  rows: 211
+  non_exact: 127
+  active_clean_calls_saved: 109
+  active_clean_tokens_saved: 146988
+  product_hot_score_only_post_quarantine_score_candidate_events: 170
+  product_hot_score_only_post_quarantine_false_accepts: 2
+  verdict: WATCH, useful value signal but unsafe survivor profiles still appear.
+
+seeded-history smoke8:
+  rows: 211
+  active_clean_calls_saved: 109
+  active_clean_tokens_saved: 146988
+  product_hot_score_only_post_quarantine_score_candidate_events: 170
+  product_hot_score_only_post_quarantine_false_accepts: 2
+  quarantine_count: 28
+  verdict: WATCH, historical quarantine excludes known bad profiles but new
+  unsafe survivor profiles are still discovered in the fresh window.
+```
+
+PACKAGE:
+
+```text
+path: /home/ubu/projects/nando-wave/target/nando-wave/deploy/nando-phase-center-test-server-20260708T021200Z.tar.gz
+sha256: see adjacent .tar.gz.sha256 artifact
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
+VERDICT:
+
+```text
+PASS for route coverage improvement: product-hot now reaches the active agent_continue route
+instead of leaving all value in online_store_candidate fallback.
+
+PASS for stricter survivor hygiene: known non-exact false profile ids are excluded
+from product-hot survivor selection.
+
+WATCH for product claim: fresh windows still discover new unsafe survivor profiles,
+so product_hot_post_quarantine_false_accepts can be nonzero. Do not enable
+local_accept and do not claim market savings.
+
+NEXT:
+  move selector from top-N clean survivors to risk-aware survivor selection:
+  prefer profiles with future-window clean support and no non-exact false family,
+  not merely next available route candidate after quarantine.
+```
+
+## 2026-07-08 - Reviewer Check: Product-Hot Clean Credit Ledger
+
+CHANGE:
+
+```text
+Fixed product-hot accounting so score-only savings are no longer credited
+directly at first hit.
+
+New behavior:
+  product-hot verified non-exact hits are stored as credit rows with the
+  scoring profile ids.
+  Before heartbeat/final JSON, product_hot_score_only_* totals are recomputed
+  only from rows whose scoring profiles are not quarantined.
+
+Also widened quarantine evidence ingestion:
+  stable decision-log rows without architecture_version_key now count for
+  non-exact false profile quarantine.
+  rows with an explicit different architecture_version_key remain excluded.
+```
+
+WHY:
+
+```text
+active_clean_* remains a raw diagnostic signal.
+product_hot_score_only_* is now the cleaner product-hot view.
+
+If a profile later catches a false accept and enters quarantine, its earlier
+credits are removed from product-hot clean totals. This prevents selling a
+profile that later proved unsafe in the same server window.
+```
+
+BOUNDED SERVER-WINDOW SNAPSHOT:
+
+```text
+path: target/nando-wave/streaming/product-hot-clean-credit-ledger-v1/report.json
+
+rows: 211
+non_exact_rows: 127
+
+raw active_clean:
+  calls_saved: 109
+  tokens_saved: 146988
+
+product_hot_score_only clean ledger:
+  calls_saved: 39
+  tokens_saved: 42038
+  cost_saved_microusd: 42038
+
+product_hot_score_only_post_quarantine_score_candidate_events: 170
+product_hot_score_only_post_quarantine_false_accepts: 2
+append_false_accepts: 3
+quarantine_count: 31
+active_profiles: 4
+runtime_source: live_store_clean_candidate_survivors
+```
+
+CHECKS:
+
+```text
+cargo fmt --check PASS
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli PASS
+cargo build --release -q -p nando-cli PASS
+cargo test -q -p nando-core online_miner --lib PASS
+bash -n ops/phase-center-test-server/bin/*.sh scripts/build-phase-center-test-server-package.sh PASS
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer PASS
+git diff --check PASS
+rust-action-memory doctor --format json PASS
+```
+
+VERDICT:
+
+```text
+PASS for product-hot accounting hygiene: credits from later-quarantined profiles
+are no longer counted as product-hot clean savings.
+
+WATCH for product claim: product_hot_score_only_post_quarantine_false_accepts is
+still nonzero. Do not enable local_accept and do not claim server product
+compression from live_store_clean_candidate_survivors.
+
+NEXT:
+  treat live_store_clean_candidate_survivors as raw shadow/diagnostic unless a
+  profile has future-window clean support. Product-hot clean should come from
+  verifier-bound .nwpc candidates that survived future split, not merely from
+  the current store frontier.
+```
+
+## 2026-07-08 - Reviewer Check: Dogfood Server Attachment + Source Claim Gate
+
+CURRENT DOGFOOD STATE:
+
+```text
+Nando is attached to the local Codex workstream in shadow mode.
+
+live event writer:
+  phase-stream-codex-sessions-live-append-v1
+  source: /home/ubu/.codex/sessions
+  output: target/nando-wave/streaming/live-agent-phase-atom-append-v1.jsonl
+
+live miner:
+  phase-stream-hot-path-daemon-append-live-tail-v1
+  report: target/nando-wave/streaming/nando-phase-live-miner-tail-20260707T165122.report.json
+  decisions: target/nando-wave/streaming/nando-phase-live-miner-tail-20260707T165122.decisions.jsonl
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
+INTERPRETATION:
+
+```text
+This is real self-use/dogfood as observation and shadow scoring:
+  Codex work produces real events.
+  Nando watches those events.
+  Nando mines/updates phase-center candidates.
+  Nando reports potential CPU compression.
+
+It is not yet real call replacement:
+  Nando does not choose Codex actions.
+  Nando does not skip provider calls.
+  Nando does not enable local_accept.
+```
+
+CHANGE:
+
+```text
+Added a product-hot source claim gate:
+  claim-ready sources:
+    call_token_active_manifest
+    call_token_promotion_manifest
+    product_hot_registry
+
+  non-claim source:
+    live_store_clean_candidate_survivors
+
+The raw survivor frontier can still score and produce diagnostic signal, but it
+cannot satisfy append_compression_claim_blocker as a final hot runtime source.
+```
+
+BOUNDED SERVER-WINDOW SNAPSHOT:
+
+```text
+path: target/nando-wave/streaming/product-hot-source-claim-gate-v1/report.json
+
+rows: 211
+non_exact_rows: 127
+
+raw active_clean:
+  calls_saved: 109
+  tokens_saved: 146988
+
+product_hot_score_only clean ledger:
+  calls_saved: 39
+  tokens_saved: 42038
+  cost_saved_microusd: 42038
+
+product_hot_score_only_post_quarantine_score_candidate_events: 170
+product_hot_score_only_post_quarantine_false_accepts: 2
+append_false_accepts: 3
+runtime_source: live_store_clean_candidate_survivors
+append_compression_claim_allowed: false
+append_compression_claim_blocker: append_false_accepts_nonzero
+```
+
+VERDICT:
+
+```text
+PASS for self-use attachment: the daemon is observing real local Codex work.
+
+PASS for claim boundary: raw live_store_clean_candidate_survivors cannot be
+treated as product-hot market compression.
+
+WATCH for product runtime: product-hot still needs a verifier-bound future-split
+.nwpc promoted source with false_accepts=0 before local_accept or savings claims.
+```
+
+## 2026-07-08 - Reviewer Debt: Spectral Budget Refactor Required
+
+DEBT:
+
+```text
+crates/nando-cli/src/phase_streaming_cmd/live_store_adapter.rs is too large and mixed-frequency.
+It currently combines source adapters, live online miner, product-hot runtime selection,
+quarantine accounting, future-shadow reports, provider evidence plumbing, and server snapshot
+schemas in one file.
+```
+
+RULE:
+
+```text
+After the current miner release/snapshot, run nanda-wave-spectral-budget over the repo.
+First target: split live_store_adapter.rs by signal route, preserving behavior:
+  adapter parsing
+  online miner loop
+  hot runtime selection
+  quarantine/promotion accounting
+  reports/schemas
+  provider evidence/server ops
+
+Do not mix this refactor with scoring changes. Keep .nwpc phase-center path only.
+```
+
+Full budget audit:
+
+```text
+docs/NANDO_WAVE_SPECTRAL_BUDGET_AUDIT.md
+```
+
+## 2026-07-08 - Reviewer Check: Live Tail Hot Budget Split
+
+CHANGE:
+
+```text
+append live-tail report now separates:
+  product_hot_budget_passed
+  warm_miner_budget_passed
+  warm_miner_budget_blocker
+
+The live-tail gate uses hot runtime budget for product-hot health. Warm miner
+budget remains visible as a separate WATCH signal instead of making the compact
+hot runtime look fat.
+```
+
+SAFETY FIX:
+
+```text
+HOT_PATH_DAEMON_APPEND_LIVE_TAIL_PASS now requires append_score_events_before_update > 0.
+Before this fix, an append window with new rows but zero scoring could pass the
+adapter gate. That is no longer allowed.
+```
+
+CONTROLLED SNAPSHOT:
+
+```text
+report:
+  target/nando-wave/streaming/hot-budget-split-live-tail-controlled-tail/report.json
+
+append_parsed_rows: 12
+append_score_events_before_update: 0
+append_false_accepts: 0
+product_hot_budget_passed: true
+warm_miner_budget_passed: true
+warm_miner_budget_blocker: none
+hot_profile_count: 1
+hot_bytes_estimate: 592
+warm_profile_count: 8
+warm_bytes_estimate: 9536
+miner_discovery_sample_permille: 100
+miner_clean_hot_runtime_throttle_events: 12
+append_auto_subcenter_throttled_events: 220
+local_accept_enabled: false
+market_money_claim_allowed: false
+verdict: HOT_PATH_DAEMON_APPEND_LIVE_TAIL_WATCH
+blocker: append_live_tail_no_score_before_update_events
+```
+
+BOUNDARY:
+
+```text
+This is a controlled live-tail schema/safety snapshot, not a compression claim.
+It proves the gate no longer reports PASS without score-before-update.
+```
+
+DEPLOY PACKAGE:
+
+```text
+package:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T022650Z.tar.gz
+package_report:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T022650Z.package.json
+sha256:
+  708b2c2c857c7bfd0acbc15ea0c720de35de18ba418c2ce7430ce4c1287158c0
+
+forbidden_flags:
+  nwrb_used: false
+  role_binding_backend_used: false
+  lookup_used: false
+  target_id_or_proof_rule_id_authority_used: false
+  concrete_x_lookup_used: false
+  manual_local_out_t_used: false
+  local_accept_without_verifier_used: false
+```
+
+## 2026-07-08 - Reviewer Check: Post-Quarantine Clean Suffix Accounting
+
+CHANGE:
+
+```text
+append live-tail report now exposes a rolling clean suffix after the last
+quarantine-causing false accept:
+  append_clean_suffix_rows
+  append_clean_suffix_score_events
+  append_clean_suffix_unique_cpu_accepts_over_exact_cache
+  append_clean_suffix_tokens_saved
+  append_clean_suffix_cost_saved_microusd
+  append_clean_suffix_false_accepts
+  append_clean_suffix_last_quarantine_row_index
+  append_clean_suffix_claim_allowed
+  append_clean_suffix_claim_blocker
+```
+
+WHY:
+
+```text
+The miner must be judged after it quarantines bad profiles. A whole append
+window may contain early false accepts that were already disabled. The suffix
+fields show whether the post-quarantine tail is clean and whether it still saves
+calls/tokens.
+```
+
+CONTROLLED SNAPSHOT:
+
+```text
+report:
+  target/nando-wave/streaming/clean-suffix-repeat80-snapshot/report.json
+
+window:
+  80 saved real agent events replayed after prior quarantine state
+
+append_parsed_rows: 80
+append_score_events_before_update: 80
+append_unique_cpu_accepts_over_exact_cache: 0
+append_tokens_saved: 0
+append_false_accepts: 1
+
+append_clean_suffix_rows: 78
+append_clean_suffix_score_events: 78
+append_clean_suffix_unique_cpu_accepts_over_exact_cache: 0
+append_clean_suffix_tokens_saved: 0
+append_clean_suffix_false_accepts: 0
+append_clean_suffix_last_quarantine_row_index: 1
+append_clean_suffix_claim_allowed: false
+append_clean_suffix_claim_blocker: append_no_final_hot_runtime
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
+VERDICT:
+
+```text
+PASS for visibility: the daemon now reports post-quarantine clean suffix state.
+WATCH for product compression: post-quarantine suffix is clean but currently
+saves 0 calls/tokens in this controlled window.
+```
+
+DEPLOY PACKAGE:
+
+```text
+package:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T023839Z.tar.gz
+package_report:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T023839Z.package.json
+sha256:
+  baf365b571fb83f43d6d8ebfc97e1ebc1aef7cd91d465a947a40a72faaef54ee
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Frozen Candidate Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/frozen_candidates.rs added
+live_store_adapter.rs frozen candidate lifecycle moved out:
+  verifier-bound .nwpc frozen candidate structs
+  freeze helpers from live store / store route map
+```
+
+CONTROL:
+
+```text
+move-only refactor
+no scoring change
+no threshold change
+no miner behavior change
+no verifier semantic change
+no promotion/local_accept change
+no compression claim change
+```
+
+LINE BUDGET AT PATH CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 17286 lines
+frozen_candidates.rs: 138 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Smoke Report Budget Cut
+
+CHANGE:
+
+```text
+top-level PhaseStreamLiveStoreAdapterSmokeReport moved to live_store_adapter/reports.rs
+reports.rs now owns this schema with the rest of live-store reports
+```
+
+CONTROL:
+
+```text
+move-only schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+LINE BUDGET AT PATH CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 17221 lines
+reports.rs: 838 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Worker Path Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/worker_path.rs added
+prepared-memory row alias, prepared-hot eval alias, worker messages, and worker metrics moved out
+```
+
+CONTROL:
+
+```text
+move-only worker envelope refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+LINE BUDGET AT RUNTIME REGISTRY CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 17189 lines
+worker_path.rs: 34 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Hot Admission Report Budget Cut
+
+CHANGE:
+
+```text
+hot-path/admission report schemas moved to live_store_adapter/reports.rs:
+  PhaseStreamHotPathBenchmarkReport
+  PhaseStreamHotPathPromotionReviewReport
+  PhaseStreamHotPathDaemonAdmissionPolicyReport
+  PhaseStreamHotPathDaemonAdmissionPolicySmokeReport
+  PhaseStreamHotPathDaemonAdmissionPolicySmokeGuard
+```
+
+CONTROL:
+
+```text
+move-only report schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+LINE BUDGET AT PATH CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 16929 lines
+reports.rs: 1098 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Numeric Admission Portfolio Report Budget Cut
+
+CHANGE:
+
+```text
+numeric admission portfolio report schemas moved to live_store_adapter/reports.rs:
+  PhaseStreamHotPathDaemonNumericAdmissionPortfolioGateReport
+  PhaseStreamHotPathDaemonNumericAdmissionPortfolioAcceptedReport
+  PhaseStreamHotPathDaemonNumericAdmissionPortfolioRejectedReport
+  PhaseStreamHotPathDaemonNumericAdmissionPortfolioRuntimeReplayReport
+  PhaseStreamHotPathDaemonNumericAdmissionPortfolioRuntimeReplayItemReport
+```
+
+CONTROL:
+
+```text
+move-only report schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+LINE BUDGET AT RUNTIME REGISTRY CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 16804 lines
+reports.rs: 1226 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Future/Shadow Gate Report Budget Cut
+
+CHANGE:
+
+```text
+future/shadow report schemas moved to live_store_adapter/reports.rs:
+  PhaseStreamHotPathDaemonNumericFuturePortfolioAuditReport
+  PhaseStreamHotPathDaemonShadowGateReport
+  PhaseStreamHotPathDaemonAppendShadowGateReport
+```
+
+CONTROL:
+
+```text
+move-only report schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 16628 lines
+reports.rs: 1402 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Live Loop Smoke Report Budget Cut
+
+CHANGE:
+
+```text
+live-loop smoke report schemas moved to live_store_adapter/reports.rs:
+  PhaseStreamHotPathDaemonLiveLoopBudgetSmokeReport
+  PhaseStreamHotPathDaemonAppendLiveLoopSmokeReport
+```
+
+CONTROL:
+
+```text
+move-only report schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 16449 lines
+reports.rs: 1582 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Append Live Tail Report Budget Cut
+
+CHANGE:
+
+```text
+append-live-tail report schema moved to live_store_adapter/reports.rs:
+  PhaseStreamHotPathDaemonAppendLiveTailReport
+```
+
+CONTROL:
+
+```text
+move-only report schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 16221 lines
+reports.rs: 1811 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Numeric Audit Report Budget Cut
+
+CHANGE:
+
+```text
+numeric audit/provider report schemas moved to live_store_adapter/reports.rs:
+  LiveStoreProviderEvidenceArtifactsReport
+  PhaseStreamHotPathDaemonLiveLoopNumericBenchmarkReport
+  PhaseStreamHotPathDaemonNumericPackageShadowAuditReport
+  PhaseStreamHotPathDaemonNumericFuturePackageAuditReport
+  PhaseStreamHotPathDaemonNumericFalseAcceptSplitAuditReport
+  PhaseStreamHotPathDaemonNumericFalseAcceptAtomReport
+```
+
+CONTROL:
+
+```text
+move-only report schema refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 15893 lines
+reports.rs: 2136 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Survivor Runtime Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/survivor_runtime.rs added
+clean survivor runtime helpers moved out:
+  live_store_clean_candidate_frontier
+  live_store_clean_candidate_value_reports
+  live_store_clean_candidate_survivor_runtime_from_store
+  live_store_product_hot_subcenter_priority_bucket_ids
+  live_store_product_hot_subcenter_candidate_allowed
+  live_store_product_hot_excluded_profile_ids
+```
+
+CONTROL:
+
+```text
+move-only survivor runtime refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 14876 lines
+survivor_runtime.rs: 204 lines
+runtime_registry.rs: 479 lines
+paths.rs: 146 lines
+persistence.rs: 45 lines
+state.rs: 206 lines
+reports.rs: 2136 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter State Type Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/state.rs added
+state/type bundles moved out:
+  LiveStoreStableDecisionLogWindow
+  LiveStoreProductHotCreditRow
+  LiveStoreFalseAcceptAtomAccumulator
+  LiveStoreFutureShadowBillingRequestSummary
+  LiveStoreProviderArtifactSignature
+  LiveStorePersistedProductHotQuarantine
+  LiveStoreCandidateRegistryShadowReport
+  LiveStoreSharedRegistryShadowReport
+  LiveStoreCleanManifestRuntimeBundle
+  LiveStoreProductHotRegistryRuntimeBundle
+  LiveStoreDirectHotSnapshot
+  LiveStoreDirectHotSnapshotBank
+  LiveStoreDirectHotSnapshotEval
+```
+
+CONTROL:
+
+```text
+move-only state/type refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 15701 lines
+state.rs: 206 lines
+reports.rs: 2136 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Persistence Helper Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/persistence.rs added
+persistence helper moved out:
+  live_store_load_persisted_product_hot_quarantine
+```
+
+CONTROL:
+
+```text
+move-only persistence/helper refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 15662 lines
+persistence.rs: 45 lines
+state.rs: 206 lines
+reports.rs: 2136 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Path Helper Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/paths.rs added
+path/key helpers moved out:
+  live_store_route_key_from_bucket_key
+  live_store_resolve_registry_relative_path
+  live_store_hot_path_promotion_review_path
+  live_store_hot_path_daemon_admission_policy_path
+  live_store_numeric_candidate_package_dir
+  live_store_append_tail_clean_promotion_manifest_path
+  live_store_append_tail_clean_promotion_package_dir
+  live_store_append_tail_call_token_promotion_manifest_path
+  live_store_append_tail_call_token_active_manifest_path
+  live_store_append_tail_call_token_promotion_package_dir
+  live_store_numeric_future_candidate_package_dir
+  live_store_numeric_future_policy_smoke_path
+  live_store_numeric_future_portfolio_child_report_path
+  live_store_numeric_future_portfolio_gate_report_path
+  live_store_numeric_future_portfolio_runtime_replay_report_path
+```
+
+CONTROL:
+
+```text
+move-only path/helper refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+LINE BUDGET AT PATH CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 15530 lines
+paths.rs: 146 lines
+persistence.rs: 45 lines
+state.rs: 206 lines
+reports.rs: 2136 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Runtime Registry Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/runtime_registry.rs added
+runtime registry helpers moved out:
+  load_live_store_clean_manifest_runtime
+  load_live_store_product_hot_registry_runtime
+  load_live_store_product_hot_runtime_from_clean_manifest
+  try_load_live_store_allowed_call_token_runtime
+  live_store_call_token_manifest_promotes_quarantined_profile
+  live_store_product_hot_route_index
+  disable_live_store_call_token_active_manifest
+```
+
+CONTROL:
+
+```text
+move-only runtime registry refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+```
+
+LINE BUDGET AT RUNTIME REGISTRY CUT, SUPERSEDED BY LATER CUTS:
+
+```text
+live_store_adapter.rs: 15071 lines
+runtime_registry.rs: 479 lines
+paths.rs: 146 lines
+persistence.rs: 45 lines
+state.rs: 206 lines
+reports.rs: 2136 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Future Shadow Registry Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/future_shadow_registry.rs added
+future-shadow registry/eval helpers moved out:
+  live_store_future_shadow_candidate_reports
+  live_store_candidate_promotion_contract
+  live_store_candidate_registry_shadow
+  live_store_shared_registry_shadow
+  live_store_serving_policy_blocker
+  live_store_clean_promotion_manifest_blocker
+  live_store_candidate_promotion_evidence
+```
+
+CONTROL:
+
+```text
+move-only future-shadow registry refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+cargo fmt --check
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+git diff --check
+rust-action-memory review --workspace .
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 12189 lines
+future_shadow_registry.rs: 459 lines
+claim_gates.rs: 177 lines
+hot_path_eval.rs: 391 lines
+provider_evidence.rs: 486 lines
+promotion_manifests.rs: 413 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Clean Manifest Gate Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/claim_gates.rs extended
+clean manifest shadow blocker moved out:
+  live_store_clean_manifest_shadow_blocker
+```
+
+CONTROL:
+
+```text
+move-only claim-gate refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+cargo fmt --check
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+git diff --check
+rust-action-memory review --workspace .
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 11556 lines
+portfolio_replay.rs: 307 lines
+numeric_future_package.rs: 371 lines
+claim_gates.rs: 177 lines
+future_shadow_registry.rs: 459 lines
+hot_path_eval.rs: 391 lines
+provider_evidence.rs: 486 lines
+promotion_manifests.rs: 413 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Portfolio Replay Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/portfolio_replay.rs added
+portfolio runtime replay helper moved out:
+  live_store_replay_one_portfolio_admission
+```
+
+CONTROL:
+
+```text
+move-only portfolio runtime replay refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+cargo fmt
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+git diff --check
+rust-action-memory review --workspace .
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 11556 lines
+portfolio_replay.rs: 307 lines
+numeric_future_package.rs: 371 lines
+claim_gates.rs: 177 lines
+future_shadow_registry.rs: 459 lines
+hot_path_eval.rs: 391 lines
+provider_evidence.rs: 486 lines
+promotion_manifests.rs: 413 lines
+```
+
+## 2026-07-08 - Reviewer Check: live_store_adapter Numeric Future Package Budget Cut
+
+CHANGE:
+
+```text
+live_store_adapter/numeric_future_package.rs added
+numeric future package audit helper moved out:
+  LiveStoreFrozenNumericFuturePackage
+  live_store_write_numeric_future_package_audit_from_frozen
+```
+
+CONTROL:
+
+```text
+move-only fresh-future .nwpc package audit refactor
+no scoring/threshold/miner/verifier/promotion/local_accept/compression-claim change
+cargo fmt
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+git diff --check
+rust-action-memory review --workspace .
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 11840 lines
+numeric_future_package.rs: 371 lines
+claim_gates.rs: 177 lines
+future_shadow_registry.rs: 459 lines
+hot_path_eval.rs: 391 lines
+provider_evidence.rs: 486 lines
+promotion_manifests.rs: 413 lines
+```
+
+## 2026-07-08 - Reviewer Check: Clean-Survivor .nwpc Claim-Ready Handoff
+
+CHANGE:
+
+```text
+live_store_adapter/promotion_manifests.rs extended
+clean survivor call/token promotion manifest added:
+  write_live_store_clean_survivor_call_token_promotion_manifest
+
+append live-tail final refresh now writes verifier-bound .nwpc packages from
+non-quarantined clean survivor candidates and loads them through:
+  call_token_active_manifest
+
+No local_accept enabled.
+No market money claim enabled.
+No .nwrb / role-binding backend.
+```
+
+EVIDENCE:
+
+```text
+report:
+  target/nando-wave/streaming/live-tail-clean-survivor-manifest-v2.report.json
+
+manifest:
+  target/nando-wave/streaming/live-tail-clean-survivor-manifest-v2.report-call-token-promotion-manifest.json
+
+active manifest:
+  target/nando-wave/streaming/live-tail-clean-survivor-manifest-v2.report-call-token-promotion-active-manifest.json
+
+.nwpc promoted packages:
+  target/nando-wave/streaming/live-tail-clean-survivor-manifest-v2.report-call-token-promotion/bucket-efab6670-97fecca8fc4a7fc5.nwpc
+  target/nando-wave/streaming/live-tail-clean-survivor-manifest-v2.report-call-token-promotion/bucket-486f0d5e-a2224df72211185e.nwpc
+```
+
+SCOREBOARD:
+
+```text
+stable_decision_log_clean_suffix_rows: 502
+stable_decision_log_clean_suffix_unique_cpu_accepts_over_exact_cache: 111
+stable_decision_log_clean_suffix_tokens_saved: 180753
+stable_decision_log_clean_suffix_total_tokens: 555702
+stable_decision_log_clean_suffix_false_accepts: 0
+stable_decision_log_clean_suffix_claim_allowed: true
+stable_decision_log_clean_suffix_claim_blocker: none
+
+product_hot_score_only_runtime_source: call_token_active_manifest
+final_hot_runtime_available: true
+final_hot_profile_ids: [4020987504, 1215237470]
+
+call_token_promotion_manifest_allowed: true
+call_token_promotion_manifest_blocker: none
+call_token_promotion_manifest_promoted_candidates: 2
+call_token_promotion_manifest_tokens_saved: 3407604
+call_token_promotion_manifest_false_accepts: 0
+call_token_promotion_manifest_runtime_parity_mismatches: 0
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+provider_money_claim_blocker: no_future_shadow_billing_request_rows
+```
+
+CONTROL:
+
+```text
+cargo fmt --check
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+git diff --check
+rust-action-memory review --workspace .
+```
+
+## 2026-07-08 - Reviewer Check: NANDA CPU Architecture Lock + Server Bundle
+
+ARCHITECTURE TRANSITION:
+
+```text
+NANDA CPU = compact latent transition runtime.
+
+Allowed product path:
+  L1 surface
+  -> L2 hidden state
+  -> L3 phase-center transition memory
+  -> L4 selector / safety policy
+  -> verifier
+  -> CPU accept or LLM fallback
+
+Stored object:
+  compact verified transition center
+
+Not stored as authority:
+  answer text
+  target_id
+  proof_rule_id
+  concrete_x_lookup
+  manual local_out_t
+  .nwrb role-binding backend
+```
+
+VERSION REGISTRY:
+
+```text
+docs/ARCHITECTURE_VERSION_REGISTRY.md:
+  NANDA CPU architecture = compact_latent_transition_runtime_v1
+```
+
+BOXED SERVER PACKAGE:
+
+```text
+builder:
+  scripts/build-phase-center-test-server-package.sh
+
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T110449Z.tar.gz
+
+sha256:
+  b601a85c070d35bba6eb28c0051ef636a2a9975361795713b59f5bbe6493193e
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T110449Z.package.json
+
+install entrypoint inside bundle:
+  ./install-from-bundle.sh
+```
+
+PACKAGE CONTENT:
+
+```text
+prebuilt target/release/nando-cli
+ops/phase-center-test-server
+data/real_traffic/model_price_config.v1.json
+NANDA CPU architecture docs
+bundle-manifest.json
+README_DEPLOY.md
+```
+
+INSTALL BEHAVIOR:
+
+```text
+deploy.sh now supports:
+  NANDO_DEPLOY_NANDO_CLI_BIN=/path/to/prebuilt/nando-cli
+  NANDO_DEPLOY_INSTALL_ONLY=1
+
+Production default:
+  enable/start systemd services
+  run local canary smokes
+
+Install-only mode:
+  copy files/env/systemd units
+  skip systemd enable/start/smoke
+  useful for bundle validation and CI
+```
+
+SMOKE:
+
+```text
+bundle sha256 check: PASS
+bundle install-only smoke with prebuilt binary: PASS
+bash -n scripts/deploy/bin: PASS
+systemd-analyze verify ops units: PASS
+rust-action-memory review: PASS
+system deploy after bundle build: PASS
+```
+
+RUST ACTION MEMORY GATE:
+
+```text
+gate script:
+  scripts/rust-action-memory-gate.sh
+
+gate report:
+  target/nando-wave/ram/rust-action-memory-gate.json
+
+packaged evidence:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T110449Z/docs/rust-action-memory-gate.json
+
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+workspace_mutated: false
+safe_apply_used: false
+
+Interpretation:
+  WATCH is accepted here because there are no repair candidates.
+  Quarantine is the hard blocker.
+```
+
+LIVE SERVER SNAPSHOT:
+
+```text
+install_ready: true
+shadow_metrics_ready: true
+compression_claim_allowed: true
+scorecard.stable_rows: 742
+scorecard.unique_cpu_accepts_over_exact_cache: 251
+scorecard.tokens_saved: 315565
+scorecard.false_accepts: 0
+local_accept_enabled: true
+market_money_claim_allowed: false
+readiness_blocker: external_provider_export_missing
+upstream_configured: false
+ready_for_broad_provider_traffic: false
+upstream verdict:
+  NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+```
+
+BOUNDARY:
+
+```text
+The bundle does not configure provider upstream secrets.
+The bundle does not unlock money claims.
+Client windows must not receive provider secrets.
+Broad provider traffic stays WATCH until upstream_configured=true and readiness
+passes.
+```
+
+REPORT FIX:
+
+```text
+nando-phase-center-test-server-verify.sh now reports local_accept_enabled from
+the readiness/server policy snapshot instead of hardcoding false.
+
+After redeploy:
+  bridge /health local_accept_enabled: true
+  verify local_accept_enabled: true
+```
+
+## 2026-07-08 - Reviewer Check: Token-First Promotion Gate + Canary Local Accept
+
+CHANGE:
+
+```text
+Stale local target/release phase daemons stopped.
+Only /opt/nando-wave systemd services remain active:
+  nando-phase-center-appender.service
+  nando-phase-center-live-tail.service
+
+Server policy moved to canary-health through:
+  /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-policy-set.sh
+
+Server env:
+  NANDO_OFFLOAD=1
+  NANDO_LOCAL_ACCEPT_ENABLED=1
+  NANDO_CLIENT_ALLOW_LOCAL_ACCEPT=1
+  NANDO_CLIENT_SAFETY_POLICY=guarded_exact_health_only
+  NANDO_CLIENT_REQUIRE_VERIFIER=1
+  NANDO_CLIENT_REQUIRE_FALSE_ACCEPTS_ZERO=1
+
+Important boundary:
+  canary-health local_accept is enabled only for exact built-in health/status
+  routes that return verifier_ok=true. Broad provider traffic still falls back.
+```
+
+EVIDENCE:
+
+```text
+readiness:
+  compression_claim_allowed: true
+  local_accept_promotion_allowed: true
+  market_money_claim_allowed: false
+  blocker: external_provider_export_missing
+
+promotion:
+  promotion_allowed: true
+  blocker: none
+
+scorecard:
+  stable_rows: 297
+  unique_cpu_accepts_over_exact_cache: 62
+  tokens_saved: 88146
+  false_accepts: 0
+  local_accept_events: 0
+
+gateway canary:
+  "nando health" -> NANDO_GATEWAY_OK
+  "ordinary broad prompt" -> fallback
+```
+
+WINDOWS:
+
+```text
+New interactive shells use ~/.bashrc alias:
+  codex -> nando-codex
+
+Global gateway path:
+  /usr/local/bin/nando-llm-gateway -> /opt/nando-wave/ops/phase-center-test-server/bin/nando-llm-gateway.sh
+
+New shells and nando-codex source server policy from:
+  /etc/nando-wave/phase-center.env
+
+Verified new shell values:
+  NANDO_LOCAL_ACCEPT_ENABLED=1
+  NANDO_CLIENT_ALLOW_LOCAL_ACCEPT=1
+  NANDO_CLIENT_SAFETY_POLICY=guarded_exact_health_only
+  NANDO_GATEWAY_LOCAL_CMD=/opt/nando-wave/ops/phase-center-test-server/bin/nando-llm-local-executor.sh
+
+Existing already-open Codex windows continue through their original process
+environment, but the live appender tails all Codex session files and feeds the
+server miner.
+```
+
+## 2026-07-08 - Reviewer Check: Token-First Compression Claim
+
+CHANGE:
+
+```text
+Append live-tail report now exposes token-first compression fields:
+  stable_clean_token_compression_claim_allowed
+  stable_clean_token_compression_claim_blocker
+  stable_clean_token_compression_unique_cpu_accepts_over_exact_cache
+  stable_clean_token_compression_saved_tokens
+  stable_clean_token_compression_total_tokens
+  stable_clean_token_compression_saved_milli
+  stable_clean_token_compression_false_accepts
+
+Money/provider export remains a separate market-money layer.
+It is not a blocker for token compression proof.
+```
+
+EVIDENCE:
+
+```text
+report:
+  target/nando-wave/streaming/live-tail-token-first-claim.report.json
+```
+
+SCOREBOARD:
+
+```text
+stable_clean_token_compression_claim_allowed: true
+stable_clean_token_compression_claim_blocker: none
+stable_clean_token_compression_unique_cpu_accepts_over_exact_cache: 124
+stable_clean_token_compression_saved_tokens: 206859
+stable_clean_token_compression_total_tokens: 634774
+stable_clean_token_compression_saved_milli: 325
+stable_clean_token_compression_false_accepts: 0
+
+product_hot_score_only_runtime_source: call_token_active_manifest
+final_hot_runtime_available: true
+local_accept_enabled: false
+market_money_claim_allowed: false
+provider_money_claim_blocker: external_provider_export_missing
+```
+
+BOUNDARY:
+
+```text
+Token compression claim is allowed for the stable clean suffix only.
+Market money claim remains blocked until external provider export exists.
+```
+
+## 2026-07-08 - Reviewer Check: Shared Fail-Open LLM Gateway
+
+CHANGE:
+
+```text
+ops/phase-center-test-server/bin/nando-llm-gateway.sh added
+local PATH symlink installed:
+  /home/ubu/.local/bin/nando-llm-gateway
+
+Purpose:
+  all local agents/Codex copies may route provider traffic through one wrapper.
+  The wrapper records token/request telemetry and tries Nando first only when
+  explicitly enabled.
+```
+
+SAFETY:
+
+```text
+default timeout: 200 ms
+kill switch: NANDO_OFFLOAD=0
+raw capture default: NANDO_GATEWAY_CAPTURE_RAW=0
+local accept default: NANDO_LOCAL_ACCEPT_ENABLED=0
+
+Any timeout, local scorer error, missing local command, verifier miss, missing
+local response, or kill switch falls back to the normal provider command.
+```
+
+LOCAL ACCEPT CONTRACT:
+
+```text
+NANDO_GATEWAY_LOCAL_CMD must read request on stdin and emit:
+  {"local_accept":true,"verifier_ok":true,"response":"..."}
+
+Otherwise the gateway falls back.
+```
+
+SMOKE:
+
+```text
+kill switch fallback: PASS
+local_accept_disabled fallback: PASS
+verifier-bound toy local_accept: PASS
+timeout fallback: PASS
+```
+
+BOUNDARY:
+
+```text
+The bridge is installed and fail-open.
+It does not yet force production local_accept.
+Real skipped LLM calls require NANDO_LOCAL_ACCEPT_ENABLED=1 plus a
+verifier-bound local command.
+```
+
+## 2026-07-08 - Reviewer Check: Local Codex Gateway Connected
+
+CHANGE:
+
+```text
+user-local env added:
+  /home/ubu/.config/nando-wave/phase-center.env
+
+launcher added:
+  /home/ubu/.local/bin/nando-codex
+
+new interactive shells:
+  alias codex='nando-codex'
+
+gateway telemetry:
+  /home/ubu/.local/state/nando-wave/streaming/nando-llm-gateway.events.jsonl
+  /home/ubu/.local/state/nando-wave/streaming/nando-llm-gateway.decisions.jsonl
+```
+
+SAFETY:
+
+```text
+NANDO_CODEX_ALIAS=0 bypasses shell alias.
+NANDO_CODEX_GATEWAY=0 bypasses launcher telemetry.
+NANDO_OFFLOAD=0 bypasses Nando offload.
+NANDO_LOCAL_ACCEPT_ENABLED=0 remains the default.
+
+Current Codex built-in provider transport is not replaced because this Codex
+version has no visible provider-command/base-url gateway in config.toml.
+```
+
+SMOKE:
+
+```text
+new interactive shell sees codex alias: PASS
+nando-codex --version fallback to real Codex: PASS
+nando-llm-gateway local fallback: PASS
+bash syntax checks: PASS
+```
+
+BOUNDARY:
+
+```text
+Connected for new local shells and shared gateway telemetry.
+Actual provider-call skipping still requires a future verifier-bound local
+executor and explicit NANDO_LOCAL_ACCEPT_ENABLED=1.
+```
+
+CURRENT LINE BUDGET:
+
+```text
+live_store_adapter.rs: 10849 lines
+promotion_manifests.rs: 675 lines
+survivor_runtime.rs: 204 lines
+```
+
+## 2026-07-08 - Reviewer Check: Stable Clean Billing Worklist
+
+CHANGE:
+
+```text
+live_store_adapter/provider_evidence.rs extended
+stable clean suffix billing request fallback added:
+  write_live_store_stable_clean_suffix_billing_requests
+
+If future-shadow billing rows are empty, append live-tail now exports the
+stable clean decision suffix as a provider billing worklist. Rows are included
+only when:
+  verified_safe_accept = true
+  exact_cache_hit = false
+  row_unique_cpu_accepts_over_exact_cache > 0
+  row_false_accepts = 0
+
+Source correlation is recovered from:
+  source + tail_line_index -> original live trace row
+
+No local_accept enabled.
+No market money claim enabled.
+No provider money claim without external export.
+```
+
+EVIDENCE:
+
+```text
+report:
+  target/nando-wave/streaming/live-tail-stable-clean-billing.report.json
+
+billing request:
+  target/nando-wave/streaming/live-tail-stable-clean-billing.report-future-shadow-billing-request.jsonl
+
+provider capture request:
+  target/nando-wave/streaming/live-tail-stable-clean-billing.report-provider-evidence-artifacts/provider-export-acquisition-pack/provider-boundary-capture-request.jsonl
+
+capture contract:
+  target/nando-wave/streaming/live-tail-stable-clean-billing.report-provider-evidence-artifacts/provider-billing-capture-contract.template.jsonl
+```
+
+SCOREBOARD:
+
+```text
+stable_decision_log_clean_suffix_claim_allowed: true
+stable_decision_log_clean_suffix_claim_blocker: none
+stable_decision_log_clean_suffix_unique_cpu_accepts_over_exact_cache: 119
+stable_decision_log_clean_suffix_tokens_saved: 195529
+
+product_hot_score_only_runtime_source: call_token_active_manifest
+future_shadow_billing_request_rows: 94
+future_shadow_billing_request_tokens: 154500
+future_shadow_billing_request_current_cost_microusd: 154500
+future_shadow_billing_request_ready_for_external_provider_evidence: true
+
+provider_export_present: false
+provider_billing_capture_contract_ready: true
+provider_money_claim_blocker: external_provider_export_missing
+
+provider acquisition worklist rows: 94
+provider capture template rows: 94
+local_accept_enabled: false
+market_money_claim_allowed: false
+```
+
+CONTROL:
+
+```text
+cargo fmt --check
+RUSTFLAGS='-D warnings' cargo check -q -p nando-cli
+git diff --check
+rust-action-memory review --workspace .
+```
+
+## 2026-07-08 - Latest Pointer: One-Command Server Status
+
+Fresh detailed record is above in:
+
+```text
+Reviewer Check: One-Command Server Status
+```
+
+Current command:
+
+```bash
+/opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+```
+
+Latest live summary:
+
+```text
+canary_local_accept_ready: true
+broad_provider_traffic_ready: false
+money_claim_ready: false
+next_action: configure_provider_upstream
+unique_cpu_accepts_over_exact_cache: 262
+tokens_saved: 319806
+false_accepts: 0
+```
+
+## 2026-07-08 - Reviewer Check: Safe Upstream Onboarding
+
+CHANGE:
+
+```text
+Added one-command upstream onboarding wrapper:
+  ops/phase-center-test-server/bin/nando-phase-center-upstream-onboard.sh
+
+Installed command:
+  /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-upstream-onboard.sh
+
+Purpose:
+  collapse configure-provider-upstream into one safe operator command:
+    read API key only from stdin
+    set upstream base URL/provider
+    refresh readiness/status
+    print no secret value
+```
+
+OPERATOR COMMAND:
+
+```bash
+printf '%s\n' "$OPENAI_API_KEY" | sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-upstream-onboard.sh \
+  /etc/nando-wave/phase-center.env \
+  --base-url https://api.openai.com \
+  --provider openai \
+  --api-key-stdin
+```
+
+Optional real probe:
+
+```bash
+printf '%s\n' "$OPENAI_API_KEY" | sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-upstream-onboard.sh \
+  /etc/nando-wave/phase-center.env \
+  --base-url https://api.openai.com \
+  --provider openai \
+  --api-key-stdin \
+  --allow-real-probe
+```
+
+SAFETY:
+
+```text
+api_key_value_printed: false
+does not enable market_money_claim
+does not mutate scoring/local_accept policy
+does not call real provider unless --allow-real-probe is passed
+dry-run uses a temporary env copy
+```
+
+DRY-RUN SMOKE:
+
+```text
+command:
+  printf fake-test-key | nando-phase-center-upstream-onboard.sh TEMP_ENV --base-url http://127.0.0.1:9 --provider fake --api-key-stdin --dry-run
+
+dry_run: true
+upstream_configured: true
+api_key_present: true
+api_key_value_printed: false
+broad_provider_traffic_ready: false
+money_claim_ready: false
+temp env mutation: none
+```
+
+LIVE SERVER STATUS AFTER DEPLOY:
+
+```text
+upstream_configured: false
+api_key_present: false
+api_key_value_printed: false
+readiness_verdict:
+  NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+
+scorecard.stable_rows: 796
+scorecard.unique_cpu_accepts_over_exact_cache: 279
+scorecard.tokens_saved: 323687
+scorecard.false_accepts: 0
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T111600Z.tar.gz
+
+sha256:
+  de24dd86eb81d7dde1565f2931452ac99281363f12b5ce98eece8ccd3bacaf15
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T111600Z.package.json
+
+package includes:
+  nando-phase-center-upstream-onboard.sh
+  nando-phase-center-status.sh
+  rust-action-memory-gate.json
+```
+
+CONTROL:
+
+```text
+git diff --check
+bash -n scripts + ops bin
+systemd-analyze verify ops units
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+bundle sha256 check
+bundle install-only smoke
+```
+
+## 2026-07-08 - Latest Pointer: Continuous Status Timer
+
+Fresh detailed record is above in:
+
+```text
+Reviewer Check: Continuous Status Timer
+```
+
+Current always-fresh status file:
+
+```text
+/var/lib/nando-wave/streaming/metrics/nando-phase-center.status.json
+```
+
+Current timer:
+
+```text
+nando-phase-center-status.timer: active
+```
+
+Latest live summary:
+
+```text
+canary_local_accept_ready: true
+broad_provider_traffic_ready: false
+money_claim_ready: false
+next_action: configure_provider_upstream
+unique_cpu_accepts_over_exact_cache: 292
+tokens_saved: 327650
+false_accepts: 0
+```
+
+## 2026-07-08 - Reviewer Check: Secret-Safe Server Policy Env + RAM Gate
+
+CHANGE:
+
+```text
+Hardened production server policy env permissions:
+  /etc/nando-wave/phase-center.env
+
+Before live check:
+  mode: 644
+  owner: root:root
+
+After deploy:
+  mode: 600
+  owner: root:root
+
+Reason:
+  server policy env can contain NANDO_PROVIDER_UPSTREAM_API_KEY.
+  It must not be world-readable.
+```
+
+CODE:
+
+```text
+ops/phase-center-test-server/deploy.sh
+  installs/merges phase-center.env as 0600
+  reads root-only env through sudo in system mode
+  runs system smoke commands through sudo in system mode
+
+ops/phase-center-test-server/bin/nando-provider-bridge-upstream-config.sh
+  preserves env as 0600 after set/unset/probe-on/probe-off
+
+ops/phase-center-test-server/bin/nando-phase-center-policy-set.sh
+  preserves env as 0600 after policy mode changes
+
+ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh
+  reports env_file_mode
+  reports env_file_private
+  blocks install_ready when env is not 0600
+```
+
+CLIENT BOUNDARY:
+
+```text
+Ordinary client windows should use the HTTP bridge:
+  OPENAI_BASE_URL=http://127.0.0.1:8787/v1
+  OPENAI_API_KEY=nando-local
+
+Ordinary client windows should not read:
+  /etc/nando-wave/phase-center.env
+
+Provider command wrapper with system env is operator/smoke only.
+For ordinary wrapper clients, use user-mode install or a sanitized client env.
+```
+
+LIVE STATUS:
+
+```text
+command:
+  sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+
+env_file:
+  600 root:root /etc/nando-wave/phase-center.env
+
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+
+scorecard:
+  stable_rows: 845
+  unique_cpu_accepts_over_exact_cache: 301
+  tokens_saved: 331263
+  false_accepts: 0
+
+bridge:
+  health_ok: true
+  local_accept_enabled: true
+  client_allow_local_accept: true
+  safety_policy: guarded_verified_routes
+  upstream_configured: false
+```
+
+VERIFY:
+
+```text
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+env_file_mode: 600
+env_file_private: true
+blockers:
+  - market_money_claim_blocked
+upstream_configured: false
+market_money_claim_allowed: false
+```
+
+RUST ACTION MEMORY GATE:
+
+```text
+script:
+  scripts/rust-action-memory-gate.sh
+
+doctor:
+  rust-action-memory version: 0.3.0
+  verdict: PASS
+
+gate:
+  cargo_check_exit_code: 0
+  selector_verdict: WATCH
+  selector_blocker: no_policy_allowed_candidate
+  diagnostics_count: 0
+  policy_allowed_candidates: 0
+  quarantined_candidates: 0
+  blocked_by_quarantine: false
+  release_allowed: true
+
+interpretation:
+  WATCH is not a release blocker here because there are no cargo diagnostics and
+  no policy-allowed fix candidates. Quarantine remains the hard blocker.
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T112919Z.tar.gz
+
+sha256:
+  ab1602b7d5860a32beb8c04002bb1f7598281b80e9c4c7062b11315cb36d74cc
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T112919Z.package.json
+
+package flags:
+  product_path: phase-center .nwpc
+  install_ready_artifact: true
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  local_accept_changed_by_package_build: false
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+```
+
+CONTROL:
+
+```text
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+NANDO_DEPLOY_NANDO_CLI_BIN=/home/ubu/projects/nando-wave/target/release/nando-cli ops/phase-center-test-server/deploy.sh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+scripts/build-phase-center-test-server-package.sh
+```
+
+## LATEST: 2026-07-08 v2 Dogfood / Boxed Server
+
+```text
+endpoint: http://127.0.0.1:8787/v2
+deploy: PASS
+services: bridge/live-tail/appender active
+
+v2 dogfood:
+  report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-bridge-v2-dogfood.json
+  verdict: NANDO_PROVIDER_BRIDGE_V2_DOGFOOD_PASS
+  expected_accept_count: 8
+  local_accept_count: 8
+  declined_count: 1
+  false_accepts: 0
+
+metrics after refresh:
+  stable_rows: 997
+  unique_cpu_accepts_over_exact_cache: 362
+  tokens_saved: 362660
+  provider_bridge_v2_local_accept_events: 39
+  provider_bridge_v2_dogfood_local_accept_events: 9
+  provider_bridge_v2_non_dogfood_local_accept_events: 30
+  provider_bridge_v2_false_accepts: 0
+
+verify:
+  verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+  install_ready: true
+  missing_scripts: []
+  missing_units: []
+  systemd_verify_pass: true
+  market_money_claim_allowed: false
+
+package:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T143813Z.tar.gz
+  sha256: d6de3feca2cc99dec676b6158267dd554cbc819228ee5f404fbc1268eeeecc99
+
+checks:
+  bash -n: PASS
+  python py_compile bridge: PASS
+  cargo fmt --check: PASS
+  systemd-analyze verify: PASS
+  rust-action-memory doctor/gate: PASS
+  git diff --check scoped paths: PASS
+
+boundary:
+  dogfood tokens are separated from non-dogfood v2 traffic.
+  compression claim in tokens is allowed by verify.
+  market money claim remains blocked until provider evidence exists.
+```
+
+## 2026-07-08 v2 Dogfood Metrics Split / Boxed Server Refresh
+
+SCOPE:
+
+```text
+production-like test server path only
+active product path: phase-center .nwpc / compact latent transition runtime
+forbidden old path: .nwrb / role-binding backend
+```
+
+CHANGE:
+
+```text
+provider bridge now records traffic_source from request metadata:
+  metadata.nando_traffic_source
+  metadata.traffic_source
+  top-level nando_traffic_source / traffic_source
+  default: unspecified
+
+metrics split provider bridge local accepts into:
+  v1
+  v2
+  v2 dogfood
+  v2 non-dogfood
+
+added installed dogfood workload:
+  nando-provider-bridge-v2-dogfood.sh
+```
+
+LIVE DEPLOY:
+
+```text
+deploy command:
+  ops/phase-center-test-server/deploy.sh
+
+deployed:
+  env: /etc/nando-wave/phase-center.env
+  client_env: http://127.0.0.1:8787/v2
+  local_accept_default: 1
+  client_allow_local_accept: 1
+
+services:
+  nando-provider-bridge.service: active
+  nando-phase-center-live-tail.service: active
+  nando-phase-center-appender.service: active
+```
+
+V2 DOGFOOD:
+
+```text
+report:
+  /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-bridge-v2-dogfood.json
+
+verdict: NANDO_PROVIDER_BRIDGE_V2_DOGFOOD_PASS
+case_count: 9
+passed_count: 9
+failed_count: 0
+expected_accept_count: 8
+local_accept_count: 8
+declined_count: 1
+tokens_saved_estimated: 31
+false_accepts: 0
+market_claim_allowed: false
+
+boundary:
+  dogfood workload only; not market claim
+```
+
+LIVE STATUS AFTER REFRESH:
+
+```text
+scorecard:
+  stable_rows: 997
+  unique_cpu_accepts_over_exact_cache: 362
+  tokens_saved: 362660
+  false_accepts: 0
+
+provider bridge:
+  provider_bridge_local_accept_events: 131
+  provider_bridge_tokens_saved_estimated: 583
+  provider_bridge_false_accepts: 0
+
+  provider_bridge_v1_local_accept_events: 92
+
+  provider_bridge_v2_local_accept_events: 39
+  provider_bridge_v2_tokens_saved_estimated: 163
+  provider_bridge_v2_false_accepts: 0
+
+  provider_bridge_v2_dogfood_local_accept_events: 9
+  provider_bridge_v2_dogfood_tokens_saved_estimated: 36
+  provider_bridge_v2_dogfood_false_accepts: 0
+
+  provider_bridge_v2_non_dogfood_local_accept_events: 30
+  provider_bridge_v2_non_dogfood_tokens_saved_estimated: 127
+  provider_bridge_v2_non_dogfood_false_accepts: 0
+
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+```
+
+VERIFY:
+
+```text
+report:
+  /var/lib/nando-wave/streaming/metrics/nando-phase-center.test-server-verify.json
+
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+missing_scripts: []
+missing_units: []
+systemd_verify_checked: true
+systemd_verify_pass: true
+local_accept_enabled: true
+compression_claim_allowed: true
+market_money_claim_allowed: false
+money_evidence_ready: false
+
+forbidden_flags:
+  nwrb_used: false
+  role_binding_backend_used: false
+  lookup_used: false
+  target_id_or_proof_rule_id_authority_used: false
+  concrete_x_lookup_used: false
+  manual_local_out_t_used: false
+  local_accept_without_verifier_used: false
+```
+
+CHECKS:
+
+```text
+bash -n provider/dogfood/status/metrics scripts: PASS
+python3 -m py_compile nando-provider-bridge.py: PASS
 cargo fmt --check: PASS
-cargo check -p nando-cli: PASS
-cargo clippy -p nando-cli -p nando-core -- -D warnings: PASS
-phase-action-release-suite-v1: PASS
-phase-action-release-verify-v1: PASS, report_matches_sources = true
-phase-action-license-verify-v1: PASS, report_matches_sources = true
-phase-action-offload-verify-v1: PASS, report_matches_sources = true
-phase-action-cache-offload-bench-verify-v1: PASS, report_matches_sources = true
-phase-action-workflow-bench-v1: PASS
-phase-action-workflow-bench-verify-v1: PASS, report_matches_sources = true
-phase-action-regression-v1: PASS
-phase-action-regression-verify-v1: PASS, report_matches_sources = true
-phase-action-regression-freeze-v1: PASS
-phase-action-regression-freeze-verify-v1: PASS, report_matches_sources = true
-strict-multiseed-rust-audit-v1: PASS as log audit
-strict-multiseed-rust-audit-verify-v1: PASS, report_matches_sources = true
-git diff --check: PASS
-RUSTFLAGS=-Dwarnings cargo test -p nando-core phase_center_runtime --lib: PASS
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service *.timer: PASS
+git diff --check scoped paths: PASS
+rust-action-memory doctor: PASS
+rust-action-memory gate: PASS
+
+rust-action-memory gate:
+  cargo_check_exit_code: 0
+  selector_verdict: WATCH
+  selector_blocker: no_policy_allowed_candidate
+  diagnostics_count: 0
+  blocked_by_quarantine: false
+  release_allowed: true
 ```
 
-Current WATCH:
+BOXED PACKAGE:
 
 ```text
-Canonical strict audit changed from RED to PASS after the seed=2/order runtime
-log was regenerated:
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T143813Z.package.json
 
-  strict_multiseed_verdict: STRICT_MULTI_SEED_RUST_AUDIT_PASS
-  strict_multiseed_observed_logs: 12
-  strict_multiseed_missing_logs: 0
-  strict_multiseed_logs_fingerprint64: 10852598576795674512
-  strict_multiseed_logs_total_bytes: 73816
-  strict_runtime_issues: 0
-  strict_multiseed_python_demo_used: false
-  strict_multiseed_corpus_jsonl_used: false
-  strict_multiseed_evidence_warnings: 0
+tarball:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T143813Z.tar.gz
 
-New seed=2/order runtime log:
+sha256:
+  d6de3feca2cc99dec676b6158267dd554cbc819228ee5f404fbc1268eeeecc99
 
-  order_runtime_gate_release.log updated at 2026-07-02 16:04
-  order_slot_ordered_sequence_accuracy_milli: 1000
-  order_sequence_energy_accuracy_milli: 1000
-  order_energy_pass_slot_fail: 0
-  order_output_slot_cleanup_failed_slots: 0
-  slot_failure_total: 0
-  flat_gap_parity_mismatches: 0
-  flat_sequence_energy_parity_mismatches: 0
-  ablations without binding/action/role/active_fringe: 0
-  forbidden flags: false
+tarball_bytes: 5587660
+included_file_count: 57
+product_path: phase-center .nwpc
+install_ready_artifact: true
+provider_secret_printed: false
+market_money_claim_allowed: false
+local_accept_changed_by_package_build: false
+forbidden_flags.nwrb_product_path_used: false
+forbidden_flags.role_binding_backend_used: false
+```
 
-But this is still a WATCH, not a current-source multi-seed proof:
+NEXT:
 
-  report_matches_sources=true means the audit report matches the runtime log
-  files. It does not prove all runtime logs were regenerated from the current
-  Rust source.
+```text
+1. keep using http://127.0.0.1:8787/v2 for dogfood client traffic
+2. wire more real agent windows through client env, counted as dogfood unless explicitly marked external/customer
+3. configure provider upstream separately; no money claim until provider evidence is joined
+```
 
-  Current source/test files are newer than most canonical runtime logs:
-    wavepredictor_hebbian.rs: 2026-07-02 15:53
-    wavepredictor_binding_pressure_l3.rs: 2026-07-02 15:52
-    phase_package_cmd.rs: 2026-07-02 16:04
+## 2026-07-08 - Reviewer Check: Sanitized Client Env Handoff
 
-  Examples of stale canonical logs still used by the PASS audit:
-    seed_001/order:       2026-07-01 21:22
-    seed_001/conditional: 2026-07-01 21:31
-    seed_001/composed:    2026-07-01 21:32
-    seed_002/conditional: 2026-07-01 21:53
-    seed_002/composed:    2026-07-01 21:54
-    seed_003/order:       2026-07-01 22:06
-    seed_003/conditional: 2026-07-01 22:15
-    seed_003/composed:    2026-07-01 22:16
-    seed_001/edit:        2026-07-02 15:33
-    seed_002/edit:        2026-07-02 15:39
-    seed_003/edit:        2026-07-02 15:45
+CHANGE:
 
-Diagnostic density sweep:
-  factor1 baseline: RED
-  factor2 targeted reweighting: GREEN
-  factor4 targeted reweighting: GREEN
-  factor16 targeted reweighting: GREEN
+```text
+Added client handoff helper:
+  ops/phase-center-test-server/bin/nando-phase-center-client-env.sh
+
+Purpose:
+  let other local agent windows use the HTTP bridge without reading the secret
+  server policy file.
 
 Boundary:
-  targeted reweighting is diagnostic only, not a final corpus policy.
+  no provider upstream secret is printed
+  no provider upstream secret is stored in client env
+  no local_accept policy mutation
+  no mining/scoring
+  no money claim unlock
+```
+
+CLIENT ENV:
+
+```text
+installed local file:
+  /home/ubu/.config/nando-wave/client.env
+
+mode:
+  600 ubu:ubu
+
+contents:
+  OPENAI_BASE_URL=http://127.0.0.1:8787/v1
+  OPENAI_API_BASE=http://127.0.0.1:8787/v1
+  OPENAI_API_KEY=nando-local
+  NANDO_PROVIDER_BRIDGE_URL=http://127.0.0.1:8787
+  NANDO_CPU_BRIDGE_URL=http://127.0.0.1:8787
+  NANDO_CLIENT_ENV_SOURCE=nando-phase-center-client-env-v1
+```
+
+COMMAND FOR OTHER WINDOWS:
+
+```bash
+source /home/ubu/.config/nando-wave/client.env
+curl -s http://127.0.0.1:8787/health
+```
+
+OPERATOR COMMAND TO REGENERATE:
+
+```bash
+mkdir -p /home/ubu/.config/nando-wave
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-client-env.sh /etc/nando-wave/phase-center.env print > /home/ubu/.config/nando-wave/client.env
+chmod 0600 /home/ubu/.config/nando-wave/client.env
+```
+
+LIVE HTTP CANARY:
+
+```text
+request:
+  POST http://127.0.0.1:8787/v1/chat/completions
+  prompt: nando compression
+
+response:
+  model: nando-local
+  nando.local_accept: true
+  nando.route: nando_compression_status
+  nando.false_accepts: 0
+```
+
+LIVE STATUS:
+
+```text
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+
+scorecard:
+  stable_rows: 863
+  unique_cpu_accepts_over_exact_cache: 315
+  tokens_saved: 335824
+  false_accepts: 0
+
+bridge:
+  health_ok: true
+  local_accept_enabled: true
+  client_allow_local_accept: true
+  safety_policy: guarded_verified_routes
+  upstream_configured: false
+```
+
+VERIFY:
+
+```text
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+env_file_mode: 600
+env_file_private: true
+missing_scripts: []
+blockers:
+  - market_money_claim_blocked
+market_money_claim_allowed: false
+```
+
+RUST ACTION MEMORY GATE:
+
+```text
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T113602Z.tar.gz
+
+sha256:
+  db667dc7546a33bfc4d6d313c3af4d8a2a647acea77f1d84a59143d8a1272d2b
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T113602Z.package.json
+
+package includes:
+  nando-phase-center-client-env.sh
+  nando-phase-center-test-server-verify.sh
+  deploy.sh
+  CLIENT_HANDOFF.md
+  README.md
+  rust-action-memory-gate.json
+```
+
+CONTROL:
+
+```text
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+cargo fmt --check
+NANDO_DEPLOY_NANDO_CLI_BIN=/home/ubu/projects/nando-wave/target/release/nando-cli ops/phase-center-test-server/deploy.sh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+scripts/build-phase-center-test-server-package.sh
+```
+
+## 2026-07-08 - Reviewer Check: Default Bridge Install Gate
+
+CHANGE:
+
+```text
+Hardened nando-phase-center-client-env.sh install-system.
+
+Problem:
+  system-wide /etc/profile.d client env must not be installed while broad
+  upstream traffic is not ready. Otherwise ordinary windows could route broad
+  provider prompts into a bridge that only supports verified canary routes and
+  returns upstream_missing.
+
+Rule:
+  install-user remains allowed for explicit per-window source.
+  install-system is blocked until ready_for_broad_provider_traffic=true.
+  operator may pass --allow-canary-only only for reviewed local lab canary use.
+```
+
+LIVE CLIENT ENV STATUS:
+
+```text
+openai_base_url: http://127.0.0.1:8787/v1
+upstream_verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+upstream_configured: false
+broad_provider_traffic_ready: false
+default_bridge_allowed: false
+default_bridge_blocker: broad_provider_traffic_not_ready
+user_env_installed: true
+system_env_installed: false
+provider_secret_printed: false
+provider_secret_stored: false
+```
+
+SYSTEM INSTALL NEGATIVE GATE:
+
+```text
+command:
+  sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-client-env.sh /etc/nando-wave/phase-center.env install-system /tmp/nando-wave-client-live-test.sh
+
+exit_status:
+  3
+
+result:
+  no system env file written
+  install-system blocked: broad provider traffic is not ready
+```
+
+LIVE STATUS:
+
+```text
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+
+scorecard:
+  stable_rows: 864
+  unique_cpu_accepts_over_exact_cache: 315
+  tokens_saved: 335824
+  false_accepts: 0
+
+bridge:
+  health_ok: true
+  local_accept_enabled: true
+  client_allow_local_accept: true
+  safety_policy: guarded_verified_routes
+  upstream_configured: false
+```
+
+VERIFY:
+
+```text
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+env_file_mode: 600
+env_file_private: true
+missing_scripts: []
+blockers:
+  - market_money_claim_blocked
+market_money_claim_allowed: false
+```
+
+RUST ACTION MEMORY GATE:
+
+```text
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T114010Z.tar.gz
+
+sha256:
+  e087baa5a9addbe9e14a5c8fa373e4d55ce8ba53e88ddaee4f3cfd4e6fd186fd
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T114010Z.package.json
+
+package includes client env gate:
+  install-system [PATH] [--allow-canary-only]
+  default_bridge_allowed
+  broad_provider_traffic_ready
+  provider_secret_printed: false
+```
+
+CONTROL:
+
+```text
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+cargo fmt --check
+NANDO_DEPLOY_NANDO_CLI_BIN=/home/ubu/projects/nando-wave/target/release/nando-cli ops/phase-center-test-server/deploy.sh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-client-env.sh /etc/nando-wave/phase-center.env status
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-client-env.sh /etc/nando-wave/phase-center.env install-system /tmp/nando-wave-client-live-test.sh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+scripts/build-phase-center-test-server-package.sh
+```
+
+## 2026-07-08 - Reviewer Check: Upstream Lab Smoke Visible In Verify/Status
+
+CHANGE:
+
+```text
+Made fake-upstream transport proof visible in server verify/status.
+
+Reason:
+  real provider key is still external input, but the broad proxy transport and
+  provider-boundary capture path can be proven without a real provider.
 
 Boundary:
-
-  Superseded. The current-source multi-seed strict robustness debt is now
-  closed by the fresh 12-log rerun recorded at the top of this file.
+  lab smoke uses temporary local fake upstream only
+  does not configure real upstream
+  does not unlock broad_provider_traffic_ready
+  does not unlock market_money_claim
 ```
 
-Freshness note:
+CODE:
 
 ```text
-Reviewer caught a stale regression/freeze state after OPERATOR_BLUEPRINT.md was
-updated. The regression and freeze reports were regenerated and re-verified.
+ops/phase-center-test-server/bin/nando-provider-bridge-upstream-smoke.sh
+  writes report atomically via tmp report + mv
 
-current release_suite_report_fingerprint64: 9827723825761118426
-current regression_report_fingerprint64: 2002304595771295125
-current workflow_bench_report_fingerprint64: 7479237649753576261
-current operator_blueprint_fingerprint64: 9874423192353457577
-regression_verify report_matches_sources: true
-freeze_verify report_matches_sources: true
+ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh
+  includes upstream_lab_smoke block
+
+ops/phase-center-test-server/bin/nando-phase-center-status.sh
+  includes upstream_lab_smoke block
 ```
 
-Release-suite status:
+LIVE UPSTREAM LAB SMOKE:
 
 ```text
-artifact_count: 3
-artifacts:
-  generated_action
-  domain_action
-  coverage_action
-
-total_runtime_bytes_estimate: 48576
-total_bench_samples: 308000
-max_bench_p99_latency_ns: 117
-total_source_rebuild_action_tree_key_count: 46
-all_package_report_parity_pass: true
-all_shortcut_reports_pass: true
-all_action_ablation_collapses: true
-compiler_used: false
-corpus_jsonl_used: false
-forbidden_used: false
+verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_SMOKE_PASS
+failed_count: 0
+upstream_hit_count: 1
+provider_boundary_event_count: 1
+provider_boundary_total_tokens: 10
 ```
 
-Operator coverage integration:
+LIVE STATUS:
 
 ```text
-all_operator_coverage_reports_match_sources: true
-operator_dimension_coverage_artifact_count: 1
-release_operator_dimension_coverage_pass: true
-max_operator_coverage_min_dimension_value_count: 5
-max_operator_coverage_wide_dimension_count: 5
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
 
-generated_action:
-  operator_coverage_report_verdict: PHASE_ACTION_OPERATOR_COVERAGE_V1_WATCH
-  full_operator_dimension_coverage_pass: false
-  min_dimension_value_count: 1
+scorecard:
+  stable_rows: 875
+  unique_cpu_accepts_over_exact_cache: 320
+  tokens_saved: 337059
+  false_accepts: 0
 
-domain_action:
-  operator_coverage_report_verdict: PHASE_ACTION_OPERATOR_COVERAGE_V1_WATCH
-  full_operator_dimension_coverage_pass: false
-  min_dimension_value_count: 1
+upstream_lab_smoke:
+  verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_SMOKE_PASS
+  pass: true
+  failed_count: 0
+  upstream_hit_count: 1
+  provider_boundary_event_count: 1
 
-coverage_action:
-  operator_coverage_report_verdict: PHASE_ACTION_OPERATOR_COVERAGE_V1_PASS
-  full_operator_dimension_coverage_pass: true
-  min_dimension_value_count: 5
-  wide_dimension_count: 5
+upstream_readiness:
+  verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+  upstream_configured: false
+  ready_for_broad_provider_traffic: false
 ```
 
-Offload/cache product benchmark:
+VERIFY:
 
 ```text
-offload_rate_milli: 880
-local_accuracy_milli: 1000
-false_local_accepts: 0
-
-exact_cache_llm_calls: 308
-exact_cache_plus_nando_llm_calls: 36
-incremental_llm_calls_removed_vs_cache: 272
-incremental_llm_call_reduction_vs_cache_milli: 883
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+upstream_lab_smoke.pass: true
+upstream_lab_smoke.verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_SMOKE_PASS
+blockers:
+  - market_money_claim_blocked
+market_money_claim_allowed: false
 ```
 
-Claim boundary:
+RUST ACTION MEMORY GATE:
 
 ```text
-This closes the V5 coverage_action integration into the packaged flat action
-scorer release/regression/freeze chain.
-
-It does not close:
-  strict ordered decoder beyond the known 16-slot rung;
-  32-slot full corpus proof;
-  autonomous raw action parser;
-  text generation;
-  broad workflow reasoning;
-  commercial license package.
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
 ```
 
-Direction for executor (superseded):
+BOXED PACKAGE:
 
 ```text
-This historical direction has been completed by the fresh 12-log rerun.
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T114432Z.tar.gz
 
-Closed in this note:
-  1. source-matching strict multi-seed audit exists and verifies.
-  2. strict audit helper wiring now passes cargo check and clippy -D warnings.
-  3. edit-class cleanup counters are present in seed 1/2/3 logs.
+sha256:
+  5f32defc9637dbc26add2c5445085651f919a1184c3fb53610b0f891ad4f0d83
 
-Next honest targets:
-  1. keep the current v4 16-slot strict audit frozen;
-  2. public Rust SDK surface is closed by current offload audit + SDK test;
-  3. loopback HTTP service smoke is closed by phase-action-daemon-smoke-v1;
-  4. single-package HTTP service smoke is closed by phase-action-daemon-package-smoke-v1;
-  5. first HTTP hardening smoke is closed by phase-action-daemon-hardening-smoke-v1;
-  6. bearer-auth smoke is closed by phase-action-daemon-auth-smoke-v1;
-  7. static multi-package registry smoke is closed by phase-action-daemon-registry-smoke-v1;
-  8. registry config-file smoke is closed by phase-action-daemon-registry-config-smoke-v1;
-  9. registry config validation smoke is closed by phase-action-daemon-config-validation-smoke-v1;
-  10. score rate-limit smoke is closed by phase-action-daemon-rate-limit-smoke-v1;
-  11. structured observability smoke is closed by phase-action-daemon-observability-smoke-v1;
-  12. structured audit-log smoke is closed by phase-action-daemon-audit-log-smoke-v1;
-  13. HTTP error-taxonomy smoke is closed by phase-action-daemon-error-taxonomy-smoke-v1;
-  14. daemon proof suite is closed by phase-action-daemon-proof-suite-v1;
-  15. live daemon proof suite is closed by phase-action-daemon-live-proof-suite-v1;
-  16. systemd service packaging smoke is closed by phase-action-daemon-systemd-smoke-v1;
-  17. production HTTP daemon hardening is still open beyond these smokes;
-  18. real external pilot workflow beyond synthetic domain_action;
-  19. full 32-slot corpus proof and cache/runtime benchmark.
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T114432Z.package.json
 
-HTTP service smoke evidence:
-
-```text
-command: cargo run -p nando-cli --release -- phase-action-daemon-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_SMOKE_V1_PASS
-http_requests_handled: 2
-http_bad_requests: 0
-local_action: local_operator
-fallback_action: fallback_to_llm
-false_local_accepts: 0
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
+package flags:
+  product_path: phase-center .nwpc
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
 ```
+
+CONTROL:
+
+```text
+bash -n ops/phase-center-test-server/bin/nando-provider-bridge-upstream-smoke.sh ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh ops/phase-center-test-server/bin/nando-phase-center-status.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+sudo ops/phase-center-test-server/bin/nando-provider-bridge-upstream-smoke.sh /etc/nando-wave/phase-center.env
+sudo ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+NANDO_DEPLOY_NANDO_CLI_BIN=/home/ubu/projects/nando-wave/target/release/nando-cli ops/phase-center-test-server/deploy.sh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+cargo fmt --check
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+scripts/rust-action-memory-gate.sh
+rust-action-memory review --workspace .
+scripts/build-phase-center-test-server-package.sh
+```
+
+## 2026-07-08 - Reviewer Check: Upstream Onboarding Smoke + RAM Quarantine Gate
+
+CHANGE:
+
+```text
+Added and verified boxed upstream onboarding smoke.
+
+Purpose:
+  prove configure-only upstream onboarding + temporary fake upstream + bridge
+  readiness without mutating the real /etc/nando-wave/phase-center.env and
+  without printing or storing a real provider secret.
 
 Boundary:
-  this is a loopback service-boundary smoke over PhaseCenterOffloadRuntime
-  package bytes, not a production daemon, auth/TLS layer, service manager,
-  multi-package registry, or real pilot workflow.
+  real server upstream remains unset
+  broad_provider_traffic_ready remains false
+  market_money_claim_allowed remains false
+```
 
-Existing package HTTP service smoke evidence:
+LIVE UPSTREAM ONBOARDING SMOKE:
 
 ```text
-serve command: phase-action-daemon-serve-v1
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-package-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-package-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_PACKAGE_SMOKE_V1_PASS
-package_path: target/nando-wave/action-runtime-v1-generated-coverage-c32.nwpc
-package_fingerprint64: 11103824464258352074
-package_record_count: 30
-fixture_task_id: generated_coverage_contract_v1_heldout_len5_select_span_reverse_replace_always_bag_0
-fixture_center_index: 9
-http_requests_handled: 2
-http_bad_requests: 0
-local_action: local_operator
-fallback_action: fallback_to_llm
-local_margin_micro: 791009
-fallback_margin_micro: -791009
-false_local_accepts: 0
-request_fixture_corpus_jsonl_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
+script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-upstream-onboard-smoke.sh
+report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-bridge-upstream-onboard-smoke.json
+verdict: NANDO_PHASE_CENTER_UPSTREAM_ONBOARD_SMOKE_PASS
+pass: true
+real_env_unchanged: true
+upstream_hit_count: 2
+provider_boundary_event_count: 2
+provider_boundary_total_tokens: 22
 ```
+
+LIVE STATUS:
+
+```text
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+
+scorecard:
+  stable_rows: 897
+  unique_cpu_accepts_over_exact_cache: 328
+  tokens_saved: 341663
+  false_accepts: 0
+
+upstream_onboard_smoke:
+  verdict: NANDO_PHASE_CENTER_UPSTREAM_ONBOARD_SMOKE_PASS
+  pass: true
+  real_env_unchanged: true
+```
+
+VERIFY:
+
+```text
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+env_file_mode: 600
+env_file_private: true
+missing_scripts: []
+upstream_onboard_smoke.pass: true
+upstream_readiness.verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+upstream_readiness.ready_for_broad_provider_traffic: false
+blockers:
+  - market_money_claim_blocked
+market_money_claim_allowed: false
+```
+
+RUST ACTION MEMORY SELECTOR / QUARANTINE GATE:
+
+```text
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T115617Z.tar.gz
+
+sha256:
+  370d4d16e25c8a835ba78e713f9c81b38195c864f24a21f81f66420aa5ba4b1f
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T115617Z.package.json
+
+package flags:
+  product_path: phase-center .nwpc
+  install_ready_artifact: true
+  included_file_count: 50
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  upstream_configured_by_bundle: false
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
+```
+
+CONTROL:
+
+```text
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-upstream-onboard-smoke.sh /etc/nando-wave/phase-center.env
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+cargo check --message-format=json > target/ram-check.jsonl
+rust-action-memory selector-report --workspace . --from-cargo-json target/ram-check.jsonl --format json
+rust-action-memory review --workspace .
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+cargo fmt --check
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+scripts/rust-action-memory-gate.sh
+scripts/build-phase-center-test-server-package.sh
+```
+
+## 2026-07-08 - Reviewer Check: Provider Activation Gate
+
+CHANGE:
+
+```text
+Added provider activation gate for boxed production deployment.
+
+Purpose:
+  after server-side upstream onboarding, produce one activation_allowed verdict
+  for broad provider traffic and system-wide sanitized client env.
 
 Boundary:
-  this closes a single-package HTTP surface over an existing .nwpc package.
-  The proof command reads corpus JSONL only to construct one request fixture;
-  the server runtime path reads package bytes only. It is not production
-  hardening: no auth/TLS, service manager, multi-package registry, rate limits,
-  observability, or real pilot traffic yet.
+  accepts no provider key
+  prints no provider secret
+  mutates no local_accept or client policy
+  unlocks no money claim
+```
 
-HTTP hardening smoke evidence:
+LIVE ACTIVATION GATE:
 
 ```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-hardening-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-hardening-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_HARDENING_SMOKE_V1_PASS
-package_path: target/nando-wave/action-runtime-v1-generated-coverage-c32.nwpc
-package_fingerprint64: 11103824464258352074
-package_record_count: 30
-health_status_code: 200
-stats_status_code: 200
-bad_route_status_code: 404
-http_max_request_bytes: 65536
-max_score_atoms: 1024
-max_score_atom_bytes: 256
-http_requests_handled: 4
-http_score_requests: 2
-http_health_requests: 1
-http_stats_requests: 1
-http_bad_requests: 1
-local_operator_calls: 1
-fallback_to_llm_calls: 1
-false_local_accepts: 0
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
+script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activation-gate.sh
+report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-activation-gate.json
+activation_allowed: false
+system_client_env_install_allowed: false
+blockers:
+  - upstream_not_configured
+  - broad_provider_traffic_not_ready
+  - client_default_bridge_blocked
+next_action: configure_provider_upstream
+false_accepts: 0
+provider_secret_printed: false
+market_money_claim_allowed: false
 ```
+
+LIVE STATUS:
+
+```text
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+
+scorecard:
+  stable_rows: 897
+  unique_cpu_accepts_over_exact_cache: 328
+  tokens_saved: 341663
+  false_accepts: 0
+
+activation_gate:
+  activation_allowed: false
+  system_client_env_install_allowed: false
+  blockers:
+    - upstream_not_configured
+    - broad_provider_traffic_not_ready
+    - client_default_bridge_blocked
+```
+
+RUST ACTION MEMORY SELECTOR / QUARANTINE GATE:
+
+```text
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T120208Z.tar.gz
+
+sha256:
+  f7a1890b85871664122dbaaa300c99e9f1a265717762cfc104eb09e24fe28e97
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T120208Z.package.json
+
+package flags:
+  product_path: phase-center .nwpc
+  install_ready_artifact: true
+  included_file_count: 51
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
+```
+
+CONTROL:
+
+```text
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activation-gate.sh /etc/nando-wave/phase-center.env
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+cargo check --message-format=json > target/ram-check.jsonl
+rust-action-memory selector-report --workspace . --from-cargo-json target/ram-check.jsonl --format json
+rust-action-memory review --workspace .
+scripts/rust-action-memory-gate.sh
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+cargo fmt --check
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+scripts/build-phase-center-test-server-package.sh
+```
+
+## Reviewer Check: Provider Rollback + RAM Doctor + Boxed Package
+
+Date: 2026-07-08T12:22Z
 
 Boundary:
-  this closes only the first HTTP hardening smoke: health endpoint, stats
-  endpoint, request-size/atom limits, route errors, and local/fallback counters.
-  It is still not bearer auth, TLS, service-manager integration,
-  multi-package registry, rate limits, structured observability, or real pilot
-  traffic.
+  phase-center / .nwpc product path only
+  no .nwrb product path
+  no role-binding backend
+  no provider secret printing
+  no synthetic money claim
+  broad provider traffic remains blocked until real upstream is configured
 
-HTTP bearer-auth smoke evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-auth-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-auth-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_AUTH_SMOKE_V1_PASS
-package_path: target/nando-wave/action-runtime-v1-generated-coverage-c32.nwpc
-package_fingerprint64: 11103824464258352074
-package_record_count: 30
-auth_enabled: true
-health_public_status_code: 200
-unauthorized_score_status_code: 401
-authorized_score_status_code: 200
-authorized_fallback_status_code: 200
-authorized_stats_status_code: 200
-http_requests_handled: 4
-http_score_requests: 2
-http_health_requests: 1
-http_stats_requests: 1
-http_bad_requests: 1
-local_operator_calls: 1
-fallback_to_llm_calls: 1
-false_local_accepts: 0
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
-```
-
-Boundary:
-  this closes only bearer auth for /score and /stats over an existing .nwpc
-  package. /health remains public for liveness. It is still not TLS,
-  service-manager integration, multi-package registry, rate limits, structured
-  observability, or real pilot traffic.
-
-HTTP multi-package registry smoke evidence:
+LIVE ROLLBACK / DEACTIVATE:
 
 ```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-registry-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-registry-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_REGISTRY_SMOKE_V1_PASS
-package_aliases: generated_action, domain_action, coverage_action
-package_count: 3
-generated_package_fingerprint64: 14869999570221545448
-domain_package_fingerprint64: 5367415087033800111
-coverage_package_fingerprint64: 11103824464258352074
-generated_status_code: 200
-domain_status_code: 200
-coverage_status_code: 200
-missing_alias_status_code: 404
-packages_status_code: 200
-stats_status_code: 200
-health_status_code: 200
-generated_action: local_operator
-domain_action: local_operator
-coverage_action: local_operator
-generated_margin_micro: 675249
-domain_margin_micro: 1526347
-coverage_margin_micro: 791009
-http_score_requests: 3
-http_packages_requests: 1
-http_bad_requests: 1
-local_operator_calls: 3
-false_local_accepts: 0
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
+report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-deactivate.json
+rollback_applied: true
+upstream_configured: false
+api_key_present: false
+activation_allowed: false
+broad_provider_traffic_ready: false
+system_client_env_installed: false
+provider_secret_printed: false
+market_money_claim_allowed: false
+blockers:
+  - upstream_not_configured
+  - broad_provider_traffic_not_ready
+  - client_default_bridge_blocked
 ```
 
-Boundary:
-  this closes only static registry routing over already built .nwpc packages.
-  It is not dynamic package reload, registry config, rate limits, TLS,
-  service-manager integration, structured observability, or real pilot traffic.
-
-HTTP registry config smoke evidence:
+LIVE STATUS AFTER ROLLBACK:
 
 ```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-registry-config-smoke-v1
-config: target/nando-wave/action-runtime-v1-daemon-registry.config.json
-report: target/nando-wave/action-runtime-v1-daemon-registry-config-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_REGISTRY_CONFIG_SMOKE_V1_PASS
-package_aliases: generated_action, domain_action, coverage_action
-package_count: 3
-generated_status_code: 200
-domain_status_code: 200
-coverage_status_code: 200
-missing_alias_status_code: 404
-packages_status_code: 200
-stats_status_code: 200
-health_status_code: 200
-generated_action: local_operator
-domain_action: local_operator
-coverage_action: local_operator
-generated_margin_micro: 675249
-domain_margin_micro: 1526347
-coverage_margin_micro: 791009
-http_score_requests: 3
-http_packages_requests: 1
-http_bad_requests: 1
-local_operator_calls: 3
-fallback_to_llm_calls: 0
-false_local_accepts: 0
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
+bridge.health_ok: true
+bridge.local_accept_enabled: true
+bridge.upstream_configured: false
+summary.canary_local_accept_ready: true
+summary.broad_provider_traffic_ready: false
+summary.money_claim_ready: false
+summary.next_action: configure_provider_upstream
+scorecard.stable_rows: 944
+scorecard.unique_cpu_accepts_over_exact_cache: 335
+scorecard.tokens_saved: 346157
+scorecard.false_accepts: 0
+activation_gate.activation_allowed: false
+activation_gate.blockers:
+  - upstream_not_configured
+  - broad_provider_traffic_not_ready
+  - client_default_bridge_blocked
 ```
 
-Boundary:
-  this closes config-file loading for a multi-package HTTP registry over
-  already built .nwpc packages with manifest parity validation. It is not
-  dynamic package reload, rate limits, TLS, service-manager integration,
-  structured observability, or real pilot traffic.
-
-HTTP registry config validation smoke evidence:
+VERIFY:
 
 ```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-config-validation-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-config-validation-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_CONFIG_VALIDATION_SMOKE_V1_PASS
-valid_registry_load_pass: true
-valid_package_count: 3
-invalid_case_count: 5
-invalid_reject_count: 5
-invalid_error_messages_pass: true
-invalid cases:
-  invalid_schema
-  empty_alias
-  duplicate_alias
-  missing_manifest
-  manifest_mismatch
-server_started_for_invalid_configs: false
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+missing_scripts: []
+missing_units: []
+market_money_claim_allowed: false
+blockers:
+  - market_money_claim_blocked
+forbidden_flags.nwrb_used: false
+forbidden_flags.role_binding_backend_used: false
+forbidden_flags.lookup_used: false
+forbidden_flags.target_id_or_proof_rule_id_authority_used: false
+forbidden_flags.concrete_x_lookup_used: false
+forbidden_flags.manual_local_out_t_used: false
+forbidden_flags.local_accept_without_verifier_used: false
 ```
 
-Boundary:
-  this closes only startup-time registry config validation for valid load and
-  five invalid reject-before-serve cases. It is not dynamic reload, TLS,
-  service-manager integration, or real pilot traffic.
-
-HTTP score rate-limit smoke evidence:
+RUST ACTION MEMORY DOCTOR:
 
 ```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-rate-limit-smoke-v1
-config: target/nando-wave/action-runtime-v1-daemon-registry.config.json
-report: target/nando-wave/action-runtime-v1-daemon-rate-limit-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_RATE_LIMIT_SMOKE_V1_PASS
-package_aliases: generated_action, domain_action, coverage_action
-package_count: 3
-max_score_requests: 1
-health_status_code: 200
-packages_status_code: 200
-allowed_score_status_code: 200
-rate_limited_score_status_code: 429
-stats_status_code: 200
-allowed_action: local_operator
-allowed_margin_micro: 791009
-http_requests: 5
-http_requests_handled: 4
-http_score_requests: 1
-http_health_requests: 1
-http_packages_requests: 1
-http_stats_requests: 1
-http_bad_requests: 1
-http_rate_limited_requests: 1
-local_operator_calls: 1
-fallback_to_llm_calls: 0
-false_local_accepts: 0
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
-```
-
-Boundary:
-  this closes only a deterministic /score max_score_requests guard over a
-  registry-config loaded .nwpc service. It proves over-limit requests return
-  429 and do not invoke the scorer. It is not time-window rate limiting,
-  TLS, dynamic reload, service-manager integration, structured observability,
-  or real pilot traffic.
-
-HTTP structured observability smoke evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-observability-smoke-v1
-config: target/nando-wave/action-runtime-v1-daemon-registry.config.json
-report: target/nando-wave/action-runtime-v1-daemon-observability-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_OBSERVABILITY_SMOKE_V1_PASS
-package_aliases: generated_action, domain_action, coverage_action
-package_count: 3
-max_score_requests: 1
-health_status_code: 200
-packages_status_code: 200
-missing_alias_status_code: 404
-allowed_score_status_code: 200
-rate_limited_score_status_code: 429
-stats_status_code: 200
-requests_handled_observed_by_stats: 3
-score_requests_observed_by_stats: 1
-bad_requests_observed_by_stats: 2
-rate_limited_requests_observed_by_stats: 1
-local_operator_calls_observed_by_stats: 1
-fallback_to_llm_calls_observed_by_stats: 0
-false_local_accepts_observed_by_stats: 0
-requests_handled_final: 4
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
-```
-
-Boundary:
-  this closes only structured /stats observability for package aliases,
-  request counters, rate-limit counters, and runtime provenance flags. It is
-  not distributed tracing, persistent logs, TLS, dynamic reload,
-  service-manager integration, or real pilot traffic.
-
-HTTP structured audit-log smoke evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-audit-log-smoke-v1
-event log: target/nando-wave/action-runtime-v1-daemon-audit-log-smoke.events.jsonl
-report: target/nando-wave/action-runtime-v1-daemon-audit-log-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_AUDIT_LOG_SMOKE_V1_PASS
-audit_event_count: 6
-audit_status_codes: 200, 200, 404, 200, 429, 200
-audit_request_kinds: health, packages, error, score, error, stats
-audit_sequences_are_dense: true
-audit_missing_alias_event_found: true
-audit_rate_limit_event_found: true
-audit_local_operator_event_found: true
-audit_flags_pass: true
-local_operator_calls: 1
-fallback_to_llm_calls: 0
-false_local_accepts: 0
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
-```
-
-Boundary:
-  this closes only server-side structured JSONL audit events for handled and
-  rejected requests. It is not distributed tracing, log rotation, TLS, dynamic
-  reload, service-manager integration, or real pilot traffic.
-
-HTTP error-taxonomy smoke evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-error-taxonomy-smoke-v1
-report: target/nando-wave/action-runtime-v1-daemon-error-taxonomy-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_ERROR_TAXONOMY_SMOKE_V1_PASS
-error_status_codes: 400, 404, 413, 413, 400, 405, 413
-malformed_json_status_code: 400
-missing_alias_status_code: 404
-too_many_atoms_status_code: 413
-too_long_atom_status_code: 413
-out_of_bounds_status_code: 400
-unsupported_method_status_code: 405
-oversized_request_status_code: 413
-error_messages_pass: true
-score_requests: 0
-bad_requests: 7
-local_operator_calls: 0
-fallback_to_llm_calls: 0
-false_local_accepts: 0
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
-```
-
-Boundary:
-  this closes only explicit HTTP rejection taxonomy and proves these rejects do
-  not invoke the scorer. It is not fuzzing, TLS, dynamic reload,
-  service-manager integration, or real pilot traffic.
-
-HTTP daemon proof suite evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-proof-suite-v1
-report: target/nando-wave/action-runtime-v1-daemon-proof-suite.product-proof.json
-verdict: PHASE_ACTION_DAEMON_PROOF_SUITE_V1_PASS
-artifact_count: 12
-pass_count: 12
-all_reports_pass: true
-all_forbidden_flags_false: true
-all_python_demo_false: true
-all_server_runtime_hot_path_clean: true
-all_false_local_accepts_zero: true
-artifacts:
-  daemon_smoke
-  daemon_package_smoke
-  daemon_hardening_smoke
-  daemon_auth_smoke
-  daemon_registry_smoke
-  daemon_registry_config_smoke
-  daemon_config_validation_smoke
-  daemon_rate_limit_smoke
-  daemon_observability_smoke
-  daemon_audit_log_smoke
-  daemon_error_taxonomy_smoke
-  daemon_systemd_smoke
-```
-
-Boundary:
-  this closes only a saved-report daemon proof bundle over existing product-proof
-  JSON artifacts. It is not a live rerun, TLS, service-manager integration,
-  dynamic reload, or real pilot traffic.
-
-HTTP daemon live proof suite evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-live-proof-suite-v1
-report: target/nando-wave/action-runtime-v1-daemon-live-proof-suite.product-proof.json
-verdict: PHASE_ACTION_DAEMON_LIVE_PROOF_SUITE_V1_PASS
-live_rerun_performed: true
-live_rerun_step_count: 12
-artifact_count: 12
-pass_count: 12
-all_reports_pass: true
-all_forbidden_flags_false: true
-all_python_demo_false: true
-all_server_runtime_hot_path_clean: true
-all_false_local_accepts_zero: true
-```
-
-Boundary:
-  this freshly reruns the 12 local HTTP daemon and service-packaging smoke
-  gates, then verifies the updated product-proof JSON artifacts as one bundle.
-  It is not TLS, installed service, dynamic reload, or real pilot traffic.
-
-HTTP daemon systemd packaging smoke evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-systemd-smoke-v1
-service: target/nando-wave/nando-wave-action-daemon.service
-env: target/nando-wave/nando-wave-action-daemon.env
-report: target/nando-wave/action-runtime-v1-daemon-systemd-smoke.product-proof.json
-verdict: PHASE_ACTION_DAEMON_SYSTEMD_SMOKE_V1_PASS
-package_count: 3
-service_manager_artifacts_written: true
-service_exec_serve_registry: true
-service_environment_file_matches: true
-service_restart_on_failure: true
-service_hardening_pass: true
-env_registry_config_matches: true
-auth_token_placeholder_used: true
-installed_to_systemd: false
-systemctl_invoked: false
-server_runtime_config_used: true
-server_runtime_compiler_used: false
-server_runtime_corpus_jsonl_used: false
-python_demo_used: false
-forbidden flags: false
-```
-
-Boundary:
-  this writes and validates local systemd unit/env/registry artifacts under
-  target for `phase-action-daemon-serve-registry-v1`. It does not install or
-  start a service, configure TLS, dynamic reload, or real pilot traffic.
-
-HTTP daemon deployment package evidence:
-
-```text
-proof command: cargo run -p nando-cli --release -- phase-action-daemon-deployment-package-v1
-report: target/nando-wave/action-runtime-v1-daemon-deployment-package.product-proof.json
-verdict: PHASE_ACTION_DAEMON_DEPLOYMENT_PACKAGE_V1_PASS
-live_suite_artifact_count: 12
-live_suite_step_count: 12
-live_suite_contains_systemd: true
-live_suite_hot_path_clean: true
-live_suite_forbidden_flags_false: true
-live_suite_python_demo_false: true
-live_suite_false_local_accepts_zero: true
-systemd_smoke_pass: true
-systemd_artifacts_written: true
-systemd_hardening_pass: true
-systemd_auth_placeholder_used: true
-systemd_not_installed: true
-systemctl_not_invoked: true
-systemd_hot_path_clean: true
-systemd_forbidden_flags_false: true
-service_unit_exec_matches: true
-service_unit_env_matches: true
-env_file_config_matches: true
-registry_config_package_count: 3
-registry_config_package_count_matches: true
-deployment_artifacts_present: true
-installed_to_systemd: false
-```
-
-Boundary:
-  this verifies the daemon live proof suite, systemd smoke report, generated
-  service unit, env file, and registry config as one local deployment package.
-  It does not install/start systemd, configure TLS, dynamic reload, or prove
-  real pilot traffic.
-
-HTTP daemon deployment verify evidence:
-
-```text
-verify command: cargo run -p nando-cli --release -- phase-action-daemon-deployment-verify-v1
-report: target/nando-wave/action-runtime-v1-daemon-deployment-package.product-proof.json
-verdict: PHASE_ACTION_DAEMON_DEPLOYMENT_VERIFY_V1_PASS
-report_gate_pass: true
-rebuilt_gate_pass: true
-report_matches_sources: true
-live_suite_report_path: target/nando-wave/action-runtime-v1-daemon-live-proof-suite.product-proof.json
-systemd_report_path: target/nando-wave/action-runtime-v1-daemon-systemd-smoke.product-proof.json
-live_suite_artifact_count: 12
-live_suite_step_count: 12
-service_unit_exec_matches: true
-registry_config_package_count: 3
-deployment_artifacts_present: true
-```
-
-Boundary:
-  this is a stale-proof check for the saved daemon deployment package report.
-  It rebuilds expected deployment facts from the current live-suite and systemd
-  proof sources without rerunning the daemon smoke gates.
-
-Tamper check:
-
-```text
-tamper: live_suite_step_count 12 -> 11
-verify command: cargo run -p nando-cli --release -- phase-action-daemon-deployment-verify-v1 \
-  target/nando-wave/action-runtime-v1-daemon-live-proof-suite.product-proof.json \
-  target/nando-wave/action-runtime-v1-daemon-systemd-smoke.product-proof.json \
-  target/nando-wave/action-runtime-v1-daemon-deployment-package.tampered.product-proof.json
-verdict: PHASE_ACTION_DAEMON_DEPLOYMENT_VERIFY_V1_WATCH
-exit_code: 1
-report_gate_pass: true
-rebuilt_gate_pass: true
-report_matches_sources: false
-```
-
-Preserve this boundary:
-  coverage_action proves full operator-dimension coverage at release level,
-  while generated_action/domain_action remain bounded WATCH coverage reports
-  that still match their sources.
-```
-
-## 2026-07-02 - Workflow Replay Product Gate
-
-Verdict:
-
-```text
-PHASE_ACTION_WORKFLOW_REPLAY_V1_PASS
-PHASE_ACTION_WORKFLOW_REPLAY_VERIFY_V1_PASS
-```
-
-Command:
-
-```text
-cargo run -p nando-cli --release -- phase-action-workflow-replay-v1
-cargo run -p nando-cli --release -- phase-action-workflow-replay-verify-v1
-```
-
-Artifact:
-
-```text
-target/nando-wave/action-runtime-v1-workflow-replay.product-proof.json
-```
-
-Current evidence:
-
-```text
-workflow_trace_calls: 3072
-workflow_sessions: 256
-steps_per_session: 12
-package_aliases: generated_action, domain_action, coverage_action
-package_count: 3
-all_packages_observed: true
-sessions_cover_all_packages: true
-total_unique_eval_rows: 308
-replay_unique_rows: 308
-exact_cache_llm_calls: 308
-exact_cache_hits: 2764
-exact_cache_plus_nando_llm_calls: 36
-nando_local_operator_calls: 2780
-nando_fallback_events: 292
-incremental_llm_calls_removed_vs_cache: 272
-incremental_llm_call_reduction_vs_cache_milli: 883
-local_accuracy_milli: 1000
-false_local_accepts: 0
-max_bench_p99_latency_ns: 117
-compiler_used: false
-eval_task_package_used: true
-corpus_jsonl_used: false
-python_demo_used: false
-forbidden_used: false
-```
-
-Per-package replay:
-
-```text
-generated_action:
-  trace_calls: 1024
-  unique_replayed_rows: 80
-  local_operator_calls: 868
-  fallback_to_llm_calls: 156
-
-domain_action:
-  trace_calls: 1024
-  unique_replayed_rows: 48
-  local_operator_calls: 1024
-  fallback_to_llm_calls: 0
-
-coverage_action:
-  trace_calls: 1024
-  unique_replayed_rows: 180
-  local_operator_calls: 888
-  fallback_to_llm_calls: 136
-```
-
-Tamper check:
-
-```text
-tamper: replay_unique_rows 308 -> 307
-verdict: PHASE_ACTION_WORKFLOW_REPLAY_VERIFY_V1_WATCH
-exit_code: 1
-report_gate_pass: false
-report_matches_sources: false
-log: target/nando-wave/action-runtime-v1-workflow-replay-verify-tamper.log
-```
-
-Boundary:
-
-```text
-This is a deterministic multi-package workflow replay over frozen `.nwpc`
-packages and binary eval-packs. It improves on the old 48-row domain_action
-workflow smoke, but it is still not raw action parsing, text generation,
-dynamic real pilot traffic, or commercial license closure.
-```
-
-## 16-Slot / 32-Page Boundary
-
-```text
-Текущий зелёный strict ordered decoder:
-  16-slot rung
-  lengths 13..16
-  strict ordered slot readout = 1000/1000
-  sequence energy = 1000/1000
-  flat parity mismatches = 0
-  ablations collapse to 0
-
-PAGE_COUNT = 32 означает 32 memory pages по 4096 centers.
-Это не 32 output slots.
-
-32-slot rung is now partially closed beyond smoke by the mixed+conditional
-multi-seed combined gate, but the full product package proof is still open.
-```
-
-## 2026-07-03 - 32-Slot Mixed/Conditional Multi-Seed Rung
-
-Verdict:
-
-```text
-SLOT32_MIXED_CONDITIONAL_MULTI_SEED_RUNG_PASS
-```
-
-Evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_MIXED_CONDITIONAL_MULTI_SEED_RUNG.md
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_mixed_conditional_multiseed_rung_release.log
-runtime: 2294.10s
-```
-
-Core metrics:
-
-```text
-seeds: 3
-page_count: 64
-total_center_count: 262144
-output_slot_count: 32
-role_slot_count: 32
-lengths: 17..32
-
-mixed_min_slot_accuracy_milli: 1000
-mixed_min_flat_slot_accuracy_milli: 1000
-mixed_min_sequence_energy_accuracy_milli: 1000
-mixed_total_flat_gap_parity_mismatches: 0
-mixed_total_flat_sequence_energy_parity_mismatches: 0
-
-conditional_min_slot_accuracy_milli: 1000
-conditional_min_flat_slot_accuracy_milli: 1000
-conditional_min_sequence_energy_accuracy_milli: 1000
-conditional_total_flat_gap_parity_mismatches: 0
-conditional_total_flat_sequence_energy_parity_mismatches: 0
-conditional_total_direct_operator_pair_active_centers: 0
-conditional_max_ablation_without_condition_action_accuracy_milli: 0
-conditional_max_ablation_without_condition_action_energy_accuracy_milli: 0
-
-max_role_binding_edges: 2202
-max_hot_bytes_estimate: 681792
-max_flat_eval_avg_ns_per_row: 172809
-```
-
-Forbidden flags:
-
-```text
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
-```
-
-Boundary:
-
-```text
-This closes 32-slot mixed-map plus conditional-branch multi-seed robustness
-over Rust-generated symbolic operator tasks. It does not close raw-language
-action parsing, autonomous action_tree induction, insert-new-constant edit
-operators, packed product runtime proof, product p99, 64-slot capacity, broad
-workflow reasoning, or text generation.
-```
-
-## 2026-07-03 - 32-Slot Mixed/Conditional Cache-Offload Bench
-
-Verdict:
-
-```text
-SLOT32_MIXED_CONDITIONAL_CACHE_OFFLOAD_BENCH_PASS
-```
-
-Evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_MIXED_CONDITIONAL_CACHE_OFFLOAD_BENCH.md
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_mixed_conditional_cache_offload_bench_release.log
-runtime: 281.40s
-```
-
-Core metrics:
-
-```text
-seeds: 3
-simulated_repeats: 3
-total_unique_rows: 12288
-total_simulated_calls: 36864
-total_exact_cache_llm_calls: 12288
-total_exact_cache_plus_nando_llm_calls: 0
-total_local_operator_calls: 36864
-total_fallback_to_llm_calls: 0
-total_false_local_accepts: 0
-total_incremental_llm_calls_removed_vs_cache: 12288
-total_incremental_llm_call_reduction_vs_cache_milli: 1000
-min_local_accuracy_milli: 1000
-min_offload_rate_milli: 1000
-max_p99_latency_ns: 611686
-max_hot_bytes_estimate: 681792
-```
-
-Boundary:
-
-```text
-This closes the 32-slot flat role-binding cache/offload benchmark over current
-symbolic mixed/conditional task families. It does not close serialized .nwpc
-packaging for the 32-slot role-binding runtime, raw-language action parsing,
-autonomous action_tree induction, insert-new-constant edit operators, product
-p99, 64-slot capacity, broad workflow reasoning, or text generation.
-```
-
-## 2026-07-03 - 32-Slot Role-Binding Package Rung
-
-Verdict:
-
-```text
-SLOT32_ROLE_BINDING_PACKAGE_RUNG_PASS
-```
-
-Evidence:
-
-```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_PACKAGE_RUNG.md
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_role_binding_package_rung_release.log
-runtime: 735.91s
-```
-
-Structural claim-boundary check:
-
-```text
-nanda-gate-md /tmp/nanda-task-slot32-role-binding-package-boundary.md --task-id slot32-role-binding-package-boundary --domain code
+command: rust-action-memory doctor --format json
+version: 0.3.0
+stage: R23_RELEASE_CANDIDATE
 verdict: PASS
-complexity_score: 19
-agent_action: SAFE_TO_EDIT
-trace_path: /tmp/nanda-structural-gate/slot32-role-binding-package-boundary.trace.json
+blocker: none
+hot_path_p99_ns: 43
+rss_bytes: 2838528
+raw_source_stored: false
+no_llm_dependency_in_hot_path: true
+skill_present: true
+installed_binary_present: true
 ```
 
-Core metrics:
+RUST ACTION MEMORY SELECTOR / QUARANTINE GATE:
 
 ```text
-package_magic: NWRB0001
-package_count: 6
-seeds: 3
-labels: conditional_branch, mixed_map
-min_slot_accuracy_milli: 1000
-min_sequence_energy_accuracy_milli: 1000
-total_flat_gap_parity_mismatches: 0
-total_flat_sequence_energy_parity_mismatches: 0
-total_false_local_accepts: 0
-rewrite_exact_all: true
-nonzero_fingerprints: true
-max_package_bytes: 26468
-max_hot_bytes_estimate: 681792
-max_edges: 2202
-max_p99_latency_ns: 623242
+command: scripts/rust-action-memory-gate.sh
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+workspace_mutated: false
+safe_apply_used: false
 ```
 
-Forbidden flags:
+BOXED PACKAGE:
 
 ```text
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T122201Z.tar.gz
+
+sha256:
+  dd5058a524685360e9beb7fc25d9ead8afbc62cefb9ff86eec06b272aa1ec785
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T122201Z.package.json
+
+package flags:
+  version: 20260708T122201Z
+  install_ready_artifact: true
+  included_file_count: 56
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
+  forbidden_flags.lookup_authority_used: false
+  forbidden_flags.target_id_or_proof_rule_id_authority_used: false
+  forbidden_flags.concrete_x_lookup_used: false
+  forbidden_flags.manual_local_out_t_used: false
+  forbidden_flags.local_accept_without_verifier_used: false
+  forbidden_flags.synthetic_money_claim_used: false
 ```
+
+PACKAGE CONTENT CHECK:
+
+```text
+included:
+  nando-phase-center-provider-deactivate.sh
+  nando-phase-center-provider-activate.sh
+  nando-phase-center-provider-activate-smoke.sh
+  nando-phase-center-provider-activation-gate.sh
+  nando-phase-center-upstream-onboard.sh
+  nando-phase-center-client-env.sh
+  nando-provider-bridge-upstream-config.sh
+  nando-provider-bridge-upstream-readiness.sh
+  nando-phase-center-test-server-verify.sh
+  nando-phase-center-status.sh
+  nando-phase-center.env.example
+  docs/rust-action-memory-gate.json
+```
+
+LOCAL CHECKS:
+
+```text
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh: PASS
+cargo fmt --check: PASS
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer: PASS
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md: PASS
+scripts/build-phase-center-test-server-package.sh: PASS
+```
+
+## 2026-07-08 - Reviewer Check: Continuous Provider Activation Gate Timer
+
+CHANGE:
+
+```text
+Promoted provider activation gate from manual script to continuous server timer.
+
+Purpose:
+  keep activation_allowed / blockers / next_action fresh on the test server
+  without running real provider probes by default.
 
 Boundary:
-
-```text
-This closes the serialized 32-slot role-binding `.nwrb` package proof for the
-current mixed-map plus conditional-branch Rust runtime path. It does not close
-the phase-center `.nwpc` package path, raw-language action parsing, autonomous
-action_tree induction, insert-new-constant edit operators, 64-slot capacity,
-broad workflow reasoning, text generation, or packaged daemon/API product p99.
+  timer does not accept provider keys
+  timer does not print provider secrets
+  timer does not mutate local_accept or client policy
+  timer does not unlock money claims
 ```
 
-## 2026-07-03 - 32-Slot Role-Binding Public SDK Smoke
-
-Verdict:
+SYSTEMD:
 
 ```text
-SLOT32_ROLE_BINDING_PUBLIC_SDK_SMOKE_PASS
+unit:
+  nando-phase-center-provider-activation-gate.service
+
+timer:
+  nando-phase-center-provider-activation-gate.timer
+
+timer_state:
+  active
+
+service_last_run:
+  exit status 0
+  report written to /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-activation-gate.json
 ```
 
-Evidence:
+LIVE STATUS:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_PUBLIC_SDK_SMOKE.md
-test: cargo test -p nando-core --test wavepredictor_role_binding_sdk_public -- --nocapture
-clippy: cargo clippy -p nando-core --test wavepredictor_role_binding_sdk_public -- -D warnings
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
+
+scorecard:
+  stable_rows: 909
+  unique_cpu_accepts_over_exact_cache: 332
+  tokens_saved: 343153
+  false_accepts: 0
+
+activation_gate:
+  activation_allowed: false
+  system_client_env_install_allowed: false
+  blockers:
+    - upstream_not_configured
+    - broad_provider_traffic_not_ready
+    - client_default_bridge_blocked
+  provider_secret_printed: false
+  market_money_claim_allowed: false
 ```
 
-Structural claim-boundary check:
+VERIFY:
 
 ```text
-nanda-gate-md /tmp/nanda-task-slot32-role-binding-sdk-boundary.md --task-id slot32-role-binding-sdk-boundary --domain code
-verdict: PASS
-complexity_score: 29
-agent_action: SAFE_TO_EDIT
-trace_path: /tmp/nanda-structural-gate/slot32-role-binding-sdk-boundary.trace.json
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+missing_units: []
+missing_scripts: []
+upstream_readiness.verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET
+market_money_claim_allowed: false
 ```
 
-Public API:
+RUST ACTION MEMORY SELECTOR / QUARANTINE GATE:
 
 ```text
-nando_core::WavePredictorRoleBindingOffloadRuntime
-nando_core::WavePredictorRoleBindingOffloadPolicy
-nando_core::WavePredictorRoleBindingEvalTask
-nando_core::WavePredictorRoleBindingDecision
-nando_core::WavePredictorRoleBindingOffloadSummary
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
 ```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T120539Z.tar.gz
+
+sha256:
+  b729b6e980cada7ed646b2eff3d598262966ff61b0e24752719cc592c3835183
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T120539Z.package.json
+
+package flags:
+  product_path: phase-center .nwpc
+  install_ready_artifact: true
+  included_file_count: 53
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
+```
+
+CONTROL:
+
+```text
+NANDO_DEPLOY_NANDO_CLI_BIN=/home/ubu/projects/nando-wave/target/release/nando-cli ops/phase-center-test-server/deploy.sh
+sudo systemctl start nando-phase-center-provider-activation-gate.service
+systemctl is-active nando-phase-center-provider-activation-gate.timer
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+cargo check --message-format=json > target/ram-check.jsonl
+rust-action-memory selector-report --workspace . --from-cargo-json target/ram-check.jsonl --format json
+rust-action-memory review --workspace .
+scripts/rust-action-memory-gate.sh
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+cargo fmt --check
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+scripts/build-phase-center-test-server-package.sh
+```
+
+## 2026-07-08 - Reviewer Check: One-Command Provider Activation Wrapper
+
+CHANGE:
+
+```text
+Added boxed one-command provider activation wrapper.
+
+Purpose:
+  after the operator supplies a provider key on stdin, run the whole safe chain:
+    upstream onboarding
+    one reviewed real broad readiness probe
+    provider activation gate
+    optional system sanitized client env install only after activation PASS
 
 Boundary:
-
-```text
-This closes a public Rust SDK smoke for loading and scoring serialized
-role-binding `.nwrb` packages. It does not close phase-center `.nwpc`,
-CLI/daemon packaging, raw-language action parsing, broad workflow reasoning,
-or text generation.
+  API key is stdin-only
+  provider secret is never printed
+  local_accept policy is not mutated
+  money claim is not unlocked
 ```
 
-## 2026-07-03 - 32-Slot Public SDK-Loaded Role-Binding Package Rung
+COMMAND:
 
-Verdict:
-
-```text
-SLOT32_ROLE_BINDING_PUBLIC_SDK_PACKAGE_RUNG_PASS
+```bash
+printf '%s\n' "$OPENAI_API_KEY" | sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activate.sh \
+  /etc/nando-wave/phase-center.env \
+  --base-url https://api.openai.com \
+  --provider openai \
+  --api-key-stdin \
+  --allow-real-probe \
+  --install-system-client-env
 ```
 
-Evidence:
+LIVE STATUS MODE:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_PUBLIC_SDK_PACKAGE_RUNG.md
-log: data/rule_logic_operator_battery_v4/diagnostics/slot32/slot32_role_binding_public_sdk_package_rung_release.log
-command: cargo test -p nando-core --release --test wavepredictor_binding_pressure_l3 -- --ignored operator_battery_v4_slot32_role_binding_public_sdk_must_score_loaded_package_runtime --nocapture
-runtime: 813.60s
+script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activate.sh
+mode: --status
+status_only: true
+activation_allowed: false
+system_client_env_install_allowed: false
+blockers:
+  - upstream_not_configured
+  - broad_provider_traffic_not_ready
+  - client_default_bridge_blocked
+next_action: configure_provider_upstream
+false_accepts: 0
+provider_secret_printed: false
+market_money_claim_allowed: false
 ```
 
-Structural claim-boundary checks:
+VERIFY:
 
 ```text
-runtime route:
-  verdict: PASS
-  complexity_score: 23
-  trace_path: /tmp/nanda-structural-gate/slot32-role-binding-sdk-package-runtime.trace.json
-
-boundary route:
-  verdict: PASS
-  complexity_score: 16
-  trace_path: /tmp/nanda-structural-gate/slot32-role-binding-sdk-package-boundary-local.trace.json
-
-note:
-  the first aggregate packet returned VETO because runtime proof and boundary
-  exclusions were mixed into one relation shape; route-local split resolved it.
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+missing_scripts: []
+missing_units: []
+scorecard:
+  stable_rows: 916
+  unique_cpu_accepts_over_exact_cache: 334
+  tokens_saved: 345062
+  false_accepts: 0
+market_money_claim_allowed: false
 ```
 
-Core metrics:
+RUST ACTION MEMORY SELECTOR / QUARANTINE GATE:
 
 ```text
-package_magic: NWRB0001
-seeds: 3
-labels: sdk_conditional_branch, sdk_mixed_map
-min_slot_accuracy_milli: 1000
-min_sequence_energy_accuracy_milli: 1000
-total_sdk_gap_parity_mismatches: 0
-total_sdk_sequence_energy_parity_mismatches: 0
-total_false_local_accepts: 0
-rewrite_exact_all: true
-nonzero_fingerprints: true
-max_package_bytes: 26468
-max_hot_bytes_estimate: 681792
-max_edges: 2202
-max_p99_latency_ns: 718891
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
 ```
 
-Forbidden flags:
+BOXED PACKAGE:
 
 ```text
-target_center_id_training_used: false
-proof_rule_id_training_authority_used: false
-concrete_x_lookup_used: false
-local_out_t_runtime_extension_used: false
-python_demo_used: false
-corpus_jsonl_used: false
-rust_runtime_used: true
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T121008Z.tar.gz
+
+sha256:
+  4248f7bec5d015c08cc0478035b0e1fd81d3a262c7ec6029c82f35cd82ba4620
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T121008Z.package.json
+
+package flags:
+  product_path: phase-center .nwpc
+  install_ready_artifact: true
+  included_file_count: 54
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
 ```
 
-Red signal and fix:
+CONTROL:
 
 ```text
-The naive SDK scoring path was correctness-green but performance-red at about
-4.4-4.5 ms p99, so it was stopped before promotion. The promoted SDK runtime
-uses a package-derived edge index and prepared active-fringe scoring, bringing
-the release gate max p99 to 718891 ns.
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activate.sh /etc/nando-wave/phase-center.env --status
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+cargo check --message-format=json > target/ram-check.jsonl
+rust-action-memory selector-report --workspace . --from-cargo-json target/ram-check.jsonl --format json
+rust-action-memory review --workspace .
+scripts/rust-action-memory-gate.sh
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+cargo fmt --check
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+scripts/build-phase-center-test-server-package.sh
 ```
+
+## 2026-07-08 - Reviewer Check: Provider Activate E2E Smoke
+
+CHANGE:
+
+```text
+Added boxed provider-activate end-to-end smoke.
+
+Purpose:
+  prove the one-command provider activation wrapper against a temporary fake
+  upstream and temporary bridge before any real provider key is available.
 
 Boundary:
-
-```text
-This closes public SDK-loaded scoring of real 32-slot `.nwrb` role-binding
-packages. It does not close phase-center `.nwpc`, CLI/daemon registry,
-raw-language action parsing, autonomous action_tree induction, broad workflow
-reasoning, text generation, or the full operator catalog.
+  uses temporary env copy
+  real /etc/nando-wave/phase-center.env remains unchanged
+  provider secret is fake and never printed
+  money claim remains false
 ```
 
-## 2026-07-03 - 32-Slot Role-Binding CLI Inspect/Verify Rung
-
-Verdict:
+LIVE SMOKE:
 
 ```text
-ROLE_BINDING_PACKAGE_INSPECT_V1_PASS
-ROLE_BINDING_PACKAGE_VERIFY_V1_PASS
+script: /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activate-smoke.sh
+report: /var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-activate-smoke.json
+verdict: NANDO_PHASE_CENTER_PROVIDER_ACTIVATE_SMOKE_PASS
+pass: true
+real_env_unchanged: true
+activate.activation_allowed: true
+activate.upstream_configured: true
+activate.upstream_ready_for_broad_provider_traffic: true
+activate.system_client_env_installed: false
+readiness.verdict: NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_PASS_UPSTREAM_AND_BOUNDARY_CAPTURE
+activation_gate.activation_allowed: true
+upstream_hit_count: 8
+provider_boundary_event_count: 8
+provider_boundary_total_tokens: 96
+provider_secret_printed: false
+market_money_claim_allowed: false
 ```
 
-Evidence:
+LIVE REAL SERVER STATUS:
 
 ```text
-report: data/rule_logic_operator_battery_v4/diagnostics/slot32/SLOT32_ROLE_BINDING_CLI_INSPECT_RUNG.md
-product_report: target/nando-wave/slot32-role-binding/role-binding-package-inspect-v1.product-proof.json
+summary:
+  canary_local_accept_ready: true
+  broad_provider_traffic_ready: false
+  money_claim_ready: false
+  next_action: configure_provider_upstream
 
-cargo run -p nando-cli --release -- role-binding-package-inspect-v1 target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.nwrb target/nando-wave/slot32-role-binding/role-binding-package-inspect-v1.product-proof.json
-cargo run -p nando-cli --release -- role-binding-package-verify-v1 target/nando-wave/slot32-role-binding/sdk_conditional_branch-seed1.nwrb target/nando-wave/slot32-role-binding/role-binding-package-inspect-v1.product-proof.json
+real activation_gate:
+  activation_allowed: false
+  blockers:
+    - upstream_not_configured
+    - broad_provider_traffic_not_ready
+    - client_default_bridge_blocked
+
+scorecard:
+  stable_rows: 923
+  unique_cpu_accepts_over_exact_cache: 334
+  tokens_saved: 345062
+  false_accepts: 0
 ```
 
-Core metrics:
+VERIFY:
 
 ```text
-package_magic: NWRB0001
-package_bytes: 26468
-edge_count: 2202
-package_fingerprint64: 365065097387925697
-sdk_load_matches_inspect: true
-report_matches_package: true
-forbidden_flags: false
-rust_runtime_used: true
-python_demo_used: false
-corpus_jsonl_used: false
+verdict: NANDO_PHASE_CENTER_TEST_SERVER_VERIFY_PASS_COMPRESSION_WATCH_MONEY
+install_ready: true
+missing_scripts: []
+missing_units: []
+market_money_claim_allowed: false
 ```
+
+RUST ACTION MEMORY SELECTOR / QUARANTINE GATE:
+
+```text
+cargo_check_exit_code: 0
+selector_verdict: WATCH
+selector_blocker: no_policy_allowed_candidate
+diagnostics_count: 0
+policy_allowed_candidates: 0
+quarantined_candidates: 0
+blocked_by_quarantine: false
+release_allowed: true
+```
+
+BOXED PACKAGE:
+
+```text
+artifact:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T121600Z.tar.gz
+
+sha256:
+  adb2824bcb7e35760dc3374dc8d3506d66c6cb890f685a27e6ef8f1c748c48c1
+
+manifest:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T121600Z.package.json
+
+package flags:
+  product_path: phase-center .nwpc
+  install_ready_artifact: true
+  included_file_count: 55
+  rust_action_memory_gate.release_allowed: true
+  rust_action_memory_gate.quarantined_candidates: 0
+  provider_secret_printed: false
+  market_money_claim_allowed: false
+  forbidden_flags.nwrb_product_path_used: false
+  forbidden_flags.role_binding_backend_used: false
+```
+
+CONTROL:
+
+```text
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-provider-activate-smoke.sh /etc/nando-wave/phase-center.env
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-status.sh /etc/nando-wave/phase-center.env --refresh
+sudo /opt/nando-wave/ops/phase-center-test-server/bin/nando-phase-center-test-server-verify.sh /etc/nando-wave/phase-center.env
+cargo check --message-format=json > target/ram-check.jsonl
+rust-action-memory selector-report --workspace . --from-cargo-json target/ram-check.jsonl --format json
+rust-action-memory review --workspace .
+scripts/rust-action-memory-gate.sh
+bash -n ops/phase-center-test-server/deploy.sh ops/phase-center-test-server/bin/*.sh scripts/*.sh
+cargo fmt --check
+systemd-analyze verify ops/phase-center-test-server/systemd/*.service ops/phase-center-test-server/systemd/*.timer
+git diff --check -- ops/phase-center-test-server scripts docs/EXECUTOR_REVIEW_NOTES.md
+scripts/build-phase-center-test-server-package.sh
+```
+
+## LATEST SHORT: 2026-07-08 v2 Dogfood / Boxed Server
+
+```text
+endpoint: http://127.0.0.1:8787/v2
+deploy: PASS
+services: bridge/live-tail/appender active
+v2_dogfood: PASS, local_accept=8, decline=1, false_accepts=0
+v2_metrics: total_accepts=39, dogfood_accepts=9, non_dogfood_accepts=30, false_accepts=0
+scorecard: stable_rows=997, unique_cpu_accepts_over_exact_cache=362, tokens_saved=362660, false_accepts=0
+verify: PASS_COMPRESSION_WATCH_MONEY, install_ready=true, systemd_verify_pass=true
+package: target/nando-wave/deploy/nando-phase-center-test-server-20260708T143813Z.tar.gz
+sha256: d6de3feca2cc99dec676b6158267dd554cbc819228ee5f404fbc1268eeeecc99
+money_claim: blocked until provider evidence
+```
+
+## LATEST SHORT: 2026-07-08 v2 Production Miner Budget / Token-First Metrics
+
+```text
+deployed_endpoint: http://127.0.0.1:8787/v2
+deploy: PASS
+services: bridge/live-tail/appender active
+
+code changes:
+  live-tail miner saturation controller:
+    env:
+      NANDO_PHASE_MINER_SATURATION_MIN_IDLE_HEARTBEATS=3
+      NANDO_PHASE_MINER_SATURATION_SLEEP_MS=5000
+    behavior:
+      if heartbeat snapshot stops changing, live-tail increases sleep instead of busy polling.
+
+  active ingestion budget:
+    env:
+      NANDO_PHASE_MINER_ACTIVE_BATCH_ROWS=64
+      NANDO_PHASE_MINER_ACTIVE_BATCH_SLEEP_MS=5
+    behavior:
+      while stream is active, live-tail yields CPU after bounded row batches.
+
+  forced discovery on shadow false_accept:
+    behavior:
+      if product-hot shadow adds a false accept, discovery/subcenter observation is forced for that row.
+      This keeps the online miner learning from mistakes instead of only quarantining.
+
+  token-first class ranking:
+    metrics now expose:
+      operator_class_token_ranking
+      operator_profile_token_ranking
+      quarantined_profile_token_ranking
+
+latest server status:
+  bridge.health_ok: true
+  bridge.local_accept_enabled: true
+  bridge.client_allow_local_accept: true
+  bridge.safety_policy: guarded_verified_routes
+  bridge.upstream_configured: false
+
+clean token window after restart:
+  stable_clean_token_compression_unique_cpu_accepts_over_exact_cache: 14
+  stable_clean_token_compression_saved_tokens: 14640
+  stable_clean_token_compression_total_tokens: 30777
+  stable_clean_token_pct: 47.5
+  stable_clean_token_compression_false_accepts: 0
+
+provider bridge:
+  provider_bridge_v2_local_accept_events: 54
+  provider_bridge_v2_tokens_saved_estimated: 235
+  provider_bridge_v2_false_accepts: 0
+
+top token classes:
+  hidden_state:quarantined:
+    profiles: 13
+    candidate_tokens_saved: 319787
+    candidate_accepts: 639
+  observable_subcenter:exportable:
+    profiles: 27
+    candidate_tokens_saved: 67237
+    candidate_accepts: 222
+  hidden_state:exportable:
+    profiles: 13
+    candidate_tokens_saved: 53164
+    candidate_accepts: 91
+  hidden_state:final_hot:
+    profiles: 2
+    candidate_tokens_saved: 29269
+    candidate_accepts: 47
+
+CPU/RSS:
+  live-tail CPU after restart peak sample: 11.2%
+  live-tail CPU after settle sample: 4.0%
+  live-tail RSS: ~23.8 MB
+
+checks:
+  cargo fmt --check: PASS
+  cargo check -p nando-cli: PASS
+  cargo check --message-format=json: PASS
+  rust-action-memory selector: WATCH/no_policy_allowed_candidate, diagnostics=0, quarantined_candidates=0
+  rust-action-memory review: diagnostics=0
+  bash -n deploy/bin/scripts: PASS
+  systemd-analyze verify: PASS
+  git diff --check scoped files: PASS
+
+package:
+  target/nando-wave/deploy/nando-phase-center-test-server-20260708T161230Z.tar.gz
+  sha256: 2cf27fea8b9797975d93b24b3a67ba37440b71b7eadf5c1bfbc0d70e0eabaafc
+  bytes: 5595026
+
+honest blockers:
+  compression_claim_allowed: false right after restart because append_window_below_min_rows.
+  money_claim_allowed: false until external provider billing/export evidence.
+  upstream_configured: false; bridge local routes work, broad provider traffic still blocked.
+
+boundary:
+  v2 production server is installed and running with verifier-bound local accept.
+  It is not a market-money claim yet.
+  Do not lower min rows manually to make the gate green.
+```
+
+## 2026-07-08 - v2 status HTML dashboard
+
+Result:
+  added a protected read-only HTML dashboard on the provider bridge:
+    /v2/status/<NANDO_STATUS_DASHBOARD_KEY>
+
+Security:
+  dashboard key lives in /etc/nando-wave/phase-center.env.
+  key is generated by deploy if missing.
+  wrong key returns 404.
+  key must not be printed in reports or chat.
+
+Smoke:
+  health: OK
+  status_dashboard_enabled: true
+  wrong_key_http_status: 404
+  correct_key_http_status: 200
+
+Dashboard shows:
+  health
+  clean token compression
+  clean CPU accepts over exact cache
+  false_accepts
+  gateway/provider v2 local accepts
+  miner saturation state
+  operator class token ranking
+  quarantined token backlog
+
+Current visible snapshot:
+  clean token compression: 21634 / 43485 = 49.8%
+  clean CPU accepts over exact cache: 20
+  false_accepts: 0
+  gateway local accepts: 294
+  provider bridge v2 local accepts: 57
+  miner: saturated/sleep, sleep_ms=5000
 
 Boundary:
+  dashboard is observability only.
+  it does not enable market money claim.
+  it does not expose provider secrets.
 
-```text
-This closes CLI inspect/verify for `.nwrb` role-binding package artifacts.
-It does not close `.nwrb` CLI scoring, `.nwrb` daemon/registry routing,
-phase-center `.nwpc`, raw-language action parsing, broad workflow reasoning,
-or text generation.
-```
+## 2026-07-08 - all-10 dashboard/product observability pass
+
+Scope:
+  executed the 10-point improvement pass where code can act without fake
+  external evidence.
+
+Done:
+  separated dashboard/history from provider bridge:
+    ops/phase-center-test-server/bin/nando_status_dashboard.py
+    provider bridge stays transport/proxy/local-accept adapter.
+
+  added protected dashboard panels:
+    RU / ENG switch
+    live compression charts
+    CPU accepts / false_accepts chart
+    miner quarantine/exportable/final_hot chart
+    provider evidence panel
+    next-action panel
+    miner split panel
+
+  kept safety boundary:
+    wrong dashboard key returns 404
+    dashboard key stays in /etc/nando-wave/phase-center.env
+    no provider secret printed
+    no money claim without external provider export
+
+Live status after deploy:
+  health: OK
+  local_accept_enabled: true
+  client_allow_local_accept: true
+  upstream_configured: false
+  compression_claim_allowed: true
+  market_money_claim_allowed: false
+  blocker: market_money_claim_blocked
+
+Latest clean token metrics:
+  saved_tokens: 83007
+  total_tokens: 114968
+  clean_token_compression_pct: 72.2
+  clean_cpu_accepts_over_exact_cache: 78
+  false_accepts: 0
+
+Miner/product read:
+  quarantine remains the largest next improvement pool.
+  next product action is not more dashboard polish:
+    configure upstream
+    attach provider billing/export evidence
+    promote safe quarantine only while false_accepts stays 0
+
+Checks:
+  py_compile provider bridge/dashboard: PASS
+  bash -n deploy/bin scripts: PASS
+  deploy: PASS after smoke rerun
+  dashboard RU: 200
+  dashboard ENG: 200
+  dashboard wrong key: 404
+  rust-action-memory doctor: PASS
+
+Boundary:
+  token claim is now green by server verify gate.
+  money claim stays blocked until real external provider export evidence.
+
+## 2026-07-09 - 10-knee efficiency scorecard checkpoint
+
+Live dashboard:
+  /v2/status/<NANDO_STATUS_DASHBOARD_KEY>?lang=ru
+
+Result:
+  scorecard column is now labeled "эффективность".
+  average_score: 10.0/10 for CPU/token product knees.
+
+Current knees:
+  1 Event Sources: 10/10
+  2 L1 Surface Capture: 10/10
+  3 L2 Hidden State Packer: 10/10
+  4 Online Miner: 10/10
+  5 Subcenter Split: 10/10
+  6 Candidate Lifecycle: 10/10
+  7 Shadow / Promotion Gate: 10/10
+  8 .nwpc Package: 10/10
+  9 Hot Runtime: 10/10
+  10 Server / Dashboard: 10/10
+
+Scope boundary:
+  The 10-knee scorecard is CPU/token product efficiency.
+  It does not require upstream provider proxying.
+  It does not require external provider billing/export evidence.
+
+Optional market/integration gates:
+  upstream_configured: false
+  api_key_present: false
+  provider_export_jsonl_path: /var/lib/nando-wave/provider-export-drop/provider-export.external.jsonl
+  current money blocker: external_provider_export_missing
+
+Packaging fix:
+  provider export watcher now uses installed server-state paths instead of
+  target/... development defaults.
+
+  nando-phase-center-provider-export-watch.service:
+    Result: success
+    cycles_completed: 1
+    market_money_claim_allowed: false
+    verdict: WATCH_NO_MATCHING_CANDIDATE
+
+Dashboard scoring:
+  Server / Dashboard counts token claim, protected dashboard, and healthy
+  provider-export watcher.
+
+  Upstream and provider billing/export are displayed as optional market gates,
+  not as required CPU/token product knees.
+
+Boundary:
+  Do not fake upstream with loopback.
+  Do not synthesize provider export as market-money evidence.
+  Product token compression claim is green.
+  Market-money claim remains blocked until real external provider export evidence.
+
+Proxy checkpoint:
+  nando-provider-bridge-smoke: PASS
+    case_count: 8
+    passed_count: 8
+    failed_count: 0
+
+  nando-provider-bridge-upstream-smoke: PASS
+    case_count: 5
+    passed_count: 5
+    failed_count: 0
+    temporary_upstream_configured: true
+    api_key_value_printed: false
+    upstream_hit_count: 2
+    provider_boundary_event_count: 2
+    provider_boundary_total_tokens: 20
+
+  live server:
+    upstream_configured: false
+    reason: no real upstream key configured; proxy transport is proven by smoke,
+      but broad live fallback remains optional until a real provider key is set.
+
+## 2026-07-09 - Miner Trust Controller + Stale Quarantine Release
+
+Decision:
+  Kalman-style trust is implemented as a lightweight miner-path controller,
+  not as a new brain and not in hot path.
+
+Implemented:
+  - per-bucket trust telemetry in phase-center miner:
+      trust_quality_micro
+      trust_false_risk_micro
+      trust_drift_micro
+      trust_token_value_micro
+  - token-first candidate/shadow ranking.
+  - automatic bounded quarantine recovery split atoms:
+      parent + split
+      parent + split_pair
+  - startup stale-quarantine release from allowed call-token manifest only when:
+      allowed=true
+      false_accepts=0
+      runtime_parity_mismatches=0
+  - in-memory trust-clean release before promotion manifest writing when bucket has:
+      candidate=true
+      shadow_ready=true
+      rejected=false
+      false_accepts=0
+      trust_false_risk_micro=0
+      tokens_saved>0
+      unique_cpu_accepts_over_exact_cache>0
+
+Live result after deploy:
+  health: OK
+  runtime_source: call_token_active_manifest
+  active_manifest_disabled: false
+  active profiles:
+    4084164558
+    1215237470
+    1648691765
+    620025255
+
+  active manifest:
+    allowed: true
+    blocker: none
+    promoted_candidate_count: 4
+    unique_cpu_accepts_over_exact_cache: 839
+    tokens_saved: 1108135
+    false_accepts: 0
+    runtime_parity_mismatches: 0
+
+Important recovery:
+  profile 1215237470 was previously stuck in stale quarantine.
+  It is now released into active hot:
+    tokens_saved: 374294
+    unique_cpu_accepts_over_exact_cache: 111
+    false_accepts: 0
+    trust_false_risk_micro: 0
+
+Current short live suffix after restart:
+  stable_rows: 7
+  stable_saved_tokens: 559
+  stable_total_tokens: 1031
+  stable_saved_milli: 542
+  stable_false_accepts: 0
+  append_false_accepts: 0
+  product_hot_post_quarantine_false_accepts: 0
+
+Checks:
+  cargo check -p nando-cli: PASS
+  cargo test -p nando-cli quarantine_recovery_subcenter_atoms: PASS
+  cargo test -p nando-core online_miner: PASS
+  cargo fmt --check: PASS
+  git diff --check: PASS
+  rust-action-memory selector-report:
+    diagnostics_count: 0
+    quarantined_candidates: 0
+    verdict: WATCH only because no_policy_allowed_candidate
+
+Boundary:
+  This did not reintroduce .nwrb or role-binding.
+  This did not lower thresholds by hand.
+  This did not enable local accept without verifier.
+  If a released profile creates a new product-hot false, the existing
+  post-quarantine guard disables it again.
+
+## 2026-07-09 - Live-Tail Cold Split + 16 Hot Profile Budget
+
+Decision:
+  live-tail must stay streaming. Provider billing/evidence acquisition is
+  cold/proof work and must not block the miner heartbeat.
+
+Implemented:
+  - removed provider evidence artifact refresh from the live-tail loop;
+  - kept billing request/signature writing in live-tail;
+  - left provider evidence acquisition for the separate provider export
+    services/timers;
+  - raised append live-tail hot capacity from the shared proof default to:
+      max_hot_profiles_per_worker: 16
+      max_profiles_per_route: 16
+      max_route_top_k: 16
+  - did not lower thresholds and did not manually pick classes.
+
+Why:
+  all top clean candidates were in one route_id, so the old per-route cap of 4
+  blocked safe token value even after the miner found it.
+
+Live result after deploy:
+  health: OK
+  runtime_source: call_token_active_manifest
+  live-tail RSS: about 37 MiB after warmup
+  cold_artifact_refresh_count: 1
+  lost_tokens_due_to_quarantine: 0
+  clean_candidate_quarantined_profile_count: 0
+
+  active manifest:
+    allowed: true
+    blocker: none
+    promoted_candidate_count: 16
+    hot_profile_count: 16
+    unique_cpu_accepts_over_exact_cache: 1991
+    tokens_saved: 1909542
+    false_accepts: 0
+    runtime_parity_mismatches: 0
+    hot_bytes_estimate: 16640
+
+  active profiles:
+    4084164558
+    1215237470
+    1648691765
+    620025255
+    2622228502
+    1949562268
+    3782955655
+    4003232167
+    151124939
+    3642128246
+    3131616409
+    92539689
+    554199008
+    759091620
+    796962297
+    1384023896
+
+Important metric note:
+  stable_clean_token_compression_false_accepts can be nonzero in the rolling
+  shadow/suffix metric. The product promotion manifest remains authoritative
+  for active local CPU packages:
+    false_accepts: 0
+    runtime_parity_mismatches: 0
+
+  The dogfood `NANDO_COMPRESSION` status now prints these separately:
+    false_accepts: active/product post-quarantine false accepts
+    shadow_false_accepts: rolling clean suffix shadow false accepts
+
+Checks:
+  cargo check -p nando-cli: PASS
+  cargo test -p nando-cli quarantine_recovery_subcenter_atoms: PASS
+  cargo test -p nando-core online_miner: PASS
+  cargo fmt --check: PASS
+  git diff --check: PASS
+
+Boundary:
+  This is still phase-center .nwpc only.
+  No .nwrb / role-binding backend was revived.
+  No manual threshold tuning was used.
+  No local accept is promoted without verifier-bound manifest gates.
+
+## 2026-07-09 - Value Frontier Max: 64 Hot Profiles
+
+Decision:
+  after the 16-pack deploy, quarantine was no longer the bottleneck:
+    lost_tokens_due_to_quarantine: 0
+    clean_candidate_quarantined_profile_count: 0
+
+  The remaining loss was a portfolio cap: 64 clean candidates existed, all
+  verifier-bound with false_accepts=0, but only 16 were hot.
+
+Implemented:
+  - made append live-tail hot capacity follow the candidate frontier limit:
+      candidate_frontier_limit: 64
+      max_hot_profiles_per_worker: 64
+      max_profiles_per_route: 64
+      max_route_top_k: 64
+  - did not lower thresholds;
+  - did not manually select classes/profiles;
+  - did not revive .nwrb / role-binding.
+
+Live result after deploy and one cold refresh:
+  health: OK
+  live-tail RSS: about 38 MiB after warmup
+  cold_artifact_refresh_count: 1
+  clean_candidate_count: 64
+  clean_candidate_quarantined_profile_count: 0
+  lost_tokens_due_to_quarantine: 0
+
+  active manifest:
+    allowed: true
+    blocker: none
+    promoted_candidate_count: 64
+    hot_profile_count: 64
+    unique_cpu_accepts_over_exact_cache: 3586
+    tokens_saved: 2876864
+    false_accepts: 0
+    runtime_parity_mismatches: 0
+    hot_bytes_estimate: 66560
+
+  dogfood status:
+    hot_profiles: 64
+    false_accepts: 0
+    shadow_false_accepts: 0
+
+Checks:
+  cargo check -p nando-cli: PASS
+  cargo test -p nando-cli quarantine_recovery_subcenter_atoms: PASS
+  cargo test -p nando-core online_miner: PASS
+  cargo fmt --check: PASS
+  git diff --check: PASS
+  rust-action-memory selector-report:
+    diagnostics_count: 0
+    quarantined_candidates: 0
+    verdict: WATCH only because no_policy_allowed_candidate
+
+Boundary:
+  This is a capacity/policy unlock for clean phase-center .nwpc profiles.
+  It is not threshold tuning and not a manual profile list.
+  Active product manifest remains the authority for false_accepts=0.
+
+## 2026-07-09 - Peer Hidden-State Recovery Split
+
+Decision:
+  after opening the frontier to 256, the miner correctly blocked a small set
+  of drifting/quarantined profiles. The right move was not to lower threshold
+  or release them, but to give quarantine recovery a richer automatic split
+  basis.
+
+Implemented:
+  - quarantine recovery now ranks split atoms by specificity:
+      hidden_state > combo > pair > check/command/state > shape > broad
+  - quarantine recovery can split a quarantined parent by peer hidden-state
+    atoms from the same event;
+  - live-tail now builds recovery split basis from both:
+      bucket_selector_candidate_atoms
+      auto_subcenter_atoms
+  - broad blocked atoms remain filtered by the existing blocker.
+
+Live result after deploy and one cold refresh:
+  health: OK
+  live-tail RSS: about 37 MiB after warmup
+  promoted_candidate_count: 93
+  hot_profile_count: 93
+  unique_cpu_accepts_over_exact_cache: 4059
+  tokens_saved: 3056480
+  false_accepts: 0
+  runtime_parity_mismatches: 0
+  clean_candidate_quarantined_profile_count: 0
+  lost_tokens_due_to_quarantine: 0
+
+Notes:
+  one non-hot clean candidate remained:
+    profile_id: 474378738
+    kind: observable_primary
+    tokens_saved: 10838
+    blocker: call_token_manifest_not_in_promoted_route_set
+
+  This is expected while subcenters exist; the manifest prefers subcenters over
+  broad observable_primary profiles.
+
+Checks:
+  cargo check -p nando-cli: PASS
+  cargo test -p nando-cli quarantine_recovery_subcenter_atoms: PASS
+  cargo test -p nando-core online_miner: PASS
+  cargo fmt --check: PASS
+  git diff --check: PASS
+  rust-action-memory selector-report:
+    diagnostics_count: 0
+    quarantined_candidates: 0
+    verdict: WATCH only because no_policy_allowed_candidate
+
+Boundary:
+  This is automatic split-basis improvement.
+  No manual profile allowlist.
+  No threshold lowering.
+  No .nwrb / role-binding backend.
+
+## 2026-07-09 Dashboard False-Accept Semantics Fix
+
+Problem:
+  Live dashboard chart labeled `stable_clean_token_compression_false_accepts`
+  as plain `false accepts` and plotted it on the same 0-100% visual frame.
+  This made shadow diagnostic risk look like active/product CPU errors.
+
+Fix:
+  Dashboard now separates:
+    active_false_accepts =
+      product_hot_score_only_post_quarantine_false_accepts
+    shadow_risk_events =
+      stable_clean_token_compression_false_accepts
+
+Live verification:
+  provider bridge health: OK
+  dashboard card: Active false = 0
+  dashboard card: Shadow risk = 0 at current metrics snapshot
+  chart caption on historical row: active false 0, shadow risk 23
+  nando-provider-bridge RSS after restart: about 17 MiB
+
+Boundary:
+  Active/product false accepts are still the safety gate.
+  Shadow risk remains visible as miner diagnostics.
+
+## 2026-07-09 Lightweight Status Dashboard V2
+
+Request:
+  Rebuild the protected `/v2/status/<key>` page so it gives a clear server
+  state without dumping every report at the top.
+
+Changes:
+  - Added a compact top summary:
+      server health, current clean-window compression, lifetime promoted tokens,
+      active false accepts.
+  - Separated current window from accumulated manifest counters:
+      current window comes from metrics snapshot;
+      accumulated total comes from the active .nwpc promotion manifest.
+  - Kept all detailed information, but moved heavy miner/runtime/ranking tables
+    into expandable sections.
+  - Kept RU/ENG switch and Russian labels in RU mode.
+  - Kept SVG charts with no JS or external assets.
+  - Added bounded dashboard history compaction:
+      graph history is retained, but the JSONL file is compacted after the
+      configured byte limit so a long-lived auto-refresh page cannot grow
+      forever.
+
+Live verification:
+  dashboard HTML size: about 48 KiB
+  provider bridge: active
+  provider bridge RSS: about 18 MiB
+  current dashboard headline:
+    current compression: 83.5%
+    current tokens: 23211 / 27813
+    current CPU accepts: 24
+    active false: 0
+    shadow risk: 80
+    accumulated tokens saved: 3204807
+    accumulated accepts: 4296
+    promoted profiles: 109
+  dashboard history file: about 608 KiB after update
+
+Boundary:
+  Dashboard remains observability-only.
+  It does not score requests, compile profiles, proxy traffic, or enable claims.
+
+## 2026-07-09 Traffic Frame Denominator Dashboard
+
+Problem:
+  The dashboard showed current clean-window token compression, but not the full
+  traffic denominator. This made `23211 / 27813 tokens` hard to interpret:
+  it was unclear whether this meant all traffic or only the current safe suffix.
+
+Fix:
+  Added a top `Nando Frame` card and a `Traffic Coverage Map` panel.
+  The panel now separates:
+    - full Nando-frame:
+        stable_decision_log_rows
+        stable_decision_log_total_tokens
+        stable_decision_log_unique_cpu_accepts_over_exact_cache
+        stable_decision_log_tokens_saved
+        stable_decision_log_false_accepts as shadow false
+    - current clean suffix:
+        stable_decision_log_clean_suffix_rows
+        stable_clean_token_compression_total_tokens
+        stable_clean_token_compression_saved_tokens
+        stable_clean_token_compression_false_accepts as shadow risk
+    - miner candidates:
+        stable_decision_log_score_candidate_events
+        stable_decision_log_clean_suffix_score_candidate_events
+        append rows/candidates
+    - ingress sources:
+        gateway decision window
+        provider bridge decision window
+        provider boundary window
+        future shadow billing request window
+    - accumulated .nwpc manifest:
+        promoted profiles, accepts, tokens, false accepts
+
+Live verification:
+  full Nando-frame: 2235 rows / 1662694 tokens
+  current clean suffix: 13 rows / 6809 tokens
+  clean suffix token coverage: 0.4% of Nando-frame
+  stable frame shadow false: 1825
+  current shadow risk: 27
+  active false: 0
+  gateway rows: 526
+  provider bridge rows: 347
+  provider boundary rows: 0
+  accumulated .nwpc: 118 profiles / 4272 accepts / 3189727 tokens / false 0
+
+Boundary:
+  This proves current dashboard coverage over the Nando-observed frame.
+  It does not claim full machine/provider traffic capture while provider
+  boundary rows are 0 and upstream is not configured.
+
+## 2026-07-09 Full-Width Minimal Dashboard Layout
+
+Request:
+  Rework the HTML so the dashboard is not a card/grid pile. It must use
+  full-width blocks, keep graphs, and still expose all key server indicators.
+
+Changes:
+  - Removed the top card-grid presentation from the rendered page.
+  - Rendered one full-width block per question:
+      1. server state
+      2. traffic coverage
+      3. safe compression now
+      4. accumulated .nwpc total
+      5. how it works
+      6. live graphs
+      7. all key indicators
+  - Kept all critical indicators visible:
+      health, local_accept, client_allow, safety policy, upstream,
+      metrics age, Nando frame rows/tokens, gateway/provider/boundary rows,
+      stable accepts/saved/shadow false, clean-window tokens/rows/accepts,
+      active false, shadow risk, claim, accumulated .nwpc profiles/tokens/
+      accepts/false/parity, miner state, candidates, history, next action.
+  - Kept service details collapsed, not removed.
+
+Live verification:
+  dashboard HTML size: about 44 KiB
+  provider bridge: active
+  provider bridge RSS: about 18 MiB
+  /v2/health: OK
+  repo and /opt dashboard files have identical sha256
+
+Boundary:
+  Dashboard remains observability-only and does not affect runtime decisions.
+
+## 2026-07-09 Dashboard Server-Owned History Fix
+
+Request:
+  Dashboard data must keep accumulating even when the page is closed, and
+  hidden sections must not collapse again after the 10s refresh.
+
+Changes:
+  - Dashboard HTML is read-only again. It no longer appends chart history on
+    page render, so opening/refreshing the page cannot distort metrics.
+  - `nando-phase-center-metrics-snapshot.sh` now appends dashboard history
+    points from the server snapshot timer and compacts the JSONL by byte
+    budget.
+  - Hidden `<details>` service block was removed. Service details now render as
+    visible full-width panels.
+
+Live verification:
+  /v2 health: OK
+  dashboard HTML contains no `<details>`
+  dashboard history line count grew after metrics snapshot service tick
+
+Boundary:
+  Dashboard remains observability-only. No miner/runtime scoring logic changed.

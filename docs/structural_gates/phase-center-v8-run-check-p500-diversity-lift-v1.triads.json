@@ -1,0 +1,183 @@
+{
+  "task_id": "phase-center-v8-run-check-p500-diversity-lift-v1",
+  "domain": "code",
+  "query": "Verify the run_check p500 lift keeps verifier-bound quarantine, global frontier replay, diversity backlog, and no-promotion boundary separated.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "run_check_p500_discovery_gate",
+      "relation": "action_family",
+      "object": "action_family:run_check",
+      "evidence": "target/nando-wave/streaming/phase-atom-run-check-time-split-promotion-audit-p500-v1.report.json#/action_family",
+      "confidence": 1.0,
+      "subject_role": "quarantine_candidate",
+      "object_role": "profile_name",
+      "route": "run_check_p500"
+    },
+    {
+      "id": "t2",
+      "subject": "run_check_p500_discovery_gate",
+      "relation": "train_events",
+      "object": "385",
+      "evidence": "target/nando-wave/streaming/phase-atom-run-check-time-split-promotion-audit-p500-v1.report.json#/discovery_gate/train_events",
+      "confidence": 1.0,
+      "subject_role": "quarantine_candidate",
+      "object_role": "metric",
+      "route": "run_check_p500"
+    },
+    {
+      "id": "t3",
+      "subject": "run_check_p500_discovery_gate",
+      "relation": "heldout_events",
+      "object": "385",
+      "evidence": "target/nando-wave/streaming/phase-atom-run-check-time-split-promotion-audit-p500-v1.report.json#/discovery_gate/heldout_events",
+      "confidence": 1.0,
+      "subject_role": "quarantine_candidate",
+      "object_role": "metric",
+      "route": "run_check_p500"
+    },
+    {
+      "id": "t4",
+      "subject": "run_check_p500_discovery_gate",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "152",
+      "evidence": "target/nando-wave/streaming/phase-atom-run-check-time-split-promotion-audit-p500-v1.report.json#/discovery_gate/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "quarantine_candidate",
+      "object_role": "metric",
+      "route": "run_check_p500"
+    },
+    {
+      "id": "t5",
+      "subject": "run_check_p500_discovery_gate",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-run-check-time-split-promotion-audit-p500-v1.report.json#/discovery_gate/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "quarantine_candidate",
+      "object_role": "safety_metric",
+      "route": "run_check_p500"
+    },
+    {
+      "id": "t6",
+      "subject": "run_check_p500_promotion_audit",
+      "relation": "product_promotion_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-run-check-time-split-promotion-audit-p500-v1.report.json#/product_promotion_allowed",
+      "confidence": 1.0,
+      "subject_role": "promotion_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t7",
+      "subject": "latest_window_frontier_replay",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "6644",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-shadow-replay-diversity-p500-run-check-p500-latest-window-v1.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "global_shadow_replay",
+      "object_role": "metric",
+      "route": "frontier_replay"
+    },
+    {
+      "id": "t8",
+      "subject": "latest_window_frontier_replay",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-shadow-replay-diversity-p500-run-check-p500-latest-window-v1.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "global_shadow_replay",
+      "object_role": "safety_metric",
+      "route": "frontier_replay"
+    },
+    {
+      "id": "t9",
+      "subject": "latest_window_frontier_replay",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-shadow-replay-diversity-p500-run-check-p500-latest-window-v1.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "global_shadow_replay",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t10",
+      "subject": "latest_window_frontier_replay",
+      "relation": "legacy_nwrb_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-shadow-replay-diversity-p500-run-check-p500-latest-window-v1.report.json#/forbidden_flags/nwrb_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t11",
+      "subject": "frontier_claim_audit",
+      "relation": "cpu10_gate_passed",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-claim-audit-diversity-p500-run-check-p500-latest-window-v1.report.json#/gates/cpu10_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "claim_audit",
+      "object_role": "gate_state",
+      "route": "claim_audit"
+    },
+    {
+      "id": "t12",
+      "subject": "frontier_claim_audit",
+      "relation": "profile_diversity_gate_passed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-claim-audit-diversity-p500-run-check-p500-latest-window-v1.report.json#/gates/profile_diversity_gate_passed",
+      "confidence": 1.0,
+      "subject_role": "claim_audit",
+      "object_role": "gate_state",
+      "route": "claim_audit"
+    },
+    {
+      "id": "t13",
+      "subject": "frontier_claim_audit",
+      "relation": "non_top_profile_accepts",
+      "object": "216",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-claim-audit-diversity-p500-run-check-p500-latest-window-v1.report.json#/profile_diversity/non_top_profile_accepts",
+      "confidence": 1.0,
+      "subject_role": "profile_diversity",
+      "object_role": "metric",
+      "route": "claim_audit"
+    },
+    {
+      "id": "t14",
+      "subject": "diversity_backlog_after_run_check_p500",
+      "relation": "additional_non_top_accepts_needed",
+      "object": "1391",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-with-run-check-p500-latest-window-v1.report.json#/diversity_target/additional_non_top_accepts_needed",
+      "confidence": 1.0,
+      "subject_role": "remaining_debt",
+      "object_role": "metric",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t15",
+      "subject": "diversity_backlog_after_run_check_p500",
+      "relation": "top_priority_profile",
+      "object": "run_check",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-with-run-check-p500-latest-window-v1.report.json#/recommended_focus/0/profile_name",
+      "confidence": 1.0,
+      "subject_role": "next_work",
+      "object_role": "profile_name",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t16",
+      "subject": "diversity_backlog_after_run_check_p500",
+      "relation": "top_priority_action",
+      "object": "expand_time_window_or_future_replay_for_existing_verifier_bound_acceptor",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-with-run-check-p500-latest-window-v1.report.json#/recommended_focus/0/recommended_next_action",
+      "confidence": 1.0,
+      "subject_role": "next_work",
+      "object_role": "action",
+      "route": "diversity_backlog"
+    }
+  ]
+}

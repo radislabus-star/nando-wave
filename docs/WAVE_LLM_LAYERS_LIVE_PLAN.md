@@ -1,5 +1,34 @@
 # Wave-LLM Layers Live Plan
 
+Current architecture overlay, 2026-07-06:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Important correction:
+
+```text
+L4 is no longer "closed" for the product path.
+L4 is now the streaming selector/router/admission/goal-state layer that makes
+real agent events visible to L3 phase centers.
+
+L3 is not expected to digest the whole stream alone.
+L4 reduces stream entropy; L3 scores compact drifting phase centers.
+```
+
+Current proof boundary:
+
+```text
+best compatible shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+product local accept: disabled
+market money claim: blocked
+```
+
 Статус: живой план, не закрыт.
 
 Цель: найти механизм, где Wave-LLM не хардкодит смысл и не вытаскивает строку
@@ -22,7 +51,9 @@ L3 = смысловые центры и операторы
 L4 = план ответа
 ```
 
-Сейчас фиксируем L1-L3. L4 закрыт.
+Историческая запись ниже говорила: "Сейчас фиксируем L1-L3. L4 закрыт".
+Для текущего product path это больше не так: L4 открыт как streaming
+goal-state/router/admission layer.
 
 Ключевой поворот после corpus-trained L3 proof:
 

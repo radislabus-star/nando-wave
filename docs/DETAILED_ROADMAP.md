@@ -1,5 +1,35 @@
 # Nando Wave Detailed Roadmap
 
+Current detailed roadmap overlay:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current P0:
+
+```text
+automatic streaming process:
+  L4 opportunity board
+  marginal-denominator selector
+  bounded HOT/WARM/COLD operator memory
+  future-window shadow proof
+  verifier-bound promotion
+```
+
+Current status:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+not closed:
+  product local_accept
+  market provider-billing money claim
+```
+
 Этот документ - главная защита от расползания проекта. Он задает порядок
 работы, входы и выходы этапов, gates, запреты и стоп-сигналы.
 

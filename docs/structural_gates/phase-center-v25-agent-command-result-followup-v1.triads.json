@@ -1,0 +1,293 @@
+{
+  "task_id": "phase-center-v25-agent-command-result-followup-v1",
+  "domain": "code",
+  "query": "Verify that v25 removes the command_result_followup result/shadow blocker and runs quarantine phase-center mining only, without local accept, market money claim, or legacy nwrb backend.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "command_result_followup_pack_v25",
+      "relation": "report_kind",
+      "object": "agent_continue_command_result_followup_pack_v1",
+      "evidence": "target/nando-wave/streaming/agent-continue-command-result-followup-pack-v25.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "packer_report",
+      "object_role": "report_kind",
+      "route": "command_result_followup"
+    },
+    {
+      "id": "t2",
+      "subject": "command_result_followup_pack_v25",
+      "relation": "agent_continue_rows_written",
+      "object": "12000",
+      "evidence": "target/nando-wave/streaming/agent-continue-command-result-followup-pack-v25.report.json#/agent_continue_rows_written",
+      "confidence": 1.0,
+      "subject_role": "packer_report",
+      "object_role": "row_count",
+      "route": "command_result_followup"
+    },
+    {
+      "id": "t3",
+      "subject": "command_result_followup_pack_v25",
+      "relation": "verifier_true_rows",
+      "object": "9980",
+      "evidence": "target/nando-wave/streaming/agent-continue-command-result-followup-pack-v25.report.json#/verifier_true_rows",
+      "confidence": 1.0,
+      "subject_role": "packer_report",
+      "object_role": "positive_count",
+      "route": "command_result_followup"
+    },
+    {
+      "id": "t4",
+      "subject": "command_result_followup_pack_v25",
+      "relation": "verifier_false_rows",
+      "object": "2020",
+      "evidence": "target/nando-wave/streaming/agent-continue-command-result-followup-pack-v25.report.json#/verifier_false_rows",
+      "confidence": 1.0,
+      "subject_role": "packer_report",
+      "object_role": "negative_count",
+      "route": "command_result_followup"
+    },
+    {
+      "id": "t5",
+      "subject": "command_result_followup_pack_v25",
+      "relation": "rows_with_shadow_request",
+      "object": "12000",
+      "evidence": "target/nando-wave/streaming/agent-continue-command-result-followup-pack-v25.report.json#/rows_with_shadow_request",
+      "confidence": 1.0,
+      "subject_role": "packer_report",
+      "object_role": "shadow_request_count",
+      "route": "command_result_followup"
+    },
+    {
+      "id": "t6",
+      "subject": "command_result_followup_scoreboard_v25",
+      "relation": "rows_ready_for_subroute_mining",
+      "object": "12000",
+      "evidence": "target/nando-wave/streaming/agent-continue-subroute-scoreboard-v25-command-result.report.json#/rows_ready_for_subroute_mining",
+      "confidence": 1.0,
+      "subject_role": "scoreboard_report",
+      "object_role": "mining_ready_count",
+      "route": "scoreboard"
+    },
+    {
+      "id": "t7",
+      "subject": "command_result_followup_scoreboard_v25",
+      "relation": "subroute",
+      "object": "command_result_followup",
+      "evidence": "target/nando-wave/streaming/agent-continue-subroute-scoreboard-v25-command-result.report.json#/subroutes/0/subroute_hint",
+      "confidence": 1.0,
+      "subject_role": "scoreboard_report",
+      "object_role": "subroute_name",
+      "route": "scoreboard"
+    },
+    {
+      "id": "t8",
+      "subject": "command_result_followup_scoreboard_v25",
+      "relation": "ready_for_subroute_mining",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/agent-continue-subroute-scoreboard-v25-command-result.report.json#/subroutes/0/ready_for_subroute_mining",
+      "confidence": 1.0,
+      "subject_role": "scoreboard_report",
+      "object_role": "mining_permission",
+      "route": "scoreboard"
+    },
+    {
+      "id": "t9",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "report_kind",
+      "object": "phase_atom_live_self_mining_loop_v1",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/report_kind",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "report_kind",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t10",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "compiled_quarantine_candidates",
+      "object": "25",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/compiled_quarantine_candidates",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "candidate_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t11",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "shadow_accepted_candidates",
+      "object": "21",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/shadow_accepted_candidates",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "shadow_candidate_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t12",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "aggregate_unique_cpu_accepts_over_exact_cache",
+      "object": "513",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/aggregate_unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "shadow_accept_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t13",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "aggregate_nando_cpu_tokens_saved",
+      "object": "784026",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/aggregate_nando_cpu_tokens_saved",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "token_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t14",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "runtime_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "market_claim_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "command_result_top128_mining_v25",
+      "relation": "legacy_backend_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top128.report.json#/forbidden_flags/legacy_backend_used",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "legacy_backend_guard",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t17",
+      "subject": "command_result_v25_doc",
+      "relation": "accepted_false_accepts",
+      "object": "0",
+      "evidence": "docs/PHASE_CENTER_AGENT_CONTINUE_COMMAND_RESULT_FOLLOWUP_V25.md#top-128-mining-result",
+      "confidence": 1.0,
+      "subject_role": "doc_claim",
+      "object_role": "false_accept_count",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t18",
+      "subject": "command_result_v25_doc",
+      "relation": "accepted_runtime_margin_parity_mismatches",
+      "object": "0",
+      "evidence": "docs/PHASE_CENTER_AGENT_CONTINUE_COMMAND_RESULT_FOLLOWUP_V25.md#top-128-mining-result",
+      "confidence": 1.0,
+      "subject_role": "doc_claim",
+      "object_role": "parity_mismatch_count",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t19",
+      "subject": "command_result_v25_doc",
+      "relation": "product_promotion_claim",
+      "object": "false",
+      "evidence": "docs/PHASE_CENTER_AGENT_CONTINUE_COMMAND_RESULT_FOLLOWUP_V25.md#verdict",
+      "confidence": 1.0,
+      "subject_role": "doc_claim",
+      "object_role": "promotion_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t20",
+      "subject": "command_result_v25_doc",
+      "relation": "legacy_nwrb_backend_reopened",
+      "object": "false",
+      "evidence": "docs/PHASE_CENTER_AGENT_CONTINUE_COMMAND_RESULT_FOLLOWUP_V25.md#boundary",
+      "confidence": 1.0,
+      "subject_role": "doc_claim",
+      "object_role": "legacy_backend_guard",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t21",
+      "subject": "command_result_top256_mining_v25",
+      "relation": "compiled_quarantine_candidates",
+      "object": "48",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top256.report.json#/compiled_quarantine_candidates",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "candidate_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t22",
+      "subject": "command_result_top256_mining_v25",
+      "relation": "shadow_accepted_candidates",
+      "object": "35",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top256.report.json#/shadow_accepted_candidates",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "shadow_candidate_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t23",
+      "subject": "command_result_top256_mining_v25",
+      "relation": "aggregate_unique_cpu_accepts_over_exact_cache",
+      "object": "568",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top256.report.json#/aggregate_unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "shadow_accept_count",
+      "route": "phase_center_mining"
+    },
+    {
+      "id": "t24",
+      "subject": "command_result_top256_mining_v25",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top256.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "runtime_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t25",
+      "subject": "command_result_top256_mining_v25",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v25-agent-command-result-top256.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "mining_report",
+      "object_role": "market_claim_permission",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t26",
+      "subject": "command_result_v25_doc",
+      "relation": "top256_ceiling_not_product_promotion",
+      "object": "true",
+      "evidence": "docs/PHASE_CENTER_AGENT_CONTINUE_COMMAND_RESULT_FOLLOWUP_V25.md#top-256-ceiling-probe",
+      "confidence": 1.0,
+      "subject_role": "doc_claim",
+      "object_role": "promotion_boundary",
+      "route": "claim_boundary"
+    }
+  ]
+}

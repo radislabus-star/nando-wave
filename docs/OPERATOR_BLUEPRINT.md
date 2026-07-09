@@ -1,5 +1,28 @@
 # Чертёж операторов Nando Wave
 
+Current implementation contract:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current product reading of this blueprint:
+
+```text
+Operator atoms are not a huge hand-written list.
+They are compact action grammar pieces that L4 can route and L3 can score as
+phase centers.
+```
+
+Current proof boundary:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+```
+
 Этот документ фиксирует компактную операторную грамматику для следующих v5/v6
 рубежей. Цель не в том, чтобы раздуть список до сотен ручных правил, а в том,
 чтобы собрать маленький алфавит действий, из которого строятся переносимые

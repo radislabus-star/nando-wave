@@ -1,12 +1,174 @@
 # Operator Product Lines And Capacity
 
-Дата среза: 2026-07-03
+Дата среза: 2026-07-06
 
 Назначение: зафиксировать, какие классы операторов нужны для продуктовой
 линейки Nando Wave, сколько примерно operator families нужно на каждом уровне,
 и какие текущие матрицы/L3-layout могут это вместить.
 
 Этот файл не вводит новую архитектуру. Это карта требований и пределов.
+
+## Current Authoritative Contract
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current product-line truth:
+
+```text
+We are not selling one giant matrix.
+We are building a bounded store of small verified phase-center operator
+profiles.
+
+L4 decides which profiles deserve HOT memory.
+L3 scores the phase-center operator.
+Verifier/promotion decides whether shadow can become product local accept.
+```
+
+Current best capacity/proof snapshot:
+
+```text
+best compatible shadow frontier:
+  profiles: 5
+  denominator_rows: 29_770
+  unique_cpu_accepts_over_exact_cache: 6_644
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+hot runtime budget proof:
+  hot_profile_count: 1
+  hot_bytes_estimate: 592
+  warm_profile_count: 33
+  warm_metadata_bytes_estimate: 39_136
+  product_runtime_budget_passed: true
+```
+
+Product boundary:
+
+```text
+CPU20 shadow has been crossed on the compatible local frontier.
+Product local accept has not been enabled.
+Market money claim is still blocked by missing real provider billing rows.
+```
+
+Capacity rule:
+
+```text
+More operators must not mean scanning everything.
+
+Route -> bounded top-K hot profiles -> score -> fallback.
+HOT memory is small.
+WARM registry is bounded.
+COLD snapshots/reports are not in request latency.
+```
+
+## Current Authoritative Snapshot: Phase-Center / L4 Product Line
+
+Текущий активный продуктовый путь больше не `.nwrb role-binding serving`.
+Активная линия:
+
+```text
+real agent/event trace
+-> L4 Streaming Operator Router/Packer
+-> phase atoms / shadow_request payload
+-> L3 phase-center .nwpc candidate
+-> compatible shadow replay
+-> verifier boundary
+-> fallback unless promotion/local_accept is explicitly proven
+```
+
+Текущий главный рубеж:
+
+```text
+v21 compatible phase-center shadow with row-level estimated cost evidence
+|
++-- compatible denominator:
+|     denominator rows: 35_833
+|     profile count: 33
+|
++-- compatible denominator shadow:
+|     CPU accepts over exact cache: 4537
+|     calls saved: 12.6615%
+|     tokens saved: 16.9513%
+|     token savings: 2_308_568
+|     row-level estimated cost saved: 2_308_568 microusd
+|     false_accepts: 0
+|
++-- CPU10 shadow gate:
+      target: 3583 accepts
+      actual: 4537 accepts
+      status: crossed in shadow mode
+```
+
+Важная граница:
+
+```text
+L3 phase-center coverage improved and L4 packers now exist for planning,
+tool_status, and run_check families.
+
+Cost evidence state:
+  token/cost enrichment rows_enriched_cost: 30_800
+  compatible shadow accepted_cost_evidence_missing_events: 0
+  provider_cost_events: 0
+  price config is still a placeholder estimate source
+  v22 market-money claim gate: INTERNAL_ESTIMATE_ONLY
+  v23 provider billing join: adapter ready, empty billing smoke matched 0 rows
+  v23 provider billing file gate: requires provider_cost_events > 0, not file presence
+  v24 agent_continue active-turn trace: 11_063 rows
+  v24 agent_continue subroute scoreboard: WATCH, 0 rows ready for mining
+  v24 blocker: artifact_progress lacks negatives; command_result_followup lacks result atoms + shadow request
+  v25 command_result_followup pack: 12_000 rows, 9_980 true / 2_020 false
+  v25 command_result_followup scoreboard: mining-ready, 12_000 result/shadow rows
+  v25 command_result top128 shadow: 513 unique CPU accepts over exact cache
+  v25 accepted classes: 21 quarantine candidates, accepted false_accepts = 0, parity mismatches = 0
+  v25 command_result top256 ceiling: 568 unique CPU accepts over exact cache
+  v25 top256 accepted classes: 35 quarantine candidates, accepted false_accepts = 0, parity mismatches = 0
+  v25 top256 marginal gain over top128: +55 unique accepts
+  v26 auto-subcenter discovery: 48 selected candidates / 90 rejected candidates
+  v26 auto-subcenter generated trace: 109300 rows with balanced positive/background evidence
+  v26 quarantine mining: 25 accepted candidates, 1643 mining unique accepts over exact cache
+  v26 compatible denominator: 328 denominator-deduped unique accepts over exact cache
+  v26 false_accepts: 0
+  v26 boundary: batch bridge, not final streaming miner, not market money claim
+
+local_accept_enabled: false
+market_money_claim_allowed: false
+product_promotion_allowed: false
+```
+
+Что теперь считается продуктовой ёмкостью:
+
+```text
+operator families are not one giant matrix.
+
+Product shape:
+  many small .nwpc phase-center operator profiles
+  selected by L4 router/packer
+  verified by per-family gates
+  loaded/served as CPU-local profiles/shards
+```
+
+Главная следующая задача по capacity/product line:
+
+```text
+replace placeholder cost evidence with provider billing or user-approved
+price evidence before external market claims. This is enforced by:
+  phase-stream-phase-atom-market-money-claim-gate-v1
+
+Attach provider billing with:
+  phase-stream-provider-billing-evidence-join-v1
+
+then add more verifier-bound families:
+  metrics_report
+  report_sync
+  git/status/test parsers
+  edit/report/operator workflow classes
+```
+
+Sections below that mention `.nwrb` / role-binding serving are historical
+capacity notes only. They are not the active product direction.
 
 ## 2026-07-05 Forbidden Legacy Correction
 
@@ -2031,4 +2193,34 @@ Strict L3 slot-binding не бесконечен:
 
 Главный предел сейчас не CenterId, а edge growth, cache budget, collision
 pressure и строгость proof-gates.
+```
+
+## Online Phase-Center Miner Capacity Note V27
+
+Current daemon proof:
+
+```text
+artifact: target/nando-wave/streaming/phase-stream-online-miner-daemon-v1-realtrace-safe.report.json
+status: PASS_SHADOW_ONLY
+phase-center package type: .nwpc quarantine checkpoints
+total_rows: 17_000
+parsed_verifier_events: 374
+compiled_checkpoint_count: 76
+active_profile_count: 5
+future_shadow_events: 313
+unique_cpu_accepts_over_exact_cache: 2
+false_accepts: 0
+runtime_margin_parity_mismatches: 0
+p99_shadow_score_latency_ns: 15_494
+```
+
+Product interpretation:
+
+```text
+The online miner mechanics are no longer the main blocker.
+The immediate capacity limiter is verifier density:
+  16_626 / 17_000 rows are skipped because the verifier label is missing.
+
+Do not scale product claims by lowering thresholds.
+Scale by increasing verifier-rich streams and keeping false_accepts=0.
 ```

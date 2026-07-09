@@ -1,5 +1,31 @@
 # NANDA Wave Theorem
 
+Current implementation overlay:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current theorem-reading:
+
+```text
+For the operator layer, the practical stable peak is a verifier-safe
+phase-center margin that adds unique accepts over exact cache.
+
+It is not enough that a center looks good locally.
+It must survive denominator, future shadow, verifier, and false_accepts = 0.
+```
+
+Current proof snapshot:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+  local_accept_enabled: false
+```
+
 ## Purpose
 
 NANDA must prove that it does not merely store an answer behind a key.

@@ -1,0 +1,183 @@
+{
+  "task_id": "phase-center-v8-result-atoms-self-mining-v1",
+  "domain": "code",
+  "query": "Verify the result-atom repair separates allowed verifier evidence, forbidden labels/hashes, self-mining shadow lift, compatible replay, and no-promotion boundary.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "phase_vector_builder",
+      "relation": "includes_allowed_result_atoms",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#parse_phase_atom_binary_event_for_action_result_atoms_chain",
+      "confidence": 1.0,
+      "subject_role": "code_change",
+      "object_role": "permission_state",
+      "route": "result_atom_repair"
+    },
+    {
+      "id": "t2",
+      "subject": "phase_vector_builder",
+      "relation": "excludes_verifier_label",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#parse_phase_atom_binary_event_for_action_label_filters",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t3",
+      "subject": "phase_vector_builder",
+      "relation": "excludes_verified_safe_accept",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#parse_phase_atom_binary_event_for_action_label_filters",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t4",
+      "subject": "phase_vector_builder",
+      "relation": "excludes_output_hash64",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#parse_phase_atom_binary_event_for_action_label_filters",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t5",
+      "subject": "run_check_separability_after_result_atoms",
+      "relation": "max_positive_delta_milli",
+      "object": "1000",
+      "evidence": "target/nando-wave/streaming/phase-atom-separability-run-check-result-atoms-v1.report.json#/max_positive_delta_milli",
+      "confidence": 1.0,
+      "subject_role": "diagnostic_report",
+      "object_role": "metric",
+      "route": "separability_audit"
+    },
+    {
+      "id": "t6",
+      "subject": "run_check_separability_after_result_atoms",
+      "relation": "max_negative_delta_milli",
+      "object": "-539",
+      "evidence": "target/nando-wave/streaming/phase-atom-separability-run-check-result-atoms-v1.report.json#/max_negative_delta_milli",
+      "confidence": 1.0,
+      "subject_role": "diagnostic_report",
+      "object_role": "metric",
+      "route": "separability_audit"
+    },
+    {
+      "id": "t7",
+      "subject": "run_check_positive_evidence",
+      "relation": "top_positive_atom",
+      "object": "exit_code_band:zero",
+      "evidence": "target/nando-wave/streaming/phase-atom-separability-run-check-result-atoms-v1.report.json#/top_positive_enriched_atoms/0/atom",
+      "confidence": 1.0,
+      "subject_role": "allowed_result_evidence",
+      "object_role": "phase_atom",
+      "route": "separability_audit"
+    },
+    {
+      "id": "t8",
+      "subject": "run_check_negative_evidence",
+      "relation": "top_negative_atom",
+      "object": "exit_code_band:positive_nonzero",
+      "evidence": "target/nando-wave/streaming/phase-atom-separability-run-check-result-atoms-v1.report.json#/top_negative_enriched_atoms/0/atom",
+      "confidence": 1.0,
+      "subject_role": "allowed_result_evidence",
+      "object_role": "phase_atom",
+      "route": "separability_audit"
+    },
+    {
+      "id": "t9",
+      "subject": "result_atom_self_mining_v11",
+      "relation": "selection_policy",
+      "object": "value_score_with_base_action_family_cap",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v11-result-atoms-diversity-aware.report.json#/selection_policy",
+      "confidence": 1.0,
+      "subject_role": "self_mining_report",
+      "object_role": "policy_name",
+      "route": "self_mining_shadow"
+    },
+    {
+      "id": "t10",
+      "subject": "result_atom_self_mining_v11",
+      "relation": "shadow_accepted_candidates",
+      "object": "8",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v11-result-atoms-diversity-aware.report.json#/shadow_accepted_candidates",
+      "confidence": 1.0,
+      "subject_role": "self_mining_report",
+      "object_role": "metric",
+      "route": "self_mining_shadow"
+    },
+    {
+      "id": "t11",
+      "subject": "result_atom_self_mining_v11",
+      "relation": "aggregate_unique_cpu_accepts_over_exact_cache",
+      "object": "371",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v11-result-atoms-diversity-aware.report.json#/aggregate_unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "self_mining_report",
+      "object_role": "metric",
+      "route": "self_mining_shadow"
+    },
+    {
+      "id": "t12",
+      "subject": "result_atom_self_mining_v11",
+      "relation": "legacy_backend_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v11-result-atoms-diversity-aware.report.json#/forbidden_flags/legacy_backend_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "compatible_denominator_replay_v11",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "367",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v11-result-atoms-diversity-aware.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "metric",
+      "route": "compatible_denominator_shadow"
+    },
+    {
+      "id": "t14",
+      "subject": "compatible_denominator_replay_v11",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v11-result-atoms-diversity-aware.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "safety_metric",
+      "route": "compatible_denominator_shadow"
+    },
+    {
+      "id": "t15",
+      "subject": "compatible_denominator_replay_v11",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v11-result-atoms-diversity-aware.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "compatible_denominator_replay_v11",
+      "relation": "verdict",
+      "object": "PHASE_ATOM_COMPATIBLE_DENOMINATOR_SHADOW_V1_PASS_SHADOW_ONLY",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v11-result-atoms-diversity-aware.report.json#/verdict",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "verdict",
+      "route": "compatible_denominator_shadow"
+    }
+  ]
+}

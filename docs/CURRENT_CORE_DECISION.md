@@ -1,6 +1,33 @@
 # Current Core Decision
 
-Date: 2026-06-20
+Date: 2026-07-06 docs-sync
+
+Current active decision:
+
+```text
+Use phase-center / streaming operator memory as the active product core.
+Keep older Cell/Organ language as research lineage unless a current gate
+explicitly depends on it.
+```
+
+Authoritative contract:
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current proof snapshot:
+
+```text
+best shadow frontier:
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+
+hot runtime:
+  hot_bytes_estimate: 592
+  PhaseCenterHotRuntime benchmark PASS
+```
 
 ## 2026-07-05 Correction
 

@@ -1,0 +1,150 @@
+{
+  "task_id": "phase-center-v9-cpu10-ladder-ranking-v1",
+  "domain": "code",
+  "query": "Verify v15 verifier-needed ranking explains the CPU10 gap without changing product runtime or forbidden paths.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "verifier_needed_ranking_v15",
+      "relation": "total_rows",
+      "object": "29770",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/total_rows",
+      "confidence": 1.0,
+      "subject_role": "ranking_report",
+      "object_role": "denominator",
+      "route": "cpu10_ladder"
+    },
+    {
+      "id": "t2",
+      "subject": "verifier_needed_ranking_v15",
+      "relation": "cpu10_target_unique_accepts",
+      "object": "2977",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/cpu10_target_unique_accepts",
+      "confidence": 1.0,
+      "subject_role": "ranking_report",
+      "object_role": "target_metric",
+      "route": "cpu10_ladder"
+    },
+    {
+      "id": "t3",
+      "subject": "verifier_needed_ranking_v15",
+      "relation": "verifier_true_over_exact_cache_ceiling",
+      "object": "6170",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/verifier_true_over_exact_cache_ceiling",
+      "confidence": 1.0,
+      "subject_role": "ranking_report",
+      "object_role": "ceiling_metric",
+      "route": "cpu10_ladder"
+    },
+    {
+      "id": "t4",
+      "subject": "verifier_needed_ranking_v15",
+      "relation": "current_labeled_pool_can_reach_cpu10",
+      "object": "true",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/current_labeled_pool_can_reach_cpu10",
+      "confidence": 1.0,
+      "subject_role": "ranking_report",
+      "object_role": "capacity_state",
+      "route": "cpu10_ladder"
+    },
+    {
+      "id": "t5",
+      "subject": "compatible_denominator_v14",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "1172",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "actual_shadow_metric",
+      "route": "cpu10_ladder"
+    },
+    {
+      "id": "t6",
+      "subject": "compatible_denominator_v14",
+      "relation": "below_cpu10_target",
+      "object": "true",
+      "evidence": "1172 actual accepts < 2977 CPU10 target in v15 ranking",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "gap_state",
+      "route": "cpu10_ladder"
+    },
+    {
+      "id": "t7",
+      "subject": "planning_family_v15",
+      "relation": "exact_cache_misses_over_cache",
+      "object": "4546",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/top_action_families/action_family:planning/exact_cache_misses_over_cache",
+      "confidence": 1.0,
+      "subject_role": "action_family",
+      "object_role": "non_cache_pool",
+      "route": "capture_gap"
+    },
+    {
+      "id": "t8",
+      "subject": "planning_family_v15",
+      "relation": "rows_with_result_atoms",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/top_action_families/action_family:planning/rows_with_result_atoms",
+      "confidence": 1.0,
+      "subject_role": "action_family",
+      "object_role": "capture_gap",
+      "route": "capture_gap"
+    },
+    {
+      "id": "t9",
+      "subject": "planning_family_v15",
+      "relation": "recommended_next_action",
+      "object": "capture_result_atoms_before_phase_center_scaling",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/top_action_families/action_family:planning/recommended_next_action",
+      "confidence": 1.0,
+      "subject_role": "action_family",
+      "object_role": "next_action",
+      "route": "capture_gap"
+    },
+    {
+      "id": "t10",
+      "subject": "serving_ops_family_v15",
+      "relation": "exact_cache_misses_over_cache",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/top_action_families/action_family:serving_ops/exact_cache_misses_over_cache",
+      "confidence": 1.0,
+      "subject_role": "action_family",
+      "object_role": "non_cache_pool",
+      "route": "capture_gap"
+    },
+    {
+      "id": "t11",
+      "subject": "verifier_needed_ranking_v15",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t12",
+      "subject": "verifier_needed_ranking_v15_forbidden_flags",
+      "relation": "legacy_backend_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/forbidden_flags/legacy_backend_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "verifier_needed_ranking_v15_forbidden_flags",
+      "relation": "target_or_proof_authority_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v15-cpu10-ladder.report.json#/forbidden_flags/target_id_used and #/forbidden_flags/proof_rule_id_authority_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

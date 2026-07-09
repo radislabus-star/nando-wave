@@ -1,0 +1,183 @@
+{
+  "task_id": "phase-center-v13-tool-status-l4-packer-v1",
+  "domain": "code",
+  "query": "Verify that v19 adds tool_status L4 request-side packing, reruns phase-center self-mining, improves compatible denominator shadow coverage, and keeps product/money boundaries closed.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "tool_status_l4_packer_v19",
+      "relation": "rows_written",
+      "object": "12000",
+      "evidence": "target/nando-wave/streaming/codex-session-tool-status-verifier-trace-v4-l4-packer.report.json#/rows_written",
+      "confidence": 1.0,
+      "subject_role": "l4_packer_report",
+      "object_role": "packed_rows",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t2",
+      "subject": "tool_status_l4_packer_v19",
+      "relation": "rows_with_shadow_request",
+      "object": "12000",
+      "evidence": "target/nando-wave/streaming/codex-session-tool-status-verifier-trace-v4-l4-packer.report.json#/rows_with_shadow_request",
+      "confidence": 1.0,
+      "subject_role": "l4_packer_report",
+      "object_role": "packed_shadow_request_rows",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t3",
+      "subject": "tool_status_l4_packer_v19",
+      "relation": "rows_ready_for_existing_shadow_scoring",
+      "object": "12000",
+      "evidence": "target/nando-wave/streaming/codex-session-tool-status-verifier-trace-v4-l4-packer.report.json#/rows_ready_for_existing_shadow_scoring",
+      "confidence": 1.0,
+      "subject_role": "l4_packer_report",
+      "object_role": "score_ready_rows",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t4",
+      "subject": "tool_status_ranking_v19",
+      "relation": "verifier_true_over_exact_cache_ceiling",
+      "object": "5711",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v19-tool-status-l4-packer.report.json#/top_action_families/action_family:tool_status/verifier_true_over_exact_cache_ceiling",
+      "confidence": 1.0,
+      "subject_role": "ranking_report",
+      "object_role": "safe_cache_miss_ceiling",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t5",
+      "subject": "tool_status_ranking_v19",
+      "relation": "rows_missing_shadow_request",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v19-tool-status-l4-packer.report.json#/top_action_families/action_family:tool_status/rows_missing_shadow_request",
+      "confidence": 1.0,
+      "subject_role": "ranking_report",
+      "object_role": "missing_l4_payload_rows",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t6",
+      "subject": "self_mining_v19",
+      "relation": "compiled_quarantine_candidates",
+      "object": "37",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v19-tool-status-l4-packer-top128.report.json#/compiled_quarantine_candidates",
+      "confidence": 1.0,
+      "subject_role": "l3_phase_center_self_mining",
+      "object_role": "candidate_count",
+      "route": "l3_phase_center"
+    },
+    {
+      "id": "t7",
+      "subject": "self_mining_v19",
+      "relation": "shadow_accepted_candidates",
+      "object": "33",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v19-tool-status-l4-packer-top128.report.json#/shadow_accepted_candidates",
+      "confidence": 1.0,
+      "subject_role": "l3_phase_center_self_mining",
+      "object_role": "accepted_candidate_count",
+      "route": "l3_phase_center"
+    },
+    {
+      "id": "t8",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "denominator_rows",
+      "object": "35833",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/denominator/total_rows",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "denominator_rows",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t9",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "4537",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "shadow_accept_count",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t10",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "calls_saved_pct",
+      "object": "12.6615131303547",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/calls_saved_pct",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "calls_saved_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t11",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "tokens_saved_pct",
+      "object": "16.95134940808968",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/tokens_saved_pct",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "tokens_saved_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t12",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "safety_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t13",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t14",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "compatible_denominator_shadow_v19",
+      "relation": "nando_cpu_cost_saved_microusd",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/nando_cpu_cost_saved_microusd",
+      "confidence": 1.0,
+      "subject_role": "money_claim_boundary",
+      "object_role": "cost_savings_metric",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "compatible_denominator_shadow_v19_forbidden_flags",
+      "relation": "forbidden_paths_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v19-tool-status-l4-packer.report.json#/forbidden_flags",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

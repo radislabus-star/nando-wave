@@ -1,0 +1,194 @@
+{
+  "task_id": "phase-center-v15-cost-filled-compatible-denominator-v1",
+  "domain": "code",
+  "query": "Verify that v21 fills row-level estimated cost evidence for compatible phase-center shadow rows while preserving false_accepts=0 and keeping local accept / market money boundaries closed.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "token_cost_enrichment_v21",
+      "relation": "input_rows",
+      "object": "35833",
+      "evidence": "target/nando-wave/streaming/real-traffic-token-cost-enrichment-v21-compatible-cost-filled.report.json#/input_rows",
+      "confidence": 1.0,
+      "subject_role": "cost_enrichment_report",
+      "object_role": "input_rows",
+      "route": "cost_enrichment"
+    },
+    {
+      "id": "t2",
+      "subject": "token_cost_enrichment_v21",
+      "relation": "rows_with_shadow_request",
+      "object": "18833",
+      "evidence": "target/nando-wave/streaming/real-traffic-token-cost-enrichment-v21-compatible-cost-filled.report.json#/rows_with_shadow_request",
+      "confidence": 1.0,
+      "subject_role": "cost_enrichment_report",
+      "object_role": "shadow_request_rows",
+      "route": "cost_enrichment"
+    },
+    {
+      "id": "t3",
+      "subject": "token_cost_enrichment_v21",
+      "relation": "rows_enriched_cost",
+      "object": "30800",
+      "evidence": "target/nando-wave/streaming/real-traffic-token-cost-enrichment-v21-compatible-cost-filled.report.json#/rows_enriched_cost",
+      "confidence": 1.0,
+      "subject_role": "cost_enrichment_report",
+      "object_role": "cost_enriched_rows",
+      "route": "cost_enrichment"
+    },
+    {
+      "id": "t4",
+      "subject": "cost_evidence_audit_v21",
+      "relation": "shadow_request_rows",
+      "object": "18833",
+      "evidence": "target/nando-wave/streaming/real-traffic-cost-evidence-audit-v21-compatible-cost-filled.report.json#/shadow_request_rows",
+      "confidence": 1.0,
+      "subject_role": "cost_evidence_audit",
+      "object_role": "shadow_request_rows",
+      "route": "cost_evidence"
+    },
+    {
+      "id": "t5",
+      "subject": "cost_evidence_audit_v21",
+      "relation": "estimated_cost_events",
+      "object": "18833",
+      "evidence": "target/nando-wave/streaming/real-traffic-cost-evidence-audit-v21-compatible-cost-filled.report.json#/estimated_cost_events",
+      "confidence": 1.0,
+      "subject_role": "cost_evidence_audit",
+      "object_role": "estimated_cost_rows",
+      "route": "cost_evidence"
+    },
+    {
+      "id": "t6",
+      "subject": "cost_evidence_audit_v21",
+      "relation": "provider_cost_events",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/real-traffic-cost-evidence-audit-v21-compatible-cost-filled.report.json#/provider_cost_events",
+      "confidence": 1.0,
+      "subject_role": "cost_evidence_audit",
+      "object_role": "provider_cost_rows",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t7",
+      "subject": "cost_evidence_audit_v21",
+      "relation": "money_proof_candidate_bucket_count",
+      "object": "2",
+      "evidence": "target/nando-wave/streaming/real-traffic-cost-evidence-audit-v21-compatible-cost-filled.report.json#/money_proof_candidate_bucket_count",
+      "confidence": 1.0,
+      "subject_role": "cost_evidence_audit",
+      "object_role": "money_ready_bucket_count",
+      "route": "cost_evidence"
+    },
+    {
+      "id": "t8",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "4537",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "shadow_accept_count",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t9",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "calls_saved_pct",
+      "object": "12.6615131303547",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/calls_saved_pct",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "calls_saved_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t10",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "tokens_saved_pct",
+      "object": "16.95134940808968",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/tokens_saved_pct",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "tokens_saved_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t11",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "nando_cpu_cost_saved_microusd",
+      "object": "2308568",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/nando_cpu_cost_saved_microusd",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "row_level_estimated_cost_metric",
+      "route": "cost_evidence"
+    },
+    {
+      "id": "t12",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "accepted_cost_evidence_missing_events",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/token_cost_evidence/accepted_cost_evidence_missing_events",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "missing_cost_evidence_count",
+      "route": "cost_evidence"
+    },
+    {
+      "id": "t13",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "safety_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t14",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "compatible_denominator_shadow_v21",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "market_money_boundary",
+      "object_role": "permission_state",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "compatible_denominator_shadow_v21_price_source",
+      "relation": "price_source",
+      "object": "User-editable placeholder for cost-meter estimates",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/token_cost_evidence/price_source",
+      "confidence": 1.0,
+      "subject_role": "market_money_boundary",
+      "object_role": "placeholder_price_source",
+      "route": "market_money_boundary"
+    },
+    {
+      "id": "t17",
+      "subject": "compatible_denominator_shadow_v21_forbidden_flags",
+      "relation": "forbidden_paths_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v21-cost-filled.report.json#/forbidden_flags",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

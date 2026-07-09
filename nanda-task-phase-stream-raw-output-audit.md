@@ -1,0 +1,37 @@
+# NANDA Triad Worksheet
+
+task_id: phase-stream-raw-output-audit
+domain: code
+query: verify raw-output phase-center audit is not product promotion or market savings claim
+
+## triads
+
+| id | subject | relation | object | evidence | confidence | subject_role | object_role | route | group | layer | owner | entrypoint | output | evidence_path | scope |
+|----|---------|----------|--------|----------|------------|--------------|-------------|-------|-------|-------|-------|------------|--------|---------------|-------|
+| t1 | raw_log_trace_builder | reads | existing_raw_stdout_stderr_log_artifacts | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json:5-12 | 1.0 | trace_builder | source | raw_output_audit | trace_boundary | CLI | nando-cli | phase-stream-test-output-raw-log-trace-v1 | trace_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json | current |
+| t2 | raw_log_trace_builder | writes | raw_output_trace_jsonl | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json:5,8-12 | 1.0 | trace_builder | trace_artifact | raw_output_audit | trace_boundary | CLI | nando-cli | phase-stream-test-output-raw-log-trace-v1 | trace_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json | current |
+| t3 | raw_output_shadow | proves_scope | raw_output_parse | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json:4,7,24-39,72-89 | 1.0 | shadow_report | proof_scope | raw_output_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-v1 | shadow_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json | current |
+| t4 | raw_output_shadow | does_not_use | metadata_status_operator | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json:30-31,72-79 | 1.0 | shadow_report | excluded_scope | raw_output_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-v1 | shadow_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json | current |
+| t5 | raw_output_audit | allows | raw_output_claim_offline_review_only | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:5,10-13,25-40 | 1.0 | audit_report | claim_scope | raw_output_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+| t6 | raw_output_audit | does_not_allow | metadata_status_claim | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:10-12,25-31 | 1.0 | audit_report | excluded_claim | raw_output_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+| t7 | raw_output_audit | does_not_enable | product_local_accept | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:94-98 | 1.0 | audit_report | forbidden_effect | raw_output_audit | product_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+| t8 | raw_output_audit | does_not_allow | market_money_claim | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:99-102 | 1.0 | audit_report | claim_boundary | raw_output_audit | economics_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+
+## candidate_triads
+
+| id | subject | relation | object | evidence | confidence | subject_role | object_role | route | group | layer | owner | entrypoint | output | evidence_path | scope |
+|----|---------|----------|--------|----------|------------|--------------|-------------|-------|-------|-------|-------|------------|--------|---------------|-------|
+| c1 | raw_log_trace_builder | reads | existing_raw_stdout_stderr_log_artifacts | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json:5-12 | 1.0 | trace_builder | source | raw_output_audit | trace_boundary | CLI | nando-cli | phase-stream-test-output-raw-log-trace-v1 | trace_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json | current |
+| c2 | raw_log_trace_builder | writes | raw_output_trace_jsonl | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json:5,8-12 | 1.0 | trace_builder | trace_artifact | raw_output_audit | trace_boundary | CLI | nando-cli | phase-stream-test-output-raw-log-trace-v1 | trace_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.trace-report.json | current |
+| c3 | raw_output_shadow | proves_scope | raw_output_parse | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json:4,7,24-39,72-89 | 1.0 | shadow_report | proof_scope | raw_output_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-v1 | shadow_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json | current |
+| c4 | raw_output_shadow | does_not_use | metadata_status_operator | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json:30-31,72-79 | 1.0 | shadow_report | excluded_scope | raw_output_audit | scope_boundary | CLI | nando-cli | phase-stream-test-output-parse-v1 | shadow_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.shadow-report.json | current |
+| c5 | raw_output_audit | allows | raw_output_claim_offline_review_only | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:5,10-13,25-40 | 1.0 | audit_report | claim_scope | raw_output_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+| c6 | raw_output_audit | does_not_allow | metadata_status_claim | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:10-12,25-31 | 1.0 | audit_report | excluded_claim | raw_output_audit | audit_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+| c7 | raw_output_audit | does_not_enable | product_local_accept | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:94-98 | 1.0 | audit_report | forbidden_effect | raw_output_audit | product_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+| c8 | raw_output_audit | does_not_allow | market_money_claim | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json:99-102 | 1.0 | audit_report | claim_boundary | raw_output_audit | economics_boundary | CLI | nando-cli | phase-stream-test-output-parse-promotion-audit-v1 | audit_report | target/nando-wave/streaming/test-output-parse-raw-log-v1.promotion-audit.json | current |
+
+## notes
+
+- Boundary gate only: raw-output claim is offline review over existing raw log artifacts.
+- The raw-output audit does not enable product local accept, serving promotion, or market money claims.
+- Cost is still estimated; provider billing evidence is not real.

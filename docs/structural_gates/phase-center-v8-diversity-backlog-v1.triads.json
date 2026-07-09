@@ -1,0 +1,161 @@
+{
+  "task_id": "phase-center-v8-diversity-backlog-v1",
+  "domain": "code",
+  "query": "Verify the phase-center diversity backlog keeps CPU10 shadow success, top-profile concentration, non-top mining gap, and no-promotion boundary separated.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "diversity_backlog_audit",
+      "relation": "reads_claim_audit",
+      "object": "phase_atom_frontier_claim_audit_diversity_p500_latest_window",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/claim_audit_path",
+      "confidence": 1.0,
+      "subject_role": "audit_report",
+      "object_role": "input_report",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t2",
+      "subject": "diversity_backlog_audit",
+      "relation": "reads_verifier_needed_ranking",
+      "object": "phase_atom_verifier_needed_ranking_v1",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/verifier_needed_ranking_path",
+      "confidence": 1.0,
+      "subject_role": "audit_report",
+      "object_role": "input_report",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t3",
+      "subject": "frontier_claim_audit_diversity_p500",
+      "relation": "current_unique_cpu_accepts_over_exact_cache",
+      "object": "6545",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-claim-audit-diversity-p500-latest-window-v1.report.json#/score/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "claim_audit",
+      "object_role": "metric",
+      "route": "current_shadow_state"
+    },
+    {
+      "id": "t4",
+      "subject": "frontier_claim_audit_diversity_p500",
+      "relation": "top_profile_name",
+      "object": "tool_status",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-claim-audit-diversity-p500-latest-window-v1.report.json#/profile_diversity/top_profile_name",
+      "confidence": 1.0,
+      "subject_role": "profile_concentration",
+      "object_role": "profile_name",
+      "route": "current_shadow_state"
+    },
+    {
+      "id": "t5",
+      "subject": "frontier_claim_audit_diversity_p500",
+      "relation": "top_profile_share_milli",
+      "object": "982",
+      "evidence": "target/nando-wave/streaming/phase-atom-frontier-claim-audit-diversity-p500-latest-window-v1.report.json#/profile_diversity/top_profile_share_milli",
+      "confidence": 1.0,
+      "subject_role": "profile_concentration",
+      "object_role": "metric",
+      "route": "current_shadow_state"
+    },
+    {
+      "id": "t6",
+      "subject": "diversity_backlog_audit",
+      "relation": "required_non_top_accepts_if_top_stays_constant",
+      "object": "1607",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/diversity_target/required_non_top_accepts_if_top_stays_constant",
+      "confidence": 1.0,
+      "subject_role": "gap_audit",
+      "object_role": "metric",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t7",
+      "subject": "diversity_backlog_audit",
+      "relation": "additional_non_top_accepts_needed",
+      "object": "1490",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/diversity_target/additional_non_top_accepts_needed",
+      "confidence": 1.0,
+      "subject_role": "gap_audit",
+      "object_role": "metric",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t8",
+      "subject": "planning_profile",
+      "relation": "recommended_next_action",
+      "object": "scale_verifier_capture_for_existing_non_top_winner_then_rerun_frontier",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/recommended_focus/0/recommended_next_action",
+      "confidence": 1.0,
+      "subject_role": "recommended_profile",
+      "object_role": "action",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t9",
+      "subject": "serving_ops_profile",
+      "relation": "recommended_next_action",
+      "object": "diagnose_window_or_exact_cache_overlap_then_expand_verifier_evidence",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/recommended_focus/2/recommended_next_action",
+      "confidence": 1.0,
+      "subject_role": "recommended_profile",
+      "object_role": "action",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t10",
+      "subject": "metrics_report_profile",
+      "relation": "recommended_next_action",
+      "object": "diagnose_window_or_exact_cache_overlap_then_expand_verifier_evidence",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/recommended_focus/3/recommended_next_action",
+      "confidence": 1.0,
+      "subject_role": "recommended_profile",
+      "object_role": "action",
+      "route": "diversity_backlog"
+    },
+    {
+      "id": "t11",
+      "subject": "diversity_backlog_audit",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/gates/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t12",
+      "subject": "diversity_backlog_audit",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/gates/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "diversity_backlog_audit",
+      "relation": "legacy_nwrb_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/forbidden_flags/nwrb_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t14",
+      "subject": "diversity_backlog_audit",
+      "relation": "verdict",
+      "object": "PHASE_ATOM_DIVERSITY_BACKLOG_ACTION_REQUIRED",
+      "evidence": "target/nando-wave/streaming/phase-atom-diversity-backlog-diversity-p500-latest-window-v1.report.json#/verdict",
+      "confidence": 1.0,
+      "subject_role": "audit_report",
+      "object_role": "verdict",
+      "route": "diversity_backlog"
+    }
+  ]
+}

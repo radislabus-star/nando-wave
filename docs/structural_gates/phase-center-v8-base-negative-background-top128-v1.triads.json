@@ -1,0 +1,205 @@
+{
+  "task_id": "phase-center-v8-base-negative-background-top128-v1",
+  "domain": "code",
+  "query": "Verify top128 online phase-center self-mining and base-family negative background preserve shadow-only, verifier-bound, no-legacy, no-promotion boundaries.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "live_self_mining_selection_v13",
+      "relation": "top_n",
+      "object": "128",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v13-result-atoms-diversity-aware-top128.report.json#/top_n",
+      "confidence": 1.0,
+      "subject_role": "self_mining_report",
+      "object_role": "selection_size",
+      "route": "top128_shadow"
+    },
+    {
+      "id": "t2",
+      "subject": "compatible_denominator_v13",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "1154",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v13-result-atoms-diversity-aware-top128.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "metric",
+      "route": "top128_shadow"
+    },
+    {
+      "id": "t3",
+      "subject": "compatible_denominator_v13",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v13-result-atoms-diversity-aware-top128.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "safety_metric",
+      "route": "top128_shadow"
+    },
+    {
+      "id": "t4",
+      "subject": "base_family_negative_background",
+      "relation": "source",
+      "object": "same_base_action_family_older_window_verifier_negative_events",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#phase_atom_live_self_mining_class_report_background_negative_train_events",
+      "confidence": 1.0,
+      "subject_role": "training_background",
+      "object_role": "allowed_negative_source",
+      "route": "base_negative_background"
+    },
+    {
+      "id": "t5",
+      "subject": "base_family_negative_background",
+      "relation": "updates",
+      "object": "negative_phase_center_only",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#add_negative_vector_background_negative_train_events",
+      "confidence": 1.0,
+      "subject_role": "training_background",
+      "object_role": "update_direction",
+      "route": "base_negative_background"
+    },
+    {
+      "id": "t6",
+      "subject": "base_family_negative_background",
+      "relation": "future_heldout_leak_allowed",
+      "object": "false",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#event_timestamp_train_time_max_filter",
+      "confidence": 1.0,
+      "subject_role": "leak_guard",
+      "object_role": "permission_state",
+      "route": "base_negative_background"
+    },
+    {
+      "id": "t7",
+      "subject": "background_task_atom_rebinding",
+      "relation": "removes_old_task_atom",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#phase_atom_binary_event_vector_for_task_filters_phase_atom_binary_task",
+      "confidence": 1.0,
+      "subject_role": "cross_bucket_guard",
+      "object_role": "mechanism",
+      "route": "base_negative_background"
+    },
+    {
+      "id": "t8",
+      "subject": "background_task_atom_rebinding",
+      "relation": "adds_current_task_atom",
+      "object": "true",
+      "evidence": "crates/nando-cli/src/phase_streaming_cmd.rs#phase_atom_binary_event_vector_for_task_current_task_atom",
+      "confidence": 1.0,
+      "subject_role": "cross_bucket_guard",
+      "object_role": "mechanism",
+      "route": "base_negative_background"
+    },
+    {
+      "id": "t9",
+      "subject": "self_mining_v14",
+      "relation": "background_negative_train_events_used",
+      "object": "nonzero",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v14-base-negative-background-top128.report.json#/classes/*/background_negative_train_events_used",
+      "confidence": 1.0,
+      "subject_role": "self_mining_report",
+      "object_role": "metric",
+      "route": "base_negative_background"
+    },
+    {
+      "id": "t10",
+      "subject": "compatible_denominator_v14",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "1172",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "metric",
+      "route": "compatible_denominator_shadow"
+    },
+    {
+      "id": "t11",
+      "subject": "compatible_denominator_v14",
+      "relation": "tokens_saved_pct",
+      "object": "9.683743190491374",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/tokens_saved_pct",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "metric",
+      "route": "compatible_denominator_shadow"
+    },
+    {
+      "id": "t12",
+      "subject": "compatible_denominator_v14",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_replay_report",
+      "object_role": "safety_metric",
+      "route": "compatible_denominator_shadow"
+    },
+    {
+      "id": "t13",
+      "subject": "compatible_denominator_v14",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t14",
+      "subject": "compatible_denominator_v14",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t15",
+      "subject": "compatible_denominator_v14_forbidden_flags",
+      "relation": "nwrb_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/forbidden_flags/nwrb_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t16",
+      "subject": "compatible_denominator_v14_forbidden_flags",
+      "relation": "target_id_or_proof_rule_id_authority_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v14-base-negative-background-top128.report.json#/forbidden_flags/target_id_or_proof_rule_id_authority_used",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t17",
+      "subject": "sed_nando_wave_background_bucket",
+      "relation": "rejection_reason",
+      "object": "false_accepts_detected",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v14-base-negative-background-top128.report.json#/classes/tool_status_sed_nando_wave/rejection_reason",
+      "confidence": 1.0,
+      "subject_role": "red_bucket",
+      "object_role": "safety_gate",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t18",
+      "subject": "sed_nando_wave_background_bucket",
+      "relation": "promotable",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v14-base-negative-background-top128.report.json#/classes/tool_status_sed_nando_wave/accepted_for_shadow_review",
+      "confidence": 1.0,
+      "subject_role": "red_bucket",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

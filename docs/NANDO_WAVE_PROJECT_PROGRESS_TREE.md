@@ -1,8 +1,167 @@
 # Nando Wave Project Progress Tree
 
-Дата среза: 2026-07-04
+Дата среза: 2026-07-06
 
 Назначение: короткая карта текущего положения проекта без stale PASS.
+
+## Current Authoritative Contract
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Current truth:
+
+```text
+TREE
+|
++-- source adapter                                      [ACTIVE]
+|   |
+|   +-- may be source-specific
+|   +-- core must stay source-neutral
+|
++-- L1/L2 safe atoms                                    [ACTIVE]
+|   |
+|   +-- request/state/result atoms
+|   +-- numeric ids for hot path
+|
++-- L4 streaming selector/router/admission              [P0 NEXT]
+|   |
+|   +-- choose classes by marginal denominator delta
+|   +-- manage hot/warm/cold operator memory
+|   +-- do not become answer authority
+|
++-- L3 drifting phase centers                           [PASS SHADOW]
+|   |
+|   +-- best frontier: 6_644 unique CPU accepts over exact cache
+|   +-- calls saved: 22.3177%
+|   +-- tokens saved: 72.0541%
+|   +-- false_accepts: 0
+|
++-- hot runtime                                         [PASS SHAPE]
+|   |
+|   +-- direct PhaseCenterHotRuntime benchmark PASS
+|   +-- hot_bytes_estimate: 592
+|   +-- no JSON/String/BTreeMap/file IO/package compile in timed lane
+|
++-- product local accept                                [NOT ENABLED]
+    |
+    +-- requires verifier-bound promotion
+    +-- requires future-window proof
+    +-- requires false_accepts = 0
+```
+
+Scoreboard:
+
+```text
+best shadow frontier:
+  artifact: target/nando-wave/streaming/phase-atom-frontier-shadow-replay-diversity-p500-run-check-p500-latest-window-v1.report.json
+  denominator_rows: 29_770
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+  status: PASS-shadow-only
+
+hot benchmark:
+  artifact: target/nando-wave/streaming/phase-stream-hot-path-benchmark-v1-release.report.json
+  hot_bytes_estimate: 592
+  unique_cpu_accepts_over_exact_cache: 8
+  false_accepts: 0
+  status: PASS-hot-path-shape
+
+live-store adapter:
+  artifact: target/nando-wave/streaming/phase-stream-live-store-adapter-smoke-v1.report.json
+  false_accepts: 2
+  status: WATCH-no-promotion
+```
+
+Debt queue:
+
+```text
+P0: automatic L4 opportunity board and marginal-denominator selector
+P0: every compression report must expose synthetic/non_synthetic rows
+P1: future-window shadow proof for selected hot profiles
+P1: provider billing join with real provider_cost_events
+P2: non-Codex source adapter proof to protect source-neutral architecture
+```
+
+## Current Progress Board
+
+```text
+Nando Wave / Phase-Center Operator Layer
+|
++-- 1. Claim Boundary                                      [ACTIVE]
+|   |
+|   +-- target: compact transferable operator
+|   +-- formula: state_t + action/operator -> state_t+1
+|   +-- forbidden: lookup / target_id / proof authority / concrete lookup / local_out_t
+|   +-- product accept: still disabled
+|
++-- 2. Active Backend                                      [PASS / ACTIVE]
+|   |
+|   +-- allowed backend: phase-center / .nwpc
+|   +-- forbidden backend: .nwrb role-binding commercial path
+|   +-- runtime direction: CPU-local phase-center profiles
+|   +-- proof style: compatible shadow replay + verifier + fallback
+|
++-- 3. L3 Phase-Center Coverage                            [IMPROVED]
+|   |
+|   +-- previous agreed coverage                           [1172 / 6170 = 19.00%]
+|   +-- v17 global coverage vs v16 ceiling                 [4160 / 12109 = 34.35%]
+|   +-- planning_update class coverage                     [2990 / 5939 = 50.35%]
+|   +-- v21 compatible unique CPU accepts                  [4537 / 35833 = 12.66%]
+|   +-- v21 token savings                                  [2308568 tokens = 16.95%]
+|   +-- v21 row-level estimated cost                       [2308568 microusd]
+|   +-- false_accepts                                      [0]
+|   +-- whole compatible replay wrong_wins                 [61, not product promotion]
+|
++-- 4. CPU Compression Shadow                              [CPU10 PASSED]
+|   |
+|   +-- denominator rows                                   [35_833]
+|   +-- CPU accepts over exact cache                       [4537]
+|   +-- calls saved                                        [12.6615%]
+|   +-- tokens saved                                       [16.9513%]
+|   +-- CPU10 target                                       [3583 accepts]
+|   +-- status                                             [shadow only, no local_accept]
+|
++-- 5. L4 Streaming Operator Router/Packer                 [IMPROVED]
+|   |
+|   +-- role                                               [event -> phase-center input]
+|   +-- planning_update L4 packer                          [6063 / 6063 shadow_request rows]
+|   +-- tool_status L4 packer                              [12000 / 12000 shadow_request rows]
+|   +-- run_check L4 packer                                [770 / 770 shadow_request rows]
+|   +-- v24 agent_continue active-turn trace               [11063 rows, WATCH]
+|   +-- v24 agent_continue subroute scoreboard             [0 rows ready for mining]
+|   +-- v25 command_result followup pack                   [12000 rows, mining-ready]
+|   +-- v25 command_result top128 shadow                   [513 unique CPU accepts, accepted false_accepts=0]
+|   +-- v25 command_result top256 ceiling                  [568 unique CPU accepts, accepted false_accepts=0]
+|   +-- v26 auto-subcenter discovery                       [48 selected / 90 rejected split atoms]
+|   +-- v26 generated candidate trace                      [109300 rows, 54650 positive / 54650 background]
+|   +-- v26 quarantine mining                              [25 accepted candidates / 1643 mining unique accepts]
+|   +-- v26 compatible denominator                         [328 unique accepts, false_accepts=0, shadow-only]
+|   +-- next proof                                         [online miner daemon / overlap reduction]
+|
++-- 6. Next Technical Debt                                 [IN PROGRESS]
+    |
+    +-- market money blocker                               [provider_cost_events = 0]
+    +-- cost state                                         [row-level estimated cost visible, placeholder price source]
+    +-- v22 money claim gate                               [INTERNAL_ESTIMATE_ONLY, market claim blocked]
+    +-- v23 provider billing join                          [adapter ready, empty billing smoke matched 0 rows]
+    +-- v23 billing-file guard                             [file presence alone does not pass provider billing gate]
+    +-- blocking gates                                     [price_source / provider_billing / user_approved_price]
+    +-- compile-ready money buckets                        [tool_status, run_check]
+    +-- non-compile-ready token/cost bucket                 [planning_update lacks negative evidence]
+    +-- agent_continue artifact_progress                   [6063 true / 0 false, needs negatives]
+    +-- agent_continue command_result_followup              [v25: 9980 true / 2020 false, result+shadow attached]
+    +-- agent_continue command_result top128                [21 accepted quarantine candidates / 513 unique shadow accepts]
+    +-- agent_continue command_result top256                [35 accepted quarantine candidates / 568 unique shadow accepts]
+    +-- v26 auto-subcenter batch bridge                     [328 denominator-deduped accepts, false_accepts=0]
+    +-- v26 boundary                                        [not final streaming miner, not market claim]
+    +-- hard rule                                          [false_accepts must remain 0 and local_accept stays disabled]
+```
+
+The older tree below is retained as historical context. The current active
+direction is the phase-center / L4-L3 board above.
 
 ```text
 Nando Wave / Operator Layer
@@ -891,6 +1050,47 @@ Open proof-debt:
   text/domain prototype;
   raw-language action parsing;
   commercial license package.
+```
+
+## 2026-07-06 - Phase-Center Online Miner Daemon V27
+
+```text
+status: PASS_SHADOW_ONLY
+route: real trace -> phase atoms -> online buckets -> quarantine .nwpc checkpoints -> future-only shadow
+
+closed:
+  append-like real trace scan;
+  score-before-train online checkpointing;
+  positive/negative reservoirs;
+  periodic quarantine .nwpc compile;
+  future-only shadow decisions;
+  aggregate runtime parity counter;
+  progress output for long compile ticks.
+
+metrics:
+  total_rows: 17_000
+  parsed_events: 374
+  skipped_no_verifier_label: 16_626
+  compiled_checkpoint_count: 76
+  future_shadow_events: 313
+  unique_cpu_accepts_over_exact_cache: 2
+  nando_cpu_tokens_saved: 642
+  nando_cpu_cost_saved_microusd: 1_926
+  runtime_margin_parity_mismatches: 0
+  false_accepts: 0
+  latency_p99_ns: 15_494
+
+boundary:
+  local_accept_enabled: false
+  auto_promote_enabled: false
+  market_money_claim_allowed: false
+  .nwrb / role-binding backend: not used
+
+finding:
+  daemon mechanics are now live, but verifier coverage is the bottleneck.
+  Only 374 / 17_000 rows have verifier labels, so current real-trace accepts
+  are tiny. Next progress must come from verifier-rich append streams, not
+  from lowering the threshold.
 ```
 
 Что сказать исполнителю:

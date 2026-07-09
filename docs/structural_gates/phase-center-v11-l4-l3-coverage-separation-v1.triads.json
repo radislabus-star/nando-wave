@@ -1,0 +1,150 @@
+{
+  "task_id": "phase-center-v11-l4-l3-coverage-separation-v1",
+  "domain": "code",
+  "query": "Verify that v17 separates L4 planning_update packing gap from L3 phase-center CPU10 shadow coverage and does not overclaim promotion or money.",
+  "triads": [
+    {
+      "id": "t1",
+      "subject": "planning_update_ranking_v16",
+      "relation": "rows",
+      "object": "6059",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v16-planning-tool-output.report.json#/top_state_action_buckets/action_family:planning::route_hint:planning_update/rows",
+      "confidence": 1.0,
+      "subject_role": "l4_packing_source_report",
+      "object_role": "bucket_rows",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t2",
+      "subject": "planning_update_ranking_v16",
+      "relation": "verifier_true_over_exact_cache_ceiling",
+      "object": "5939",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v16-planning-tool-output.report.json#/top_state_action_buckets/action_family:planning::route_hint:planning_update/verifier_true_over_exact_cache_ceiling",
+      "confidence": 1.0,
+      "subject_role": "l4_packing_source_report",
+      "object_role": "cache_miss_verifier_true_ceiling",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t3",
+      "subject": "planning_update_ranking_v16",
+      "relation": "rows_with_shadow_request",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-verifier-needed-ranking-v16-planning-tool-output.report.json#/top_state_action_buckets/action_family:planning::route_hint:planning_update/rows_with_shadow_request",
+      "confidence": 1.0,
+      "subject_role": "l4_packing_source_report",
+      "object_role": "packed_request_count",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t4",
+      "subject": "planning_update_l4_packing_coverage",
+      "relation": "coverage_milli",
+      "object": "0",
+      "evidence": "0 rows_with_shadow_request out of 5939 verifier_true cache-miss rows",
+      "confidence": 1.0,
+      "subject_role": "l4_packing_gap",
+      "object_role": "coverage_metric",
+      "route": "l4_packing"
+    },
+    {
+      "id": "t5",
+      "subject": "planning_update_l3_phase_center_v17",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "2990",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v17-planning-background-eval-top128.report.json#/classes/action_family:planning::route_hint:planning_update/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "l3_phase_center_class",
+      "object_role": "shadow_accept_count",
+      "route": "l3_phase_center"
+    },
+    {
+      "id": "t6",
+      "subject": "planning_update_l3_phase_center_v17",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-live-self-mining-loop-v17-planning-background-eval-top128.report.json#/classes/action_family:planning::route_hint:planning_update/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "l3_phase_center_class",
+      "object_role": "safety_metric",
+      "route": "l3_phase_center"
+    },
+    {
+      "id": "t7",
+      "subject": "planning_update_l3_phase_center_v17",
+      "relation": "uses_background_negative_eval",
+      "object": "true",
+      "evidence": "background_negative_train_events_used=111 and background_negative_heldout_events_used=112 in v17 self-mining report",
+      "confidence": 1.0,
+      "subject_role": "background_dependency",
+      "object_role": "dependency_state",
+      "route": "background_negative"
+    },
+    {
+      "id": "t8",
+      "subject": "compatible_denominator_shadow_v17",
+      "relation": "unique_cpu_accepts_over_exact_cache",
+      "object": "4160",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v17-planning-background-eval-top128.report.json#/unique_cpu_accepts_over_exact_cache",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "shadow_accept_count",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t9",
+      "subject": "compatible_denominator_shadow_v17",
+      "relation": "calls_saved_pct",
+      "object": "11.610706411007843",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v17-planning-background-eval-top128.report.json#/calls_saved_pct",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "calls_saved_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t10",
+      "subject": "compatible_denominator_shadow_v17",
+      "relation": "false_accepts",
+      "object": "0",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v17-planning-background-eval-top128.report.json#/false_accepts",
+      "confidence": 1.0,
+      "subject_role": "compatible_shadow_report",
+      "object_role": "safety_metric",
+      "route": "compatible_shadow"
+    },
+    {
+      "id": "t11",
+      "subject": "compatible_denominator_shadow_v17",
+      "relation": "local_accept_enabled",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v17-planning-background-eval-top128.report.json#/local_accept_enabled",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t12",
+      "subject": "compatible_denominator_shadow_v17",
+      "relation": "market_money_claim_allowed",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v17-planning-background-eval-top128.report.json#/market_money_claim_allowed",
+      "confidence": 1.0,
+      "subject_role": "claim_boundary",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    },
+    {
+      "id": "t13",
+      "subject": "compatible_denominator_shadow_v17_forbidden_flags",
+      "relation": "forbidden_paths_used",
+      "object": "false",
+      "evidence": "target/nando-wave/streaming/phase-atom-compatible-denominator-shadow-v17-planning-background-eval-top128.report.json#/forbidden_flags",
+      "confidence": 1.0,
+      "subject_role": "forbidden_path_guard",
+      "object_role": "permission_state",
+      "route": "claim_boundary"
+    }
+  ]
+}

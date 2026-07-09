@@ -1,10 +1,151 @@
 # Nando Wave Signal Path: From N-Grams To Transferable Action
 
-Дата среза: 2026-07-03
+Дата среза: 2026-07-06
 
 Назначение: показать, как сигнал идёт от surface n-grams до оператора действия,
 какие структуры он проходит, какие размерности используются, и как это живёт в
 CPU/runtime.
+
+## Current Authoritative Contract
+
+```text
+docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+```
+
+Текущий signal path теперь надо читать так:
+
+```text
+real event stream
+|
++-- source adapter
+|   |
+|   +-- parses Codex/agent/app-specific raw event
+|   +-- core never depends on the source name
+|
++-- L1/L2 safe atoms
+|   |
+|   +-- request atoms
+|   +-- state atoms
+|   +-- result atoms
+|   +-- numeric atom ids for hot path
+|
++-- L4 streaming goal-state layer
+|   |
+|   +-- route_id / profile_id / bucket_id
+|   +-- opportunity ranking
+|   +-- admission / eviction / top-K
+|
++-- L3 drifting phase-center operator memory
+|   |
+|   +-- score_before_update
+|   +-- positive/background centers
+|   +-- margin/threshold
+|
++-- PhaseCenterHotRuntime
+    |
+    +-- route_index + fixed phase_vector + scratch -> margin
+    +-- accept remains shadow unless verifier-bound promotion passes
+```
+
+Current best compression signal:
+
+```text
+shadow frontier:
+  denominator_rows: 29_770
+  unique_cpu_accepts_over_exact_cache: 6_644
+  calls_saved: 22.3177%
+  tokens_saved: 72.0541%
+  false_accepts: 0
+  local_accept_enabled: false
+```
+
+Current hot runtime shape:
+
+```text
+hot_bytes_estimate: 592
+warm_metadata_bytes_estimate: 39_136
+hot_runtime_bytes_estimate: 544
+hot_route_table_bytes_estimate: 48
+```
+
+## Current Active Signal Path: L4 -> L3 Phase-Center
+
+Текущий активный путь продукта:
+
+```text
+real agent-loop event
+|
++-- L1 / surface atoms
+|   |
+|   +-- request atoms
+|   +-- state atoms
+|   +-- result atoms
+|
++-- L2 / event family and route hints
+|   |
+|   +-- action_family
+|   +-- route_hint
+|   +-- tool/result shape
+|
++-- L4 Streaming Operator Router/Packer
+|   |
+|   +-- choose operator family/profile
+|   +-- build phase-center input / shadow_request
+|   +-- filter forbidden authority atoms
+|
++-- L3 Phase-Center Runtime
+    |
+    +-- compare event vector to positive/negative phase centers
+    +-- accept when margin/verifier boundary is safe
+    +-- fallback otherwise
+```
+
+Разделение ролей:
+
+```text
+L3 = operator scorer / compact operator memory.
+L4 = streaming router/packer that makes events visible to L3.
+```
+
+Текущий доказанный L3-сдвиг:
+
+```text
+planning_update:
+  verifier_true cache-miss ceiling: 5939
+  phase-center accepts: 2990
+  class coverage: 50.35%
+  false_accepts: 0
+  wrong_wins: 0
+
+compatible denominator v17:
+  rows: 35_829
+  CPU accepts over exact cache: 4160
+  calls saved: 11.6107%
+  tokens saved: 11.5390%
+```
+
+Текущая незакрытая L4-дыра:
+
+```text
+planning_update:
+  rows_with_shadow_request: 0
+  L4 packing coverage: 0 / 5939 = 0%
+```
+
+То есть фазовый центр уже доказал полезный оператор для `planning_update`, но
+поточный L4-пакер ещё должен научиться собирать этот вход в live/daemon path.
+
+Forbidden filters on the phase-center path:
+
+```text
+no verifier_label as score authority
+no verified_safe_accept as score authority
+no output_hash64 lookup
+no target/proof authority
+no concrete_x_lookup
+no manual local_out_t
+no legacy .nwrb role-binding backend
+```
 
 ## Current Implementation Check
 
