@@ -1744,9 +1744,9 @@ def status_dashboard_html(request_path: str = "") -> str:
     .status-line {{ display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; color: #9aa7b2; font-size: 13px; }}
     .status-line b {{ color: #fff; font-size: 15px; }}
     .cpu-live-list {{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }}
-    .cpu-live-list li {{ display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 10px 11px; background: #111519; border: 1px solid #252e36; border-radius: 8px; }}
+    .cpu-live-list li {{ display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 10px 11px; background: #111519; border: 1px solid #252e36; border-radius: 8px; min-width: 0; }}
     .cpu-live-list span {{ color: #9aa7b2; font-size: 13px; line-height: 1.25; }}
-    .cpu-live-list b {{ color: #fff; font-size: 16px; line-height: 1.1; text-align: right; white-space: nowrap; }}
+    .cpu-live-list b {{ color: #fff; font-size: 16px; line-height: 1.2; text-align: right; overflow-wrap: anywhere; min-width: 0; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th, td {{ text-align: left; border-bottom: 1px solid #28313a; padding: 9px 8px; white-space: nowrap; }}
     th {{ color: #a8b3bd; font-weight: 650; }}
