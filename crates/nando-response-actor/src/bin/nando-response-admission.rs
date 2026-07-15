@@ -1,0 +1,453 @@
+use std::collections::BTreeMap;
+use std::env;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use nando_response_actor::{
+    OnlineAdmissionCandidateBundle, ResponseExecutor, ResponseRegistry,
+    build_online_admission_snapshot, build_online_collection_admission_snapshot,
+    merge_online_admission_snapshots, response_runtime_contract_sha256, sha256_bytes,
+};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct AdmissionControllerReport {
+    schema: &'static str,
+    verdict: &'static str,
+    blocker: Option<String>,
+    candidate_revision: u64,
+    relation_candidates: usize,
+    collection_candidates: usize,
+    relation_max_future_rows: usize,
+    relation_max_runtime_parity_cases: usize,
+    collection_max_future_rows: usize,
+    collection_max_runtime_parity_cases: usize,
+    active_packages: usize,
+    last_known_good_preserved: bool,
+    elapsed_micros: u64,
+}
+
+fn main() {
+    match env::args().nth(1).as_deref() {
+        Some("--print-runtime-contract-sha256") => {
+            println!("{}", response_runtime_contract_sha256());
+            return;
+        }
+        Some("--inspect-candidate-routes") => {
+            if let Err(error) = inspect_candidate_routes() {
+                eprintln!("nando-response-admission: {error}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        _ => {}
+    }
+    let started = Instant::now();
+    if let Err(error) = run(started) {
+        eprintln!("nando-response-admission: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn inspect_candidate_routes() -> Result<(), String> {
+    let state_dir = env_path(
+        "NANDO_TRANSITION_STATE_DIR",
+        "/var/lib/nando-wave/transition",
+    );
+    let candidate_path = env_path_join(
+        "NANDO_RESPONSE_ADMISSION_CANDIDATES",
+        &state_dir,
+        "response-admission-candidates.cbor",
+    );
+    let bytes = fs::read(&candidate_path)
+        .map_err(|error| format!("candidate_bundle_read:{}:{error}", candidate_path.display()))?;
+    let bundle: OnlineAdmissionCandidateBundle = serde_cbor::from_slice(&bytes)
+        .map_err(|error| format!("candidate_bundle_decode:{error}"))?;
+    bundle.validate().map_err(str::to_owned)?;
+    let candidates = bundle
+        .relation_candidates
+        .iter()
+        .map(|candidate| {
+            let support = candidate
+                .support
+                .iter()
+                .map(nando_response_actor::relation_frame_online_routing_atom_ids)
+                .collect::<Vec<_>>();
+            let negatives = candidate
+                .negatives
+                .iter()
+                .map(nando_response_actor::relation_frame_online_routing_atom_ids)
+                .collect::<Vec<_>>();
+            let mut frequencies = BTreeMap::<u64, (usize, usize)>::new();
+            for atoms in &support {
+                for atom in atoms {
+                    frequencies.entry(*atom).or_default().0 += 1;
+                }
+            }
+            for atoms in &negatives {
+                for atom in atoms {
+                    frequencies.entry(*atom).or_default().1 += 1;
+                }
+            }
+            let required_coverage = candidate
+                .required_routing_atom_ids
+                .iter()
+                .map(|required| {
+                    serde_json::json!({
+                        "atom_id": required,
+                        "support": support.iter().filter(|atoms| atoms.binary_search(required).is_ok()).count(),
+                        "negatives": negatives.iter().filter(|atoms| atoms.binary_search(required).is_ok()).count(),
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut clean_atoms = frequencies
+                .iter()
+                .filter(|(_, (_, negative))| *negative == 0)
+                .map(|(atom, (positive, _))| (*atom, *positive))
+                .collect::<Vec<_>>();
+            clean_atoms.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+            clean_atoms.truncate(32);
+            let guard_like_negatives = candidate
+                .negatives
+                .iter()
+                .zip(&negatives)
+                .filter(|(_, atoms)| {
+                    candidate
+                        .required_routing_atom_ids
+                        .iter()
+                        .all(|required| atoms.binary_search(required).is_ok())
+                })
+                .map(|(frame, atoms)| {
+                    let identical_support_rows = support.iter().filter(|positive| *positive == atoms).count();
+                    let minimum_atom_difference = support
+                        .iter()
+                        .map(|positive| sorted_symmetric_difference_len(positive, atoms))
+                        .min()
+                        .unwrap_or(0);
+                    serde_json::json!({
+                        "frame_id_sha256": frame.frame_id_sha256,
+                        "identical_support_rows": identical_support_rows,
+                        "minimum_atom_difference": minimum_atom_difference,
+                        "atom_count": atoms.len(),
+                    })
+                })
+                .collect::<Vec<_>>();
+            serde_json::json!({
+                "bucket_id": candidate.candidate.bucket_id,
+                "program": format!("{:?}", candidate.candidate.program.operation),
+                "support_rows": support.len(),
+                "future_rows": candidate.future.len(),
+                "negative_rows": negatives.len(),
+                "required_atom_coverage": required_coverage,
+                "clean_atoms_top32": clean_atoms,
+                "guard_like_negatives": guard_like_negatives,
+            })
+        })
+        .collect::<Vec<_>>();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "nando.response-candidate-route-inspection.v1",
+            "revision": bundle.revision,
+            "candidates": candidates,
+        }))
+        .map_err(|error| format!("candidate_inspection_encode:{error}"))?
+    );
+    Ok(())
+}
+
+fn sorted_symmetric_difference_len(left: &[u64], right: &[u64]) -> usize {
+    let mut left_index = 0;
+    let mut right_index = 0;
+    let mut difference = 0;
+    while left_index < left.len() && right_index < right.len() {
+        match left[left_index].cmp(&right[right_index]) {
+            std::cmp::Ordering::Less => {
+                difference += 1;
+                left_index += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                difference += 1;
+                right_index += 1;
+            }
+            std::cmp::Ordering::Equal => {
+                left_index += 1;
+                right_index += 1;
+            }
+        }
+    }
+    difference + left.len().saturating_sub(left_index) + right.len().saturating_sub(right_index)
+}
+
+fn run(started: Instant) -> Result<(), String> {
+    let state_dir = env_path(
+        "NANDO_TRANSITION_STATE_DIR",
+        "/var/lib/nando-wave/transition",
+    );
+    let candidate_path = env_path_join(
+        "NANDO_RESPONSE_ADMISSION_CANDIDATES",
+        &state_dir,
+        "response-admission-candidates.cbor",
+    );
+    let registry_path = env_path_join(
+        "NANDO_RESPONSE_REGISTRY",
+        &state_dir,
+        "response-registry.json",
+    );
+    let admission_path = env_path_join(
+        "NANDO_TRANSITION_ADMISSION_JSON",
+        &state_dir,
+        "admission.json",
+    );
+    let authority_candidate_path = env_path_join(
+        "NANDO_RESPONSE_AUTHORITY_CANDIDATE",
+        &state_dir,
+        "response-authority-candidate.json",
+    );
+    let report_path = env_path_join(
+        "NANDO_RESPONSE_ADMISSION_REPORT",
+        &state_dir,
+        "response-admission-controller-report.json",
+    );
+    let marker_path = state_dir.join("response-admission-controller.marker.json");
+    let gate_path = env_path(
+        "NANDO_LIVE_TRANSITION_GATE_BUILD",
+        "/opt/nando-wave/bin/nando-live-transition-gate",
+    );
+    let max_age_seconds = env::var("NANDO_TRANSITION_ADMISSION_MAX_AGE_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(30)
+        .clamp(5, 3_600);
+    let bytes = fs::read(&candidate_path)
+        .map_err(|error| format!("candidate_bundle_read:{}:{error}", candidate_path.display()))?;
+    let bundle: OnlineAdmissionCandidateBundle = serde_cbor::from_slice(&bytes)
+        .map_err(|error| format!("candidate_bundle_decode:{error}"))?;
+    bundle.validate().map_err(str::to_owned)?;
+    let relation_max_future_rows = bundle
+        .relation_candidates
+        .iter()
+        .map(|candidate| candidate.future.len())
+        .max()
+        .unwrap_or(0);
+    let relation_max_runtime_parity_cases = bundle
+        .relation_candidates
+        .iter()
+        .map(|candidate| candidate.runtime_parity_cases.len())
+        .max()
+        .unwrap_or(0);
+    let collection_max_future_rows = bundle
+        .collection_candidates
+        .iter()
+        .map(|candidate| candidate.future_receipts.len())
+        .max()
+        .unwrap_or(0);
+    let collection_max_runtime_parity_cases = bundle
+        .collection_candidates
+        .iter()
+        .map(|candidate| candidate.runtime_parity_cases.len())
+        .max()
+        .unwrap_or(0);
+    let gate_sha256 = sha256_file(&gate_path, "gate_build")?;
+    let runtime_sha256 = response_runtime_contract_sha256();
+    let now_unix = unix_now();
+    let relation = build_online_admission_snapshot(
+        &bundle.relation_candidates,
+        &bundle.project_id,
+        bundle.revision,
+        now_unix,
+        max_age_seconds,
+        &gate_sha256,
+        &runtime_sha256,
+    )
+    .map_err(str::to_owned)?;
+    let collection = build_online_collection_admission_snapshot(
+        &bundle.collection_candidates,
+        &bundle.project_id,
+        bundle.revision,
+        now_unix,
+        max_age_seconds,
+        &gate_sha256,
+        &runtime_sha256,
+    )
+    .map_err(str::to_owned)?;
+    let snapshot =
+        merge_online_admission_snapshots([relation, collection].into_iter().flatten().collect())
+            .map_err(str::to_owned)?;
+    let Some(snapshot) = snapshot else {
+        let preserved_active_packages = last_known_good_package_count(
+            &registry_path,
+            &admission_path,
+            &authority_candidate_path,
+            &marker_path,
+        );
+        return write_report(
+            &report_path,
+            AdmissionControllerReport {
+                schema: "nando.response-admission-controller-report.v1",
+                verdict: "BLOCK",
+                blocker: Some("no_candidate_with_complete_runtime_parity".to_owned()),
+                candidate_revision: bundle.revision,
+                relation_candidates: bundle.relation_candidates.len(),
+                collection_candidates: bundle.collection_candidates.len(),
+                relation_max_future_rows,
+                relation_max_runtime_parity_cases,
+                collection_max_future_rows,
+                collection_max_runtime_parity_cases,
+                active_packages: preserved_active_packages,
+                last_known_good_preserved: preserved_active_packages > 0,
+                elapsed_micros: elapsed_micros(started),
+            },
+        );
+    };
+    let active_packages = snapshot.registry.packages.len();
+    ResponseExecutor::from_registry_with_admission(
+        snapshot.registry.clone(),
+        snapshot.admission.clone(),
+        &bundle.project_id,
+        &gate_sha256,
+        &runtime_sha256,
+        now_unix,
+        max_age_seconds,
+    )
+    .map_err(|error| format!("admission_self_check:{error}"))?;
+    let response_authority = &snapshot.admission.response_authority;
+    let authority_candidate = serde_json::json!({
+        "schema": "nando.response-authority-candidate.v1",
+        "authority_schema": response_authority.schema,
+        "registry_schema": response_authority.registry_schema,
+        "registry_revision": response_authority.registry_revision,
+        "registry_sha256": response_authority.registry_sha256,
+        "execution_authority": false,
+        "packages": response_authority.packages,
+        "required_gate_fields": [
+            "gate_build_sha256",
+            "runtime_build_sha256",
+            "generated_at_unix",
+            "expires_at_unix"
+        ]
+    });
+    write_json_atomic(&registry_path, &snapshot.registry, "response-registry")?;
+    write_json_atomic(&admission_path, &snapshot.admission, "response-admission")?;
+    write_json_atomic(
+        &marker_path,
+        &serde_json::json!({
+            "schema": "nando.response-admission-controller-marker.v1",
+            "candidate_revision": bundle.revision,
+            "registry_revision": snapshot.registry.revision,
+            "runtime_build_sha256": runtime_sha256,
+            "written_at_unix": now_unix,
+        }),
+        "response-admission-marker",
+    )?;
+    write_json_atomic(
+        &authority_candidate_path,
+        &authority_candidate,
+        "response-authority-candidate",
+    )?;
+    write_report(
+        &report_path,
+        AdmissionControllerReport {
+            schema: "nando.response-admission-controller-report.v1",
+            verdict: "PASS",
+            blocker: None,
+            candidate_revision: bundle.revision,
+            relation_candidates: bundle.relation_candidates.len(),
+            collection_candidates: bundle.collection_candidates.len(),
+            relation_max_future_rows,
+            relation_max_runtime_parity_cases,
+            collection_max_future_rows,
+            collection_max_runtime_parity_cases,
+            active_packages,
+            last_known_good_preserved: false,
+            elapsed_micros: elapsed_micros(started),
+        },
+    )
+}
+
+fn write_report(path: &Path, report: AdmissionControllerReport) -> Result<(), String> {
+    write_json_atomic(path, &report, "response-admission-report")
+}
+
+fn write_json_atomic(path: &Path, value: &impl Serialize, stem: &str) -> Result<(), String> {
+    let bytes =
+        serde_json::to_vec_pretty(value).map_err(|error| format!("{stem}_encode:{error}"))?;
+    write_atomic(path, &bytes, stem)
+}
+
+fn write_atomic(path: &Path, bytes: &[u8], stem: &str) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("{stem}_parent_missing"))?;
+    fs::create_dir_all(parent).map_err(|error| format!("{stem}_parent_create:{error}"))?;
+    let temporary = parent.join(format!(
+        ".{stem}.{}.{}.tmp",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    let result = (|| -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .map_err(|error| format!("{stem}_temp_create:{error}"))?;
+        file.write_all(bytes)
+            .map_err(|error| format!("{stem}_temp_write:{error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("{stem}_temp_sync:{error}"))?;
+        fs::rename(&temporary, path).map_err(|error| format!("{stem}_rename:{error}"))?;
+        fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| format!("{stem}_directory_sync:{error}"))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn last_known_good_package_count(
+    registry_path: &Path,
+    admission_path: &Path,
+    authority_candidate_path: &Path,
+    marker_path: &Path,
+) -> usize {
+    if !admission_path.is_file() || !authority_candidate_path.is_file() || !marker_path.is_file() {
+        return 0;
+    }
+    fs::read(registry_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<ResponseRegistry>(&bytes).ok())
+        .filter(|registry| registry.validate().is_ok())
+        .map_or(0, |registry| registry.packages.len())
+}
+
+fn sha256_file(path: &Path, label: &str) -> Result<String, String> {
+    fs::read(path)
+        .map(|bytes| sha256_bytes(&bytes))
+        .map_err(|error| format!("{label}_read:{}:{error}", path.display()))
+}
+
+fn env_path(name: &str, default: &str) -> PathBuf {
+    env::var_os(name).map_or_else(|| PathBuf::from(default), PathBuf::from)
+}
+
+fn env_path_join(name: &str, parent: &Path, default: &str) -> PathBuf {
+    env::var_os(name).map_or_else(|| parent.join(default), PathBuf::from)
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn elapsed_micros(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX)
+}

@@ -3,6 +3,12 @@ members = [
     "crates/nando-core",
     "crates/nando-cli",
     "crates/nando-eval",
+    "crates/nando-transition-actor",
+    "crates/nando-transition-inducer",
+    "crates/nando-gateway-control",
+    "crates/nando-transition-serving",
+    "crates/nando-response-actor",
+    "crates/nando-expression-runtime",
 ]
 resolver = "3"
 

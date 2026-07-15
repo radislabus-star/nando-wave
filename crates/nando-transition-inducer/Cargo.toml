@@ -1,0 +1,18 @@
+[package]
+name = "nando-transition-inducer"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nando-core = { path = "../nando-core" }
+nando-transition-actor = { path = "../nando-transition-actor" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+time = { version = "0.3", features = ["parsing"] }
+
+[lints]
+workspace = true
