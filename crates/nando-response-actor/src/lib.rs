@@ -1,5 +1,6 @@
 mod admission_bundle;
 mod authority;
+mod backward_wave;
 mod causal;
 mod cegis;
 mod collection_synthesis;
@@ -28,6 +29,7 @@ mod semantic_alias;
 mod synthesis;
 mod teacher_join;
 mod training_types;
+mod verified_delta;
 mod verifier;
 mod version_space;
 
@@ -51,6 +53,7 @@ pub use authority::{
     response_package_digest, response_proof_receipts_digest, response_registry_digest,
     response_runtime_contract_sha256, sha256_bytes, valid_nonzero_sha256,
 };
+pub use backward_wave::{BackwardWave, BackwardWaveError, BackwardWaveUpdate};
 pub use causal::{
     GroundedWaveCausalReport, evaluate_grounded_wave_causality,
     evaluate_grounded_wave_causality_refs,
@@ -197,6 +200,11 @@ pub use training_types::{
     TEACHER_OUTCOME_SCHEMA_V1, TEACHER_TRANSITION_SCHEMA_V1, TeacherActionAst, TeacherOutcome,
     TeacherTransition, TeacherVerifierEvidence, relation_atom_is_teacher_only,
     relation_frame_learning_digest,
+};
+pub use verified_delta::{
+    TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1, TypedExecutionStage, TypedExecutionStageReceipt,
+    VERIFIED_DELTA_MAX_RELATIONS, VERIFIED_DELTA_RECEIPT_SCHEMA_V1, VerifiedDeltaError,
+    VerifiedDeltaOutcome, VerifiedDeltaReceipt, VerifiedDeltaRelation, VerifiedDeltaRelationState,
 };
 pub use verifier::{ResponseVerificationError, verify_response, verify_response_independently};
 pub use version_space::{
