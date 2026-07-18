@@ -25,7 +25,7 @@ use crate::{
 use crate::online_subcenter::OnlineSubcenterDiscovery;
 
 const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 65;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 66;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 
@@ -1287,6 +1287,8 @@ impl OnlineResponseMiner {
                     preserved_self_training.prepare_effect_law_migration();
                 } else if checkpoint.bucket_strategy_version < 65 {
                     preserved_self_training.prepare_phase_route_migration();
+                } else if checkpoint.bucket_strategy_version < 66 {
+                    preserved_self_training.prepare_teacher_signature_migration()?;
                 }
                 let support_frames =
                     preserved_self_training.bounded_teacher_frames_for_wave_migration();

@@ -434,8 +434,15 @@ impl StreamingSelfTrainingState {
     pub fn prepare_teacher_signature_migration(&mut self) -> Result<(), String> {
         self.discovery
             .enforce_runtime_limits(FamilyDiscoveryConfig::default());
-        self.discovery
-            .enrich_action_schemas(&self.runtime_parity_cases);
+
+        // Historical parity material may still use the pre-canonical frame ID.
+        // Rekey it before enriching action schemas, and include the bounded
+        // replay receipts so migration does not discard independently verified
+        // support merely because it predates the live parity reservoir.
+        self.repair_parity_frames_from_discovery();
+        let mut parity_cases = self.replay_support_parity_cases.clone();
+        parity_cases.extend(self.runtime_parity_cases.clone());
+        self.discovery.enrich_action_schemas(&parity_cases);
         self.discovery.recanonicalize_teacher_signatures()?;
         self.repair_parity_frames_from_discovery();
         self.cegis.prepare_strategy_migration();
@@ -2550,6 +2557,67 @@ mod tests {
                 .get(&canonical_training.frame_id_sha256),
             Some(&canonical_training)
         );
+    }
+
+    #[test]
+    fn teacher_signature_migration_rekeys_replay_before_schema_enrichment() {
+        let mut transition = continuation_transition(
+            43,
+            "wait",
+            "cell_id",
+            "Script running with cell ID ",
+            "continue",
+        );
+        for atom in &mut transition.outcome.action.atoms {
+            if let crate::RelationAtom::ActionRoleArgument { value_type, .. } = atom {
+                *value_type = None;
+            }
+        }
+        let canonical = transition.as_training_relation_frame();
+        let canonical_id = canonical.frame_id_sha256.clone();
+        let mut state = StreamingSelfTrainingState::default();
+        assert_eq!(state.discovery.observe_transition(&transition), Ok(true));
+
+        let stale_id = "f".repeat(64);
+        let mut stale_frame = canonical.clone();
+        stale_frame.frame_id_sha256.clone_from(&stale_id);
+        let mut parity = transition
+            .runtime_parity_case
+            .take()
+            .expect("runtime parity case");
+        parity.evidence_ref_sha256.clone_from(&stale_id);
+        state
+            .replay_support_parity_cases
+            .insert(stale_id.clone(), parity);
+        state
+            .replay_support_parity_frames
+            .insert(stale_id.clone(), stale_frame);
+
+        state
+            .prepare_teacher_signature_migration()
+            .expect("teacher signature migration");
+
+        assert!(
+            state
+                .replay_support_parity_cases
+                .contains_key(&canonical_id)
+        );
+        assert!(!state.replay_support_parity_cases.contains_key(&stale_id));
+        let migrated = state
+            .discovery
+            .pool_snapshots()
+            .into_iter()
+            .flat_map(|pool| pool.positives)
+            .find(|frame| frame.frame_id_sha256 == canonical_id)
+            .expect("migrated canonical frame");
+        assert!(migrated.atoms.iter().any(|atom| matches!(
+            atom,
+            crate::RelationAtom::ActionRoleArgument {
+                name,
+                value_type: Some(crate::AtomValueType::String),
+                ..
+            } if name == "cell_id"
+        )));
     }
 
     #[test]
