@@ -169,23 +169,43 @@ independent verification and admission
 
 ## 4. The Required Feedback Loop
 
-The Wave must receive both reinforcement and contradiction:
+Every evaluated outcome must first be classified. It is incorrect to collapse
+all non-PASS outcomes into one negative class:
 
 ```text
 verified positive
 -> reinforce center / law
 
-verified counterexample
--> invalidate unsafe winner
+repeated applicability negative
+-> accumulate evidence from independent sessions
 -> derive an action-neutral distinguishing relation
--> form anti-center or split into applicability subcenters
+-> form an anti-center
+-> narrow the route without changing the actor law
+
+hard actor / verifier / teacher contradiction
+-> invalidate the unsafe winner
+-> split into applicability subcenters, repair, or revoke
 -> begin a new frozen generation
+
+timeout / unavailable environment / missing evaluator / not evaluated
+-> censored UNKNOWN
+-> do not reinforce a center
+-> do not create an anti-center
+-> do not count as evidence against the law
 ```
 
 This is the current decisive research/product boundary. A system that counts a
-negative but does not feed it back into the field is not the intended learning
-loop. A clean law needs both a positive center and a learned boundary against
-negative states.
+repeatable applicability negative but does not feed it back into the field is
+not the intended learning loop. A clean law needs both a positive center and a
+learned boundary against negative states. Conversely, poisoning that boundary
+with infrastructure failures or unknown outcomes is also a learning failure.
+
+An anti-center means repeatable *non-applicability*, not arbitrary failure. It
+requires independent-session evidence and an observable pre-decision relation
+that distinguishes the negative surface from positive support. A hard semantic
+contradiction means that the current operator law or its partition is unsafe;
+it must cause repair, split, or revocation rather than being hidden behind a
+broader anti-center.
 
 The next meaningful live progression is:
 
@@ -199,6 +219,35 @@ live counterexample
 
 If no action-neutral pre-decision distinction exists, the correct result is
 `ABSTAIN`. Never invent a discriminator from the future action.
+
+### Three complementary intelligence levels
+
+These are distinct responsibilities, not competing implementations:
+
+```text
+latent Wave memory
+  recognizes state and stores interference/phase structure
+
+self-correcting Wave operator
+  binds a known law to an actor and learns when it is applicable
+
+external causal law discovery (for example, MICRO-12 research)
+  investigates unresolved contradictions and proposes genuinely new actions
+```
+
+Their loop is:
+
+```text
+external discovery proposes a new verified law
+-> Wave compresses repeated experience into centers
+-> actor executes the law
+-> verifier classifies the consequence
+-> Wave refines applicability
+-> unexplained hard contradiction returns to causal discovery
+```
+
+The external researcher is not part of the hot runtime and has no execution
+authority. The latent Wave does not invent arbitrary new actions by itself.
 
 ## 5. Runtime Boundary
 
@@ -231,20 +280,24 @@ core. Never turn discovery into selection among a few pre-named programs.
 2. Future action/response is forbidden in runtime routing and guards.
 3. Field names, function names, and manual family IDs are not semantic
    authority; transfer must survive renamed surfaces.
-4. Negatives must update anti-centers, applicability subcenters, or CEGIS
-   repair. Merely recording a rejection is insufficient.
-5. `false_accepts = 0` is a hard requirement.
-6. `runtime_parity_mismatches = 0` is a hard requirement.
-7. Every local accept has an independent verifier receipt.
-8. The miner emits evidence-bearing candidates; external admission grants
+4. Repeatable applicability negatives must update anti-centers. Hard semantic
+   contradictions must trigger applicability subcenters, CEGIS repair, or
+   revocation. Merely recording either outcome is insufficient.
+5. Censored outcomes such as timeout, unavailable environment, missing
+   evaluator, or `NOT_EVALUATED` are unknown evidence. They must never train a
+   positive center or anti-center.
+6. `false_accepts = 0` is a hard requirement.
+7. `runtime_parity_mismatches = 0` is a hard requirement.
+8. Every local accept has an independent verifier receipt.
+9. The miner emits evidence-bearing candidates; external admission grants
    authority.
-9. Frozen future is event-time independent from support. Never fabricate or
+10. Frozen future is event-time independent from support. Never fabricate or
    backfill it from support.
-10. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
-11. State is bounded and compact. Normal startup must not rescan unbounded
+11. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
+12. State is bounded and compact. Normal startup must not rescan unbounded
     history, and the hot path must not append unbounded payloads.
-12. Serving and learning remain streaming, event-driven Rust with low idle CPU.
-13. One algorithmic mechanism changes at a time; refactoring and scoring changes
+13. Serving and learning remain streaming, event-driven Rust with low idle CPU.
+14. One algorithmic mechanism changes at a time; refactoring and scoring changes
     are separate commits.
 
 Accounting identities must have no silent loss:
@@ -314,6 +367,10 @@ These mistakes have already damaged coverage and must not be repeated:
   surface-bound programs, support such as 12/32 or 13/32, and loss of transfer.
 - Counting counterexamples without feeding them into Wave repair. Result: no
   applicability boundary and no live anti-center.
+- Treating timeout, unavailable environment, or unevaluated work as negative
+  knowledge. Result: a poisoned anti-center that learns infrastructure noise.
+- Hiding a hard actor/verifier/teacher contradiction inside a broad anti-center.
+  Result: the unsafe operator survives instead of being split or revoked.
 - Merging all actions globally without preserving structural role alignment.
   Result: inconsistent roles and unsynthesizable families.
 - Deduplicating packages only by actor text while ignoring phase centers,
