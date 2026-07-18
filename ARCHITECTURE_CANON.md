@@ -765,14 +765,30 @@ Potential coverage is secondary and is never counted as actual CPU savings.
 
 ### Implementation status boundary
 
-This section is the canonical target core, not a claim that every component is
-already complete. The repository already contains phase centers, negative Wave
-training, anti-wave scoring, CEGIS repair, typed actor/verifier pieces, frozen
-future, and external admission. `TransferableOperatorV2`, the complete typed
-receipt chain, production `VerifiedDeltaReceipt`, immutable generational
-`BackwardWave`, `CandidateCubeField`, `OperatorGrokkingConsolidator`, cleanup of
-exact episodic authority, and the five-contour proof remain implementation
-obligations until verified by artifacts and live runtime evidence.
+The pure architectural core is now implemented:
+
+```text
+crates/nando-core/src/wave/operator_circuit.rs
+crates/nando-core/src/wave/operator_grokking.rs
+crates/nando-core/src/wave/operator_grokking_proof.rs
+crates/nando-core/src/wave/operator_page.rs
+crates/nando-response-actor/src/verified_delta.rs
+crates/nando-response-actor/src/backward_wave.rs
+crates/nando-response-actor/src/operator_generation.rs
+crates/nando-response-actor/src/transferable_operator_v2.rs
+crates/nando-core/tests/operator_grokking_causal.rs
+```
+
+It includes bounded competing circuits, whole-circuit phase consolidation,
+strict proof states, the 4032-byte operator page, typed verified residuals,
+immutable `g -> g+1` feedback, actor/verifier binding, and matched causal tests.
+
+This is not yet a production grokking claim. Automatic emission of all typed
+stage receipts from live actor/verifier execution, bounded streaming checkpoint
+integration, live frozen-future proof, external admission of a generated page,
+exact episodic runtime-authority cleanup, and real CPU economics remain open.
+Simple traces that already contain a complete law may train an operator, but
+they cannot satisfy the grokking claim.
 
 Canonical implementation plan:
 
