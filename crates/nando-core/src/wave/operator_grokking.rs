@@ -66,6 +66,7 @@ pub struct OperatorCircuitScore {
     pub independent_sessions: usize,
     pub relation_planes: usize,
     pub one_surface_contains_complete_circuit: bool,
+    pub relation_conflicts: usize,
     pub hard_contradictions: usize,
     pub eligible: bool,
 }
@@ -293,6 +294,7 @@ fn score_circuit(
     let mut resultant_im = 0.0;
     let mut resultant_weight = 0.0;
     let mut hard_contradictions = 0_usize;
+    let mut relation_conflicts = 0_usize;
 
     for wave in waves {
         if wave.outcome == VerifiedWaveOutcome::CensoredUnknown {
@@ -309,6 +311,7 @@ fn score_circuit(
             }
             if sample.state != relation.state {
                 wave_conflicts = wave_conflicts.saturating_add(1);
+                relation_conflicts = relation_conflicts.saturating_add(1);
                 continue;
             }
 
@@ -360,6 +363,7 @@ fn score_circuit(
         && sessions.len() >= config.min_independent_sessions
         && planes.len() >= config.min_relation_planes
         && !one_surface_contains_complete_circuit
+        && relation_conflicts == 0
         && hard_contradictions == 0;
 
     OperatorCircuitScore {
@@ -370,6 +374,7 @@ fn score_circuit(
         independent_sessions: sessions.len(),
         relation_planes: planes.len(),
         one_surface_contains_complete_circuit,
+        relation_conflicts,
         hard_contradictions,
         eligible,
     }
@@ -546,5 +551,30 @@ mod tests {
         assert_eq!(report.stage, OperatorCircuitStage::Censored);
         assert_eq!(report.semantic_waves, 0);
         assert_eq!(report.censored_waves, 1);
+    }
+
+    #[test]
+    fn one_verified_relation_conflict_blocks_crystallization() {
+        let mut field =
+            CandidateCubeField::new(7, OperatorGrokkingConfig::default()).expect("valid config");
+        field
+            .register_circuit(circuit([0.0, FRAC_PI_2, PI]))
+            .expect("correct circuit");
+        for (receipt, surface, relation_cell, angle) in [
+            (1, 101, cell(0, 0, 1), 0.0),
+            (2, 202, cell(0, 1, 2), FRAC_PI_2),
+            (3, 303, cell(1, 0, 2), PI),
+        ] {
+            field
+                .observe(wave(receipt, surface, relation_cell, angle))
+                .expect("positive wave");
+        }
+        let mut contradiction = wave(4, 404, cell(0, 0, 1), 0.0);
+        contradiction.samples[0].state = TernaryRelationState::Opposed;
+        field.observe(contradiction).expect("contradicting wave");
+
+        let report = OperatorGrokkingConsolidator::consolidate(&field);
+        assert!(report.candidate.is_none());
+        assert_eq!(report.scores[0].relation_conflicts, 1);
     }
 }
