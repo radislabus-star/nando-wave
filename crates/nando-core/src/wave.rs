@@ -92,6 +92,7 @@ mod morphology_wave;
 mod operator_circuit;
 mod operator_grokking;
 mod operator_grokking_proof;
+mod operator_page;
 mod organ;
 mod phase_center_runtime;
 mod semantic_extract;
@@ -154,6 +155,14 @@ pub use operator_grokking::{
 pub use operator_grokking_proof::{
     OperatorGrokkingAblation, OperatorGrokkingAblationReceipt, OperatorGrokkingProofStage,
     OperatorGrokkingProofTracker, ProvenOperatorGrokking,
+};
+pub use operator_page::{
+    OPERATOR_PAGE32_BYTES, OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_CUBE_BYTES,
+    OPERATOR_PAGE32_HEADER_BYTES, OPERATOR_PAGE32_MAGIC, OPERATOR_PAGE32_MAX_PLANES,
+    OPERATOR_PAGE32_MAX_ROLES, OPERATOR_PAGE32_MAX_TRANSFORMS, OPERATOR_PAGE32_PHASE_BYTES,
+    OPERATOR_PAGE32_RENDERER_BYTES, OPERATOR_PAGE32_ROLES_BYTES, OPERATOR_PAGE32_SCHEMA_VERSION,
+    OPERATOR_PAGE32_TRANSFORM_BYTES, OperatorPage32, OperatorPage32Error, OperatorPage32Header,
+    OperatorPage32Metadata, StructuralRole16, TernaryOperatorCube32, TransformOp8,
 };
 pub use organ::{
     LiveCycle, LivePrediction, LocalUpdateReport, OrganState, Stage2Organ, stage2_organ,
