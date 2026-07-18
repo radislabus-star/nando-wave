@@ -213,6 +213,69 @@ surfaces that currently fragment into separate exact programs. The miner finds
 repeated evidence; the operator is responsible for expressing and transferring
 the law.
 
+### Setun balanced ternary and the operator-state tensor
+
+Balanced ternary is a foundational representation, not an L1-only hashing
+detail. The canonical local state alphabet is:
+
+```text
+-1  negative / counter-phase / inhibitory relation
+ 0  neutral / absent / unbound relation
++1  positive / phase-aligned / excitatory relation
+```
+
+This is the Setun-inspired part of the architecture: zero is a first-class
+state, while positive and negative evidence are symmetric signed states. Wave
+accumulation may maintain bounded strength, energy, real/imaginary phase, and
+coherence around this ternary relation skeleton; those continuous or integer
+statistics do not erase the underlying `-1 / 0 / +1` semantics.
+
+A complete transferable operator cannot be stored only as one C32 or C64
+phase-center record. Those records are compact phase profiles:
+
+```text
+C32 ~= 1024 bytes per record
+C64 ~= 2048 bytes per record
+```
+
+They recognize and score an operator field, but they do not encode every role
+binding and state transformation. The full operator memory is layered:
+
+```text
+TransferableOperatorMemory
++-- C32/C64 phase profile
++-- mode / transition / interference state
++-- role and slot center pages
++-- operator-pair action matrix
+`-- TernaryOperatorStateTensor
+    `-- action_center x output_role x source_role -> signed relation state
+```
+
+Conceptually, `TernaryOperatorStateTensor` is a three-dimensional matrix of
+operator state. A sign/polarity plane may be represented as an additional
+packed coordinate. Zero relations should remain implicit so the hot runtime is
+sparse and cache-conscious rather than a giant dense allocation.
+
+The historical operator runtime represented this tensor as:
+
+```rust
+HashMap<(action_center, output_slot_id, source_slot_id, sign_key), i16>
+```
+
+where the sparse key selected action, output role, source role, and polarity,
+and the `i16` value accumulated learned binding strength. It was compiled into
+a flat role-binding table for runtime. This historical form is evidence of the
+required relation shape, not a mandate to restore the same `HashMap` storage.
+
+The current HEAD no longer contains `state_delta_role_binding_edges` in
+`WavePredictorHebbianField`. Therefore the operator-state tensor is an explicit
+restoration obligation for `TransferableOperatorV2`, not a component that may
+be assumed present because C32/C64 phase scoring still exists.
+
+`ForwardWave` reads this tensor to bind source roles into output roles.
+`BackwardWave` proposes bounded signed updates to the tensor of candidate
+generation `g+1`. It never mutates the tensor of ACTIVE generation `g`.
+
 ### ForwardWave
 
 ```text
@@ -628,6 +691,12 @@ These mistakes have already damaged coverage and must not be repeated:
   lineage, oscillation, and behavior with no frozen generation boundary.
 - Calling a counter or discrete reject list `BackwardWave` without proving a
   typed residual-to-phase update and its causal phase ablation.
+- Treating a C32/C64 phase record as the complete operator. Result: phase
+  recognition survives while role binding, transformation state, and transfer
+  capacity disappear.
+- Replacing balanced ternary operator state with unsigned presence bits. Result:
+  loss of neutral state, counter-phase symmetry, and the original Setun-inspired
+  interference semantics.
 
 ## 11. Required Protocol Before Core Changes
 
@@ -660,6 +729,8 @@ docs/NANDA_WAVE_THEOREM.md
 docs/NANDO_WAVE_SIGNAL_PATH_L1_TO_OPERATOR.md
 docs/SYMBOL_CELL8_ARCHITECTURE.md
 docs/LEXICON_FOUNDATION_V1.md
+docs/OPERATOR_PRODUCT_LINES_AND_CAPACITY.md
+docs/architecture_lineage/03_role_filler_binding.md
 docs/RISKS.md
 ```
 
