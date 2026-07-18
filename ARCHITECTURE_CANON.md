@@ -461,6 +461,64 @@ independent evidence. This prevents one failure from flipping the semantic law.
 
 ### Operator grokking: field to circuit to cube
 
+The implementation core is named and ordered exactly as follows. These names
+are lifecycle boundaries, not interchangeable labels:
+
+```text
+VerifiedPartialRelationWaves
+    from independent surfaces, roles, and planes
+              |
+              v
+CandidateCubeField
+    +-- partial operator circuits
+    +-- competing circuits
+    +-- signed amplitudes
+    +-- verified residual phases
+    `-- cross-plane relations
+              |
+              v
+OperatorGrokkingConsolidator
+    +-- global interference
+    +-- cross-plane phase locking
+    +-- whole-circuit connectivity
+    +-- circuit coherence
+    `-- margin over competing circuits
+              |
+              v
+CoherentOperatorCandidate generation g+1
+    SHADOW only; no execution authority
+              |
+              v
+TransferableOperatorV2
+    +-- RoleGraph
+    +-- RelationProgram
+    +-- TransformProgram
+    +-- CompositionDag
+    +-- RendererContract
+    `-- VerifierContract
+              |
+              v
+Frozen future + causal controls
+              |
+              v
+Exact episodic runtime-authority cleanup
+              |
+              v
+ProvenGrokking
+              |
+              v
+immutable TernaryOperatorCube + typed operator
+              |
+              v
+external admission -> ACTIVE -> CPU
+```
+
+`CoherentOperatorCandidate` means that a whole circuit has formed. It is not a
+grokking proof and has no authority. `ProvenGrokking` is a proof state granted
+only after frozen-future transfer, exact-memory cleanup, causal controls, and
+independent verification all pass. Runtime admission remains a separate later
+decision.
+
 Per-cell threshold updates are not grokking:
 
 ```text
