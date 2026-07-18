@@ -18,6 +18,7 @@ mod online_checkpoint;
 mod online_collection;
 mod online_state;
 mod online_subcenter;
+mod operator_generation;
 mod opportunity;
 mod outcome_example;
 mod output_graph;
@@ -141,6 +142,9 @@ pub use online_state::{
     MinerSignalStageReport, MinerSignalTreeReport, SELF_TRAINING_STATE_SCHEMA_V2,
     SELF_TRAINING_STATE_SCHEMA_V3, SelfTrainingAdmissionCohort, SelfTrainingGenerationReport,
     SelfTrainingStateReport, StreamingSelfTrainingState,
+};
+pub use operator_generation::{
+    AdmissionReadyOperatorGeneration, OperatorGenerationError, OperatorGenerationFirewall,
 };
 pub use opportunity::{
     M3WindowReport, OPPORTUNITY_BOARD_SCHEMA_V2, OPPORTUNITY_BOARD_SCHEMA_V3, OpportunityBoard,
