@@ -11,6 +11,19 @@ That document is the architectural authority for this repository. Existing
 research notes and reports are supporting evidence; they do not override the
 canon silently.
 
+## Critical Grokking Warning
+
+The operator circuit is what groks. Cross-plane phase coherence is the birth
+mechanism and order parameter. `TernaryOperatorCube` stores the crystallized
+result. Per-cell thresholds, score growth, anti-center creation, and package
+promotion are not grokking by themselves.
+
+Correct inaccurate wording immediately, including wording used by the user or
+the current agent. Never preserve agreement at the cost of turning the Wave
+architecture into an ordinary rule table. A grokking claim requires whole-
+circuit formation, heldout transfer, exact-memory cleanup, causal phase
+ablations, independent verification, and zero false accepts.
+
 ## Required Change Protocol
 
 Before editing core behavior:

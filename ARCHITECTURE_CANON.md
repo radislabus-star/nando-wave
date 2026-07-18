@@ -8,6 +8,75 @@ This file exists to prevent a locally reasonable refactor from destroying the
 project's actual mechanism. Read it before editing discovery, learning, Wave,
 actor, verifier, admission, serving, storage, or economics code.
 
+## WARNING: Do Not Replace Grokking With A Table
+
+This distinction is critical. Incorrect language here leads directly to an
+incorrect architecture.
+
+```text
+what groks:       the whole connected operator circuit
+birth mechanism: cross-plane phase coherence and phase locking
+order parameter: circuit coherence and its margin over competing circuits
+stored result:    crystallized TernaryOperatorCube + typed operator program
+```
+
+The phase does not "grok" by itself. The cube does not "grok" by itself. The
+operator circuit groks **through** phase coherence:
+
+```text
+partial relation waves from independent surfaces
+-> agreement across surfaces, roles, and relation planes
+-> phase locking
+-> abrupt circuit-coherence transition
+-> one connected typed operator
+-> transfer to frozen future
+-> exact episodic memory cleanup
+```
+
+Required wording:
+
+```text
+Произошёл фазовый переход к когерентному операторному контуру.
+
+Коротко:
+Оператор грокнулся через межплоскостную фазовую когерентность.
+
+The operator underwent a phase transition into a coherent circuit.
+
+Short form:
+The operator grokked through cross-plane phase coherence.
+```
+
+Forbidden claims:
+
+```text
+"coherence grokked"
+"the cube grokked"
+"three votes switched a cell, therefore grokking"
+"the score crossed a threshold, therefore grokking"
+"an anti-center appeared, therefore grokking"
+"the package became ACTIVE, therefore grokking"
+```
+
+Those events may be ordinary learning, storage, routing, or lifecycle progress.
+They are not sufficient evidence of grokking.
+
+A grokking claim is allowed only when all of these are demonstrated:
+
+1. No individual example contains the complete operator circuit.
+2. Correct fragments align across independent surfaces or repositories.
+3. One circuit obtains an abrupt coherence margin over matched competitors.
+4. The resulting typed operator transfers to a new frozen surface.
+5. Exact episodic runtime authority is removed and transfer remains unchanged.
+6. No-phase, shuffled-phase/residual, magnitude-only, and matched-random controls
+   destroy circuit formation or force a tie/`ABSTAIN`.
+7. An independent verifier confirms execution with `false_accepts = 0`.
+
+Every agent must correct this terminology immediately when the user, another
+agent, documentation, or the agent itself uses it incorrectly. Politeness must
+not preserve a technically false grokking claim. Without this boundary, Nando
+Wave becomes a rule table that imitates a thinking wave machine.
+
 ## 1. What This Project Is
 
 Nando Wave is a cache-conscious wave memory that learns transferable actions
