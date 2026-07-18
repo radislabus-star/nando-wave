@@ -219,16 +219,18 @@ Balanced ternary is a foundational representation, not an L1-only hashing
 detail. The canonical local state alphabet is:
 
 ```text
--1  negative / counter-phase / inhibitory relation
- 0  neutral / absent / unbound relation
-+1  positive / phase-aligned / excitatory relation
+-1  relation opposed or forbidden
+ 0  relation absent
++1  relation supported
 ```
 
 This is the Setun-inspired part of the architecture: zero is a first-class
-state, while positive and negative evidence are symmetric signed states. Wave
-accumulation may maintain bounded strength, energy, real/imaginary phase, and
-coherence around this ternary relation skeleton; those continuous or integer
-statistics do not erase the underlying `-1 / 0 / +1` semantics.
+state, while supported and opposed relations are symmetric signed states. The
+axes define direction: reversing a relation swaps `output_role` and
+`source_role`; it does not negate the cell. Wave accumulation may maintain
+bounded strength, energy, real/imaginary phase, and coherence around this
+ternary relation skeleton; those statistics do not erase the underlying
+`-1 / 0 / +1` semantics.
 
 A complete transferable operator cannot be stored only as one C32 or C64
 phase-center record. Those records are compact phase profiles:
@@ -247,14 +249,25 @@ TransferableOperatorMemory
 +-- mode / transition / interference state
 +-- role and slot center pages
 +-- operator-pair action matrix
-`-- TernaryOperatorStateTensor
-    `-- action_center x output_role x source_role -> signed relation state
+`-- TernaryOperatorCube
+    `-- relation_plane x output_role x source_role -> ternary relation state
 ```
 
-Conceptually, `TernaryOperatorStateTensor` is a three-dimensional matrix of
-operator state. A sign/polarity plane may be represented as an additional
-packed coordinate. Zero relations should remain implicit so the hot runtime is
-sparse and cache-conscious rather than a giant dense allocation.
+Conceptually, `TernaryOperatorCube` is a three-dimensional relational field of
+operator state. Relation kind is a real axis; sign is the value stored in the
+cell, not another semantic axis. Its canonical two-bit encoding is:
+
+```text
+00 =  0
+01 = +1
+10 = -1
+11 = reserved and invalid in an admitted package
+```
+
+The cube is nonlinear memory and applicability structure. It does not replace
+the typed transform program. Pairwise role relations alone cannot express a
+multi-role computation such as filtering a collection by a predicate and then
+aggregating the selected values.
 
 The historical operator runtime represented this tensor as:
 
@@ -272,9 +285,111 @@ The current HEAD no longer contains `state_delta_role_binding_edges` in
 restoration obligation for `TransferableOperatorV2`, not a component that may
 be assumed present because C32/C64 phase scoring still exists.
 
-`ForwardWave` reads this tensor to bind source roles into output roles.
-`BackwardWave` proposes bounded signed updates to the tensor of candidate
-generation `g+1`. It never mutates the tensor of ACTIVE generation `g`.
+### Compact roles and typed transforms
+
+The hot role table uses structural identity only:
+
+```rust
+struct StructuralRole16 {
+    type_class: u8,
+    cardinality_class: u8,
+    temporal_class: u8,
+    relation_flags: u8,
+    phase_center: u16,
+    selector_center: u16,
+    constraint_mask: u32,
+    role_signature_hash: u32,
+}
+```
+
+`role_signature_hash` is derived only from type, cardinality, relations,
+temporal position, and structural constraints. Repository identity, source
+surface, field names, and provenance are forbidden inputs. Provenance remains
+in cold proof receipts.
+
+Exact multi-role semantics is executed by a bounded typed block:
+
+```rust
+struct TransformOp8 {
+    opcode: u8,
+    output: u8,
+    source_a: u8,
+    source_b: u8,
+    parameter: u16,
+    flags: u16,
+}
+```
+
+Sixteen operations require 128 bytes. The cube says which structural relations
+are supported or opposed; `TransformProgram` says exactly what deterministic
+computation to execute. Neither field names nor pre-named traffic families are
+semantic authority.
+
+### OperatorPage32 budget
+
+The canonical hot C32 package fits in one 4 KiB page:
+
+```text
+OperatorPage32
++-- Header64                 64 B
++-- PhaseProfile1024       1024 B
++-- StructuralRoles512     512 B
++-- TernaryCube2048       2048 B
++-- TransformProgram128     128 B
++-- CompositionDag128       128 B
+`-- RendererProgram128      128 B
+                            ------
+                              4032 B
+```
+
+The verifier contract and proof lineage are bound by hashes in the header and
+stored outside the hot page. They remain mandatory authority; moving them cold
+does not let the actor authorize itself.
+
+For C64, each relation plane uses bitmap-addressed sparse tiles:
+
+```text
+u64 present_tiles
++ packed sequence of 16-byte tiles
+
+one tile = 8 x 8 ternary cells = 128 bits = 16 bytes
+```
+
+The tile coordinate is its bit position, so individual tile headers are not
+stored. This preserves exact dense/sparse parity while keeping typical C64
+operators in the expected few-KiB range.
+
+### Generational tensor updates
+
+`ForwardWave` reads the cube and typed program to bind and transform roles.
+`BackwardWave` never rewrites the ACTIVE cube:
+
+```text
+immutable Cube generation g
+-> typed signed residual
+-> CubeEvidenceAccumulator
+-> candidate Cube generation g+1
+-> replay / frozen future / ablation
+-> admission
+```
+
+For core relation planes, a contradiction to `+1` becomes unresolved and
+triggers split or relearning before any polarity change. Direct learned
+opposition is primarily allowed in the applicability plane after repeated
+independent evidence. This prevents one failure from flipping the semantic law.
+
+### Mandatory compact-operator tests
+
+```text
+renamed surface       -> identical cube hash
+permuted roles        -> canonical cube
+dense vs sparse       -> exact parity
+reserved 11           -> package rejected
+symmetric bindings    -> ABSTAIN
+restart               -> identical decision
+shuffled residual     -> causal degradation
+false accepts         -> 0
+```
 
 ### ForwardWave
 
