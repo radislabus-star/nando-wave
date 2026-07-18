@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE_DIR="${NANDO_EXPRESSION_SHADOW_DIR:-/var/lib/nando-wave/expression-shadow}"
+SOURCE="${NANDO_EXPRESSION_SOURCE:-/var/lib/nando-wave/transition/live-transitions.jsonl}"
+VERIFIER_BIN="${NANDO_EXPRESSION_FUTURE_VERIFIER_BIN:-/opt/nando-wave/bin/nando-expression-future-verify}"
+CANDIDATE="$STATE_DIR/candidate.json"
+OUTPUT="$STATE_DIR/future.json"
+TEMPORARY="$STATE_DIR/future.json.next"
+
+[[ -x "$VERIFIER_BIN" ]]
+[[ -f "$CANDIDATE" ]]
+"$VERIFIER_BIN" "$CANDIDATE" "$SOURCE" > "$TEMPORARY"
+jq -e '
+  .schema == "nando.expression-post-candidate-future.v1"
+  and (.verdict == "PASS" or .verdict == "WATCH")
+  and .execution_authority == false
+  and .contract_bound == true
+  and .wrong == 0
+  and .malformed_rows == 0
+' "$TEMPORARY" >/dev/null
+mv -f "$TEMPORARY" "$OUTPUT"
+jq '{schema,verdict,execution_authority,future_rows,correct,wrong,abstain,minimum_future_rows}' "$OUTPUT"
+

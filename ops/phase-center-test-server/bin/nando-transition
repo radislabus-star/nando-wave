@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly BASE_URL="${NANDO_TRANSITION_BASE_URL:-http://127.0.0.1:8787/v2}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  nando-transition execute < request.json
+  nando-transition observe < applied-result.json
+
+execute input:
+  {"before": {...}, "action": {...}}
+
+observe input:
+  {
+    "before": {...}, "action": {...}, "after": {...},
+    "evidence_source": "application_state|tool_result|environment_snapshot",
+    "evidence_verifier": "verifier-name",
+    "trace_id": "optional",
+    "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+  }
+EOF
+}
+
+[[ $# -eq 1 ]] || { usage >&2; exit 2; }
+command="$1"
+input="$(cat)"
+jq -e . >/dev/null <<<"${input}" || { printf '%s\n' 'invalid JSON' >&2; exit 2; }
+
+case "${command}" in
+  execute)
+    payload="$(jq -c '{schema:"nando.transition-execute.v1", before, action}' <<<"${input}")"
+    curl -sS \
+      -H 'content-type: application/json' \
+      -X POST "${BASE_URL}/transitions/execute" \
+      --data-binary "${payload}"
+    ;;
+  observe)
+    jq -e '
+      has("before") and has("action") and has("after")
+      and (.evidence_source | type == "string" and length > 0)
+      and (.evidence_verifier | type == "string" and length > 0)
+    ' >/dev/null <<<"${input}" || { printf '%s\n' 'missing grounded observation fields' >&2; exit 2; }
+    receipt="$(python3 -c '
+import hashlib, json, sys
+row = json.load(sys.stdin)
+material = json.dumps({
+    "before": row["before"],
+    "action": row["action"],
+    "after": row["after"],
+    "evidence_source": row["evidence_source"],
+    "evidence_verifier": row["evidence_verifier"],
+}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+print(hashlib.sha256(material).hexdigest())
+' <<<"${input}")"
+    payload="$(jq -c --arg receipt "${receipt}" '{
+      schema:"nando.transition-observation.v1",
+      trace_id:(.trace_id // null),
+      before,
+      action,
+      after,
+      evidence:{
+        source:.evidence_source,
+        verifier:.evidence_verifier,
+        receipt_sha256:$receipt
+      },
+      usage:(.usage // {})
+    }' <<<"${input}")"
+    curl -sS \
+      -H 'content-type: application/json' \
+      -X POST "${BASE_URL}/transitions/observe" \
+      --data-binary "${payload}"
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

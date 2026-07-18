@@ -13,6 +13,8 @@ METRICS_JSON="${NANDO_METRICS_SNAPSHOT_JSON:-/var/lib/nando-wave/streaming/metri
 READINESS_JSON="${NANDO_READINESS_REPORT:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.readiness.json}"
 PROMOTION_JSON="${NANDO_LOCAL_ACCEPT_PROMOTION_REPORT:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.local-accept-promotion.json}"
 VERIFY_JSON="${NANDO_VERIFY_REPORT:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.test-server-verify.json}"
+TYPED_ACTOR_CMD="${NANDO_TYPED_ACTOR_CMD:-/opt/nando-wave/bin/nando-transition-actor-exec}"
+TYPED_ACTOR_PACKAGE="${NANDO_TYPED_ACTOR_PACKAGE:-/opt/nando-wave/ops/phase-center-test-server/packages/rsmod-portable-v1.json}"
 
 emit_decline() {
   local reason="$1"
@@ -130,6 +132,36 @@ emit_server_status() {
     + " report=" + input_filename
   '
 }
+
+request_left_trimmed="${request#"${request%%[![:space:]]*}"}"
+if [[ "${request_left_trimmed:0:1}" == "{" \
+  && "${request}" == *'"nando.transition-request.v1"'* ]] \
+  && jq -e '.schema == "nando.transition-request.v1"' <<<"${request}" >/dev/null 2>&1; then
+  if [[ ! -x "${TYPED_ACTOR_CMD}" || ! -r "${TYPED_ACTOR_PACKAGE}" ]]; then
+    emit_decline "typed_actor_runtime_unavailable"
+    exit 0
+  fi
+  actor_output="$(${TYPED_ACTOR_CMD} --package "${TYPED_ACTOR_PACKAGE}" <<<"${request}" 2>/dev/null || true)"
+  if ! jq -e '
+    type == "object"
+    and (.local_accept | type == "boolean")
+    and (.verifier_ok | type == "boolean")
+    and ((.false_accepts // 0) == 0)
+    and (.reason | type == "string")
+    and (if .local_accept then
+      .verifier_ok == true
+      and (.route | startswith("typed_transition:"))
+      and (.response | type == "string")
+    else
+      .verifier_ok == false
+    end)
+  ' <<<"${actor_output}" >/dev/null 2>&1; then
+    emit_decline "typed_actor_protocol_invalid"
+    exit 0
+  fi
+  printf '%s\n' "${actor_output}"
+  exit 0
+fi
 
 case "${normalized}" in
   "nando health"|"nando:health"|"nando gateway health"|"nando-gateway health")

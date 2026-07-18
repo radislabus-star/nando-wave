@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 
 mod args;
+mod artifact_budget;
 mod bench;
 mod chat0_cmd;
 mod help;
@@ -228,6 +229,7 @@ use snapshot_io::{read_snapshot, save_snapshot};
 use status::{print_organ128_plan, print_status, print_wave_tick};
 
 fn main() -> ExitCode {
+    let _artifact_budget = artifact_budget::ArtifactBudgetGuard::start();
     let mut args = std::env::args();
     let _bin = args.next();
     let command = args.next();

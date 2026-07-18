@@ -198,6 +198,7 @@ pub fn relation_atom_is_teacher_only(atom: &RelationAtom) -> bool {
             | RelationAtom::ActionJsonResultProjection
             | RelationAtom::ActionValueProjection { .. }
             | RelationAtom::ActionStatusProjection { .. }
+            | RelationAtom::ActionPlanAdvance
             | RelationAtom::ReconstructedClientCapabilityAtom { .. }
             | RelationAtom::ResponseShape { .. }
     )

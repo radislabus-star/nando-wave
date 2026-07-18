@@ -1,0 +1,255 @@
+{
+  "schema": "nando.transition-package.v1",
+  "package_id": "rsmod-portable-v1-20260710",
+  "programs": {
+    "append_record": {
+      "schema": "nando.transition-program.v1",
+      "action_kind": "append_record",
+      "operation": {
+        "op": "append_record",
+        "record_bindings": {
+          "count": "record.count",
+          "id": "record.id",
+          "owner": "record.owner",
+          "status": "record.status"
+        }
+      },
+      "slot_types": {
+        "record.count": "number",
+        "record.id": "string",
+        "record.owner": "string",
+        "record.status": "string"
+      }
+    },
+    "delete_record": {
+      "schema": "nando.transition-program.v1",
+      "action_kind": "delete_record",
+      "operation": {
+        "op": "delete_record",
+        "match_field": "id",
+        "target_slot": "target"
+      },
+      "slot_types": {"target": "string"}
+    },
+    "increment_field": {
+      "schema": "nando.transition-program.v1",
+      "action_kind": "increment_field",
+      "operation": {
+        "op": "increment_field",
+        "match_field": "id",
+        "target_slot": "target",
+        "target_field": "count",
+        "amount_slot": "amount"
+      },
+      "slot_types": {
+        "amount": "number",
+        "target": "string"
+      }
+    },
+    "set_field": {
+      "schema": "nando.transition-program.v1",
+      "action_kind": "set_field",
+      "operation": {
+        "op": "set_field",
+        "match_field": "id",
+        "target_slot": "target",
+        "target_field": "status",
+        "value_slot": "value"
+      },
+      "slot_types": {
+        "target": "string",
+        "value": "string"
+      }
+    }
+  },
+  "adapters": {
+    "crm_list": {
+      "name": "crm_list",
+      "layout": "list",
+      "root_path": ["workspace", "leads"],
+      "field_map": {
+        "id": "lead_id",
+        "status": "stage",
+        "owner": "rep",
+        "count": "touches"
+      },
+      "action_kind_path": ["command"],
+      "action_rules": [
+        {
+          "concrete_kind": "advance",
+          "canonical_kind": "set_field",
+          "slot_paths": {"target": ["lead"], "value": ["stage"]},
+          "slot_constants": {"field": "status"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "touch",
+          "canonical_kind": "increment_field",
+          "slot_paths": {"target": ["lead"], "amount": ["by"]},
+          "slot_constants": {"field": "count"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "new_lead",
+          "canonical_kind": "append_record",
+          "slot_paths": {},
+          "slot_constants": {},
+          "record_paths": {
+            "id": ["payload", "lead_id"],
+            "status": ["payload", "stage"],
+            "owner": ["payload", "rep"],
+            "count": ["payload", "touches"]
+          }
+        },
+        {
+          "concrete_kind": "drop",
+          "canonical_kind": "delete_record",
+          "slot_paths": {"target": ["lead"]},
+          "slot_constants": {},
+          "record_paths": {}
+        }
+      ]
+    },
+    "incident_list": {
+      "name": "incident_list",
+      "layout": "list",
+      "root_path": ["payload", "incidents"],
+      "field_map": {
+        "id": "incident_no",
+        "status": "phase",
+        "owner": "responder",
+        "count": "attempts"
+      },
+      "action_kind_path": ["event"],
+      "action_rules": [
+        {
+          "concrete_kind": "move_phase",
+          "canonical_kind": "set_field",
+          "slot_paths": {"target": ["ref"], "value": ["next"]},
+          "slot_constants": {"field": "status"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "retry",
+          "canonical_kind": "increment_field",
+          "slot_paths": {"target": ["ref"], "amount": ["times"]},
+          "slot_constants": {"field": "count"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "open_incident",
+          "canonical_kind": "append_record",
+          "slot_paths": {},
+          "slot_constants": {},
+          "record_paths": {
+            "id": ["incident", "number"],
+            "status": ["incident", "phase"],
+            "owner": ["incident", "responder"],
+            "count": ["incident", "attempts"]
+          }
+        },
+        {
+          "concrete_kind": "close_incident",
+          "canonical_kind": "delete_record",
+          "slot_paths": {"target": ["ref"]},
+          "slot_constants": {},
+          "record_paths": {}
+        }
+      ]
+    },
+    "task_map": {
+      "name": "task_map",
+      "layout": "map",
+      "root_path": ["board", "items"],
+      "field_map": {
+        "id": "$key",
+        "status": "state",
+        "owner": "assignee",
+        "count": "points"
+      },
+      "action_kind_path": ["cmd"],
+      "action_rules": [
+        {
+          "concrete_kind": "complete",
+          "canonical_kind": "set_field",
+          "slot_paths": {"target": ["item"], "value": ["to_state"]},
+          "slot_constants": {"field": "status"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "add_points",
+          "canonical_kind": "increment_field",
+          "slot_paths": {"target": ["item"], "amount": ["delta"]},
+          "slot_constants": {"field": "count"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "create",
+          "canonical_kind": "append_record",
+          "slot_paths": {},
+          "slot_constants": {},
+          "record_paths": {
+            "id": ["new", "key"],
+            "status": ["new", "state"],
+            "owner": ["new", "assignee"],
+            "count": ["new", "points"]
+          }
+        },
+        {
+          "concrete_kind": "archive",
+          "canonical_kind": "delete_record",
+          "slot_paths": {"target": ["item"]},
+          "slot_constants": {},
+          "record_paths": {}
+        }
+      ]
+    },
+    "warehouse_columns": {
+      "name": "warehouse_columns",
+      "layout": "columns",
+      "root_path": ["inventory"],
+      "field_map": {
+        "id": "sku",
+        "status": "condition",
+        "owner": "zone",
+        "count": "units"
+      },
+      "action_kind_path": ["operation"],
+      "action_rules": [
+        {
+          "concrete_kind": "set_condition",
+          "canonical_kind": "set_field",
+          "slot_paths": {"target": ["sku"], "value": ["condition"]},
+          "slot_constants": {"field": "status"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "adjust_stock",
+          "canonical_kind": "increment_field",
+          "slot_paths": {"target": ["sku"], "amount": ["units_delta"]},
+          "slot_constants": {"field": "count"},
+          "record_paths": {}
+        },
+        {
+          "concrete_kind": "register",
+          "canonical_kind": "append_record",
+          "slot_paths": {},
+          "slot_constants": {},
+          "record_paths": {
+            "id": ["article", "sku"],
+            "status": ["article", "condition"],
+            "owner": ["article", "zone"],
+            "count": ["article", "units"]
+          }
+        },
+        {
+          "concrete_kind": "remove",
+          "canonical_kind": "delete_record",
+          "slot_paths": {"target": ["sku"]},
+          "slot_constants": {},
+          "record_paths": {}
+        }
+      ]
+    }
+  }
+}

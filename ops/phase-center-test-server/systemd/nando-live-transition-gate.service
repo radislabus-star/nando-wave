@@ -1,0 +1,14 @@
+[Unit]
+Description=Nando composite live-transition admission gate
+After=nando-transition-serving.service nando-transition-profile-daemon.service nando-transport-gateway.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStart=/opt/nando-wave/ops/phase-center-test-server/bin/nando-live-transition-gate --status-mode --project-root /opt/nando-wave
+CPUQuota=25%
+MemoryHigh=192M
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true

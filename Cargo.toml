@@ -26,3 +26,13 @@ unsafe_code = "forbid"
 dbg_macro = "deny"
 todo = "deny"
 unwrap_used = "deny"
+
+# Local checks are disposable. Keeping full debug symbols and per-crate
+# incremental state made repeated test builds consume tens of GiB.
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false

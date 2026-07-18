@@ -1,0 +1,32 @@
+[Unit]
+Description=Nando bounded Codex transition capture
+After=nando-transition-serving.service nando-transport-gateway.service
+Wants=nando-transition-serving.service nando-transport-gateway.service
+ConditionPathExists=/home/ubu/.codex/sessions
+
+[Service]
+Type=oneshot
+User=ubu
+Group=ubu
+Environment=NANDO_CODEX_SESSIONS_DIR=/home/ubu/.codex/sessions
+Environment=NANDO_CODEX_CAPTURE_STATE=/var/lib/nando-wave/transition/codex-session-capture.json
+Environment=NANDO_CODEX_CAPTURE_LOOKBACK_DAYS=2
+Environment=NANDO_CODEX_CAPTURE_MAX_EVENTS=64
+Environment=NANDO_CODEX_CAPTURE_MAX_EVENTS_PER_FILE=16
+Environment=NANDO_CODEX_CAPTURE_GENERIC_RELATION_FILES_PER_CYCLE=16
+Environment=NANDO_CODEX_CAPTURE_WAIT_RELATION_FILES_PER_CYCLE=16
+Environment=NANDO_CODEX_CAPTURE_GENERIC_BACKFILL_BYTES=8388608
+Environment=NANDO_CODEX_CAPTURE_TIMEOUT_SECONDS=0.8
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStart=/usr/bin/env python3 /opt/nando-wave/ops/phase-center-test-server/bin/nando-codex-session-capture.py --sessions-root ${NANDO_CODEX_SESSIONS_DIR} --state ${NANDO_CODEX_CAPTURE_STATE} --observe-url http://127.0.0.1:8787/v2/transitions/observe --lookback-days ${NANDO_CODEX_CAPTURE_LOOKBACK_DAYS} --max-events ${NANDO_CODEX_CAPTURE_MAX_EVENTS} --max-events-per-file ${NANDO_CODEX_CAPTURE_MAX_EVENTS_PER_FILE} --generic-relation-files-per-cycle ${NANDO_CODEX_CAPTURE_GENERIC_RELATION_FILES_PER_CYCLE} --wait-relation-files-per-cycle ${NANDO_CODEX_CAPTURE_WAIT_RELATION_FILES_PER_CYCLE} --generic-relation-backfill-bytes ${NANDO_CODEX_CAPTURE_GENERIC_BACKFILL_BYTES} --timeout ${NANDO_CODEX_CAPTURE_TIMEOUT_SECONDS}
+Nice=10
+CPUQuota=80%
+MemoryHigh=256M
+MemoryMax=384M
+MemorySwapMax=0
+TasksMax=8
+IOSchedulingClass=idle
+TimeoutStartSec=180s
+NoNewPrivileges=true
+PrivateTmp=true

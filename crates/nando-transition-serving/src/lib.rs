@@ -13,8 +13,10 @@ pub mod session_backfill;
 mod session_stream;
 mod stream_evidence;
 pub use session_stream::{
-    verified_relation_frames_from_session, verified_relation_frames_from_session_tail,
-    verified_training_cases_from_session_tail,
+    verified_collection_observations_from_session, verified_relation_frames_from_session,
+    verified_relation_frames_from_session_tail, verified_session_identity_sha256_candidates,
+    verified_training_cases_from_session, verified_training_cases_from_session_head,
+    verified_training_cases_from_session_tail, verified_write_stdin_training_cases_from_session,
 };
 
 use axum::Router;
@@ -42,8 +44,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, SyncSender};
@@ -66,7 +68,7 @@ use stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
 const OBSERVATION_REQUEST_SCHEMA: &str = "nando.transition-observation.v1";
 const EXECUTE_REQUEST_SCHEMA: &str = "nando.transition-execute.v1";
 const MAX_REASON_BYTES: usize = 120;
-const COLLECTION_SYNTHESIS_GENERATION: u32 = 31;
+const COLLECTION_SYNTHESIS_GENERATION: u32 = 37;
 const OBSERVATION_RESTART_TAIL_BYTES: u64 = 4 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
@@ -392,6 +394,13 @@ struct MinerWarmupStatus {
     error: String,
     started_at_unix: u64,
     completed_at_unix: u64,
+    checkpoint_restored: bool,
+    source_offset: u64,
+    source_lines: u64,
+    replay_support_after_open: usize,
+    checkpoint_path: String,
+    checkpoint_sha256_before_open: String,
+    checkpoint_sha256_after_open: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -540,6 +549,16 @@ fn spawn_miner_warmup(state: AppState) -> Result<(), String> {
         .name("nando-miner-warmup".to_owned())
         .spawn(move || {
             set_miner_warmup(&state, "loading", "", unix_now(), 0);
+            if let Ok(mut warmup) = state.miner_warmup.write() {
+                warmup.checkpoint_path = state
+                    .config
+                    .response_online_checkpoint_path
+                    .display()
+                    .to_string();
+                warmup.checkpoint_sha256_before_open =
+                    sha256_file_streaming(&state.config.response_online_checkpoint_path)
+                        .unwrap_or_default();
+            }
             let response = if state.config.generic_response_miner_enabled {
                 OnlineResponseStream::open_streaming(OnlineResponseTailConfig {
                     input_path: state.config.response_relation_frames_path.clone(),
@@ -559,6 +578,19 @@ fn spawn_miner_warmup(state: AppState) -> Result<(), String> {
                     return;
                 }
             };
+            if let Some(miner) = response.as_ref()
+                && let Ok(miner) = miner.lock()
+            {
+                if let Ok(mut warmup) = state.miner_warmup.write() {
+                    warmup.checkpoint_restored = miner.checkpoint_restored();
+                    warmup.source_offset = miner.source_offset();
+                    warmup.source_lines = miner.source_lines();
+                    warmup.replay_support_after_open = miner.replay_support_parity_cases_total();
+                    warmup.checkpoint_sha256_after_open =
+                        sha256_file_streaming(&state.config.response_online_checkpoint_path)
+                            .unwrap_or_default();
+                }
+            }
             let collection = match OnlineCollectionMiner::open(
                 state.config.online_collection_checkpoint_path.clone(),
                 OnlineCollectionConfig::default(),
@@ -621,6 +653,23 @@ fn spawn_miner_warmup(state: AppState) -> Result<(), String> {
         })
         .map(|_| ())
         .map_err(|error| format!("miner_warmup_thread:{error}"))
+}
+
+fn sha256_file_streaming(path: &Path) -> Result<String, String> {
+    let mut file = File::open(path)
+        .map_err(|error| format!("checkpoint_hash_open:{}:{error}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|error| format!("checkpoint_hash_read:{}:{error}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn set_miner_warmup(
@@ -714,10 +763,16 @@ async fn health(State(state): State<AppState>) -> Response {
     let (expression_ready, expression_package_sha256, expression_error) =
         expression_shadow_cache_status(&state);
     let response_miner = current_response_miner(&state);
+    let miner_worker_handle = current_miner_worker(&state);
     let online = response_miner
         .as_ref()
-        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.status()));
-    let miner_worker = current_miner_worker(&state).map(|worker| worker.status());
+        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.status()))
+        .or_else(|| {
+            miner_worker_handle
+                .as_ref()
+                .and_then(MinerWorkerHandle::response_status)
+        });
+    let miner_worker = miner_worker_handle.map(|worker| worker.status());
     let miner_warmup = state
         .miner_warmup
         .read()
@@ -739,6 +794,23 @@ async fn health(State(state): State<AppState>) -> Response {
         "cegis_winners": online.map_or(0, |status| status.cegis_winners),
         "max_frozen_future_rows": online.map_or(0, |status| status.max_frozen_future_rows),
         "signal_score_out_of_10": online.map_or(0, |status| status.signal_score_out_of_10),
+        "opportunity": {
+            "ordinary_intents": online.map_or(0, |status| status.opportunity_ordinary_intents),
+            "ordinary_tokens": online.map_or(0, |status| status.opportunity_ordinary_tokens),
+            "verified_tokens": online.map_or(0, |status| status.opportunity_verified_tokens),
+            "verified_share_milli": online.map_or(0, |status| status.opportunity_verified_share_milli),
+            "executable_candidate_tokens": online.map_or(0, |status| status.opportunity_executable_candidate_tokens),
+            "missing_dsl_tokens": online.map_or(0, |status| status.opportunity_missing_dsl_tokens),
+            "missing_verifier_tokens": online.map_or(0, |status| status.opportunity_missing_verifier_tokens),
+            "insufficient_repetition_tokens": online.map_or(0, |status| status.opportunity_insufficient_repetition_tokens),
+            "unexplored_multi_source_tokens": online.map_or(0, |status| status.opportunity_unexplored_multi_source_tokens),
+            "ambiguous_tokens": online.map_or(0, |status| status.opportunity_ambiguous_tokens),
+            "non_deterministic_tokens": online.map_or(0, |status| status.opportunity_non_deterministic_tokens),
+            "unresolved_tokens": online.map_or(0, |status| status.opportunity_unresolved_tokens),
+            "optimistic_upper_bound_share_milli": online.map_or(0, |status| status.opportunity_upper_bound_share_milli),
+            "accounting_identity_holds": online.is_some_and(|status| status.opportunity_accounting_identity_holds),
+            "m3_reachable": online.is_some_and(|status| status.opportunity_m3_reachable),
+        },
         "stream_worker": miner_worker,
     });
     let evidence_ledger = state
@@ -911,12 +983,28 @@ async fn miner_report(State(state): State<AppState>) -> Response {
     });
     let collection_report = collection_snapshot.as_ref().map(
         |(status, quarantine_packages, admission_candidates)| {
+            let emitted_candidates = admission_candidates.as_ref().map_or(0, Vec::len);
+            let explicitly_blocked_candidates = status
+                .frozen_buckets_total
+                .saturating_sub(status.pre_admission_ready_buckets_total);
+            let silent_candidate_losses = status
+                .pre_admission_ready_buckets_total
+                .saturating_sub(emitted_candidates);
             json!({
                 "status": status,
                 "quarantine_packages": quarantine_packages.as_ref().map_or(0, |rows| rows.len()),
                 "quarantine_error": quarantine_packages.as_ref().err(),
-                "admission_ready_candidates": admission_candidates.as_ref().map_or(0, |rows| rows.len()),
+                "admission_ready_candidates": emitted_candidates,
                 "admission_candidate_error": admission_candidates.as_ref().err(),
+                "candidate_outcomes": {
+                    "frozen_cohorts": status.frozen_buckets_total,
+                    "emitted_candidates": emitted_candidates,
+                    "explicitly_blocked_candidates": explicitly_blocked_candidates,
+                    "silent_candidate_losses": silent_candidate_losses,
+                    "outcome_identity_holds": status.frozen_buckets_total
+                        == emitted_candidates.saturating_add(explicitly_blocked_candidates)
+                            .saturating_add(silent_candidate_losses),
+                },
                 "coverage_contract": "program-explainable evidence is not counted as saved tokens until a verifier-authorized runtime accept",
             })
         },
@@ -1532,7 +1620,7 @@ fn handle_openai(
         &client_intent_id,
         body.clone(),
         input_tokens,
-        traffic_source == "ordinary",
+        traffic_source_dedupe_eligible(traffic_source),
     );
     let request_shape = provider_request_shape(&payload, projection, &request_text);
     write_event(
@@ -4257,6 +4345,7 @@ mod tests {
             verifier: Some(VerifierProgram::ProjectStatus {
                 selector,
                 mapping: ProjectStatusMapping::ZeroIsSuccess,
+                renderer: nando_response_actor::CollectionOutputRenderer::Direct,
                 completion_state: "completed".to_owned(),
                 require_unique_value: true,
             }),
@@ -4358,7 +4447,7 @@ mod tests {
         let admission = project_status_admission(
             &registry,
             &sha256_bytes(b"test-gate-build"),
-            &sha256_bytes(b"test-runtime-build"),
+            &response_runtime_contract_sha256(),
         );
         write_json(
             &admission_path,
@@ -5150,6 +5239,8 @@ mod tests {
         assert!(!traffic_source_dedupe_eligible("controlled_probe"));
         assert!(!traffic_source_dedupe_eligible("dogfood_live_cell"));
         assert!(traffic_source_dedupe_eligible("ordinary"));
+        assert!(traffic_source_dedupe_eligible("codex"));
+        assert!(traffic_source_dedupe_eligible("unspecified"));
     }
 
     #[test]

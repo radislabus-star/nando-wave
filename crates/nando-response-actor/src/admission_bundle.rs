@@ -5,6 +5,8 @@ use crate::{OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate
 
 pub const ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1: &str =
     "nando.online-admission-candidate-bundle.v1";
+pub const DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1: &str =
+    "nando.durable-runtime-parity-receipt.v1";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RuntimeParityCase {
@@ -13,6 +15,22 @@ pub struct RuntimeParityCase {
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DurableRuntimeParityReceipt {
+    pub schema: String,
+    pub receipt_sha256: String,
+    pub evidence_ref_sha256: String,
+    pub program_sha256: String,
+    pub verifier_sha256: String,
+    pub input_sha256: String,
+    pub teacher_response_sha256: String,
+    pub actor_response_sha256: String,
+    pub actor_executed: bool,
+    pub teacher_authority_match: bool,
+    pub independent_verifier_pass: bool,
+    pub exact_teacher_match: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

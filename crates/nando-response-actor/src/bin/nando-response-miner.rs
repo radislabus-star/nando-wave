@@ -1864,6 +1864,8 @@ const fn package_state_name(state: ResponsePackageState) -> &'static str {
 
 const fn program_operation_name(operation: &ResponseOperation) -> &'static str {
     match operation {
+        ResponseOperation::UniqueConsensus { .. } => "unique_consensus",
+        ResponseOperation::AdvancePlan { .. } => "advance_plan",
         ResponseOperation::FunctionCallFromRoles { .. } => "function_call_from_roles",
         ResponseOperation::CustomToolCallFromRoles { .. } => "custom_tool_call_from_roles",
         ResponseOperation::ProjectSelectedValue { .. } => "project_selected_value",
@@ -2870,9 +2872,24 @@ fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -> Value {
                         nando_response_actor::ResponseValueSelector::UniqueActiveTurnJsonField {
                             ..
                         } => "unique_active_turn_json_field",
+                        nando_response_actor::ResponseValueSelector::RequestReferencedJsonField {
+                            ..
+                        } => "request_referenced_json_field",
                         nando_response_actor::ResponseValueSelector::TurnOutputLine { .. } => {
                             "turn_output_line"
                         }
+                        nando_response_actor::ResponseValueSelector::TurnOutputScalarOrdinal {
+                            ..
+                        } => "turn_output_scalar_ordinal",
+                        nando_response_actor::ResponseValueSelector::LatestTurnOutputLine {
+                            ..
+                        } => "latest_turn_output_line",
+                        nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+                            ..
+                        } => "latest_turn_output_scalar_ordinal",
+                        nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+                            ..
+                        } => "latest_turn_output_scalar_from_end",
                         nando_response_actor::ResponseValueSelector::CommandOutputBody => {
                             "command_output_body"
                         }
@@ -3252,6 +3269,11 @@ fn parity_provider_payload(
                 )
             },
         )
+    } else if matches!(
+        projection_selector.or(status_selector),
+        Some(ResponseValueSelector::RequestReferencedJsonField { .. })
+    ) {
+        "runtime parity selected".to_owned()
     } else {
         "runtime parity".to_owned()
     };
@@ -3344,11 +3366,28 @@ fn parity_provider_output(selector: &ResponseValueSelector, value: &Value) -> St
             object.insert(field.clone(), value.clone());
             serde_json::to_string(&Value::Object(object)).unwrap_or_else(|_| "{}".to_owned())
         }
+        ResponseValueSelector::RequestReferencedJsonField { .. } => {
+            serde_json::json!({"selected": value}).to_string()
+        }
         ResponseValueSelector::JsonScalarOrdinal {
             ordinal,
             value_type,
         } => parity_scalar_ordinal_output(*ordinal, *value_type, value),
-        ResponseValueSelector::TurnOutputLine { line_index, .. } => {
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+            ..
+        }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => parity_scalar_ordinal_output(*scalar_ordinal, *value_type, value),
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => parity_scalar_reverse_ordinal_output(*reverse_ordinal, *value_type, value),
+        ResponseValueSelector::TurnOutputLine { line_index, .. }
+        | ResponseValueSelector::LatestTurnOutputLine { line_index, .. } => {
             let value = value
                 .as_str()
                 .map_or_else(|| value.to_string(), str::to_owned);
@@ -3398,11 +3437,38 @@ fn parity_projection_output(
                 serde_json::to_string(&Value::Object(object)).unwrap_or_else(|_| "null".to_owned()),
             )
         }
+        nando_response_actor::ResponseValueSelector::RequestReferencedJsonField { .. } => {
+            Value::String(serde_json::json!({"selected": value}).to_string())
+        }
         nando_response_actor::ResponseValueSelector::JsonScalarOrdinal {
             ordinal,
             value_type,
         } => Value::String(parity_scalar_ordinal_output(*ordinal, *value_type, value)),
-        nando_response_actor::ResponseValueSelector::TurnOutputLine { line_index, .. } => {
+        nando_response_actor::ResponseValueSelector::TurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+            ..
+        }
+        | nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => Value::String(parity_scalar_ordinal_output(
+            *scalar_ordinal,
+            *value_type,
+            value,
+        )),
+        nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => Value::String(parity_scalar_reverse_ordinal_output(
+            *reverse_ordinal,
+            *value_type,
+            value,
+        )),
+        nando_response_actor::ResponseValueSelector::TurnOutputLine { line_index, .. }
+        | nando_response_actor::ResponseValueSelector::LatestTurnOutputLine {
+            line_index, ..
+        } => {
             let value = value
                 .as_str()
                 .map_or_else(|| value.to_string(), str::to_owned);
@@ -3442,6 +3508,22 @@ fn parity_scalar_ordinal_output(ordinal: u16, value_type: AtomValueType, value: 
     let mut values = vec![filler; usize::from(ordinal)];
     values.push(value.clone());
     serde_json::json!({"values": values}).to_string()
+}
+
+fn parity_scalar_reverse_ordinal_output(
+    reverse_ordinal: u16,
+    value_type: AtomValueType,
+    value: &Value,
+) -> String {
+    let filler = match value_type {
+        AtomValueType::String | AtomValueType::Identifier => Value::String(String::new()),
+        AtomValueType::Integer => Value::from(0),
+        AtomValueType::Boolean => Value::Bool(false),
+        AtomValueType::Collection => Value::Null,
+    };
+    let mut values = vec![value.clone()];
+    values.extend(std::iter::repeat_n(filler, usize::from(reverse_ordinal)));
+    serde_json::to_string(&values).unwrap_or_default()
 }
 
 fn exact_package_hard_negative_accepts(package: &nando_response_actor::ResponsePackage) -> usize {
@@ -4185,6 +4267,7 @@ mod tests {
                         RelationAtom::ActionRoleArgument {
                             name: "value".to_owned(),
                             slot_id: 2,
+                            value_type: Some(value_type),
                         },
                     ],
                     evidence_ref_sha256: "e".repeat(64),
@@ -4230,6 +4313,7 @@ mod tests {
                 vec![nando_response_actor::ResponseArgument::Role {
                     name: "value".to_owned(),
                     role: nando_response_actor::SemanticRole::SourceValue,
+                    value_type: Some(nando_response_actor::AtomValueType::String),
                 }],
             ),
             &source,
@@ -4244,6 +4328,7 @@ mod tests {
                 vec![nando_response_actor::ResponseArgument::Role {
                     name: "value".to_owned(),
                     role: nando_response_actor::SemanticRole::ContinuationHandle,
+                    value_type: Some(nando_response_actor::AtomValueType::Identifier),
                 }],
             ),
             &wait,
@@ -4312,6 +4397,7 @@ mod tests {
                 RelationAtom::ActionRoleArgument {
                     name: "session_id".to_owned(),
                     slot_id: 2,
+                    value_type: Some(AtomValueType::Integer),
                 },
                 RelationAtom::ActionJsonResultProjection,
             ],
@@ -4327,6 +4413,7 @@ mod tests {
             vec![nando_response_actor::ResponseArgument::Role {
                 name: "session_id".to_owned(),
                 role: nando_response_actor::SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::Integer),
             }],
             nando_response_actor::CustomToolResultProjection::JsonStringifyResult,
         );

@@ -1,8 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
-use crate::teacher_join::program_has_compatible_teacher_effect;
 use crate::{
     ResponseOperation, ResponseProgram, RuntimeInvariant, TeacherPoolSnapshot, VersionSpaceArena,
     VersionSpaceConfig, ground_roles, relation_frame_online_routing_atom_ids,
@@ -11,6 +10,47 @@ use crate::{
 const MAX_ACTIVE_CEGIS_STATES: usize = 128;
 const MAX_APPLICABILITY_ATOMS: usize = 64;
 const MAX_APPLICABILITY_SUBCENTERS: usize = 16;
+const MAX_ROUTING_ATOM_CACHE_ENTRIES: usize = 4_096;
+
+#[derive(Clone, Debug, Default)]
+struct RoutingAtomCache {
+    entries: BTreeMap<String, Vec<u64>>,
+    insertion_order: VecDeque<String>,
+}
+
+impl RoutingAtomCache {
+    fn atoms(&mut self, frame: &crate::RelationFrame) -> &[u64] {
+        let frame_id = frame.frame_id_sha256.as_str();
+        if !self.entries.contains_key(frame_id) {
+            let atoms = relation_frame_online_routing_atom_ids(frame);
+            let frame_id = frame_id.to_owned();
+            self.entries.insert(frame_id.clone(), atoms);
+            self.insertion_order.push_back(frame_id);
+            while self.entries.len() > MAX_ROUTING_ATOM_CACHE_ENTRIES {
+                let Some(oldest) = self.insertion_order.pop_front() else {
+                    break;
+                };
+                self.entries.remove(&oldest);
+            }
+        }
+        self.entries
+            .get(frame_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
+    fn frame_has_atoms(&mut self, frame: &crate::RelationFrame, required: &[u64]) -> bool {
+        let observed = self.atoms(frame);
+        required
+            .iter()
+            .all(|atom| observed.binary_search(atom).is_ok())
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.insertion_order.clear();
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -56,6 +96,10 @@ pub struct CegisWinner {
     pub action_symbol: String,
     pub program: ResponseProgram,
     pub required_atom_ids: Vec<u64>,
+    #[serde(default)]
+    pub anti_center_atom_sets: Vec<Vec<u64>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learned_wave_route: Option<crate::LearnedWaveRoute>,
     pub positive_rows: usize,
     pub negative_rows: usize,
     pub exact_checks: u64,
@@ -83,6 +127,8 @@ pub struct CegisPoolReport {
     pub counterexamples: usize,
     #[serde(default)]
     pub generated_repair_programs: u64,
+    #[serde(default)]
+    pub anti_centers: usize,
     pub winner: bool,
     pub repair_watermark_unix_nanos: u64,
     pub blocker: Option<String>,
@@ -99,6 +145,8 @@ pub struct CegisReport {
     pub repair_events: u64,
     #[serde(default)]
     pub generated_repair_programs: u64,
+    #[serde(default)]
+    pub anti_centers: usize,
     pub pools_waiting_after_repair: usize,
     pub state_capacity_evictions: u64,
     pub pools: Vec<CegisPoolReport>,
@@ -127,6 +175,8 @@ struct CegisSearchState {
     positives: Vec<crate::RelationFrame>,
     negatives: Vec<crate::RelationFrame>,
     invariants: Vec<RuntimeInvariant>,
+    #[serde(default)]
+    safe_anti_center_candidates: Vec<Vec<u64>>,
     arena: VersionSpaceArena,
     active: Option<ActiveEvaluation>,
     winner: Option<CegisWinner>,
@@ -148,6 +198,8 @@ pub struct CegisCoordinator {
     repair_events: u64,
     #[serde(default)]
     state_capacity_evictions: u64,
+    #[serde(skip)]
+    routing_atom_cache: RoutingAtomCache,
 }
 
 impl CegisCoordinator {
@@ -161,6 +213,7 @@ impl CegisCoordinator {
             teacher_repair_watermarks: BTreeMap::new(),
             repair_events: 0,
             state_capacity_evictions: 0,
+            routing_atom_cache: RoutingAtomCache::default(),
         }
     }
 
@@ -168,6 +221,7 @@ impl CegisCoordinator {
         self.version_space_config = VersionSpaceConfig::default();
         self.states.clear();
         self.next_state_cursor = 0;
+        self.routing_atom_cache.clear();
     }
 
     #[must_use]
@@ -176,14 +230,27 @@ impl CegisCoordinator {
     }
 
     pub fn refresh_pool(&mut self, pool: &TeacherPoolSnapshot) {
+        self.refresh_pool_with_preferred_support(pool, &BTreeSet::new());
+    }
+
+    pub fn refresh_pool_with_preferred_support(
+        &mut self,
+        pool: &TeacherPoolSnapshot,
+        preferred_support_ids: &BTreeSet<String>,
+    ) {
         self.invalidate_from_new_counterexample(pool);
         let repair_watermark_unix_nanos = self
             .teacher_repair_watermarks
             .get(&pool.teacher_signature_sha256)
             .copied()
             .unwrap_or(0);
-        let cohorts =
-            discover_program_cohorts(pool, self.minimum_cohort_rows, repair_watermark_unix_nanos);
+        let cohorts = discover_program_cohorts(
+            pool,
+            self.minimum_cohort_rows,
+            repair_watermark_unix_nanos,
+            preferred_support_ids,
+            &mut self.routing_atom_cache,
+        );
         let live_ids = cohorts
             .iter()
             .map(|cohort| cohort.cohort_id_sha256.clone())
@@ -217,6 +284,7 @@ impl CegisCoordinator {
                         .map(|frame| frame.frame_id_sha256.as_str())
                         .collect::<Vec<_>>(),
                     &cohort.invariants,
+                    &cohort.safe_anti_center_candidates,
                 ))
                 .unwrap_or_default(),
             );
@@ -229,8 +297,13 @@ impl CegisCoordinator {
             }
             let mut arena = VersionSpaceArena::new(self.version_space_config);
             arena.intern_all(cohort.programs);
-            arena.rank_for_support(&cohort.positives);
-            let blocker = candidate_invariants(&cohort.invariants, &cohort.positives)
+            arena.rank_for_phase_centers(&cohort.positives, &cohort.negatives);
+            let candidate_invariants = candidate_invariants(
+                &cohort.invariants,
+                &cohort.positives,
+                &mut self.routing_atom_cache,
+            );
+            let blocker = candidate_invariants
                 .is_empty()
                 .then(|| "no_clean_pre_action_invariant".to_owned());
             let mut counterexamples = Vec::new();
@@ -255,7 +328,8 @@ impl CegisCoordinator {
                     repair_watermark_unix_nanos,
                     positives: cohort.positives,
                     negatives: cohort.negatives,
-                    invariants: cohort.invariants,
+                    invariants: candidate_invariants,
+                    safe_anti_center_candidates: cohort.safe_anti_center_candidates,
                     arena,
                     active: None,
                     winner: None,
@@ -276,7 +350,9 @@ impl CegisCoordinator {
         let signature = transition.outcome.action.signature_sha256.as_str();
         let accepted = transition.outcome.verifier.accepted;
         let mut invalidated = BTreeMap::<String, u64>::new();
-        for state in self.states.values() {
+        let states = &self.states;
+        let routing_atom_cache = &mut self.routing_atom_cache;
+        for state in states.values() {
             let Some(winner) = state.winner.as_ref() else {
                 continue;
             };
@@ -284,15 +360,13 @@ impl CegisCoordinator {
                 .support_watermark_unix_nanos
                 .max(winner.repair_watermark_unix_nanos);
             if frame.observed_at_unix_nanos <= after
-                || !frame_has_atoms(&frame, &winner.required_atom_ids)
-                || !crate::synthesis::program_runtime_applicable(&winner.program, &frame)
+                || !winner_routes_frame_cached(winner, &frame, routing_atom_cache)
             {
                 continue;
             }
             let agrees = accepted
-                && ((state.teacher_signature_sha256 == signature
-                    && crate::synthesis::program_is_consistent(&winner.program, &frame))
-                    || program_has_compatible_teacher_effect(&winner.program, &frame));
+                && state.teacher_signature_sha256 == signature
+                && crate::synthesis::program_is_consistent(&winner.program, &frame);
             if !agrees {
                 invalidated
                     .entry(state.teacher_signature_sha256.clone())
@@ -334,7 +408,34 @@ impl CegisCoordinator {
                 continue;
             }
             self.next_state_cursor = index.saturating_add(1) % keys.len();
-            return run_state_slice(state);
+            return run_state_slice(state, &mut self.routing_atom_cache);
+        }
+        0
+    }
+
+    /// Runs one bounded slice only for cohorts belonging to the selected
+    /// teacher signatures. This keeps support migrations from draining
+    /// unrelated live synthesis work.
+    pub fn run_next_slice_for_teacher_signatures(
+        &mut self,
+        signatures: &BTreeSet<String>,
+    ) -> usize {
+        let keys = self.states.keys().cloned().collect::<Vec<_>>();
+        if keys.is_empty() || signatures.is_empty() {
+            return 0;
+        }
+        for offset in 0..keys.len() {
+            let index = self.next_state_cursor.saturating_add(offset) % keys.len();
+            let key = &keys[index];
+            let state = self.states.get_mut(key).expect("CEGIS state exists");
+            if !signatures.contains(&state.teacher_signature_sha256)
+                || state.winner.is_some()
+                || state.blocker.is_some()
+            {
+                continue;
+            }
+            self.next_state_cursor = index.saturating_add(1) % keys.len();
+            return run_state_slice(state, &mut self.routing_atom_cache);
         }
         0
     }
@@ -343,7 +444,17 @@ impl CegisCoordinator {
     pub fn has_pending_work(&self) -> bool {
         self.states.values().any(|state| {
             state.winner.is_none()
-                && state.blocker.as_deref() != Some("no_clean_pre_action_invariant")
+                && state.blocker.is_none()
+                && (state.active.is_some() || state.arena.has_pending_candidates())
+        })
+    }
+
+    #[must_use]
+    pub fn has_pending_work_for_teacher_signatures(&self, signatures: &BTreeSet<String>) -> bool {
+        self.states.values().any(|state| {
+            signatures.contains(&state.teacher_signature_sha256)
+                && state.winner.is_none()
+                && state.blocker.is_none()
                 && (state.active.is_some() || state.arena.has_pending_candidates())
         })
     }
@@ -407,6 +518,11 @@ impl CegisCoordinator {
             report.generated_repair_programs = report
                 .generated_repair_programs
                 .saturating_add(state.generated_repair_programs);
+            let anti_centers = state
+                .winner
+                .as_ref()
+                .map_or(0, |winner| winner.anti_center_atom_sets.len());
+            report.anti_centers = report.anti_centers.saturating_add(anti_centers);
             report.winners = report
                 .winners
                 .saturating_add(usize::from(state.winner.is_some()));
@@ -422,6 +538,7 @@ impl CegisCoordinator {
                 search_slices: arena.slices_completed,
                 counterexamples: state.counterexamples.len(),
                 generated_repair_programs: state.generated_repair_programs,
+                anti_centers,
                 winner: state.winner.is_some(),
                 repair_watermark_unix_nanos: state.repair_watermark_unix_nanos,
                 blocker: state.blocker.clone(),
@@ -486,10 +603,7 @@ impl CegisCoordinator {
                 {
                     continue;
                 }
-                if frame.observed_at_unix_nanos <= after
-                    || !frame_has_atoms(frame, &winner.required_atom_ids)
-                    || !crate::synthesis::program_runtime_applicable(&winner.program, frame)
-                {
+                if frame.observed_at_unix_nanos <= after || !winner_routes_frame(winner, frame) {
                     continue;
                 }
                 let candidate = (frame.observed_at_unix_nanos, frame.frame_id_sha256.clone());
@@ -567,6 +681,7 @@ struct ProgramCohort {
     positives: Vec<crate::RelationFrame>,
     negatives: Vec<crate::RelationFrame>,
     invariants: Vec<RuntimeInvariant>,
+    safe_anti_center_candidates: Vec<Vec<u64>>,
     programs: Vec<ResponseProgram>,
 }
 
@@ -577,16 +692,24 @@ struct ApplicabilitySubcenter {
     positive_tokens: u64,
 }
 
+type ApplicabilityAtomEvidence = (usize, u64, usize, bool);
+
 fn discover_program_cohorts(
     pool: &TeacherPoolSnapshot,
     minimum_rows: usize,
     repair_watermark_unix_nanos: u64,
+    preferred_support_ids: &BTreeSet<String>,
+    routing_atom_cache: &mut RoutingAtomCache,
 ) -> Vec<ProgramCohort> {
     let mut discovery_support = pool.positives.to_vec();
     discovery_support.sort_by(|left, right| {
-        left.observed_at_unix_nanos
-            .cmp(&right.observed_at_unix_nanos)
-            .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
+        let left_preferred = preferred_support_ids.contains(&left.frame_id_sha256);
+        let right_preferred = preferred_support_ids.contains(&right.frame_id_sha256);
+        right_preferred.cmp(&left_preferred).then_with(|| {
+            left.observed_at_unix_nanos
+                .cmp(&right.observed_at_unix_nanos)
+                .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
+        })
     });
     discovery_support.truncate(32);
     let mut programs = crate::synthesis::enumerate_response_program_candidates(&discovery_support);
@@ -696,11 +819,12 @@ fn discover_program_cohorts(
             &discovery_negatives,
             minimum_rows,
             MAX_APPLICABILITY_SUBCENTERS,
+            routing_atom_cache,
         );
-        let indistinguishable_negative_vectors = discovery_negatives
-            .iter()
-            .map(relation_frame_online_routing_atom_ids)
-            .collect::<BTreeSet<_>>();
+        let mut indistinguishable_negative_vectors = BTreeSet::new();
+        for frame in &discovery_negatives {
+            indistinguishable_negative_vectors.insert(routing_atom_cache.atoms(frame).to_vec());
+        }
         applicability_subcenters.insert(
             0,
             ApplicabilitySubcenter {
@@ -720,9 +844,9 @@ fn discover_program_cohorts(
                 .iter()
                 .filter(|frame| {
                     crate::synthesis::program_is_consistent(selected_program, frame)
-                        && frame_has_atoms(frame, &subcenter.atom_ids)
+                        && routing_atom_cache.frame_has_atoms(frame, &subcenter.atom_ids)
                         && !indistinguishable_negative_vectors
-                            .contains(&relation_frame_online_routing_atom_ids(frame))
+                            .contains(routing_atom_cache.atoms(frame))
                 })
                 .cloned()
                 .collect::<Vec<_>>();
@@ -730,12 +854,22 @@ fn discover_program_cohorts(
                 continue;
             }
             let rollover_policy = crate::RolloverPolicy::default();
+            let preferred_matching = matching_positives
+                .iter()
+                .filter(|frame| preferred_support_ids.contains(&frame.frame_id_sha256))
+                .cloned()
+                .collect::<Vec<_>>();
+            let support_source = if preferred_matching.len() >= rollover_policy.support_rows {
+                preferred_matching.as_slice()
+            } else {
+                matching_positives.as_slice()
+            };
             let support_sessions = crate::rollover::select_support_sessions(
-                &matching_positives,
+                support_source,
                 rollover_policy.support_rows,
                 rollover_policy.minimum_future_sessions,
             );
-            let support_candidates = matching_positives
+            let support_candidates = support_source
                 .iter()
                 .filter(|frame| support_sessions.contains(frame.session_id_sha256.as_str()))
                 .take(rollover_policy.support_rows.saturating_mul(2))
@@ -788,10 +922,25 @@ fn discover_program_cohorts(
                 .map(|(_, program)| program.clone())
                 .collect::<Vec<_>>();
             let invariants = if subcenter.atom_ids.is_empty() {
-                derive_cohort_invariants(&pool.invariants, &positives, &negatives)
+                derive_cohort_invariants(
+                    &pool.invariants,
+                    &matching_positives,
+                    &negatives,
+                    routing_atom_cache,
+                )
             } else {
-                derive_subcenter_invariants(&subcenter.atom_ids, &positives, &negatives)
+                derive_subcenter_invariants(
+                    &subcenter.atom_ids,
+                    &matching_positives,
+                    &negatives,
+                    routing_atom_cache,
+                )
             };
+            let safe_anti_center_candidates = derive_safe_anti_center_candidates(
+                &matching_positives,
+                &negatives,
+                routing_atom_cache,
+            );
             let cohort_id_sha256 = crate::sha256_bytes(
                 &serde_json::to_vec(&(
                     "nando.cegis-cohort.v9",
@@ -807,6 +956,7 @@ fn discover_program_cohorts(
                 positives,
                 negatives,
                 invariants,
+                safe_anti_center_candidates,
                 programs: cohort_programs,
             });
         }
@@ -823,6 +973,7 @@ fn discover_clean_applicability_subcenters(
     negatives: &[crate::RelationFrame],
     minimum_rows: usize,
     limit: usize,
+    routing_atom_cache: &mut RoutingAtomCache,
 ) -> Vec<ApplicabilitySubcenter> {
     let positives = discovery_support
         .iter()
@@ -831,28 +982,31 @@ fn discover_clean_applicability_subcenters(
     if positives.len() < minimum_rows {
         return Vec::new();
     }
-    let mut atom_evidence = BTreeMap::<u64, (usize, u64)>::new();
+    let mut atom_evidence = BTreeMap::<u64, ApplicabilityAtomEvidence>::new();
     for frame in &positives {
-        for atom in relation_frame_online_routing_atom_ids(frame) {
+        let hidden = crate::package::relation_frame_hidden_wave_atom_ids(frame)
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        let observed = routing_atom_cache.atoms(frame).to_vec();
+        for atom in observed {
             let evidence = atom_evidence.entry(atom).or_default();
             evidence.0 = evidence.0.saturating_add(1);
             evidence.1 = evidence.1.saturating_add(frame.estimated_input_tokens);
+            evidence.3 |= hidden.contains(&atom);
         }
     }
-    let mut ranked_atoms = atom_evidence.into_iter().collect::<Vec<_>>();
-    ranked_atoms.sort_by(|left, right| {
-        right
-            .1
-            .0
-            .cmp(&left.1.0)
-            .then_with(|| right.1.1.cmp(&left.1.1))
-            .then_with(|| left.0.cmp(&right.0))
-    });
-    let atoms = ranked_atoms
-        .into_iter()
-        .take(MAX_APPLICABILITY_ATOMS)
-        .map(|(atom, _)| atom)
-        .collect::<Vec<_>>();
+    for frame in negatives
+        .iter()
+        .filter(|frame| crate::synthesis::program_runtime_applicable(program, frame))
+    {
+        let observed = routing_atom_cache.atoms(frame).to_vec();
+        for atom in observed {
+            if let Some(evidence) = atom_evidence.get_mut(&atom) {
+                evidence.2 = evidence.2.saturating_add(1);
+            }
+        }
+    }
+    let atoms = rank_applicability_atoms(atom_evidence, minimum_rows, MAX_APPLICABILITY_ATOMS);
     let mut predicates = atoms.iter().map(|atom| vec![*atom]).collect::<Vec<_>>();
     for (left_index, left) in atoms.iter().enumerate() {
         for right in atoms.iter().skip(left_index.saturating_add(1)) {
@@ -863,13 +1017,13 @@ fn discover_clean_applicability_subcenters(
     for atom_ids in predicates {
         let matching = positives
             .iter()
-            .filter(|frame| frame_has_atoms(frame, &atom_ids))
+            .filter(|frame| routing_atom_cache.frame_has_atoms(frame, &atom_ids))
             .copied()
             .collect::<Vec<_>>();
         if matching.len() < minimum_rows
             || matching.len() == positives.len()
             || negatives.iter().any(|frame| {
-                frame_has_atoms(frame, &atom_ids)
+                routing_atom_cache.frame_has_atoms(frame, &atom_ids)
                     && crate::synthesis::program_runtime_applicable(program, frame)
             })
         {
@@ -917,10 +1071,38 @@ fn discover_clean_applicability_subcenters(
     subcenters
 }
 
+fn rank_applicability_atoms(
+    atom_evidence: BTreeMap<u64, ApplicabilityAtomEvidence>,
+    minimum_rows: usize,
+    limit: usize,
+) -> Vec<u64> {
+    let mut ranked_atoms = atom_evidence
+        .into_iter()
+        .filter(|(_, evidence)| evidence.0 >= minimum_rows)
+        .collect::<Vec<_>>();
+    ranked_atoms.sort_by(|left, right| {
+        let left_clean = left.1.2 == 0;
+        let right_clean = right.1.2 == 0;
+        right_clean
+            .cmp(&left_clean)
+            .then_with(|| right.1.3.cmp(&left.1.3))
+            .then_with(|| right.1.1.cmp(&left.1.1))
+            .then_with(|| right.1.0.cmp(&left.1.0))
+            .then_with(|| left.1.2.cmp(&right.1.2))
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    ranked_atoms
+        .into_iter()
+        .take(limit)
+        .map(|(atom, _)| atom)
+        .collect()
+}
+
 fn derive_subcenter_invariants(
     required_atom_ids: &[u64],
     positives: &[crate::RelationFrame],
     negatives: &[crate::RelationFrame],
+    routing_atom_cache: &mut RoutingAtomCache,
 ) -> Vec<RuntimeInvariant> {
     let mut candidates = BTreeMap::<Vec<u64>, RuntimeInvariant>::new();
     let positive_tokens = positives
@@ -933,8 +1115,9 @@ fn derive_subcenter_invariants(
         positives.len(),
         positive_tokens,
         negatives,
+        routing_atom_cache,
     );
-    for invariant in derive_cohort_invariants(&[], positives, negatives) {
+    for invariant in derive_cohort_invariants(&[], positives, negatives, routing_atom_cache) {
         let mut combined = required_atom_ids.to_vec();
         combined.extend(invariant.atom_ids);
         insert_invariant_candidate(
@@ -943,6 +1126,7 @@ fn derive_subcenter_invariants(
             positives.len(),
             positive_tokens,
             negatives,
+            routing_atom_cache,
         );
     }
     let mut invariants = candidates.into_values().collect::<Vec<_>>();
@@ -960,16 +1144,21 @@ fn derive_cohort_invariants(
     inherited: &[RuntimeInvariant],
     positives: &[crate::RelationFrame],
     negatives: &[crate::RelationFrame],
+    routing_atom_cache: &mut RoutingAtomCache,
 ) -> Vec<RuntimeInvariant> {
     let Some(first) = positives.first() else {
         return Vec::new();
     };
-    let mut common = relation_frame_online_routing_atom_ids(first)
-        .into_iter()
+    let mut common = routing_atom_cache
+        .atoms(first)
+        .iter()
+        .copied()
         .collect::<BTreeSet<_>>();
     for frame in &positives[1..] {
-        let atoms = relation_frame_online_routing_atom_ids(frame)
-            .into_iter()
+        let atoms = routing_atom_cache
+            .atoms(frame)
+            .iter()
+            .copied()
             .collect::<BTreeSet<_>>();
         common.retain(|atom| atoms.contains(atom));
     }
@@ -986,6 +1175,7 @@ fn derive_cohort_invariants(
                 positives.len(),
                 positive_tokens,
                 negatives,
+                routing_atom_cache,
             );
         }
     }
@@ -997,6 +1187,7 @@ fn derive_cohort_invariants(
             positives.len(),
             positive_tokens,
             negatives,
+            routing_atom_cache,
         );
     }
     'pairs: for (left_index, left) in common.iter().enumerate() {
@@ -1007,6 +1198,7 @@ fn derive_cohort_invariants(
                 positives.len(),
                 positive_tokens,
                 negatives,
+                routing_atom_cache,
             );
             if candidates.len() >= 512 {
                 break 'pairs;
@@ -1030,6 +1222,7 @@ fn insert_invariant_candidate(
     positive_rows: usize,
     positive_tokens: u64,
     negatives: &[crate::RelationFrame],
+    routing_atom_cache: &mut RoutingAtomCache,
 ) {
     atom_ids.sort_unstable();
     atom_ids.dedup();
@@ -1038,7 +1231,7 @@ fn insert_invariant_candidate(
     }
     let negative_collisions = negatives
         .iter()
-        .filter(|frame| frame_has_atoms(frame, &atom_ids))
+        .filter(|frame| routing_atom_cache.frame_has_atoms(frame, &atom_ids))
         .count();
     candidates.insert(
         atom_ids.clone(),
@@ -1070,13 +1263,16 @@ where
     frames
 }
 
-fn run_state_slice(state: &mut CegisSearchState) -> usize {
+fn run_state_slice(
+    state: &mut CegisSearchState,
+    routing_atom_cache: &mut RoutingAtomCache,
+) -> usize {
     let budget = state.arena.exact_checks_per_slice();
-    let invariants = candidate_invariants(&state.invariants, &state.positives);
-    if invariants.is_empty() {
+    if state.invariants.is_empty() {
         state.blocker = Some("no_clean_pre_action_invariant".to_owned());
         return 0;
     }
+    let invariants = &state.invariants;
     state.arena.begin_slice();
     let mut checks = 0_usize;
     while checks < budget {
@@ -1131,7 +1327,9 @@ fn run_state_slice(state: &mut CegisSearchState) -> usize {
                 state.generated_repair_programs = state
                     .generated_repair_programs
                     .saturating_add(u64::try_from(inserted).unwrap_or(u64::MAX));
-                state.arena.rank_for_support(&state.positives);
+                state
+                    .arena
+                    .rank_for_phase_centers(&state.positives, &state.negatives);
             }
             continue;
         }
@@ -1148,7 +1346,7 @@ fn run_state_slice(state: &mut CegisSearchState) -> usize {
                 active.negative_index = active.negative_index.saturating_add(1);
                 continue;
             }
-            let false_accept = frame_has_atoms(frame, &required_atom_ids)
+            let false_accept = routing_atom_cache.frame_has_atoms(frame, &required_atom_ids)
                 && crate::synthesis::program_runtime_applicable(&active.program.program, frame);
             if false_accept {
                 if active.phase_delegated {
@@ -1205,12 +1403,60 @@ fn run_state_slice(state: &mut CegisSearchState) -> usize {
             .arena
             .phase_rank(active.program.node_id)
             .unwrap_or(u32::MAX);
+        let (anti_center_atom_sets, learned_wave_route) = match derive_safe_anti_centers(
+            &active.program.program,
+            &required_atom_ids,
+            &state.negatives,
+            &state.safe_anti_center_candidates,
+            routing_atom_cache,
+        ) {
+            Ok(anti_centers) => (anti_centers, None),
+            Err(blocker) => {
+                let phase_negatives = state
+                    .negatives
+                    .iter()
+                    .filter(|frame| {
+                        !(frame.verifier_label == Some(true)
+                            && crate::synthesis::program_is_consistent(
+                                &active.program.program,
+                                frame,
+                            ))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let learned = crate::online_admission::learned_wave_route_from_support_medoid(
+                    &state.positives,
+                    &phase_negatives,
+                    32,
+                );
+                let phase_separates = learned.as_ref().is_some_and(|route| {
+                    state.positives.iter().all(|frame| {
+                        crate::online_admission::learned_wave_route_accepts_frame(route, frame)
+                    }) && phase_negatives.iter().all(|frame| {
+                        !crate::online_admission::learned_wave_route_accepts_frame(route, frame)
+                    })
+                });
+                if !phase_separates {
+                    state.blocker = Some(blocker.to_owned());
+                    state.arena.record_exact_check(
+                        active.program.node_id,
+                        false,
+                        "negative_unseparable_at_current_representation",
+                    );
+                    state.active = None;
+                    break;
+                }
+                (Vec::new(), learned)
+            }
+        };
         state.winner = Some(CegisWinner {
             cohort_id_sha256: state.cohort_id_sha256.clone(),
             teacher_signature_sha256: state.teacher_signature_sha256.clone(),
             action_symbol: state.action_symbol.clone(),
             program: active.program.program.clone(),
             required_atom_ids,
+            anti_center_atom_sets,
+            learned_wave_route,
             positive_rows: state.positives.len(),
             negative_rows: state.negatives.len(),
             exact_checks: state.arena.report().exact_checks,
@@ -1262,13 +1508,14 @@ fn repaired_program_candidates(
 fn candidate_invariants(
     invariants: &[RuntimeInvariant],
     positives: &[crate::RelationFrame],
+    routing_atom_cache: &mut RoutingAtomCache,
 ) -> Vec<RuntimeInvariant> {
     let mut candidates = invariants
         .iter()
         .filter(|invariant| {
             positives
                 .iter()
-                .all(|frame| frame_has_atoms(frame, &invariant.atom_ids))
+                .all(|frame| routing_atom_cache.frame_has_atoms(frame, &invariant.atom_ids))
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -1287,6 +1534,98 @@ fn frame_has_atoms(frame: &crate::RelationFrame, required: &[u64]) -> bool {
     required
         .iter()
         .all(|atom| observed.binary_search(atom).is_ok())
+}
+
+#[must_use]
+pub(crate) fn winner_routes_frame(winner: &CegisWinner, frame: &crate::RelationFrame) -> bool {
+    frame_has_atoms(frame, &winner.required_atom_ids)
+        && !winner
+            .anti_center_atom_sets
+            .iter()
+            .any(|anti_center| frame_has_atoms(frame, anti_center))
+        && winner.learned_wave_route.as_ref().is_none_or(|route| {
+            crate::online_admission::learned_wave_route_accepts_frame(route, frame)
+        })
+        && crate::synthesis::program_runtime_applicable(&winner.program, frame)
+}
+
+fn winner_routes_frame_cached(
+    winner: &CegisWinner,
+    frame: &crate::RelationFrame,
+    routing_atom_cache: &mut RoutingAtomCache,
+) -> bool {
+    routing_atom_cache.frame_has_atoms(frame, &winner.required_atom_ids)
+        && !winner
+            .anti_center_atom_sets
+            .iter()
+            .any(|anti_center| routing_atom_cache.frame_has_atoms(frame, anti_center))
+        && winner.learned_wave_route.as_ref().is_none_or(|route| {
+            crate::online_admission::learned_wave_route_accepts_frame(route, frame)
+        })
+        && crate::synthesis::program_runtime_applicable(&winner.program, frame)
+}
+
+fn derive_safe_anti_centers(
+    program: &ResponseProgram,
+    required_atom_ids: &[u64],
+    negatives: &[crate::RelationFrame],
+    safe_candidates: &[Vec<u64>],
+    routing_atom_cache: &mut RoutingAtomCache,
+) -> Result<Vec<Vec<u64>>, &'static str> {
+    let mut anti_centers = BTreeSet::<Vec<u64>>::new();
+    for negative in negatives {
+        if negative.verifier_label == Some(true)
+            && crate::synthesis::program_is_consistent(program, negative)
+        {
+            continue;
+        }
+        if !routing_atom_cache.frame_has_atoms(negative, required_atom_ids)
+            || !crate::synthesis::program_runtime_applicable(program, negative)
+        {
+            continue;
+        }
+        let selected = safe_candidates
+            .iter()
+            .find(|candidate| routing_atom_cache.frame_has_atoms(negative, candidate))
+            .cloned()
+            .ok_or("negative_unseparable_at_current_representation")?;
+        anti_centers.insert(selected);
+    }
+    Ok(anti_centers.into_iter().collect())
+}
+
+fn derive_safe_anti_center_candidates(
+    positives: &[crate::RelationFrame],
+    negatives: &[crate::RelationFrame],
+    routing_atom_cache: &mut RoutingAtomCache,
+) -> Vec<Vec<u64>> {
+    let mut candidates = BTreeSet::<Vec<u64>>::new();
+    for negative in negatives {
+        let atoms = routing_atom_cache
+            .atoms(negative)
+            .iter()
+            .copied()
+            .take(MAX_APPLICABILITY_ATOMS)
+            .collect::<Vec<_>>();
+        let selected = atoms
+            .iter()
+            .map(|atom| vec![*atom])
+            .chain(atoms.iter().enumerate().flat_map(|(left_index, left)| {
+                atoms
+                    .iter()
+                    .skip(left_index.saturating_add(1))
+                    .map(move |right| vec![*left, *right])
+            }))
+            .find(|candidate| {
+                positives
+                    .iter()
+                    .all(|positive| !routing_atom_cache.frame_has_atoms(positive, candidate))
+            });
+        if let Some(selected) = selected {
+            candidates.insert(selected);
+        }
+    }
+    candidates.into_iter().collect()
 }
 
 fn classify_program_counterexample(
@@ -1326,6 +1665,25 @@ mod tests {
         AtomSource, AtomValueType, RELATION_FRAME_SCHEMA, RelationAtom, ResponseValueSelector,
         SOURCE_NEUTRAL_EXTRACTOR_VERSION, teacher_program_signature,
     };
+
+    #[test]
+    fn applicability_ranking_keeps_clean_hidden_signal_inside_budget() {
+        let mut evidence = BTreeMap::new();
+        for atom in 0_u64..70 {
+            evidence.insert(atom, (100, 10_000, 1, false));
+        }
+        let clean_plain = 998_u64;
+        let clean_hidden = 999_u64;
+        evidence.insert(clean_plain, (32, 20_000, 0, false));
+        evidence.insert(clean_hidden, (32, 15_000, 0, true));
+
+        let ranked = rank_applicability_atoms(evidence, 32, 64);
+        assert_eq!(ranked.len(), 64);
+        assert_eq!(ranked[0], clean_hidden);
+        assert_eq!(ranked[1], clean_plain);
+        assert!(ranked.contains(&clean_hidden));
+        assert!(!ranked.contains(&69));
+    }
 
     fn function_frame(
         index: u64,
@@ -1403,6 +1761,49 @@ mod tests {
     }
 
     #[test]
+    fn terminal_blocker_removes_cohort_from_pending_work() {
+        let positives = (0..32)
+            .map(|row| function_frame(row + 1, row + 10, "wait", &[10]))
+            .collect::<Vec<_>>();
+        let signature = teacher_program_signature(&positives[0]).expect("teacher signature");
+        let pool = TeacherPoolSnapshot {
+            teacher_signature_sha256: signature.clone(),
+            action_symbol: "function:wait".to_owned(),
+            positives,
+            negatives: Vec::new(),
+            positive_rows: 32,
+            negative_rows: 0,
+            positive_tokens: 3_200,
+            negative_tokens: 0,
+            distinct_surfaces: 1,
+            distinct_sessions: 32,
+            invariants: Vec::new(),
+        };
+        let mut cegis = CegisCoordinator::new(VersionSpaceConfig::default(), 16);
+        cegis.refresh_pool(&pool);
+        assert!(cegis.has_pending_work());
+
+        cegis
+            .states
+            .values_mut()
+            .for_each(|state| state.blocker = Some("version_space_exhausted".to_owned()));
+
+        assert!(!cegis.has_pending_work());
+        assert!(!cegis.has_pending_work_for_teacher_signatures(&BTreeSet::from([signature])));
+        assert_eq!(cegis.run_next_slice(), 0);
+    }
+
+    #[test]
+    fn routing_atom_cache_matches_direct_extractor() {
+        let frame = function_frame(1, 10, "wait", &[10, 20, 30]);
+        let expected = relation_frame_online_routing_atom_ids(&frame);
+        let mut cache = RoutingAtomCache::default();
+
+        assert_eq!(cache.atoms(&frame), expected);
+        assert_eq!(cache.atoms(&frame), expected);
+    }
+
+    #[test]
     fn accepted_cross_signature_example_is_transfer_not_a_negative() {
         let positives = (0..32)
             .map(|row| function_frame(row + 1, row + 10, "wait", &[10]))
@@ -1435,7 +1836,7 @@ mod tests {
         let positives = (0..96)
             .map(|row| {
                 let layout = 100 + row % 4;
-                let capabilities = if row < 16 || row >= 32 {
+                let capabilities = if !(16..32).contains(&row) {
                     vec![10, 20, layout]
                 } else {
                     vec![10, 30, layout]
@@ -1484,6 +1885,7 @@ mod tests {
             crate::RolloverPolicy::default(),
             0,
             &future_eligible_ids,
+            &future_eligible_ids,
         );
         assert_eq!(generation.support.len(), 32);
         assert!(generation.future.len() >= 32);
@@ -1496,7 +1898,7 @@ mod tests {
         let positives = (0..96)
             .map(|row| {
                 let layout = 100 + row % 4;
-                let capabilities = if row < 16 || row >= 32 {
+                let capabilities = if !(16..32).contains(&row) {
                     vec![10, 20, layout]
                 } else {
                     vec![10, 30, layout]
@@ -1545,6 +1947,87 @@ mod tests {
                 .iter()
                 .any(|winner| winner.required_atom_ids.contains(&clean_specific_atom))
         );
+    }
+
+    #[test]
+    fn learned_anti_center_prevents_repeated_false_repair() {
+        let positives = (0..32)
+            .map(|row| function_frame(row + 1, row + 10, "wait", &[10, 20]))
+            .collect::<Vec<_>>();
+        let signature = teacher_program_signature(&positives[0]).expect("teacher signature");
+        let negative = function_frame(1_000, 100, "exec_command", &[10, 20, 30]);
+        let pool = TeacherPoolSnapshot {
+            teacher_signature_sha256: signature,
+            action_symbol: "function:wait".to_owned(),
+            positives,
+            negatives: vec![negative.clone()],
+            positive_rows: 32,
+            negative_rows: 1,
+            positive_tokens: 3_200,
+            negative_tokens: 100,
+            distinct_surfaces: 1,
+            distinct_sessions: 32,
+            invariants: Vec::new(),
+        };
+        let mut cegis = CegisCoordinator::new(VersionSpaceConfig::default(), 16);
+        cegis.refresh_pool(&pool);
+        run_to_quiescence(&mut cegis);
+
+        let winner = cegis.winners().into_iter().next().expect("winner");
+        assert!(winner_routes_frame(&winner, &pool.positives[0]));
+        assert!(!winner_routes_frame(&winner, &negative));
+        assert!(
+            !winner.anti_center_atom_sets.is_empty()
+                || !frame_has_atoms(&negative, &winner.required_atom_ids)
+        );
+
+        let later_negative = function_frame(2_000, 200, "exec_command", &[10, 20, 30]);
+        let transition = crate::teacher_transition_from_completed(&later_negative, None)
+            .expect("teacher transition");
+        assert_eq!(cegis.observe_global_transition(&transition), 0);
+        assert_eq!(cegis.winners().len(), 1);
+        assert_eq!(cegis.report().repair_events, 0);
+    }
+
+    #[test]
+    fn routing_invariant_spans_all_retained_program_positives() {
+        let positives = (0..64)
+            .map(|row| {
+                let surface_atom = if row < 32 { 20 } else { 30 };
+                function_frame(row + 1, row + 10, "wait", &[10, surface_atom])
+            })
+            .collect::<Vec<_>>();
+        let signature = teacher_program_signature(&positives[0]).expect("teacher signature");
+        let pool = TeacherPoolSnapshot {
+            teacher_signature_sha256: signature,
+            action_symbol: "function:wait".to_owned(),
+            positives: positives.clone(),
+            negatives: Vec::new(),
+            positive_rows: 64,
+            negative_rows: 0,
+            positive_tokens: 6_400,
+            negative_tokens: 0,
+            distinct_surfaces: 2,
+            distinct_sessions: 64,
+            invariants: Vec::new(),
+        };
+        let mut cegis = CegisCoordinator::new(VersionSpaceConfig::default(), 16);
+        let preferred_support_ids = positives[32..]
+            .iter()
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        cegis.refresh_pool_with_preferred_support(&pool, &preferred_support_ids);
+        run_to_quiescence(&mut cegis);
+
+        assert!(cegis.winners().iter().any(|winner| {
+            winner
+                .support_frame_ids
+                .iter()
+                .all(|frame_id| preferred_support_ids.contains(frame_id))
+                && positives
+                    .iter()
+                    .all(|positive| winner_routes_frame(winner, positive))
+        }));
     }
 
     #[test]

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::TeacherTransition;
 
 pub const OPPORTUNITY_BOARD_SCHEMA_V2: &str = "nando.opportunity-board.v2";
+pub const OPPORTUNITY_BOARD_SCHEMA_V3: &str = "nando.opportunity-board.v3";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -65,6 +66,8 @@ struct IntentOpportunity {
     class: ReducibilityClass,
     verifier_available: bool,
     observed_at_unix: u64,
+    #[serde(default)]
+    authority_observed: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -81,6 +84,8 @@ pub struct TeacherOpportunityReport {
     pub ordinary_tokens: u64,
     pub verified_intents: u64,
     pub verified_tokens: u64,
+    #[serde(default)]
+    pub verifier_available_intents: u64,
     pub marginal_uncovered_tokens: u64,
     pub exact_checks: u64,
     pub search_slices: u64,
@@ -118,6 +123,22 @@ pub struct OpportunityBoardReport {
     pub verified_token_share_milli: u64,
     pub classified_intents: u64,
     pub classification_identity_holds: bool,
+    #[serde(default)]
+    pub proven_irreducible_intents: u64,
+    #[serde(default)]
+    pub proven_irreducible_tokens: u64,
+    #[serde(default)]
+    pub unresolved_intents: u64,
+    #[serde(default)]
+    pub unresolved_tokens: u64,
+    #[serde(default)]
+    pub optimistic_executable_upper_bound_tokens: u64,
+    #[serde(default)]
+    pub optimistic_executable_upper_bound_share_milli: u64,
+    #[serde(default)]
+    pub upper_bound_identity_holds: bool,
+    #[serde(default)]
+    pub m3_reachable_under_upper_bound: bool,
     pub capacity_overflow: u64,
     pub false_accepts: u64,
     pub parity_failures: u64,
@@ -176,7 +197,20 @@ impl OpportunityBoard {
         ordinary: bool,
         now_unix: u64,
     ) {
-        if !ordinary || self.intents.contains_key(intent_sha256) {
+        if !ordinary {
+            return;
+        }
+        if let Some(previous) = self.intents.get(intent_sha256).cloned() {
+            self.remove_teacher_assignment(&previous);
+            let intent = self
+                .intents
+                .get_mut(intent_sha256)
+                .expect("intent was read above");
+            intent.input_tokens = input_tokens;
+            intent.observed_at_unix = now_unix;
+            intent.authority_observed = true;
+            let updated = intent.clone();
+            self.add_teacher_assignment(&updated);
             return;
         }
         if self.intents.len() >= self.config.maximum_window_intents {
@@ -191,6 +225,7 @@ impl OpportunityBoard {
                 class: ReducibilityClass::InsufficientRepetition,
                 verifier_available: false,
                 observed_at_unix: now_unix,
+                authority_observed: true,
             },
         );
     }
@@ -202,51 +237,68 @@ impl OpportunityBoard {
         if economics.controlled || economics.replay || !economics.dedupe_eligible {
             return;
         }
-        let now_unix = transition.outcome.completed_at_unix_nanos / 1_000_000_000;
-        if economics.ordinary {
-            self.observe_request(
-                &transition.before.client_intent_id_sha256,
-                economics.exact_input_tokens,
-                true,
-                now_unix,
-            );
+        let intent_sha256 = transition.before.client_intent_id_sha256.as_str();
+        if !economics.ordinary
+            || !self
+                .intents
+                .get(intent_sha256)
+                .is_some_and(|intent| intent.authority_observed)
+        {
+            return;
         }
+        self.assign_teacher_transition(transition);
+    }
+
+    /// Reattaches bounded discovery evidence to intents that already entered
+    /// the authoritative live denominator. It never creates an intent.
+    pub fn reconcile_teacher_transition(&mut self, transition: &TeacherTransition) {
+        let intent_sha256 = transition.before.client_intent_id_sha256.as_str();
+        if !self
+            .intents
+            .get(intent_sha256)
+            .is_some_and(|intent| intent.authority_observed)
+        {
+            return;
+        }
+        self.assign_teacher_transition(transition);
+    }
+
+    fn assign_teacher_transition(&mut self, transition: &TeacherTransition) {
+        let intent_sha256 = transition.before.client_intent_id_sha256.as_str();
+        let Some(previous) = self.intents.get(intent_sha256).cloned() else {
+            return;
+        };
+        self.remove_teacher_assignment(&previous);
         let signature = transition.outcome.action.signature_sha256.clone();
         let verifier_available = transition.outcome.verifier.accepted;
-        if economics.ordinary
-            && let Some(intent) = self
-                .intents
-                .get_mut(&transition.before.client_intent_id_sha256)
-        {
-            intent.teacher_signature_sha256 = Some(signature.clone());
-            intent.verifier_available = verifier_available;
-            intent.class = if transition.before.contains_teacher_atoms() {
-                ReducibilityClass::UnclassifiedBug
-            } else if !verifier_available {
-                ReducibilityClass::MissingExternalVerifier
-            } else {
-                ReducibilityClass::ExecutableCandidate
-            };
-        }
-        let aggregate = self
-            .teacher_programs
+        self.teacher_programs
             .entry(signature.clone())
             .or_insert_with(|| TeacherOpportunityReport {
-                teacher_signature_sha256: signature,
+                teacher_signature_sha256: signature.clone(),
                 action_symbol: transition.outcome.action.action_symbol.clone(),
                 estimated_safe_accept_milli: 1_000,
-                verifier_availability_milli: u64::from(verifier_available) * 1_000,
                 transfer_probability_milli: 500,
                 ..TeacherOpportunityReport::default()
             });
-        aggregate.ordinary_intents = aggregate.ordinary_intents.saturating_add(1);
-        aggregate.ordinary_tokens = aggregate
-            .ordinary_tokens
-            .saturating_add(economics.exact_input_tokens);
-        aggregate.marginal_uncovered_tokens = aggregate
-            .marginal_uncovered_tokens
-            .saturating_add(economics.exact_input_tokens);
-        recompute_priority(aggregate);
+        if let Some(intent) = self.intents.get_mut(intent_sha256) {
+            intent.teacher_signature_sha256 = Some(signature.clone());
+            intent.verifier_available = verifier_available;
+            if intent.class != ReducibilityClass::CpuVerified {
+                intent.class = if transition.before.contains_teacher_atoms() {
+                    ReducibilityClass::UnclassifiedBug
+                } else if !verifier_available {
+                    ReducibilityClass::MissingExternalVerifier
+                } else {
+                    ReducibilityClass::ExecutableCandidate
+                };
+            }
+        }
+        let updated = self
+            .intents
+            .get(intent_sha256)
+            .expect("authoritative intent exists")
+            .clone();
+        self.add_teacher_assignment(&updated);
     }
 
     pub fn classify_intent(
@@ -255,11 +307,23 @@ impl OpportunityBoard {
         class: ReducibilityClass,
         blocker: Option<&str>,
     ) {
-        let Some(intent) = self.intents.get_mut(intent_sha256) else {
+        let Some(previous) = self.intents.get(intent_sha256).cloned() else {
             return;
         };
+        if previous.class == ReducibilityClass::CpuVerified
+            && class != ReducibilityClass::CpuVerified
+        {
+            return;
+        }
+        self.remove_teacher_assignment(&previous);
+        let intent = self
+            .intents
+            .get_mut(intent_sha256)
+            .expect("intent was read above");
         intent.class = class;
-        if let Some(signature) = intent.teacher_signature_sha256.as_ref()
+        let updated = intent.clone();
+        self.add_teacher_assignment(&updated);
+        if let Some(signature) = updated.teacher_signature_sha256.as_ref()
             && let Some(program) = self.teacher_programs.get_mut(signature)
         {
             program.blocker = blocker.map(str::to_owned);
@@ -289,22 +353,74 @@ impl OpportunityBoard {
     }
 
     pub fn mark_verified(&mut self, intent_sha256: &str) {
-        let Some(intent) = self.intents.get_mut(intent_sha256) else {
+        let Some(previous) = self.intents.get(intent_sha256).cloned() else {
             return;
         };
-        if intent.class == ReducibilityClass::CpuVerified {
+        if previous.class == ReducibilityClass::CpuVerified {
             return;
         }
+        self.remove_teacher_assignment(&previous);
+        let intent = self
+            .intents
+            .get_mut(intent_sha256)
+            .expect("intent was read above");
         intent.class = ReducibilityClass::CpuVerified;
-        if let Some(signature) = intent.teacher_signature_sha256.as_ref()
-            && let Some(program) = self.teacher_programs.get_mut(signature)
+        let updated = intent.clone();
+        self.add_teacher_assignment(&updated);
+    }
+
+    /// Rebuilds denormalized teacher rankings from the authoritative intent map.
+    /// This is also the checkpoint migration for boards written before V3.
+    pub fn repair_teacher_aggregates(&mut self) {
+        let templates = std::mem::take(&mut self.teacher_programs);
+        let mut rebuilt = BTreeMap::<String, TeacherOpportunityReport>::new();
+        for intent in self
+            .intents
+            .values()
+            .filter(|intent| intent.authority_observed)
         {
-            program.verified_intents = program.verified_intents.saturating_add(1);
-            program.verified_tokens = program.verified_tokens.saturating_add(intent.input_tokens);
-            program.marginal_uncovered_tokens = program
-                .marginal_uncovered_tokens
-                .saturating_sub(intent.input_tokens);
-            recompute_priority(program);
+            let Some(signature) = intent.teacher_signature_sha256.as_ref() else {
+                continue;
+            };
+            let Some(template) = templates.get(signature) else {
+                continue;
+            };
+            let program = rebuilt.entry(signature.clone()).or_insert_with(|| {
+                let mut program = template.clone();
+                reset_teacher_accounting(&mut program);
+                program
+            });
+            add_intent_accounting(program, intent);
+        }
+        for program in rebuilt.values_mut() {
+            refresh_teacher_accounting(program);
+        }
+        self.teacher_programs = rebuilt;
+    }
+
+    fn remove_teacher_assignment(&mut self, intent: &IntentOpportunity) {
+        if !intent.authority_observed {
+            return;
+        }
+        let Some(signature) = intent.teacher_signature_sha256.as_ref() else {
+            return;
+        };
+        if let Some(program) = self.teacher_programs.get_mut(signature) {
+            remove_intent_accounting(program, intent);
+            refresh_teacher_accounting(program);
+        }
+    }
+
+    fn add_teacher_assignment(&mut self, intent: &IntentOpportunity) {
+        if !intent.authority_observed {
+            return;
+        }
+        let Some(signature) = intent.teacher_signature_sha256.as_ref() else {
+            return;
+        };
+        if let Some(program) = self.teacher_programs.get_mut(signature) {
+            add_intent_accounting(program, intent);
+            refresh_teacher_accounting(program);
         }
     }
 
@@ -356,7 +472,11 @@ impl OpportunityBoard {
     pub fn report(&self, now_unix: u64) -> OpportunityBoardReport {
         let current = self.current_window_report(now_unix);
         let mut classes = BTreeMap::<String, OpportunityClassReport>::new();
-        for intent in self.intents.values() {
+        for intent in self
+            .intents
+            .values()
+            .filter(|intent| intent.authority_observed)
+        {
             let class = classes.entry(intent.class.as_str().to_owned()).or_default();
             class.intents = class.intents.saturating_add(1);
             class.input_tokens = class.input_tokens.saturating_add(intent.input_tokens);
@@ -379,17 +499,70 @@ impl OpportunityBoard {
         let completed_m3_windows = self.completed_windows.clone();
         let product_m3_pass = completed_m3_windows.len() >= self.config.required_m3_windows
             && completed_m3_windows.iter().all(|window| window.pass);
+        let proven_irreducible_intents = class_intents(
+            &classes,
+            &[
+                ReducibilityClass::AmbiguousPreActionState,
+                ReducibilityClass::NonDeterministicOrCreative,
+            ],
+        );
+        let proven_irreducible_tokens = class_tokens(
+            &classes,
+            &[
+                ReducibilityClass::AmbiguousPreActionState,
+                ReducibilityClass::NonDeterministicOrCreative,
+            ],
+        );
+        let resolved_intents = class_intents(
+            &classes,
+            &[
+                ReducibilityClass::CpuVerified,
+                ReducibilityClass::ExecutableCandidate,
+                ReducibilityClass::AmbiguousPreActionState,
+                ReducibilityClass::NonDeterministicOrCreative,
+            ],
+        );
+        let resolved_tokens = class_tokens(
+            &classes,
+            &[
+                ReducibilityClass::CpuVerified,
+                ReducibilityClass::ExecutableCandidate,
+                ReducibilityClass::AmbiguousPreActionState,
+                ReducibilityClass::NonDeterministicOrCreative,
+            ],
+        );
+        let unresolved_intents = current.ordinary_intents.saturating_sub(resolved_intents);
+        let unresolved_tokens = current.ordinary_tokens.saturating_sub(resolved_tokens);
+        let optimistic_executable_upper_bound_tokens = current
+            .ordinary_tokens
+            .saturating_sub(proven_irreducible_tokens);
+        let optimistic_executable_upper_bound_share_milli = ratio_milli(
+            optimistic_executable_upper_bound_tokens,
+            current.ordinary_tokens,
+        );
         OpportunityBoardReport {
-            schema: OPPORTUNITY_BOARD_SCHEMA_V2.to_owned(),
+            schema: OPPORTUNITY_BOARD_SCHEMA_V3.to_owned(),
             window_started_at_unix: self.window_started_at_unix,
             ordinary_intents: current.ordinary_intents,
             ordinary_tokens: current.ordinary_tokens,
             verified_intents: current.verified_intents,
             verified_tokens: current.verified_tokens,
             verified_token_share_milli: current.verified_token_share_milli,
-            classified_intents: self.intents.len() as u64,
+            classified_intents: current.ordinary_intents,
             classification_identity_holds: self.capacity_overflow == 0
-                && current.ordinary_intents == self.intents.len() as u64,
+                && current.ordinary_intents
+                    == classes.values().map(|class| class.intents).sum::<u64>(),
+            proven_irreducible_intents,
+            proven_irreducible_tokens,
+            unresolved_intents,
+            unresolved_tokens,
+            optimistic_executable_upper_bound_tokens,
+            optimistic_executable_upper_bound_share_milli,
+            upper_bound_identity_holds: current.ordinary_tokens
+                == optimistic_executable_upper_bound_tokens
+                    .saturating_add(proven_irreducible_tokens),
+            m3_reachable_under_upper_bound: current.ordinary_tokens == 0
+                || optimistic_executable_upper_bound_share_milli >= 500,
             capacity_overflow: self.capacity_overflow,
             false_accepts: self.false_accepts,
             parity_failures: self.parity_failures,
@@ -401,21 +574,31 @@ impl OpportunityBoard {
     }
 
     fn current_window_report(&self, now_unix: u64) -> M3WindowReport {
-        let ordinary_intents = self.intents.len() as u64;
+        let authority_intents = self
+            .intents
+            .values()
+            .filter(|intent| intent.authority_observed)
+            .collect::<Vec<_>>();
+        let ordinary_intents = authority_intents.len() as u64;
         let ordinary_tokens = self
             .intents
             .values()
+            .filter(|intent| intent.authority_observed)
             .map(|intent| intent.input_tokens)
             .sum::<u64>();
         let verified_intents = self
             .intents
             .values()
-            .filter(|intent| intent.class == ReducibilityClass::CpuVerified)
+            .filter(|intent| {
+                intent.authority_observed && intent.class == ReducibilityClass::CpuVerified
+            })
             .count() as u64;
         let verified_tokens = self
             .intents
             .values()
-            .filter(|intent| intent.class == ReducibilityClass::CpuVerified)
+            .filter(|intent| {
+                intent.authority_observed && intent.class == ReducibilityClass::CpuVerified
+            })
             .map(|intent| intent.input_tokens)
             .sum::<u64>();
         let verified_token_share_milli = ratio_milli(verified_tokens, ordinary_tokens);
@@ -441,6 +624,28 @@ impl OpportunityBoard {
     }
 }
 
+fn class_intents(
+    classes: &BTreeMap<String, OpportunityClassReport>,
+    selected: &[ReducibilityClass],
+) -> u64 {
+    selected
+        .iter()
+        .filter_map(|class| classes.get(class.as_str()))
+        .map(|class| class.intents)
+        .sum()
+}
+
+fn class_tokens(
+    classes: &BTreeMap<String, OpportunityClassReport>,
+    selected: &[ReducibilityClass],
+) -> u64 {
+    selected
+        .iter()
+        .filter_map(|class| classes.get(class.as_str()))
+        .map(|class| class.input_tokens)
+        .sum()
+}
+
 impl Default for OpportunityBoard {
     fn default() -> Self {
         Self::new(OpportunityBoardConfig::default(), 0)
@@ -461,6 +666,49 @@ fn recompute_priority(program: &mut TeacherOpportunityReport) {
     .saturating_mul(1_000_000);
     program.expected_verified_value_micro =
         u64::try_from(numerator / denominator).unwrap_or(u64::MAX);
+}
+
+fn reset_teacher_accounting(program: &mut TeacherOpportunityReport) {
+    program.ordinary_intents = 0;
+    program.ordinary_tokens = 0;
+    program.verified_intents = 0;
+    program.verified_tokens = 0;
+    program.verifier_available_intents = 0;
+    program.marginal_uncovered_tokens = 0;
+    program.verifier_availability_milli = 0;
+}
+
+fn add_intent_accounting(program: &mut TeacherOpportunityReport, intent: &IntentOpportunity) {
+    program.ordinary_intents = program.ordinary_intents.saturating_add(1);
+    program.ordinary_tokens = program.ordinary_tokens.saturating_add(intent.input_tokens);
+    if intent.class == ReducibilityClass::CpuVerified {
+        program.verified_intents = program.verified_intents.saturating_add(1);
+        program.verified_tokens = program.verified_tokens.saturating_add(intent.input_tokens);
+    }
+    if intent.verifier_available {
+        program.verifier_available_intents = program.verifier_available_intents.saturating_add(1);
+    }
+}
+
+fn remove_intent_accounting(program: &mut TeacherOpportunityReport, intent: &IntentOpportunity) {
+    program.ordinary_intents = program.ordinary_intents.saturating_sub(1);
+    program.ordinary_tokens = program.ordinary_tokens.saturating_sub(intent.input_tokens);
+    if intent.class == ReducibilityClass::CpuVerified {
+        program.verified_intents = program.verified_intents.saturating_sub(1);
+        program.verified_tokens = program.verified_tokens.saturating_sub(intent.input_tokens);
+    }
+    if intent.verifier_available {
+        program.verifier_available_intents = program.verifier_available_intents.saturating_sub(1);
+    }
+}
+
+fn refresh_teacher_accounting(program: &mut TeacherOpportunityReport) {
+    program.marginal_uncovered_tokens = program
+        .ordinary_tokens
+        .saturating_sub(program.verified_tokens);
+    program.verifier_availability_milli =
+        ratio_milli(program.verifier_available_intents, program.ordinary_intents);
+    recompute_priority(program);
 }
 
 fn ratio_milli(numerator: u64, denominator: u64) -> u64 {
@@ -489,5 +737,101 @@ mod tests {
         let report = restored.report(1);
         assert_eq!(report.false_accepts, 1);
         assert_eq!(report.parity_failures, 1);
+    }
+
+    #[test]
+    fn legacy_intent_enters_denominator_only_after_authoritative_request() {
+        let mut board = OpportunityBoard::default();
+        board.intents.insert(
+            "intent-a".to_owned(),
+            IntentOpportunity {
+                input_tokens: 999,
+                teacher_signature_sha256: None,
+                class: ReducibilityClass::ExecutableCandidate,
+                verifier_available: true,
+                observed_at_unix: 1,
+                authority_observed: false,
+            },
+        );
+        assert_eq!(board.report(1).ordinary_intents, 0);
+
+        board.observe_request("intent-a", 123, true, 2);
+        board.observe_request("intent-a", 123, true, 3);
+        let report = board.report(3);
+        assert_eq!(report.ordinary_intents, 1);
+        assert_eq!(report.ordinary_tokens, 123);
+        assert!(report.classification_identity_holds);
+    }
+
+    #[test]
+    fn teacher_aggregate_repair_is_idempotent_and_preserves_verified_authority() {
+        let mut board = OpportunityBoard::default();
+        board.observe_request("intent-a", 123, true, 1);
+        let intent = board.intents.get_mut("intent-a").expect("intent");
+        intent.teacher_signature_sha256 = Some("teacher-a".to_owned());
+        intent.verifier_available = true;
+        intent.class = ReducibilityClass::ExecutableCandidate;
+        board.teacher_programs.insert(
+            "teacher-a".to_owned(),
+            TeacherOpportunityReport {
+                teacher_signature_sha256: "teacher-a".to_owned(),
+                action_symbol: "function:wait".to_owned(),
+                ordinary_intents: 999,
+                ordinary_tokens: 999_999,
+                marginal_uncovered_tokens: 999_999,
+                ..TeacherOpportunityReport::default()
+            },
+        );
+
+        board.repair_teacher_aggregates();
+        board.repair_teacher_aggregates();
+        board.observe_request("intent-a", 123, true, 2);
+        let program = board
+            .report(2)
+            .teacher_programs
+            .into_iter()
+            .next()
+            .expect("teacher program");
+        assert_eq!(program.ordinary_intents, 1);
+        assert_eq!(program.ordinary_tokens, 123);
+        assert_eq!(program.verifier_available_intents, 1);
+        assert_eq!(program.verifier_availability_milli, 1_000);
+
+        board.mark_verified("intent-a");
+        board.classify_intent(
+            "intent-a",
+            ReducibilityClass::InsufficientRepetition,
+            Some("late_fallback"),
+        );
+        let report = board.report(3);
+        assert_eq!(report.verified_intents, 1);
+        assert_eq!(report.verified_tokens, 123);
+        assert_eq!(report.teacher_programs[0].verified_intents, 1);
+        assert_eq!(report.teacher_programs[0].verified_tokens, 123);
+    }
+
+    #[test]
+    fn executable_upper_bound_accounts_every_authoritative_token_once() {
+        let mut board = OpportunityBoard::default();
+        for (intent, tokens, class) in [
+            ("candidate", 100, ReducibilityClass::ExecutableCandidate),
+            ("ambiguous", 60, ReducibilityClass::AmbiguousPreActionState),
+            (
+                "creative",
+                40,
+                ReducibilityClass::NonDeterministicOrCreative,
+            ),
+        ] {
+            board.observe_request(intent, tokens, true, 1);
+            board.classify_intent(intent, class, Some(class.as_str()));
+        }
+
+        let report = board.report(2);
+        assert_eq!(report.ordinary_tokens, 200);
+        assert_eq!(report.proven_irreducible_tokens, 100);
+        assert_eq!(report.optimistic_executable_upper_bound_tokens, 100);
+        assert_eq!(report.optimistic_executable_upper_bound_share_milli, 500);
+        assert!(report.upper_bound_identity_holds);
+        assert!(report.m3_reachable_under_upper_bound);
     }
 }

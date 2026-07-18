@@ -2869,6 +2869,42 @@ impl PhaseCenterOnlineMiner {
         self.candidate_package_bytes_impl(bucket_id, PhaseCenterVerifierBinding::default())
     }
 
+    /// Exports an active center as a non-authoritative QUARANTINE candidate.
+    /// Unlike a shadow-ready package, this only proves that the old online
+    /// miner core has accumulated both positive and negative evidence. It must
+    /// never be granted execution authority without the external future,
+    /// verifier, causal and runtime-parity admission checks.
+    pub fn provisional_package_bytes(
+        &self,
+        bucket_id: u32,
+    ) -> Result<Option<PhaseCenterOnlineCandidatePackage>, PhaseCenterRuntimeError> {
+        let Some(bucket) = self.bucket(bucket_id) else {
+            return Ok(None);
+        };
+        if bucket.rejected
+            || bucket.false_accepts != 0
+            || !bucket.is_active(self.config.min_bucket_events)
+        {
+            return Ok(None);
+        }
+        let runtime = PhaseCenterFlatRuntime::new(
+            self.config.cells,
+            vec![PhaseCenterFlatRecord {
+                positive_center: phase_center_from_sum(&bucket.positive_sum).into_boxed_slice(),
+                negative_center: phase_center_from_sum(&bucket.negative_sum).into_boxed_slice(),
+            }],
+        )?;
+        let package_bytes = runtime.to_bytes()?;
+        let package_info = PhaseCenterFlatRuntime::inspect_bytes(&package_bytes)?;
+        Ok(Some(PhaseCenterOnlineCandidatePackage {
+            bucket_id,
+            threshold_micro: bucket.learned_threshold_micro,
+            verifier_binding: PhaseCenterVerifierBinding::default(),
+            package_info,
+            package_bytes,
+        }))
+    }
+
     /// Exports a calibrated shadow package for an independent admission
     /// controller. This package has no execution authority: the caller must
     /// still prove future coverage, causal separation, and runtime parity.

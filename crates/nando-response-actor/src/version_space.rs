@@ -1,11 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use nando_core::wave::{phase_coherence, phase_vector_from_atom_ids};
+use nando_core::wave::{
+    PhaseCenterCell, add_phase_vector, phase_center_from_sum, phase_coherence,
+    phase_vector_from_atom_ids,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     CollectionOutputRenderer, RelationFrame, ResponseOperation, ResponseProgram,
-    relation_frame_routing_atom_ids, response_program_required_routing_atom_ids,
+    relation_frame_online_routing_atom_ids, response_program_required_routing_atom_ids,
 };
 
 pub type AstNodeId = u32;
@@ -32,6 +35,7 @@ impl Default for VersionSpaceConfig {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AstProgramKind {
+    PlanAdvance,
     FunctionCall,
     CustomToolCall,
     Project,
@@ -146,20 +150,39 @@ impl VersionSpaceArena {
     }
 
     pub fn rank_for_support(&mut self, support: &[RelationFrame]) {
-        let queries = support
-            .iter()
-            .map(|frame| phase_vector_from_atom_ids(relation_frame_routing_atom_ids(frame), 16))
-            .collect::<Vec<_>>();
+        self.rank_for_phase_centers(support, &[]);
+    }
+
+    pub fn rank_for_phase_centers(
+        &mut self,
+        positives: &[RelationFrame],
+        negatives: &[RelationFrame],
+    ) {
+        let positive_center = phase_center_for_frames(positives);
+        let negative_center = phase_center_for_frames(negatives);
         for node in &mut self.nodes {
-            let center = phase_vector_from_atom_ids(
+            let program_vector = phase_vector_from_atom_ids(
                 response_program_required_routing_atom_ids(&node.program),
                 16,
             );
-            let coherence = queries
-                .iter()
-                .map(|query| phase_coherence(query, &center))
-                .sum::<f64>();
-            node.phase_score_micro = finite_micro(coherence);
+            let score = if negatives.is_empty() {
+                positives
+                    .iter()
+                    .map(|frame| {
+                        phase_coherence(
+                            &phase_vector_from_atom_ids(
+                                relation_frame_online_routing_atom_ids(frame),
+                                16,
+                            ),
+                            &program_vector,
+                        )
+                    })
+                    .sum::<f64>()
+            } else {
+                phase_coherence(&program_vector, &positive_center)
+                    - phase_coherence(&program_vector, &negative_center)
+            };
+            node.phase_score_micro = finite_micro(score);
         }
         let mut frontier = self.survivors.iter().copied().collect::<Vec<AstNodeId>>();
         frontier.sort_by(|left, right| {
@@ -306,6 +329,7 @@ pub fn response_program_depth(program: &ResponseProgram) -> u8 {
                 CollectionOutputRenderer::RenderSequence { segments } => {
                     u8::from(!segments.is_empty())
                 }
+                CollectionOutputRenderer::RequestTemplate { .. } => 1,
             };
             u8::try_from(steps.len())
                 .unwrap_or(u8::MAX)
@@ -315,7 +339,8 @@ pub fn response_program_depth(program: &ResponseProgram) -> u8 {
         ResponseOperation::ProjectSelectedValue { renderer, .. } => match renderer {
             CollectionOutputRenderer::Direct => 1,
             CollectionOutputRenderer::RenderTemplate { .. }
-            | CollectionOutputRenderer::RenderSequence { .. } => 2,
+            | CollectionOutputRenderer::RenderSequence { .. }
+            | CollectionOutputRenderer::RequestTemplate { .. } => 2,
         },
         _ => 1,
     }
@@ -323,7 +348,12 @@ pub fn response_program_depth(program: &ResponseProgram) -> u8 {
 
 #[must_use]
 pub fn response_program_kind(program: &ResponseProgram) -> AstProgramKind {
-    match program.operation {
+    match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => variants
+            .first()
+            .map(|variant| response_program_kind(&variant.program))
+            .unwrap_or(AstProgramKind::Legacy),
+        ResponseOperation::AdvancePlan { .. } => AstProgramKind::PlanAdvance,
         ResponseOperation::FunctionCallFromRoles { .. } => AstProgramKind::FunctionCall,
         ResponseOperation::CustomToolCallFromRoles { .. } => AstProgramKind::CustomToolCall,
         ResponseOperation::ProjectSelectedValue { .. } => AstProgramKind::Project,
@@ -337,6 +367,15 @@ pub fn response_program_kind(program: &ResponseProgram) -> AstProgramKind {
     }
 }
 
+fn phase_center_for_frames(frames: &[RelationFrame]) -> Vec<PhaseCenterCell> {
+    let mut sum = vec![PhaseCenterCell::default(); 16];
+    for frame in frames {
+        let vector = phase_vector_from_atom_ids(relation_frame_online_routing_atom_ids(frame), 16);
+        add_phase_vector(&mut sum, &vector, 1.0);
+    }
+    phase_center_from_sum(&sum)
+}
+
 fn finite_micro(value: f64) -> i64 {
     if !value.is_finite() {
         return i64::MIN;
@@ -348,5 +387,102 @@ fn finite_micro(value: f64) -> i64 {
         i64::MIN
     } else {
         scaled.round() as i64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AtomValueType, ProjectStatusMapping, RELATION_FRAME_SCHEMA, RelationAtom,
+        ResponseValueSelector, SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+    };
+
+    fn frame(index: u64, atom_ids: &[u64]) -> RelationFrame {
+        RelationFrame {
+            schema: RELATION_FRAME_SCHEMA.to_owned(),
+            frame_id_sha256: format!("{index:064x}"),
+            event_id_sha256: format!("{:064x}", index.saturating_add(1_000)),
+            client_intent_id_sha256: format!("{:064x}", index.saturating_add(2_000)),
+            session_id_sha256: format!("{:064x}", index.saturating_add(3_000)),
+            observed_at_unix_nanos: index,
+            estimated_input_tokens: 100,
+            extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+            verifier_label: Some(true),
+            atoms: atom_ids
+                .iter()
+                .map(|atom_id| RelationAtom::ClientCapabilityAtom { atom_id: *atom_id })
+                .collect(),
+            evidence_ref_sha256: format!("{:064x}", index.saturating_add(4_000)),
+        }
+    }
+
+    fn exact_checks_until(arena: &mut VersionSpaceArena, winner: AstNodeId) -> u64 {
+        while let Some(candidate) = arena.next_candidate() {
+            arena.record_exact_check(
+                candidate.node_id,
+                candidate.node_id == winner,
+                "causal_rank_control",
+            );
+            if candidate.node_id == winner {
+                break;
+            }
+        }
+        arena.report().exact_checks
+    }
+
+    #[test]
+    fn learned_anti_center_changes_top_one_and_halves_exact_search() {
+        let programs = vec![
+            ResponseProgram::project_status(
+                ResponseValueSelector::UniqueScalar {
+                    value_type: AtomValueType::Integer,
+                },
+                ProjectStatusMapping::ZeroIsSuccess,
+                "completed",
+            ),
+            ResponseProgram::project_status(
+                ResponseValueSelector::JsonField {
+                    field: "status".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+                ProjectStatusMapping::ZeroIsSuccess,
+                "completed",
+            ),
+        ];
+        let positive_atoms = programs
+            .iter()
+            .flat_map(response_program_required_routing_atom_ids)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let positives = vec![frame(1, &positive_atoms)];
+
+        let mut positive_only = VersionSpaceArena::default();
+        positive_only.intern_all(programs.clone());
+        positive_only.rank_for_phase_centers(&positives, &[]);
+        let rejected = positive_only
+            .next_candidate()
+            .expect("positive-only top one");
+        let winner = positive_only
+            .next_candidate()
+            .expect("positive-only second");
+
+        let negative_atoms = response_program_required_routing_atom_ids(&rejected.program);
+        let negatives = vec![frame(2, &negative_atoms)];
+
+        let mut no_anti = VersionSpaceArena::default();
+        no_anti.intern_all(programs.clone());
+        no_anti.rank_for_phase_centers(&positives, &[]);
+        let no_anti_checks = exact_checks_until(&mut no_anti, winner.node_id);
+
+        let mut full_phase = VersionSpaceArena::default();
+        full_phase.intern_all(programs);
+        full_phase.rank_for_phase_centers(&positives, &negatives);
+        let full_phase_checks = exact_checks_until(&mut full_phase, winner.node_id);
+
+        assert_eq!(no_anti_checks, 2);
+        assert_eq!(full_phase_checks, 1);
+        assert!(full_phase_checks < no_anti_checks);
     }
 }

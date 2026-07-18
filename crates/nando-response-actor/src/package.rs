@@ -26,6 +26,16 @@ pub const VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA: &str = "value_projection_ex
 pub const STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA: &str =
     "status_projection_external_evidence.v1";
 pub const COLLECTION_EXTERNAL_VERIFIER_SCHEMA: &str = "collection_program_external_evidence.v1";
+pub const PLAN_ADVANCE_EXTERNAL_VERIFIER_SCHEMA: &str = "plan_advance_external_evidence.v1";
+
+fn response_operation_label(program: &ResponseProgram) -> &'static str {
+    match &program.operation {
+        ResponseOperation::ProjectSelectedValue { .. } => "project",
+        ResponseOperation::ProjectStatus { .. } => "status",
+        ResponseOperation::ComposeCollection { .. } => "collection",
+        _ => "other",
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -174,6 +184,14 @@ impl ResponsePackage {
         {
             return Err("collection_external_evidence_required");
         }
+        if matches!(
+            self.program.operation,
+            ResponseOperation::AdvancePlan { .. }
+        ) && (self.proof.verifier_schema != PLAN_ADVANCE_EXTERNAL_VERIFIER_SCHEMA
+            || !response_program_verifier_matches(&self.program, self.verifier.as_ref()))
+        {
+            return Err("plan_advance_external_evidence_required");
+        }
         if self
             .routing_predicates
             .iter()
@@ -245,7 +263,9 @@ impl ResponsePackage {
         let grounded_authority = self.origin == ResponsePackageOrigin::GroundedSynthesis
             && matches!(
                 self.program.operation,
-                ResponseOperation::FunctionCallFromRoles { .. }
+                ResponseOperation::UniqueConsensus { .. }
+                    | ResponseOperation::AdvancePlan { .. }
+                    | ResponseOperation::FunctionCallFromRoles { .. }
                     | ResponseOperation::CustomToolCallFromRoles { .. }
                     | ResponseOperation::ProjectSelectedValue { .. }
                     | ResponseOperation::ProjectStatus { .. }
@@ -303,6 +323,27 @@ impl ResponsePackage {
 #[must_use]
 pub fn response_program_required_routing_atom_ids(program: &ResponseProgram) -> Vec<u64> {
     let mut atoms = match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => {
+            let mut variants = variants.iter();
+            let Some(first) = variants.next() else {
+                return Vec::new();
+            };
+            let mut common = response_program_required_routing_atom_ids(&first.program)
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            for variant in variants {
+                let atoms = response_program_required_routing_atom_ids(&variant.program)
+                    .into_iter()
+                    .collect::<BTreeSet<_>>();
+                common.retain(|atom| atoms.contains(atom));
+            }
+            common.into_iter().collect()
+        }
+        ResponseOperation::AdvancePlan { function_name } => vec![
+            stable_atom_id("relation:plan_state"),
+            stable_atom_id("status:success"),
+            stable_atom_id(&format!("client_capability:function:{function_name}")),
+        ],
         ResponseOperation::FunctionCallFromRoles {
             selector,
             arguments,
@@ -370,6 +411,18 @@ pub fn response_program_external_verifier_schema(
     program: &ResponseProgram,
 ) -> Option<&'static str> {
     let arguments = match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => {
+            let schemas = variants
+                .iter()
+                .filter_map(|variant| response_program_external_verifier_schema(&variant.program))
+                .collect::<BTreeSet<_>>();
+            return (schemas.len() == 1)
+                .then(|| schemas.first().copied())
+                .flatten();
+        }
+        ResponseOperation::AdvancePlan { .. } => {
+            return Some(PLAN_ADVANCE_EXTERNAL_VERIFIER_SCHEMA);
+        }
         ResponseOperation::FunctionCallFromRoles { arguments, .. } => arguments,
         ResponseOperation::CustomToolCallFromRoles { .. } => {
             return Some(CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA);
@@ -409,6 +462,39 @@ fn response_program_verifier_matches(
     verifier: Option<&VerifierProgram>,
 ) -> bool {
     match (&program.operation, verifier) {
+        (
+            ResponseOperation::UniqueConsensus { variants, .. },
+            Some(VerifierProgram::UniqueConsensus {
+                variants: verifier_variants,
+                ..
+            }),
+        ) => {
+            variants.len() == verifier_variants.len()
+                && variants
+                    .iter()
+                    .zip(verifier_variants)
+                    .all(|(variant, verifier)| {
+                        variant.allowed_layout_sha256 == verifier.allowed_layout_sha256
+                            && variant.required_request_atom_ids
+                                == verifier.required_request_atom_ids
+                            && response_program_verifier_matches(
+                                &variant.program,
+                                Some(&verifier.verifier),
+                            )
+                    })
+        }
+        (
+            ResponseOperation::AdvancePlan { function_name },
+            Some(VerifierProgram::AdvancePlan {
+                function_name: verifier_function,
+                require_explicit_tool_success,
+                require_canonical_plan,
+            }),
+        ) => {
+            function_name == verifier_function
+                && *require_explicit_tool_success
+                && *require_canonical_plan
+        }
         (
             ResponseOperation::ComposeCollection {
                 steps,
@@ -541,17 +627,20 @@ fn response_program_verifier_matches(
             ResponseOperation::ProjectStatus {
                 selector,
                 mapping,
+                renderer,
                 completion_state,
             },
             Some(VerifierProgram::ProjectStatus {
                 selector: verifier_selector,
                 mapping: verifier_mapping,
+                renderer: verifier_renderer,
                 completion_state: verifier_completion,
                 require_unique_value,
             }),
         ) => {
             selector == verifier_selector
                 && mapping == verifier_mapping
+                && renderer == verifier_renderer
                 && completion_state == verifier_completion
                 && *require_unique_value
         }
@@ -756,6 +845,16 @@ impl ResponseExecutor {
         let mut labels = BTreeMap::new();
         for package in &self.packages {
             let label = match &package.program.operation {
+                ResponseOperation::UniqueConsensus { variants, .. } => format!(
+                    "consensus:{}",
+                    variants
+                        .first()
+                        .map(|variant| response_operation_label(&variant.program))
+                        .unwrap_or("empty")
+                ),
+                ResponseOperation::AdvancePlan { function_name } => {
+                    format!("plan_advance:{function_name}")
+                }
                 ResponseOperation::FunctionCallFromRoles { function_name, .. } => {
                     format!("function:{function_name}")
                 }
@@ -855,6 +954,12 @@ impl ResponseExecutor {
             }
             predicate_matches = predicate_matches.saturating_add(1);
             let grounded_atoms = match &package.program.operation {
+                ResponseOperation::AdvancePlan { function_name } => {
+                    Some(response_phase_atom_ids_for_advance_plan_payload(
+                        provider_payload,
+                        function_name,
+                    ))
+                }
                 ResponseOperation::FunctionCallFromRoles {
                     selector,
                     arguments,
@@ -1297,6 +1402,8 @@ fn relation_atom_phase_id(atom: &RelationAtom) -> u64 {
         RelationAtom::ActionBooleanArgument { name, .. } => {
             stable_atom_id_parts(&["action_boolean_argument:", name])
         }
+        RelationAtom::PlanState { .. } => stable_atom_id("relation:plan_state"),
+        RelationAtom::ActionPlanAdvance => stable_atom_id("action_plan_advance"),
         RelationAtom::ActionResultProjection {
             output_field,
             continuation_field,
@@ -1409,9 +1516,245 @@ pub fn relation_frame_online_routing_atom_ids(frame: &RelationFrame) -> Vec<u64>
         RelationAtom::ToolKind { value } => Some(stable_atom_id_parts(&["tool_kind:", value])),
         _ => None,
     }));
+    ids.extend(relation_frame_hidden_wave_atom_ids(frame));
     ids.sort_unstable();
     ids.dedup();
     ids
+}
+
+#[derive(Clone, Copy)]
+enum WaveAtomLayer {
+    Request,
+    State,
+    Tool,
+}
+
+pub(crate) fn relation_frame_hidden_wave_atom_ids(frame: &RelationFrame) -> Vec<u64> {
+    const BASIS_LIMIT: usize = 6;
+    const LEGACY_HIDDEN_LIMIT: usize = 12;
+    const BALANCED_HIDDEN_LIMIT: usize = 12;
+
+    let pre_action_slots = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::TypedSlot {
+                slot_id,
+                source: AtomSource::Request | AtomSource::Observation,
+                ..
+            } => Some(*slot_id),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut request = Vec::new();
+    let mut state = Vec::new();
+    let mut tool = Vec::new();
+    let mut ranked_request = Vec::new();
+    let mut ranked_state = Vec::new();
+    let mut ranked_tool = Vec::new();
+    for atom in &frame.atoms {
+        let layer = match atom {
+            RelationAtom::TypedSlot {
+                source: AtomSource::Request,
+                ..
+            }
+            | RelationAtom::RequestPhaseAtom { .. }
+            | RelationAtom::ClientCapabilityAtom { .. }
+            | RelationAtom::ReconstructedClientCapabilityAtom { .. } => {
+                Some(WaveAtomLayer::Request)
+            }
+            RelationAtom::TypedSlot {
+                source: AtomSource::Observation,
+                ..
+            }
+            | RelationAtom::ObservationCallShape { .. }
+            | RelationAtom::CollectionShape { .. }
+            | RelationAtom::ToolKind { .. }
+            | RelationAtom::OutputStatus { .. } => Some(WaveAtomLayer::Tool),
+            RelationAtom::ObservationSelector { slot_id, .. }
+                if pre_action_slots.contains(slot_id) =>
+            {
+                Some(WaveAtomLayer::Tool)
+            }
+            RelationAtom::SlotEquality {
+                left_slot,
+                right_slot,
+            } if pre_action_slots.contains(left_slot) && pre_action_slots.contains(right_slot) => {
+                Some(WaveAtomLayer::State)
+            }
+            RelationAtom::UniqueSlot { slot_id } if pre_action_slots.contains(slot_id) => {
+                Some(WaveAtomLayer::State)
+            }
+            RelationAtom::TypedEquality { .. }
+            | RelationAtom::Cardinality { .. }
+            | RelationAtom::TemporalEdge { .. }
+            | RelationAtom::CompletionState { .. } => Some(WaveAtomLayer::State),
+            _ => None,
+        };
+        let Some(layer) = layer else {
+            continue;
+        };
+        let id = relation_atom_phase_id(atom);
+        let ranked = (wave_hidden_source_priority(atom), id);
+        match layer {
+            WaveAtomLayer::Request => {
+                request.push(id);
+                ranked_request.push(ranked);
+            }
+            WaveAtomLayer::State => {
+                state.push(id);
+                ranked_state.push(ranked);
+            }
+            WaveAtomLayer::Tool => {
+                tool.push(id);
+                ranked_tool.push(ranked);
+            }
+        }
+    }
+    for basis in [&mut request, &mut state, &mut tool] {
+        basis.sort_unstable();
+        basis.dedup();
+        basis.truncate(BASIS_LIMIT);
+    }
+    for basis in [&mut ranked_request, &mut ranked_state, &mut ranked_tool] {
+        basis.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+        basis.dedup_by_key(|entry| entry.1);
+        basis.truncate(BASIS_LIMIT);
+    }
+
+    // Keep the original hash-selected atoms so already compiled packages keep
+    // exactly the routing vocabulary they were trained with.
+    let mut hidden = Vec::with_capacity(LEGACY_HIDDEN_LIMIT + BALANCED_HIDDEN_LIMIT);
+    extend_wave_pairs(&mut hidden, 1, &request, &state);
+    extend_wave_pairs(&mut hidden, 2, &state, &tool);
+    extend_wave_pairs(&mut hidden, 3, &request, &tool);
+    for request_id in &request {
+        for state_id in &state {
+            for tool_id in &tool {
+                hidden.push(wave_hidden_atom_id(4, &[*request_id, *state_id, *tool_id]));
+            }
+        }
+    }
+    hidden.sort_unstable();
+    hidden.dedup();
+    hidden.truncate(LEGACY_HIDDEN_LIMIT);
+
+    let balanced = balanced_wave_hidden_atom_ids(
+        &ranked_request,
+        &ranked_state,
+        &ranked_tool,
+        BALANCED_HIDDEN_LIMIT,
+    );
+    hidden.extend(balanced);
+    hidden.sort_unstable();
+    hidden.dedup();
+    hidden
+}
+
+fn balanced_wave_hidden_atom_ids(
+    request: &[(u16, u64)],
+    state: &[(u16, u64)],
+    tool: &[(u16, u64)],
+    limit: usize,
+) -> Vec<u64> {
+    let mut groups = [
+        ranked_wave_pairs(1, request, state),
+        ranked_wave_pairs(2, state, tool),
+        ranked_wave_pairs(3, request, tool),
+        ranked_wave_triples(request, state, tool),
+    ];
+    for group in &mut groups {
+        group.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+        group.dedup_by_key(|entry| entry.1);
+    }
+    let mut output = Vec::with_capacity(limit);
+    let mut seen = BTreeSet::new();
+    for rank in 0..groups.iter().map(Vec::len).max().unwrap_or(0) {
+        for group in &groups {
+            let Some((_, atom_id)) = group.get(rank) else {
+                continue;
+            };
+            if seen.insert(*atom_id) {
+                output.push(*atom_id);
+                if output.len() == limit {
+                    return output;
+                }
+            }
+        }
+    }
+    output
+}
+
+fn ranked_wave_pairs(kind: u64, left: &[(u16, u64)], right: &[(u16, u64)]) -> Vec<(u32, u64)> {
+    left.iter()
+        .flat_map(|(left_priority, left_id)| {
+            right.iter().map(move |(right_priority, right_id)| {
+                (
+                    u32::from(*left_priority).saturating_add(u32::from(*right_priority)),
+                    wave_hidden_atom_id(kind, &[*left_id, *right_id]),
+                )
+            })
+        })
+        .collect()
+}
+
+fn ranked_wave_triples(
+    request: &[(u16, u64)],
+    state: &[(u16, u64)],
+    tool: &[(u16, u64)],
+) -> Vec<(u32, u64)> {
+    let mut output = Vec::new();
+    for (request_priority, request_id) in request {
+        for (state_priority, state_id) in state {
+            for (tool_priority, tool_id) in tool {
+                output.push((
+                    u32::from(*request_priority)
+                        .saturating_add(u32::from(*state_priority))
+                        .saturating_add(u32::from(*tool_priority)),
+                    wave_hidden_atom_id(4, &[*request_id, *state_id, *tool_id]),
+                ));
+            }
+        }
+    }
+    output
+}
+
+fn wave_hidden_source_priority(atom: &RelationAtom) -> u16 {
+    match atom {
+        RelationAtom::CompletionState { .. } | RelationAtom::OutputStatus { .. } => 1_000,
+        RelationAtom::ObservationSelector { .. } | RelationAtom::Cardinality { .. } => 900,
+        RelationAtom::TypedSlot { .. }
+        | RelationAtom::SlotEquality { .. }
+        | RelationAtom::UniqueSlot { .. } => 800,
+        RelationAtom::ToolKind { .. }
+        | RelationAtom::ObservationCallShape { .. }
+        | RelationAtom::TypedEquality { .. }
+        | RelationAtom::TemporalEdge { .. } => 700,
+        RelationAtom::CollectionShape { .. } | RelationAtom::RequestPhaseAtom { .. } => 600,
+        RelationAtom::ClientCapabilityAtom { .. }
+        | RelationAtom::ReconstructedClientCapabilityAtom { .. } => 500,
+        _ => 0,
+    }
+}
+
+fn extend_wave_pairs(out: &mut Vec<u64>, kind: u64, left: &[u64], right: &[u64]) {
+    for left_id in left {
+        for right_id in right {
+            out.push(wave_hidden_atom_id(kind, &[*left_id, *right_id]));
+        }
+    }
+}
+
+fn wave_hidden_atom_id(kind: u64, parts: &[u64]) -> u64 {
+    let mut hash = 0x6e61_6e64_6f77_6176_u64;
+    for byte in kind
+        .to_le_bytes()
+        .into_iter()
+        .chain(parts.iter().flat_map(|part| part.to_le_bytes()))
+    {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+    }
+    hash
 }
 
 #[must_use]
@@ -1628,6 +1971,35 @@ fn response_phase_atom_ids_for_grounded_function_call_payload(
     atoms
 }
 
+fn response_phase_atom_ids_for_advance_plan_payload(
+    provider_payload: &Value,
+    function_name: &str,
+) -> Vec<u64> {
+    let Some((step_count, completed_count, _active_index)) =
+        crate::runtime::advance_plan_runtime_state(provider_payload, function_name)
+    else {
+        return Vec::new();
+    };
+    let mut atoms = vec![
+        stable_atom_id("relation:tool_kind"),
+        stable_atom_id("completion:completed"),
+        stable_atom_id("status:success"),
+        stable_atom_id("relation:plan_state"),
+        stable_atom_id(&format!(
+            "cardinality:plan_step_count_band:{}",
+            count_band(usize::from(step_count))
+        )),
+        stable_atom_id(&format!(
+            "cardinality:plan_completed_count_band:{}",
+            count_band(usize::from(completed_count))
+        )),
+    ];
+    if let Some(shape) = immediate_observation_call_shape(provider_payload) {
+        atoms.push(stable_atom_id(&format!("observation_call_shape:{shape}")));
+    }
+    atoms
+}
+
 fn immediate_observation_call_shape(provider_payload: &Value) -> Option<String> {
     let input = provider_payload.get("input")?.as_array()?;
     let (output_index, call_id) = input.iter().enumerate().rev().find_map(|(index, item)| {
@@ -1701,6 +2073,34 @@ fn response_phase_atom_ids_for_custom_tool_call_payload(
     if let Some(tool_kind) = immediate_observation_tool_kind(provider_payload) {
         atoms.push(stable_atom_id(&format!("tool_kind:{tool_kind}")));
     }
+    atoms
+}
+
+pub(crate) fn response_program_grounded_routing_atom_ids(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> Vec<u64> {
+    let mut atoms = match &program.operation {
+        ResponseOperation::FunctionCallFromRoles {
+            selector,
+            arguments,
+            ..
+        } => response_phase_atom_ids_for_grounded_function_call_payload(
+            provider_payload,
+            selector,
+            arguments,
+        ),
+        ResponseOperation::CustomToolCallFromRoles { selector, .. } => {
+            response_phase_atom_ids_for_custom_tool_call_payload(provider_payload, selector)
+        }
+        _ => return Vec::new(),
+    };
+    if atoms.is_empty() {
+        return atoms;
+    }
+    atoms.extend(response_pre_action_context_atom_ids(provider_payload));
+    atoms.sort_unstable();
+    atoms.dedup();
     atoms
 }
 
@@ -1959,6 +2359,53 @@ mod tests {
         ValueProjectionFormat,
     };
 
+    #[test]
+    fn plan_runtime_payload_reconstructs_every_required_routing_atom() {
+        let payload = serde_json::json!({
+            "tools":[{"type":"function","name":"update_plan"}],
+            "input":[
+                {
+                    "type":"function_call",
+                    "name":"update_plan",
+                    "call_id":"plan-1",
+                    "arguments":{
+                        "plan":[
+                            {"step":"Inspect","status":"in_progress"},
+                            {"step":"Apply","status":"pending"}
+                        ]
+                    }
+                },
+                {
+                    "type":"function_call",
+                    "name":"exec_command",
+                    "call_id":"exec-1"
+                },
+                {
+                    "type":"function_call_output",
+                    "call_id":"exec-1",
+                    "output":{"exit_code":0}
+                }
+            ]
+        });
+        let program = ResponseProgram::advance_plan("update_plan");
+        let mut query = response_phase_atom_ids_for_advance_plan_payload(&payload, "update_plan");
+        query.extend(response_pre_action_context_atom_ids(&payload));
+        query.sort_unstable();
+        query.dedup();
+        let required = response_program_required_routing_atom_ids(&program);
+        assert!(
+            required
+                .iter()
+                .all(|atom| query.binary_search(atom).is_ok())
+        );
+
+        let mut failed = payload;
+        failed["input"][2]["output"]["exit_code"] = Value::from(1);
+        assert!(
+            response_phase_atom_ids_for_advance_plan_payload(&failed, "update_plan").is_empty()
+        );
+    }
+
     fn active_projection_package() -> ResponsePackage {
         let selector = ResponseValueSelector::JsonField {
             field: "status".to_owned(),
@@ -2023,6 +2470,7 @@ mod tests {
             verifier: Some(VerifierProgram::ProjectStatus {
                 selector,
                 mapping: ProjectStatusMapping::ZeroIsSuccess,
+                renderer: crate::CollectionOutputRenderer::Direct,
                 completion_state: "completed".to_owned(),
                 require_unique_value: true,
             }),
@@ -2203,6 +2651,80 @@ mod tests {
             relation_frame_routing_atom_ids(&frame),
             relation_frame_routing_atom_ids(&without_target)
         );
+    }
+
+    #[test]
+    fn balanced_hidden_wave_keeps_every_cross_layer_kind() {
+        let request = (0_u64..6)
+            .map(|id| (600, id.saturating_add(10)))
+            .collect::<Vec<_>>();
+        let state = (0_u64..6)
+            .map(|id| (900, id.saturating_add(20)))
+            .collect::<Vec<_>>();
+        let tool = (0_u64..6)
+            .map(|id| (1_000, id.saturating_add(30)))
+            .collect::<Vec<_>>();
+        let balanced = balanced_wave_hidden_atom_ids(&request, &state, &tool, 12);
+        assert_eq!(balanced.len(), 12);
+
+        let expected_groups = [
+            ranked_wave_pairs(1, &request, &state),
+            ranked_wave_pairs(2, &state, &tool),
+            ranked_wave_pairs(3, &request, &tool),
+            ranked_wave_triples(&request, &state, &tool),
+        ];
+        for expected in expected_groups {
+            let expected = expected
+                .into_iter()
+                .map(|(_, atom_id)| atom_id)
+                .collect::<BTreeSet<_>>();
+            assert_eq!(
+                balanced
+                    .iter()
+                    .filter(|atom_id| expected.contains(atom_id))
+                    .count(),
+                3
+            );
+        }
+    }
+
+    #[test]
+    fn hidden_wave_atoms_ignore_teacher_action_and_outcome() {
+        let mut frame = RelationFrame {
+            schema: RELATION_FRAME_SCHEMA.to_owned(),
+            frame_id_sha256: "1".repeat(64),
+            event_id_sha256: "2".repeat(64),
+            client_intent_id_sha256: "3".repeat(64),
+            session_id_sha256: "4".repeat(64),
+            observed_at_unix_nanos: 1,
+            extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+            verifier_label: Some(true),
+            estimated_input_tokens: 55,
+            atoms: vec![
+                RelationAtom::RequestPhaseAtom { atom_id: 11 },
+                RelationAtom::Cardinality {
+                    role: "records".to_owned(),
+                    count: 3,
+                },
+                RelationAtom::ToolKind {
+                    value: "exec".to_owned(),
+                },
+                RelationAtom::CompletionState {
+                    value: "pending".to_owned(),
+                },
+            ],
+            evidence_ref_sha256: "5".repeat(64),
+        };
+        let before = relation_frame_hidden_wave_atom_ids(&frame);
+        frame.atoms.extend([
+            RelationAtom::ActionFunction {
+                value: "wait".to_owned(),
+            },
+            RelationAtom::ResponseShape {
+                value: "function_call".to_owned(),
+            },
+        ]);
+        assert_eq!(before, relation_frame_hidden_wave_atom_ids(&frame));
     }
 
     #[test]

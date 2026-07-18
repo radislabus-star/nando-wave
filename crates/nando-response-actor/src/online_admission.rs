@@ -7,20 +7,23 @@ use serde::Serialize;
 
 use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
-    COMPOSITE_ADMISSION_SCHEMA_V2, CompositeResponseAdmissionV2, LearnedWaveRoute,
+    COMPOSITE_ADMISSION_SCHEMA_V2, CollectionSynthesisExample, CompositeResponseAdmissionV2,
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt, LearnedWaveRoute,
     LearnedWaveSubcenter, OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
     RESPONSE_AUTHORITY_SCHEMA_V2, RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2,
     RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
-    RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1,
-    ResponseAuthorityV2, ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState,
+    RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseAuthorityV2, ResponseExecutionStatus,
+    ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram,
     ResponseRegistry, canonical_json_sha256, compile_source_neutral_quarantine_packages,
-    evaluate_grounded_wave_causality, frame_matches_program_action_contract,
+    evaluate_grounded_wave_causality, execute_response, frame_matches_program_action_contract,
     online_collection_future_manifest_digest, online_collection_support_manifest_digest,
     relation_frame_routes_to_package, relation_frame_structural_family_id,
     response_actor_program_digest, response_execution_payload_digest,
     response_independent_verifier_program_digest, response_package_digest,
-    response_program_required_routing_atom_ids, response_proof_receipts_digest,
-    response_registry_digest, verify_response_independently,
+    response_program_authority_matches_example, response_program_required_routing_atom_ids,
+    response_proof_receipts_digest, response_registry_digest, sha256_bytes,
+    source_neutral_verifier_for_program, valid_nonzero_sha256, verify_response_independently,
 };
 
 #[derive(Clone, Debug)]
@@ -116,6 +119,143 @@ struct RuntimeParityReceiptSet<'a> {
     package_id: &'a str,
     receipts: Vec<RuntimeParityReceipt>,
     failures: usize,
+}
+
+#[derive(Serialize)]
+struct DurableRuntimeParityReceiptMaterial<'a> {
+    schema: &'a str,
+    evidence_ref_sha256: &'a str,
+    program_sha256: &'a str,
+    verifier_sha256: &'a str,
+    input_sha256: &'a str,
+    teacher_response_sha256: &'a str,
+    actor_response_sha256: &'a str,
+    actor_executed: bool,
+    teacher_authority_match: bool,
+    independent_verifier_pass: bool,
+    exact_teacher_match: bool,
+}
+
+fn durable_runtime_parity_receipt_digest(
+    receipt: &DurableRuntimeParityReceipt,
+) -> Result<String, &'static str> {
+    canonical_json_sha256(&DurableRuntimeParityReceiptMaterial {
+        schema: &receipt.schema,
+        evidence_ref_sha256: &receipt.evidence_ref_sha256,
+        program_sha256: &receipt.program_sha256,
+        verifier_sha256: &receipt.verifier_sha256,
+        input_sha256: &receipt.input_sha256,
+        teacher_response_sha256: &receipt.teacher_response_sha256,
+        actor_response_sha256: &receipt.actor_response_sha256,
+        actor_executed: receipt.actor_executed,
+        teacher_authority_match: receipt.teacher_authority_match,
+        independent_verifier_pass: receipt.independent_verifier_pass,
+        exact_teacher_match: receipt.exact_teacher_match,
+    })
+}
+
+pub fn build_durable_runtime_parity_receipt(
+    program: &ResponseProgram,
+    evidence_ref_sha256: &str,
+    example: &CollectionSynthesisExample,
+) -> Result<DurableRuntimeParityReceipt, &'static str> {
+    if !valid_nonzero_sha256(evidence_ref_sha256) {
+        return Err("durable_runtime_parity_evidence_ref_invalid");
+    }
+    let verifier = source_neutral_verifier_for_program(program)?;
+    let execution = execute_response(program, "", &example.provider_payload);
+    let actor_executed = execution.status == ResponseExecutionStatus::Executed;
+    let actor_response = execution
+        .response
+        .as_deref()
+        .ok_or("durable_runtime_parity_actor_abstained")?;
+    let teacher_authority_match = response_program_authority_matches_example(program, example);
+    let independent_verifier_pass =
+        verify_response_independently(&verifier, &example.provider_payload, actor_response).is_ok();
+    if !actor_executed || !teacher_authority_match || !independent_verifier_pass {
+        return Err("durable_runtime_parity_verification_failed");
+    }
+    let mut receipt = DurableRuntimeParityReceipt {
+        schema: DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1.to_owned(),
+        receipt_sha256: String::new(),
+        evidence_ref_sha256: evidence_ref_sha256.to_owned(),
+        program_sha256: canonical_json_sha256(program)?,
+        verifier_sha256: canonical_json_sha256(&verifier)?,
+        input_sha256: canonical_json_sha256(&example.provider_payload)?,
+        teacher_response_sha256: sha256_bytes(example.expected_response.as_bytes()),
+        actor_response_sha256: sha256_bytes(actor_response.as_bytes()),
+        actor_executed,
+        teacher_authority_match,
+        independent_verifier_pass,
+        exact_teacher_match: actor_response == example.expected_response,
+    };
+    receipt.receipt_sha256 = durable_runtime_parity_receipt_digest(&receipt)?;
+    Ok(receipt)
+}
+
+fn validate_durable_runtime_parity_receipt(
+    receipt: &DurableRuntimeParityReceipt,
+    expected_program_sha256: &str,
+    expected_verifier_sha256: &str,
+) -> bool {
+    receipt.schema == DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1
+        && valid_nonzero_sha256(&receipt.receipt_sha256)
+        && valid_nonzero_sha256(&receipt.evidence_ref_sha256)
+        && receipt.program_sha256 == expected_program_sha256
+        && receipt.verifier_sha256 == expected_verifier_sha256
+        && valid_nonzero_sha256(&receipt.input_sha256)
+        && valid_nonzero_sha256(&receipt.teacher_response_sha256)
+        && valid_nonzero_sha256(&receipt.actor_response_sha256)
+        && receipt.actor_executed
+        && receipt.teacher_authority_match
+        && receipt.independent_verifier_pass
+        && durable_runtime_parity_receipt_digest(receipt)
+            .is_ok_and(|digest| digest == receipt.receipt_sha256)
+}
+
+fn validate_durable_runtime_parity(
+    package: &ResponsePackage,
+    durable_receipts: &[DurableRuntimeParityReceipt],
+    allowed_evidence_refs: &BTreeSet<&str>,
+) -> Result<Option<String>, &'static str> {
+    let verifier = package
+        .verifier
+        .as_ref()
+        .ok_or("runtime_parity_verifier_missing")?;
+    let program_sha256 = canonical_json_sha256(&package.program)?;
+    let verifier_sha256 = canonical_json_sha256(verifier)?;
+    let mut seen = BTreeSet::new();
+    let mut receipts = Vec::new();
+    for receipt in durable_receipts {
+        if !allowed_evidence_refs.contains(receipt.evidence_ref_sha256.as_str())
+            || !seen.insert(receipt.evidence_ref_sha256.as_str())
+        {
+            continue;
+        }
+        if !validate_durable_runtime_parity_receipt(receipt, &program_sha256, &verifier_sha256) {
+            return Ok(None);
+        }
+        receipts.push(RuntimeParityReceipt {
+            evidence_ref_sha256: receipt.evidence_ref_sha256.clone(),
+            provider_payload_sha256: receipt.input_sha256.clone(),
+            expected_response_sha256: receipt.actor_response_sha256.clone(),
+            actual_response_sha256: Some(receipt.actor_response_sha256.clone()),
+            actor_executed: true,
+            independent_verifier_pass: true,
+            exact_response_match: true,
+            execution_budget_normalized_match: false,
+        });
+    }
+    if receipts.len() < 32 {
+        return Ok(None);
+    }
+    canonical_json_sha256(&RuntimeParityReceiptSet {
+        schema: RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1,
+        package_id: &package.package_id,
+        receipts,
+        failures: 0,
+    })
+    .map(Some)
 }
 
 fn execute_runtime_parity(
@@ -214,7 +354,10 @@ fn execute_runtime_parity(
     .map(Some)
 }
 
-fn responses_match_after_execution_budget_normalization(actual: &str, expected: &str) -> bool {
+pub(crate) fn responses_match_after_execution_budget_normalization(
+    actual: &str,
+    expected: &str,
+) -> bool {
     let (Ok(mut actual), Ok(mut expected)) = (
         serde_json::from_str::<serde_json::Value>(actual),
         serde_json::from_str::<serde_json::Value>(expected),
@@ -300,6 +443,9 @@ fn parity_value_kind(value: &serde_json::Value) -> &'static str {
 
 fn program_required_client_capability_atom(program: &crate::ResponseProgram) -> Option<u64> {
     match &program.operation {
+        crate::ResponseOperation::AdvancePlan { function_name } => Some(
+            crate::package::stable_atom_id(&format!("client_capability:function:{function_name}")),
+        ),
         crate::ResponseOperation::FunctionCallFromRoles {
             function_name,
             selector,
@@ -330,6 +476,36 @@ fn trace_online_admission(candidate: &OnlineResponseAdmissionCandidate, blocker:
             candidate.candidate.bucket_id
         );
     }
+}
+
+fn bind_proven_semantic_law_program(
+    package: &mut crate::ResponsePackage,
+    program: &crate::ResponseProgram,
+    training: &[crate::RelationFrame],
+) -> Result<(), &'static str> {
+    if !matches!(
+        program.operation,
+        crate::ResponseOperation::UniqueConsensus { .. }
+    ) {
+        return Ok(());
+    }
+    program
+        .validate()
+        .map_err(|_| "semantic_law_program_invalid")?;
+    if !training
+        .iter()
+        .all(|frame| crate::synthesis::program_is_consistent(program, frame))
+    {
+        return Err("semantic_law_support_mismatch");
+    }
+    let verifier = crate::source_neutral_verifier_for_program(program)
+        .map_err(|_| "semantic_law_verifier_missing")?;
+    let verifier_schema = crate::response_program_external_verifier_schema(program)
+        .ok_or("semantic_law_verifier_schema_missing")?;
+    package.program = program.clone();
+    package.verifier = Some(verifier);
+    package.proof.verifier_schema = verifier_schema.to_owned();
+    Ok(())
 }
 
 pub fn build_online_admission_snapshot(
@@ -394,6 +570,12 @@ pub fn build_online_admission_snapshot(
             trace_online_admission(candidate, "package_compile_empty");
             continue;
         };
+        if let Err(blocker) =
+            bind_proven_semantic_law_program(&mut package, &candidate.candidate.program, &training)
+        {
+            trace_online_admission(candidate, blocker);
+            continue;
+        }
         // The streaming subcenter already supplies an action-neutral exact
         // guard proven clean against global negatives. Reapplying the legacy
         // broad-family cardinality refinement here destroys cross-layout
@@ -406,6 +588,18 @@ pub fn build_online_admission_snapshot(
             .extend(candidate.required_routing_atom_ids.iter().copied());
         package.required_routing_atom_ids.sort_unstable();
         package.required_routing_atom_ids.dedup();
+        let Some(learned_wave_route) = learned_wave_route_from_bytes(
+            &candidate.wave_runtime_package,
+            candidate.candidate.wave_threshold_micro,
+        ) else {
+            trace_online_admission(candidate, "learned_wave_route_invalid");
+            continue;
+        };
+        package.wave_margin_micro = learned_wave_route.threshold_micro;
+        package.learned_wave_route = Some(LearnedWaveRoute {
+            query_atom_ids: Vec::new(),
+            ..learned_wave_route
+        });
         let lineage = crate::response_package_lineage_id(
             &package.program,
             &package.required_routing_atom_ids,
@@ -437,18 +631,6 @@ pub fn build_online_admission_snapshot(
             .filter(|frame| crate::package::relation_frame_matches_package_guard(&package, frame))
             .cloned()
             .collect::<Vec<_>>();
-        let Some(learned_wave_route) = learned_wave_route_from_bytes(
-            &candidate.wave_runtime_package,
-            candidate.candidate.wave_threshold_micro,
-        ) else {
-            trace_online_admission(candidate, "learned_wave_route_invalid");
-            continue;
-        };
-        package.wave_margin_micro = learned_wave_route.threshold_micro;
-        package.learned_wave_route = Some(LearnedWaveRoute {
-            query_atom_ids: Vec::new(),
-            ..learned_wave_route
-        });
         if !ensure_support_separating_learned_route(
             &mut package,
             &refined_support,
@@ -744,9 +926,21 @@ pub fn build_online_admission_snapshot(
                 .collect(),
             wrong_accepts: 0,
         })?;
+        let semantic_alias_sha256 = semantic_alias_future_proof_digest(
+            candidate,
+            &refined_support,
+            &routed_future,
+            &causal,
+        )?;
         receipt_digests.insert(
             package.package_id.clone(),
-            (support_sha256, causal_sha256, parity_sha256, future_sha256),
+            (
+                support_sha256,
+                causal_sha256,
+                parity_sha256,
+                future_sha256,
+                semantic_alias_sha256,
+            ),
         );
         packages.push(package);
     }
@@ -764,7 +958,7 @@ pub fn build_online_admission_snapshot(
     let registry_sha256 = response_registry_digest(&registry)?;
     let mut bindings = Vec::new();
     for package in &registry.packages {
-        let (support, causal, parity, future) = receipt_digests
+        let (support, causal, parity, future, semantic_alias) = receipt_digests
             .remove(&package.package_id)
             .ok_or("online_admission_receipts_missing")?;
         let verifier = package
@@ -791,6 +985,8 @@ pub fn build_online_admission_snapshot(
             future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
                 .to_owned(),
             future_verifier_receipt_set_sha256: future,
+            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
+            semantic_alias_proof_sha256: semantic_alias,
             proof_receipts_sha256: String::new(),
         };
         binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
@@ -818,6 +1014,113 @@ pub fn build_online_admission_snapshot(
         registry,
         admission,
     }))
+}
+
+fn semantic_alias_future_proof_digest(
+    candidate: &OnlineResponseAdmissionCandidate,
+    refined_support: &[crate::RelationFrame],
+    routed_future: &[crate::RelationFrame],
+    causal: &crate::GroundedWaveCausalReport,
+) -> Result<String, &'static str> {
+    let physical_signatures = candidate
+        .support
+        .iter()
+        .filter_map(crate::teacher_program_signature)
+        .collect::<BTreeSet<_>>();
+    if candidate.semantic_alias_edges.is_empty() {
+        if physical_signatures.len() > 1 {
+            return Err("semantic_alias_proof_missing_for_multi_adapter_candidate");
+        }
+        return canonical_json_sha256(&(
+            RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+            "exact_singleton",
+            candidate.candidate.teacher_signature_sha256.as_str(),
+            &candidate.candidate.program,
+            causal,
+        ));
+    }
+
+    let support_ids = candidate
+        .support
+        .iter()
+        .map(|frame| frame.frame_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let parity_receipts = candidate
+        .runtime_parity_cases
+        .iter()
+        .map(|receipt| receipt.evidence_ref_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let future_receipts = routed_future
+        .iter()
+        .flat_map(|frame| {
+            [
+                frame.frame_id_sha256.as_str(),
+                frame.evidence_ref_sha256.as_str(),
+            ]
+        })
+        .collect::<BTreeSet<_>>();
+    for edge in &candidate.semantic_alias_edges {
+        if !matches!(
+            edge.state,
+            crate::SemanticAliasState::SupportProven | crate::SemanticAliasState::FutureProven
+        ) || edge.effect_graph_sha256 != candidate.candidate.teacher_signature_sha256
+            || !physical_signatures.contains(&edge.left_teacher_signature_sha256)
+            || !physical_signatures.contains(&edge.right_teacher_signature_sha256)
+            || edge.support_receipts.is_empty()
+            || edge
+                .support_receipts
+                .iter()
+                .any(|receipt| !support_ids.contains(receipt.as_str()))
+            || edge.parity_receipts.is_empty()
+            || edge
+                .parity_receipts
+                .iter()
+                .any(|receipt| !parity_receipts.contains(receipt.as_str()))
+            || edge
+                .wave_proof_sha256
+                .as_deref()
+                .is_none_or(|digest| !valid_nonzero_sha256(digest))
+            || edge.blocker.is_some()
+            || !edge.counterexamples.is_empty()
+        {
+            return Err("semantic_alias_support_proof_invalid");
+        }
+        if edge.state == crate::SemanticAliasState::FutureProven
+            && (edge.future_receipts.is_empty()
+                || edge
+                    .future_receipts
+                    .iter()
+                    .any(|receipt| !future_receipts.contains(receipt.as_str())))
+        {
+            return Err("semantic_alias_future_receipt_mismatch");
+        }
+    }
+    let refined_support_ids = refined_support
+        .iter()
+        .map(|frame| frame.frame_id_sha256.as_str())
+        .collect::<Vec<_>>();
+    let routed_future_ids = routed_future
+        .iter()
+        .map(|frame| frame.evidence_ref_sha256.as_str())
+        .collect::<Vec<_>>();
+    let mut future_proven_edges = candidate.semantic_alias_edges.clone();
+    for edge in &mut future_proven_edges {
+        edge.state = crate::SemanticAliasState::FutureProven;
+        edge.future_receipts = routed_future_ids
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect();
+        edge.blocker = None;
+    }
+    canonical_json_sha256(&(
+        RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+        "future_proven",
+        0_u64,
+        future_proven_edges,
+        refined_support_ids,
+        routed_future_ids,
+        causal,
+    ))
 }
 
 fn clean_guard_candidates(
@@ -900,12 +1203,15 @@ fn clean_guard_candidates(
     candidates
 }
 
+type PhaseCoverPoint = (usize, usize, usize);
+type PhaseMedoidCoverage = (String, usize, usize, i64, Vec<PhaseCoverPoint>);
+
 fn best_phase_medoid_coverage(
     support: &[&crate::RelationFrame],
     future: &[&crate::RelationFrame],
     negatives: &[&crate::RelationFrame],
     cells: usize,
-) -> Option<(String, usize, usize, i64, Vec<(usize, usize, usize)>)> {
+) -> Option<PhaseMedoidCoverage> {
     if support.is_empty() || negatives.is_empty() || cells == 0 {
         return None;
     }
@@ -1118,17 +1424,10 @@ pub(crate) fn ensure_support_separating_learned_route(
     support: &[crate::RelationFrame],
     negatives: &[crate::RelationFrame],
 ) -> bool {
-    if let Some(cells) = package
-        .learned_wave_route
-        .as_ref()
-        .filter(|route| route.query_atom_ids.is_empty())
-        .map(|route| usize::from(route.cells))
-        && let Some(route) = learned_wave_route_from_support_medoid(support, negatives, cells)
-    {
-        package.wave_margin_micro = route.threshold_micro;
-        package.learned_wave_route = Some(route);
-        return calibrate_learned_route_threshold(package, support, negatives);
-    }
+    // Preserve the proof-carrying center emitted by the streaming miner when
+    // it already separates support from negatives. An empty vocabulary means
+    // all online routing atoms, matching the miner's training representation;
+    // it is not a request to replace the learned center with a medoid.
     if calibrate_learned_route_threshold(package, support, negatives) {
         return true;
     }
@@ -1147,7 +1446,7 @@ pub(crate) fn ensure_support_separating_learned_route(
     calibrate_learned_route_threshold(package, support, negatives)
 }
 
-fn learned_wave_route_from_support_medoid(
+pub(crate) fn learned_wave_route_from_support_medoid(
     support: &[crate::RelationFrame],
     negatives: &[crate::RelationFrame],
     cells: usize,
@@ -1375,6 +1674,46 @@ fn learned_wave_route_from_support_medoid(
     })
 }
 
+pub(crate) fn learned_wave_route_accepts_frame(
+    route: &LearnedWaveRoute,
+    frame: &crate::RelationFrame,
+) -> bool {
+    let cells = usize::from(route.cells);
+    if cells == 0 || route.center_delta_micro.len() != cells.saturating_mul(2) {
+        return false;
+    }
+    let mut atoms = crate::relation_frame_online_routing_atom_ids(frame);
+    if !route.query_atom_ids.is_empty() {
+        atoms.retain(|atom| route.query_atom_ids.binary_search(atom).is_ok());
+    }
+    if atoms.is_empty() {
+        return false;
+    }
+    let query = phase_vector_from_atom_ids(atoms, cells);
+    let score = |center_delta_micro: &[i32]| {
+        if center_delta_micro.len() != cells.saturating_mul(2) {
+            return i64::MIN;
+        }
+        phase_margin_to_micro(
+            query
+                .iter()
+                .zip(center_delta_micro.chunks_exact(2))
+                .map(|(cell, center)| {
+                    cell.re * f64::from(center[0]) / 1_000_000.0
+                        + cell.im * f64::from(center[1]) / 1_000_000.0
+                })
+                .sum::<f64>()
+                / cells as f64,
+        )
+        .unwrap_or(i64::MIN)
+    };
+    score(&route.center_delta_micro) >= route.threshold_micro
+        || route
+            .subcenters
+            .iter()
+            .any(|subcenter| score(&subcenter.center_delta_micro) >= subcenter.threshold_micro)
+}
+
 fn learned_wave_feature_vocabulary(
     support: &[crate::RelationFrame],
     negatives: &[crate::RelationFrame],
@@ -1550,9 +1889,15 @@ pub fn build_online_collection_admission_snapshot(
             .iter()
             .map(|receipt| receipt.evidence_graph_sha256.as_str())
             .collect::<BTreeSet<_>>();
-        let Some(parity_sha256) =
-            execute_runtime_parity(package, &candidate.runtime_parity_cases, &future_refs)?
-        else {
+        let parity_sha256 =
+            execute_runtime_parity(package, &candidate.runtime_parity_cases, &future_refs)?.or(
+                validate_durable_runtime_parity(
+                    package,
+                    &candidate.durable_runtime_parity_receipts,
+                    &future_refs,
+                )?,
+            );
+        let Some(parity_sha256) = parity_sha256 else {
             continue;
         };
         let future_sha256 = canonical_json_sha256(&FrameReceiptSet {
@@ -1572,6 +1917,13 @@ pub fn build_online_collection_admission_snapshot(
                 canonical_json_sha256(&candidate.causal_report)?,
                 parity_sha256,
                 future_sha256,
+                canonical_json_sha256(&(
+                    RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+                    "exact_singleton",
+                    package.package_id.as_str(),
+                    &package.program,
+                    &candidate.causal_report,
+                ))?,
             ),
         );
         packages.push(package.clone());
@@ -1590,7 +1942,7 @@ pub fn build_online_collection_admission_snapshot(
     let registry_sha256 = response_registry_digest(&registry)?;
     let mut bindings = Vec::new();
     for package in &registry.packages {
-        let (support, causal, parity, future) = receipt_digests
+        let (support, causal, parity, future, semantic_alias) = receipt_digests
             .remove(&package.package_id)
             .ok_or("online_collection_admission_receipts_missing")?;
         let verifier = package
@@ -1617,6 +1969,8 @@ pub fn build_online_collection_admission_snapshot(
             future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
                 .to_owned(),
             future_verifier_receipt_set_sha256: future,
+            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
+            semantic_alias_proof_sha256: semantic_alias,
             proof_receipts_sha256: String::new(),
         };
         binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
@@ -1792,6 +2146,7 @@ mod tests {
             negatives: Vec::new(),
             required_routing_atom_ids: Vec::new(),
             runtime_parity_cases,
+            semantic_alias_edges: Vec::new(),
         }
     }
 
@@ -1810,6 +2165,58 @@ mod tests {
         )
         .expect("admission evaluation");
         assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn semantic_law_binding_preserves_consensus_actor_and_independent_verifier() {
+        let first = (0..32).map(frame).collect::<Vec<_>>();
+        let mut second = (100..132).map(frame).collect::<Vec<_>>();
+        for row in &mut second {
+            for atom in &mut row.atoms {
+                match atom {
+                    RelationAtom::ActionFunction { value } => *value = "wait".to_owned(),
+                    RelationAtom::ActionRoleArgument { name, .. } => {
+                        *name = "cell_id".to_owned();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let first_program = synthesize_response_operator(&first)
+            .expect("first adapter")
+            .candidate
+            .program;
+        let second_program = synthesize_response_operator(&second)
+            .expect("second adapter")
+            .candidate
+            .program;
+        let consensus = crate::ResponseProgram::unique_consensus(vec![
+            crate::ResponseConsensusVariant {
+                program: first_program,
+                allowed_layout_sha256: Vec::new(),
+                required_request_atom_ids: Vec::new(),
+            },
+            crate::ResponseConsensusVariant {
+                program: second_program,
+                allowed_layout_sha256: Vec::new(),
+                required_request_atom_ids: Vec::new(),
+            },
+        ]);
+        let mut package = compile_source_neutral_quarantine_packages(&first, true)
+            .into_iter()
+            .next()
+            .expect("package shell");
+        let training = first.into_iter().chain(second).collect::<Vec<_>>();
+
+        bind_proven_semantic_law_program(&mut package, &consensus, &training)
+            .expect("bind semantic law");
+
+        assert_eq!(package.program, consensus);
+        assert!(matches!(
+            package.verifier,
+            Some(crate::VerifierProgram::UniqueConsensus { .. })
+        ));
+        assert!(package.validate().is_ok());
     }
 
     #[test]

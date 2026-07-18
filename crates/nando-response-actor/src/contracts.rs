@@ -81,6 +81,12 @@ pub enum RelationAtom {
         name: String,
         value: bool,
     },
+    PlanState {
+        step_count: u16,
+        completed_count: u16,
+        active_index: u16,
+    },
+    ActionPlanAdvance,
     ActionResultProjection {
         output_field: String,
         continuation_field: String,
@@ -179,9 +185,29 @@ pub enum ResponseValueSelector {
         field: String,
         value_type: AtomValueType,
     },
+    RequestReferencedJsonField {
+        value_type: AtomValueType,
+    },
     TurnOutputLine {
         output_ordinal: u16,
         line_index: u16,
+        value_type: AtomValueType,
+    },
+    TurnOutputScalarOrdinal {
+        output_ordinal: u16,
+        scalar_ordinal: u16,
+        value_type: AtomValueType,
+    },
+    LatestTurnOutputLine {
+        line_index: u16,
+        value_type: AtomValueType,
+    },
+    LatestTurnOutputScalarOrdinal {
+        scalar_ordinal: u16,
+        value_type: AtomValueType,
+    },
+    LatestTurnOutputScalarFromEnd {
+        reverse_ordinal: u16,
         value_type: AtomValueType,
     },
     CommandOutputBody,
@@ -276,8 +302,27 @@ pub struct VerifierReceipt {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VerifierConsensusVariant {
+    pub verifier: VerifierProgram,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_layout_sha256: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_request_atom_ids: Vec<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum VerifierProgram {
+    UniqueConsensus {
+        variants: Vec<VerifierConsensusVariant>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        adapter_wave: Option<crate::program::ResponseAdapterWaveConsensus>,
+    },
+    AdvancePlan {
+        function_name: String,
+        require_explicit_tool_success: bool,
+        require_canonical_plan: bool,
+    },
     FunctionCallFromRoles {
         function_name: String,
         selector: ResponseValueSelector,
@@ -320,6 +365,11 @@ pub enum VerifierProgram {
     ProjectStatus {
         selector: ResponseValueSelector,
         mapping: crate::ProjectStatusMapping,
+        #[serde(
+            default,
+            skip_serializing_if = "crate::CollectionOutputRenderer::is_direct"
+        )]
+        renderer: crate::CollectionOutputRenderer,
         completion_state: String,
         require_unique_value: bool,
     },

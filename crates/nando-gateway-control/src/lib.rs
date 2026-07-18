@@ -63,6 +63,7 @@ pub struct ControlConfig {
     pub response_registry_path: PathBuf,
     pub response_miner_status_path: PathBuf,
     pub response_online_miner_report_path: PathBuf,
+    pub build_manifest_path: PathBuf,
     pub admission_max_age_seconds: u64,
     pub cpu_route_ready: bool,
 }
@@ -122,6 +123,11 @@ impl ControlConfig {
             response_online_miner_report_path: PathBuf::from(
                 env::var("NANDO_RESPONSE_ONLINE_MINER_REPORT").unwrap_or_else(|_| {
                     "/var/lib/nando-wave/transition/response-online-miner-report.json".into()
+                }),
+            ),
+            build_manifest_path: PathBuf::from(
+                env::var("NANDO_BUILD_MANIFEST").unwrap_or_else(|_| {
+                    "/var/lib/nando-wave/transition/build-manifest.json".into()
                 }),
             ),
             admission_max_age_seconds,
@@ -492,6 +498,7 @@ mod tests {
             response_registry_path: root.join("response-registry.json"),
             response_miner_status_path: root.join("response-miner-status.json"),
             response_online_miner_report_path: root.join("response-online-miner-report.json"),
+            build_manifest_path: root.join("build-manifest.json"),
             admission_max_age_seconds: 900,
             cpu_route_ready: false,
         }

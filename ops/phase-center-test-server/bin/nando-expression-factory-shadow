@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${NANDO_EXPRESSION_SOURCE:-/var/lib/nando-wave/transition/live-transitions.jsonl}"
+STATE_DIR="${NANDO_EXPRESSION_SHADOW_DIR:-/var/lib/nando-wave/expression-shadow}"
+FACTORY_ROOT="${NANDO_EXPRESSION_FACTORY_ROOT:-/home/ubu/projects/rsmod/rust/expression-factory}"
+FACTORY_BIN="${NANDO_EXPRESSION_FACTORY_BIN:-/opt/nando-wave/bin/nando-expression-factory-live-mine}"
+VERIFIER_BIN="${NANDO_EXPRESSION_VERIFIER_BIN:-/opt/nando-wave/bin/nando-expression-shadow-verify}"
+PREFIX_BYTES="${NANDO_EXPRESSION_PREFIX_BYTES:-}"
+
+mkdir -p "$STATE_DIR"
+if [[ -z "$PREFIX_BYTES" ]]; then
+  PREFIX_BYTES="$(stat -c %s "$SOURCE")"
+fi
+
+PACKAGE_TMP="$STATE_DIR/package.rsef.next"
+RECEIPT_TMP="$STATE_DIR/receipt.json.next"
+VERIFIER_TMP="$STATE_DIR/verifier.json.next"
+PACKAGE="$STATE_DIR/package.rsef"
+RECEIPT="$STATE_DIR/receipt.json"
+VERIFIER="$STATE_DIR/verifier.json"
+CANDIDATE_TMP="$STATE_DIR/candidate.json.next"
+CANDIDATE="$STATE_DIR/candidate.json"
+
+if [[ -x "$FACTORY_BIN" ]]; then
+  "$FACTORY_BIN" "$SOURCE" "$PREFIX_BYTES" "$PACKAGE_TMP" > "$RECEIPT_TMP"
+else
+  cargo run --release --quiet --manifest-path "$FACTORY_ROOT/Cargo.toml" \
+    --bin live-mine -- "$SOURCE" "$PREFIX_BYTES" "$PACKAGE_TMP" > "$RECEIPT_TMP"
+fi
+
+jq -e --argjson prefix "$PREFIX_BYTES" '
+  .verdict == "PASS"
+  and .runtime_loaded_from_binary == true
+  and .wrong == 0
+  and .missing_receipts == 0
+  and .wave_causal_pass == true
+  and .source_prefix_bytes == $prefix
+' "$RECEIPT_TMP" >/dev/null
+
+PACKAGE_SHA="$(sha256sum "$PACKAGE_TMP" | awk '{print $1}')"
+jq -e --arg sha "$PACKAGE_SHA" '.package_sha256 == $sha' "$RECEIPT_TMP" >/dev/null
+
+[[ -x "$VERIFIER_BIN" ]]
+"$VERIFIER_BIN" "$PACKAGE_TMP" "$RECEIPT_TMP" "$SOURCE" > "$VERIFIER_TMP"
+jq -e '
+  .verdict == "PASS"
+  and .execution_authority == false
+  and .wrong == 0
+  and .abstain == 0
+  and .route_splice_accepts == 0
+  and .package_mutation_rejections == .package_mutations
+  and .miner_receipt_bound == true
+' "$VERIFIER_TMP" >/dev/null
+
+if [[ -f "$CANDIDATE" ]] \
+  && [[ "$(jq -r '.package.sha256 // empty' "$CANDIDATE")" == "$PACKAGE_SHA" ]] \
+  && [[ -f "$PACKAGE" ]] \
+  && [[ "$(sha256sum "$PACKAGE" | awk '{print $1}')" == "$PACKAGE_SHA" ]]; then
+  rm -f "$PACKAGE_TMP" "$RECEIPT_TMP" "$VERIFIER_TMP"
+  jq -n \
+    --arg schema "nando.expression-shadow-status.v1" \
+    --arg candidate "$CANDIDATE" \
+    --arg package_sha256 "$PACKAGE_SHA" \
+    '{schema:$schema,verdict:"SHADOW_READY",execution_authority:false,candidate:$candidate,package_sha256:$package_sha256,candidate_reused:true}'
+  exit 0
+fi
+
+mv -f "$PACKAGE_TMP" "$PACKAGE"
+mv -f "$RECEIPT_TMP" "$RECEIPT"
+mv -f "$VERIFIER_TMP" "$VERIFIER"
+
+RECEIPT_SHA="$(sha256sum "$RECEIPT" | awk '{print $1}')"
+VERIFIER_SHA="$(sha256sum "$VERIFIER" | awk '{print $1}')"
+FACTORY_BUILD_SHA="$(sha256sum "$FACTORY_BIN" | awk '{print $1}')"
+VERIFIER_BUILD_SHA="$(sha256sum "$VERIFIER_BIN" | awk '{print $1}')"
+SOURCE_PREFIX_SHA="$(jq -r '.source_prefix_sha256' "$RECEIPT")"
+jq -n \
+  --arg schema "nando.expression-quarantine-candidate.v1" \
+  --arg package "$PACKAGE" \
+  --arg package_sha256 "$PACKAGE_SHA" \
+  --arg miner_receipt "$RECEIPT" \
+  --arg miner_receipt_sha256 "$RECEIPT_SHA" \
+  --arg verifier_receipt "$VERIFIER" \
+  --arg verifier_receipt_sha256 "$VERIFIER_SHA" \
+  --arg factory_build_sha256 "$FACTORY_BUILD_SHA" \
+  --arg verifier_build_sha256 "$VERIFIER_BUILD_SHA" \
+  --arg source_prefix_sha256 "$SOURCE_PREFIX_SHA" \
+  --argjson source_prefix_bytes "$PREFIX_BYTES" \
+  --argjson generated_at_unix "$(date +%s)" \
+  '{schema:$schema,state:"quarantine",execution_authority:false,generated_at_unix:$generated_at_unix,source_prefix_bytes:$source_prefix_bytes,source_prefix_sha256:$source_prefix_sha256,package:{path:$package,sha256:$package_sha256},miner_receipt:{path:$miner_receipt,sha256:$miner_receipt_sha256},verifier_receipt:{path:$verifier_receipt,sha256:$verifier_receipt_sha256},builds:{factory_sha256:$factory_build_sha256,verifier_sha256:$verifier_build_sha256}}' \
+  > "$CANDIDATE_TMP"
+mv -f "$CANDIDATE_TMP" "$CANDIDATE"
+
+jq -n \
+  --arg schema "nando.expression-shadow-status.v1" \
+  --arg package "$PACKAGE" \
+  --arg receipt "$RECEIPT" \
+  --arg verifier "$VERIFIER" \
+  --arg candidate "$CANDIDATE" \
+  --arg package_sha256 "$PACKAGE_SHA" \
+  --argjson prefix_bytes "$PREFIX_BYTES" \
+  '{schema:$schema,verdict:"SHADOW_READY",execution_authority:false,package:$package,receipt:$receipt,verifier:$verifier,candidate:$candidate,package_sha256:$package_sha256,prefix_bytes:$prefix_bytes}'

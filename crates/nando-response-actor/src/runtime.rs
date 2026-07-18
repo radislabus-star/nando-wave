@@ -1,12 +1,14 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use nando_core::wave::{phase_margin_to_micro, phase_vector_from_atom_ids};
 use serde_json::Value;
 
 use crate::program::{
     CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
     CollectionScalarType, CustomToolResultProjection, MAX_PROJECT_STATUS_CODE,
-    ProjectStatusMapping, ResponseArgument, ResponseOperation, ResponseProgram,
-    ResponseRenderSegment, ValueProjectionFormat,
+    ProjectStatusMapping, RequestTemplateMarker, ResponseAdapterWaveRoute, ResponseArgument,
+    ResponseConsensusVariant, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ValueProjectionFormat,
 };
 use crate::verifier::verify_response;
 use crate::{AtomValueType, ResponseValueSelector, SemanticRole};
@@ -49,6 +51,18 @@ pub fn execute_response(
         );
     }
     let response = match &program.operation {
+        ResponseOperation::UniqueConsensus {
+            variants,
+            adapter_wave,
+        } => execute_unique_consensus(
+            variants,
+            adapter_wave.as_ref(),
+            request_text,
+            provider_payload,
+        ),
+        ResponseOperation::AdvancePlan { function_name } => {
+            execute_advance_plan(provider_payload, function_name)
+        }
         ResponseOperation::FunctionCallFromRoles {
             function_name,
             selector,
@@ -76,8 +90,12 @@ pub fn execute_response(
         } => project_selected_value(provider_payload, selector, *format)
             .and_then(|computed| apply_value_renderer(provider_payload, computed, renderer)),
         ResponseOperation::ProjectStatus {
-            selector, mapping, ..
-        } => project_status(provider_payload, selector, *mapping),
+            selector,
+            mapping,
+            renderer,
+            ..
+        } => project_status(provider_payload, selector, *mapping)
+            .and_then(|computed| apply_value_renderer(provider_payload, computed, renderer)),
         ResponseOperation::ComposeCollection {
             steps,
             format,
@@ -145,6 +163,672 @@ pub fn execute_response(
     }
 }
 
+fn execute_unique_consensus(
+    variants: &[ResponseConsensusVariant],
+    adapter_wave: Option<&crate::ResponseAdapterWaveConsensus>,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Result<String, &'static str> {
+    let layout =
+        actor_structural_layout_sha256(provider_payload).map_err(|_| "unique_consensus_layout")?;
+    let request_atoms = self::request_text(provider_payload)
+        .map(|text| crate::request_phase_atom_ids(&text))
+        .unwrap_or_default();
+    let mut applicable = variants
+        .iter()
+        .enumerate()
+        .filter(|(_, variant)| {
+            (variant.allowed_layout_sha256.is_empty()
+                || variant.allowed_layout_sha256.binary_search(&layout).is_ok())
+                && variant
+                    .required_request_atom_ids
+                    .iter()
+                    .all(|atom| request_atoms.binary_search(atom).is_ok())
+        })
+        .map(|(index, variant)| {
+            let margin = adapter_wave
+                .and_then(|wave| wave.routes.get(index))
+                .and_then(|route| {
+                    actor_adapter_wave_margin(&variant.program, provider_payload, route)
+                })
+                .unwrap_or(i64::MIN);
+            (index, variant, margin)
+        })
+        .collect::<Vec<_>>();
+    if let Some(wave) = adapter_wave {
+        applicable.retain(|(_, _, margin)| *margin != i64::MIN);
+        applicable.sort_unstable_by(|left, right| {
+            right.2.cmp(&left.2).then_with(|| left.0.cmp(&right.0))
+        });
+        let Some(best_margin) = applicable.first().map(|value| value.2) else {
+            return Err("adapter_wave_no_candidate");
+        };
+        let tied = applicable
+            .iter()
+            .filter(|value| value.2 == best_margin)
+            .count();
+        if tied > usize::from(wave.exact_budget) {
+            return Err("adapter_wave_tie_budget");
+        }
+        applicable.retain(|value| value.2 == best_margin);
+    }
+    let responses = applicable
+        .into_iter()
+        .filter_map(|(_, variant, _)| {
+            let execution = execute_response(&variant.program, request_text, provider_payload);
+            (execution.status == ResponseExecutionStatus::Executed)
+                .then_some(execution.response)
+                .flatten()
+        })
+        .collect::<BTreeSet<_>>();
+    if responses.len() != 1 {
+        return Err(if responses.is_empty() {
+            "unique_consensus_no_applicable_variant"
+        } else {
+            "unique_consensus_disagreement"
+        });
+    }
+    responses
+        .into_iter()
+        .next()
+        .ok_or("unique_consensus_no_applicable_variant")
+}
+
+fn actor_adapter_wave_margin(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+    route: &ResponseAdapterWaveRoute,
+) -> Option<i64> {
+    let atoms = actor_adapter_phase_atom_ids(program, provider_payload);
+    if atoms.is_empty() {
+        return None;
+    }
+    let anchor_matches = route
+        .anchor_atom_ids
+        .iter()
+        .any(|atom| atoms.binary_search(atom).is_ok());
+    let fingerprint_matches = route
+        .positive_fingerprint_ids
+        .binary_search(&actor_adapter_wave_atom_fingerprint(&atoms))
+        .is_ok();
+    if (!route.anchor_atom_ids.is_empty() || !route.positive_fingerprint_ids.is_empty())
+        && !anchor_matches
+        && !fingerprint_matches
+    {
+        return None;
+    }
+    let query = phase_vector_from_atom_ids(atoms, usize::from(route.cells));
+    let score = |center: &[i32]| {
+        phase_margin_to_micro(
+            query
+                .iter()
+                .zip(center.chunks_exact(2))
+                .map(|(query, center)| {
+                    query.re * f64::from(center[0]) / 1_000_000.0
+                        + query.im * f64::from(center[1]) / 1_000_000.0
+                })
+                .sum::<f64>()
+                / f64::from(route.cells),
+        )
+        .ok()
+    };
+    std::iter::once((&route.center_delta_micro, route.threshold_micro))
+        .chain(
+            route
+                .subcenters
+                .iter()
+                .map(|center| (&center.center_delta_micro, center.threshold_micro)),
+        )
+        .filter_map(|(center, threshold)| {
+            score(center)
+                .filter(|margin| *margin >= threshold)
+                .map(|margin| margin.saturating_sub(threshold))
+        })
+        .max()
+}
+
+fn actor_adapter_wave_atom_fingerprint(atoms: &[u64]) -> u64 {
+    let mut fingerprint = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in atoms.iter().flat_map(|atom| atom.to_le_bytes()) {
+        fingerprint = (fingerprint ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+    }
+    fingerprint
+}
+
+pub(crate) fn actor_adapter_phase_atom_ids(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> Vec<u64> {
+    if matches!(
+        program.operation,
+        ResponseOperation::FunctionCallFromRoles { .. }
+            | ResponseOperation::CustomToolCallFromRoles { .. }
+    ) {
+        return crate::package::response_program_grounded_routing_atom_ids(
+            program,
+            provider_payload,
+        );
+    }
+    let mut atoms = Vec::new();
+    let mut identifiers = Vec::<String>::new();
+    match &program.operation {
+        ResponseOperation::FunctionCallFromRoles {
+            function_name,
+            selector,
+            arguments,
+        } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:call"));
+            actor_selector_adapter_atoms(selector, provider_payload, &mut atoms, &mut identifiers);
+            if execute_function_call_from_roles(
+                provider_payload,
+                function_name,
+                selector,
+                arguments,
+            )
+            .is_ok()
+            {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        ResponseOperation::CustomToolCallFromRoles {
+            custom_tool_name,
+            inner_tool_name,
+            selector,
+            arguments,
+            projection,
+        } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:call"));
+            actor_selector_adapter_atoms(selector, provider_payload, &mut atoms, &mut identifiers);
+            if execute_custom_tool_call_from_roles(
+                provider_payload,
+                custom_tool_name,
+                inner_tool_name,
+                selector,
+                arguments,
+                projection,
+            )
+            .is_ok()
+            {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        ResponseOperation::ProjectSelectedValue { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:project"));
+            actor_selector_adapter_atoms(selector, provider_payload, &mut atoms, &mut identifiers);
+        }
+        ResponseOperation::ProjectStatus { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:status"));
+            actor_selector_adapter_atoms(selector, provider_payload, &mut atoms, &mut identifiers);
+        }
+        ResponseOperation::ComposeCollection { steps, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:collection"));
+            for step in steps {
+                match step {
+                    CollectionProgramStep::SelectTurnOutput { output_ordinal } => {
+                        atoms.push(crate::stable_atom_id(&format!(
+                            "adapter:collection_output_ordinal:{output_ordinal}"
+                        )));
+                    }
+                    CollectionProgramStep::SelectField { field }
+                    | CollectionProgramStep::FilterFieldEquals { field, .. }
+                    | CollectionProgramStep::ProjectField { field } => {
+                        identifiers.push(field.clone());
+                    }
+                    CollectionProgramStep::SelectOnlyArrayField
+                    | CollectionProgramStep::FilterUniqueFieldEquals { .. }
+                    | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+                    | CollectionProgramStep::ProjectUniqueFieldByType { .. }
+                    | CollectionProgramStep::ProjectOnlyNonFilterField
+                    | CollectionProgramStep::AggregateUniqueIntegerField { .. }
+                    | CollectionProgramStep::Count => {}
+                }
+            }
+            if execute_compose_collection_from_program(program, provider_payload) {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        _ => return Vec::new(),
+    }
+    let request_tokens = request_text(provider_payload)
+        .map(|text| identifier_tokens(&text))
+        .unwrap_or_default();
+    atoms.extend(actor_adapter_request_lexical_atoms(&request_tokens));
+    let mentioned = identifiers
+        .iter()
+        .filter(|identifier| request_mentions_identifier(&request_tokens, identifier))
+        .count();
+    let relation = if identifiers.is_empty() {
+        "none_available"
+    } else if mentioned == 0 {
+        "none_mentioned"
+    } else if mentioned == identifiers.len() {
+        "all_mentioned"
+    } else {
+        "some_mentioned"
+    };
+    atoms.push(crate::stable_atom_id(&format!(
+        "adapter:request_identifier_relation:{relation}"
+    )));
+    atoms.extend(crate::response_pre_action_context_atom_ids(
+        provider_payload,
+    ));
+    atoms.sort_unstable();
+    atoms.dedup();
+    atoms
+}
+
+fn actor_adapter_request_lexical_atoms(tokens: &[String]) -> Vec<u64> {
+    let bounded = tokens
+        .iter()
+        .filter(|token| !token.is_empty() && token.len() <= 64)
+        .take(32)
+        .collect::<Vec<_>>();
+    let mut atoms = bounded
+        .iter()
+        .map(|token| crate::stable_atom_id(&format!("adapter:request_unigram:{token}")))
+        .collect::<Vec<_>>();
+    atoms.extend(bounded.windows(2).map(|window| {
+        crate::stable_atom_id(&format!(
+            "adapter:request_bigram:{}:{}",
+            window[0], window[1]
+        ))
+    }));
+    atoms
+}
+
+fn execute_compose_collection_from_program(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> bool {
+    let ResponseOperation::ComposeCollection {
+        steps,
+        format,
+        renderer,
+        max_items,
+        ..
+    } = &program.operation
+    else {
+        return false;
+    };
+    execute_compose_collection(provider_payload, steps, *format, renderer, *max_items).is_ok()
+}
+
+fn actor_selector_adapter_atoms<'a>(
+    selector: &ResponseValueSelector,
+    provider_payload: &Value,
+    atoms: &mut Vec<u64>,
+    identifiers: &mut Vec<String>,
+) {
+    let (family, position, value_type) = match selector {
+        ResponseValueSelector::UniqueScalar { value_type } => {
+            ("unique_scalar", None, Some(value_type))
+        }
+        ResponseValueSelector::UniqueTurnScalar { value_type } => {
+            ("unique_turn_scalar", None, Some(value_type))
+        }
+        ResponseValueSelector::ContentLinePrefix { value_type, .. } => {
+            ("line_prefix", None, Some(value_type))
+        }
+        ResponseValueSelector::JsonField { field, value_type } => {
+            identifiers.push(field.clone());
+            ("json_field", None, Some(value_type))
+        }
+        ResponseValueSelector::JsonScalarOrdinal {
+            ordinal,
+            value_type,
+        } => ("json_ordinal", Some(u64::from(*ordinal)), Some(value_type)),
+        ResponseValueSelector::UniqueTurnJsonField { field, value_type } => {
+            identifiers.push(field.clone());
+            ("turn_json_field", None, Some(value_type))
+        }
+        ResponseValueSelector::UniqueActiveTurnJsonField { field, value_type } => {
+            identifiers.push(field.clone());
+            ("active_turn_json_field", None, Some(value_type))
+        }
+        ResponseValueSelector::RequestReferencedJsonField { value_type } => {
+            ("request_referenced", None, Some(value_type))
+        }
+        ResponseValueSelector::TurnOutputLine {
+            output_ordinal,
+            line_index,
+            value_type,
+        } => (
+            "turn_output_line",
+            Some((u64::from(*output_ordinal) << 16) | u64::from(*line_index)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            output_ordinal,
+            scalar_ordinal,
+            value_type,
+        } => (
+            "turn_output_scalar",
+            Some((u64::from(*output_ordinal) << 16) | u64::from(*scalar_ordinal)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::LatestTurnOutputLine {
+            line_index,
+            value_type,
+        } => (
+            "latest_line",
+            Some(u64::from(*line_index)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => (
+            "latest_scalar",
+            Some(u64::from(*scalar_ordinal)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => (
+            "latest_scalar_from_end",
+            Some(u64::from(*reverse_ordinal)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::CommandOutputBody => ("command_body", None, None),
+        ResponseValueSelector::RequestLastToken => ("request_last_token", None, None),
+        ResponseValueSelector::RequestUniqueLiteral => ("request_unique_literal", None, None),
+    };
+    atoms.push(crate::stable_atom_id(&format!(
+        "adapter:selector_family:{family}"
+    )));
+    if let Some(position) = position {
+        atoms.push(crate::stable_atom_id(&format!(
+            "adapter:position:{position}"
+        )));
+    }
+    if let Some(value_type) = value_type {
+        atoms.push(crate::stable_atom_id(&format!(
+            "adapter:value_type:{}",
+            adapter_value_type_name(*value_type)
+        )));
+    }
+    if let Ok(selected) = immediate_selected_scalar(provider_payload, selector) {
+        atoms.push(crate::stable_atom_id("adapter:executes"));
+        if identifiers.is_empty()
+            && let Some(identifier) =
+                actor_unique_output_key_for_scalar(provider_payload, &selected.value)
+        {
+            identifiers.push(identifier);
+        }
+    }
+}
+
+fn actor_unique_output_key_for_scalar(
+    provider_payload: &Value,
+    selected: &Value,
+) -> Option<String> {
+    let mut identifiers = BTreeSet::new();
+    let input = provider_payload.get("input")?.as_array()?;
+    for item in input {
+        if !matches!(
+            item.get("type").and_then(Value::as_str),
+            Some("function_call_output" | "custom_tool_call_output")
+        ) {
+            continue;
+        }
+        let Some(output) = item.get("output") else {
+            continue;
+        };
+        if let Some(text) = output.as_str() {
+            for object in runtime_embedded_json_objects(text) {
+                actor_collect_scalar_keys(&Value::Object(object), selected, &mut identifiers, 0);
+            }
+        } else {
+            actor_collect_scalar_keys(output, selected, &mut identifiers, 0);
+        }
+        if identifiers.len() > 1 {
+            return None;
+        }
+    }
+    (identifiers.len() == 1)
+        .then(|| identifiers.into_iter().next())
+        .flatten()
+}
+
+fn actor_collect_scalar_keys(
+    value: &Value,
+    selected: &Value,
+    identifiers: &mut BTreeSet<String>,
+    depth: usize,
+) {
+    if depth > 8 || identifiers.len() > 1 {
+        return;
+    }
+    match value {
+        Value::Object(object) => {
+            for (key, value) in object {
+                if value == selected {
+                    identifiers.insert(key.clone());
+                }
+                actor_collect_scalar_keys(value, selected, identifiers, depth.saturating_add(1));
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                actor_collect_scalar_keys(value, selected, identifiers, depth.saturating_add(1));
+            }
+        }
+        _ => {}
+    }
+}
+
+const fn adapter_value_type_name(value_type: AtomValueType) -> &'static str {
+    match value_type {
+        AtomValueType::String => "string",
+        AtomValueType::Integer => "integer",
+        AtomValueType::Boolean => "boolean",
+        AtomValueType::Identifier => "identifier",
+        AtomValueType::Collection => "collection",
+    }
+}
+
+fn actor_structural_layout_sha256(value: &Value) -> Result<String, &'static str> {
+    crate::canonical_json_sha256(&actor_structural_layout(value))
+}
+
+fn actor_structural_layout(value: &Value) -> Value {
+    match value {
+        Value::Null => Value::String("null".to_owned()),
+        Value::Bool(_) => Value::String("bool".to_owned()),
+        Value::Number(number) if number.is_i64() || number.is_u64() => {
+            Value::String("integer".to_owned())
+        }
+        Value::Number(_) => Value::String("number".to_owned()),
+        Value::String(value) => serde_json::from_str::<Value>(value)
+            .ok()
+            .filter(|parsed| !matches!(parsed, Value::String(_)))
+            .map_or_else(
+                || Value::String("string".to_owned()),
+                |parsed| actor_structural_layout(&parsed),
+            ),
+        Value::Array(values) => Value::Array(values.iter().map(actor_structural_layout).collect()),
+        Value::Object(values) => {
+            let mut shapes = values
+                .iter()
+                .map(|(key, value)| {
+                    Value::Array(vec![
+                        Value::String(crate::sha256_bytes(key.as_bytes())),
+                        actor_structural_layout(value),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            shapes.sort_by_cached_key(|shape| serde_json::to_vec(shape).unwrap_or_default());
+            Value::Array(shapes)
+        }
+    }
+}
+
+fn execute_advance_plan(
+    provider_payload: &Value,
+    function_name: &str,
+) -> Result<String, &'static str> {
+    let output = immediate_tool_output_value(provider_payload)
+        .ok_or("plan_immediate_tool_output_missing")?;
+    if !actor_explicit_tool_success(output) {
+        return Err("plan_tool_success_missing");
+    }
+    let mut plan = actor_latest_plan(provider_payload, function_name)?;
+    let active = actor_validate_canonical_plan(&plan)?;
+    let current = plan
+        .get_mut(active)
+        .and_then(Value::as_object_mut)
+        .ok_or("plan_active_step_missing")?;
+    current.insert("status".to_owned(), Value::String("completed".to_owned()));
+    if let Some(next) = plan.get_mut(active.saturating_add(1)) {
+        let next = next.as_object_mut().ok_or("plan_next_step_invalid")?;
+        next.insert("status".to_owned(), Value::String("in_progress".to_owned()));
+    }
+    serde_json::to_string(&serde_json::json!({
+        "name": function_name,
+        "arguments": {"plan": plan},
+    }))
+    .map_err(|_| "plan_serialization")
+}
+
+fn actor_latest_plan(
+    provider_payload: &Value,
+    function_name: &str,
+) -> Result<Vec<Value>, &'static str> {
+    let items = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .ok_or("plan_input_missing")?;
+    let call = items
+        .iter()
+        .rev()
+        .skip(1)
+        .find(|item| {
+            item.get("type").and_then(Value::as_str) == Some("function_call")
+                && item.get("name").and_then(Value::as_str) == Some(function_name)
+        })
+        .ok_or("plan_previous_call_missing")?;
+    let arguments = call
+        .get("arguments")
+        .ok_or("plan_previous_arguments_missing")?;
+    let parsed;
+    let arguments = if let Some(arguments) = arguments.as_str() {
+        parsed = serde_json::from_str::<Value>(arguments)
+            .map_err(|_| "plan_previous_arguments_invalid")?;
+        &parsed
+    } else {
+        arguments
+    };
+    arguments
+        .get("plan")
+        .and_then(Value::as_array)
+        .filter(|plan| !plan.is_empty() && plan.len() <= 32)
+        .cloned()
+        .ok_or("plan_previous_state_missing")
+}
+
+fn actor_validate_canonical_plan(plan: &[Value]) -> Result<usize, &'static str> {
+    let mut active = None;
+    for (index, step) in plan.iter().enumerate() {
+        let step = step.as_object().ok_or("plan_step_not_object")?;
+        if step.len() != 2 {
+            return Err("plan_step_schema_mismatch");
+        }
+        let text = step
+            .get("step")
+            .and_then(Value::as_str)
+            .filter(|text| !text.is_empty() && text.len() <= 1_024)
+            .ok_or("plan_step_text_invalid")?;
+        if text.chars().any(char::is_control) {
+            return Err("plan_step_text_control");
+        }
+        let status = step
+            .get("status")
+            .and_then(Value::as_str)
+            .ok_or("plan_step_status_missing")?;
+        match status {
+            "completed" if active.is_none() => {}
+            "in_progress" if active.is_none() => active = Some(index),
+            "pending" if active.is_some() => {}
+            _ => return Err("plan_status_order_invalid"),
+        }
+    }
+    active.ok_or("plan_active_step_ambiguous")
+}
+
+pub(crate) fn advance_plan_runtime_state(
+    provider_payload: &Value,
+    function_name: &str,
+) -> Option<(u16, u16, u16)> {
+    let output = immediate_tool_output_value(provider_payload)?;
+    if !actor_explicit_tool_success(output) {
+        return None;
+    }
+    let plan = actor_latest_plan(provider_payload, function_name).ok()?;
+    let active_index = actor_validate_canonical_plan(&plan).ok()?;
+    Some((
+        u16::try_from(plan.len()).ok()?,
+        u16::try_from(active_index).ok()?,
+        u16::try_from(active_index).ok()?,
+    ))
+}
+
+fn actor_explicit_tool_success(output: &Value) -> bool {
+    match output {
+        Value::Object(object) => {
+            if let Some(exit_code) = object.get("exit_code") {
+                return exit_code.as_i64() == Some(0);
+            }
+            if let Some(ok) = object.get("ok") {
+                return ok.as_bool() == Some(true);
+            }
+            if let Some(status) = object.get("status").and_then(Value::as_str) {
+                return matches!(
+                    status.to_ascii_lowercase().as_str(),
+                    "success" | "succeeded" | "pass" | "passed" | "ok" | "completed"
+                );
+            }
+            object
+                .get("result")
+                .is_some_and(actor_explicit_tool_success)
+        }
+        Value::String(text) if !text.is_empty() && text.len() <= 131_072 => {
+            if let Ok(decoded) = serde_json::from_str::<Value>(text) {
+                return actor_explicit_tool_success(&decoded);
+            }
+            matches!(
+                text.trim().to_ascii_lowercase().as_str(),
+                "success" | "succeeded" | "pass" | "passed" | "ok" | "completed"
+            ) || actor_transport_exit_success(text)
+        }
+        Value::Array(parts) if parts.len() == 1 => parts[0]
+            .get("text")
+            .is_some_and(actor_explicit_tool_success),
+        _ => false,
+    }
+}
+
+fn actor_transport_exit_success(text: &str) -> bool {
+    const PREFIX: &str = "Process exited with code ";
+    let mut exit_code = None;
+    for line in text.lines() {
+        let Some(raw_code) = line.strip_prefix(PREFIX) else {
+            continue;
+        };
+        if exit_code.is_some()
+            || raw_code.is_empty()
+            || !raw_code.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return false;
+        }
+        let Ok(code) = raw_code.parse::<u16>() else {
+            return false;
+        };
+        exit_code = Some(code);
+    }
+    exit_code == Some(0)
+}
+
 fn execute_compose_collection(
     provider_payload: &Value,
     steps: &[CollectionProgramStep],
@@ -152,12 +836,23 @@ fn execute_compose_collection(
     renderer: &CollectionOutputRenderer,
     max_items: usize,
 ) -> Result<String, &'static str> {
-    let output =
-        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let (output, transform_steps) = match steps.first() {
+        Some(CollectionProgramStep::SelectTurnOutput { output_ordinal }) => (
+            active_turn_output_value(provider_payload, Some(*output_ordinal))?,
+            &steps[1..],
+        ),
+        _ => (
+            immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?,
+            steps,
+        ),
+    };
     let mut value = collection_json_from_value(output)?;
     let mut filter_field = None::<String>;
-    for step in steps {
+    for step in transform_steps {
         value = match step {
+            CollectionProgramStep::SelectTurnOutput { .. } => {
+                return Err("collection_output_selector_position");
+            }
             CollectionProgramStep::SelectOnlyArrayField => {
                 let object = value.as_object().ok_or("collection_select_not_object")?;
                 let mut arrays = object.values().filter(|candidate| candidate.is_array());
@@ -466,6 +1161,7 @@ fn request_contains_collection_value(request: &str, value: &Value) -> bool {
 }
 
 fn apply_output_renderer(
+    provider_payload: &Value,
     computed: String,
     renderer: &CollectionOutputRenderer,
 ) -> Result<String, &'static str> {
@@ -477,6 +1173,9 @@ fn apply_output_renderer(
         CollectionOutputRenderer::RenderSequence { .. } => {
             Err("collection_render_sequence_unsupported")
         }
+        CollectionOutputRenderer::RequestTemplate { marker } => {
+            apply_request_template(provider_payload, computed, *marker)
+        }
     }
 }
 
@@ -486,7 +1185,7 @@ fn apply_value_renderer(
     renderer: &CollectionOutputRenderer,
 ) -> Result<String, &'static str> {
     let CollectionOutputRenderer::RenderSequence { segments } = renderer else {
-        return apply_output_renderer(computed, renderer);
+        return apply_output_renderer(provider_payload, computed, renderer);
     };
     let mut output = String::new();
     for segment in segments {
@@ -502,6 +1201,44 @@ fn apply_value_renderer(
         }
     }
     Ok(output)
+}
+
+fn apply_request_template(
+    provider_payload: &Value,
+    computed: String,
+    marker: RequestTemplateMarker,
+) -> Result<String, &'static str> {
+    let request = request_text(provider_payload).ok_or("request_template_text_missing")?;
+    let template = unique_request_template(&request, marker.token())?;
+    let output = template.replacen(marker.token(), &computed, 1);
+    if output.is_empty() || output.len() > 16_384 {
+        return Err("request_template_output_budget");
+    }
+    Ok(output)
+}
+
+fn unique_request_template(request: &str, marker: &str) -> Result<String, &'static str> {
+    let mut templates = BTreeMap::<String, ()>::new();
+    for delimiter in ['`', '\'', '"'] {
+        let parts = request.split(delimiter).collect::<Vec<_>>();
+        for value in parts.iter().skip(1).step_by(2) {
+            let value = value.trim();
+            if !value.is_empty()
+                && value.len() <= 512
+                && !value.contains(['\n', '\r'])
+                && value.matches(marker).count() == 1
+            {
+                templates.insert(value.to_owned(), ());
+            }
+        }
+    }
+    if templates.len() != 1 {
+        return Err("request_template_cardinality");
+    }
+    templates
+        .into_keys()
+        .next()
+        .ok_or("request_template_missing")
 }
 
 fn collection_json_from_value(output: &Value) -> Result<Value, &'static str> {
@@ -989,11 +1726,36 @@ pub(crate) fn immediate_selected_scalar(
         ResponseValueSelector::UniqueActiveTurnJsonField { field, value_type } => {
             unique_active_turn_json_field(provider_payload, field, *value_type)
         }
+        ResponseValueSelector::RequestReferencedJsonField { value_type } => {
+            request_referenced_json_field(provider_payload, *value_type)
+        }
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,
             value_type,
         } => turn_output_line(provider_payload, *output_ordinal, *line_index, *value_type),
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            output_ordinal,
+            scalar_ordinal,
+            value_type,
+        } => turn_output_scalar_ordinal(
+            provider_payload,
+            *output_ordinal,
+            *scalar_ordinal,
+            *value_type,
+        ),
+        ResponseValueSelector::LatestTurnOutputLine {
+            line_index,
+            value_type,
+        } => latest_turn_output_line(provider_payload, *line_index, *value_type),
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => latest_turn_output_scalar_ordinal(provider_payload, *scalar_ordinal, *value_type),
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => latest_turn_output_scalar_from_end(provider_payload, *reverse_ordinal, *value_type),
         ResponseValueSelector::CommandOutputBody => {
             let value = command_output_body(provider_payload)?;
             Ok(ExtractedScalar {
@@ -1150,6 +1912,122 @@ fn collect_runtime_json_field(
         _ => {}
     }
     Ok(())
+}
+
+fn request_referenced_json_field(
+    provider_payload: &Value,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    let request = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .rev()
+        .find(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+        .and_then(|item| item.get("content"))
+        .and_then(runtime_request_content_text)
+        .ok_or("selector_request_text_missing")?;
+    let request_tokens = identifier_tokens(&request);
+    let output =
+        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let mut matches = Vec::<(String, ExtractedScalar)>::new();
+    for text in output_text_parts(output)? {
+        for object in runtime_embedded_json_objects(text) {
+            collect_runtime_request_referenced_fields(
+                &Value::Object(object),
+                &request_tokens,
+                value_type,
+                0,
+                &mut matches,
+            )?;
+        }
+    }
+    matches.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.value.to_string().cmp(&right.1.value.to_string()))
+    });
+    matches.dedup();
+    if matches.len() != 1 {
+        return Err("selector_request_field_ambiguous");
+    }
+    matches
+        .pop()
+        .map(|(_, scalar)| scalar)
+        .ok_or("selector_request_field_missing")
+}
+
+fn collect_runtime_request_referenced_fields(
+    value: &Value,
+    request_tokens: &[String],
+    value_type: AtomValueType,
+    depth: usize,
+    output: &mut Vec<(String, ExtractedScalar)>,
+) -> Result<(), &'static str> {
+    if depth > 8 || output.len() >= 64 {
+        return Err("selector_request_field_structure_budget");
+    }
+    match value {
+        Value::Object(object) => {
+            for (field, value) in object {
+                if request_mentions_identifier(request_tokens, field)
+                    && let Ok(scalar) = extracted_scalar(value.clone(), value_type)
+                {
+                    output.push((field.clone(), scalar));
+                }
+                collect_runtime_request_referenced_fields(
+                    value,
+                    request_tokens,
+                    value_type,
+                    depth.saturating_add(1),
+                    output,
+                )?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_runtime_request_referenced_fields(
+                    value,
+                    request_tokens,
+                    value_type,
+                    depth.saturating_add(1),
+                    output,
+                )?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn runtime_request_content_text(content: &Value) -> Option<String> {
+    if let Some(text) = content.as_str() {
+        return (!text.is_empty()).then(|| text.to_owned());
+    }
+    let text = content
+        .as_array()?
+        .iter()
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
+    (!text.is_empty()).then_some(text)
+}
+
+fn identifier_tokens(text: &str) -> Vec<String> {
+    text.split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_lowercase)
+        .take(256)
+        .collect()
+}
+
+fn request_mentions_identifier(request_tokens: &[String], identifier: &str) -> bool {
+    let identifier_tokens = identifier_tokens(identifier);
+    !identifier_tokens.is_empty()
+        && request_tokens
+            .windows(identifier_tokens.len())
+            .any(|window| window == identifier_tokens)
 }
 
 fn request_unique_literal(provider_payload: &Value) -> Result<String, &'static str> {
@@ -1335,28 +2213,23 @@ fn turn_output_line(
     if value_type != AtomValueType::String || output_ordinal == 0 {
         return Err("turn_output_line_selector_invalid");
     }
-    let items = provider_payload
-        .get("input")
-        .and_then(Value::as_array)
-        .ok_or("turn_input_missing")?;
-    let turn_start = items
-        .iter()
-        .rposition(|item| {
-            item.get("type").and_then(Value::as_str) == Some("message")
-                && item.get("role").and_then(Value::as_str) == Some("user")
-        })
-        .map_or(0, |index| index.saturating_add(1));
-    let item = items[turn_start..]
-        .iter()
-        .filter(|item| {
-            matches!(
-                item.get("type").and_then(Value::as_str),
-                Some("function_call_output" | "custom_tool_call_output")
-            )
-        })
-        .nth(usize::from(output_ordinal - 1))
-        .ok_or("turn_output_ordinal_missing")?;
-    let output = item.get("output").ok_or("turn_output_missing")?;
+    let output = active_turn_output_value(provider_payload, Some(output_ordinal))?;
+    output_line_scalar(output, line_index)
+}
+
+fn latest_turn_output_line(
+    provider_payload: &Value,
+    line_index: u16,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if value_type != AtomValueType::String {
+        return Err("latest_turn_output_line_selector_invalid");
+    }
+    let output = active_turn_output_value(provider_payload, None)?;
+    output_line_scalar(output, line_index)
+}
+
+fn output_line_scalar(output: &Value, line_index: u16) -> Result<ExtractedScalar, &'static str> {
     let lines = output_text_parts(output)?
         .into_iter()
         .flat_map(str::lines)
@@ -1368,6 +2241,176 @@ fn turn_output_line(
         .filter(|line| line.len() <= 512)
         .ok_or("turn_output_line_missing")?;
     extracted_scalar(Value::String((*line).to_owned()), AtomValueType::String)
+}
+
+fn turn_output_scalar_ordinal(
+    provider_payload: &Value,
+    output_ordinal: u16,
+    scalar_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if output_ordinal == 0 || matches!(value_type, AtomValueType::Collection) {
+        return Err("turn_output_scalar_ordinal_selector_invalid");
+    }
+    let output = active_turn_output_value(provider_payload, Some(output_ordinal))?;
+    output_scalar_ordinal(output, scalar_ordinal, value_type)
+}
+
+fn latest_turn_output_scalar_ordinal(
+    provider_payload: &Value,
+    scalar_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if matches!(value_type, AtomValueType::Collection) {
+        return Err("latest_turn_output_scalar_ordinal_selector_invalid");
+    }
+    let output = active_turn_output_value(provider_payload, None)?;
+    output_scalar_ordinal(output, scalar_ordinal, value_type)
+}
+
+fn latest_turn_output_scalar_from_end(
+    provider_payload: &Value,
+    reverse_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if matches!(value_type, AtomValueType::Collection) {
+        return Err("latest_turn_output_scalar_from_end_selector_invalid");
+    }
+    let output = active_turn_output_value(provider_payload, None)?;
+    let mut scalars = Vec::new();
+    for text in output_text_parts(output)? {
+        collect_runtime_output_scalars(text, &mut scalars)?;
+    }
+    scalars
+        .into_iter()
+        .filter(|scalar| {
+            scalar.value_type == value_type
+                || matches!(
+                    (scalar.value_type, value_type),
+                    (AtomValueType::Identifier, AtomValueType::String)
+                )
+        })
+        .rev()
+        .nth(usize::from(reverse_ordinal))
+        .map(|mut scalar| {
+            scalar.value_type = value_type;
+            scalar
+        })
+        .ok_or("latest_turn_output_scalar_from_end_missing")
+}
+
+fn active_turn_output_value(
+    provider_payload: &Value,
+    output_ordinal: Option<u16>,
+) -> Result<&Value, &'static str> {
+    let items = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .ok_or("turn_input_missing")?;
+    let turn_start = items
+        .iter()
+        .rposition(|item| {
+            item.get("type").and_then(Value::as_str) == Some("message")
+                && item.get("role").and_then(Value::as_str) == Some("user")
+        })
+        .map_or(0, |index| index.saturating_add(1));
+    let mut outputs = items[turn_start..].iter().filter(|item| {
+        matches!(
+            item.get("type").and_then(Value::as_str),
+            Some("function_call_output" | "custom_tool_call_output")
+        )
+    });
+    let item = match output_ordinal {
+        Some(ordinal) if ordinal > 0 => outputs.nth(usize::from(ordinal - 1)),
+        Some(_) => None,
+        None => outputs.next_back(),
+    }
+    .ok_or("turn_output_ordinal_missing")?;
+    item.get("output").ok_or("turn_output_missing")
+}
+
+fn output_scalar_ordinal(
+    output: &Value,
+    scalar_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    let mut scalars = Vec::new();
+    for text in output_text_parts(output)? {
+        collect_runtime_output_scalars(text, &mut scalars)?;
+    }
+    scalars
+        .into_iter()
+        .filter(|scalar| {
+            scalar.value_type == value_type
+                || matches!(
+                    (scalar.value_type, value_type),
+                    (AtomValueType::Identifier, AtomValueType::String)
+                )
+        })
+        .nth(usize::from(scalar_ordinal))
+        .map(|mut scalar| {
+            scalar.value_type = value_type;
+            scalar
+        })
+        .ok_or("turn_output_scalar_ordinal_missing")
+}
+
+fn collect_runtime_output_scalars(
+    text: &str,
+    output: &mut Vec<ExtractedScalar>,
+) -> Result<(), &'static str> {
+    if output.len() >= 64 {
+        return Err("turn_output_scalar_ordinal_budget");
+    }
+    if let Ok(value) = serde_json::from_str::<Value>(text) {
+        return collect_scalar_values(&value, 0, output);
+    }
+    let embedded = runtime_embedded_json_objects(text);
+    if !embedded.is_empty() {
+        for object in embedded {
+            collect_scalar_values(&Value::Object(object), 0, output)?;
+        }
+        return Ok(());
+    }
+    collect_plain_text_scalars(text, output)
+}
+
+fn collect_plain_text_scalars(
+    text: &str,
+    output: &mut Vec<ExtractedScalar>,
+) -> Result<(), &'static str> {
+    for (start, token) in text
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .scan(0_usize, |offset, token| {
+            let relative = text[*offset..].find(token).unwrap_or(0);
+            let start = (*offset).saturating_add(relative);
+            *offset = start.saturating_add(token.len());
+            Some((start, token))
+        })
+    {
+        if token.is_empty() {
+            continue;
+        }
+        if output.len() >= 64 {
+            return Err("turn_output_scalar_ordinal_budget");
+        }
+        let end = start.saturating_add(token.len());
+        let decimal_neighbor = text[..start].ends_with('.') || text[end..].starts_with('.');
+        if token.bytes().all(|byte| byte.is_ascii_digit()) && !decimal_neighbor {
+            if let Ok(value) = token.parse::<u64>() {
+                output.push(ExtractedScalar {
+                    value: Value::from(value),
+                    value_type: AtomValueType::Integer,
+                });
+            }
+        } else if token.eq_ignore_ascii_case("true") || token.eq_ignore_ascii_case("false") {
+            output.push(ExtractedScalar {
+                value: Value::Bool(token.eq_ignore_ascii_case("true")),
+                value_type: AtomValueType::Boolean,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn unique_turn_json_field(

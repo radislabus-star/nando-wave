@@ -370,7 +370,14 @@ const fn selector_value_type(selector: &crate::ResponseValueSelector) -> AtomVal
         | crate::ResponseValueSelector::JsonScalarOrdinal { value_type, .. }
         | crate::ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | crate::ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
-        | crate::ResponseValueSelector::TurnOutputLine { value_type, .. } => *value_type,
+        | crate::ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | crate::ResponseValueSelector::TurnOutputLine { value_type, .. }
+        | crate::ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
+        | crate::ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
+        | crate::ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. }
+        | crate::ResponseValueSelector::LatestTurnOutputScalarFromEnd { value_type, .. } => {
+            *value_type
+        }
         crate::ResponseValueSelector::CommandOutputBody
         | crate::ResponseValueSelector::RequestLastToken
         | crate::ResponseValueSelector::RequestUniqueLiteral => AtomValueType::String,
@@ -436,7 +443,15 @@ fn family_id(atoms: &[RelationAtom]) -> u64 {
             | RelationAtom::ActionJsonResultProjection
             | RelationAtom::ActionValueProjection { .. }
             | RelationAtom::ActionStatusProjection { .. }
+            | RelationAtom::ActionPlanAdvance
             | RelationAtom::ResponseShape { .. } => None,
+            RelationAtom::PlanState {
+                step_count,
+                completed_count,
+                active_index,
+            } => Some(format!(
+                "plan_state:{step_count}:{completed_count}:{active_index}"
+            )),
             RelationAtom::CollectionShape {
                 array_fields,
                 row_fields,

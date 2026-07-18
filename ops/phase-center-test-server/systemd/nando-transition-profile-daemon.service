@@ -1,0 +1,23 @@
+[Unit]
+Description=Nando autonomous typed-transition profile miner
+After=network.target nando-transition-serving.service
+Wants=nando-transition-serving.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStartPre=/usr/bin/mkdir -p ${NANDO_TRANSITION_STATE_DIR} ${NANDO_TRANSITION_PACKAGE_INBOX}
+ExecStart=/opt/nando-wave/bin/nando-transition-profile-daemon
+Restart=always
+RestartSec=2
+CPUQuota=50%
+MemoryHigh=256M
+MemoryMax=512M
+MemorySwapMax=0
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

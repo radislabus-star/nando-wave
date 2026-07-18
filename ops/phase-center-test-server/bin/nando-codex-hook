@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+EVENTS_JSONL="${NANDO_CODEX_HOOK_EVENTS_JSONL:-${HOME}/.local/state/nando-wave/streaming/nando-codex-hook.events.jsonl}"
+HEALTH_TIMEOUT_MS="${NANDO_CODEX_HEALTH_TIMEOUT_MS:-300}"
+OBSERVE_TIMEOUT_MS="${NANDO_CODEX_OBSERVE_TIMEOUT_MS:-800}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+TRANSITION_ADAPTER="${NANDO_CODEX_TRANSITION_ADAPTER:-${SCRIPT_DIR}/nando-codex-transition-adapter.py}"
+
+timeout_arg() {
+  local ms="$1"
+  [[ "${ms}" =~ ^[0-9]+$ ]] || ms=300
+  printf '%d.%03ds' "$((ms / 1000))" "$((ms % 1000))"
+}
+
+base_url="${NANDO_CODEX_BASE_URL:-http://127.0.0.1:8787/v2}"
+
+hook_input="$(mktemp "${TMPDIR:-/tmp}/nando-codex-hook.XXXXXX")"
+trap 'rm -f "${hook_input}"' EXIT
+cat > "${hook_input}" || true
+hook_event_name="$(jq -r '.hook_event_name // "SessionStart"' "${hook_input}" 2>/dev/null || echo SessionStart)"
+
+if [[ "${hook_event_name}" == "PostToolUse" ]]; then
+  observation="$("${TRANSITION_ADAPTER}" < "${hook_input}" 2>/dev/null || true)"
+  [[ -n "${observation}" ]] || exit 0
+  observe_url="${base_url%/}/transitions/observe"
+  response="$(timeout "$(timeout_arg "${OBSERVE_TIMEOUT_MS}")" \
+    curl -fsS -H 'content-type: application/json' -X POST \
+    --data-binary "${observation}" "${observe_url}" 2>/dev/null || true)"
+  accepted="$(printf '%s' "${response}" | jq -r '(.accepted // false) | tostring' 2>/dev/null || echo false)"
+  mkdir -p "$(dirname "${EVENTS_JSONL}")" 2>/dev/null || true
+  jq -cn \
+    --arg ts "$(date -Is)" \
+    --arg event "${hook_event_name}" \
+    --arg tool_name "$(jq -r '.tool_name // "unknown"' "${hook_input}" 2>/dev/null || echo unknown)" \
+    --arg trace_id "$(printf '%s' "${observation}" | jq -r '.trace_id // ""' 2>/dev/null || true)" \
+    --arg observe_url "${observe_url}" \
+    --argjson accepted "$(if [[ "${accepted}" == "true" ]]; then echo true; else echo false; fi)" \
+    '{schema_version:"nando_codex_tool_capture_event_v1",timestamp:$ts,event:$event,tool_name:$tool_name,trace_id:$trace_id,observe_url:$observe_url,accepted:$accepted,claim_boundary:"capture is not a prevented LLM call"}' \
+    >> "${EVENTS_JSONL}" 2>/dev/null || true
+  exit 0
+fi
+
+health_url="${NANDO_CODEX_CPU_HEALTH_URL:-http://127.0.0.1:8787/cpu-health}"
+body="$(timeout "$(timeout_arg "${HEALTH_TIMEOUT_MS}")" curl -fsS "${health_url}" 2>/dev/null || true)"
+
+ok=false
+service="unknown"
+mode="unknown"
+admission_verdict="unknown"
+local_accept_enabled=false
+effective_local_accept_enabled=false
+if [[ -n "${body}" ]]; then
+  ok="$(printf '%s' "${body}" | jq -r '(.ok // false) | tostring' 2>/dev/null || echo false)"
+  service="$(printf '%s' "${body}" | jq -r '.service // "unknown"' 2>/dev/null || echo unknown)"
+  mode="$(printf '%s' "${body}" | jq -r '.mode // "unknown"' 2>/dev/null || echo unknown)"
+  admission_verdict="$(printf '%s' "${body}" | jq -r '.admission_verdict // "unknown"' 2>/dev/null || echo unknown)"
+  local_accept_enabled="$(printf '%s' "${body}" | jq -r '(.local_accept_enabled // false) | tostring' 2>/dev/null || echo false)"
+  effective_local_accept_enabled="$(printf '%s' "${body}" | jq -r '(.effective_local_accept_enabled // false) | tostring' 2>/dev/null || echo false)"
+fi
+
+mkdir -p "$(dirname "${EVENTS_JSONL}")" 2>/dev/null || true
+jq -cn \
+  --arg ts "$(date -Is)" \
+  --arg cwd "${PWD}" \
+  --arg health_url "${health_url}" \
+  --arg service "${service}" \
+  --arg mode "${mode}" \
+  --arg admission_verdict "${admission_verdict}" \
+  --argjson ok "$(if [[ "${ok}" == "true" ]]; then echo true; else echo false; fi)" \
+  --argjson local_accept_enabled "$(if [[ "${local_accept_enabled}" == "true" ]]; then echo true; else echo false; fi)" \
+  --argjson effective_local_accept_enabled "$(if [[ "${effective_local_accept_enabled}" == "true" ]]; then echo true; else echo false; fi)" \
+  '{
+    schema_version: "nando_codex_session_hook_event_v1",
+    timestamp: $ts,
+    cwd: $cwd,
+    health_url: $health_url,
+    ok: $ok,
+    service: $service,
+    mode: $mode,
+    admission_verdict: $admission_verdict,
+    local_accept_enabled: $local_accept_enabled,
+    effective_local_accept_enabled: $effective_local_accept_enabled,
+    boundary: "Codex hook records Rust transition serving readiness and submits grounded PostToolUse observations; it never authorizes local accept"
+  }' >> "${EVENTS_JSONL}" 2>/dev/null || true
+
+exit 0

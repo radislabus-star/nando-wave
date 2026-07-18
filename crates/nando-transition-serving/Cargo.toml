@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 axum = "0.7"
 bytes = "1"
+memchr = "2"
 mimalloc = "0.1"
 nando-response-actor = { path = "../nando-response-actor" }
 nando-expression-runtime = { path = "../nando-expression-runtime" }

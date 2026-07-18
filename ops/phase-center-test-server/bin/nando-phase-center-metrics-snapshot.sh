@@ -21,8 +21,19 @@ CLEAN_PROMOTION_MANIFEST_JSON="${NANDO_CLEAN_PROMOTION_MANIFEST_JSON:-/var/lib/n
 DASHBOARD_HISTORY_JSONL="${NANDO_STATUS_DASHBOARD_HISTORY_JSONL:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.dashboard-history.jsonl}"
 DASHBOARD_HISTORY_COMPACT_MAX_BYTES="${NANDO_STATUS_DASHBOARD_COMPACT_MAX_BYTES:-4194304}"
 DASHBOARD_HISTORY_RETAIN_POINTS="${NANDO_STATUS_DASHBOARD_RETAIN_POINTS:-1440}"
+ECONOMICS_LEDGER_JSONL="${NANDO_ECONOMICS_LEDGER_JSONL:-/var/lib/nando-wave/transition/economics-terminal.jsonl}"
+ECONOMICS_SNAPSHOT_JSON="${NANDO_ECONOMICS_SNAPSHOT_JSON:-/var/lib/nando-wave/transition/economics.json}"
+TRANSITION_METRICS_JSON="${NANDO_TRANSITION_METRICS:-/var/lib/nando-wave/transition/metrics.json}"
+ECONOMICS_LEDGER_BIN="${NANDO_ECONOMICS_LEDGER_BIN:-${NANDO_PHASE_CENTER_OPS_DIR:-/opt/nando-wave/ops/phase-center-test-server}/bin/nando-economics-ledger.py}"
 
 mkdir -p "$(dirname "${OUT_JSON}")" "$(dirname "${OUT_PROM}")" "$(dirname "${DASHBOARD_HISTORY_JSONL}")"
+
+if [[ -x "${ECONOMICS_LEDGER_BIN}" ]]; then
+  "${ECONOMICS_LEDGER_BIN}" \
+    --ledger "${ECONOMICS_LEDGER_JSONL}" \
+    --transition-metrics "${TRANSITION_METRICS_JSON}" \
+    --output "${ECONOMICS_SNAPSHOT_JSON}"
+fi
 
 write_atomic_file() {
   local target="$1"
@@ -43,17 +54,38 @@ append_dashboard_history_snapshot() {
           select(((.class // "") | tostring) | startswith($prefix)) |
           (.tokens_saved // 0)
         ] | add) // 0;
-      (.stable_serving_cpu_clean_suffix_tokens_saved // .stable_clean_token_compression_saved_tokens // 0) as $clean_saved |
-      (.stable_serving_cpu_clean_suffix_total_tokens // .stable_clean_token_compression_total_tokens // 0) as $clean_total |
-      if $clean_total <= 0 then empty else {
-        schema_version: "nando_status_dashboard_history_v1",
+      (.stable_serving_cpu_clean_suffix_tokens_saved // .stable_clean_token_compression_saved_tokens // 0) as $actual_saved |
+      (.stable_serving_cpu_clean_suffix_total_tokens // .stable_clean_token_compression_total_tokens // 0) as $actual_total |
+      {
+        schema_version: "nando_status_dashboard_history_v2",
         history_source: "metrics_snapshot_timer",
         timestamp: (now | todateiso8601),
         epoch: (now | floor),
         source_report_present: (.source_report_present // false),
-        clean_saved_tokens: $clean_saved,
-        clean_total_tokens: $clean_total,
-        clean_compression_pct: (($clean_saved * 100) / $clean_total),
+        incoming_rows: (.append_parsed_rows // 0),
+        incoming_tokens: (.append_total_tokens // 0),
+        exact_cache_hits: (.append_exact_cache_hits // 0),
+        shadow_cpu_candidates: (.product_hot_score_only_unique_cpu_accepts_over_exact_cache // 0),
+        shadow_potential_tokens: (.product_hot_score_only_tokens_saved // 0),
+        actual_broad_rows: (.stable_serving_cpu_clean_suffix_rows // .stable_serving_cpu_rows // 0),
+        actual_broad_tokens: $actual_total,
+        actual_broad_cpu_accepts: (.stable_serving_cpu_clean_suffix_local_accept_events // .stable_serving_cpu_local_accept_events // 0),
+        actual_broad_saved_tokens: $actual_saved,
+        actual_broad_false_accepts: (.stable_serving_cpu_clean_suffix_false_accepts // .stable_serving_cpu_false_accepts // 0),
+        canary_rows: (.provider_bridge_decision_window_rows // 0),
+        canary_cpu_accepts: (.provider_bridge_local_accept_events // 0),
+        canary_saved_tokens: (.provider_bridge_tokens_saved_estimated // 0),
+        canary_false_accepts: (.provider_bridge_false_accepts // 0),
+        profiles_mined: (.online_bucket_count // 0),
+        profiles_active: (.active_bucket_count // 0),
+        profiles_hot: (.product_hot_score_only_active_profile_count // .final_hot_profile_count // 0),
+        profiles_quarantined: (.product_hot_score_only_quarantined_profile_count // 0),
+        profiles_promoted: (.auto_recovery_promoted_profile_count // 0),
+        profiles_pending: (.auto_recovery_pending_profile_count // 0),
+        verifier_blocked_rows: (.append_verifier_blocked_non_exact_rows // 0),
+        clean_saved_tokens: $actual_saved,
+        clean_total_tokens: $actual_total,
+        clean_compression_pct: (if $actual_total > 0 then (($actual_saved * 100) / $actual_total) else 0 end),
         clean_cpu_accepts: (.stable_serving_cpu_clean_suffix_unique_cpu_accepts_over_exact_cache // .stable_clean_token_compression_unique_cpu_accepts_over_exact_cache // 0),
         clean_false_accepts: (.stable_serving_cpu_clean_suffix_false_accepts // .product_hot_score_only_post_quarantine_false_accepts // 0),
         active_false_accepts: (.product_hot_score_only_post_quarantine_false_accepts // 0),
@@ -67,7 +99,7 @@ append_dashboard_history_snapshot() {
         quarantined_tokens: (ct("hidden_state:quarantined") + ct("observable_subcenter:quarantined")),
         exportable_tokens: (ct("hidden_state:exportable") + ct("observable_subcenter:exportable") + ct("observable_primary:exportable")),
         final_hot_tokens: (ct("hidden_state:final_hot") + ct("observable_subcenter:final_hot"))
-      } end
+      }
     ' "${metrics_json}" 2>/dev/null || true
   )"
   [[ -n "${row}" ]] || return 0
@@ -140,12 +172,28 @@ if [[ ! -s "${REPORT}" ]]; then
     provider_bridge_v2_non_dogfood_local_accept_events: 0,
     provider_bridge_v2_non_dogfood_tokens_saved_estimated: 0,
     provider_bridge_v2_non_dogfood_false_accepts: 0,
+    provider_bridge_typed_actor_local_accept_events: 0,
+    provider_bridge_typed_actor_tokens_saved_estimated: 0,
+    provider_bridge_typed_actor_false_accepts: 0,
     edge_serving_cpu_local_accept_events: 0,
     edge_serving_cpu_tokens_saved_estimated: 0,
     edge_serving_cpu_false_accepts: 0,
     provider_bridge_boundary_window_rows: 0,
   provider_bridge_boundary_total_tokens: 0,
   provider_bridge_boundary_total_cost_microusd: 0,
+  symbiosis_recovery_discovery_events: 0,
+  symbiosis_recovery_discovery_tokens: 0,
+  symbiosis_recovery_auto_subcenter_observe_events: 0,
+  auto_recovery_quarantine_released_profiles: 0,
+  auto_recovery_promoted_profile_count: 0,
+  auto_recovery_pending_profile_count: 0,
+  auto_recovery_promoted_unique_cpu_accepts_over_exact_cache: 0,
+  auto_recovery_promoted_tokens_saved: 0,
+  product_hot_score_only_quarantined_profile_count: 0,
+  cpu_call_share_target_milli: 400,
+  append_cpu_call_share_milli: 0,
+  product_hot_cpu_call_share_milli: 0,
+  cpu_call_share_gap_to_target_calls: 0,
   operator_class_token_ranking: [],
   operator_profile_token_ranking: [],
   quarantined_profile_token_ranking: [],
@@ -189,6 +237,19 @@ if [[ ! -s "${REPORT}" ]]; then
     echo "nando_phase_provider_bridge_boundary_window_rows 0"
     echo "nando_phase_provider_bridge_boundary_total_tokens 0"
     echo "nando_phase_provider_bridge_boundary_total_cost_microusd 0"
+    echo "nando_phase_symbiosis_recovery_discovery_events 0"
+    echo "nando_phase_symbiosis_recovery_discovery_tokens 0"
+    echo "nando_phase_symbiosis_recovery_auto_subcenter_observe_events 0"
+    echo "nando_phase_auto_recovery_quarantine_released_profiles 0"
+    echo "nando_phase_auto_recovery_promoted_profile_count 0"
+    echo "nando_phase_auto_recovery_pending_profile_count 0"
+    echo "nando_phase_auto_recovery_promoted_unique_cpu_accepts_over_exact_cache 0"
+    echo "nando_phase_auto_recovery_promoted_tokens_saved 0"
+    echo "nando_phase_product_hot_score_only_quarantined_profile_count 0"
+    echo "nando_phase_cpu_call_share_target_milli 400"
+    echo "nando_phase_append_cpu_call_share_milli 0"
+    echo "nando_phase_product_hot_cpu_call_share_milli 0"
+    echo "nando_phase_cpu_call_share_gap_to_target_calls 0"
     echo "nando_phase_miner_saturation_control_enabled 0"
     echo "nando_phase_miner_saturation_active 0"
     echo "nando_phase_miner_saturation_sleep_events 0"
@@ -232,6 +293,7 @@ jq --arg source_report "${REPORT}" \
   ([ $provider_local[] | select((.api_version // "v1") == "v2") ]) as $provider_local_v2 |
   ([ $provider_local_v2[] | select((.traffic_source // "") | startswith("dogfood")) ]) as $provider_local_v2_dogfood |
   ([ $provider_local_v2[] | select(((.traffic_source // "") | startswith("dogfood")) | not) ]) as $provider_local_v2_non_dogfood |
+  ([ $provider_local_v2[] | select((.local_route // "") | startswith("typed_transition:")) ]) as $provider_typed_actor |
   ([ .clean_candidate_reports[]? |
       .profile_id as $candidate_profile_id |
       (($clean_promoted_profile_ids | index($candidate_profile_id)) != null) as $clean_manifest_promoted |
@@ -318,6 +380,7 @@ jq --arg source_report "${REPORT}" \
   ([ $provider_local_v2[] | (.tokens_saved_estimated // 0) ] | add // 0) as $provider_bridge_v2_tokens_saved |
   ([ $provider_local_v2_dogfood[] | (.tokens_saved_estimated // 0) ] | add // 0) as $provider_bridge_v2_dogfood_tokens_saved |
   ([ $provider_local_v2_non_dogfood[] | (.tokens_saved_estimated // 0) ] | add // 0) as $provider_bridge_v2_non_dogfood_tokens_saved |
+  ([ $provider_typed_actor[] | (.tokens_saved_estimated // 0) ] | add // 0) as $provider_typed_actor_tokens_saved |
   ([ $pbb[] | (.provider_total_tokens // .token_cost.total_tokens // 0) ] | add // 0) as $provider_bridge_boundary_tokens |
   ([ $pbb[] | (.provider_cost_microusd // .token_cost.total_cost_microusd // 0) ] | add // 0) as $provider_bridge_boundary_cost |
   ([ $local[] | (.false_accepts // 0) ] | add // 0) as $gateway_false_accepts |
@@ -326,10 +389,12 @@ jq --arg source_report "${REPORT}" \
   ([ $provider_local_v2[] | (.false_accepts // 0) ] | add // 0) as $provider_bridge_v2_false_accepts |
   ([ $provider_local_v2_dogfood[] | (.false_accepts // 0) ] | add // 0) as $provider_bridge_v2_dogfood_false_accepts |
   ([ $provider_local_v2_non_dogfood[] | (.false_accepts // 0) ] | add // 0) as $provider_bridge_v2_non_dogfood_false_accepts |
+  ([ $provider_typed_actor[] | (.false_accepts // 0) ] | add // 0) as $provider_typed_actor_false_accepts |
   ([ $local[] | (.local_route // "unknown") ] | unique) as $gateway_routes |
   ([ $provider_local[] | (.local_route // "unknown") ] | unique) as $provider_bridge_routes |
   ([ $provider_local_v1[] | (.local_route // "unknown") ] | unique) as $provider_bridge_v1_routes |
   ([ $provider_local_v2[] | (.local_route // "unknown") ] | unique) as $provider_bridge_v2_routes |
+  ([ $provider_typed_actor[] | (.local_route // "unknown") ] | unique) as $provider_typed_actor_routes |
   {
   report_kind: "nando_phase_center_metrics_snapshot_v1",
   source_report: $source_report,
@@ -368,6 +433,11 @@ jq --arg source_report "${REPORT}" \
   provider_bridge_v2_non_dogfood_local_accept_events: ($provider_local_v2_non_dogfood | length),
   provider_bridge_v2_non_dogfood_tokens_saved_estimated: $provider_bridge_v2_non_dogfood_tokens_saved,
   provider_bridge_v2_non_dogfood_false_accepts: $provider_bridge_v2_non_dogfood_false_accepts,
+  provider_bridge_typed_actor_local_accept_events: ($provider_typed_actor | length),
+  provider_bridge_typed_actor_tokens_saved_estimated: $provider_typed_actor_tokens_saved,
+  provider_bridge_typed_actor_false_accepts: $provider_typed_actor_false_accepts,
+  provider_bridge_typed_actor_local_route_count: ($provider_typed_actor_routes | length),
+  provider_bridge_typed_actor_local_routes: $provider_typed_actor_routes,
   provider_bridge_v2_local_route_count: ($provider_bridge_v2_routes | length),
   provider_bridge_v2_local_routes: $provider_bridge_v2_routes,
   provider_bridge_v2_transition_runtime_events:
@@ -379,6 +449,19 @@ jq --arg source_report "${REPORT}" \
   provider_bridge_boundary_total_tokens: $provider_bridge_boundary_tokens,
   provider_bridge_boundary_total_cost_microusd: $provider_bridge_boundary_cost,
   provider_bridge_boundary_cost_evidence_ready: ($provider_bridge_boundary_cost > 0),
+  symbiosis_recovery_discovery_events: (.symbiosis_recovery_discovery_events // 0),
+  symbiosis_recovery_discovery_tokens: (.symbiosis_recovery_discovery_tokens // 0),
+  symbiosis_recovery_auto_subcenter_observe_events: (.symbiosis_recovery_auto_subcenter_observe_events // 0),
+  auto_recovery_quarantine_released_profiles: (.auto_recovery_quarantine_released_profiles // 0),
+  auto_recovery_promoted_profile_count: (.auto_recovery_promoted_profile_count // 0),
+  auto_recovery_pending_profile_count: (.auto_recovery_pending_profile_count // 0),
+  auto_recovery_promoted_unique_cpu_accepts_over_exact_cache: (.auto_recovery_promoted_unique_cpu_accepts_over_exact_cache // 0),
+  auto_recovery_promoted_tokens_saved: (.auto_recovery_promoted_tokens_saved // 0),
+  product_hot_score_only_quarantined_profile_count: (.product_hot_score_only_quarantined_profile_count // 0),
+  cpu_call_share_target_milli: (.cpu_call_share_target_milli // 400),
+  append_cpu_call_share_milli: (.append_cpu_call_share_milli // 0),
+  product_hot_cpu_call_share_milli: (.product_hot_cpu_call_share_milli // 0),
+  cpu_call_share_gap_to_target_calls: (.cpu_call_share_gap_to_target_calls // 0),
   operator_class_token_ranking: $operator_class_token_ranking,
   operator_profile_token_ranking: $operator_profile_token_ranking,
   quarantined_profile_token_ranking: $quarantined_profile_token_ranking,
@@ -395,10 +478,21 @@ jq --arg source_report "${REPORT}" \
   miner_active_batch_sleep_events: (.miner_active_batch_sleep_events // 0),
   architecture_version_key: (.stable_decision_log_architecture_key // .architecture_version_key // ""),
   append_parsed_rows: (.append_parsed_rows // 0),
+  append_total_tokens: (.append_total_tokens // 0),
+  append_total_cost_microusd: (.append_total_cost_microusd // 0),
+  append_exact_cache_hits: (.append_exact_cache_hits // 0),
+  append_non_exact_rows: (.append_non_exact_rows // 0),
+  append_skipped_no_safe_atoms: (.append_skipped_no_safe_atoms // 0),
+  append_skipped_no_verifier_label: (.append_skipped_no_verifier_label // 0),
   append_score_candidate_events: (.append_score_candidate_events // 0),
   append_unique_cpu_accepts_over_exact_cache: (.append_unique_cpu_accepts_over_exact_cache // 0),
   append_tokens_saved: (.append_tokens_saved // 0),
+  append_local_accept_events: (.append_local_accept_events // 0),
   append_false_accepts: (.append_false_accepts // 0),
+  append_verifier_blocked_non_exact_rows: (.append_verifier_blocked_non_exact_rows // 0),
+  append_verifier_blocked_non_exact_tokens: (.append_verifier_blocked_non_exact_tokens // 0),
+  append_nonzero_verifier_blocked_rows: (.append_nonzero_verifier_blocked_rows // 0),
+  append_nonzero_verifier_blocked_tokens: (.append_nonzero_verifier_blocked_tokens // 0),
   active_clean_calls_saved: (.active_clean_calls_saved // 0),
   active_clean_tokens_saved: (.active_clean_tokens_saved // 0),
   active_clean_cost_saved_microusd: (.append_estimated_cost_saved_microusd // .append_cost_saved_microusd // 0),
@@ -449,15 +543,24 @@ jq --arg source_report "${REPORT}" \
   stable_decision_log_clean_suffix_score_candidate_events: (.stable_decision_log_clean_suffix_score_candidate_events // 0),
   stable_decision_log_clean_suffix_local_accept_events: (.stable_decision_log_clean_suffix_local_accept_events // 0),
   final_hot_runtime_available: (.final_hot_runtime_available // false),
+  online_bucket_count: (.online_bucket_count // 0),
+  active_bucket_count: (.active_bucket_count // 0),
+  candidate_bucket_count: (.candidate_bucket_count // 0),
+  shadow_ready_bucket_count: (.shadow_ready_bucket_count // 0),
+  rejected_bucket_count: (.rejected_bucket_count // 0),
   final_hot_profile_count: (.final_hot_profile_count // 0),
   product_hot_score_only_runtime_active: (.product_hot_score_only_runtime_active // false),
   product_hot_score_only_active_profile_count: (.product_hot_score_only_active_profile_count // 0),
+  product_hot_score_only_package_bytes: (.product_hot_score_only_package_bytes // 0),
+  product_hot_score_only_quarantine_false_accepts: (.product_hot_score_only_quarantine_false_accepts // 0),
   product_hot_score_only_post_quarantine_score_candidate_events: (.product_hot_score_only_post_quarantine_score_candidate_events // 0),
   product_hot_score_only_post_quarantine_false_accepts: (.product_hot_score_only_post_quarantine_false_accepts // 0),
   product_hot_phase_trust_filtered_events: (.product_hot_phase_trust_filtered_events // 0),
   product_hot_score_only_unique_cpu_accepts_over_exact_cache: (.product_hot_score_only_unique_cpu_accepts_over_exact_cache // 0),
   product_hot_score_only_tokens_saved: (.product_hot_score_only_tokens_saved // 0),
   product_hot_score_only_cost_saved_microusd: (.product_hot_score_only_cost_saved_microusd // 0),
+  exact_cache_overlap_excluded: (.exact_cache_overlap_excluded // false),
+  runtime_budget: (.runtime_budget // {}),
   product_hot_compression_claim_blocker:
     (if (.append_parsed_rows // 0) == 0 then "append_no_rows"
      elif (.local_accept_enabled // false) then "local_accept_already_enabled"
@@ -511,6 +614,19 @@ jq -r '
     "nando_phase_quarantine_recovery_discovery_events " + ((.quarantine_recovery_discovery_events // 0)|tostring),
     "nando_phase_quarantine_recovery_discovery_tokens " + ((.quarantine_recovery_discovery_tokens // 0)|tostring),
     "nando_phase_quarantine_recovery_auto_subcenter_observe_events " + ((.quarantine_recovery_auto_subcenter_observe_events // 0)|tostring),
+    "nando_phase_symbiosis_recovery_discovery_events " + ((.symbiosis_recovery_discovery_events // 0)|tostring),
+    "nando_phase_symbiosis_recovery_discovery_tokens " + ((.symbiosis_recovery_discovery_tokens // 0)|tostring),
+    "nando_phase_symbiosis_recovery_auto_subcenter_observe_events " + ((.symbiosis_recovery_auto_subcenter_observe_events // 0)|tostring),
+    "nando_phase_auto_recovery_quarantine_released_profiles " + ((.auto_recovery_quarantine_released_profiles // 0)|tostring),
+    "nando_phase_auto_recovery_promoted_profile_count " + ((.auto_recovery_promoted_profile_count // 0)|tostring),
+    "nando_phase_auto_recovery_pending_profile_count " + ((.auto_recovery_pending_profile_count // 0)|tostring),
+    "nando_phase_auto_recovery_promoted_unique_cpu_accepts_over_exact_cache " + ((.auto_recovery_promoted_unique_cpu_accepts_over_exact_cache // 0)|tostring),
+    "nando_phase_auto_recovery_promoted_tokens_saved " + ((.auto_recovery_promoted_tokens_saved // 0)|tostring),
+    "nando_phase_product_hot_score_only_quarantined_profile_count " + ((.product_hot_score_only_quarantined_profile_count // 0)|tostring),
+    "nando_phase_cpu_call_share_target_milli " + ((.cpu_call_share_target_milli // 400)|tostring),
+    "nando_phase_append_cpu_call_share_milli " + ((.append_cpu_call_share_milli // 0)|tostring),
+    "nando_phase_product_hot_cpu_call_share_milli " + ((.product_hot_cpu_call_share_milli // 0)|tostring),
+    "nando_phase_cpu_call_share_gap_to_target_calls " + ((.cpu_call_share_gap_to_target_calls // 0)|tostring),
     "nando_phase_stable_rows " + ((.stable_decision_log_rows // 0)|tostring),
     "nando_phase_stable_score_candidate_events " + ((.stable_decision_log_score_candidate_events // 0)|tostring),
     "nando_phase_stable_unique_cpu_accepts_over_exact_cache " + ((.stable_decision_log_unique_cpu_accepts_over_exact_cache // 0)|tostring),
@@ -587,6 +703,9 @@ jq -r '
     "nando_phase_provider_bridge_v2_non_dogfood_local_accept_events " + ((.provider_bridge_v2_non_dogfood_local_accept_events // 0)|tostring),
     "nando_phase_provider_bridge_v2_non_dogfood_tokens_saved_estimated " + ((.provider_bridge_v2_non_dogfood_tokens_saved_estimated // 0)|tostring),
     "nando_phase_provider_bridge_v2_non_dogfood_false_accepts " + ((.provider_bridge_v2_non_dogfood_false_accepts // 0)|tostring),
+    "nando_phase_provider_bridge_typed_actor_local_accept_events " + ((.provider_bridge_typed_actor_local_accept_events // 0)|tostring),
+    "nando_phase_provider_bridge_typed_actor_tokens_saved_estimated " + ((.provider_bridge_typed_actor_tokens_saved_estimated // 0)|tostring),
+    "nando_phase_provider_bridge_typed_actor_false_accepts " + ((.provider_bridge_typed_actor_false_accepts // 0)|tostring),
     "nando_phase_edge_serving_cpu_local_accept_events " + ((.edge_serving_cpu_local_accept_events // 0)|tostring),
     "nando_phase_edge_serving_cpu_tokens_saved_estimated " + ((.edge_serving_cpu_tokens_saved_estimated // 0)|tostring),
     "nando_phase_edge_serving_cpu_false_accepts " + ((.edge_serving_cpu_false_accepts // 0)|tostring),

@@ -1,0 +1,37 @@
+{
+  "section": "structural",
+  "verdict": "PASS",
+  "source": "live_structural_tool",
+  "pass_count": 3,
+  "route_count": 3,
+  "blocked_routes": [],
+  "routes": [
+    {
+      "route": "01_ingest_induction",
+      "verdict": "PASS",
+      "weak_triads": [],
+      "conflicts": [],
+      "evidence_gaps": [],
+      "repair_queue": [],
+      "trace_path": "/tmp/nanda-structural-gate/nando-live-01_ingest_induction.trace.json"
+    },
+    {
+      "route": "02_package_lifecycle",
+      "verdict": "PASS",
+      "weak_triads": [],
+      "conflicts": [],
+      "evidence_gaps": [],
+      "repair_queue": [],
+      "trace_path": "/tmp/nanda-structural-gate/nando-live-02_package_lifecycle.trace.json"
+    },
+    {
+      "route": "03_serving_recovery",
+      "verdict": "PASS",
+      "weak_triads": [],
+      "conflicts": [],
+      "evidence_gaps": [],
+      "repair_queue": [],
+      "trace_path": "/tmp/nanda-structural-gate/nando-live-03_serving_recovery.trace.json"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=Nando expression post-candidate future verifier
+After=nando-expression-factory-shadow.service
+
+[Service]
+Type=oneshot
+Environment=NANDO_EXPRESSION_SOURCE=/var/lib/nando-wave/transition/live-transitions.jsonl
+Environment=NANDO_EXPRESSION_SHADOW_DIR=/var/lib/nando-wave/expression-shadow
+Environment=NANDO_EXPRESSION_FUTURE_VERIFIER_BIN=/opt/nando-wave/bin/nando-expression-future-verify
+ExecStart=/opt/nando-wave/bin/nando-expression-future-shadow
+User=ubu
+Group=ubu
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/nando-wave/expression-shadow
+CPUQuota=50%
+MemoryHigh=128M
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=16
+

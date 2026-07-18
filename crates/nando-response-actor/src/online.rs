@@ -25,7 +25,9 @@ use crate::{
 use crate::online_subcenter::OnlineSubcenterDiscovery;
 
 const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 43;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 65;
+const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
+const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OnlineResponseMinerConfig {
@@ -41,7 +43,7 @@ impl Default for OnlineResponseMinerConfig {
     fn default() -> Self {
         Self {
             cells: 32,
-            min_bucket_events: 16,
+            min_bucket_events: RESTORED_CORE_MIN_BUCKET_EVENTS,
             calibration_events: 16,
             max_buckets: 1_024,
             reservoir_rows: 32,
@@ -79,6 +81,14 @@ pub struct OnlineResponseAdmissionCandidate {
     pub required_routing_atom_ids: Vec<u64>,
     #[serde(default)]
     pub runtime_parity_cases: Vec<crate::RuntimeParityCase>,
+    #[serde(default)]
+    pub semantic_alias_edges: Vec<crate::SemanticAliasEdge>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OnlineResponseAdmissionBlockerReport {
+    pub cohort_id_sha256: String,
+    pub blocker: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -154,6 +164,16 @@ pub struct OnlineResponseMinerReport {
     pub buckets: Vec<OnlineResponseBucketReport>,
     pub candidates: Vec<OnlineResponseCandidate>,
     pub self_training_v2: SelfTrainingStateReport,
+    #[serde(default)]
+    pub admission_ready_cohorts: usize,
+    #[serde(default)]
+    pub emitted_candidate_cohorts: usize,
+    #[serde(default)]
+    pub explicitly_blocked_cohorts: usize,
+    #[serde(default)]
+    pub admission_candidate_blockers: Vec<OnlineResponseAdmissionBlockerReport>,
+    #[serde(default)]
+    pub admission_accounting_complete: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -167,6 +187,7 @@ pub struct OnlineResponseIngestResult {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OnlineResponseStreamStatus {
+    pub checkpoint_restored: bool,
     pub rows_seen: usize,
     pub rows_learned: usize,
     pub bucket_count: usize,
@@ -179,6 +200,21 @@ pub struct OnlineResponseStreamStatus {
     pub cegis_winners: usize,
     pub max_frozen_future_rows: usize,
     pub signal_score_out_of_10: u8,
+    pub opportunity_ordinary_intents: u64,
+    pub opportunity_ordinary_tokens: u64,
+    pub opportunity_verified_tokens: u64,
+    pub opportunity_verified_share_milli: u64,
+    pub opportunity_executable_candidate_tokens: u64,
+    pub opportunity_missing_dsl_tokens: u64,
+    pub opportunity_missing_verifier_tokens: u64,
+    pub opportunity_insufficient_repetition_tokens: u64,
+    pub opportunity_unexplored_multi_source_tokens: u64,
+    pub opportunity_ambiguous_tokens: u64,
+    pub opportunity_non_deterministic_tokens: u64,
+    pub opportunity_unresolved_tokens: u64,
+    pub opportunity_upper_bound_share_milli: u64,
+    pub opportunity_accounting_identity_holds: bool,
+    pub opportunity_m3_reachable: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -221,6 +257,7 @@ pub struct OnlineResponseMiner {
     rows_without_teacher_action: usize,
     competing_negative_updates: usize,
     seen_frame_sha256: BTreeMap<String, String>,
+    future_runtime_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
     subcenters: OnlineSubcenterDiscovery,
     self_training_v2: StreamingSelfTrainingState,
 }
@@ -276,6 +313,8 @@ struct OnlineResponseCheckpoint {
     #[serde(default)]
     seen_frame_sha256: BTreeMap<String, String>,
     #[serde(default)]
+    future_runtime_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
+    #[serde(default)]
     subcenters: OnlineSubcenterDiscovery,
     #[serde(default)]
     self_training_v2: StreamingSelfTrainingState,
@@ -300,11 +339,32 @@ struct OnlineResponseCheckpointRef<'a> {
     rows_without_teacher_action: usize,
     competing_negative_updates: usize,
     seen_frame_sha256: &'a BTreeMap<String, String>,
+    future_runtime_parity_cases: &'a BTreeMap<String, crate::RuntimeParityCase>,
     subcenters: &'a OnlineSubcenterDiscovery,
     self_training_v2: &'a StreamingSelfTrainingState,
 }
 
 impl OnlineResponseStream {
+    #[must_use]
+    pub const fn checkpoint_restored(&self) -> bool {
+        self.checkpoint_restored
+    }
+
+    #[must_use]
+    pub const fn source_offset(&self) -> u64 {
+        self.source_offset
+    }
+
+    #[must_use]
+    pub const fn source_lines(&self) -> u64 {
+        self.source_lines
+    }
+
+    #[must_use]
+    pub fn replay_support_parity_cases_total(&self) -> usize {
+        self.miner.replay_support_parity_cases_total()
+    }
+
     /// Restores only the bounded miner checkpoint. Live V2 evidence arrives
     /// through framed worker segments, so production never scans the legacy
     /// relation JSON ledger during startup.
@@ -520,9 +580,25 @@ impl OnlineResponseStream {
         self.miner.self_training_v2.run_work_slice()
     }
 
+    pub fn run_self_training_work_slice_for_signatures(
+        &mut self,
+        signatures: &BTreeSet<String>,
+    ) -> usize {
+        self.miner
+            .self_training_v2
+            .run_work_slice_for_signatures(signatures)
+    }
+
     #[must_use]
     pub fn has_self_training_work(&self) -> bool {
         self.miner.self_training_v2.has_pending_work()
+    }
+
+    #[must_use]
+    pub fn has_self_training_work_for_signatures(&self, signatures: &BTreeSet<String>) -> bool {
+        self.miner
+            .self_training_v2
+            .has_pending_work_for_signatures(signatures)
     }
 
     pub fn persist_now(&mut self) -> Result<(), String> {
@@ -635,7 +711,34 @@ impl OnlineResponseStream {
     where
         I: IntoIterator<Item = RelationFrame>,
     {
-        for frame in frames {
+        self.train_replay_cases_batch(frames.into_iter().map(|frame| (frame, None)))
+    }
+
+    /// Imports immutable history as support evidence while retaining an
+    /// independently reconstructed runtime parity case when one is available.
+    pub fn train_replay_cases_batch<I>(
+        &mut self,
+        cases: I,
+    ) -> Result<OnlineResponseIngestResult, String>
+    where
+        I: IntoIterator<Item = (RelationFrame, Option<crate::RuntimeParityCase>)>,
+    {
+        let result = self.train_replay_cases_batch_buffered(cases)?;
+        self.persist()?;
+        Ok(result)
+    }
+
+    /// Imports support-only replay cases without an intermediate checkpoint.
+    /// Callers must persist after their bounded synthesis work completes.
+    pub fn train_replay_cases_batch_buffered<I>(
+        &mut self,
+        cases: I,
+    ) -> Result<OnlineResponseIngestResult, String>
+    where
+        I: IntoIterator<Item = (RelationFrame, Option<crate::RuntimeParityCase>)>,
+    {
+        let mut imported_signatures = BTreeSet::new();
+        for (frame, runtime_parity_case) in cases {
             let economics = (frame.estimated_input_tokens > 0).then(|| EconomicsReceipt {
                 schema: ECONOMICS_RECEIPT_SCHEMA_V1.to_owned(),
                 exact_input_tokens: frame.estimated_input_tokens,
@@ -645,16 +748,21 @@ impl OnlineResponseStream {
                 dedupe_eligible: true,
                 provider_evidence_ref_sha256: frame.evidence_ref_sha256.clone(),
             });
-            let transition = teacher_transition_from_completed(&frame, economics)
+            let mut transition = teacher_transition_from_completed(&frame, economics)
                 .map_err(|error| format!("online_replay_teacher_transition:{error:?}"))?;
+            transition.runtime_parity_case = runtime_parity_case;
             match self.miner.import_teacher_transition(transition) {
-                Ok(()) => {}
+                Ok(Some(signature)) => {
+                    imported_signatures.insert(signature);
+                }
+                Ok(None) => {}
                 Err(error) if error == "online_frame_id_content_conflict" => {}
                 Err(error) => return Err(error),
             }
         }
-        self.miner.self_training_v2.prepare_replay_seed();
-        self.persist()?;
+        self.miner
+            .self_training_v2
+            .prepare_incremental_replay_seed(imported_signatures);
         Ok(self.miner.ingest_result())
     }
 
@@ -690,7 +798,14 @@ impl OnlineResponseStream {
                 .map(|pool| pool.ast_nodes.saturating_mul(256))
                 .sum::<usize>(),
         );
+        let class_tokens = |class: &str| {
+            v2.opportunity
+                .classes
+                .get(class)
+                .map_or(0, |report| report.input_tokens)
+        };
         OnlineResponseStreamStatus {
+            checkpoint_restored: self.checkpoint_restored,
             rows_seen: ingest.rows_seen,
             rows_learned: ingest.rows_learned,
             bucket_count: ingest.bucket_count,
@@ -703,6 +818,24 @@ impl OnlineResponseStream {
             cegis_winners: v2.cegis.winners,
             max_frozen_future_rows,
             signal_score_out_of_10: v2.signal_tree.overall_score_out_of_10,
+            opportunity_ordinary_intents: v2.opportunity.ordinary_intents,
+            opportunity_ordinary_tokens: v2.opportunity.ordinary_tokens,
+            opportunity_verified_tokens: v2.opportunity.verified_tokens,
+            opportunity_verified_share_milli: v2.opportunity.verified_token_share_milli,
+            opportunity_executable_candidate_tokens: class_tokens("EXECUTABLE_CANDIDATE"),
+            opportunity_missing_dsl_tokens: class_tokens("MISSING_DSL_PRIMITIVE"),
+            opportunity_missing_verifier_tokens: class_tokens("MISSING_EXTERNAL_VERIFIER"),
+            opportunity_insufficient_repetition_tokens: class_tokens("INSUFFICIENT_REPETITION"),
+            opportunity_unexplored_multi_source_tokens: class_tokens("UNEXPLORED_MULTI_SOURCE"),
+            opportunity_ambiguous_tokens: class_tokens("AMBIGUOUS_PRE_ACTION_STATE"),
+            opportunity_non_deterministic_tokens: class_tokens("NON_DETERMINISTIC_OR_CREATIVE"),
+            opportunity_unresolved_tokens: v2.opportunity.unresolved_tokens,
+            opportunity_upper_bound_share_milli: v2
+                .opportunity
+                .optimistic_executable_upper_bound_share_milli,
+            opportunity_accounting_identity_holds: v2.opportunity.classification_identity_holds
+                && v2.opportunity.upper_bound_identity_holds,
+            opportunity_m3_reachable: v2.opportunity.m3_reachable_under_upper_bound,
         }
     }
 
@@ -1019,6 +1152,11 @@ fn source_identity(_metadata: &fs::Metadata) -> (u64, u64) {
 }
 
 impl OnlineResponseMiner {
+    #[must_use]
+    pub fn replay_support_parity_cases_total(&self) -> usize {
+        self.self_training_v2.replay_support_parity_cases_total()
+    }
+
     pub fn new(config: OnlineResponseMinerConfig) -> Result<Self, String> {
         if config.reservoir_rows == 0 {
             return Err("online_response_reservoir_rows_zero".to_owned());
@@ -1044,6 +1182,7 @@ impl OnlineResponseMiner {
             rows_without_teacher_action: 0,
             competing_negative_updates: 0,
             seen_frame_sha256: BTreeMap::new(),
+            future_runtime_parity_cases: BTreeMap::new(),
             subcenters: OnlineSubcenterDiscovery::default(),
             self_training_v2: StreamingSelfTrainingState::new(unix_now_seconds()),
         })
@@ -1079,6 +1218,7 @@ impl OnlineResponseMiner {
             rows_without_teacher_action: self.rows_without_teacher_action,
             competing_negative_updates: self.competing_negative_updates,
             seen_frame_sha256: self.seen_frame_sha256.clone(),
+            future_runtime_parity_cases: self.future_runtime_parity_cases.clone(),
             subcenters: self.subcenters.clone(),
             self_training_v2: self.self_training_v2.clone(),
         })
@@ -1117,6 +1257,7 @@ impl OnlineResponseMiner {
                 rows_without_teacher_action: self.rows_without_teacher_action,
                 competing_negative_updates: self.competing_negative_updates,
                 seen_frame_sha256: &self.seen_frame_sha256,
+                future_runtime_parity_cases: &self.future_runtime_parity_cases,
                 subcenters: &self.subcenters,
                 self_training_v2: &self.self_training_v2,
             })
@@ -1131,20 +1272,36 @@ impl OnlineResponseMiner {
             .reservoir_rows
             .clamp(1, OnlineResponseMinerConfig::default().reservoir_rows);
         if checkpoint.bucket_strategy_version < ONLINE_BUCKET_STRATEGY_VERSION {
+            checkpoint.config.min_bucket_events = checkpoint
+                .config
+                .min_bucket_events
+                .max(RESTORED_CORE_MIN_BUCKET_EVENTS);
             let mut migrated = Self::new(checkpoint.config)?;
             if checkpoint.self_training_v2.teacher_pool_count() > 0 {
+                let mut preserved_self_training = checkpoint.self_training_v2;
+                if checkpoint.bucket_strategy_version < 33 {
+                    preserved_self_training.prepare_strategy_migration();
+                } else if checkpoint.bucket_strategy_version < 44 {
+                    preserved_self_training.prepare_teacher_signature_migration()?;
+                } else if checkpoint.bucket_strategy_version < 64 {
+                    preserved_self_training.prepare_effect_law_migration();
+                } else if checkpoint.bucket_strategy_version < 65 {
+                    preserved_self_training.prepare_phase_route_migration();
+                }
+                let support_frames =
+                    preserved_self_training.bounded_teacher_frames_for_wave_migration();
+                for frame in support_frames {
+                    migrated.process_frame(frame, false, None, false)?;
+                }
+                // The replay above rebuilds only the restored Wave buckets.
+                // Keep the already learned V2 state byte-for-byte and never
+                // reinterpret historical rows as frozen future.
+                migrated.self_training_v2 = preserved_self_training;
                 migrated.rows_seen = checkpoint.rows_seen;
                 migrated.rows_learned = checkpoint.rows_learned;
                 migrated.rows_ambiguous = checkpoint.rows_ambiguous;
                 migrated.rows_without_teacher_action = checkpoint.rows_without_teacher_action;
-                migrated.self_training_v2 = checkpoint.self_training_v2;
-                if checkpoint.bucket_strategy_version < 33 {
-                    migrated.self_training_v2.prepare_strategy_migration();
-                } else {
-                    migrated
-                        .self_training_v2
-                        .prepare_teacher_signature_migration()?;
-                }
+                migrated.seen_frame_sha256 = checkpoint.seen_frame_sha256;
                 return Ok(migrated);
             }
             let mut replay = checkpoint
@@ -1182,6 +1339,8 @@ impl OnlineResponseMiner {
             }
             if checkpoint.bucket_strategy_version < 33 {
                 migrated.self_training_v2.prepare_strategy_migration();
+            } else if checkpoint.bucket_strategy_version >= 44 {
+                migrated.self_training_v2.prepare_replay_seed();
             } else {
                 migrated
                     .self_training_v2
@@ -1228,17 +1387,18 @@ impl OnlineResponseMiner {
             rows_without_teacher_action: checkpoint.rows_without_teacher_action,
             competing_negative_updates: checkpoint.competing_negative_updates,
             seen_frame_sha256: checkpoint.seen_frame_sha256,
+            future_runtime_parity_cases: checkpoint.future_runtime_parity_cases,
             subcenters: checkpoint.subcenters,
             self_training_v2: checkpoint.self_training_v2,
         })
     }
 
     pub fn train_frame(&mut self, frame: RelationFrame) -> Result<(), String> {
-        self.process_frame(frame, false, None)
+        self.process_frame(frame, false, None, true)
     }
 
     pub fn observe_frame(&mut self, frame: RelationFrame) -> Result<(), String> {
-        self.process_frame(frame, true, None)
+        self.process_frame(frame, true, None, true)
     }
 
     pub fn observe_teacher_transition(
@@ -1258,20 +1418,26 @@ impl OnlineResponseMiner {
                 .observe_runtime_parity_case(&transition);
             return Ok(());
         }
-        self.process_frame(frame, true, Some(transition))
+        self.process_frame(frame, true, Some(transition), true)
     }
 
     fn import_teacher_transition(
         &mut self,
         transition: crate::TeacherTransition,
-    ) -> Result<(), String> {
+    ) -> Result<Option<String>, String> {
         let mut frame = transition.as_training_relation_frame();
         let economics = transition.economics;
         let runtime_parity_case = transition.runtime_parity_case;
         frame = action_schema_enriched_frame(&frame, runtime_parity_case.as_ref());
         canonicalize_online_frame(&mut frame);
+        let mut canonical_transition = teacher_transition_from_completed(&frame, economics)
+            .map_err(|error| format!("online_migration_teacher_transition:{error:?}"))?;
+        canonical_transition.runtime_parity_case = runtime_parity_case;
+        let teacher_signature = crate::teacher_program_signature(&frame);
         if self.frame_disposition(&frame)? == FrameDisposition::Duplicate {
-            return Ok(());
+            self.self_training_v2
+                .observe_migration_transition(&canonical_transition)?;
+            return Ok(teacher_signature);
         }
         let frame_digest = crate::relation_frame_learning_digest(&frame)
             .map_err(|error| format!("online_frame_digest:{error}"))?;
@@ -1281,11 +1447,9 @@ impl OnlineResponseMiner {
         if transition.outcome.verifier.accepted {
             self.rows_learned = self.rows_learned.saturating_add(1);
         }
-        let mut canonical_transition = teacher_transition_from_completed(&frame, economics)
-            .map_err(|error| format!("online_migration_teacher_transition:{error:?}"))?;
-        canonical_transition.runtime_parity_case = runtime_parity_case;
         self.self_training_v2
-            .observe_migration_transition(&canonical_transition)
+            .observe_migration_transition(&canonical_transition)?;
+        Ok(teacher_signature)
     }
 
     /// Replays immutable source history in event order. The first bounded
@@ -1293,7 +1457,7 @@ impl OnlineResponseMiner {
     /// scored as frozen future and can calibrate a candidate.
     pub fn replay_chronological_frame(&mut self, frame: RelationFrame) -> Result<(), String> {
         let verified_teacher_event = frame.verifier_label == Some(true);
-        self.process_frame(frame, verified_teacher_event, None)
+        self.process_frame(frame, verified_teacher_event, None, true)
     }
 
     fn process_frame(
@@ -1301,6 +1465,7 @@ impl OnlineResponseMiner {
         mut frame: RelationFrame,
         score_before_update: bool,
         explicit_transition: Option<crate::TeacherTransition>,
+        update_self_training: bool,
     ) -> Result<(), String> {
         canonicalize_online_frame(&mut frame);
         if self.frame_disposition(&frame)? == FrameDisposition::Duplicate {
@@ -1316,6 +1481,9 @@ impl OnlineResponseMiner {
             return Ok(());
         }
         let streaming_v2_transition = explicit_transition.is_some();
+        let future_runtime_parity_case = explicit_transition
+            .as_ref()
+            .and_then(|transition| transition.runtime_parity_case.clone());
         let (explicit_economics, explicit_runtime_parity_case) = explicit_transition
             .map_or((None, None), |transition| {
                 (transition.economics, transition.runtime_parity_case)
@@ -1339,22 +1507,20 @@ impl OnlineResponseMiner {
             });
             teacher_transition_from_completed(&frame, economics).ok()
         };
-        if let Some(transition) = transition {
+        if update_self_training && let Some(transition) = transition {
             self.self_training_v2.observe_transition(&transition)?;
-        }
-        if streaming_v2_transition {
-            if frame.verifier_label == Some(true) {
-                self.rows_learned = self.rows_learned.saturating_add(1);
-            }
-            return Ok(());
         }
         let teacher_signature = teacher_program_signature(&frame);
         let hypotheses = ground_roles(&frame);
-        if teacher_signature.is_some()
-            && (hypotheses.len() != 1 || hypotheses[0].competing_binding_count != 0)
-        {
+        let plan_advance = frame
+            .atoms
+            .iter()
+            .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance));
+        let ambiguous_grounding = teacher_signature.is_some()
+            && !plan_advance
+            && (hypotheses.len() != 1 || hypotheses[0].competing_binding_count != 0);
+        if ambiguous_grounding {
             self.rows_ambiguous = self.rows_ambiguous.saturating_add(1);
-            return Ok(());
         }
         let atom_ids = relation_frame_online_routing_atom_ids(&frame);
         if atom_ids.is_empty() {
@@ -1368,9 +1534,6 @@ impl OnlineResponseMiner {
             }
         }
 
-        let target_bucket = online_bucket_identity(&frame)
-            .map(|(family_id, signature)| self.bucket_for(family_id, &signature, &frame))
-            .transpose()?;
         let target_is_positive = frame.verifier_label == Some(true);
         if target_is_positive && teacher_signature.is_some() {
             self.subcenters.observe(
@@ -1379,10 +1542,26 @@ impl OnlineResponseMiner {
                 frame.estimated_input_tokens,
             );
         }
+        let mut target_family_ids = teacher_signature
+            .as_ref()
+            .map(|signature| restored_miner_family_ids(self, &frame, signature, &atom_ids))
+            .unwrap_or_default();
+        target_family_ids.sort_unstable();
+        target_family_ids.dedup();
+        let mut target_bucket_ids = BTreeSet::new();
+        if let Some(signature) = teacher_signature.as_deref() {
+            for family_id in target_family_ids {
+                target_bucket_ids.insert(self.bucket_for(family_id, signature, &frame)?);
+            }
+        }
+        if target_is_positive && !target_bucket_ids.is_empty() {
+            self.rows_learned = self.rows_learned.saturating_add(1);
+        }
         let family_bucket_ids = self.buckets.keys().copied().collect::<Vec<_>>();
 
+        let mut retained_as_frozen_future = false;
         for bucket_id in family_bucket_ids {
-            let is_target = target_bucket == Some(bucket_id);
+            let is_target = target_bucket_ids.contains(&bucket_id);
             let same_teacher_program = teacher_signature.as_deref().is_some_and(|signature| {
                 self.buckets
                     .get(&bucket_id)
@@ -1510,9 +1689,9 @@ impl OnlineResponseMiner {
                         frame.clone(),
                         self.config.reservoir_rows.saturating_mul(4),
                     );
+                    retained_as_frozen_future = true;
                 }
                 update_cardinality_bounds(bucket, &frame);
-                self.rows_learned = self.rows_learned.saturating_add(1);
             } else {
                 let mut negative = frame.clone();
                 negative.verifier_label = Some(false);
@@ -1536,7 +1715,32 @@ impl OnlineResponseMiner {
                 }
             }
         }
+        if retained_as_frozen_future && let Some(mut parity_case) = future_runtime_parity_case {
+            parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
+            self.future_runtime_parity_cases
+                .insert(canonical_runtime_parity_key(&frame), parity_case);
+            if self.rows_seen % 64 == 0 {
+                self.prune_future_runtime_parity_cases();
+            }
+        }
         Ok(())
+    }
+
+    fn prune_future_runtime_parity_cases(&mut self) {
+        let retained = self
+            .buckets
+            .values()
+            .flat_map(|bucket| bucket.future_positives.iter())
+            .map(canonical_runtime_parity_key)
+            .collect::<BTreeSet<_>>();
+        self.future_runtime_parity_cases
+            .retain(|key, _| retained.contains(key));
+        while self.future_runtime_parity_cases.len() > MAX_PINNED_FUTURE_PARITY_CASES {
+            let Some(oldest) = self.future_runtime_parity_cases.keys().next().cloned() else {
+                break;
+            };
+            self.future_runtime_parity_cases.remove(&oldest);
+        }
     }
 
     fn frame_disposition(&self, frame: &RelationFrame) -> Result<FrameDisposition, String> {
@@ -1734,7 +1938,10 @@ impl OnlineResponseMiner {
                 admission_precheck,
             });
             let (Some(wave_package), Ok(synthesized)) = (
-                self.wave.candidate_package_bytes(*bucket_id).ok().flatten(),
+                self.wave
+                    .provisional_package_bytes(*bucket_id)
+                    .ok()
+                    .flatten(),
                 synthesis,
             ) else {
                 continue;
@@ -1823,7 +2030,11 @@ impl OnlineResponseMiner {
             .into_iter()
             .map(|action| self.subcenters.clean_subcenters(action, 64, 256).len())
             .sum();
+        let admission_evaluation = self.combined_admission_evaluation();
         let self_training_v2 = self.self_training_v2.report(unix_now_seconds());
+        let admission_ready_cohorts = admission_evaluation.ready_cohorts;
+        let emitted_candidate_cohorts = admission_evaluation.candidates.len();
+        let explicitly_blocked_cohorts = admission_evaluation.blockers.len();
         let v2_warm_bytes = self_training_v2
             .discovery
             .warm_bytes_estimate
@@ -1844,7 +2055,9 @@ impl OnlineResponseMiner {
             competing_negative_updates: self.competing_negative_updates,
             bucket_count: summary.bucket_count,
             active_bucket_count: summary.active_bucket_count,
-            candidate_bucket_count: self_training_v2.admission_ready_cohorts,
+            // Provisional programs remain visible in `candidates`, but this
+            // counter represents only cohorts that reached admission gates.
+            candidate_bucket_count: admission_ready_cohorts,
             false_accepts: usize::try_from(self_training_v2.opportunity.false_accepts)
                 .unwrap_or(usize::MAX),
             discovery_false_accepts: summary.false_accepts,
@@ -1861,6 +2074,13 @@ impl OnlineResponseMiner {
             buckets: bucket_reports,
             candidates,
             self_training_v2,
+            admission_ready_cohorts,
+            emitted_candidate_cohorts,
+            explicitly_blocked_cohorts,
+            admission_candidate_blockers: admission_evaluation.blockers,
+            admission_accounting_complete: admission_ready_cohorts
+                == emitted_candidate_cohorts.saturating_add(explicitly_blocked_cohorts)
+                && admission_ready_cohorts == admission_evaluation.ready_cohorts,
         }
     }
 
@@ -1882,9 +2102,200 @@ impl OnlineResponseMiner {
             .map(|package| package.package_bytes)
     }
 
-    fn self_training_v2_admission_candidates(&self) -> Vec<OnlineResponseAdmissionCandidate> {
+    fn restored_core_admission_evaluation(&self) -> SelfTrainingAdmissionEvaluation {
+        let mut ready_cohorts = 0usize;
+        let mut evaluated = Vec::<(String, OnlineResponseAdmissionCandidate)>::new();
+        let mut blockers = Vec::new();
+
+        for bucket in self.buckets.values() {
+            if bucket.positives.len() < 32
+                || bucket.future_positives.len() < 32
+                || (bucket.negatives.is_empty() && bucket.future_negatives.is_empty())
+            {
+                continue;
+            }
+            ready_cohorts = ready_cohorts.saturating_add(1);
+            let cohort_id_sha256 = format!(
+                "{:x}",
+                Sha256::digest(
+                    serde_json::to_vec(&(
+                        "nando.restored-miner-cohort.v1",
+                        bucket.structural_family_id,
+                        &bucket.teacher_signature_sha256,
+                    ))
+                    .unwrap_or_default()
+                )
+            );
+            let negatives = bucket
+                .negatives
+                .iter()
+                .chain(bucket.future_negatives.iter())
+                .cloned()
+                .collect::<Vec<_>>();
+            let support = bucket.positives.iter().cloned().collect::<Vec<_>>();
+            let future = bucket.future_positives.iter().cloned().collect::<Vec<_>>();
+            let synthesized = match synthesize_response_operator(&support) {
+                Ok(synthesized) => synthesized,
+                Err(error) => {
+                    blockers.push(OnlineResponseAdmissionBlockerReport {
+                        cohort_id_sha256,
+                        blocker: format!("synthesis:{}", error.code()),
+                    });
+                    continue;
+                }
+            };
+            let (required_atom_ids, support, future) = match repair_frozen_admission_guard(
+                &synthesized.candidate.program,
+                &bucket.exact_guard_atom_ids,
+                &support,
+                &future,
+                &negatives,
+            ) {
+                Ok(repaired) => repaired,
+                Err(blocker) => {
+                    blockers.push(OnlineResponseAdmissionBlockerReport {
+                        cohort_id_sha256,
+                        blocker,
+                    });
+                    continue;
+                }
+            };
+            let state_runtime_parity_cases = self
+                .self_training_v2
+                .runtime_parity_cases_for_frames(future.iter());
+            let mut state_cases_by_ref = state_runtime_parity_cases
+                .into_iter()
+                .map(|case| (case.evidence_ref_sha256.clone(), case))
+                .collect::<BTreeMap<_, _>>();
+            let mut seen_future_events = BTreeSet::new();
+            let mut receipt_backed_future = Vec::new();
+            let mut runtime_parity_cases = Vec::new();
+            for frame in future {
+                let parity_key = canonical_runtime_parity_key(&frame);
+                if !seen_future_events.insert(parity_key.clone()) {
+                    continue;
+                }
+                let parity_case = self
+                    .future_runtime_parity_cases
+                    .get(&parity_key)
+                    .cloned()
+                    .or_else(|| state_cases_by_ref.remove(&frame.frame_id_sha256));
+                if let Some(mut parity_case) = parity_case {
+                    parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
+                    receipt_backed_future.push(frame);
+                    runtime_parity_cases.push(parity_case);
+                }
+            }
+            if receipt_backed_future.len() < 32 {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: format!(
+                        "receipt_backed_future_rows_below_32:{}/32",
+                        receipt_backed_future.len()
+                    ),
+                });
+                continue;
+            }
+            match build_subcenter_admission_candidate(
+                self.config,
+                bucket,
+                &required_atom_ids,
+                support,
+                receipt_backed_future,
+                negatives,
+                Some(ProvenAdmissionProgram {
+                    program: &synthesized.candidate.program,
+                    phase_rank: synthesized.candidate.phase_rank,
+                    exact_checks: synthesized.candidate.exact_checks,
+                }),
+            ) {
+                Ok(mut candidate) => {
+                    candidate.runtime_parity_cases = runtime_parity_cases;
+                    evaluated.push((cohort_id_sha256, candidate));
+                }
+                Err(blocker) => blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker,
+                }),
+            }
+        }
+
+        evaluated.sort_by(|left, right| {
+            right
+                .1
+                .candidate
+                .positive_tokens
+                .cmp(&left.1.candidate.positive_tokens)
+                .then_with(|| left.1.candidate.bucket_id.cmp(&right.1.candidate.bucket_id))
+        });
+        let mut selected_signatures = BTreeSet::new();
         let mut candidates = Vec::new();
+        for (cohort_id_sha256, candidate) in evaluated {
+            if selected_signatures.insert(candidate.candidate.teacher_signature_sha256.clone()) {
+                candidates.push(candidate);
+            } else {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: "dominated_by_higher_value_restored_bucket".to_owned(),
+                });
+            }
+        }
+        candidates.sort_by(|left, right| {
+            right
+                .candidate
+                .positive_tokens
+                .cmp(&left.candidate.positive_tokens)
+                .then_with(|| left.candidate.bucket_id.cmp(&right.candidate.bucket_id))
+        });
+        blockers.sort_by(|left, right| left.cohort_id_sha256.cmp(&right.cohort_id_sha256));
+        SelfTrainingAdmissionEvaluation {
+            ready_cohorts,
+            candidates,
+            blockers,
+        }
+    }
+
+    fn self_training_v2_admission_evaluation(&self) -> SelfTrainingAdmissionEvaluation {
+        let mut candidates = Vec::new();
+        let mut blockers = Vec::new();
         for cohort in self.self_training_v2.admission_cohorts() {
+            let cohort_id_sha256 = cohort.winner.cohort_id_sha256.clone();
+            let admission_negatives = cohort
+                .generation
+                .negatives
+                .iter()
+                .filter(|frame| {
+                    frame.observed_at_unix_nanos > cohort.winner.repair_watermark_unix_nanos
+                        && teacher_action_symbol(frame) != cohort.winner.action_symbol
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if admission_negatives.is_empty() {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: format!(
+                        "post_repair_negative_evidence_missing:repair_watermark={}",
+                        cohort.winner.repair_watermark_unix_nanos
+                    ),
+                });
+                continue;
+            }
+            let (required_atom_ids, support, future) = match repair_frozen_admission_guard(
+                &cohort.winner.program,
+                &cohort.winner.required_atom_ids,
+                &cohort.generation.support,
+                &cohort.generation.future,
+                &admission_negatives,
+            ) {
+                Ok(repaired) => repaired,
+                Err(blocker) => {
+                    blockers.push(OnlineResponseAdmissionBlockerReport {
+                        cohort_id_sha256,
+                        blocker,
+                    });
+                    continue;
+                }
+            };
             let family_digest = Sha256::digest(cohort.winner.cohort_id_sha256.as_bytes());
             let structural_family_id =
                 u64::from_be_bytes(family_digest[..8].try_into().unwrap_or([0; 8]));
@@ -1892,12 +2303,12 @@ impl OnlineResponseMiner {
                 structural_family_id,
                 teacher_signature_sha256: cohort.winner.teacher_signature_sha256.clone(),
                 teacher_action_symbol: cohort.winner.action_symbol.clone(),
-                positives: cohort.generation.support.iter().cloned().collect(),
-                negatives: cohort.generation.negatives.iter().cloned().collect(),
-                future_positives: cohort.generation.future.iter().cloned().collect(),
+                positives: support.iter().cloned().collect(),
+                negatives: admission_negatives.iter().cloned().collect(),
+                future_positives: future.iter().cloned().collect(),
                 future_negatives: VecDeque::new(),
                 positive_rows: usize::try_from(cohort.pool.positive_rows).unwrap_or(usize::MAX),
-                negative_rows: usize::try_from(cohort.pool.negative_rows).unwrap_or(usize::MAX),
+                negative_rows: admission_negatives.len(),
                 positive_tokens: cohort.pool.positive_tokens,
                 negative_tokens: cohort.pool.negative_tokens,
                 first_false_accept_frame_id: None,
@@ -1908,27 +2319,54 @@ impl OnlineResponseMiner {
                     .generation
                     .support_watermark_unix_nanos,
                 late_or_missing_time_rows: 0,
-                exact_guard_atom_ids: cohort.winner.required_atom_ids.clone(),
+                exact_guard_atom_ids: required_atom_ids.clone(),
             };
-            let Some(mut candidate) = build_subcenter_admission_candidate(
+            let mut candidate = match build_subcenter_admission_candidate(
                 self.config,
                 &virtual_bucket,
-                &cohort.winner.required_atom_ids,
-                cohort.generation.support.clone(),
-                cohort.generation.future.clone(),
-                cohort.generation.negatives.clone(),
+                &required_atom_ids,
+                support,
+                future,
+                admission_negatives,
                 Some(ProvenAdmissionProgram {
                     program: &cohort.winner.program,
                     phase_rank: cohort.winner.phase_rank,
                     exact_checks: u32::try_from(cohort.winner.exact_checks).unwrap_or(u32::MAX),
                 }),
-            ) else {
-                continue;
+            ) {
+                Ok(candidate) => candidate,
+                Err(blocker) => {
+                    blockers.push(OnlineResponseAdmissionBlockerReport {
+                        cohort_id_sha256,
+                        blocker,
+                    });
+                    continue;
+                }
             };
             if candidate.candidate.program != cohort.winner.program {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: "candidate_program_changed_after_proof".to_owned(),
+                });
                 continue;
             }
-            candidate.runtime_parity_cases = cohort.runtime_parity_cases;
+            let future_runtime_parity_cases = self
+                .self_training_v2
+                .runtime_parity_cases_for_frames(candidate.future.iter());
+            if future_runtime_parity_cases.len() < 32 {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: format!(
+                        "semantic_future_runtime_parity_below_32:{}/32",
+                        future_runtime_parity_cases.len()
+                    ),
+                });
+                continue;
+            }
+            candidate.runtime_parity_cases = self.self_training_v2.runtime_parity_cases_for_frames(
+                candidate.support.iter().chain(candidate.future.iter()),
+            );
+            candidate.semantic_alias_edges = cohort.semantic_alias_edges;
             candidates.push(candidate);
         }
         candidates.sort_by(|left, right| {
@@ -1938,12 +2376,67 @@ impl OnlineResponseMiner {
                 .cmp(&left.candidate.positive_tokens)
                 .then_with(|| left.candidate.bucket_id.cmp(&right.candidate.bucket_id))
         });
-        candidates.truncate(64);
-        candidates
+        blockers.sort_by(|left, right| left.cohort_id_sha256.cmp(&right.cohort_id_sha256));
+        SelfTrainingAdmissionEvaluation {
+            ready_cohorts: candidates.len().saturating_add(blockers.len()),
+            candidates,
+            blockers,
+        }
+    }
+
+    fn combined_admission_evaluation(&self) -> SelfTrainingAdmissionEvaluation {
+        let restored = self.restored_core_admission_evaluation();
+        let semantic = self.self_training_v2_admission_evaluation();
+        let ready_cohorts = restored
+            .ready_cohorts
+            .saturating_add(semantic.ready_cohorts);
+        let mut blockers = restored
+            .blockers
+            .into_iter()
+            .chain(semantic.blockers)
+            .collect::<Vec<_>>();
+        let mut candidates = Vec::new();
+        let mut proof_payloads = BTreeSet::new();
+        for candidate in restored.candidates.into_iter().chain(semantic.candidates) {
+            let proof_payload_sha256 = format!(
+                "{:x}",
+                Sha256::digest(
+                    serde_json::to_vec(&(
+                        "nando.combined-admission-proof-payload.v1",
+                        &candidate.candidate.program,
+                        &candidate.candidate.verifier,
+                        &candidate.required_routing_atom_ids,
+                        &candidate.wave_runtime_package,
+                    ))
+                    .unwrap_or_default()
+                )
+            );
+            if proof_payloads.insert(proof_payload_sha256.clone()) {
+                candidates.push(candidate);
+            } else {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256: proof_payload_sha256,
+                    blocker: "duplicate_admission_proof_payload".to_owned(),
+                });
+            }
+        }
+        candidates.sort_by(|left, right| {
+            right
+                .candidate
+                .positive_tokens
+                .cmp(&left.candidate.positive_tokens)
+                .then_with(|| left.candidate.bucket_id.cmp(&right.candidate.bucket_id))
+        });
+        blockers.sort_by(|left, right| left.cohort_id_sha256.cmp(&right.cohort_id_sha256));
+        SelfTrainingAdmissionEvaluation {
+            ready_cohorts,
+            candidates,
+            blockers,
+        }
     }
 
     pub fn admission_candidates(&self) -> Vec<OnlineResponseAdmissionCandidate> {
-        self.self_training_v2_admission_candidates()
+        self.combined_admission_evaluation().candidates
     }
 
     fn bucket_for(
@@ -1991,6 +2484,147 @@ impl OnlineResponseMiner {
     }
 }
 
+type RepairedAdmissionGuard = (Vec<u64>, Vec<RelationFrame>, Vec<RelationFrame>);
+
+fn repair_frozen_admission_guard(
+    program: &crate::ResponseProgram,
+    required_atom_ids: &[u64],
+    support: &[RelationFrame],
+    future: &[RelationFrame],
+    negatives: &[RelationFrame],
+) -> Result<RepairedAdmissionGuard, String> {
+    if support.len() < 32 || future.len() < 32 {
+        return Err(format!(
+            "guard_evidence_below_gate:support={}:future={}",
+            support.len(),
+            future.len()
+        ));
+    }
+    let mut base_required = required_atom_ids.to_vec();
+    base_required.sort_unstable();
+    base_required.dedup();
+    let frame_matches = |frame: &RelationFrame, required: &[u64]| {
+        let observed = relation_frame_online_routing_atom_ids(frame);
+        required
+            .iter()
+            .all(|atom| observed.binary_search(atom).is_ok())
+    };
+    let routed_negatives = negatives
+        .iter()
+        .filter(|frame| frame_matches(frame, &base_required))
+        .collect::<Vec<_>>();
+    if routed_negatives.is_empty() {
+        return Ok((base_required, support.to_vec(), future.to_vec()));
+    }
+    let applicable_negatives = routed_negatives
+        .iter()
+        .copied()
+        .filter(|frame| crate::synthesis::program_runtime_applicable(program, frame))
+        .collect::<Vec<_>>();
+    if applicable_negatives.is_empty() {
+        return Ok((base_required, support.to_vec(), future.to_vec()));
+    }
+
+    let support_atoms = support
+        .iter()
+        .map(relation_frame_online_routing_atom_ids)
+        .collect::<Vec<_>>();
+    let future_atoms = future
+        .iter()
+        .map(relation_frame_online_routing_atom_ids)
+        .collect::<Vec<_>>();
+    let negative_atoms = applicable_negatives
+        .iter()
+        .map(|frame| relation_frame_online_routing_atom_ids(frame))
+        .collect::<Vec<_>>();
+    let mut frequency = BTreeMap::<u64, usize>::new();
+    for observed in support_atoms.iter().chain(&future_atoms) {
+        for atom in observed {
+            if base_required.binary_search(atom).is_err() {
+                *frequency.entry(*atom).or_default() += 1;
+            }
+        }
+    }
+    let mut ranked_atoms = frequency.into_iter().collect::<Vec<_>>();
+    ranked_atoms.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    ranked_atoms.truncate(64);
+    let ranked_atoms = ranked_atoms
+        .into_iter()
+        .map(|(atom, _)| atom)
+        .collect::<Vec<_>>();
+    let mut predicates = ranked_atoms
+        .iter()
+        .map(|atom| vec![*atom])
+        .collect::<Vec<_>>();
+    for (left_index, left) in ranked_atoms.iter().enumerate() {
+        for right in ranked_atoms.iter().skip(left_index.saturating_add(1)) {
+            predicates.push(vec![*left, *right]);
+        }
+    }
+    let Some(best) = predicates
+        .into_iter()
+        .filter_map(|predicate| {
+            let mut combined = base_required.clone();
+            combined.extend(predicate);
+            combined.sort_unstable();
+            combined.dedup();
+            let support_rows = support_atoms
+                .iter()
+                .filter(|observed| {
+                    combined
+                        .iter()
+                        .all(|atom| observed.binary_search(atom).is_ok())
+                })
+                .count();
+            let future_rows = future_atoms
+                .iter()
+                .filter(|observed| {
+                    combined
+                        .iter()
+                        .all(|atom| observed.binary_search(atom).is_ok())
+                })
+                .count();
+            if support_rows < 32
+                || future_rows < 32
+                || negative_atoms.iter().any(|observed| {
+                    combined
+                        .iter()
+                        .all(|atom| observed.binary_search(atom).is_ok())
+                })
+            {
+                return None;
+            }
+            Some((combined, support_rows, future_rows))
+        })
+        .max_by(|left, right| {
+            left.1
+                .saturating_add(left.2)
+                .cmp(&right.1.saturating_add(right.2))
+                .then_with(|| left.1.cmp(&right.1))
+                .then_with(|| left.2.cmp(&right.2))
+                .then_with(|| right.0.len().cmp(&left.0.len()))
+                .then_with(|| right.0.cmp(&left.0))
+        })
+    else {
+        // CEGIS deliberately delegates a pre-action collision that no exact
+        // guard can separate to the learned anti-center. The candidate builder
+        // below must still prove that Wave rejects these negatives with zero
+        // false accepts before external admission sees the package.
+        return Ok((base_required, support.to_vec(), future.to_vec()));
+    };
+    let repaired_support = support
+        .iter()
+        .filter(|frame| frame_matches(frame, &best.0))
+        .cloned()
+        .collect::<Vec<_>>();
+    let repaired_future = future
+        .iter()
+        .filter(|frame| frame_matches(frame, &best.0))
+        .cloned()
+        .collect::<Vec<_>>();
+    Ok((best.0, repaired_support, repaired_future))
+}
+
 fn build_subcenter_admission_candidate(
     config: OnlineResponseMinerConfig,
     bucket: &ResponseBucket,
@@ -1999,14 +2633,19 @@ fn build_subcenter_admission_candidate(
     future: Vec<RelationFrame>,
     negatives: Vec<RelationFrame>,
     proven: Option<ProvenAdmissionProgram<'_>>,
-) -> Option<OnlineResponseAdmissionCandidate> {
+) -> Result<OnlineResponseAdmissionCandidate, String> {
     let parent_bucket_id = stable_action_signature_bucket_id(
         &bucket.teacher_action_symbol,
         &bucket.teacher_signature_sha256,
     );
     if support.len() < 32 || future.len() < 32 || negatives.is_empty() {
         trace_subcenter_build(parent_bucket_id, required_atom_ids, "evidence_below_gate");
-        return None;
+        return Err(format!(
+            "evidence_below_gate:support={}:future={}:negatives={}",
+            support.len(),
+            future.len(),
+            negatives.len()
+        ));
     }
     let calibration_events = config.calibration_events.min(negatives.len()).max(1);
     let (program, verifier, phase_rank, exact_checks) = if let Some(proven) = proven {
@@ -2019,13 +2658,13 @@ fn build_subcenter_admission_candidate(
                 required_atom_ids,
                 "cegis_support_mismatch",
             );
-            return None;
+            return Err("cegis_support_mismatch".to_owned());
         }
         let verifier = match crate::synthesis::compile_independent_verifier(proven.program) {
             Ok(verifier) => verifier,
             Err(error) => {
                 trace_subcenter_build(parent_bucket_id, required_atom_ids, error.code());
-                return None;
+                return Err(format!("verifier_compile:{}", error.code()));
             }
         };
         (
@@ -2039,7 +2678,7 @@ fn build_subcenter_admission_candidate(
             Ok(synthesized) => synthesized,
             Err(error) => {
                 trace_subcenter_build(parent_bucket_id, required_atom_ids, error.code());
-                return None;
+                return Err(format!("synthesis:{}", error.code()));
             }
         };
         (
@@ -2067,7 +2706,11 @@ fn build_subcenter_admission_candidate(
                 offered_future
             ),
         );
-        return None;
+        return Err(format!(
+            "consistent_future_below_gate:{}/{}",
+            future.len(),
+            offered_future
+        ));
     }
     let bucket_id = stable_subcenter_bucket_id(parent_bucket_id, required_atom_ids);
     let wave_config = PhaseCenterOnlineMinerConfig {
@@ -2077,22 +2720,24 @@ fn build_subcenter_admission_candidate(
         calibration_events,
         max_buckets: 1,
     };
-    let mut wave = PhaseCenterOnlineMiner::new(wave_config).ok()?;
-    let mut encoder = PhaseCenterAtomEncoder::new(config.cells).ok()?;
+    let mut wave =
+        PhaseCenterOnlineMiner::new(wave_config).map_err(|error| format!("wave_init:{error:?}"))?;
+    let mut encoder = PhaseCenterAtomEncoder::new(config.cells)
+        .map_err(|error| format!("wave_encoder_init:{error:?}"))?;
     for frame in &support {
         let wave_atoms = subcenter_wave_atom_ids(frame, required_atom_ids);
         wave.train_atom_ids(&mut encoder, bucket_id, wave_atoms, true)
-            .ok()?;
+            .map_err(|error| format!("wave_support_train:{error:?}"))?;
     }
     for frame in negatives.iter().take(calibration_events) {
         let wave_atoms = subcenter_wave_atom_ids(frame, required_atom_ids);
         wave.train_atom_ids(&mut encoder, bucket_id, wave_atoms, false)
-            .ok()?;
+            .map_err(|error| format!("wave_negative_train:{error:?}"))?;
     }
     for frame in negatives.iter().take(calibration_events) {
         let wave_atoms = subcenter_wave_atom_ids(frame, required_atom_ids);
         wave.observe_atom_ids(&mut encoder, bucket_id, wave_atoms, false, false, 0, 0)
-            .ok()?;
+            .map_err(|error| format!("wave_negative_calibration:{error:?}"))?;
     }
     for frame in &future {
         let wave_atoms = subcenter_wave_atom_ids(frame, required_atom_ids);
@@ -2106,23 +2751,28 @@ fn build_subcenter_admission_candidate(
                 frame.estimated_input_tokens,
                 0,
             )
-            .ok()?;
+            .map_err(|error| format!("wave_future_observe:{error:?}"))?;
         if decision.unique_cpu_accept_over_exact_cache {
             break;
         }
     }
-    let wave_bucket = wave.bucket(bucket_id)?;
+    let wave_bucket = wave
+        .bucket(bucket_id)
+        .ok_or_else(|| "wave_bucket_missing".to_owned())?;
     if wave_bucket.rejected
         || wave_bucket.false_accepts != 0
         || !wave_bucket.is_shadow_ready(config.min_bucket_events, calibration_events)
     {
         trace_subcenter_build(parent_bucket_id, required_atom_ids, "wave_not_shadow_ready");
-        return None;
+        return Err("wave_not_shadow_ready".to_owned());
     }
     // This is only a proof candidate. The independent admission controller
     // replays frozen future, calibrates routing, runs causal ablations, and
     // checks runtime parity before granting execution authority.
-    let wave_package = wave.shadow_ready_package_bytes(bucket_id).ok()??;
+    let wave_package = wave
+        .shadow_ready_package_bytes(bucket_id)
+        .map_err(|error| format!("wave_package:{error:?}"))?
+        .ok_or_else(|| "wave_package_missing".to_owned())?;
     let distinct_sessions = support
         .iter()
         .map(|frame| frame.session_id_sha256.as_str())
@@ -2133,7 +2783,7 @@ fn build_subcenter_admission_candidate(
         .chain(future.iter())
         .map(|frame| frame.estimated_input_tokens)
         .sum();
-    Some(OnlineResponseAdmissionCandidate {
+    Ok(OnlineResponseAdmissionCandidate {
         candidate: OnlineResponseCandidate {
             bucket_id,
             structural_family_id: stable_subcenter_family_id(
@@ -2160,6 +2810,7 @@ fn build_subcenter_admission_candidate(
         negatives,
         required_routing_atom_ids: required_atom_ids.to_vec(),
         runtime_parity_cases: Vec::new(),
+        semantic_alias_edges: Vec::new(),
     })
 }
 
@@ -2172,6 +2823,12 @@ struct ProvenAdmissionProgram<'a> {
     program: &'a crate::ResponseProgram,
     phase_rank: u32,
     exact_checks: u32,
+}
+
+struct SelfTrainingAdmissionEvaluation {
+    ready_cohorts: usize,
+    candidates: Vec<OnlineResponseAdmissionCandidate>,
+    blockers: Vec<OnlineResponseAdmissionBlockerReport>,
 }
 
 fn trace_subcenter_build(parent_bucket_id: u32, atom_ids: &[u64], reason: &str) {
@@ -2265,6 +2922,7 @@ fn reconstruct_online_client_capability(frame: &mut RelationFrame) {
 
 fn response_operation_name(program: &ResponseProgram) -> &'static str {
     match &program.operation {
+        crate::ResponseOperation::AdvancePlan { .. } => "advance_plan",
         crate::ResponseOperation::FunctionCallFromRoles { function_name, .. } => {
             if function_name == "write_stdin" {
                 "write_stdin"
@@ -2293,6 +2951,19 @@ fn push_bounded<T>(rows: &mut VecDeque<T>, row: T, limit: usize) {
         rows.pop_front();
     }
     rows.push_back(row);
+}
+
+fn canonical_runtime_parity_key(frame: &RelationFrame) -> String {
+    let digest = Sha256::digest(
+        serde_json::to_vec(&(
+            "nando.future-runtime-parity.v1",
+            &frame.evidence_ref_sha256,
+            &frame.event_id_sha256,
+            &frame.session_id_sha256,
+        ))
+        .unwrap_or_default(),
+    );
+    format!("{:020}:{digest:x}", frame.observed_at_unix_nanos)
 }
 
 fn push_session_diverse_future(
@@ -2630,12 +3301,81 @@ fn cardinality_signature(frame: &RelationFrame) -> Option<String> {
 
 fn online_bucket_identity(frame: &RelationFrame) -> Option<(u64, String)> {
     let teacher_signature = teacher_program_signature(frame)?;
+    if frame
+        .atoms
+        .iter()
+        .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance))
+    {
+        let function_name = frame.atoms.iter().find_map(|atom| match atom {
+            RelationAtom::ActionFunction { value } => Some(value.as_str()),
+            _ => None,
+        })?;
+        let digest = Sha256::digest(
+            serde_json::to_vec(&("nando.plan-advance-family.v1", function_name)).ok()?,
+        );
+        let family_id = u64::from_be_bytes(digest[..8].try_into().unwrap_or([0; 8]));
+        return Some((family_id, teacher_signature));
+    }
     let hypotheses = ground_roles(frame);
     let hypothesis = hypotheses
         .first()
         .filter(|_| hypotheses.len() == 1 && hypotheses[0].competing_binding_count == 0)?;
     let family_id = grounded_program_family_id(frame, hypothesis)?;
     Some((family_id, teacher_signature))
+}
+
+fn restored_miner_family_ids(
+    miner: &OnlineResponseMiner,
+    frame: &RelationFrame,
+    teacher_signature: &str,
+    atom_ids: &[u64],
+) -> Vec<u64> {
+    let action = teacher_action_symbol(frame);
+    let mut family_ids = vec![stable_restored_family_id(
+        "broad_action",
+        &action,
+        teacher_signature,
+        &[],
+    )];
+    if let Some((structural_family_id, _)) = online_bucket_identity(frame) {
+        family_ids.push(structural_family_id);
+    }
+
+    let observed = atom_ids.iter().copied().collect::<BTreeSet<_>>();
+    for subcenter in miner.subcenters.clean_subcenters(&action, 64, 8) {
+        if subcenter
+            .atom_ids
+            .iter()
+            .all(|atom_id| observed.contains(atom_id))
+        {
+            family_ids.push(stable_restored_family_id(
+                "learned_subcenter",
+                &action,
+                teacher_signature,
+                &subcenter.atom_ids,
+            ));
+        }
+    }
+    family_ids
+}
+
+fn stable_restored_family_id(
+    kind: &str,
+    action: &str,
+    teacher_signature: &str,
+    atom_ids: &[u64],
+) -> u64 {
+    let digest = Sha256::digest(
+        serde_json::to_vec(&(
+            "nando.restored-online-miner-family.v1",
+            kind,
+            action,
+            teacher_signature,
+            atom_ids,
+        ))
+        .unwrap_or_default(),
+    );
+    u64::from_be_bytes(digest[..8].try_into().unwrap_or([0; 8]))
 }
 
 fn stable_bucket_id(family_id: u64, signature: &str) -> u32 {
@@ -2736,6 +3476,281 @@ mod tests {
         }
     }
 
+    fn plan_frame(index: usize) -> RelationFrame {
+        RelationFrame {
+            schema: RELATION_FRAME_SCHEMA.to_owned(),
+            frame_id_sha256: format!("{:064x}", index + 50_000),
+            event_id_sha256: format!("{:064x}", index + 60_000),
+            client_intent_id_sha256: format!("{:064x}", index + 70_000),
+            session_id_sha256: format!("{:064x}", index % 4 + 80_000),
+            observed_at_unix_nanos: index as u64,
+            estimated_input_tokens: 500,
+            extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+            verifier_label: Some(true),
+            atoms: vec![
+                RelationAtom::ToolKind {
+                    value: "exec_command".to_owned(),
+                },
+                RelationAtom::CompletionState {
+                    value: "completed".to_owned(),
+                },
+                RelationAtom::OutputStatus {
+                    value: "success".to_owned(),
+                },
+                RelationAtom::PlanState {
+                    step_count: 3,
+                    completed_count: 0,
+                    active_index: 0,
+                },
+                RelationAtom::ActionFunction {
+                    value: "update_plan".to_owned(),
+                },
+                RelationAtom::ActionPlanAdvance,
+            ],
+            evidence_ref_sha256: format!("{:064x}", index + 90_000),
+        }
+    }
+
+    fn plan_parity_case(index: usize) -> crate::RuntimeParityCase {
+        // Replay support is valid only when the production actor can execute
+        // the captured before-state and reproduce the completed teacher call.
+        let plan = serde_json::json!([
+            {"step": "inspect", "status": "in_progress"},
+            {"step": "repair", "status": "pending"},
+            {"step": "verify", "status": "pending"}
+        ]);
+        let provider_payload = serde_json::json!({
+            "input": [
+                {
+                    "type": "function_call",
+                    "name": "update_plan",
+                    "arguments": {"plan": plan}
+                },
+                {
+                    "type": "function_call_output",
+                    "output": {"ok": true}
+                }
+            ]
+        });
+        let expected_response = serde_json::json!({
+            "name": "update_plan",
+            "arguments": {
+                "plan": [
+                    {"step": "inspect", "status": "completed"},
+                    {"step": "repair", "status": "in_progress"},
+                    {"step": "verify", "status": "pending"}
+                ]
+            }
+        })
+        .to_string();
+        crate::RuntimeParityCase {
+            evidence_ref_sha256: format!("{:064x}", index + 90_000),
+            request_text: String::new(),
+            provider_payload,
+            expected_response,
+        }
+    }
+
+    fn write_stdin_parity_case(index: usize, prefix: &str) -> crate::RuntimeParityCase {
+        // Model the real continuation surface; an empty payload would create
+        // a receipt that cannot prove runtime parity.
+        crate::RuntimeParityCase {
+            evidence_ref_sha256: String::new(),
+            request_text: String::new(),
+            provider_payload: serde_json::json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": format!("{prefix}handle-{index}")
+                }]
+            }),
+            expected_response: serde_json::json!({
+                "name": "write_stdin",
+                "arguments": {"session_id": format!("handle-{index}")}
+            })
+            .to_string(),
+        }
+    }
+
+    #[test]
+    fn plan_teacher_frame_reaches_a_synthesizable_online_bucket() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("miner");
+        miner
+            .observe_frame(plan_frame(1))
+            .expect("plan frame ingest");
+        let report = miner.report();
+        assert_eq!(report.rows_ambiguous, 0);
+        assert_eq!(report.bucket_count, 2);
+        assert_eq!(report.candidates.len(), 0);
+        assert_eq!(report.buckets.len(), 2);
+        assert!(
+            report
+                .buckets
+                .iter()
+                .all(|bucket| { bucket.synthesized_operation.as_deref() == Some("advance_plan") })
+        );
+    }
+
+    #[test]
+    fn restored_broad_teacher_bucket_accumulates_across_structural_surfaces() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("miner");
+        for index in 1..=64 {
+            let mut row = frame(index, "write_stdin", true);
+            row.atoms.push(RelationAtom::ClientCapabilityAtom {
+                atom_id: if index % 2 == 0 { 100 } else { 200 },
+            });
+            miner.observe_frame(row).expect("teacher row");
+        }
+
+        let signature =
+            teacher_program_signature(&frame(1, "write_stdin", true)).expect("teacher signature");
+        let broad_family =
+            stable_restored_family_id("broad_action", "function:write_stdin", &signature, &[]);
+        let broad_id = stable_bucket_id(broad_family, &signature);
+        let broad = miner.buckets.get(&broad_id).expect("restored broad bucket");
+        assert_eq!(broad.positive_rows, 64);
+        assert_eq!(broad.positives.len(), 32);
+        assert_eq!(broad.future_positives.len(), 32);
+        let structural_surfaces = [100, 200].map(|atom_id| {
+            let mut row = frame(1000 + atom_id as usize, "write_stdin", true);
+            row.atoms
+                .push(RelationAtom::ClientCapabilityAtom { atom_id });
+            online_bucket_identity(&row)
+                .map(|identity| identity.0)
+                .expect("structural surface")
+        });
+        for structural_family in structural_surfaces {
+            let structural_id = stable_bucket_id(structural_family, &signature);
+            let structural = miner
+                .buckets
+                .get(&structural_id)
+                .expect("structural bucket");
+            assert_eq!(structural.positives.len(), 32);
+            assert_eq!(structural.future_positives.len(), 0);
+        }
+    }
+
+    #[test]
+    fn restored_core_compiles_provisional_candidate_before_admission_gate() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("restored miner");
+        for index in 1..=16 {
+            miner
+                .observe_frame(frame(index, "write_stdin", true))
+                .expect("positive teacher row");
+        }
+        for index in 100..104 {
+            let mut negative = frame(index, "exec_command", true);
+            negative.atoms[0] = RelationAtom::ToolKind {
+                value: "exec_command".to_owned(),
+            };
+            miner
+                .observe_frame(negative)
+                .expect("competing teacher row");
+        }
+
+        let report = miner.report();
+        assert!(report.active_bucket_count >= 1);
+        assert!(report.candidates.iter().any(|candidate| {
+            candidate.teacher_signature_sha256
+                == teacher_program_signature(&frame(1, "write_stdin", true))
+                    .expect("teacher signature")
+        }));
+        assert_eq!(report.admission_ready_cohorts, 0);
+        assert_eq!(report.emitted_candidate_cohorts, 0);
+        assert!(
+            report
+                .buckets
+                .iter()
+                .filter(|bucket| bucket.teacher_action_symbol == "function:write_stdin")
+                .all(|bucket| bucket.frozen_future_rows == 0)
+        );
+    }
+
+    #[test]
+    fn restored_core_emits_a_verifier_bound_admission_candidate() {
+        let mut miner = OnlineResponseMiner::new(OnlineResponseMinerConfig {
+            min_bucket_events: 2,
+            calibration_events: 2,
+            reservoir_rows: 32,
+            ..OnlineResponseMinerConfig::default()
+        })
+        .expect("miner");
+        for index in 1..=64 {
+            let mut source = frame(index, "write_stdin", true);
+            source
+                .atoms
+                .retain(|atom| !matches!(atom, RelationAtom::ObservationSelector { .. }));
+            source.atoms.push(RelationAtom::ObservationSelector {
+                slot_id: 1,
+                selector: ResponseValueSelector::ContentLinePrefix {
+                    prefix: "Process running with session ID ".to_owned(),
+                    value_type: AtomValueType::Identifier,
+                },
+            });
+            source.atoms.push(RelationAtom::ClientCapabilityAtom {
+                atom_id: if index % 2 == 0 { 100 } else { 200 },
+            });
+            let evidence_ref_sha256 = source.evidence_ref_sha256.clone();
+            let mut transition = crate::teacher_transition_from_completed(&source, None)
+                .expect("teacher transition");
+            let provider_payload = serde_json::json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": format!("Process running with session ID handle-{index}")
+                }]
+            });
+            let training_frame = transition.as_training_relation_frame();
+            let program = crate::synthesize_response_operator(&[training_frame])
+                .expect("typed program")
+                .candidate
+                .program;
+            let execution = crate::execute_response(&program, "", &provider_payload);
+            assert_eq!(execution.status, crate::ResponseExecutionStatus::Executed);
+            transition.runtime_parity_case = Some(crate::RuntimeParityCase {
+                evidence_ref_sha256,
+                request_text: String::new(),
+                provider_payload,
+                expected_response: execution.response.expect("exact response"),
+            });
+            miner
+                .observe_teacher_transition(transition)
+                .expect("observe teacher transition");
+        }
+        for index in 100..104 {
+            let mut negative = frame(index, "exec_command", true);
+            negative.atoms[0] = RelationAtom::ToolKind {
+                value: "exec_command".to_owned(),
+            };
+            miner.observe_frame(negative).expect("negative teacher row");
+        }
+
+        let evaluation = miner.restored_core_admission_evaluation();
+        assert!(evaluation.ready_cohorts >= 1);
+        assert_eq!(
+            evaluation.ready_cohorts,
+            evaluation
+                .candidates
+                .len()
+                .saturating_add(evaluation.blockers.len())
+        );
+        let candidate = evaluation
+            .candidates
+            .iter()
+            .find(|candidate| {
+                matches!(
+                    candidate.candidate.program.operation,
+                    crate::ResponseOperation::FunctionCallFromRoles { .. }
+                )
+            })
+            .unwrap_or_else(|| panic!("restored candidate blockers={:?}", evaluation.blockers));
+        assert!(candidate.support.len() >= 32);
+        assert!(candidate.future.len() >= 32);
+        assert!(candidate.runtime_parity_cases.len() >= candidate.future.len());
+        assert_eq!(miner.report().false_accepts, 0);
+    }
+
     #[test]
     fn proven_subcenter_trains_real_negative_before_calibration() {
         let guard_atom = crate::package::stable_atom_id("test:clean-subcenter");
@@ -2798,6 +3813,130 @@ mod tests {
         .expect("subcenter candidate");
         assert_eq!(candidate.required_routing_atom_ids, [guard_atom]);
         assert!(!candidate.wave_runtime_package.is_empty());
+    }
+
+    #[test]
+    fn frozen_admission_guard_repair_adds_clean_atom_without_repartitioning_future() {
+        let base_atom = crate::package::stable_atom_id("test:base-guard");
+        let clean_atom = crate::package::stable_atom_id("test:clean-guard");
+        let add_atoms = |mut frame: RelationFrame| {
+            frame
+                .atoms
+                .push(RelationAtom::ClientCapabilityAtom { atom_id: base_atom });
+            frame.atoms.push(RelationAtom::ClientCapabilityAtom {
+                atom_id: clean_atom,
+            });
+            frame
+        };
+        let support = (1..=32)
+            .map(|index| add_atoms(frame(index, "write_stdin", true)))
+            .collect::<Vec<_>>();
+        let future = (33..=64)
+            .map(|index| add_atoms(frame(index, "write_stdin", true)))
+            .collect::<Vec<_>>();
+        let mut negative = support[0].clone();
+        negative.frame_id_sha256 = format!("{:064x}", 100_000);
+        negative.event_id_sha256 = format!("{:064x}", 100_001);
+        negative.session_id_sha256 = format!("{:064x}", 100_002);
+        negative.observed_at_unix_nanos = 100_000;
+        negative.verifier_label = Some(false);
+        negative.atoms.retain(|atom| {
+            !matches!(atom, RelationAtom::ClientCapabilityAtom { atom_id } if *atom_id == clean_atom)
+        });
+        let program = synthesize_response_operator(&support)
+            .expect("program")
+            .candidate
+            .program;
+
+        let (required, repaired_support, repaired_future) =
+            repair_frozen_admission_guard(&program, &[base_atom], &support, &future, &[negative])
+                .expect("clean exact guard");
+        let mut expected_required = vec![base_atom, clean_atom];
+        expected_required.sort_unstable();
+        assert_eq!(required, expected_required);
+        assert_eq!(
+            repaired_support
+                .iter()
+                .map(|frame| frame.frame_id_sha256.as_str())
+                .collect::<Vec<_>>(),
+            support
+                .iter()
+                .map(|frame| frame.frame_id_sha256.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            repaired_future
+                .iter()
+                .map(|frame| frame.frame_id_sha256.as_str())
+                .collect::<Vec<_>>(),
+            future
+                .iter()
+                .map(|frame| frame.frame_id_sha256.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn frozen_admission_guard_delegates_unseparable_negative_to_wave() {
+        let base_atom = crate::package::stable_atom_id("test:base-guard");
+        let add_atom = |mut frame: RelationFrame| {
+            frame
+                .atoms
+                .push(RelationAtom::ClientCapabilityAtom { atom_id: base_atom });
+            frame
+        };
+        let support = (1..=32)
+            .map(|index| add_atom(frame(index, "write_stdin", true)))
+            .collect::<Vec<_>>();
+        let future = (33..=64)
+            .map(|index| add_atom(frame(index, "write_stdin", true)))
+            .collect::<Vec<_>>();
+        let negative = add_atom(frame(100, "exec_command", false));
+        let program = synthesize_response_operator(&support)
+            .expect("program")
+            .candidate
+            .program;
+        let (required, repaired_support, repaired_future) =
+            repair_frozen_admission_guard(&program, &[base_atom], &support, &future, &[negative])
+                .expect("anti-center delegation");
+        assert_eq!(required, [base_atom]);
+        assert_eq!(repaired_support.len(), 32);
+        assert_eq!(repaired_future.len(), 32);
+    }
+
+    #[test]
+    fn frozen_admission_guard_ignores_negative_where_actor_cannot_run() {
+        let base_atom = crate::package::stable_atom_id("test:base-guard");
+        let add_atom = |mut frame: RelationFrame| {
+            frame
+                .atoms
+                .push(RelationAtom::ClientCapabilityAtom { atom_id: base_atom });
+            frame
+        };
+        let support = (1..=32)
+            .map(|index| add_atom(frame(index, "write_stdin", true)))
+            .collect::<Vec<_>>();
+        let future = (33..=64)
+            .map(|index| add_atom(frame(index, "write_stdin", true)))
+            .collect::<Vec<_>>();
+        let program = synthesize_response_operator(&support)
+            .expect("program")
+            .candidate
+            .program;
+        let mut negative = add_atom(frame(100, "exec_command", false));
+        negative.atoms.retain(|atom| {
+            !matches!(
+                atom,
+                RelationAtom::ObservationSelector { .. } | RelationAtom::UniqueSlot { .. }
+            )
+        });
+
+        let (required, repaired_support, repaired_future) =
+            repair_frozen_admission_guard(&program, &[base_atom], &support, &future, &[negative])
+                .expect("actor abstain makes routed negative harmless");
+        assert_eq!(required, [base_atom]);
+        assert_eq!(repaired_support.len(), 32);
+        assert_eq!(repaired_future.len(), 32);
     }
 
     #[test]
@@ -2916,7 +4055,7 @@ mod tests {
             OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("miner");
         miner.train_frame(first).expect("first surface");
         miner.train_frame(second).expect("second surface");
-        assert_eq!(miner.report().bucket_count, 1);
+        assert_eq!(miner.report().bucket_count, 2);
 
         let different_program = frame(102, "exec_command", true);
         assert_ne!(
@@ -3053,7 +4192,14 @@ mod tests {
                 .replay_chronological_frame(frame(index, "write_stdin", true))
                 .expect("chronological replay");
         }
-        let bucket = miner.buckets.values().next().expect("bucket");
+        let signature =
+            teacher_program_signature(&frame(0, "write_stdin", true)).expect("teacher signature");
+        let broad_family =
+            stable_restored_family_id("broad_action", "function:write_stdin", &signature, &[]);
+        let bucket = miner
+            .buckets
+            .get(&stable_bucket_id(broad_family, &signature))
+            .expect("broad bucket");
         let support_ids = bucket
             .positives
             .iter()
@@ -3202,6 +4348,7 @@ mod tests {
                 .expect("first transition");
             stream.persist_now().expect("checkpoint");
             assert_eq!(stream.report().rows_seen, 1);
+            assert_eq!(stream.report().bucket_count, 2);
         }
 
         let mut restored =
@@ -3210,7 +4357,206 @@ mod tests {
             .apply_teacher_transition(transition)
             .expect("duplicate transition after restart");
         assert_eq!(restored.report().rows_seen, 1);
+        assert_eq!(restored.report().bucket_count, 2);
         fs::remove_dir_all(root).expect("temp cleanup");
+    }
+
+    #[test]
+    fn v43_teacher_pools_seed_wave_support_without_future_claims() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");
+        for index in 0..40 {
+            let mut transition =
+                crate::teacher_transition_from_completed(&frame(index, "write_stdin", true), None)
+                    .expect("teacher transition");
+            transition.runtime_parity_case = Some(write_stdin_parity_case(
+                index,
+                "Process running with session ID ",
+            ));
+            miner
+                .observe_teacher_transition(transition)
+                .expect("observe teacher transition");
+        }
+        let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+        checkpoint.bucket_strategy_version = 43;
+
+        let restored = OnlineResponseMiner::from_checkpoint(checkpoint).expect("migrated miner");
+        let report = restored.report();
+        assert!(report.bucket_count > 0);
+        assert!(
+            report
+                .buckets
+                .iter()
+                .all(|bucket| bucket.frozen_future_rows == 0)
+        );
+    }
+
+    #[test]
+    fn replay_parity_batch_builds_support_without_claiming_live_future() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-replay-parity-batch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("temp root");
+        let config = OnlineResponseTailConfig {
+            input_path: root.join("frames.jsonl"),
+            report_path: root.join("report.json"),
+            checkpoint_path: root.join("miner.checkpoint"),
+            idle_sleep: Duration::from_millis(1),
+        };
+        File::create(&config.input_path).expect("empty audit");
+        let mut stream = OnlineResponseStream::open_streaming(config).expect("stream");
+        let target_signature = crate::teacher_program_signature(&frame(0, "write_stdin", true))
+            .expect("target signature");
+        let target_signatures = BTreeSet::from([target_signature]);
+        let cases = (0..40).map(|index| {
+            (
+                frame(index, "write_stdin", true),
+                Some(write_stdin_parity_case(
+                    index,
+                    "Script running with cell ID ",
+                )),
+            )
+        });
+        stream
+            .train_replay_cases_batch(cases)
+            .expect("replay support import");
+        for _ in 0..512 {
+            let checks = stream.run_self_training_work_slice_for_signatures(&target_signatures);
+            if checks == 0 && !stream.has_self_training_work_for_signatures(&target_signatures) {
+                break;
+            }
+        }
+
+        let report = stream.report().self_training_v2;
+        assert_eq!(report.runtime_parity_cases_total, 0);
+        assert_eq!(report.replay_support_parity_cases_total, 40);
+        assert!(!report.generations.is_empty());
+        assert!(report.generations.iter().all(|generation| {
+            generation.support_rows == 32
+                && generation.future_rows == 0
+                && generation.runtime_parity_rows == 0
+        }));
+        fs::remove_dir_all(root).expect("temp cleanup");
+    }
+
+    #[test]
+    fn v48_canonical_parity_migration_preserves_teacher_pools_and_parity() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");
+        for index in 0..40 {
+            let mut source_frame = frame(index, "write_stdin", true);
+            source_frame
+                .atoms
+                .retain(|atom| !matches!(atom, RelationAtom::ObservationSelector { .. }));
+            source_frame.atoms.push(RelationAtom::ObservationSelector {
+                slot_id: 1,
+                selector: ResponseValueSelector::ContentLinePrefix {
+                    prefix: "Process running with session ID ".to_owned(),
+                    value_type: AtomValueType::Identifier,
+                },
+            });
+            source_frame.atoms.sort();
+            let mut transition = crate::teacher_transition_from_completed(&source_frame, None)
+                .expect("teacher transition");
+            let provider_payload = serde_json::json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": format!("Process running with session ID handle-{index}")
+                }]
+            });
+            let expected_response = serde_json::json!({
+                "name": "write_stdin",
+                "arguments": {"session_id": format!("handle-{index}")}
+            })
+            .to_string();
+            transition.runtime_parity_case = Some(crate::RuntimeParityCase {
+                evidence_ref_sha256: String::new(),
+                request_text: String::new(),
+                provider_payload,
+                expected_response,
+            });
+            let enriched = transition.as_training_relation_frame();
+            let synthesized = crate::synthesize_response_operator(&[enriched])
+                .expect("typed synthesis")
+                .candidate
+                .program;
+            let parity = transition.runtime_parity_case.as_ref().expect("parity");
+            let execution = crate::execute_response(
+                &synthesized,
+                &parity.request_text,
+                &parity.provider_payload,
+            );
+            assert_eq!(
+                execution.response.as_deref(),
+                Some(parity.expected_response.as_str())
+            );
+            miner
+                .observe_teacher_transition(transition)
+                .expect("observe teacher transition");
+        }
+        let accepted = miner
+            .report()
+            .self_training_v2
+            .discovery
+            .accepted_transitions;
+        let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+        let parity_before_report = checkpoint.self_training_v2.report(0);
+        let parity_before = parity_before_report
+            .runtime_parity_cases_total
+            .saturating_add(parity_before_report.replay_support_parity_cases_total);
+        assert_eq!(parity_before, 40);
+        checkpoint.bucket_strategy_version = 48;
+
+        let mut restored =
+            OnlineResponseMiner::from_checkpoint(checkpoint).expect("migrated miner");
+        assert_eq!(
+            restored
+                .report()
+                .self_training_v2
+                .discovery
+                .accepted_transitions,
+            accepted
+        );
+        assert!(restored.self_training_v2.has_pending_work());
+        assert!(restored.report().self_training_v2.generations.is_empty());
+        // A strategy migration demotes historical live parity to support-only
+        // evidence so it cannot be reinterpreted as post-freeze future.
+        let migrated_parity = restored.report().self_training_v2;
+        assert_eq!(migrated_parity.runtime_parity_cases_total, 0);
+        assert_eq!(
+            migrated_parity
+                .runtime_parity_cases_total
+                .saturating_add(migrated_parity.replay_support_parity_cases_total),
+            parity_before
+        );
+        for _ in 0..1_024 {
+            if !restored.self_training_v2.has_pending_work() {
+                break;
+            }
+            let _ = restored.self_training_v2.run_work_slice();
+        }
+        assert!(!restored.self_training_v2.has_pending_work());
+        let migrated_report = restored.report().self_training_v2;
+        assert_eq!(
+            migrated_report
+                .generations
+                .iter()
+                .map(|generation| generation.support_rows)
+                .max(),
+            Some(32),
+            "parity_overlap={} accepted={} signature_match={} cegis={:?} semantic_blockers={:?} generations={:?}",
+            migrated_report.parity_discovery_key_overlap,
+            migrated_report.parity_accepted_frame_rows,
+            migrated_report.parity_signature_match_rows,
+            migrated_report.cegis,
+            migrated_report.semantic_law_blockers,
+            migrated_report.generations,
+        );
     }
 
     #[test]
@@ -3352,6 +4698,68 @@ mod tests {
             40
         );
         assert_eq!(fs::metadata(&config.input_path).expect("audit").len(), 0);
+        fs::remove_dir_all(root).expect("temp cleanup");
+    }
+
+    #[test]
+    fn replay_parity_receipts_enable_support_but_never_future() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-response-replay-parity-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("temp dir");
+        let config = OnlineResponseTailConfig {
+            input_path: root.join("frames.jsonl"),
+            report_path: root.join("report.json"),
+            checkpoint_path: root.join("miner.checkpoint"),
+            idle_sleep: Duration::from_millis(1),
+        };
+        let mut stream = OnlineResponseStream::open_streaming(config.clone()).expect("stream");
+        stream
+            .train_replay_cases_batch((0..40).map(|index| {
+                let frame = plan_frame(index);
+                let parity = plan_parity_case(index);
+                (frame, Some(parity))
+            }))
+            .expect("replay parity train");
+        for _ in 0..2_048 {
+            if !stream.has_self_training_work() {
+                break;
+            }
+            stream.run_self_training_work_slice();
+        }
+        assert!(!stream.has_self_training_work());
+        stream.persist_now().expect("persist replay parity");
+        let report = stream.report();
+        assert!(
+            report
+                .self_training_v2
+                .generations
+                .iter()
+                .any(|generation| generation.support_rows == 32)
+        );
+        assert!(
+            report
+                .self_training_v2
+                .generations
+                .iter()
+                .all(|generation| generation.future_rows == 0)
+        );
+        drop(stream);
+
+        let restored = OnlineResponseStream::open_streaming(config).expect("restored stream");
+        assert!(
+            restored
+                .report()
+                .self_training_v2
+                .generations
+                .iter()
+                .all(|generation| generation.future_rows == 0)
+        );
         fs::remove_dir_all(root).expect("temp cleanup");
     }
 }

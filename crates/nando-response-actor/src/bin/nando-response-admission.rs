@@ -120,7 +120,23 @@ fn inspect_candidate_routes() -> Result<(), String> {
                         .all(|required| atoms.binary_search(required).is_ok())
                 })
                 .map(|(frame, atoms)| {
-                    let identical_support_rows = support.iter().filter(|positive| *positive == atoms).count();
+                    let identical_support = candidate
+                        .support
+                        .iter()
+                        .zip(&support)
+                        .filter(|(_, positive)| *positive == atoms)
+                        .map(|(support_frame, _)| {
+                            serde_json::json!({
+                                "frame_id_sha256": support_frame.frame_id_sha256,
+                                "session_id_sha256": support_frame.session_id_sha256,
+                                "client_intent_id_sha256": support_frame.client_intent_id_sha256,
+                                "event_id_sha256": support_frame.event_id_sha256,
+                                "evidence_ref_sha256": support_frame.evidence_ref_sha256,
+                                "observed_at_unix_nanos": support_frame.observed_at_unix_nanos,
+                                "atoms": support_frame.atoms,
+                            })
+                        })
+                        .collect::<Vec<_>>();
                     let minimum_atom_difference = support
                         .iter()
                         .map(|positive| sorted_symmetric_difference_len(positive, atoms))
@@ -128,9 +144,16 @@ fn inspect_candidate_routes() -> Result<(), String> {
                         .unwrap_or(0);
                     serde_json::json!({
                         "frame_id_sha256": frame.frame_id_sha256,
-                        "identical_support_rows": identical_support_rows,
+                        "session_id_sha256": frame.session_id_sha256,
+                        "client_intent_id_sha256": frame.client_intent_id_sha256,
+                        "event_id_sha256": frame.event_id_sha256,
+                        "evidence_ref_sha256": frame.evidence_ref_sha256,
+                        "observed_at_unix_nanos": frame.observed_at_unix_nanos,
+                        "identical_support_rows": identical_support.len(),
+                        "identical_support": identical_support,
                         "minimum_atom_difference": minimum_atom_difference,
                         "atom_count": atoms.len(),
+                        "atoms": frame.atoms,
                     })
                 })
                 .collect::<Vec<_>>();
@@ -140,6 +163,7 @@ fn inspect_candidate_routes() -> Result<(), String> {
                 "support_rows": support.len(),
                 "future_rows": candidate.future.len(),
                 "negative_rows": negatives.len(),
+                "negative_event_times": candidate.negatives.iter().map(|frame| frame.observed_at_unix_nanos).collect::<Vec<_>>(),
                 "required_atom_coverage": required_coverage,
                 "clean_atoms_top32": clean_atoms,
                 "guard_like_negatives": guard_like_negatives,

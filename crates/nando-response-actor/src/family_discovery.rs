@@ -3,10 +3,11 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use serde::{Deserialize, Serialize};
 
 use crate::online_subcenter::OnlineSubcenterDiscovery;
-use crate::teacher_join::{action_schema_enriched_frame, teacher_actions_have_compatible_effect};
+use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
-    RelationFrame, RuntimeParityCase, TeacherTransition, relation_frame_online_routing_atom_ids,
-    relation_frame_structural_family_id, teacher_action_symbol, teacher_program_signature,
+    RelationFrame, RuntimeParityCase, SemanticAliasGraph, SemanticAliasReport, TeacherTransition,
+    relation_frame_online_routing_atom_ids, relation_frame_structural_family_id,
+    teacher_action_symbol, teacher_program_signature,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -41,6 +42,8 @@ pub struct RuntimeInvariant {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct TeacherProgramPool {
     teacher_signature_sha256: String,
+    #[serde(default)]
+    transfer_family_sha256: String,
     action_symbol: String,
     positives: VecDeque<RelationFrame>,
     positive_rows: u64,
@@ -74,6 +77,8 @@ pub struct TeacherPoolSnapshot {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TeacherPoolReport {
     pub teacher_signature_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_law_signature_sha256: Option<String>,
     pub action_symbol: String,
     pub positive_rows: u64,
     pub positive_tokens: u64,
@@ -88,12 +93,16 @@ pub struct FamilyDiscoveryReport {
     pub accepted_transitions: u64,
     pub rejected_transitions: u64,
     pub teacher_pool_count: usize,
+    #[serde(default)]
+    pub transfer_family_count: usize,
     pub cross_program_negative_updates: u64,
     pub same_action_program_negative_updates: u64,
     pub pool_capacity_evictions: u64,
     pub duplicate_rows: u64,
     pub invariant_candidates: usize,
     pub warm_bytes_estimate: usize,
+    #[serde(default)]
+    pub semantic_alias: SemanticAliasReport,
     #[serde(default)]
     pub teacher_pools: Vec<TeacherPoolReport>,
 }
@@ -106,11 +115,15 @@ pub struct CrossSurfaceFamilyDiscovery {
     action_pool_counts: BTreeMap<String, usize>,
     subcenters: OnlineSubcenterDiscovery,
     #[serde(default)]
+    transfer_subcenters: OnlineSubcenterDiscovery,
+    #[serde(default)]
     global_examples: VecDeque<GlobalTrainingExample>,
     #[serde(default)]
     total_tokens: u64,
     seen_events: BTreeMap<String, String>,
     report: FamilyDiscoveryReport,
+    #[serde(default)]
+    semantic_aliases: SemanticAliasGraph,
 }
 
 impl CrossSurfaceFamilyDiscovery {
@@ -121,10 +134,12 @@ impl CrossSurfaceFamilyDiscovery {
             pools: BTreeMap::new(),
             action_pool_counts: BTreeMap::new(),
             subcenters: OnlineSubcenterDiscovery::default(),
+            transfer_subcenters: OnlineSubcenterDiscovery::default(),
             global_examples: VecDeque::new(),
             total_tokens: 0,
             seen_events: BTreeMap::new(),
             report: FamilyDiscoveryReport::default(),
+            semantic_aliases: SemanticAliasGraph::default(),
         }
     }
 
@@ -221,6 +236,8 @@ impl CrossSurfaceFamilyDiscovery {
                         .entry(signature.clone())
                         .or_insert_with(|| TeacherProgramPool {
                             teacher_signature_sha256: signature,
+                            transfer_family_sha256: crate::teacher_transfer_family_signature(first)
+                                .unwrap_or_default(),
                             action_symbol,
                             positives: VecDeque::with_capacity(self.config.positive_reservoir_rows),
                             positive_rows: 0,
@@ -282,6 +299,7 @@ impl CrossSurfaceFamilyDiscovery {
 
         self.action_pool_counts.clear();
         self.subcenters = OnlineSubcenterDiscovery::default();
+        self.transfer_subcenters = OnlineSubcenterDiscovery::default();
         for pool in self.pools.values() {
             *self
                 .action_pool_counts
@@ -293,6 +311,13 @@ impl CrossSurfaceFamilyDiscovery {
                     &relation_frame_online_routing_atom_ids(frame),
                     frame.estimated_input_tokens,
                 );
+                if !pool.transfer_family_sha256.is_empty() {
+                    self.transfer_subcenters.observe(
+                        &pool.transfer_family_sha256,
+                        &relation_frame_online_routing_atom_ids(frame),
+                        frame.estimated_input_tokens,
+                    );
+                }
             }
         }
         self.report.cross_program_negative_updates = 0;
@@ -300,6 +325,28 @@ impl CrossSurfaceFamilyDiscovery {
         self.rebuild_seen_frames();
         self.refresh_report();
         Ok(old_pool_count.saturating_sub(self.pools.len()))
+    }
+
+    pub fn rebuild_transfer_subcenters(&mut self) {
+        self.transfer_subcenters = OnlineSubcenterDiscovery::default();
+        for pool in self.pools.values_mut() {
+            pool.transfer_family_sha256 = pool
+                .positives
+                .front()
+                .and_then(crate::teacher_transfer_family_signature)
+                .unwrap_or_default();
+            if pool.transfer_family_sha256.is_empty() {
+                continue;
+            }
+            for frame in &pool.positives {
+                self.transfer_subcenters.observe(
+                    &pool.transfer_family_sha256,
+                    &relation_frame_online_routing_atom_ids(frame),
+                    frame.estimated_input_tokens,
+                );
+            }
+        }
+        self.refresh_report();
     }
 
     pub fn observe_transition(&mut self, transition: &TeacherTransition) -> Result<bool, String> {
@@ -320,7 +367,10 @@ impl CrossSurfaceFamilyDiscovery {
             self.config.positive_reservoir_rows.saturating_mul(32),
         );
         self.report.transitions_seen = self.report.transitions_seen.saturating_add(1);
+        self.semantic_aliases.observe_transition(transition);
         let signature = transition.outcome.action.signature_sha256.as_str();
+        let transfer_family_sha256 = crate::teacher_transfer_family_signature(&training)
+            .ok_or_else(|| "family_discovery_missing_transfer_family".to_owned())?;
         let action_symbol = transition.outcome.action.action_symbol.as_str();
         if !self.pools.contains_key(signature) {
             self.make_capacity_for_pool();
@@ -328,6 +378,7 @@ impl CrossSurfaceFamilyDiscovery {
                 signature.to_owned(),
                 TeacherProgramPool {
                     teacher_signature_sha256: signature.to_owned(),
+                    transfer_family_sha256: transfer_family_sha256.clone(),
                     action_symbol: action_symbol.to_owned(),
                     positives: VecDeque::with_capacity(self.config.positive_reservoir_rows),
                     positive_rows: 0,
@@ -352,6 +403,11 @@ impl CrossSurfaceFamilyDiscovery {
             let atom_ids = relation_frame_online_routing_atom_ids(&runtime);
             self.subcenters
                 .observe(signature, &atom_ids, training.estimated_input_tokens);
+            self.transfer_subcenters.observe(
+                &transfer_family_sha256,
+                &atom_ids,
+                training.estimated_input_tokens,
+            );
         } else {
             self.report.rejected_transitions = self.report.rejected_transitions.saturating_add(1);
         }
@@ -408,6 +464,15 @@ impl CrossSurfaceFamilyDiscovery {
     }
 
     #[must_use]
+    pub fn semantic_law_signature(&self, signature: &str) -> Option<String> {
+        self.pools
+            .get(signature)?
+            .positives
+            .front()
+            .and_then(crate::teacher_semantic_law_signature)
+    }
+
+    #[must_use]
     pub fn pool_snapshots(&self) -> Vec<TeacherPoolSnapshot> {
         let mut snapshots = self
             .pools
@@ -444,16 +509,16 @@ impl CrossSurfaceFamilyDiscovery {
 
     fn snapshot_pool(&self, pool: &TeacherProgramPool) -> TeacherPoolSnapshot {
         let positives = chronological_unique(pool.positives.iter().cloned());
-        let representative = pool.positives.front();
         let negatives = chronological_unique(
             self.global_examples
                 .iter()
                 .filter(|example| {
+                    // Accepted physical adapters of one learned transfer law
+                    // are additional positives, not cross-program negatives.
                     !example.accepted
                         || (example.teacher_signature_sha256 != pool.teacher_signature_sha256
-                            && !representative.is_some_and(|positive| {
-                                teacher_actions_have_compatible_effect(positive, &example.frame)
-                            }))
+                            && crate::teacher_transfer_family_signature(&example.frame).as_deref()
+                                != Some(pool.transfer_family_sha256.as_str()))
                 })
                 .map(|example| {
                     let mut frame = example.frame.clone();
@@ -476,6 +541,23 @@ impl CrossSurfaceFamilyDiscovery {
                 negative_collisions: 0,
             })
             .collect::<Vec<_>>();
+        if !pool.transfer_family_sha256.is_empty() {
+            invariants.extend(
+                self.transfer_subcenters
+                    .clean_subcenters(
+                        &pool.transfer_family_sha256,
+                        self.config.minimum_invariant_rows,
+                        self.config.max_invariants_per_pool,
+                    )
+                    .into_iter()
+                    .map(|invariant| RuntimeInvariant {
+                        atom_ids: invariant.atom_ids,
+                        positive_rows: invariant.positive_rows,
+                        positive_tokens: invariant.positive_tokens,
+                        negative_collisions: 0,
+                    }),
+            );
+        }
         if invariants.is_empty() {
             invariants.extend(exact_clean_intersection(&positives, &negatives));
         }
@@ -502,17 +584,29 @@ impl CrossSurfaceFamilyDiscovery {
     pub fn report(&self) -> FamilyDiscoveryReport {
         let mut report = self.report.clone();
         report.teacher_pool_count = self.pools.len();
+        report.transfer_family_count = self
+            .pools
+            .values()
+            .map(|pool| pool.transfer_family_sha256.as_str())
+            .filter(|family| !family.is_empty())
+            .collect::<BTreeSet<_>>()
+            .len();
         report.invariant_candidates = self
             .pool_snapshots()
             .iter()
             .map(|pool| pool.invariants.len())
             .sum();
         report.warm_bytes_estimate = self.bytes_estimate();
+        report.semantic_alias = self.semantic_aliases.report();
         report.teacher_pools = self
             .pools
             .values()
             .map(|pool| TeacherPoolReport {
                 teacher_signature_sha256: pool.teacher_signature_sha256.clone(),
+                semantic_law_signature_sha256: pool
+                    .positives
+                    .front()
+                    .and_then(crate::teacher_semantic_law_signature),
                 action_symbol: pool.action_symbol.clone(),
                 positive_rows: pool.positive_rows,
                 positive_tokens: pool.positive_tokens,
@@ -537,6 +631,15 @@ impl CrossSurfaceFamilyDiscovery {
     #[must_use]
     pub fn teacher_pool_count(&self) -> usize {
         self.pools.len()
+    }
+
+    #[must_use]
+    pub fn semantic_alias_graph(&self) -> &SemanticAliasGraph {
+        &self.semantic_aliases
+    }
+
+    pub fn semantic_alias_graph_mut(&mut self) -> &mut SemanticAliasGraph {
+        &mut self.semantic_aliases
     }
 
     fn make_capacity_for_pool(&mut self) {
@@ -575,6 +678,7 @@ impl CrossSurfaceFamilyDiscovery {
     fn refresh_report(&mut self) {
         self.report.teacher_pool_count = self.pools.len();
         self.report.warm_bytes_estimate = self.bytes_estimate();
+        self.report.semantic_alias = self.semantic_aliases.report();
     }
 
     fn rebuild_seen_frames(&mut self) {
@@ -875,6 +979,42 @@ mod tests {
     }
 
     #[test]
+    fn transfer_family_shares_wave_invariants_without_merging_exact_teachers() {
+        let first = wait_frame(40, 12_000);
+        let mut second = wait_frame(41, 12_000);
+        for atom in &mut second.atoms {
+            match atom {
+                RelationAtom::ActionFunction { value } => *value = "continue_process".to_owned(),
+                RelationAtom::ActionRoleArgument { name, .. } => *name = "session".to_owned(),
+                _ => {}
+            }
+        }
+        let mut discovery = CrossSurfaceFamilyDiscovery::new(FamilyDiscoveryConfig {
+            minimum_invariant_rows: 2,
+            ..FamilyDiscoveryConfig::default()
+        });
+        for frame in [&first, &second] {
+            let transition =
+                crate::teacher_transition_from_completed(frame, None).expect("teacher transition");
+            assert_eq!(discovery.observe_transition(&transition), Ok(true));
+        }
+
+        let report = discovery.report();
+        assert_eq!(report.teacher_pool_count, 2);
+        assert_eq!(report.transfer_family_count, 1);
+        let first_signature = teacher_program_signature(&first).expect("first signature");
+        let snapshot = discovery
+            .pool_snapshot(&first_signature)
+            .expect("first exact pool");
+        assert!(
+            snapshot
+                .invariants
+                .iter()
+                .any(|invariant| invariant.positive_rows == 2)
+        );
+    }
+
+    #[test]
     fn signature_migration_merges_budget_variants_and_removes_false_negatives() {
         let first = wait_frame(1, 1_000);
         let second = wait_frame(2, 5_000);
@@ -883,6 +1023,7 @@ mod tests {
             "old-a".to_owned(),
             TeacherProgramPool {
                 teacher_signature_sha256: "old-a".to_owned(),
+                transfer_family_sha256: String::new(),
                 action_symbol: "function:wait".to_owned(),
                 positives: VecDeque::from([first.clone()]),
                 positive_rows: 12,
@@ -895,6 +1036,7 @@ mod tests {
             "old-b".to_owned(),
             TeacherProgramPool {
                 teacher_signature_sha256: "old-b".to_owned(),
+                transfer_family_sha256: String::new(),
                 action_symbol: "function:wait".to_owned(),
                 positives: VecDeque::from([second.clone()]),
                 positive_rows: 7,

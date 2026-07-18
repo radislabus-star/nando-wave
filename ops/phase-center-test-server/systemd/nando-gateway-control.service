@@ -1,0 +1,39 @@
+[Unit]
+Description=Nando local gateway control plane
+After=network.target nando-transition-serving.service
+Wants=nando-transition-serving.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/nando-wave/phase-center.env
+Environment=NANDO_GATEWAY_CONTROL_BIND=127.0.0.1:18788
+Environment=NANDO_GATEWAY_CONTROL_STATE_DIR=/var/lib/nando-gateway-control
+Environment=NANDO_GATEWAY_PUBLIC_MODE_JSON=/run/nando-gateway-control/mode.json
+Environment=NANDO_GATEWAY_CPU_ROUTE_READY=1
+Environment=NANDO_ECONOMICS_SNAPSHOT_JSON=/var/lib/nando-wave/transition/economics-live.json
+ExecStart=/opt/nando-wave/bin/nando-gateway-control
+Restart=always
+RestartSec=1s
+TimeoutStartSec=10s
+TimeoutStopSec=10s
+StateDirectory=nando-gateway-control
+StateDirectoryMode=0700
+RuntimeDirectory=nando-gateway-control
+RuntimeDirectoryMode=0755
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=true
+MemoryHigh=64M
+MemoryMax=128M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

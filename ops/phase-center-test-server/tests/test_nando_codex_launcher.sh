@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LAUNCHER="${ROOT}/bin/nando-codex"
+WORK="$(mktemp -d)"
+trap 'rm -rf "${WORK}"' EXIT
+
+mkdir -p "${WORK}/home"
+printf '%s\n' '{"ok":true,"service":"nando-nginx-gateway","transport":"nginx"}' >"${WORK}/health.json"
+printf '%s\n' 'process.stdout.write(JSON.stringify(process.argv.slice(2)));' >"${WORK}/argv.js"
+
+run_launcher() {
+  HOME="${WORK}/home" \
+  NANDO_REAL_CODEX="${WORK}/argv.js" \
+  NANDO_CODEX_HEALTH_URL="file://${WORK}/health.json" \
+  NANDO_GATEWAY_EVENTS_JSONL="${WORK}/events.jsonl" \
+    "${LAUNCHER}" "$@"
+}
+
+assert_argv() {
+  local actual="$1"
+  local expected="$2"
+  jq -e --argjson expected "${expected}" '. == $expected' <<<"${actual}" >/dev/null
+}
+
+assert_argv \
+  "$(run_launcher exec --ephemeral probe)" \
+  '["exec","-c","model_provider=\"nando_nginx\"","--ephemeral","probe"]'
+
+assert_argv \
+  "$(run_launcher resume session-id probe)" \
+  '["resume","-c","model_provider=\"nando_nginx\"","session-id","probe"]'
+
+assert_argv \
+  "$(run_launcher -m gpt-5.6-sol exec probe)" \
+  '["-m","gpt-5.6-sol","exec","-c","model_provider=\"nando_nginx\"","probe"]'
+
+assert_argv \
+  "$(run_launcher probe)" \
+  '["-c","model_provider=\"nando_nginx\"","probe"]'
+
+assert_argv \
+  "$(NANDO_CODEX_FORCE_DIRECT=1 run_launcher exec probe)" \
+  '["exec","probe"]'
+
+dry_run="$({ NANDO_CODEX_DRY_RUN=1 run_launcher exec probe; })"
+jq -e '
+  .route_mode == "nando_nginx"
+  and .config_override_scope == "exec"
+  and .config_override_insert_index == 1
+  and .config_override_position_verified == true
+' <<<"${dry_run}" >/dev/null
+
+echo "nando-codex launcher tests: PASS"

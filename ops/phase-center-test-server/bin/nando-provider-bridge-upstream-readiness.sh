@@ -15,11 +15,13 @@ OUT_JSON="${NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_REPORT:-${NANDO_METRICS_DIR
 BOUNDARY_JSONL="${NANDO_PROVIDER_BRIDGE_BOUNDARY_EVENTS_JSONL:-/var/lib/nando-wave/streaming/nando-provider-bridge.provider-boundary-events.jsonl}"
 ALLOW_REAL_CALL="${NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_ALLOW_REAL_CALL:-0}"
 PROMPT="${NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_PROMPT:-ordinary broad prompt}"
+OBSERVED_WINDOW_ROWS="${NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_OBSERVED_WINDOW_ROWS:-1000}"
 
 mkdir -p "$(dirname "${OUT_JSON}")"
 
 body_file="$(mktemp)"
-trap 'rm -f "${body_file}"' EXIT
+observed_file="$(mktemp)"
+trap 'rm -f "${body_file}" "${observed_file}"' EXIT
 
 health_ok=false
 upstream_configured=false
@@ -37,6 +39,35 @@ fi
 boundary_rows_before=0
 if [[ -s "${BOUNDARY_JSONL}" ]]; then
   boundary_rows_before="$(wc -l < "${BOUNDARY_JSONL}" | tr -d ' ')"
+fi
+
+observed_live_upstream_success=false
+observed_live_success_count=0
+observed_live_latest_timestamp=""
+observed_live_latest_path=""
+observed_live_latest_status=0
+observed_live_latest_provider=""
+if [[ -s "${BOUNDARY_JSONL}" ]]; then
+  tail -n "${OBSERVED_WINDOW_ROWS}" "${BOUNDARY_JSONL}" | jq -Rsc '
+    [
+      split("\n")[]
+      | fromjson?
+      | select(
+          .billing_source == "nando_provider_bridge_observed_upstream_response"
+          and ((.status_code // 0) >= 200 and (.status_code // 0) < 300)
+          and ((.path // "") | test("(^|/)(responses|chat/completions)$"))
+        )
+    ]
+    | {count: length, latest: (last // {})}
+  ' > "${observed_file}"
+  observed_live_success_count="$(jq -r '.count // 0' "${observed_file}")"
+  if (( observed_live_success_count > 0 )); then
+    observed_live_upstream_success=true
+    observed_live_latest_timestamp="$(jq -r '.latest.timestamp // ""' "${observed_file}")"
+    observed_live_latest_path="$(jq -r '.latest.path // ""' "${observed_file}")"
+    observed_live_latest_status="$(jq -r '.latest.status_code // 0' "${observed_file}")"
+    observed_live_latest_provider="$(jq -r '.latest.provider // ""' "${observed_file}")"
+  fi
 fi
 
 real_probe_attempted=false
@@ -78,11 +109,14 @@ verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_BRIDGE_HEALTH_MISSING"
 ready_for_broad_provider_traffic=false
 if [[ "${health_ok}" == "true" && "${upstream_configured}" == "false" ]]; then
   verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_CANARY_ONLY_UPSTREAM_UNSET"
-elif [[ "${health_ok}" == "true" && "${upstream_configured}" == "true" && "${ALLOW_REAL_CALL}" != "1" ]]; then
-  verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_UPSTREAM_CONFIGURED_NOT_PROBED"
 elif [[ "${health_ok}" == "true" && "${upstream_configured}" == "true" && "${real_probe_upstream_reached}" == "true" && "${real_probe_boundary_rows_added}" -gt 0 ]]; then
   verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_PASS_UPSTREAM_AND_BOUNDARY_CAPTURE"
   ready_for_broad_provider_traffic=true
+elif [[ "${health_ok}" == "true" && "${upstream_configured}" == "true" && "${observed_live_upstream_success}" == "true" ]]; then
+  verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_PASS_OBSERVED_LIVE_TRAFFIC"
+  ready_for_broad_provider_traffic=true
+elif [[ "${health_ok}" == "true" && "${upstream_configured}" == "true" && "${ALLOW_REAL_CALL}" != "1" ]]; then
+  verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_UPSTREAM_CONFIGURED_NOT_PROBED"
 elif [[ "${health_ok}" == "true" && "${upstream_configured}" == "true" ]]; then
   verdict="NANDO_PROVIDER_BRIDGE_UPSTREAM_READINESS_WATCH_UPSTREAM_PROBE_FAILED"
 fi
@@ -93,6 +127,9 @@ jq -n \
   --arg boundary_jsonl "${BOUNDARY_JSONL}" \
   --arg verdict "${verdict}" \
   --arg real_probe_error_type "${real_probe_error_type}" \
+  --arg observed_live_latest_timestamp "${observed_live_latest_timestamp}" \
+  --arg observed_live_latest_path "${observed_live_latest_path}" \
+  --arg observed_live_latest_provider "${observed_live_latest_provider}" \
   --argjson health_ok "${health_ok}" \
   --argjson health_status "${health_status}" \
   --argjson upstream_configured "${upstream_configured}" \
@@ -104,6 +141,10 @@ jq -n \
   --argjson boundary_rows_before "${boundary_rows_before}" \
   --argjson boundary_rows_after "${real_probe_boundary_rows_after}" \
   --argjson boundary_rows_added "${real_probe_boundary_rows_added}" \
+  --argjson observed_window_rows "${OBSERVED_WINDOW_ROWS}" \
+  --argjson observed_live_upstream_success "${observed_live_upstream_success}" \
+  --argjson observed_live_success_count "${observed_live_success_count}" \
+  --argjson observed_live_latest_status "${observed_live_latest_status}" \
   --argjson ready_for_broad_provider_traffic "${ready_for_broad_provider_traffic}" \
   '{
     report_kind: "nando_provider_bridge_upstream_readiness_v1",
@@ -122,11 +163,18 @@ jq -n \
     boundary_rows_before: $boundary_rows_before,
     boundary_rows_after: $boundary_rows_after,
     boundary_rows_added: $boundary_rows_added,
+    observed_window_rows: $observed_window_rows,
+    observed_live_upstream_success: $observed_live_upstream_success,
+    observed_live_success_count: $observed_live_success_count,
+    observed_live_latest_timestamp: $observed_live_latest_timestamp,
+    observed_live_latest_path: $observed_live_latest_path,
+    observed_live_latest_status: $observed_live_latest_status,
+    observed_live_latest_provider: $observed_live_latest_provider,
     ready_for_broad_provider_traffic: $ready_for_broad_provider_traffic,
     local_accept_enabled: false,
     market_money_claim_allowed: false,
     verdict: $verdict,
-    boundary: "upstream readiness report only: default mode does not call the real provider; optional real probe checks fail-open broad transport and provider-boundary capture without creating money claims"
+    boundary: "upstream transport readiness only: accepts an explicit probe or observed live provider-boundary 2xx; does not prove token savings, billing, response correctness, or money claims"
   }' > "${OUT_JSON}"
 
 echo "${OUT_JSON}"

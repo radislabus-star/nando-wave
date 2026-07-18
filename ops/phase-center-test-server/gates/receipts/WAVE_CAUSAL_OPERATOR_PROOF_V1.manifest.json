@@ -1,0 +1,21 @@
+{
+  "schema": "nando.wave-causal-proof-manifest.v1",
+  "artifact": {
+    "path": "ops/phase-center-test-server/gates/receipts/WAVE_CAUSAL_OPERATOR_PROOF_V1.json",
+    "sha256": "199d45efbf98cf8193911c25b92f4e98a75c0c301ecd657322073be60eb183cc"
+  },
+  "sources": [
+    {
+      "path": "crates/nando-transition-inducer/src/causal_proof.rs",
+      "sha256": "889f8397f9c5d1269118462b01c97a20f473ea383514a3a6a47315c0be550f00"
+    },
+    {
+      "path": "crates/nando-transition-inducer/src/wave.rs",
+      "sha256": "88ff4bc2ad3b3d72f03b47ecddf259751fcbbaab6ea5f9d7ab46634c243176b7"
+    },
+    {
+      "path": "crates/nando-transition-inducer/src/induce.rs",
+      "sha256": "a335df6728297fd5f692653e5314236a671e18d65f8011565534f57c3bbce9cc"
+    }
+  ]
+}

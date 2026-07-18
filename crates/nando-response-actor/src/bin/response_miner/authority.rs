@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use nando_response_actor::{
     GroundedWaveCausalReport, RESPONSE_AUTHORITY_SCHEMA_V2, RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2,
     RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
-    RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1,
-    ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageOrigin,
-    ResponsePackageState, ResponseRegistry, ResponseSupportManifest, canonical_json_sha256,
-    response_actor_program_digest, response_execution_payload_digest,
+    RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponsePackage, ResponsePackageAuthorityBindingV2,
+    ResponsePackageOrigin, ResponsePackageState, ResponseRegistry, ResponseSupportManifest,
+    canonical_json_sha256, response_actor_program_digest, response_execution_payload_digest,
     response_independent_verifier_program_digest, response_package_digest,
     response_proof_receipts_digest, response_registry_digest, response_support_manifest_digest,
 };
@@ -190,6 +190,15 @@ pub(super) fn response_authority_candidate(
                 .to_owned(),
             future_verifier_receipt_set_sha256: canonical_json_sha256(future_receipts)
                 .map_err(str::to_owned)?,
+            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
+            semantic_alias_proof_sha256: canonical_json_sha256(&(
+                RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+                "exact_singleton",
+                package.package_id.as_str(),
+                &package.program,
+                causal,
+            ))
+            .map_err(str::to_owned)?,
             proof_receipts_sha256: String::new(),
         };
         binding.proof_receipts_sha256 =

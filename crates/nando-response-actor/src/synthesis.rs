@@ -29,8 +29,12 @@ pub fn partition_teacher_training_families(
         .iter()
         .filter(|frame| frame.verifier_label != Some(false))
     {
+        let plan_advance = frame
+            .atoms
+            .iter()
+            .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance));
         let hypotheses = ground_roles(frame);
-        if hypotheses.len() != 1 || hypotheses[0].competing_binding_count != 0 {
+        if !plan_advance && (hypotheses.len() != 1 || hypotheses[0].competing_binding_count != 0) {
             continue;
         }
         let Some(teacher_signature) = teacher_program_signature(frame) else {
@@ -181,6 +185,14 @@ pub fn synthesize_response_operator(
     if positive_support.is_empty() {
         return Err(SynthesisError::EmptySupport);
     }
+    if positive_support.iter().any(|frame| {
+        frame
+            .atoms
+            .iter()
+            .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance))
+    }) {
+        return synthesize_plan_advance(&positive_support, &counterexamples);
+    }
     let mut role_hypotheses = Vec::with_capacity(positive_support.len());
     let mut required_atom_indices = BTreeSet::new();
     let mut source_role = None;
@@ -290,6 +302,101 @@ pub fn synthesize_response_operator(
     })
 }
 
+fn synthesize_plan_advance(
+    positive_support: &[RelationFrame],
+    counterexamples: &[&RelationFrame],
+) -> Result<SynthesizedResponseOperator, SynthesisError> {
+    if positive_support.iter().any(|frame| {
+        !frame
+            .atoms
+            .iter()
+            .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance))
+    }) {
+        return Err(SynthesisError::InconsistentRoleFamily);
+    }
+    let observed_function_names = positive_support
+        .iter()
+        .filter_map(|frame| {
+            frame.atoms.iter().find_map(|atom| match atom {
+                RelationAtom::ActionFunction { value } => Some(value.clone()),
+                _ => None,
+            })
+        })
+        .collect::<Vec<_>>();
+    if observed_function_names.len() != positive_support.len() {
+        return Err(SynthesisError::InconsistentRoleFamily);
+    }
+    let function_names = observed_function_names.into_iter().collect::<BTreeSet<_>>();
+    if function_names.len() != 1 || function_names.is_empty() {
+        return Err(SynthesisError::InconsistentRoleFamily);
+    }
+    let function_name = function_names
+        .first()
+        .cloned()
+        .ok_or(SynthesisError::InconsistentRoleFamily)?;
+    let program = ResponseProgram::advance_plan(&function_name);
+    let mut exact_checks = 0_usize;
+    for frame in positive_support {
+        exact_checks = exact_checks.saturating_add(1);
+        if !program_is_consistent(&program, frame) {
+            return Err(SynthesisError::NoConsistentProgram);
+        }
+    }
+    for frame in counterexamples {
+        exact_checks = exact_checks.saturating_add(1);
+        if program_is_consistent(&program, frame) {
+            return Err(SynthesisError::NoConsistentProgram);
+        }
+    }
+
+    let first = positive_support
+        .first()
+        .ok_or(SynthesisError::EmptySupport)?;
+    let required_atom_indices = first
+        .atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(index, atom)| {
+            (matches!(atom, RelationAtom::PlanState { .. })
+                || matches!(atom, RelationAtom::OutputStatus { value } if value == "success"))
+            .then_some(index)
+        })
+        .collect::<Vec<_>>();
+    if required_atom_indices.len() != 2 {
+        return Err(SynthesisError::NoConsistentProgram);
+    }
+    let guard = GuardCandidate {
+        required_atom_indices,
+        forbidden_atom_indices: Vec::new(),
+        require_unique_selector: false,
+        max_evidence_age_ms: 30_000,
+    };
+    let family_material = ("nando.plan-advance-family.v1", &function_name);
+    let family_digest = Sha256::digest(serde_json::to_vec(&family_material).unwrap_or_default());
+    let family_id = u64::from_be_bytes(family_digest[..8].try_into().unwrap_or([0; 8]));
+    let role_hypothesis_id_sha256 = digest_json(&family_material);
+    let candidate_material = serde_json::to_vec(&(&program, &guard, family_id)).unwrap_or_default();
+    let candidate = ResponseProgramCandidate {
+        schema: PROGRAM_CANDIDATE_SCHEMA.to_owned(),
+        candidate_id_sha256: digest_bytes(&candidate_material),
+        role_hypothesis_id_sha256,
+        program: program.clone(),
+        guard,
+        phase_rank: 1,
+        exact_checks: u32::try_from(exact_checks).unwrap_or(u32::MAX),
+        description_length_bytes: candidate_material.len(),
+    };
+    Ok(SynthesizedResponseOperator {
+        candidate,
+        verifier: compile_independent_verifier(&program)?,
+        support_frame_ids: positive_support
+            .iter()
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect(),
+        rejected_ambiguous_frames: 0,
+    })
+}
+
 fn rank_program_candidates_by_phase(
     support: &[RelationFrame],
     mut candidates: Vec<ResponseProgram>,
@@ -340,6 +447,7 @@ fn synthesize_independent_verifier(
         let ResponseOperation::ProjectStatus {
             selector,
             mapping,
+            renderer,
             completion_state,
         } = program.operation
         else {
@@ -348,6 +456,7 @@ fn synthesize_independent_verifier(
         return Ok(VerifierProgram::ProjectStatus {
             selector,
             mapping,
+            renderer,
             completion_state,
             require_unique_value: true,
         });
@@ -536,6 +645,27 @@ pub(crate) fn compile_independent_verifier(
     program: &ResponseProgram,
 ) -> Result<VerifierProgram, SynthesisError> {
     match &program.operation {
+        ResponseOperation::UniqueConsensus {
+            variants,
+            adapter_wave,
+        } => Ok(VerifierProgram::UniqueConsensus {
+            variants: variants
+                .iter()
+                .map(|variant| {
+                    Ok(crate::VerifierConsensusVariant {
+                        verifier: compile_independent_verifier(&variant.program)?,
+                        allowed_layout_sha256: variant.allowed_layout_sha256.clone(),
+                        required_request_atom_ids: variant.required_request_atom_ids.clone(),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            adapter_wave: adapter_wave.clone(),
+        }),
+        ResponseOperation::AdvancePlan { function_name } => Ok(VerifierProgram::AdvancePlan {
+            function_name: function_name.clone(),
+            require_explicit_tool_success: true,
+            require_canonical_plan: true,
+        }),
         ResponseOperation::FunctionCallFromRoles {
             function_name,
             selector,
@@ -617,10 +747,12 @@ pub(crate) fn compile_independent_verifier(
         ResponseOperation::ProjectStatus {
             selector,
             mapping,
+            renderer,
             completion_state,
         } => Ok(VerifierProgram::ProjectStatus {
             selector: selector.clone(),
             mapping: *mapping,
+            renderer: renderer.clone(),
             completion_state: completion_state.clone(),
             require_unique_value: true,
         }),
@@ -650,6 +782,31 @@ pub(crate) fn compile_independent_verifier(
 pub(crate) fn enumerate_response_program_candidates(
     support: &[RelationFrame],
 ) -> Vec<ResponseProgram> {
+    let plan_rows = support
+        .iter()
+        .filter(|frame| {
+            frame
+                .atoms
+                .iter()
+                .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance))
+        })
+        .count();
+    if plan_rows > 0 {
+        if plan_rows != support.len() {
+            return Vec::new();
+        }
+        return support
+            .iter()
+            .flat_map(|frame| frame.atoms.iter())
+            .filter_map(|atom| match atom {
+                RelationAtom::ActionFunction { value } => Some(value.clone()),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(ResponseProgram::advance_plan)
+            .collect();
+    }
     let Some(source_role) = support
         .first()
         .and_then(|frame| ground_roles(frame).into_iter().next())
@@ -1141,6 +1298,15 @@ fn consistent_observation_selector(
 
 pub(crate) fn program_is_consistent(program: &ResponseProgram, frame: &RelationFrame) -> bool {
     match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => variants
+            .iter()
+            .any(|variant| program_is_consistent(&variant.program, frame)),
+        ResponseOperation::AdvancePlan { function_name } => frame.atoms.iter().any(
+            |atom| matches!(atom, RelationAtom::ActionFunction { value } if value == function_name),
+        ) && frame
+            .atoms
+            .iter()
+            .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance)),
         ResponseOperation::ComposeCollection { .. } => false,
         ResponseOperation::FunctionCallFromRoles {
             function_name,
@@ -1319,6 +1485,7 @@ pub(crate) fn program_is_consistent(program: &ResponseProgram, frame: &RelationF
             selector,
             mapping,
             completion_state,
+            ..
         } => status_projection_frame_matches(frame, selector, *mapping, completion_state),
         ResponseOperation::CopyAfterPrefix { .. }
         | ResponseOperation::TestResultSummary { .. }
@@ -1337,6 +1504,16 @@ pub(crate) fn program_runtime_applicable(
 ) -> bool {
     let runtime = crate::RuntimeFrame::from_completed(completed).as_routing_relation_frame();
     match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => variants
+            .iter()
+            .any(|variant| program_runtime_applicable(&variant.program, completed)),
+        ResponseOperation::AdvancePlan { .. } => runtime
+            .atoms
+            .iter()
+            .any(|atom| matches!(atom, RelationAtom::PlanState { .. }))
+            && runtime.atoms.iter().any(
+                |atom| matches!(atom, RelationAtom::OutputStatus { value } if value == "success"),
+            ),
         ResponseOperation::FunctionCallFromRoles {
             selector,
             arguments,
@@ -1531,7 +1708,14 @@ const fn selector_value_type(selector: &crate::ResponseValueSelector) -> crate::
         | crate::ResponseValueSelector::JsonScalarOrdinal { value_type, .. }
         | crate::ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | crate::ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
-        | crate::ResponseValueSelector::TurnOutputLine { value_type, .. } => *value_type,
+        | crate::ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | crate::ResponseValueSelector::TurnOutputLine { value_type, .. }
+        | crate::ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
+        | crate::ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
+        | crate::ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. }
+        | crate::ResponseValueSelector::LatestTurnOutputScalarFromEnd { value_type, .. } => {
+            *value_type
+        }
         crate::ResponseValueSelector::CommandOutputBody
         | crate::ResponseValueSelector::RequestLastToken
         | crate::ResponseValueSelector::RequestUniqueLiteral => crate::AtomValueType::String,
@@ -1789,6 +1973,7 @@ pub fn verify_operator_structure(
     if let VerifierProgram::ProjectStatus {
         selector,
         mapping,
+        renderer,
         completion_state,
         require_unique_value,
     } = &operator.verifier
@@ -1796,6 +1981,7 @@ pub fn verify_operator_structure(
         let ResponseOperation::ProjectStatus {
             selector: program_selector,
             mapping: program_mapping,
+            renderer: program_renderer,
             completion_state: program_completion,
         } = &operator.candidate.program.operation
         else {
@@ -1804,6 +1990,7 @@ pub fn verify_operator_structure(
         return *require_unique_value
             && selector == program_selector
             && mapping == program_mapping
+            && renderer == program_renderer
             && completion_state == program_completion
             && status_projection_frame_matches(frame, selector, *mapping, completion_state);
     }
@@ -1839,6 +2026,24 @@ pub fn verify_operator_structure(
     }
     let (require_observation_action_equality, require_pending_state, require_unique_handle) =
         match &operator.verifier {
+            VerifierProgram::UniqueConsensus { .. } => return false,
+            VerifierProgram::AdvancePlan {
+                function_name,
+                require_explicit_tool_success,
+                require_canonical_plan,
+            } => {
+                return *require_explicit_tool_success
+                    && *require_canonical_plan
+                    && matches!(
+                        &operator.candidate.program.operation,
+                        ResponseOperation::AdvancePlan { function_name: program_name }
+                            if program_name == function_name
+                    )
+                    && frame
+                        .atoms
+                        .iter()
+                        .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance));
+            }
             VerifierProgram::FunctionCallFromRoles {
                 require_pending_state,
                 require_unique_handle,
@@ -2082,6 +2287,89 @@ mod tests {
         }
     }
 
+    fn plan_advance_frame() -> RelationFrame {
+        RelationFrame {
+            schema: RELATION_FRAME_SCHEMA.to_owned(),
+            frame_id_sha256: "e".repeat(64),
+            event_id_sha256: "f".repeat(64),
+            client_intent_id_sha256: "1".repeat(64),
+            session_id_sha256: "2".repeat(64),
+            observed_at_unix_nanos: 3,
+            extractor_version: SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+            verifier_label: Some(true),
+            estimated_input_tokens: 500,
+            atoms: vec![
+                RelationAtom::ToolKind {
+                    value: "exec_command".to_owned(),
+                },
+                RelationAtom::CompletionState {
+                    value: "completed".to_owned(),
+                },
+                RelationAtom::OutputStatus {
+                    value: "success".to_owned(),
+                },
+                RelationAtom::PlanState {
+                    step_count: 3,
+                    completed_count: 0,
+                    active_index: 0,
+                },
+                RelationAtom::ActionFunction {
+                    value: "update_plan".to_owned(),
+                },
+                RelationAtom::ActionPlanAdvance,
+            ],
+            evidence_ref_sha256: "3".repeat(64),
+        }
+    }
+
+    #[test]
+    fn plan_advance_bypasses_scalar_grounding_and_synthesizes_typed_operator() {
+        let frame = plan_advance_frame();
+        let runtime = crate::RuntimeFrame::from_completed(&frame);
+        assert!(!runtime.contains_teacher_atoms());
+        assert!(
+            !runtime
+                .atoms
+                .iter()
+                .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance))
+        );
+        assert!(
+            runtime
+                .atoms
+                .iter()
+                .any(|atom| matches!(atom, RelationAtom::PlanState { .. }))
+        );
+        assert_eq!(
+            partition_teacher_training_families(std::slice::from_ref(&frame)).len(),
+            1
+        );
+        let version_space = enumerate_response_program_candidates(std::slice::from_ref(&frame));
+        assert_eq!(version_space.len(), 1);
+        assert!(matches!(
+            version_space[0].operation,
+            ResponseOperation::AdvancePlan { .. }
+        ));
+        let operator = synthesize_response_operator(std::slice::from_ref(&frame))
+            .expect("plan advance synthesis");
+        assert!(matches!(
+            &operator.candidate.program.operation,
+            ResponseOperation::AdvancePlan { function_name } if function_name == "update_plan"
+        ));
+        assert!(matches!(
+            &operator.verifier,
+            VerifierProgram::AdvancePlan {
+                function_name,
+                require_explicit_tool_success: true,
+                require_canonical_plan: true,
+            } if function_name == "update_plan"
+        ));
+        assert_eq!(operator.candidate.guard.required_atom_indices.len(), 2);
+        assert_eq!(
+            response_program_required_routing_atom_ids(&operator.candidate.program).len(),
+            3
+        );
+    }
+
     #[test]
     fn value_projection_synthesis_preserves_observed_completion_state() {
         let frame = pending_projection_frame();
@@ -2133,6 +2421,7 @@ mod tests {
                 selector,
                 mapping: ProjectStatusMapping::ZeroIsSuccess,
                 completion_state,
+                ..
             } if selector == &expected_selector && completion_state == "completed"
         ));
         assert!(matches!(
@@ -2142,6 +2431,7 @@ mod tests {
                 mapping: ProjectStatusMapping::ZeroIsSuccess,
                 completion_state,
                 require_unique_value: true,
+                ..
             } if selector == &expected_selector && completion_state == "completed"
         ));
         assert!(verify_operator_structure(&frame, &operator));

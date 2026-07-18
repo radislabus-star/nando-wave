@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -6,13 +6,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 
+use memchr::memchr_iter;
 use nando_response_actor::{
     AtomSource, AtomValueType, CanonicalEventGraph, CollectionOutputRenderer, CompletedTurnExample,
     DeterministicEvidenceGraphStore, DeterministicEvidenceLedger, EvidenceGraphBuilder,
-    EvidenceGraphPolicy, EvidenceIngestOutcome, OnlineCollectionMiner, OnlineCollectionObservation,
-    RELATION_FRAME_SCHEMA, RawEvidenceEnvelope, RelationAtom, RelationFrame, ResponseValueSelector,
+    EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, OnlineCollectionMiner,
+    OnlineCollectionObservation, RELATION_FRAME_SCHEMA, RawEvidenceEnvelope, RelationAtom,
+    RelationFrame, ResponseExecutionStatus, ResponseProgram, ResponseValueSelector,
     RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION, TurnCompletionReason,
-    ValueProjectionFormat, provider_tool_capability_atom_ids, sha256_bytes,
+    ValueProjectionFormat, VerifierProgram, evidence_session_id_sha256, execute_response,
+    provider_tool_capability_atom_ids, sha256_bytes, teacher_action_symbol,
+    teacher_program_signature, teacher_program_signature_from_action_atoms,
+    verify_response_independently,
 };
 use notify::event::ModifyKind;
 use notify::{EventKind, RecursiveMode, Watcher};
@@ -21,7 +26,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::miner_worker::MinerWorkerHandle;
-use crate::stream_evidence::SessionEvidenceLedger;
+use crate::stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
 
 const MAX_OBSERVATIONS: usize = 32;
 const MAX_TURN_EVIDENCE_EVENTS: usize = 64;
@@ -64,6 +69,29 @@ trait SessionMinerSink: Send + Sync {
         runtime_parity_case: Option<RuntimeParityCase>,
     ) -> Result<(), String>;
     fn submit_collection(&self, observation: OnlineCollectionObservation) -> Result<(), String>;
+}
+
+#[derive(Default)]
+struct CollectionObservationCollector {
+    observations: Mutex<Vec<OnlineCollectionObservation>>,
+}
+
+impl SessionMinerSink for CollectionObservationCollector {
+    fn submit_frame_with_parity(
+        &self,
+        _frame: RelationFrame,
+        _runtime_parity_case: Option<RuntimeParityCase>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn submit_collection(&self, observation: OnlineCollectionObservation) -> Result<(), String> {
+        self.observations
+            .lock()
+            .map_err(|_| "collection_observation_collector_poisoned".to_owned())?
+            .push(observation);
+        Ok(())
+    }
 }
 
 impl SessionMinerSink for MinerWorkerHandle {
@@ -300,6 +328,7 @@ struct SessionState {
     collection_expected_response: Option<String>,
     collection_completion_reason: Option<TurnCompletionReason>,
     runtime_provider_payload: Option<Value>,
+    latest_plan_call_item: Option<Value>,
     request_phase_atom_ids: Vec<u64>,
     capability_atom_ids: Vec<u64>,
     turn_client_intent_id_sha256: String,
@@ -434,6 +463,14 @@ fn training_cases_from_session_at(
     path: &Path,
     start_offset: u64,
 ) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
+    training_cases_from_session_range(path, start_offset, None)
+}
+
+fn training_cases_from_session_range(
+    path: &Path,
+    start_offset: u64,
+    max_bytes: Option<u64>,
+) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
     let file = File::open(path).map_err(|error| format!("session_backfill_open:{error}"))?;
     let mut reader = BufReader::new(file);
     if start_offset > 0 {
@@ -452,11 +489,15 @@ fn training_cases_from_session_at(
     };
     let mut emitted = Vec::new();
     let mut line = String::new();
+    let end_offset = max_bytes.map(|bytes| start_offset.saturating_add(bytes));
     loop {
         line.clear();
         let position = reader
             .stream_position()
             .map_err(|error| format!("session_backfill_position:{error}"))?;
+        if end_offset.is_some_and(|end| position >= end) {
+            break;
+        }
         let bytes = reader
             .read_line(&mut line)
             .map_err(|error| format!("session_backfill_read:{error}"))?;
@@ -487,6 +528,88 @@ pub fn verified_relation_frames_from_session(path: &Path) -> Result<Vec<Relation
     relation_frames_from_session(path)
 }
 
+pub fn verified_training_cases_from_session(
+    path: &Path,
+) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
+    training_cases_from_session_at(path, 0)
+}
+
+pub fn verified_collection_observations_from_session(
+    path: &Path,
+) -> Result<Vec<OnlineCollectionObservation>, String> {
+    let scratch = std::env::temp_dir().join(format!(
+        "nando-collection-rehydrate-{}-{}",
+        std::process::id(),
+        sha256_bytes(path.to_string_lossy().as_bytes())
+    ));
+    let _ = fs::remove_dir_all(&scratch);
+    let result = (|| {
+        let evidence = Arc::new(Mutex::new(StreamingEvidenceLedger::open(
+            &scratch,
+            EvidencePolicyV1::streaming_bounded(),
+        )?));
+        let collector = CollectionObservationCollector::default();
+        let metrics = Arc::new(SessionStreamMetrics::default());
+        let capabilities = Arc::new(RequestCapabilityIndex::default());
+        let mut state = SessionState {
+            session_id: path.to_string_lossy().into_owned(),
+            session_id_sha256: sha256_bytes(path.to_string_lossy().as_bytes()),
+            ..SessionState::default()
+        };
+        read_appended_frames(
+            path,
+            &mut state,
+            SessionReadContext {
+                evidence: &evidence,
+                evidence_graphs: None,
+                miner: Some(&collector),
+                direct_collection_miner: None,
+                metrics: &metrics,
+                capabilities: &capabilities,
+            },
+        )?;
+        collector
+            .observations
+            .into_inner()
+            .map_err(|_| "collection_observation_collector_poisoned".to_owned())
+    })();
+    let _ = fs::remove_dir_all(&scratch);
+    result
+}
+
+pub fn verified_session_identity_sha256_candidates(
+    path: &Path,
+) -> Result<BTreeSet<String>, String> {
+    const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
+
+    let path_identity = path.to_string_lossy();
+    let mut identities = BTreeSet::from([
+        evidence_session_id_sha256(&path_identity),
+        sha256_bytes(path_identity.as_bytes()),
+    ]);
+    let file = File::open(path).map_err(|error| format!("session_meta_open:{error}"))?;
+    let mut reader = BufReader::new(file).take(MAX_SESSION_META_BYTES);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let bytes = reader
+            .read_until(b'\n', &mut line)
+            .map_err(|error| format!("session_meta_read:{error}"))?;
+        if bytes == 0 {
+            break;
+        }
+        if contains_bytes(&line, b"\"type\":\"session_meta\"")
+            && let Ok(row) = serde_json::from_slice::<Value>(&line)
+            && let Some(id) = session_id_from_meta(&row)
+        {
+            identities.insert(evidence_session_id_sha256(id));
+            identities.insert(sha256_bytes(id.as_bytes()));
+            break;
+        }
+    }
+    Ok(identities)
+}
+
 pub fn verified_relation_frames_from_session_tail(
     path: &Path,
     max_bytes: u64,
@@ -505,6 +628,364 @@ pub fn verified_training_cases_from_session_tail(
         .map_err(|error| format!("session_backfill_metadata:{error}"))?
         .len();
     training_cases_from_session_at(path, length.saturating_sub(max_bytes))
+}
+
+pub fn verified_training_cases_from_session_head(
+    path: &Path,
+    max_bytes: u64,
+) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
+    training_cases_from_session_range(path, 0, Some(max_bytes))
+}
+
+pub fn verified_write_stdin_training_cases_from_session(
+    path: &Path,
+) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
+    verified_write_stdin_training_cases_from_session_matching(path, None)
+}
+
+pub fn verified_write_stdin_training_cases_from_session_for_signatures(
+    path: &Path,
+    target_signatures: &BTreeSet<String>,
+) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
+    verified_write_stdin_training_cases_from_session_matching(path, Some(target_signatures))
+}
+
+fn verified_write_stdin_training_cases_from_session_matching(
+    path: &Path,
+    target_signatures: Option<&BTreeSet<String>>,
+) -> Result<Vec<(RelationFrame, Option<RuntimeParityCase>)>, String> {
+    const CONTEXT_ROWS: usize = 64;
+    const CONTEXT_BYTES: usize = 2 * 1024 * 1024;
+    const ACTIVE_ROWS: usize = 128;
+    const ACTIVE_BYTES: usize = 4 * 1024 * 1024;
+    const MAX_CASES_PER_SIGNATURE: usize = 64;
+
+    let mut recent = VecDeque::<(u64, Vec<u8>)>::new();
+    let mut recent_bytes = 0_usize;
+    let mut active = None::<Vec<(u64, Vec<u8>)>>;
+    let mut active_bytes = 0_usize;
+    let mut session_id_sha256 = sha256_bytes(path.to_string_lossy().as_bytes());
+    let mut output = BTreeMap::<String, (RelationFrame, Option<RuntimeParityCase>)>::new();
+    let mut selected_by_signature = BTreeMap::<String, usize>::new();
+    visit_complete_lines(path, |position, line| {
+        let prefix = &line[..line.len().min(2 * 1024)];
+        let session_meta = contains_bytes(prefix, b"\"type\":\"session_meta\"");
+        let turn_context = contains_bytes(prefix, b"\"type\":\"turn_context\"");
+        let user_message = contains_bytes(prefix, b"\"type\":\"user_message\"");
+        let function_call = contains_bytes(prefix, b"\"type\":\"function_call\"");
+        let function_call_output = contains_bytes(prefix, b"\"type\":\"function_call_output\"");
+        let custom_tool_call = contains_bytes(prefix, b"\"type\":\"custom_tool_call\"");
+        let custom_tool_call_output =
+            contains_bytes(prefix, b"\"type\":\"custom_tool_call_output\"");
+        let token_count = contains_bytes(prefix, b"\"type\":\"token_count\"");
+        let task_started = contains_bytes(prefix, b"\"type\":\"task_started\"");
+        let task_complete = contains_bytes(prefix, b"\"type\":\"task_complete\"");
+        if session_meta
+            && let Ok(row) = serde_json::from_slice::<Value>(&line)
+            && let Some(id) = row
+                .get("payload")
+                .and_then(|payload| payload.get("id"))
+                .and_then(Value::as_str)
+        {
+            session_id_sha256 = sha256_bytes(id.as_bytes());
+        }
+        let turn_start = turn_context || user_message;
+        if turn_start {
+            if let Some(rows) = active.take() {
+                append_write_stdin_window(
+                    path,
+                    &session_id_sha256,
+                    rows,
+                    target_signatures,
+                    MAX_CASES_PER_SIGNATURE,
+                    &mut selected_by_signature,
+                    &mut output,
+                )?;
+                active_bytes = 0;
+            }
+            recent.clear();
+            recent_bytes = 0;
+        }
+        let relevant = session_meta
+            || turn_context
+            || user_message
+            || function_call
+            || function_call_output
+            || custom_tool_call
+            || custom_tool_call_output
+            || token_count
+            || task_started
+            || task_complete;
+        let is_write_stdin_call = if (function_call || custom_tool_call)
+            && contains_bytes(&line, b"write_stdin")
+        {
+            let signatures = write_stdin_call_signatures(&line);
+            !signatures.is_empty()
+                && target_signatures
+                    .is_none_or(|targets| signatures.iter().any(|value| targets.contains(value)))
+        } else {
+            false
+        };
+        if is_write_stdin_call && active.is_none() {
+            active_bytes = recent_bytes;
+            active = Some(recent.iter().cloned().collect());
+        }
+        if relevant {
+            let line = line.to_vec();
+            if let Some(rows) = active.as_mut() {
+                active_bytes = active_bytes.saturating_add(line.len());
+                rows.push((position, line.clone()));
+            }
+            recent_bytes = recent_bytes.saturating_add(line.len());
+            recent.push_back((position, line.clone()));
+            while recent.len() > CONTEXT_ROWS || recent_bytes > CONTEXT_BYTES {
+                let Some(removed) = recent.pop_front() else {
+                    break;
+                };
+                recent_bytes = recent_bytes.saturating_sub(removed.1.len());
+            }
+        }
+        if active.as_ref().is_some_and(|rows| {
+            token_count || rows.len() >= ACTIVE_ROWS || active_bytes >= ACTIVE_BYTES
+        }) && let Some(rows) = active.take()
+        {
+            append_write_stdin_window(
+                path,
+                &session_id_sha256,
+                rows,
+                target_signatures,
+                MAX_CASES_PER_SIGNATURE,
+                &mut selected_by_signature,
+                &mut output,
+            )?;
+            active_bytes = 0;
+        }
+        let evidence_complete = target_signatures.map_or_else(
+            || output.len() >= MAX_CASES_PER_SIGNATURE,
+            |targets| {
+                !targets.is_empty()
+                    && targets.iter().all(|signature| {
+                        selected_by_signature.get(signature).copied().unwrap_or(0)
+                            >= MAX_CASES_PER_SIGNATURE
+                    })
+            },
+        );
+        Ok(!evidence_complete)
+    })?;
+    if let Some(rows) = active {
+        append_write_stdin_window(
+            path,
+            &session_id_sha256,
+            rows,
+            target_signatures,
+            MAX_CASES_PER_SIGNATURE,
+            &mut selected_by_signature,
+            &mut output,
+        )?;
+    }
+    Ok(output.into_values().collect())
+}
+
+fn visit_complete_lines(
+    path: &Path,
+    mut visit: impl FnMut(u64, &[u8]) -> Result<bool, String>,
+) -> Result<(), String> {
+    const BUFFER_BYTES: usize = 8 * 1024 * 1024;
+
+    let file = File::open(path).map_err(|error| format!("session_sparse_open:{error}"))?;
+    let mut reader = BufReader::with_capacity(BUFFER_BYTES, file);
+    let mut absolute_offset = 0_u64;
+    let mut partial = Vec::new();
+    let mut partial_offset = 0_u64;
+    loop {
+        let consumed = {
+            let buffer = reader
+                .fill_buf()
+                .map_err(|error| format!("session_sparse_read:{error}"))?;
+            if buffer.is_empty() {
+                break;
+            }
+            let mut line_start = 0_usize;
+            for newline in memchr_iter(b'\n', buffer) {
+                let line_end = newline.saturating_add(1);
+                let keep_scanning = if partial.is_empty() {
+                    visit(
+                        absolute_offset.saturating_add(line_start as u64),
+                        &buffer[line_start..line_end],
+                    )?
+                } else {
+                    partial.extend_from_slice(&buffer[line_start..line_end]);
+                    let keep_scanning = visit(partial_offset, &partial)?;
+                    partial.clear();
+                    keep_scanning
+                };
+                if !keep_scanning {
+                    return Ok(());
+                }
+                line_start = line_end;
+            }
+            if line_start < buffer.len() {
+                if partial.is_empty() {
+                    partial_offset = absolute_offset.saturating_add(line_start as u64);
+                }
+                partial.extend_from_slice(&buffer[line_start..]);
+            }
+            buffer.len()
+        };
+        reader.consume(consumed);
+        absolute_offset = absolute_offset.saturating_add(consumed as u64);
+    }
+    Ok(())
+}
+
+fn append_write_stdin_window(
+    path: &Path,
+    session_id_sha256: &str,
+    rows: Vec<(u64, Vec<u8>)>,
+    target_signatures: Option<&BTreeSet<String>>,
+    cases_per_signature: usize,
+    selected_by_signature: &mut BTreeMap<String, usize>,
+    output: &mut BTreeMap<String, (RelationFrame, Option<RuntimeParityCase>)>,
+) -> Result<(), String> {
+    let mut state = SessionState {
+        session_id: path.to_string_lossy().into_owned(),
+        session_id_sha256: session_id_sha256.to_owned(),
+        ..SessionState::default()
+    };
+    let mut emitted = Vec::new();
+    for (offset, raw) in rows {
+        let Ok(row) = serde_json::from_slice::<Value>(&raw) else {
+            continue;
+        };
+        state.offset = offset;
+        observe_row(&row, &mut state, &mut emitted);
+    }
+    flush_pending(&mut state, 0, &mut emitted);
+    let mut parity_cases = state.runtime_parity_cases;
+    for frame in emitted {
+        if matches!(
+            teacher_action_symbol(&frame).as_str(),
+            "function:write_stdin" | "custom_tool:exec/write_stdin"
+        ) {
+            let Some(signature) = teacher_program_signature(&frame) else {
+                continue;
+            };
+            if target_signatures.is_some_and(|targets| !targets.contains(&signature))
+                || selected_by_signature.get(&signature).copied().unwrap_or(0)
+                    >= cases_per_signature
+            {
+                continue;
+            }
+            let parity = parity_cases.remove(&frame.frame_id_sha256);
+            *selected_by_signature.entry(signature).or_default() += 1;
+            output.insert(frame.frame_id_sha256.clone(), (frame, parity));
+        }
+    }
+    Ok(())
+}
+
+fn write_stdin_call_signatures(line: &[u8]) -> BTreeSet<String> {
+    let mut output = BTreeSet::new();
+    let Ok(row) = serde_json::from_slice::<Value>(line) else {
+        return output;
+    };
+    if row.get("type").and_then(Value::as_str) != Some("response_item") {
+        return output;
+    }
+    let Some(payload) = row.get("payload").and_then(Value::as_object) else {
+        return output;
+    };
+    let Some(outer_name) = payload.get("name").and_then(Value::as_str) else {
+        return output;
+    };
+    let (action_name, arguments, transport_atoms) =
+        match payload.get("type").and_then(Value::as_str) {
+            Some("function_call") if outer_name == "write_stdin" => {
+                let Some(arguments) = direct_call_arguments(payload) else {
+                    return output;
+                };
+                (
+                    outer_name.to_owned(),
+                    arguments,
+                    vec![RelationAtom::ActionFunction {
+                        value: outer_name.to_owned(),
+                    }],
+                )
+            }
+            Some("custom_tool_call") => {
+                let Some(custom) = payload
+                    .get("input")
+                    .or_else(|| payload.get("arguments"))
+                    .and_then(Value::as_str)
+                    .and_then(parse_custom_tool_source)
+                else {
+                    return output;
+                };
+                if custom.inner_tool_name != "write_stdin" {
+                    return output;
+                }
+                let atoms = vec![
+                    RelationAtom::ActionCustomTool {
+                        value: outer_name.to_owned(),
+                    },
+                    RelationAtom::ActionInnerTool {
+                        value: custom.inner_tool_name.clone(),
+                    },
+                    custom.projection.clone(),
+                ];
+                (custom.inner_tool_name, custom.arguments, atoms)
+            }
+            _ => return output,
+        };
+    if action_name != "write_stdin" {
+        return output;
+    }
+    for (role_name, role_value) in &arguments {
+        let Some(role_type) = action_argument_value_type(role_value) else {
+            continue;
+        };
+        let mut atoms = transport_atoms.clone();
+        atoms.push(RelationAtom::ActionRoleArgument {
+            name: role_name.clone(),
+            slot_id: 0,
+            value_type: Some(role_type),
+        });
+        for (name, value) in &arguments {
+            if name == role_name {
+                continue;
+            }
+            let atom = match value {
+                Value::Number(number) => {
+                    number
+                        .as_u64()
+                        .map(|value| RelationAtom::ActionIntegerArgument {
+                            name: name.clone(),
+                            value,
+                        })
+                }
+                Value::String(value) => Some(RelationAtom::ActionStringArgument {
+                    name: name.clone(),
+                    value: value.clone(),
+                }),
+                Value::Bool(value) => Some(RelationAtom::ActionBooleanArgument {
+                    name: name.clone(),
+                    value: *value,
+                }),
+                _ => None,
+            };
+            if let Some(atom) = atom {
+                atoms.push(atom);
+            }
+        }
+        if let Some(signature) = teacher_program_signature_from_action_atoms(&atoms) {
+            output.insert(signature);
+        }
+    }
+    output
+}
+
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    memchr::memmem::find(haystack, needle).is_some()
 }
 
 fn session_files(root: &Path) -> Vec<PathBuf> {
@@ -1009,6 +1490,7 @@ fn reset_turn(state: &mut SessionState) {
     state.collection_expected_response = None;
     state.collection_completion_reason = None;
     state.runtime_provider_payload = None;
+    state.latest_plan_call_item = None;
     state.request_phase_atom_ids.clear();
     state.capability_atom_ids.clear();
     state.turn_client_intent_id_sha256.clear();
@@ -1042,6 +1524,17 @@ fn remember_call(payload: &serde_json::Map<String, Value>, shape: &str, state: &
             shape: shape.to_owned(),
         },
     );
+    if shape == "function_call"
+        && let Some(arguments) = direct_call_arguments(payload)
+        && is_plan_arguments(&arguments)
+    {
+        state.latest_plan_call_item = Some(serde_json::json!({
+            "type": "function_call",
+            "name": name,
+            "call_id": call_id,
+            "arguments": Value::Object(arguments),
+        }));
+    }
     state.call_count = state.call_count.saturating_add(1);
 }
 
@@ -1062,6 +1555,7 @@ fn remember_output(payload: &serde_json::Map<String, Value>, state: &mut Session
     };
     state.runtime_provider_payload = immediate_runtime_provider_payload(
         state.collection_request_item.as_ref(),
+        state.latest_plan_call_item.as_ref(),
         call_id,
         &call,
         output,
@@ -1123,50 +1617,68 @@ fn collection_provider_payload(output: &Value) -> Option<Value> {
 }
 
 fn bounded_session_output_text(output: &Value) -> Option<String> {
-    match output {
-        Value::String(text) if !text.is_empty() && text.len() <= 65_536 => Some(text.clone()),
-        Value::Array(parts) if !parts.is_empty() && parts.len() <= 64 => {
-            let mut text = String::new();
-            for part in parts {
-                if !matches!(
-                    part.get("type").and_then(Value::as_str),
-                    Some("text" | "input_text" | "output_text")
-                ) {
-                    return None;
-                }
-                let part = part.get("text").and_then(Value::as_str)?;
-                let next_len = text
-                    .len()
-                    .checked_add(part.len() + usize::from(!text.is_empty()))?;
-                if part.is_empty() || next_len > 65_536 {
-                    return None;
-                }
-                if !text.is_empty() {
-                    text.push('\n');
-                }
-                text.push_str(part);
-            }
-            Some(text)
+    let parts = bounded_session_output_text_parts(output)?;
+    let mut text = String::new();
+    for part in parts {
+        let next_len = text
+            .len()
+            .checked_add(part.len() + usize::from(!text.is_empty()))?;
+        if next_len > 65_536 {
+            return None;
         }
-        _ => None,
+        if !text.is_empty() && !part.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(part);
     }
+    (!text.is_empty()).then_some(text)
+}
+
+fn bounded_session_output_text_parts(output: &Value) -> Option<Vec<&str>> {
+    if let Some(text) = output.as_str() {
+        return (!text.is_empty() && text.len() <= 65_536).then_some(vec![text]);
+    }
+    let parts = output.as_array()?;
+    if parts.is_empty() || parts.len() > 64 {
+        return None;
+    }
+    let mut texts = Vec::with_capacity(parts.len());
+    let mut total_bytes = 0_usize;
+    for part in parts {
+        if !matches!(
+            part.get("type").and_then(Value::as_str),
+            Some("text" | "input_text" | "output_text")
+        ) {
+            return None;
+        }
+        let text = part.get("text").and_then(Value::as_str)?;
+        total_bytes = total_bytes.checked_add(text.len())?;
+        texts.push(text);
+    }
+    (total_bytes > 0 && total_bytes <= 65_536).then_some(texts)
 }
 
 fn immediate_runtime_provider_payload(
     request: Option<&Value>,
+    latest_plan_call: Option<&Value>,
     call_id: &str,
     call: &CallShape,
     output: &Value,
 ) -> Option<Value> {
-    bounded_session_output_text(output)?;
+    serde_json::to_vec(output)
+        .ok()
+        .filter(|bytes| !bytes.is_empty() && bytes.len() <= 65_536)?;
     let output_type = match call.shape.as_str() {
         "function_call" => "function_call_output",
         "custom_tool_call" => "custom_tool_call_output",
         _ => return None,
     };
-    let mut input = Vec::with_capacity(3);
+    let mut input = Vec::with_capacity(4);
     if let Some(request) = request {
         input.push(request.clone());
+    }
+    if let Some(plan) = latest_plan_call {
+        input.push(plan.clone());
     }
     input.push(serde_json::json!({
         "type": call.shape,
@@ -1208,9 +1720,10 @@ fn mark_completed_turn_if_settled(state: &mut SessionState) {
 }
 
 fn scalar_observations(output: &Value, call: &CallShape, output_sha256: &str) -> Vec<Observation> {
-    let Some(text) = bounded_session_output_text(output) else {
+    let Some(parts) = bounded_session_output_text_parts(output) else {
         return Vec::new();
     };
+    let text = parts.join("\n");
     let trimmed = text.trim();
     let completion_state = if text.lines().any(|line| {
         line.starts_with("Script running with cell ID ")
@@ -1240,30 +1753,29 @@ fn scalar_observations(output: &Value, call: &CallShape, output_sha256: &str) ->
             ));
         }
     }
-    let parsed = serde_json::from_str::<Value>(trimmed)
-        .unwrap_or_else(|_| Value::String(trimmed.to_owned()));
-    if let Some(object) = parsed.as_object() {
-        for (field, value) in object {
-            if let Some(value_type) = scalar_type(value) {
-                values.push((
-                    value.clone(),
-                    value_type,
-                    ResponseValueSelector::JsonField {
-                        field: field.clone(),
-                        value_type,
-                    },
-                ));
-            }
+    for part in parts {
+        for object in session_embedded_json_objects(part) {
+            collect_session_json_scalars(&Value::Object(object), 0, &mut values);
         }
-    } else if values.is_empty()
-        && let Some(value_type) = scalar_type(&parsed)
-    {
-        values.push((
-            parsed.clone(),
-            value_type,
-            ResponseValueSelector::UniqueScalar { value_type },
-        ));
     }
+    if values.is_empty() {
+        let parsed = serde_json::from_str::<Value>(trimmed)
+            .unwrap_or_else(|_| Value::String(trimmed.to_owned()));
+        if let Some(value_type) = scalar_type(&parsed) {
+            values.push((
+                parsed,
+                value_type,
+                ResponseValueSelector::UniqueScalar { value_type },
+            ));
+        }
+    }
+    values.sort_by_cached_key(|(value, _, selector)| {
+        (
+            serde_json::to_string(selector).unwrap_or_default(),
+            hash_value(value),
+        )
+    });
+    values.dedup_by(|left, right| left.0 == right.0 && left.2 == right.2);
     values
         .into_iter()
         .map(|(value, value_type, selector)| Observation {
@@ -1276,6 +1788,98 @@ fn scalar_observations(output: &Value, call: &CallShape, output_sha256: &str) ->
             completion_state,
         })
         .collect()
+}
+
+fn session_embedded_json_objects(text: &str) -> Vec<serde_json::Map<String, Value>> {
+    session_embedded_json_objects_at_depth(text, 0)
+}
+
+fn session_embedded_json_objects_at_depth(
+    text: &str,
+    depth: usize,
+) -> Vec<serde_json::Map<String, Value>> {
+    if depth > 4 {
+        return Vec::new();
+    }
+    let mut objects = BTreeMap::<Vec<u8>, serde_json::Map<String, Value>>::new();
+    let mut sources = vec![text.trim()];
+    if let Some((_, output)) = text.rsplit_once("\nOutput:\n") {
+        sources.push(output.trim());
+    }
+    for source in sources {
+        if let Ok(value) = serde_json::from_str::<Value>(source) {
+            collect_session_json_objects(&value, depth, &mut objects);
+        }
+    }
+    objects.into_values().collect()
+}
+
+fn collect_session_json_objects(
+    value: &Value,
+    depth: usize,
+    output: &mut BTreeMap<Vec<u8>, serde_json::Map<String, Value>>,
+) {
+    if depth > 4 || output.len() >= 64 {
+        return;
+    }
+    match value {
+        Value::Object(object) => {
+            let mut encoded_children = BTreeMap::new();
+            for text in object.values().filter_map(Value::as_str) {
+                for child in session_embedded_json_objects_at_depth(text, depth + 1) {
+                    if let Ok(key) = serde_json::to_vec(&child) {
+                        encoded_children.insert(key, child);
+                    }
+                }
+            }
+            if encoded_children.len() == 1 {
+                output.extend(encoded_children);
+                return;
+            }
+            if let Ok(key) = serde_json::to_vec(value) {
+                output.insert(key, object.clone());
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_session_json_objects(value, depth + 1, output);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_session_json_scalars(
+    value: &Value,
+    depth: usize,
+    output: &mut Vec<(Value, AtomValueType, ResponseValueSelector)>,
+) {
+    if depth > 8 || output.len() >= 64 {
+        return;
+    }
+    match value {
+        Value::Object(object) => {
+            for (field, value) in object {
+                if let Some(value_type) = scalar_type(value) {
+                    output.push((
+                        value.clone(),
+                        value_type,
+                        ResponseValueSelector::JsonField {
+                            field: field.clone(),
+                            value_type,
+                        },
+                    ));
+                }
+                collect_session_json_scalars(value, depth + 1, output);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_session_json_scalars(value, depth + 1, output);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn action_frames(
@@ -1303,6 +1907,12 @@ fn action_frames(
             .unwrap_or_default();
         (outer_name, arguments)
     };
+    if custom.is_none()
+        && payload.get("type").and_then(Value::as_str) == Some("function_call")
+        && is_plan_arguments(&arguments)
+    {
+        return plan_advance_frames(row, state, outer_name, &arguments);
+    }
     if arguments.is_empty() {
         return Vec::new();
     }
@@ -1408,6 +2018,235 @@ fn action_frames(
         );
         trim_runtime_parity_outbox(state);
     }
+    vec![frame]
+}
+
+fn direct_call_arguments(
+    payload: &serde_json::Map<String, Value>,
+) -> Option<serde_json::Map<String, Value>> {
+    match payload.get("arguments")? {
+        Value::Object(arguments) => Some(arguments.clone()),
+        Value::String(arguments) if arguments.len() <= 131_072 => {
+            serde_json::from_str::<Value>(arguments)
+                .ok()?
+                .as_object()
+                .cloned()
+        }
+        _ => None,
+    }
+}
+
+fn is_plan_arguments(arguments: &serde_json::Map<String, Value>) -> bool {
+    if arguments.len() != 1 {
+        return false;
+    }
+    let Some(plan) = arguments.get("plan").and_then(Value::as_array) else {
+        return false;
+    };
+    if plan.is_empty() || plan.len() > 32 {
+        return false;
+    }
+    plan.iter().all(|step| {
+        let Some(step) = step.as_object() else {
+            return false;
+        };
+        if step.len() != 2 {
+            return false;
+        }
+        let Some(text) = step.get("step").and_then(Value::as_str) else {
+            return false;
+        };
+        let Some(status) = step.get("status").and_then(Value::as_str) else {
+            return false;
+        };
+        !text.is_empty()
+            && text.len() <= 1_024
+            && !text.chars().any(char::is_control)
+            && matches!(status, "pending" | "in_progress" | "completed")
+    })
+}
+
+fn canonical_plan_state(arguments: &serde_json::Map<String, Value>) -> Option<(u16, u16, u16)> {
+    if !is_plan_arguments(arguments) {
+        return None;
+    }
+    let plan = arguments.get("plan")?.as_array()?;
+    let mut completed_count = 0_usize;
+    while plan.get(completed_count)?.get("status")?.as_str()? == "completed" {
+        completed_count = completed_count.saturating_add(1);
+        if completed_count == plan.len() {
+            return None;
+        }
+    }
+    if plan.get(completed_count)?.get("status")?.as_str()? != "in_progress" {
+        return None;
+    }
+    if plan
+        .iter()
+        .skip(completed_count.saturating_add(1))
+        .any(|step| step.get("status").and_then(Value::as_str) != Some("pending"))
+    {
+        return None;
+    }
+    Some((
+        u16::try_from(plan.len()).ok()?,
+        u16::try_from(completed_count).ok()?,
+        u16::try_from(completed_count).ok()?,
+    ))
+}
+
+fn latest_prior_plan_state(
+    provider_payload: &Value,
+    function_name: &str,
+) -> Option<(u16, u16, u16)> {
+    provider_payload
+        .get("input")?
+        .as_array()?
+        .iter()
+        .rev()
+        .filter_map(Value::as_object)
+        .find_map(|item| {
+            (item.get("type").and_then(Value::as_str) == Some("function_call")
+                && item.get("name").and_then(Value::as_str) == Some(function_name))
+            .then(|| direct_call_arguments(item))
+            .flatten()
+            .and_then(|arguments| canonical_plan_state(&arguments))
+        })
+}
+
+fn immediate_tool_shape(provider_payload: &Value) -> Option<(&str, &str)> {
+    let input = provider_payload.get("input")?.as_array()?;
+    let output = input.iter().rev().find_map(Value::as_object)?;
+    let call_id = output.get("call_id")?.as_str()?;
+    input
+        .iter()
+        .rev()
+        .filter_map(Value::as_object)
+        .find_map(|item| {
+            (item.get("call_id").and_then(Value::as_str) == Some(call_id)
+                && matches!(
+                    item.get("type").and_then(Value::as_str),
+                    Some("function_call" | "custom_tool_call")
+                ))
+            .then(|| Some((item.get("name")?.as_str()?, item.get("type")?.as_str()?)))
+            .flatten()
+        })
+}
+
+fn plan_advance_frames(
+    row: &Value,
+    state: &mut SessionState,
+    function_name: &str,
+    teacher_arguments: &serde_json::Map<String, Value>,
+) -> Vec<RelationFrame> {
+    let Some(provider_payload) = bounded_runtime_provider_payload(state) else {
+        return Vec::new();
+    };
+    let Some((step_count, completed_count, active_index)) =
+        latest_prior_plan_state(&provider_payload, function_name)
+    else {
+        return Vec::new();
+    };
+    let Some((tool_name, tool_shape)) = immediate_tool_shape(&provider_payload) else {
+        return Vec::new();
+    };
+    let program = ResponseProgram::advance_plan(function_name);
+    let execution = execute_response(&program, &state.runtime_request_text, &provider_payload);
+    if execution.status != ResponseExecutionStatus::Executed {
+        return Vec::new();
+    }
+    let Some(response) = execution.response else {
+        return Vec::new();
+    };
+    let teacher_response = serde_json::json!({
+        "name": function_name,
+        "arguments": teacher_arguments,
+    });
+    if serde_json::from_str::<Value>(&response).ok().as_ref() != Some(&teacher_response) {
+        return Vec::new();
+    }
+    let verifier = VerifierProgram::AdvancePlan {
+        function_name: function_name.to_owned(),
+        require_explicit_tool_success: true,
+        require_canonical_plan: true,
+    };
+    if verify_response_independently(&verifier, &provider_payload, &response).is_err() {
+        return Vec::new();
+    }
+
+    let evidence_sha256 = hash_value(&provider_payload);
+    let mut atoms = vec![
+        RelationAtom::ToolKind {
+            value: tool_name.to_owned(),
+        },
+        RelationAtom::ObservationCallShape {
+            value: tool_shape.to_owned(),
+        },
+        RelationAtom::CompletionState {
+            value: "completed".to_owned(),
+        },
+        RelationAtom::OutputStatus {
+            value: "success".to_owned(),
+        },
+        RelationAtom::ResponseShape {
+            value: "model_action".to_owned(),
+        },
+        RelationAtom::PlanState {
+            step_count,
+            completed_count,
+            active_index,
+        },
+        RelationAtom::Cardinality {
+            role: "plan_step_count_band".to_owned(),
+            count: count_band(u32::from(step_count)),
+        },
+        RelationAtom::Cardinality {
+            role: "plan_completed_count_band".to_owned(),
+            count: count_band(u32::from(completed_count)),
+        },
+        RelationAtom::Cardinality {
+            role: "turn_call_count_band".to_owned(),
+            count: count_band(state.call_count),
+        },
+        RelationAtom::Cardinality {
+            role: "turn_output_count_band".to_owned(),
+            count: count_band(state.output_count),
+        },
+        RelationAtom::Cardinality {
+            role: "turn_message_count_band".to_owned(),
+            count: count_band(state.message_count),
+        },
+        RelationAtom::ActionFunction {
+            value: function_name.to_owned(),
+        },
+        RelationAtom::ActionPlanAdvance,
+    ];
+    atoms.extend(
+        state
+            .request_phase_atom_ids
+            .iter()
+            .copied()
+            .map(|atom_id| RelationAtom::RequestPhaseAtom { atom_id }),
+    );
+    atoms.extend(
+        state
+            .capability_atom_ids
+            .iter()
+            .copied()
+            .map(|atom_id| RelationAtom::ClientCapabilityAtom { atom_id }),
+    );
+    let mut frame = build_frame(row, state, atoms, false, &evidence_sha256);
+    frame.verifier_label = None;
+    state.runtime_parity_cases.insert(
+        frame.frame_id_sha256.clone(),
+        RuntimeParityCase {
+            evidence_ref_sha256: frame.frame_id_sha256.clone(),
+            request_text: state.runtime_request_text.clone(),
+            provider_payload,
+            expected_response: response,
+        },
+    );
+    trim_runtime_parity_outbox(state);
     vec![frame]
 }
 
@@ -2005,6 +2844,79 @@ mod tests {
     }
 
     #[test]
+    fn completed_plan_transition_emits_typed_frame_only_after_explicit_success() {
+        fn observe_plan_transition(tool_output: Value) -> (SessionState, Vec<RelationFrame>) {
+            let mut state = SessionState {
+                session_id_sha256: "a".repeat(64),
+                ..SessionState::default()
+            };
+            let mut emitted = Vec::new();
+            for row in [
+                json!({"type":"event_msg","payload":{"type":"user_message","message":"apply the change"}}),
+                json!({"type":"response_item","payload":{"type":"function_call","name":"update_plan","call_id":"plan-1","arguments":serde_json::to_string(&json!({"plan":[
+                    {"step":"Inspect state","status":"in_progress"},
+                    {"step":"Apply change","status":"pending"},
+                    {"step":"Verify runtime","status":"pending"}
+                ]})).expect("initial plan")}}),
+                json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"plan-1","output":"Plan updated"}}),
+                json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"exec-1","arguments":"{\"cmd\":\"true\"}"}}),
+                json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"exec-1","output":tool_output}}),
+                json!({"type":"response_item","payload":{"type":"function_call","name":"update_plan","call_id":"plan-2","arguments":serde_json::to_string(&json!({"plan":[
+                    {"step":"Inspect state","status":"completed"},
+                    {"step":"Apply change","status":"in_progress"},
+                    {"step":"Verify runtime","status":"pending"}
+                ]})).expect("advanced plan")}}),
+                json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"plan-2","output":"Plan updated"}}),
+                json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":321}}}}),
+            ] {
+                observe_row(&row, &mut state, &mut emitted);
+            }
+            (state, emitted)
+        }
+
+        let (state, emitted) = observe_plan_transition(json!(
+            "Chunk ID: plan\nWall time: 0.1 seconds\nProcess exited with code 0\nFinal output:\nverified"
+        ));
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].estimated_input_tokens, 321);
+        assert!(
+            emitted[0]
+                .atoms
+                .iter()
+                .any(|atom| matches!(atom, RelationAtom::ActionPlanAdvance))
+        );
+        assert!(emitted[0].atoms.iter().any(|atom| matches!(
+            atom,
+            RelationAtom::PlanState {
+                step_count: 3,
+                completed_count: 0,
+                active_index: 0
+            }
+        )));
+        let parity = state
+            .runtime_parity_cases
+            .get(&emitted[0].frame_id_sha256)
+            .expect("plan runtime parity case");
+        assert!(
+            verify_response_independently(
+                &VerifierProgram::AdvancePlan {
+                    function_name: "update_plan".to_owned(),
+                    require_explicit_tool_success: true,
+                    require_canonical_plan: true,
+                },
+                &parity.provider_payload,
+                &parity.expected_response,
+            )
+            .is_ok()
+        );
+
+        let (_, failed) = observe_plan_transition(json!(
+            "Chunk ID: plan\nProcess exited with code 1\nFinal output:\nfailed"
+        ));
+        assert!(failed.is_empty());
+    }
+
+    #[test]
     fn custom_exec_wrapper_emits_typed_inner_tool_frame() {
         let mut state = SessionState {
             session_id_sha256: "a".repeat(64),
@@ -2014,7 +2926,7 @@ mod tests {
         for row in [
             json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"1","arguments":"{}"}}),
             json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"1","output":"Process running with session ID abc"}}),
-            json!({"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"2","input":"const r = await tools.write_stdin({session_id:\"abc\",yield_time_ms:1000}); text(r.output);"}}),
+            json!({"timestamp":"2026-07-16T00:00:00Z","type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"2","input":"const r = await tools.write_stdin({session_id:\"abc\",yield_time_ms:1000}); text(r.output);"}}),
             json!({"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"2","output":"accepted"}}),
             json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
         ] {
@@ -2047,6 +2959,125 @@ mod tests {
                 "input": "const r=await tools.write_stdin({\"session_id\":\"abc\",\"yield_time_ms\":1000});text(r.output);",
             })
         );
+    }
+
+    #[test]
+    fn custom_exec_array_output_grounds_embedded_json_handle() {
+        let mut state = SessionState {
+            session_id_sha256: "a".repeat(64),
+            ..SessionState::default()
+        };
+        let mut emitted = Vec::new();
+        for row in [
+            json!({"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"1","input":"const r = await tools.exec_command({cmd:\"cargo build\"}); text(JSON.stringify(r));"}}),
+            json!({"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"1","output":[
+                {"type":"input_text","text":""},
+                {"type":"input_text","text":"{\"chunk_id\":\"abc\",\"session_id\":60906,\"output\":\"Compiling\"}"}
+            ]}}),
+            json!({"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"2","input":"const r = await tools.write_stdin({session_id:60906,chars:\"\",yield_time_ms:1000}); text(r.output);"}}),
+            json!({"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"2","output":[{"type":"input_text","text":"accepted"}]}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
+        ] {
+            observe_row(&row, &mut state, &mut emitted);
+        }
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(
+            teacher_action_symbol(&emitted[0]),
+            "custom_tool:exec/write_stdin"
+        );
+        assert_eq!(emitted[0].verifier_label, Some(true));
+        assert!(
+            state
+                .runtime_parity_cases
+                .contains_key(&emitted[0].frame_id_sha256)
+        );
+    }
+
+    #[test]
+    fn bounded_session_head_recovers_custom_write_stdin_parity() {
+        let path = std::env::temp_dir().join(format!(
+            "nando-custom-head-parity-{}-{}.jsonl",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let rows = [
+            json!({"type":"session_meta","payload":{"id":"session-a"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"1","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"1","output":"Process running with session ID abc"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100}}}}),
+            json!({"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"2","input":"const r = await tools.write_stdin({session_id:\"abc\",yield_time_ms:1000}); text(r.output);"}}),
+            json!({"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"2","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
+        ];
+        let mut file = File::create(&path).expect("session file");
+        for row in rows {
+            writeln!(file, "{row}").expect("session row");
+        }
+        file.flush().expect("head flush");
+        let head_bytes = file.metadata().expect("head metadata").len();
+        for index in 0..128 {
+            writeln!(
+                file,
+                "{}",
+                json!({"type":"event_msg","payload":{"type":"user_message","message":format!("filler-{index}")}})
+            )
+            .expect("filler row");
+        }
+        drop(file);
+
+        let head = verified_training_cases_from_session_head(&path, head_bytes)
+            .expect("head training cases");
+        assert_eq!(head.len(), 1);
+        assert!(head[0].1.is_some());
+        assert_eq!(
+            teacher_action_symbol(&head[0].0),
+            "custom_tool:exec/write_stdin"
+        );
+        let sparse = verified_write_stdin_training_cases_from_session(&path)
+            .expect("sparse custom training cases");
+        assert_eq!(sparse.len(), 1);
+        assert!(sparse[0].1.is_some());
+        assert_eq!(sparse[0].0.frame_id_sha256, head[0].0.frame_id_sha256);
+        let tail =
+            verified_training_cases_from_session_tail(&path, 128).expect("tail training cases");
+        assert!(tail.is_empty());
+        fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn sparse_backfill_recovers_direct_write_stdin_parity() {
+        let path = std::env::temp_dir().join(format!(
+            "nando-direct-write-stdin-parity-{}-{}.jsonl",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let rows = [
+            json!({"type":"session_meta","payload":{"id":"session-direct"}}),
+            json!({"type":"event_msg","payload":{"type":"user_message","message":"continue the pending command"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"exec","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"exec","output":"Process running with session ID 4242"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"wait","arguments":"{\"session_id\":4242,\"yield_time_ms\":1000}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"wait","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
+        ];
+        let mut file = File::create(&path).expect("session file");
+        for row in rows {
+            writeln!(file, "{row}").expect("session row");
+        }
+        drop(file);
+
+        let cases = verified_write_stdin_training_cases_from_session(&path)
+            .expect("direct write_stdin cases");
+        fs::remove_file(path).ok();
+        assert_eq!(cases.len(), 1);
+        assert_eq!(teacher_action_symbol(&cases[0].0), "function:write_stdin");
+        assert!(cases[0].1.is_some());
     }
 
     #[test]

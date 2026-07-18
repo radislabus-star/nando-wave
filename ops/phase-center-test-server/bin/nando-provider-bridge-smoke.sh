@@ -12,6 +12,11 @@ fi
 BIND="${NANDO_PROVIDER_BRIDGE_BIND:-127.0.0.1:8787}"
 BASE_URL="http://${BIND}"
 OUT_JSON="${NANDO_PROVIDER_BRIDGE_SMOKE_REPORT:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-bridge-smoke.json}"
+ADMISSION_JSON="${NANDO_TRANSITION_ADMISSION_JSON:-/var/lib/nando-wave/transition/admission.json}"
+ADMISSION_ELIGIBLE=false
+if [[ -f "${ADMISSION_JSON}" ]]; then
+  ADMISSION_ELIGIBLE="$(jq -r '(.verdict == "PASS" and .eligible_for_local_accept == true) | tostring' "${ADMISSION_JSON}")"
+fi
 
 mkdir -p "$(dirname "${OUT_JSON}")"
 case_rows="$(mktemp)"
@@ -53,6 +58,42 @@ record_case() {
     '{name: $name, status: $status, passed: $passed, body: ($body[0] // {})}' >> "${case_rows}"
 }
 
+record_upstream_fallback_case() {
+  local name="$1"
+  local status="$2"
+  local body_file="$3"
+  local local_accept=false
+  local body_json_valid=false
+  if jq -e type "${body_file}" >/dev/null 2>&1; then
+    body_json_valid=true
+    local_accept="$(jq -r '(.nando.local_accept // false) | tostring' "${body_file}")"
+  fi
+  jq -cn \
+    --arg name "${name}" \
+    --argjson status "${status}" \
+    --argjson local_accept "${local_accept}" \
+    --argjson body_json_valid "${body_json_valid}" \
+    '{
+      name: $name,
+      status: $status,
+      passed: ($local_accept | not),
+      local_accept: $local_accept,
+      upstream_body_json_valid: $body_json_valid
+    }' >> "${case_rows}"
+}
+
+record_local_or_fallback_case() {
+  local name="$1"
+  local status="$2"
+  local body_file="$3"
+  local jq_assert="$4"
+  if [[ "${ADMISSION_ELIGIBLE}" == "true" ]]; then
+    record_case "${name}" "${status}" "${body_file}" "${jq_assert}"
+  else
+    record_upstream_fallback_case "${name}_admission_veto_fallback" "${status}" "${body_file}"
+  fi
+}
+
 body_file="/tmp/nando-provider-bridge-smoke-body.$$"
 
 status="$(curl_json GET /health)"
@@ -62,27 +103,38 @@ status="$(curl_json GET /v2/health)"
 record_case "v2_health" "${status}" "${body_file}" '.ok == true and .default_client_api_version == "v2" and (.supported_api_versions | index("v2"))'
 
 status="$(curl_json POST /v1/chat/completions '{"model":"nando-test","messages":[{"role":"user","content":"nando compression"}]}')"
-record_case "chat_local_compression" "${status}" "${body_file}" '.nando.local_accept == true and (.choices[0].message.content | startswith("NANDO_COMPRESSION"))'
+record_local_or_fallback_case "chat_local_compression" "${status}" "${body_file}" '.nando.local_accept == true and (.choices[0].message.content | startswith("NANDO_COMPRESSION"))'
 
 status="$(curl_json POST /v1/responses '{"model":"nando-test","input":"nando readiness"}')"
-record_case "responses_local_readiness" "${status}" "${body_file}" '.nando.local_accept == true and (.output_text | startswith("NANDO_READINESS"))'
+record_local_or_fallback_case "responses_local_readiness" "${status}" "${body_file}" '.nando.local_accept == true and (.output_text | startswith("NANDO_READINESS"))'
 
 status="$(curl_json POST /v2/chat/completions '{"model":"nando-test","messages":[{"role":"user","content":"nando compression"}]}')"
-record_case "v2_chat_local_compression" "${status}" "${body_file}" '.nando.local_accept == true and .nando.api_version == "v2" and .nando.transition_runtime == true and .nando.architecture == "compact_latent_transition_runtime" and (.choices[0].message.content | startswith("NANDO_COMPRESSION"))'
+record_local_or_fallback_case "v2_chat_local_compression" "${status}" "${body_file}" '.nando.local_accept == true and .nando.api_version == "v2" and .nando.transition_runtime == true and .nando.architecture == "compact_latent_transition_runtime" and (.choices[0].message.content | startswith("NANDO_COMPRESSION"))'
 
 status="$(curl_json POST /v2/responses '{"model":"nando-test","input":"nando readiness"}')"
-record_case "v2_responses_local_readiness" "${status}" "${body_file}" '.nando.local_accept == true and .nando.api_version == "v2" and .nando.transition_runtime == true and .nando.architecture == "compact_latent_transition_runtime" and (.output_text | startswith("NANDO_READINESS"))'
+record_local_or_fallback_case "v2_responses_local_readiness" "${status}" "${body_file}" '.nando.local_accept == true and .nando.api_version == "v2" and .nando.transition_runtime == true and .nando.architecture == "compact_latent_transition_runtime" and (.output_text | startswith("NANDO_READINESS"))'
+
+typed_request='{"schema":"nando.transition-request.v1","package_id":"rsmod-portable-v1-20260710","operator_id":"set_field","adapter_id":"task_map","before":{"board":{"items":{"smoke":{"state":"open","assignee":"test","points":1,"frame":"keep"}}}},"action":{"cmd":"complete","item":"smoke","to_state":"done"}}'
+typed_body="$(jq -cn --arg input "${typed_request}" '{model:"nando-test",metadata:{nando_traffic_source:"dogfood_v2_typed_actor_smoke"},input:$input,stream:false}')"
+status="$(curl_json POST /v2/responses "${typed_body}")"
+record_local_or_fallback_case "v2_typed_transition_actor" "${status}" "${body_file}" '
+  .nando.local_accept == true
+  and (.nando.route | startswith("typed_transition:"))
+  and ((.output_text | fromjson).status == "executed")
+  and ((.output_text | fromjson).after.board.items.smoke.state == "done")
+  and ((.output_text | fromjson).after.board.items.smoke.frame == "keep")
+'
 
 status="$(curl_json POST /v1/chat/completions '{"model":"nando-test","messages":[{"role":"user","content":"ordinary broad prompt"}]}')"
 if [[ -n "${NANDO_PROVIDER_UPSTREAM_BASE_URL:-}" ]]; then
-  record_case "chat_broad_upstream_fallback" "${status}" "${body_file}" '.nando.local_accept != true'
+  record_upstream_fallback_case "chat_broad_upstream_fallback" "${status}" "${body_file}"
 else
   record_case "chat_broad_upstream_missing" "${status}" "${body_file}" '.error.type == "upstream_missing" and .nando.local_accept == false'
 fi
 
 status="$(curl_json POST /v2/chat/completions '{"model":"nando-test","messages":[{"role":"user","content":"ordinary broad prompt"}]}')"
 if [[ -n "${NANDO_PROVIDER_UPSTREAM_BASE_URL:-}" ]]; then
-  record_case "v2_chat_broad_upstream_fallback" "${status}" "${body_file}" '.nando.local_accept != true'
+  record_upstream_fallback_case "v2_chat_broad_upstream_fallback" "${status}" "${body_file}"
 else
   record_case "v2_chat_broad_upstream_missing" "${status}" "${body_file}" '.error.type == "upstream_missing" and .nando.local_accept == false and .nando.api_version == "v2"'
 fi

@@ -1,0 +1,24 @@
+[Unit]
+Description=Nando autonomous Raw Phase response package miner
+After=nando-phase-center-codex-capture.service
+
+[Service]
+Type=oneshot
+User=ubu
+Group=ubu
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStart=/opt/nando-wave/bin/nando-response-miner
+Nice=10
+CPUQuota=100%
+MemoryHigh=640M
+MemoryMax=768M
+MemorySwapMax=0
+TasksMax=8
+TimeoutStartSec=600s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nando-wave/transition

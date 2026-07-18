@@ -61,6 +61,14 @@ else
   DEPLOY_GROUP="$(id -gn)"
 fi
 
+echo "build release typed-transition runtime..."
+cargo build --release -q -p nando-transition-inducer --bins
+cargo build --release -q -p nando-transition-serving -p nando-response-actor -p nando-gateway-control --bins
+NANDO_TRANSITION_EXEC_SRC="${ROOT_DIR}/target/release/nando-transition-live-exec"
+NANDO_TRANSITION_INSPECT_SRC="${ROOT_DIR}/target/release/nando-transition-admission-inspect"
+NANDO_TRANSITION_SERVING_SRC="${ROOT_DIR}/target/release/nando-transition-serving"
+NANDO_GATEWAY_CONTROL_SRC="${ROOT_DIR}/target/release/nando-gateway-control"
+
 echo "nando phase-center deploy:"
 echo "  mode=${MODE}"
 echo "  root=${ROOT_DIR}"
@@ -88,10 +96,12 @@ INSTALL_ONLY="${NANDO_DEPLOY_INSTALL_ONLY:-0}"
 echo "install files..."
 "${SUDO[@]}" mkdir -p \
   "${PREFIX}/bin" \
+  "${PREFIX}/crates/nando-transition-inducer/src" \
   "${PREFIX}/ops" \
   "${PREFIX}/data" \
   "${ENV_DIR}" \
   "${STATE_DIR}/streaming" \
+  "${STATE_DIR}/transition/package-inbox" \
   "${STATE_DIR}/provider-export-drop" \
   "${LOG_DIR}" \
   "${SYSTEMD_DIR}" \
@@ -106,9 +116,24 @@ if [[ "$(readlink -f "${NANDO_CLI_SRC}")" != "$(readlink -f "${NANDO_CLI_DEST}" 
 else
   echo "skip nando-cli install: source already at ${NANDO_CLI_DEST}"
 fi
+"${SUDO[@]}" install -m 0755 "${NANDO_TRANSITION_EXEC_SRC}" "${PREFIX}/bin/nando-transition-live-exec"
+"${SUDO[@]}" install -m 0755 "${NANDO_TRANSITION_INSPECT_SRC}" "${PREFIX}/bin/nando-transition-admission-inspect"
+"${SUDO[@]}" install -m 0755 "${NANDO_TRANSITION_SERVING_SRC}" "${PREFIX}/bin/nando-transition-serving"
+"${SUDO[@]}" install -m 0755 "${NANDO_GATEWAY_CONTROL_SRC}" "${PREFIX}/bin/nando-gateway-control"
+"${SUDO[@]}" rm -f \
+  "${PREFIX}/bin/nando-transition-profile-daemon" \
+  "${PREFIX}/bin/nando-response-miner" \
+  "${PREFIX}/bin/nando-response-online-miner"
+for proof_source in causal_proof.rs wave.rs induce.rs; do
+  "${SUDO[@]}" install -m 0644 \
+    "${ROOT_DIR}/crates/nando-transition-inducer/src/${proof_source}" \
+    "${PREFIX}/crates/nando-transition-inducer/src/${proof_source}"
+done
 "${SUDO[@]}" rm -rf "${PREFIX}/ops/phase-center-test-server"
 "${SUDO[@]}" mkdir -p "${PREFIX}/ops"
 "${SUDO[@]}" cp -R "${ROOT_DIR}/ops/phase-center-test-server" "${PREFIX}/ops/"
+"${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server" -type f -name '*.py' -delete
+"${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server" -type d -name '__pycache__' -prune -exec rm -rf {} +
 "${SUDO[@]}" rm -rf "${PREFIX}/data/real_traffic"
 "${SUDO[@]}" mkdir -p "${PREFIX}/data"
 if [[ -d "${ROOT_DIR}/data/real_traffic" ]]; then
@@ -116,9 +141,12 @@ if [[ -d "${ROOT_DIR}/data/real_traffic" ]]; then
 else
   "${SUDO[@]}" mkdir -p "${PREFIX}/data/real_traffic"
 fi
-"${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server/bin" -type f \( -name '*.sh' -o -name '*.py' -o -name 'nando-codex' \) -exec chmod 0755 {} \;
+"${SUDO[@]}" find "${PREFIX}/ops/phase-center-test-server/bin" -type f \( -name '*.sh' -o -name '*.py' -o -name 'nando-codex' -o -name 'nando-codex-hook' -o -name 'codex' \) -exec chmod 0755 {} \;
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-llm-gateway.sh" "${INSTALL_BIN_DIR}/nando-llm-gateway"
 "${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-codex" "${INSTALL_BIN_DIR}/nando-codex"
+"${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/codex" "${INSTALL_BIN_DIR}/codex"
+"${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-live-transition-gate" "${INSTALL_BIN_DIR}/nando-live-transition-gate"
+"${SUDO[@]}" ln -sf "${PREFIX}/ops/phase-center-test-server/bin/nando-transition" "${INSTALL_BIN_DIR}/nando-transition"
 
 ENV_FILE="${ENV_DIR}/phase-center.env"
 tmp_env="$(mktemp)"
@@ -131,6 +159,16 @@ sed \
   -e "s#^NANDO_PHASE_CENTER_OPS_DIR=.*#NANDO_PHASE_CENTER_OPS_DIR=${PREFIX}/ops/phase-center-test-server#" \
   -e "s#^NANDO_SYSTEMD_DIR=.*#NANDO_SYSTEMD_DIR=${SYSTEMD_DIR}#" \
   -e "s#^NANDO_GATEWAY_LOCAL_CMD=.*#NANDO_GATEWAY_LOCAL_CMD=${PREFIX}/ops/phase-center-test-server/bin/nando-llm-local-executor.sh#" \
+  -e "s#^NANDO_TRANSITION_STATE_DIR=.*#NANDO_TRANSITION_STATE_DIR=${STATE_DIR}/transition#" \
+  -e "s#^NANDO_TRANSITION_TRACE_JSONL=.*#NANDO_TRANSITION_TRACE_JSONL=${STATE_DIR}/transition/live-transitions.jsonl#" \
+  -e "s#^NANDO_LEGACY_JSON_AUDIT_ENABLED=.*#NANDO_LEGACY_JSON_AUDIT_ENABLED=0#" \
+  -e "s#^NANDO_RESPONSE_ONLINE_CHECKPOINT=.*#NANDO_RESPONSE_ONLINE_CHECKPOINT=${STATE_DIR}/transition/response-online-miner.checkpoint#" \
+  -e "s#^NANDO_STREAMING_EVIDENCE_DIR=.*#NANDO_STREAMING_EVIDENCE_DIR=${STATE_DIR}/transition/streaming-evidence-v2#" \
+  -e "s#^NANDO_TRANSITION_PACKAGE_INBOX=.*#NANDO_TRANSITION_PACKAGE_INBOX=${STATE_DIR}/transition/package-inbox#" \
+  -e "s#^NANDO_TRANSITION_REGISTRY=.*#NANDO_TRANSITION_REGISTRY=${STATE_DIR}/transition/registry.json#" \
+  -e "s#^NANDO_TRANSITION_METRICS=.*#NANDO_TRANSITION_METRICS=${STATE_DIR}/transition/metrics.json#" \
+  -e "s#^NANDO_TRANSITION_EXECUTOR=.*#NANDO_TRANSITION_EXECUTOR=${PREFIX}/bin/nando-transition-live-exec#" \
+  -e "s#^NANDO_ECONOMICS_SNAPSHOT_JSON=.*#NANDO_ECONOMICS_SNAPSHOT_JSON=${STATE_DIR}/transition/economics-live.json#" \
   "${ROOT_DIR}/ops/phase-center-test-server/nando-phase-center.env.example" > "${tmp_env}"
 
 if [[ ! -f "${ENV_FILE}" || "${NANDO_DEPLOY_OVERWRITE_ENV:-0}" == "1" ]]; then
@@ -152,6 +190,20 @@ else
       printf '%s=%s\n' "${key}" "${value}" >> "${merged_env}"
     fi
   done < "${tmp_env}"
+  for key in NANDO_LEGACY_JSON_AUDIT_ENABLED NANDO_RESPONSE_ONLINE_CHECKPOINT NANDO_STREAMING_EVIDENCE_DIR NANDO_ECONOMICS_SNAPSHOT_JSON; do
+    value="$(grep -E "^${key}=" "${tmp_env}" | tail -n 1 | cut -d= -f2-)"
+    if grep -qE "^${key}=" "${merged_env}"; then
+      sed -i "s#^${key}=.*#${key}=${value}#" "${merged_env}"
+    else
+      printf '%s=%s\n' "${key}" "${value}" >> "${merged_env}"
+    fi
+  done
+  sed -i \
+    -e '/^NANDO_TRANSITION_EXECUTION_EVENTS_JSONL=/d' \
+    -e '/^NANDO_ECONOMICS_LEDGER_JSONL=/d' \
+    -e '/^NANDO_DETERMINISTIC_EVIDENCE_LEDGER=/d' \
+    -e '/^NANDO_M3_WINDOW_EVALUATOR=/d' \
+    "${merged_env}"
   if [[ "${MODE}" == "system" ]]; then
     "${SUDO[@]}" install -m 0600 "${merged_env}" "${ENV_FILE}"
   else
@@ -173,10 +225,7 @@ random_hex_key() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 32
   else
-    python3 - <<'PY'
-import secrets
-print(secrets.token_hex(32))
-PY
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
   fi
 }
 
@@ -220,20 +269,56 @@ if [[ -n "${WATERMARK_TRACE_JSONL}" && -n "${APPEND_JSONL}" ]]; then
 fi
 
 echo "install systemd units..."
+obsolete_units=(
+  nando-phase-center-appender.service
+  nando-phase-center-live-tail.service
+  nando-phase-center-codex-capture.service
+  nando-phase-center-codex-capture.timer
+  nando-transition-profile-daemon.service
+  nando-response-miner.service
+  nando-response-miner.timer
+  nando-response-online-miner.service
+  nando-live-transition-gate.service
+  nando-live-transition-gate.timer
+  nando-live-transition-gate.path
+  nando-phase-center-metrics-snapshot.service
+  nando-phase-center-metrics-snapshot.timer
+  nando-phase-center-provider-evidence-snapshot.timer
+  nando-phase-center-provider-export-contract-pack.timer
+  nando-phase-center-readiness-snapshot.timer
+  nando-phase-center-test-server-verify.timer
+  nando-phase-center-status.timer
+  nando-phase-center-local-accept-promotion-gate.timer
+  nando-phase-center-provider-activation-gate.timer
+  nando-phase-center-provider-export-watch.timer
+)
+if [[ "${INSTALL_ONLY}" != "1" ]]; then
+  for unit in "${obsolete_units[@]}"; do
+    "${SYSTEMCTL[@]}" disable --now "${unit}" >/dev/null 2>&1 || true
+  done
+fi
 if [[ "${MODE}" == "system" ]]; then
-  "${SUDO[@]}" cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/"*.service "${SYSTEMD_DIR}/"
-  "${SUDO[@]}" cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/"*.timer "${SYSTEMD_DIR}/"
+  "${SUDO[@]}" cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-transition-serving.service" "${SYSTEMD_DIR}/"
+  "${SUDO[@]}" cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-gateway-control.service" "${SYSTEMD_DIR}/"
+  for unit in "${obsolete_units[@]}"; do
+    "${SUDO[@]}" rm -f "${SYSTEMD_DIR}/${unit}"
+  done
   if [[ "${INSTALL_ONLY}" != "1" ]]; then
     "${SYSTEMCTL[@]}" daemon-reload
   fi
 else
-  cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/"*.service "${SYSTEMD_DIR}/"
-  cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/"*.timer "${SYSTEMD_DIR}/"
+  cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-transition-serving.service" "${SYSTEMD_DIR}/"
+  cp "${ROOT_DIR}/ops/phase-center-test-server/systemd/nando-gateway-control.service" "${SYSTEMD_DIR}/"
   sed -i \
     -e "s#EnvironmentFile=/etc/nando-wave/phase-center.env#EnvironmentFile=${ENV_FILE}#" \
     -e "s#WorkingDirectory=/opt/nando-wave#WorkingDirectory=${PREFIX}#" \
     -e "s#/opt/nando-wave#${PREFIX}#g" \
-    "${SYSTEMD_DIR}"/nando-phase-center-*.service
+    "${SYSTEMD_DIR}"/nando-transition-serving.service
+  sed -i \
+    -e "s#EnvironmentFile=/etc/nando-wave/phase-center.env#EnvironmentFile=${ENV_FILE}#" \
+    -e "s#/var/lib/nando-gateway-control#${STATE_DIR}/gateway-control#g" \
+    -e "s#/opt/nando-wave#${PREFIX}#g" \
+    "${SYSTEMD_DIR}"/nando-gateway-control.service
   if [[ "${INSTALL_ONLY}" != "1" ]]; then
     "${SYSTEMCTL[@]}" daemon-reload
   fi
@@ -250,18 +335,8 @@ fi
 
 echo "enable services..."
 units=(
-  nando-phase-center-appender.service
-  nando-phase-center-live-tail.service
-  nando-provider-bridge.service
-  nando-phase-center-metrics-snapshot.timer
-  nando-phase-center-provider-evidence-snapshot.timer
-  nando-phase-center-provider-export-contract-pack.timer
-  nando-phase-center-readiness-snapshot.timer
-  nando-phase-center-test-server-verify.timer
-  nando-phase-center-status.timer
-  nando-phase-center-local-accept-promotion-gate.timer
-  nando-phase-center-provider-activation-gate.timer
-  nando-phase-center-provider-export-watch.timer
+  nando-transition-serving.service
+  nando-gateway-control.service
 )
 
 for unit in "${units[@]}"; do
@@ -269,9 +344,8 @@ for unit in "${units[@]}"; do
 done
 
 long_running_services=(
-  nando-phase-center-appender.service
-  nando-phase-center-live-tail.service
-  nando-provider-bridge.service
+  nando-transition-serving.service
+  nando-gateway-control.service
 )
 
 for unit in "${long_running_services[@]}"; do
@@ -290,19 +364,8 @@ if command -v curl >/dev/null 2>&1; then
 fi
 
 echo "run smoke..."
-if [[ "${MODE}" == "system" ]]; then
-  "${SUDO[@]}" "${PREFIX}/ops/phase-center-test-server/bin/nando-phase-center-refresh-snapshots.sh" "${ENV_FILE}" >/dev/null || true
-  printf 'nando gateway health' | "${SUDO[@]}" "${INSTALL_BIN_DIR}/nando-llm-gateway" "${ENV_FILE}" -- cat >/dev/null
-  "${SUDO[@]}" "${PREFIX}/ops/phase-center-test-server/bin/nando-phase-center-gateway-canary-smoke.sh" "${ENV_FILE}" >/dev/null
-  "${SUDO[@]}" "${PREFIX}/ops/phase-center-test-server/bin/nando-provider-bridge-smoke.sh" "${ENV_FILE}" >/dev/null
-  "${SUDO[@]}" "${PREFIX}/ops/phase-center-test-server/bin/nando-provider-bridge-upstream-smoke.sh" "${ENV_FILE}" >/dev/null
-else
-  "${PREFIX}/ops/phase-center-test-server/bin/nando-phase-center-refresh-snapshots.sh" "${ENV_FILE}" >/dev/null || true
-  printf 'nando gateway health' | "${INSTALL_BIN_DIR}/nando-llm-gateway" "${ENV_FILE}" -- cat >/dev/null
-  "${PREFIX}/ops/phase-center-test-server/bin/nando-phase-center-gateway-canary-smoke.sh" "${ENV_FILE}" >/dev/null
-  "${PREFIX}/ops/phase-center-test-server/bin/nando-provider-bridge-smoke.sh" "${ENV_FILE}" >/dev/null
-  "${PREFIX}/ops/phase-center-test-server/bin/nando-provider-bridge-upstream-smoke.sh" "${ENV_FILE}" >/dev/null
-fi
+curl -fsS --max-time 2 "http://${BRIDGE_BIND_VALUE}/health" >/dev/null
+curl -fsS --max-time 2 "http://${BRIDGE_BIND_VALUE}/cpu-health" >/dev/null
 
 echo "deployed:"
 echo "  env=${ENV_FILE}"

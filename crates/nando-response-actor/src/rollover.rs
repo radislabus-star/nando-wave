@@ -4,7 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CegisWinner, RelationFrame, TeacherPoolSnapshot};
 
-pub const FROZEN_PARTITION_VERSION: u32 = 6;
+pub const FROZEN_PARTITION_VERSION: u32 = 13;
+const MAX_EXACT_PARTITION_SESSIONS: usize = 16;
+
+#[must_use]
+pub(crate) fn support_partition_complete(support_rows: usize, policy: RolloverPolicy) -> bool {
+    support_rows >= policy.support_rows
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RolloverPolicy {
@@ -56,6 +62,7 @@ pub fn freeze_generation(
     pool: &TeacherPoolSnapshot,
     policy: RolloverPolicy,
     generation: u64,
+    support_eligible_ids: &BTreeSet<String>,
     future_eligible_ids: &BTreeSet<String>,
 ) -> FrozenGeneration {
     let mut matching = pool
@@ -63,14 +70,26 @@ pub fn freeze_generation(
         .iter()
         .filter(|frame| {
             crate::synthesis::program_is_consistent(&winner.program, frame)
-                && frame_has_atoms(frame, &winner.required_atom_ids)
+                && crate::cegis::winner_routes_frame(winner, frame)
         })
         .cloned()
         .collect::<Vec<_>>();
     matching.sort_by(frame_event_order);
     matching.dedup_by(|left, right| left.frame_id_sha256 == right.frame_id_sha256);
+    let synthesis_support_ids = winner
+        .support_frame_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
 
-    let (support, mut future) = initial_session_partition(&matching, policy, future_eligible_ids);
+    let (support, mut future) = initial_session_partition(
+        &matching,
+        policy,
+        support_eligible_ids,
+        future_eligible_ids,
+        winner.repair_watermark_unix_nanos,
+        &synthesis_support_ids,
+    );
     let support_sessions = support
         .iter()
         .map(|frame| frame.session_id_sha256.as_str())
@@ -119,7 +138,7 @@ pub fn freeze_generation(
     };
     let generation_id_sha256 = crate::sha256_bytes(
         &serde_json::to_vec(&(
-            "nando.frozen-generation.v6",
+            "nando.frozen-generation.v10",
             FROZEN_PARTITION_VERSION,
             winner.cohort_id_sha256.as_str(),
             generation,
@@ -181,6 +200,7 @@ pub fn refresh_frozen_generation(
         .future
         .iter()
         .filter(|frame| future_eligible_ids.contains(&frame.frame_id_sha256))
+        .filter(|frame| !winner.support_frame_ids.contains(&frame.frame_id_sha256))
         .cloned()
         .map(|frame| (frame.frame_id_sha256.clone(), frame))
         .collect::<BTreeMap<_, _>>();
@@ -194,8 +214,9 @@ pub fn refresh_frozen_generation(
             || support_sessions.contains(frame.session_id_sha256.as_str())
             || support_intents.contains(frame.client_intent_id_sha256.as_str())
             || support_events.contains(frame.event_id_sha256.as_str())
+            || winner.support_frame_ids.contains(&frame.frame_id_sha256)
             || !crate::synthesis::program_is_consistent(&winner.program, frame)
-            || !frame_has_atoms(frame, &winner.required_atom_ids)
+            || !crate::cegis::winner_routes_frame(winner, frame)
         {
             continue;
         }
@@ -206,6 +227,9 @@ pub fn refresh_frozen_generation(
     let mut future = future.into_values().collect::<Vec<_>>();
     future.sort_by(frame_event_order);
     future.truncate(policy.future_rows.saturating_mul(4));
+    if !support_partition_complete(support.len(), policy) {
+        future.clear();
+    }
     let support_session_count = support_sessions.len();
     let future_sessions = future
         .iter()
@@ -243,7 +267,7 @@ pub fn refresh_frozen_generation(
     };
     let generation_id_sha256 = crate::sha256_bytes(
         &serde_json::to_vec(&(
-            "nando.frozen-generation.v6",
+            "nando.frozen-generation.v10",
             current.partition_version,
             winner.cohort_id_sha256.as_str(),
             current.generation,
@@ -363,7 +387,7 @@ pub fn successor_generation(
     let generation = current.generation.saturating_add(1);
     let generation_id_sha256 = crate::sha256_bytes(
         &serde_json::to_vec(&(
-            "nando.frozen-generation.v6",
+            "nando.frozen-generation.v10",
             current.partition_version,
             current.cohort_id_sha256.as_str(),
             generation,
@@ -409,37 +433,88 @@ pub fn generation_monotonically_improves(
         && next.future_sessions >= previous.future_sessions.min(3)
 }
 
-fn frame_has_atoms(frame: &RelationFrame, required: &[u64]) -> bool {
-    let observed = crate::relation_frame_online_routing_atom_ids(frame);
-    required
-        .iter()
-        .all(|atom| observed.binary_search(atom).is_ok())
-}
-
 fn initial_session_partition(
     matching: &[RelationFrame],
     policy: RolloverPolicy,
+    support_eligible_ids: &BTreeSet<String>,
     future_eligible_ids: &BTreeSet<String>,
+    minimum_future_watermark: u64,
+    preferred_support_ids: &BTreeSet<String>,
 ) -> (Vec<RelationFrame>, Vec<RelationFrame>) {
-    let parity_eligible = matching
+    let mut parity_eligible = matching
         .iter()
-        .filter(|frame| future_eligible_ids.contains(&frame.frame_id_sha256))
+        .filter(|frame| support_eligible_ids.contains(&frame.frame_id_sha256))
         .cloned()
         .collect::<Vec<_>>();
-    let support_session_ids = select_support_sessions(
+    parity_eligible.sort_by(frame_event_order);
+    let sessions = parity_eligible
+        .iter()
+        .map(|frame| frame.session_id_sha256.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let fallback = select_support_sessions(
         &parity_eligible,
         policy.support_rows,
         policy.minimum_future_sessions,
     );
-    let support_candidates = parity_eligible
+    let support_session_candidates = if sessions.len() <= MAX_EXACT_PARTITION_SESSIONS {
+        (1_u64..(1_u64 << sessions.len()))
+            .map(|mask| {
+                sessions
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| mask & (1_u64 << index) != 0)
+                    .map(|(_, session)| session.clone())
+                    .collect::<BTreeSet<_>>()
+            })
+            .collect::<Vec<_>>()
+    } else {
+        vec![fallback]
+    };
+    support_session_candidates
+        .into_iter()
+        .filter_map(|support_sessions| {
+            partition_for_support_sessions(
+                &parity_eligible,
+                &support_sessions,
+                policy,
+                future_eligible_ids,
+                minimum_future_watermark,
+                preferred_support_ids,
+            )
+        })
+        .max_by(|left, right| compare_partitions(left, right, policy, preferred_support_ids))
+        .unwrap_or_default()
+}
+
+fn partition_for_support_sessions(
+    parity_eligible: &[RelationFrame],
+    support_session_ids: &BTreeSet<String>,
+    policy: RolloverPolicy,
+    future_eligible_ids: &BTreeSet<String>,
+    minimum_future_watermark: u64,
+    preferred_support_ids: &BTreeSet<String>,
+) -> Option<(Vec<RelationFrame>, Vec<RelationFrame>)> {
+    let mut support_candidates = parity_eligible
         .iter()
         .filter(|frame| support_session_ids.contains(&frame.session_id_sha256))
         .cloned()
         .collect::<Vec<_>>();
+    support_candidates.sort_by(|left, right| {
+        let left_preferred = preferred_support_ids.contains(&left.frame_id_sha256);
+        let right_preferred = preferred_support_ids.contains(&right.frame_id_sha256);
+        right_preferred
+            .cmp(&left_preferred)
+            .then_with(|| frame_event_order(left, right))
+    });
     let support = support_candidates
         .into_iter()
         .take(policy.support_rows)
         .collect::<Vec<_>>();
+    if support.len() < policy.support_rows {
+        return None;
+    }
     let support_ids = support
         .iter()
         .map(|frame| frame.frame_id_sha256.as_str())
@@ -460,11 +535,14 @@ fn initial_session_partition(
         .iter()
         .map(|frame| frame.observed_at_unix_nanos)
         .max()
-        .unwrap_or(0);
+        .unwrap_or(0)
+        .max(minimum_future_watermark);
     let future = parity_eligible
         .iter()
         .filter(|frame| {
             frame.observed_at_unix_nanos > watermark
+                && future_eligible_ids.contains(&frame.frame_id_sha256)
+                && !preferred_support_ids.contains(&frame.frame_id_sha256)
                 && !support_ids.contains(frame.frame_id_sha256.as_str())
                 && !support_sessions.contains(frame.session_id_sha256.as_str())
                 && !support_intents.contains(frame.client_intent_id_sha256.as_str())
@@ -473,56 +551,85 @@ fn initial_session_partition(
         .take(policy.future_rows.saturating_mul(4))
         .cloned()
         .collect::<Vec<_>>();
-    (support, future)
+    Some((support, future))
+}
+
+fn compare_partitions(
+    left: &(Vec<RelationFrame>, Vec<RelationFrame>),
+    right: &(Vec<RelationFrame>, Vec<RelationFrame>),
+    policy: RolloverPolicy,
+    preferred_support_ids: &BTreeSet<String>,
+) -> std::cmp::Ordering {
+    let score = |partition: &(Vec<RelationFrame>, Vec<RelationFrame>)| {
+        let future_sessions = partition
+            .1
+            .iter()
+            .map(|frame| frame.session_id_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len();
+        let support_sessions = partition
+            .0
+            .iter()
+            .map(|frame| frame.session_id_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len();
+        let support_watermark = partition
+            .0
+            .iter()
+            .map(|frame| frame.observed_at_unix_nanos)
+            .max()
+            .unwrap_or(u64::MAX);
+        let preferred_support_rows = partition
+            .0
+            .iter()
+            .filter(|frame| preferred_support_ids.contains(&frame.frame_id_sha256))
+            .count();
+        (
+            partition.1.len() >= policy.future_rows
+                && future_sessions >= policy.minimum_future_sessions,
+            preferred_support_rows,
+            partition.1.len(),
+            future_sessions,
+            std::cmp::Reverse(support_sessions),
+            std::cmp::Reverse(support_watermark),
+        )
+    };
+    score(left).cmp(&score(right))
 }
 
 pub(crate) fn select_support_sessions(
     frames: &[RelationFrame],
     support_rows: usize,
-    minimum_future_sessions: usize,
+    _minimum_future_sessions: usize,
 ) -> BTreeSet<String> {
-    let all_sessions = frames
-        .iter()
-        .map(|frame| frame.session_id_sha256.as_str())
-        .collect::<BTreeSet<_>>();
-    if all_sessions.is_empty() {
+    let mut counts = BTreeMap::<String, usize>::new();
+    for frame in frames {
+        *counts.entry(frame.session_id_sha256.clone()).or_default() += 1;
+    }
+    if counts.is_empty() {
         return BTreeSet::new();
     }
 
-    // Reserving future sessions is a preference, not a reason to discard
-    // already verified support. Admission still requires three disjoint
-    // future sessions after the immutable support watermark.
-    let preferred_limit = all_sessions
-        .len()
-        .saturating_sub(minimum_future_sessions)
-        .max(1);
-
-    let mut counts = BTreeMap::<String, usize>::new();
-    let mut selected = BTreeSet::new();
-    for frame in frames {
-        *counts.entry(frame.session_id_sha256.clone()).or_default() += 1;
-        let mut ranked = counts
+    // Use the smallest sufficient support-session set. Every unused session
+    // remains eligible for the independent future partition.
+    let mut ranked = counts.into_iter().collect::<Vec<_>>();
+    ranked.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    for limit in 1..=ranked.len() {
+        let selected = ranked
             .iter()
-            .map(|(session, rows)| (session.clone(), *rows))
-            .collect::<Vec<_>>();
-        ranked.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
-        for limit in preferred_limit..=ranked.len() {
-            let candidate = ranked
-                .iter()
-                .take(limit)
-                .map(|(session, _)| session.clone())
-                .collect::<BTreeSet<_>>();
-            let candidate_rows = candidate
-                .iter()
-                .map(|session| counts.get(session).copied().unwrap_or(0))
-                .sum::<usize>();
-            selected = candidate;
-            if candidate_rows >= support_rows {
-                return selected;
-            }
+            .take(limit)
+            .map(|(session, _)| session.clone())
+            .collect::<BTreeSet<_>>();
+        let selected_rows = ranked
+            .iter()
+            .take(limit)
+            .map(|(_, rows)| *rows)
+            .sum::<usize>();
+        if selected_rows >= support_rows {
+            return selected;
         }
     }
-    selected
+    ranked.into_iter().map(|(session, _)| session).collect()
 }
 
 pub(crate) fn select_diverse_support_rows(
@@ -641,6 +748,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn future_requires_complete_frozen_support() {
+        let policy = RolloverPolicy::default();
+        assert!(!support_partition_complete(31, policy));
+        assert!(support_partition_complete(32, policy));
+    }
+
+    #[test]
     fn initial_partition_reserves_three_independent_sessions_for_future() {
         let mut matching = Vec::new();
         for row in 0..50 {
@@ -684,13 +798,19 @@ mod tests {
             .map(|frame| frame.frame_id_sha256.clone())
             .collect::<BTreeSet<_>>();
 
-        let (support, future) =
-            initial_session_partition(&matching, RolloverPolicy::default(), &future_eligible_ids);
+        let (support, future) = initial_session_partition(
+            &matching,
+            RolloverPolicy::default(),
+            &future_eligible_ids,
+            &future_eligible_ids,
+            0,
+            &BTreeSet::new(),
+        );
 
         assert_eq!(support.len(), 32);
         assert!(future.len() >= 32);
-        assert_eq!(distinct_session_count(&future), 3);
-        let expected_support_sessions = (0..2)
+        assert!(distinct_session_count(&future) >= 3);
+        let expected_support_sessions = (0..1)
             .map(|session| format!("{session:064x}"))
             .collect::<BTreeSet<_>>();
         assert_eq!(support_sessions, expected_support_sessions);
@@ -708,14 +828,59 @@ mod tests {
                 .any(|support_frame| support_frame.frame_id_sha256 == frame.frame_id_sha256)
         }));
 
+        let preferred_support_ids = selected_support
+            .iter()
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let (preferred_support, preferred_future) = initial_session_partition(
+            &matching,
+            RolloverPolicy::default(),
+            &future_eligible_ids,
+            &future_eligible_ids,
+            0,
+            &preferred_support_ids,
+        );
+        assert_eq!(preferred_support.len(), 32);
+        assert!(preferred_future.len() >= 32);
+        assert!(
+            preferred_support
+                .iter()
+                .all(|frame| { preferred_support_ids.contains(&frame.frame_id_sha256) })
+        );
+        assert!(
+            preferred_future
+                .iter()
+                .all(|frame| { !preferred_support_ids.contains(&frame.frame_id_sha256) })
+        );
+
+        let (_, repaired_future) = initial_session_partition(
+            &matching,
+            RolloverPolicy::default(),
+            &future_eligible_ids,
+            &future_eligible_ids,
+            200,
+            &BTreeSet::new(),
+        );
+        assert!(
+            repaired_future
+                .iter()
+                .all(|frame| frame.observed_at_unix_nanos > 200)
+        );
+
         let parity_eligible_ids = matching
             .iter()
             .filter(|frame| frame.session_id_sha256 == format!("{:064x}", 4))
             .map(|frame| frame.frame_id_sha256.clone())
             .collect::<BTreeSet<_>>();
-        let (parity_support, parity_future) =
-            initial_session_partition(&matching, RolloverPolicy::default(), &parity_eligible_ids);
-        assert_eq!(parity_support.len(), 20);
+        let (parity_support, parity_future) = initial_session_partition(
+            &matching,
+            RolloverPolicy::default(),
+            &parity_eligible_ids,
+            &parity_eligible_ids,
+            0,
+            &BTreeSet::new(),
+        );
+        assert_eq!(parity_support.len(), RolloverPolicy::default().support_rows);
         assert!(parity_future.is_empty());
         assert!(
             parity_support

@@ -57,6 +57,9 @@ UPSTREAM_ONBOARD_SMOKE_JSON="${NANDO_PROVIDER_BRIDGE_UPSTREAM_ONBOARD_SMOKE_REPO
 ACTIVATION_GATE_JSON="${NANDO_PROVIDER_BRIDGE_ACTIVATION_GATE_REPORT:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-activation-gate.json}"
 ACTIVATE_SMOKE_JSON="${NANDO_PROVIDER_BRIDGE_ACTIVATE_SMOKE_REPORT:-/var/lib/nando-wave/streaming/metrics/nando-phase-center.provider-activate-smoke.json}"
 EVIDENCE_JSON="${NANDO_PROVIDER_EVIDENCE_SNAPSHOT_REPORT:-/var/lib/nando-wave/streaming/provider-evidence/provider-evidence-snapshot.report.json}"
+BRIDGE_EVENTS_JSONL="${NANDO_PROVIDER_BRIDGE_EVENTS_JSONL:-/var/lib/nando-wave/streaming/nando-provider-bridge.events.jsonl}"
+BRIDGE_DECISIONS_JSONL="${NANDO_PROVIDER_BRIDGE_DECISIONS_JSONL:-/var/lib/nando-wave/streaming/nando-provider-bridge.decisions.jsonl}"
+LATENCY_WINDOW_ROWS="${NANDO_STATUS_LATENCY_WINDOW_ROWS:-1000}"
 BIND="${NANDO_PROVIDER_BRIDGE_BIND:-127.0.0.1:8787}"
 BASE_URL="http://${BIND}"
 
@@ -82,6 +85,8 @@ activation_gate_json="${tmpdir}/activation-gate.json"
 activate_smoke_json="${tmpdir}/activate-smoke.json"
 evidence_json="${tmpdir}/evidence.json"
 services_json="${tmpdir}/services.json"
+bridge_latency_json="${tmpdir}/bridge-latency.json"
+cpu_latency_json="${tmpdir}/cpu-latency.json"
 
 write_json_or_empty() {
   local src="$1"
@@ -131,19 +136,56 @@ units=(
   nando-phase-center-provider-activation-gate.timer
 )
 
+printf '{"count":0,"p50_ms":0,"p99_ms":0,"max_ms":0}\n' > "${bridge_latency_json}"
+if [[ -s "${BRIDGE_EVENTS_JSONL}" ]]; then
+  tail -n "${LATENCY_WINDOW_ROWS}" "${BRIDGE_EVENTS_JSONL}" | jq -Rsc '
+    [split("\n")[] | fromjson? | select(.stage == "egress" and ((.elapsed_ns // 0) > 0)) | .elapsed_ns]
+    | sort
+    | . as $values
+    | {
+        count: ($values | length),
+        p50_ms: (($values | if length == 0 then 0 else .[((length * 0.50 | ceil) - 1)] end) / 1000000),
+        p99_ms: (($values | if length == 0 then 0 else .[((length * 0.99 | ceil) - 1)] end) / 1000000),
+        max_ms: (($values | last // 0) / 1000000)
+      }
+  ' > "${bridge_latency_json}"
+fi
+
+printf '{"count":0,"p50_ms":0,"p99_ms":0,"max_ms":0}\n' > "${cpu_latency_json}"
+if [[ -s "${BRIDGE_DECISIONS_JSONL}" ]]; then
+  tail -n "${LATENCY_WINDOW_ROWS}" "${BRIDGE_DECISIONS_JSONL}" | jq -Rsc '
+    [split("\n")[] | fromjson? | select(.decision == "local_accept" and ((.elapsed_ns // 0) > 0)) | .elapsed_ns]
+    | sort
+    | . as $values
+    | {
+        count: ($values | length),
+        p50_ms: (($values | if length == 0 then 0 else .[((length * 0.50 | ceil) - 1)] end) / 1000000),
+        p99_ms: (($values | if length == 0 then 0 else .[((length * 0.99 | ceil) - 1)] end) / 1000000),
+        max_ms: (($values | last // 0) / 1000000)
+      }
+  ' > "${cpu_latency_json}"
+fi
+
 {
   for unit in "${units[@]}"; do
     active=false
     state="unknown"
+    main_pid=0
+    memory_current=0
     if command -v systemctl >/dev/null 2>&1; then
       if systemctl is-active --quiet "${unit}" 2>/dev/null; then
         active=true
       fi
       state="$(systemctl is-active "${unit}" 2>/dev/null || true)"
       state="${state:-unknown}"
+      raw_main_pid="$(systemctl show "${unit}" -p MainPID --value 2>/dev/null || true)"
+      raw_memory_current="$(systemctl show "${unit}" -p MemoryCurrent --value 2>/dev/null || true)"
+      [[ "${raw_main_pid}" =~ ^[0-9]+$ ]] && main_pid="${raw_main_pid}"
+      [[ "${raw_memory_current}" =~ ^[0-9]+$ ]] && memory_current="${raw_memory_current}"
     fi
     jq -n --arg unit "${unit}" --arg state "${state}" --argjson active "${active}" \
-      '{unit: $unit, active: $active, state: $state}'
+      --argjson main_pid "${main_pid}" --argjson memory_current "${memory_current}" \
+      '{unit: $unit, active: $active, state: $state, main_pid: $main_pid, memory_current_bytes: $memory_current}'
   done
 } | jq -s . > "${services_json}"
 
@@ -162,6 +204,7 @@ jq -n \
   --arg evidence_json_path "${EVIDENCE_JSON}" \
   --argjson health_ok "${health_ok}" \
   --argjson health_status "${health_status}" \
+  --argjson latency_window_rows "${LATENCY_WINDOW_ROWS}" \
   --slurpfile health "${health_json}" \
   --slurpfile verify "${verify_json}" \
   --slurpfile metrics "${metrics_json}" \
@@ -172,7 +215,9 @@ jq -n \
   --slurpfile activation_gate "${activation_gate_json}" \
   --slurpfile activate_smoke "${activate_smoke_json}" \
   --slurpfile evidence "${evidence_json}" \
-  --slurpfile services "${services_json}" '
+  --slurpfile services "${services_json}" \
+  --slurpfile bridge_latency "${bridge_latency_json}" \
+  --slurpfile cpu_latency "${cpu_latency_json}" '
   def n($v): $v // 0;
   def b($v): if $v then true else false end;
   ($health[0] // {}) as $h |
@@ -186,6 +231,8 @@ jq -n \
   ($activate_smoke[0] // {}) as $as |
   ($evidence[0] // {}) as $e |
   ($services[0] // []) as $svc |
+  ($bridge_latency[0] // {}) as $bl |
+  ($cpu_latency[0] // {}) as $cl |
   (b($health_ok)
     and b($v.install_ready)
     and b($v.shadow_metrics_ready)
@@ -212,7 +259,10 @@ jq -n \
       local_accept_enabled: b($h.local_accept_enabled),
       client_allow_local_accept: b($h.client_allow_local_accept),
       safety_policy: ($h.safety_policy // ""),
-      upstream_configured: b($h.upstream_configured)
+      upstream_configured: b($h.upstream_configured),
+      upstream_base_url_configured: b($h.upstream_base_url_configured),
+      upstream_server_api_key_configured: b($h.upstream_server_api_key_configured),
+      client_auth_forwarding_supported: b($h.client_auth_forwarding_supported)
     },
     verify: {
       path: $verify_json_path,
@@ -245,7 +295,13 @@ jq -n \
       ready_for_broad_provider_traffic: $broad_ready,
       real_probe_allowed: b($u.real_probe_allowed),
       real_probe_attempted: b($u.real_probe_attempted),
-      boundary_rows_added: n($u.boundary_rows_added)
+      boundary_rows_added: n($u.boundary_rows_added),
+      observed_live_upstream_success: b($u.observed_live_upstream_success),
+      observed_live_success_count: n($u.observed_live_success_count),
+      observed_live_latest_timestamp: ($u.observed_live_latest_timestamp // ""),
+      observed_live_latest_path: ($u.observed_live_latest_path // ""),
+      observed_live_latest_status: n($u.observed_live_latest_status),
+      observed_live_latest_provider: ($u.observed_live_latest_provider // "")
     },
     upstream_lab_smoke: {
       path: $upstream_smoke_json_path,
@@ -293,6 +349,25 @@ jq -n \
       market_money_claim_allowed: b($e.evidence_chain.market_money_claim_allowed),
       provider_billing_evidence_present: b($e.evidence_chain.provider_billing_evidence_present),
       blocker: ($e.blocker // "")
+    },
+    latency: {
+      window_rows: $latency_window_rows,
+      bridge_egress_count: n($bl.count),
+      bridge_egress_p50_ms: n($bl.p50_ms),
+      bridge_egress_p99_ms: n($bl.p99_ms),
+      bridge_egress_max_ms: n($bl.max_ms),
+      cpu_local_accept_count: n($cl.count),
+      cpu_local_accept_p50_ms: n($cl.p50_ms),
+      cpu_local_accept_p99_ms: n($cl.p99_ms),
+      cpu_local_accept_max_ms: n($cl.max_ms),
+      boundary: "observed elapsed time from recent bridge event rows; bridge egress includes upstream provider time, CPU local accept does not"
+    },
+    resources: {
+      provider_bridge_rss_bytes: ([ $svc[] | select(.unit == "nando-provider-bridge.service") | n(.memory_current_bytes) ] | first // 0),
+      live_tail_rss_bytes: ([ $svc[] | select(.unit == "nando-phase-center-live-tail.service") | n(.memory_current_bytes) ] | first // 0),
+      appender_rss_bytes: ([ $svc[] | select(.unit == "nando-phase-center-appender.service") | n(.memory_current_bytes) ] | first // 0),
+      serving_rss_bytes: ([ $svc[] | select(.unit == "nando-provider-bridge.service" or .unit == "nando-phase-center-live-tail.service" or .unit == "nando-phase-center-appender.service") | n(.memory_current_bytes) ] | add // 0),
+      boundary: "live systemd MemoryCurrent snapshot; not a configured limit"
     },
     metrics: {
       path: $metrics_json_path,

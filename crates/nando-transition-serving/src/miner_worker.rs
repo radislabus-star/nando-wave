@@ -9,14 +9,15 @@ use std::time::{Duration, Instant};
 use nando_response_actor::{
     ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, FramedCborLedger, OnlineCollectionMiner,
     OnlineCollectionObservation, OnlineResponseMinerReport, OnlineResponseStream,
-    ReducibilityClass, RelationFrame, RuntimeParityCase, TeacherTransition, read_framed_cbor,
-    teacher_transition_from_completed,
+    OnlineResponseStreamStatus, ReducibilityClass, RelationFrame, RuntimeParityCase,
+    TeacherTransition, read_framed_cbor, teacher_transition_from_completed,
 };
 
 const QUEUE_CAPACITY: usize = 4_096;
 const INPUTS_PER_SYNTHESIS_SLICE: u64 = 64;
-const CHECKPOINT_EVENTS: u64 = 256;
-const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(5);
+const CHECKPOINT_EVENTS: u64 = 4_096;
+const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(60);
+const EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED: bool = true;
 
 #[derive(Default)]
 struct MinerWorkerCounters {
@@ -28,18 +29,25 @@ struct MinerWorkerCounters {
     exact_checks: AtomicU64,
     replayed_records: AtomicU64,
     collection_processed: AtomicU64,
+    collection_maintenance_slices: AtomicU64,
     collection_replayed_records: AtomicU64,
     opportunity_processed: AtomicU64,
     opportunity_replayed_records: AtomicU64,
     replay_rejected_records: AtomicU64,
     opportunity_dropped: AtomicU64,
     startup_replay_micros: AtomicU64,
+    startup_replay_support_before: AtomicU64,
+    startup_replay_support_after_teacher: AtomicU64,
+    startup_replay_support_after_opportunity: AtomicU64,
     transition_last_micros: AtomicU64,
     transition_max_micros: AtomicU64,
     transition_total_micros: AtomicU64,
     collection_last_micros: AtomicU64,
     collection_max_micros: AtomicU64,
     collection_total_micros: AtomicU64,
+    collection_maintenance_last_micros: AtomicU64,
+    collection_maintenance_max_micros: AtomicU64,
+    collection_maintenance_total_micros: AtomicU64,
     synthesis_last_micros: AtomicU64,
     synthesis_max_micros: AtomicU64,
     synthesis_total_micros: AtomicU64,
@@ -56,6 +64,7 @@ pub struct MinerWorkerStatus {
     pub queue_capacity: usize,
     pub inputs_per_synthesis_slice: u64,
     pub checkpoint_events: u64,
+    pub checkpoint_interval_seconds: u64,
     pub enqueued: u64,
     pub processed: u64,
     pub failed: u64,
@@ -64,6 +73,7 @@ pub struct MinerWorkerStatus {
     pub exact_checks: u64,
     pub replayed_records: u64,
     pub collection_processed: u64,
+    pub collection_maintenance_slices: u64,
     pub collection_replayed_records: u64,
     pub opportunity_processed: u64,
     pub opportunity_replayed_records: u64,
@@ -71,12 +81,18 @@ pub struct MinerWorkerStatus {
     pub opportunity_dropped: u64,
     pub queue_backlog_estimate: u64,
     pub startup_replay_micros: u64,
+    pub startup_replay_support_before: u64,
+    pub startup_replay_support_after_teacher: u64,
+    pub startup_replay_support_after_opportunity: u64,
     pub transition_last_micros: u64,
     pub transition_max_micros: u64,
     pub transition_total_micros: u64,
     pub collection_last_micros: u64,
     pub collection_max_micros: u64,
     pub collection_total_micros: u64,
+    pub collection_maintenance_last_micros: u64,
+    pub collection_maintenance_max_micros: u64,
+    pub collection_maintenance_total_micros: u64,
     pub synthesis_last_micros: u64,
     pub synthesis_max_micros: u64,
     pub synthesis_total_micros: u64,
@@ -93,6 +109,7 @@ pub struct MinerWorkerHandle {
     sender: SyncSender<MinerCommand>,
     counters: Arc<MinerWorkerCounters>,
     response_report: Arc<std::sync::RwLock<Option<OnlineResponseMinerReport>>>,
+    response_status: Arc<std::sync::RwLock<Option<OnlineResponseStreamStatus>>>,
 }
 
 enum MinerCommand {
@@ -231,6 +248,7 @@ impl MinerWorkerHandle {
             queue_capacity: QUEUE_CAPACITY,
             inputs_per_synthesis_slice: INPUTS_PER_SYNTHESIS_SLICE,
             checkpoint_events: CHECKPOINT_EVENTS,
+            checkpoint_interval_seconds: CHECKPOINT_INTERVAL.as_secs(),
             enqueued,
             processed,
             failed,
@@ -239,6 +257,10 @@ impl MinerWorkerHandle {
             exact_checks: self.counters.exact_checks.load(Ordering::Relaxed),
             replayed_records: self.counters.replayed_records.load(Ordering::Relaxed),
             collection_processed: self.counters.collection_processed.load(Ordering::Relaxed),
+            collection_maintenance_slices: self
+                .counters
+                .collection_maintenance_slices
+                .load(Ordering::Relaxed),
             collection_replayed_records: self
                 .counters
                 .collection_replayed_records
@@ -255,6 +277,18 @@ impl MinerWorkerHandle {
             opportunity_dropped: self.counters.opportunity_dropped.load(Ordering::Relaxed),
             queue_backlog_estimate: enqueued.saturating_sub(processed.saturating_add(failed)),
             startup_replay_micros: self.counters.startup_replay_micros.load(Ordering::Relaxed),
+            startup_replay_support_before: self
+                .counters
+                .startup_replay_support_before
+                .load(Ordering::Relaxed),
+            startup_replay_support_after_teacher: self
+                .counters
+                .startup_replay_support_after_teacher
+                .load(Ordering::Relaxed),
+            startup_replay_support_after_opportunity: self
+                .counters
+                .startup_replay_support_after_opportunity
+                .load(Ordering::Relaxed),
             transition_last_micros: self.counters.transition_last_micros.load(Ordering::Relaxed),
             transition_max_micros: self.counters.transition_max_micros.load(Ordering::Relaxed),
             transition_total_micros: self
@@ -266,6 +300,18 @@ impl MinerWorkerHandle {
             collection_total_micros: self
                 .counters
                 .collection_total_micros
+                .load(Ordering::Relaxed),
+            collection_maintenance_last_micros: self
+                .counters
+                .collection_maintenance_last_micros
+                .load(Ordering::Relaxed),
+            collection_maintenance_max_micros: self
+                .counters
+                .collection_maintenance_max_micros
+                .load(Ordering::Relaxed),
+            collection_maintenance_total_micros: self
+                .counters
+                .collection_maintenance_total_micros
                 .load(Ordering::Relaxed),
             synthesis_last_micros: self.counters.synthesis_last_micros.load(Ordering::Relaxed),
             synthesis_max_micros: self.counters.synthesis_max_micros.load(Ordering::Relaxed),
@@ -295,6 +341,11 @@ impl MinerWorkerHandle {
             .ok()
             .and_then(|report| report.clone())
     }
+
+    #[must_use]
+    pub fn response_status(&self) -> Option<OnlineResponseStreamStatus> {
+        self.response_status.read().ok().and_then(|status| *status)
+    }
 }
 
 pub fn spawn_miner_worker(
@@ -321,6 +372,10 @@ pub fn spawn_miner_worker(
     )?;
     let opportunity_replay =
         read_framed_cbor::<MinerOpportunityEvent>(&opportunity_ledger_dir, "opportunity")?;
+    let startup_replay_support_before = miner
+        .lock()
+        .map_err(|_| "miner_worker_initial_support_lock_poisoned".to_owned())?
+        .replay_support_parity_cases_total();
     let mut replay_rejected_records = 0_u64;
     if !teacher_replay.is_empty() {
         let mut stream = miner
@@ -334,6 +389,10 @@ pub fn spawn_miner_worker(
         }
         stream.persist_now()?;
     }
+    let startup_replay_support_after_teacher = miner
+        .lock()
+        .map_err(|_| "miner_worker_teacher_support_lock_poisoned".to_owned())?
+        .replay_support_parity_cases_total();
     if !collection_replay.is_empty() {
         let mut collection = collection_miner
             .lock()
@@ -355,6 +414,10 @@ pub fn spawn_miner_worker(
         }
         stream.persist_now()?;
     }
+    let startup_replay_support_after_opportunity = miner
+        .lock()
+        .map_err(|_| "miner_worker_opportunity_support_lock_poisoned".to_owned())?
+        .replay_support_parity_cases_total();
     let mut teacher_ledger = FramedCborLedger::open(&teacher_ledger_dir, "teacher-transition")?;
     let mut collection_ledger =
         FramedCborLedger::open(&collection_ledger_dir, "collection-observation")?;
@@ -373,6 +436,18 @@ pub fn spawn_miner_worker(
     counters
         .startup_replay_micros
         .store(elapsed_micros(startup_started), Ordering::Relaxed);
+    counters.startup_replay_support_before.store(
+        u64::try_from(startup_replay_support_before).unwrap_or(u64::MAX),
+        Ordering::Relaxed,
+    );
+    counters.startup_replay_support_after_teacher.store(
+        u64::try_from(startup_replay_support_after_teacher).unwrap_or(u64::MAX),
+        Ordering::Relaxed,
+    );
+    counters.startup_replay_support_after_opportunity.store(
+        u64::try_from(startup_replay_support_after_opportunity).unwrap_or(u64::MAX),
+        Ordering::Relaxed,
+    );
     counters.replayed_records.store(
         u64::try_from(teacher_replay.len()).unwrap_or(u64::MAX),
         Ordering::Relaxed,
@@ -388,18 +463,26 @@ pub fn spawn_miner_worker(
     counters
         .replay_rejected_records
         .store(replay_rejected_records, Ordering::Relaxed);
-    let initial_synthesis_pending = miner
-        .lock()
-        .map_err(|_| "miner_worker_initial_work_lock_poisoned".to_owned())?
-        .has_self_training_work();
-    let response_report = Arc::new(std::sync::RwLock::new(Some(
-        miner
+    let initial_synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED
+        && miner
             .lock()
-            .map_err(|_| "miner_worker_initial_report_lock_poisoned".to_owned())?
-            .report(),
-    )));
+            .map_err(|_| "miner_worker_initial_work_lock_poisoned".to_owned())?
+            .has_self_training_work();
+    let initial_collection_maintenance_pending = collection_miner
+        .lock()
+        .map_err(|_| "miner_worker_initial_collection_work_lock_poisoned".to_owned())?
+        .has_structural_resynthesis_work();
+    let (initial_report, initial_status) = {
+        let stream = miner
+            .lock()
+            .map_err(|_| "miner_worker_initial_report_lock_poisoned".to_owned())?;
+        (stream.report(), stream.status())
+    };
+    let response_report = Arc::new(std::sync::RwLock::new(Some(initial_report)));
+    let response_status = Arc::new(std::sync::RwLock::new(Some(initial_status)));
     let thread_counters = Arc::clone(&counters);
     let thread_response_report = Arc::clone(&response_report);
+    let thread_response_status = Arc::clone(&response_status);
     thread::Builder::new()
         .name("nando-response-miner-v2".to_owned())
         .spawn(move || {
@@ -407,8 +490,10 @@ pub fn spawn_miner_worker(
             let mut inputs_since_synthesis = 0_u64;
             let mut last_checkpoint = Instant::now();
             let mut synthesis_pending = initial_synthesis_pending;
+            let mut collection_maintenance_pending = initial_collection_maintenance_pending;
+            let mut prefer_collection_maintenance = initial_collection_maintenance_pending;
             loop {
-                let command = if synthesis_pending {
+                let command = if synthesis_pending || collection_maintenance_pending {
                     match receiver.try_recv() {
                         Ok(command) => Some(command),
                         Err(TryRecvError::Empty) => None,
@@ -454,7 +539,7 @@ pub fn spawn_miner_worker(
                         }
                         thread_counters.processed.fetch_add(1, Ordering::Relaxed);
                         events_since_checkpoint = events_since_checkpoint.saturating_add(1);
-                        synthesis_pending = true;
+                        synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED;
                         if let Some(trigger) = &authority_trigger {
                             let _ = trigger.try_send(());
                         }
@@ -519,23 +604,20 @@ pub fn spawn_miner_worker(
                 if input_was_available {
                     inputs_since_synthesis = inputs_since_synthesis.saturating_add(1);
                 }
-                let run_synthesis = synthesis_pending
-                    && (!input_was_available
-                        || inputs_since_synthesis >= INPUTS_PER_SYNTHESIS_SLICE);
+                let slice_due =
+                    !input_was_available || inputs_since_synthesis >= INPUTS_PER_SYNTHESIS_SLICE;
+                let run_collection_maintenance = collection_maintenance_pending
+                    && slice_due
+                    && (!synthesis_pending || prefer_collection_maintenance);
+                let run_synthesis = synthesis_pending && slice_due && !run_collection_maintenance;
                 if run_synthesis {
                     let started = Instant::now();
-                    let (checks, finished_report) =
-                        miner.lock().ok().map_or((0, None), |mut stream| {
+                    let (checks, synthesis_work_remains) =
+                        miner.lock().ok().map_or((0, false), |mut stream| {
                             let checks = stream.run_self_training_work_slice();
-                            let finished_report =
-                                (!stream.has_self_training_work()).then(|| stream.report());
-                            (checks, finished_report)
+                            let synthesis_work_remains = stream.has_self_training_work();
+                            (checks, synthesis_work_remains)
                         });
-                    if let Some(report) = finished_report
-                        && let Ok(mut published) = thread_response_report.write()
-                    {
-                        *published = Some(report);
-                    }
                     record_timing(
                         &thread_counters.synthesis_last_micros,
                         &thread_counters.synthesis_max_micros,
@@ -543,12 +625,9 @@ pub fn spawn_miner_worker(
                         elapsed_micros(started),
                     );
                     inputs_since_synthesis = 0;
-                    if checks == 0 {
-                        synthesis_pending = miner
-                            .lock()
-                            .ok()
-                            .is_some_and(|stream| stream.has_self_training_work());
-                    } else {
+                    synthesis_pending = synthesis_work_remains;
+                    prefer_collection_maintenance = collection_maintenance_pending;
+                    if checks > 0 {
                         thread_counters
                             .synthesis_slices
                             .fetch_add(1, Ordering::Relaxed);
@@ -561,6 +640,47 @@ pub fn spawn_miner_worker(
                             let _ = trigger.try_send(());
                         }
                         thread::sleep(Duration::from_millis(1));
+                    }
+                } else if run_collection_maintenance {
+                    let started = Instant::now();
+                    let result = collection_miner
+                        .lock()
+                        .map_err(|_| "miner_worker_collection_maintenance_lock_poisoned".to_owned())
+                        .and_then(|mut collection| {
+                            let programs_added =
+                                collection.run_structural_resynthesis_work_slice()?;
+                            Ok((programs_added, collection.has_structural_resynthesis_work()))
+                        });
+                    record_timing(
+                        &thread_counters.collection_maintenance_last_micros,
+                        &thread_counters.collection_maintenance_max_micros,
+                        &thread_counters.collection_maintenance_total_micros,
+                        elapsed_micros(started),
+                    );
+                    inputs_since_synthesis = 0;
+                    prefer_collection_maintenance = false;
+                    match result {
+                        Ok((programs_added, work_remains)) => {
+                            collection_maintenance_pending = work_remains;
+                            thread_counters
+                                .collection_maintenance_slices
+                                .fetch_add(1, Ordering::Relaxed);
+                            events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                            if programs_added > 0
+                                && let Some(trigger) = &authority_trigger
+                            {
+                                let _ = trigger.try_send(());
+                            }
+                            thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(error) => {
+                            collection_maintenance_pending =
+                                collection_miner.lock().is_ok_and(|collection| {
+                                    collection.has_structural_resynthesis_work()
+                                });
+                            thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            eprintln!("nando-response-miner-v2 collection maintenance: {error}");
+                        }
                     }
                 }
 
@@ -592,10 +712,15 @@ pub fn spawn_miner_worker(
                     );
                     match persisted {
                         Ok(()) => {
-                            if let Ok(stream) = miner.lock()
-                                && let Ok(mut published) = thread_response_report.write()
-                            {
-                                *published = Some(stream.report());
+                            if let Ok(stream) = miner.lock() {
+                                let report = stream.report();
+                                let status = stream.status();
+                                if let Ok(mut published) = thread_response_report.write() {
+                                    *published = Some(report);
+                                }
+                                if let Ok(mut published) = thread_response_status.write() {
+                                    *published = Some(status);
+                                }
                             }
                             thread_counters.checkpoints.fetch_add(1, Ordering::Relaxed);
                             events_since_checkpoint = 0;
@@ -629,6 +754,7 @@ pub fn spawn_miner_worker(
         sender,
         counters,
         response_report,
+        response_status,
     })
 }
 

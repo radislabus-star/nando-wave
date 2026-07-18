@@ -3,6 +3,46 @@ use serde::{Deserialize, Serialize};
 use crate::{ResponseValueSelector, SemanticRole};
 
 pub const MAX_PROJECT_STATUS_CODE: u64 = 1_000_000;
+pub const MAX_UNIQUE_CONSENSUS_VARIANTS: usize = 64;
+pub const MAX_ADAPTER_WAVE_CELLS: usize = 32;
+pub const MAX_ADAPTER_WAVE_SUBCENTERS: usize = 16;
+pub const MAX_ADAPTER_WAVE_EXACT_BUDGET: usize = 16;
+pub const MAX_ADAPTER_WAVE_ANCHOR_ATOMS: usize = 32;
+pub const MAX_ADAPTER_WAVE_FINGERPRINTS: usize = 64;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ResponseAdapterWaveSubcenter {
+    pub center_delta_micro: Vec<i32>,
+    pub threshold_micro: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ResponseAdapterWaveRoute {
+    pub cells: u16,
+    pub center_delta_micro: Vec<i32>,
+    pub threshold_micro: i64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub anchor_atom_ids: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub positive_fingerprint_ids: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subcenters: Vec<ResponseAdapterWaveSubcenter>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ResponseAdapterWaveConsensus {
+    pub routes: Vec<ResponseAdapterWaveRoute>,
+    pub exact_budget: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ResponseConsensusVariant {
+    pub program: ResponseProgram,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_layout_sha256: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_request_atom_ids: Vec<u64>,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
@@ -60,12 +100,46 @@ pub enum CollectionOutputRenderer {
     RenderSequence {
         segments: Vec<ResponseRenderSegment>,
     },
+    RequestTemplate {
+        marker: RequestTemplateMarker,
+    },
 }
 
 impl CollectionOutputRenderer {
     #[must_use]
     pub const fn is_direct(&self) -> bool {
         matches!(self, Self::Direct)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RequestTemplateMarker {
+    BracedValue,
+    BracedResult,
+    BracedCount,
+    BracedStatus,
+    BracedItems,
+    DoubleBracedValue,
+    AngleValue,
+    AngleResult,
+    PercentS,
+}
+
+impl RequestTemplateMarker {
+    #[must_use]
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::BracedValue => "{value}",
+            Self::BracedResult => "{result}",
+            Self::BracedCount => "{count}",
+            Self::BracedStatus => "{status}",
+            Self::BracedItems => "{items}",
+            Self::DoubleBracedValue => "{{value}}",
+            Self::AngleValue => "<value>",
+            Self::AngleResult => "<result>",
+            Self::PercentS => "%s",
+        }
     }
 }
 
@@ -122,6 +196,9 @@ impl ResponseScalarLiteral {
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(tag = "step", rename_all = "snake_case")]
 pub enum CollectionProgramStep {
+    SelectTurnOutput {
+        output_ordinal: u16,
+    },
     SelectOnlyArrayField,
     SelectField {
         field: String,
@@ -178,6 +255,14 @@ impl ProjectStatusValue {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum ResponseOperation {
+    UniqueConsensus {
+        variants: Vec<ResponseConsensusVariant>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        adapter_wave: Option<ResponseAdapterWaveConsensus>,
+    },
+    AdvancePlan {
+        function_name: String,
+    },
     FunctionCallFromRoles {
         function_name: String,
         selector: ResponseValueSelector,
@@ -200,6 +285,8 @@ pub enum ResponseOperation {
     ProjectStatus {
         selector: ResponseValueSelector,
         mapping: ProjectStatusMapping,
+        #[serde(default, skip_serializing_if = "CollectionOutputRenderer::is_direct")]
+        renderer: CollectionOutputRenderer,
         completion_state: String,
     },
     ComposeCollection {
@@ -245,6 +332,46 @@ pub struct ResponseProgram {
 }
 
 impl ResponseProgram {
+    #[must_use]
+    pub fn unique_consensus(variants: Vec<ResponseConsensusVariant>) -> Self {
+        let max_output_bytes = variants
+            .iter()
+            .map(|variant| variant.program.max_output_bytes)
+            .max()
+            .unwrap_or(16_384);
+        Self {
+            schema: "nando.response-program.v1".to_owned(),
+            operation: ResponseOperation::UniqueConsensus {
+                variants,
+                adapter_wave: None,
+            },
+            max_output_bytes,
+        }
+    }
+
+    #[must_use]
+    pub fn with_adapter_wave(mut self, adapter_wave: ResponseAdapterWaveConsensus) -> Self {
+        if let ResponseOperation::UniqueConsensus {
+            adapter_wave: current,
+            ..
+        } = &mut self.operation
+        {
+            *current = Some(adapter_wave);
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn advance_plan(function_name: impl Into<String>) -> Self {
+        Self {
+            schema: "nando.response-program.v1".to_owned(),
+            operation: ResponseOperation::AdvancePlan {
+                function_name: function_name.into(),
+            },
+            max_output_bytes: 32_768,
+        }
+    }
+
     #[must_use]
     pub fn function_call_from_roles(
         function_name: impl Into<String>,
@@ -323,10 +450,23 @@ impl ResponseProgram {
             operation: ResponseOperation::ProjectStatus {
                 selector,
                 mapping,
+                renderer: CollectionOutputRenderer::Direct,
                 completion_state: completion_state.into(),
             },
             max_output_bytes: ProjectStatusValue::Failure.canonical_text().len(),
         }
+    }
+
+    #[must_use]
+    pub fn with_status_renderer(mut self, renderer: CollectionOutputRenderer) -> Self {
+        if let ResponseOperation::ProjectStatus {
+            renderer: current, ..
+        } = &mut self.operation
+        {
+            *current = renderer;
+        }
+        self.max_output_bytes = 4_096;
+        self
     }
 
     #[must_use]
@@ -446,6 +586,86 @@ impl ResponseProgram {
             return Err("invalid_output_budget");
         }
         match &self.operation {
+            ResponseOperation::UniqueConsensus {
+                variants,
+                adapter_wave,
+            } => {
+                if !(1..=MAX_UNIQUE_CONSENSUS_VARIANTS).contains(&variants.len()) {
+                    return Err("invalid_unique_consensus_variant_count");
+                }
+                if let Some(wave) = adapter_wave {
+                    if wave.routes.len() != variants.len()
+                        || !(1..=MAX_ADAPTER_WAVE_EXACT_BUDGET)
+                            .contains(&usize::from(wave.exact_budget))
+                        || usize::from(wave.exact_budget) > variants.len()
+                    {
+                        return Err("invalid_adapter_wave_shape");
+                    }
+                    for route in &wave.routes {
+                        let cells = usize::from(route.cells);
+                        if cells == 0
+                            || cells > MAX_ADAPTER_WAVE_CELLS
+                            || route.center_delta_micro.len() != cells * 2
+                            || route.subcenters.len() > MAX_ADAPTER_WAVE_SUBCENTERS
+                            || route.anchor_atom_ids.len() > MAX_ADAPTER_WAVE_ANCHOR_ATOMS
+                            || route.positive_fingerprint_ids.len() > MAX_ADAPTER_WAVE_FINGERPRINTS
+                            || route
+                                .anchor_atom_ids
+                                .windows(2)
+                                .any(|pair| pair[0] >= pair[1])
+                            || route
+                                .positive_fingerprint_ids
+                                .windows(2)
+                                .any(|pair| pair[0] >= pair[1])
+                            || route
+                                .subcenters
+                                .iter()
+                                .any(|subcenter| subcenter.center_delta_micro.len() != cells * 2)
+                        {
+                            return Err("invalid_adapter_wave_route");
+                        }
+                    }
+                }
+                let Some(kind) = variants
+                    .first()
+                    .and_then(|variant| consensus_variant_kind(&variant.program))
+                else {
+                    return Err("invalid_unique_consensus_variant_kind");
+                };
+                for variant in variants {
+                    if consensus_variant_kind(&variant.program) != Some(kind) {
+                        return Err("mixed_unique_consensus_variant_kinds");
+                    }
+                    if variant.program.max_output_bytes > self.max_output_bytes {
+                        return Err("unique_consensus_variant_output_budget");
+                    }
+                    if variant.allowed_layout_sha256.len() > 16
+                        || !variant
+                            .allowed_layout_sha256
+                            .windows(2)
+                            .all(|pair| pair[0] < pair[1])
+                        || variant.allowed_layout_sha256.iter().any(|digest| {
+                            digest.len() != 64
+                                || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        })
+                    {
+                        return Err("invalid_unique_consensus_layout_guards");
+                    }
+                    if variant.required_request_atom_ids.len() > 8
+                        || !variant
+                            .required_request_atom_ids
+                            .windows(2)
+                            .all(|pair| pair[0] < pair[1])
+                    {
+                        return Err("invalid_unique_consensus_request_guards");
+                    }
+                    variant.program.validate()?;
+                }
+                Ok(())
+            }
+            ResponseOperation::AdvancePlan { function_name } => {
+                validate_identifier(function_name, "invalid_plan_function_name")
+            }
             ResponseOperation::FunctionCallFromRoles {
                 function_name,
                 selector,
@@ -505,11 +725,13 @@ impl ResponseProgram {
                     CollectionOutputRenderer::RenderSequence { segments } => {
                         validate_render_sequence(segments)?;
                     }
+                    CollectionOutputRenderer::RequestTemplate { .. } => {}
                 }
                 Ok(())
             }
             ResponseOperation::ProjectStatus {
                 selector,
+                renderer,
                 completion_state,
                 ..
             } => {
@@ -520,6 +742,18 @@ impl ResponseProgram {
                 if !matches!(completion_state.as_str(), "pending" | "completed") {
                     return Err("invalid_status_completion_state");
                 }
+                match renderer {
+                    CollectionOutputRenderer::Direct => {}
+                    CollectionOutputRenderer::RenderTemplate { prefix, suffix } => {
+                        if !safe_collection_renderer(prefix, suffix) {
+                            return Err("invalid_status_renderer");
+                        }
+                    }
+                    CollectionOutputRenderer::RenderSequence { segments } => {
+                        validate_render_sequence(segments)?;
+                    }
+                    CollectionOutputRenderer::RequestTemplate { .. } => {}
+                }
                 Ok(())
             }
             ResponseOperation::ComposeCollection {
@@ -529,7 +763,19 @@ impl ResponseProgram {
                 max_items,
                 ..
             } => {
-                if steps.is_empty() || steps.len() > 8 {
+                let source_steps = steps
+                    .iter()
+                    .filter(|step| matches!(step, CollectionProgramStep::SelectTurnOutput { .. }))
+                    .count();
+                let has_explicit_source = matches!(
+                    steps.first(),
+                    Some(CollectionProgramStep::SelectTurnOutput { .. })
+                );
+                if steps.is_empty()
+                    || steps.len().saturating_sub(usize::from(has_explicit_source)) > 8
+                    || source_steps > 1
+                    || (source_steps == 1 && !has_explicit_source)
+                {
                     return Err("invalid_collection_program_length");
                 }
                 if *max_items == 0 || *max_items > 4_096 {
@@ -548,9 +794,15 @@ impl ResponseProgram {
                     CollectionOutputRenderer::RenderSequence { segments } => {
                         validate_render_sequence(segments)?;
                     }
+                    CollectionOutputRenderer::RequestTemplate { .. } => {}
                 }
                 for step in steps {
                     match step {
+                        CollectionProgramStep::SelectTurnOutput { output_ordinal } => {
+                            if !(1..=16).contains(output_ordinal) {
+                                return Err("invalid_collection_output_ordinal");
+                            }
+                        }
                         CollectionProgramStep::SelectField { field }
                         | CollectionProgramStep::ProjectField { field }
                         | CollectionProgramStep::FilterFieldEquals { field, .. } => {
@@ -619,8 +871,19 @@ impl ResponseProgram {
     }
 }
 
+fn consensus_variant_kind(program: &ResponseProgram) -> Option<u8> {
+    match program.operation {
+        ResponseOperation::ProjectSelectedValue { .. } => Some(0),
+        ResponseOperation::ProjectStatus { .. } => Some(1),
+        ResponseOperation::ComposeCollection { .. } => Some(2),
+        ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => Some(3),
+        _ => None,
+    }
+}
+
 fn validate_render_sequence(segments: &[ResponseRenderSegment]) -> Result<(), &'static str> {
-    if !(2..=32).contains(&segments.len()) {
+    if !(1..=64).contains(&segments.len()) {
         return Err("invalid_render_sequence_length");
     }
     let primary_count = segments
@@ -631,7 +894,8 @@ fn validate_render_sequence(segments: &[ResponseRenderSegment]) -> Result<(), &'
         .iter()
         .filter(|segment| matches!(segment, ResponseRenderSegment::Selected { .. }))
         .count();
-    if primary_count == 0 || primary_count > 8 || primary_count.saturating_add(selected_count) < 2 {
+    let dynamic_count = primary_count.saturating_add(selected_count);
+    if dynamic_count == 0 || dynamic_count > 16 {
         return Err("invalid_render_sequence_dynamic_segments");
     }
     let mut static_text = String::new();
@@ -675,10 +939,7 @@ fn safe_collection_renderer(prefix: &str, suffix: &str) -> bool {
     {
         return false;
     }
-    if !renderer_static_grammar_allowed(&combined) {
-        return false;
-    }
-    let lower = combined.to_ascii_lowercase();
+    let lower = combined.to_lowercase();
     if [
         "authorization",
         "bearer ",
@@ -694,6 +955,15 @@ fn safe_collection_renderer(prefix: &str, suffix: &str) -> bool {
         "privatekey",
         "cookie",
         "token",
+        "customer ",
+        "client ",
+        "phone ",
+        "address ",
+        "клиент ",
+        "телефон ",
+        "адрес ",
+        "улица ",
+        "проспект ",
     ]
     .iter()
     .any(|term| lower.contains(term))
@@ -706,145 +976,32 @@ fn safe_collection_renderer(prefix: &str, suffix: &str) -> bool {
         || contains_email_like(&combined)
         || contains_windows_path(&combined)
         || contains_high_entropy_run(&combined)
+        || contains_phone_like(&combined)
+        || (combined.contains('\n') && combined.chars().any(char::is_alphabetic))
     {
         return false;
     }
     true
 }
 
-fn renderer_static_grammar_allowed(value: &str) -> bool {
-    let mut word = String::new();
+fn contains_phone_like(value: &str) -> bool {
+    let mut digits = 0_usize;
+    let mut span = 0_usize;
     for character in value.chars().chain(std::iter::once(' ')) {
-        if character.is_alphabetic() {
-            word.extend(character.to_lowercase());
-            continue;
-        }
-        if !word.is_empty() {
-            if !renderer_word_allowed(&word) {
-                return false;
+        if character.is_ascii_digit() {
+            digits = digits.saturating_add(1);
+            span = span.saturating_add(1);
+        } else if matches!(character, '+' | '-' | '(' | ')' | ' ') && digits > 0 {
+            span = span.saturating_add(1);
+        } else {
+            if digits >= 7 && span <= 24 {
+                return true;
             }
-            word.clear();
-        }
-        if !character.is_whitespace()
-            && !matches!(
-                character,
-                '.' | ','
-                    | ':'
-                    | ';'
-                    | '!'
-                    | '?'
-                    | '('
-                    | ')'
-                    | '['
-                    | ']'
-                    | '{'
-                    | '}'
-                    | '\''
-                    | '"'
-                    | '-'
-                    | '/'
-                    | '_'
-                    | '*'
-                    | '`'
-                    | '#'
-                    | '+'
-                    | '|'
-                    | '<'
-                    | '>'
-                    | '%'
-            )
-        {
-            return false;
+            digits = 0;
+            span = 0;
         }
     }
-    true
-}
-
-fn renderer_word_allowed(word: &str) -> bool {
-    matches!(
-        word,
-        "selected"
-            | "select"
-            | "value"
-            | "values"
-            | "result"
-            | "results"
-            | "count"
-            | "total"
-            | "status"
-            | "item"
-            | "items"
-            | "row"
-            | "rows"
-            | "record"
-            | "records"
-            | "entry"
-            | "entries"
-            | "matching"
-            | "matched"
-            | "filtered"
-            | "found"
-            | "output"
-            | "data"
-            | "is"
-            | "are"
-            | "was"
-            | "were"
-            | "success"
-            | "failure"
-            | "passed"
-            | "failed"
-            | "true"
-            | "false"
-            | "none"
-            | "empty"
-            | "выбрано"
-            | "выбранные"
-            | "значение"
-            | "значения"
-            | "результат"
-            | "результаты"
-            | "количество"
-            | "всего"
-            | "статус"
-            | "элемент"
-            | "элементы"
-            | "строка"
-            | "строки"
-            | "запись"
-            | "записи"
-            | "найдено"
-            | "найденные"
-            | "отфильтровано"
-            | "успешно"
-            | "ошибка"
-            | "да"
-            | "нет"
-            | "пусто"
-            | "данные"
-            | "на"
-            | "не"
-            | "это"
-            | "его"
-            | "уже"
-            | "был"
-            | "есть"
-            | "то"
-            | "только"
-            | "проверка"
-            | "готово"
-            | "заблокирован"
-            | "подтвердила"
-            | "должен"
-            | "обновлять"
-            | "автоматически"
-            | "обновил"
-            | "остался"
-            | "тронул"
-            | "apt"
-            | "chrome"
-            | "hold"
-    )
+    false
 }
 
 fn contains_email_like(value: &str) -> bool {
@@ -895,7 +1052,12 @@ const fn selector_value_type(selector: &ResponseValueSelector) -> crate::AtomVal
         | ResponseValueSelector::JsonScalarOrdinal { value_type, .. }
         | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
-        | ResponseValueSelector::TurnOutputLine { value_type, .. } => *value_type,
+        | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::TurnOutputLine { value_type, .. }
+        | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { value_type, .. } => *value_type,
         ResponseValueSelector::CommandOutputBody
         | ResponseValueSelector::RequestLastToken
         | ResponseValueSelector::RequestUniqueLiteral => crate::AtomValueType::String,
@@ -938,7 +1100,8 @@ fn validate_arguments(arguments: &[ResponseArgument]) -> Result<(), &'static str
 fn validate_selector(selector: &ResponseValueSelector) -> Result<(), &'static str> {
     match selector {
         ResponseValueSelector::UniqueScalar { .. }
-        | ResponseValueSelector::UniqueTurnScalar { .. } => Ok(()),
+        | ResponseValueSelector::UniqueTurnScalar { .. }
+        | ResponseValueSelector::RequestReferencedJsonField { .. } => Ok(()),
         ResponseValueSelector::JsonScalarOrdinal { ordinal, .. } => {
             if *ordinal < 64 {
                 Ok(())
@@ -978,6 +1141,73 @@ fn validate_selector(selector: &ResponseValueSelector) -> Result<(), &'static st
                 || *value_type != crate::AtomValueType::String
             {
                 Err("invalid_turn_output_line_selector")
+            } else {
+                Ok(())
+            }
+        }
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            output_ordinal,
+            scalar_ordinal,
+            value_type,
+        } => {
+            if *output_ordinal == 0
+                || *output_ordinal > 64
+                || *scalar_ordinal >= 64
+                || !matches!(
+                    value_type,
+                    crate::AtomValueType::String
+                        | crate::AtomValueType::Integer
+                        | crate::AtomValueType::Boolean
+                        | crate::AtomValueType::Identifier
+                )
+            {
+                Err("invalid_turn_output_scalar_ordinal_selector")
+            } else {
+                Ok(())
+            }
+        }
+        ResponseValueSelector::LatestTurnOutputLine {
+            line_index,
+            value_type,
+        } => {
+            if *line_index > 255 || *value_type != crate::AtomValueType::String {
+                Err("invalid_latest_turn_output_line_selector")
+            } else {
+                Ok(())
+            }
+        }
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => {
+            if *scalar_ordinal >= 64
+                || !matches!(
+                    value_type,
+                    crate::AtomValueType::String
+                        | crate::AtomValueType::Integer
+                        | crate::AtomValueType::Boolean
+                        | crate::AtomValueType::Identifier
+                )
+            {
+                Err("invalid_latest_turn_output_scalar_ordinal_selector")
+            } else {
+                Ok(())
+            }
+        }
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => {
+            if *reverse_ordinal >= 64
+                || !matches!(
+                    value_type,
+                    crate::AtomValueType::String
+                        | crate::AtomValueType::Integer
+                        | crate::AtomValueType::Boolean
+                        | crate::AtomValueType::Identifier
+                )
+            {
+                Err("invalid_latest_turn_output_scalar_from_end_selector")
             } else {
                 Ok(())
             }

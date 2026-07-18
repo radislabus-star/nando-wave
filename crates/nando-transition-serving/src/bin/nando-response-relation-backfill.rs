@@ -1,13 +1,14 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use nando_response_actor::{
-    OnlineResponseStream, OnlineResponseTailConfig, build_online_admission_snapshot,
+    OnlineResponseMinerReport, OnlineResponseStream, OnlineResponseTailConfig,
+    teacher_action_symbol,
 };
 use nando_transition_serving::{
-    verified_relation_frames_from_session, verified_relation_frames_from_session_tail,
+    verified_training_cases_from_session, verified_training_cases_from_session_tail,
 };
 
 fn main() -> Result<(), String> {
@@ -29,24 +30,24 @@ fn main() -> Result<(), String> {
     files.sort();
     let mut seen_frames = BTreeSet::new();
     let mut seen_events = BTreeSet::new();
-    let mut frames = Vec::new();
+    let mut cases = Vec::new();
     for path in &files {
         let file_bytes = fs::metadata(path).map_err(|error| error.to_string())?.len();
         let extracted = if file_bytes > max_file_bytes {
-            verified_relation_frames_from_session_tail(path, max_file_bytes)?
+            verified_training_cases_from_session_tail(path, max_file_bytes)?
         } else {
-            verified_relation_frames_from_session(path)?
+            verified_training_cases_from_session(path)?
         };
-        for frame in extracted {
+        for (frame, parity) in extracted {
             if !seen_frames.insert(frame.frame_id_sha256.clone())
                 || !seen_events.insert(frame.event_id_sha256.clone())
             {
                 continue;
             }
-            frames.push(frame);
+            cases.push((frame, parity));
         }
     }
-    frames.sort_by(|left, right| {
+    cases.sort_by(|(left, _), (right, _)| {
         (
             left.observed_at_unix_nanos,
             left.session_id_sha256.as_str(),
@@ -58,44 +59,61 @@ fn main() -> Result<(), String> {
                 right.frame_id_sha256.as_str(),
             ))
     });
+    let mut parity_by_action = BTreeMap::<String, usize>::new();
+    for (frame, parity) in &cases {
+        if parity.is_some() {
+            *parity_by_action
+                .entry(teacher_action_symbol(frame))
+                .or_default() += 1;
+        }
+    }
+    let parity_cases_total = parity_by_action.values().sum::<usize>();
+    let parity_by_action_json =
+        serde_json::to_string(&parity_by_action).map_err(|error| error.to_string())?;
 
-    let emitted = frames.len();
-    let mut miner = OnlineResponseStream::open(OnlineResponseTailConfig {
+    let emitted = cases.len();
+    let mut miner = OnlineResponseStream::open_streaming(OnlineResponseTailConfig {
         input_path: live_ledger,
         report_path: report,
         checkpoint_path: checkpoint,
         idle_sleep: Duration::from_millis(50),
     })?;
-    let result = miner.ingest_batch(frames)?;
-    let admission_candidates = miner.admission_candidates();
-    let snapshot_present = build_online_admission_snapshot(
-        &admission_candidates,
-        "nando-wave",
-        1,
-        1,
-        30,
-        &"0".repeat(64),
-        &"0".repeat(64),
-    )
-    .map_err(str::to_owned)?
-    .is_some();
+    let future_frames_before = frozen_future_rows(&miner.report());
+    let result = miner.train_replay_cases_batch(cases)?;
     let report = miner.report();
-    let future_frames = report
+    let future_frames_after = frozen_future_rows(&report);
+    let frozen_future_rows_claimed = future_frames_after.saturating_sub(future_frames_before);
+    if frozen_future_rows_claimed != 0 {
+        return Err("relation_backfill_claimed_frozen_future".to_owned());
+    }
+    println!(
+        "{{\"files_scanned\":{},\"chronological_frames\":{},\"parity_cases_total\":{},\"parity_by_action\":{},\"support_only\":true,\"frozen_future_rows_before\":{},\"frozen_future_rows_after\":{},\"frozen_future_rows_claimed\":0,\"rows_learned\":{},\"buckets\":{},\"raw_text_persisted\":false}}",
+        files.len(),
+        emitted,
+        parity_cases_total,
+        parity_by_action_json,
+        future_frames_before,
+        future_frames_after,
+        result.rows_learned,
+        result.bucket_count
+    );
+    Ok(())
+}
+
+fn frozen_future_rows(report: &OnlineResponseMinerReport) -> usize {
+    report
         .buckets
         .iter()
         .map(|bucket| bucket.frozen_future_rows)
-        .sum::<usize>();
-    println!(
-        "{{\"files_scanned\":{},\"chronological_frames\":{},\"frozen_future_frames\":{},\"rows_learned\":{},\"buckets\":{},\"admission_candidates\":{},\"snapshot_present\":{},\"raw_text_persisted\":false}}",
-        files.len(),
-        emitted,
-        future_frames,
-        result.rows_learned,
-        result.bucket_count,
-        admission_candidates.len(),
-        snapshot_present
-    );
-    Ok(())
+        .sum::<usize>()
+        .saturating_add(
+            report
+                .self_training_v2
+                .generations
+                .iter()
+                .map(|generation| generation.future_rows)
+                .sum::<usize>(),
+        )
 }
 
 fn usage() -> String {
@@ -114,10 +132,10 @@ fn collect_session_files(root: &Path, output: &mut Vec<PathBuf>) -> Result<(), S
         for entry in fs::read_dir(&path).map_err(|error| error.to_string())? {
             let entry = entry.map_err(|error| error.to_string())?;
             let path = entry.path();
-            let metadata = entry.metadata().map_err(|error| error.to_string())?;
-            if metadata.is_dir() {
+            let file_type = entry.file_type().map_err(|error| error.to_string())?;
+            if file_type.is_dir() {
                 pending.push(path);
-            } else if metadata.is_file()
+            } else if (file_type.is_file() || (file_type.is_symlink() && path.is_file()))
                 && path.extension().and_then(|value| value.to_str()) == Some("jsonl")
             {
                 output.push(path);

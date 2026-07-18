@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NANDO_CODEX_BIN="${NANDO_CODEX_BIN:-${HOME}/.local/bin/nando-codex}"
+if [[ ! -x "${NANDO_CODEX_BIN}" ]]; then
+  NANDO_CODEX_BIN="/opt/nando-wave/ops/phase-center-test-server/bin/nando-codex"
+fi
+
+if [[ -x "${NANDO_CODEX_BIN}" ]]; then
+  exec "${NANDO_CODEX_BIN}" "$@"
+fi
+
+REAL_CODEX="${NANDO_REAL_CODEX:-/home/ubu/.nvm/versions/node/v22.22.2/lib/node_modules/@openai/codex/bin/codex.js}"
+exec node "${REAL_CODEX}" "$@"

@@ -13,7 +13,7 @@ use nando_response_actor::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const SCHEMA: &str = "nando.streaming-opportunity-scan.v12";
+const SCHEMA: &str = "nando.streaming-opportunity-scan.v13";
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 const MAX_FINAL_BYTES: usize = 16 * 1024;
 const MAX_TURN_BYTES: usize = 512 * 1024;
@@ -117,9 +117,7 @@ impl TurnSample {
                 payload_type,
                 "function_call_output" | "custom_tool_call_output"
             )
-            && let Some(text) = payload.get("output").and_then(Value::as_str)
-            && !text.is_empty()
-            && text.len() <= MAX_OUTPUT_BYTES
+            && let Some(text) = payload.get("output").and_then(bounded_output_text)
         {
             self.outputs.push(serde_json::json!({
                 "type": "function_call_output",
@@ -151,6 +149,32 @@ impl TurnSample {
                 .and_then(Value::as_u64)
                 .unwrap_or(self.input_tokens);
         }
+    }
+}
+
+fn bounded_output_text(output: &Value) -> Option<String> {
+    match output {
+        Value::String(text) if !text.is_empty() && text.len() <= MAX_OUTPUT_BYTES => {
+            Some(text.clone())
+        }
+        Value::Array(parts) if !parts.is_empty() && parts.len() <= 64 => {
+            let mut combined = String::new();
+            for part in parts {
+                if !matches!(
+                    part.get("type").and_then(Value::as_str),
+                    Some("text" | "input_text" | "output_text")
+                ) {
+                    return None;
+                }
+                let text = part.get("text").and_then(Value::as_str)?;
+                if combined.len().saturating_add(text.len()) > MAX_OUTPUT_BYTES {
+                    return None;
+                }
+                combined.push_str(text);
+            }
+            (!combined.is_empty()).then_some(combined)
+        }
+        _ => None,
     }
 }
 
@@ -465,12 +489,22 @@ fn program_class(program: &nando_response_actor::ResponseProgram) -> String {
 fn selector_class(selector: &ResponseValueSelector) -> &'static str {
     match selector {
         ResponseValueSelector::UniqueScalar { .. } => "unique_scalar",
+        ResponseValueSelector::UniqueTurnScalar { .. } => "unique_turn_scalar",
         ResponseValueSelector::ContentLinePrefix { .. } => "content_line_prefix",
         ResponseValueSelector::JsonField { .. } => "json_field",
         ResponseValueSelector::JsonScalarOrdinal { .. } => "json_scalar_ordinal",
         ResponseValueSelector::UniqueTurnJsonField { .. } => "unique_turn_json_field",
         ResponseValueSelector::UniqueActiveTurnJsonField { .. } => "active_turn_json_field",
+        ResponseValueSelector::RequestReferencedJsonField { .. } => "request_referenced_json_field",
         ResponseValueSelector::TurnOutputLine { .. } => "turn_output_line",
+        ResponseValueSelector::TurnOutputScalarOrdinal { .. } => "turn_output_scalar_ordinal",
+        ResponseValueSelector::LatestTurnOutputLine { .. } => "latest_turn_output_line",
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. } => {
+            "latest_turn_output_scalar_ordinal"
+        }
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. } => {
+            "latest_turn_output_scalar_from_end"
+        }
         ResponseValueSelector::CommandOutputBody => "command_output_body",
         ResponseValueSelector::RequestLastToken => "request_last_token",
         ResponseValueSelector::RequestUniqueLiteral => "request_unique_literal",
@@ -482,6 +516,7 @@ fn renderer_class(renderer: &CollectionOutputRenderer) -> &'static str {
         CollectionOutputRenderer::Direct => "direct",
         CollectionOutputRenderer::RenderTemplate { .. } => "template",
         CollectionOutputRenderer::RenderSequence { .. } => "sequence",
+        CollectionOutputRenderer::RequestTemplate { .. } => "request_template",
     }
 }
 
@@ -657,5 +692,28 @@ mod tests {
         let durable = fs::read_to_string(&checkpoint_path).expect("checkpoint");
         assert!(!durable.contains("private_surface"));
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn turn_sample_accepts_bounded_custom_output_parts() {
+        let mut turn = TurnSample::default();
+        turn.observe(
+            &json!({
+                "type":"response_item",
+                "payload":{
+                    "type":"custom_tool_call_output",
+                    "output":[
+                        {"type":"input_text","text":""},
+                        {"type":"input_text","text":"{\"session_id\":60906}"}
+                    ]
+                }
+            }),
+            64,
+        );
+        assert_eq!(turn.outputs.len(), 1);
+        assert_eq!(
+            turn.outputs[0].get("output").and_then(Value::as_str),
+            Some("{\"session_id\":60906}")
+        );
     }
 }

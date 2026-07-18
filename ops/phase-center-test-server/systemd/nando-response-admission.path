@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Nando admission when the Rust miner publishes candidates
+After=nando-transition-serving.service
+
+[Path]
+PathChanged=/var/lib/nando-wave/transition/response-admission-candidates.cbor
+Unit=nando-response-admission.service
+TriggerLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

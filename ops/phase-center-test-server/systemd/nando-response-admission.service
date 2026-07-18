@@ -1,0 +1,23 @@
+[Unit]
+Description=Nando independent Rust response admission controller
+After=nando-transition-serving.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=ubu
+Group=ubu
+EnvironmentFile=/etc/nando-wave/phase-center.env
+WorkingDirectory=/opt/nando-wave
+ExecStart=/opt/nando-wave/bin/nando-response-admission
+TimeoutStartSec=30s
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=8
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nando-wave/transition

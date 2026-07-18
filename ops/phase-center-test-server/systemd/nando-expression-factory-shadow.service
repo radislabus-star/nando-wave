@@ -1,0 +1,23 @@
+[Unit]
+Description=Nando expression factory shadow miner
+After=nando-transition-profile-daemon.service
+
+[Service]
+Type=oneshot
+Environment=NANDO_EXPRESSION_SOURCE=/var/lib/nando-wave/transition/live-transitions.jsonl
+Environment=NANDO_EXPRESSION_SHADOW_DIR=/var/lib/nando-wave/expression-shadow
+Environment=NANDO_EXPRESSION_FACTORY_BIN=/opt/nando-wave/bin/nando-expression-factory-live-mine
+Environment=NANDO_EXPRESSION_VERIFIER_BIN=/opt/nando-wave/bin/nando-expression-shadow-verify
+ExecStart=/opt/nando-wave/bin/nando-expression-factory-shadow
+User=ubu
+Group=ubu
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/nando-wave/expression-shadow
+CPUQuota=75%
+MemoryHigh=384M
+MemoryMax=512M
+MemorySwapMax=0
+TasksMax=32

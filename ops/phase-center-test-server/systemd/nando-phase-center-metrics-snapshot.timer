@@ -3,8 +3,8 @@ Description=Run Nando phase-center metrics snapshot
 
 [Timer]
 OnBootSec=90s
-OnUnitActiveSec=15s
-AccuracySec=5s
+OnUnitInactiveSec=60s
+AccuracySec=10s
 Persistent=true
 
 [Install]

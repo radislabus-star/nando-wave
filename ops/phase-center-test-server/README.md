@@ -224,9 +224,37 @@ It tries the same verifier-bound local executor as `nando-llm-gateway`.
 `/v2` is the default NANDA CPU compact latent transition surface. `/v1`
 remains available for legacy clients. Accepted exact routes return
 OpenAI-compatible JSON locally. Broad prompts proxy to
-`NANDO_PROVIDER_UPSTREAM_BASE_URL` when configured; if upstream is not
-configured, the bridge returns `upstream_missing` instead of faking a local
-answer.
+`NANDO_PROVIDER_UPSTREAM_BASE_URL` when configured; Authorization can be
+forwarded from the client request, so `NANDO_PROVIDER_UPSTREAM_API_KEY` is
+optional. If upstream base URL is not configured, the bridge returns
+`upstream_missing` instead of faking a local answer.
+
+`/v2/responses` also accepts a strict typed transition envelope as its latest
+user input. The envelope must name a registered package, operator, and explicit
+surface adapter and provide structured `before` state plus `action`. The Rust
+actor executes, verifies the postcondition, and returns projected `state_t+1`;
+any malformed, unknown, ambiguous, no-effect, or verifier-failed request
+abstains and follows the normal upstream path.
+
+```json
+{
+  "schema": "nando.transition-request.v1",
+  "package_id": "rsmod-portable-v1-20260710",
+  "operator_id": "set_field",
+  "adapter_id": "task_map",
+  "before": {
+    "board": {
+      "items": {
+        "t1": {"state": "open", "assignee": "alice", "points": 3}
+      }
+    }
+  },
+  "action": {"cmd": "complete", "item": "t1", "to_state": "done"}
+}
+```
+
+This is explicit typed execution, not natural-language adapter induction or
+automatic phase-center-to-actor routing.
 
 When a broad request reaches upstream, the bridge also writes metadata-only
 provider boundary rows to:
@@ -259,6 +287,7 @@ Checks the actual HTTP bridge:
 /v1/responses "nando readiness" -> local accept
 /v2/chat/completions "nando compression" -> local accept with transition_runtime=true
 /v2/responses "nando readiness" -> local accept with transition_runtime=true
+/v2/responses typed transition envelope -> verified actor execution
 broad prompt -> upstream fallback or upstream_missing
 ```
 
@@ -619,6 +648,7 @@ For user-local Codex copies on this machine:
 ```text
 /etc/nando-wave/phase-center.env
 ~/.local/bin/nando-codex
+~/.local/bin/codex
 ~/.bashrc alias codex='nando-codex'
 ```
 
@@ -629,21 +659,30 @@ This mode reads server policy from `/etc` and writes gateway telemetry under:
 ```
 
 It does not require `/etc` or `/var/lib` permissions.
+`~/.local/bin/codex` is a tiny shim to the same fail-open launcher, so normal
+PATH-based `codex` invocations are captured even when shell aliases are not
+loaded.
 
 `nando-codex` is guarded fail-open. It preserves the original OpenAI
 environment, checks `http://127.0.0.1:8787/v2/health`, and routes Codex through
-the local OpenAI-compatible bridge only when the bridge is healthy and upstream
-is configured. Otherwise it restores the original environment and starts the
-real Codex CLI directly.
+the local OpenAI-compatible bridge only when the bridge is healthy and the
+upstream policy is satisfied. Otherwise it restores the original environment
+and starts the real Codex CLI directly.
+
+The default upstream policy is `base`: the server must have
+`NANDO_PROVIDER_UPSTREAM_BASE_URL`, but a server-side
+`NANDO_PROVIDER_UPSTREAM_API_KEY` is optional. In that mode Codex supplies
+Authorization per request and the bridge forwards it upstream.
 
 Control knobs:
 
 ```text
 NANDO_CODEX_PROVIDER_BRIDGE=auto  # default guarded mode
-NANDO_CODEX_REQUIRE_UPSTREAM=1    # default: do not route broad traffic into Nando unless upstream is ready
+NANDO_CODEX_REQUIRE_UPSTREAM=base # default: require upstream base URL; provider key is optional
 NANDO_CODEX_HEALTH_TIMEOUT_MS=300
 NANDO_CODEX_ALIAS=0               # emergency bypass
 NANDO_OFFLOAD=0                   # emergency bypass
+NANDO_CODEX_DRY_RUN=1             # print launcher routing decision and exit
 ```
 
 Default safety policy:

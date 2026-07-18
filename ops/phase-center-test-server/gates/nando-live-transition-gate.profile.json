@@ -1,0 +1,80 @@
+{
+  "schema": "nando.live-transition-gate-profile.v1",
+  "project_id": "nando-wave",
+  "required_checks": [
+    "structural",
+    "wave_causal",
+    "runtime_admission",
+    "response_runtime",
+    "deployment"
+  ],
+  "structural_routes": [
+    "01_ingest_induction",
+    "02_package_lifecycle",
+    "03_serving_recovery"
+  ],
+  "wave_causal": {
+    "receipt": "ops/phase-center-test-server/gates/receipts/WAVE_CAUSAL_OPERATOR_PROOF_V1.json",
+    "manifest": "ops/phase-center-test-server/gates/receipts/WAVE_CAUSAL_OPERATOR_PROOF_V1.manifest.json",
+    "minimum_corpus_seeds": 3,
+    "minimum_heldout_queries": 1000,
+    "accepted_report_kinds": [
+      "nando_wave_causal_operator_proof_v1",
+      "nando_wave_causal_operator_proof_v2"
+    ],
+    "require_core_causal_pass": true,
+    "require_strict_anti_center_pass": true
+  },
+  "runtime": {
+    "registry": "/var/lib/nando-wave/transition/registry.json",
+    "inspector": "/opt/nando-wave/bin/nando-transition-admission-inspect",
+    "admission_status": "/var/lib/nando-wave/transition/admission.json"
+  },
+  "expression_shadow": {
+    "candidate": "/var/lib/nando-wave/expression-shadow/candidate.json",
+    "factory_build": "/opt/nando-wave/bin/nando-expression-factory-live-mine",
+    "verifier_build": "/opt/nando-wave/bin/nando-expression-shadow-verify",
+    "source": "/var/lib/nando-wave/transition/live-transitions.jsonl",
+    "future_receipt": "/var/lib/nando-wave/expression-shadow/future.json",
+    "minimum_future_rows": 32,
+    "maximum_age_seconds": 1800
+  },
+  "response_runtime": {
+    "registry": "/var/lib/nando-wave/transition/response-registry.json",
+    "miner_status": "/var/lib/nando-wave/transition/response-miner-status.json",
+    "online_miner_report": "/var/lib/nando-wave/transition/response-online-miner-report.json",
+    "economics": "/var/lib/nando-wave/transition/economics-live.json",
+    "m3_authority_sources": {
+      "rust_snapshot": "/var/lib/nando-wave/transition/economics-live.json",
+      "rust_checkpoint": "/var/lib/nando-wave/transition/economics-live-v2.checkpoint",
+      "rust_event_segments": "/var/lib/nando-wave/transition/economics-events-v2"
+    },
+    "m3_window_schema": "nando.economics-m3-window.v1",
+    "m3_post_verifier_receipt_schema": "nando.response-post-verifier-receipt.v1",
+    "m3_window_duration_seconds": 86400,
+    "m3_window_settlement_seconds": 86400,
+    "m3_required_consecutive_windows": 3,
+    "m3_traffic_class": "ordinary",
+    "m3_dedupe_key": "client_intent_id",
+    "m3_dedupe_scope": "global_first_seen",
+    "minimum_m3_eligible_client_intents": 10000,
+    "minimum_m3_verified_avoided_calls": 100,
+    "minimum_m3_receipt_coverage_milli": 1000,
+    "minimum_m3_input_token_saving_share_milli": 500
+  },
+  "deployment": {
+    "health_url": "http://127.0.0.1:18789/health",
+    "gate_build": "/opt/nando-wave/bin/nando-live-transition-gate",
+    "response_runtime_build": "/opt/nando-wave/bin/nando-transition-serving",
+    "services": [
+      "nando-transition-serving.service",
+      "nando-transport-gateway.service",
+      "nando-gateway-control.service"
+    ]
+  },
+  "policy": {
+    "fail_closed_for_local_accept": true,
+    "preserve_provider_fallback": true,
+    "manual_per_profile_controls_allowed": false
+  }
+}

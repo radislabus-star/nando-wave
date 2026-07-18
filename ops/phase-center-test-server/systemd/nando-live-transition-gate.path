@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Nando admission when proof inputs change
+
+[Path]
+PathChanged=/var/lib/nando-wave/transition/response-registry.json
+PathChanged=/var/lib/nando-wave/transition/response-grounded-wave-causal-proof.json
+PathChanged=/var/lib/nando-wave/transition/response-runtime-parity-receipts.json
+PathChanged=/var/lib/nando-wave/transition/response-verifier-receipts.json
+Unit=nando-live-transition-gate.service
+
+[Install]
+WantedBy=multi-user.target

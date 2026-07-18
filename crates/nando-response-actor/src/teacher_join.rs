@@ -4,10 +4,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    AtomSource, EconomicsReceipt, RelationAtom, RelationFrame, ResponseArgument, ResponseOperation,
-    ResponseProgram, RuntimeFrame, RuntimeParityCase, SemanticRole, TEACHER_OUTCOME_SCHEMA_V1,
-    TEACHER_TRANSITION_SCHEMA_V1, TeacherActionAst, TeacherOutcome, TeacherTransition,
-    TeacherVerifierEvidence, ground_roles, relation_atom_is_teacher_only,
+    AtomSource, EconomicsReceipt, RelationAtom, RelationFrame, RuntimeFrame, RuntimeParityCase,
+    TEACHER_OUTCOME_SCHEMA_V1, TEACHER_TRANSITION_SCHEMA_V1, TeacherActionAst, TeacherOutcome,
+    TeacherTransition, TeacherVerifierEvidence, relation_atom_is_teacher_only,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -244,8 +243,12 @@ pub fn teacher_action_ast(frame: &RelationFrame) -> Option<TeacherActionAst> {
 /// appears in runtime routing atoms.
 #[must_use]
 pub fn teacher_program_signature(frame: &RelationFrame) -> Option<String> {
-    let mut action_atoms = frame
-        .atoms
+    teacher_program_signature_from_action_atoms(&frame.atoms)
+}
+
+#[must_use]
+pub fn teacher_program_signature_from_action_atoms(atoms: &[RelationAtom]) -> Option<String> {
+    let mut action_atoms = atoms
         .iter()
         .filter_map(|atom| match atom {
             RelationAtom::ActionRoleArgument {
@@ -310,11 +313,272 @@ pub fn teacher_program_signature(frame: &RelationFrame) -> Option<String> {
                 "kind": "action_status_projection",
                 "mapping": mapping,
             })),
+            RelationAtom::ActionPlanAdvance => Some(serde_json::json!({
+                "kind": "action_plan_advance",
+            })),
             _ => None,
         })
         .collect::<Vec<_>>();
     action_atoms.sort_by_cached_key(|atom| serde_json::to_vec(atom).unwrap_or_default());
     (!action_atoms.is_empty()).then(|| digest_json(&action_atoms))
+}
+
+/// Post-completion identity of the transferable operator shape. Exact wire
+/// names remain in `teacher_program_signature`; this parent identity only
+/// shares Wave/subcenter hypotheses between structurally equivalent teachers.
+#[must_use]
+pub fn teacher_transfer_family_signature(frame: &RelationFrame) -> Option<String> {
+    let action_slot_types = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::TypedSlot {
+                slot_id,
+                value_type,
+                source: AtomSource::Action | AtomSource::Outcome,
+                ..
+            } => Some((*slot_id, *value_type)),
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut effect_atoms = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::ActionRoleArgument {
+                slot_id,
+                value_type,
+                ..
+            } => Some(serde_json::json!({
+                "kind": "role_argument",
+                "value_type": value_type.or_else(|| action_slot_types.get(slot_id).copied()),
+            })),
+            RelationAtom::ActionIntegerArgument { name, .. }
+                if !is_execution_budget_argument(name) =>
+            {
+                Some(serde_json::json!({"kind": "integer_constant"}))
+            }
+            RelationAtom::ActionStringArgument { name, value }
+                if name == "chars" && value.is_empty() =>
+            {
+                None
+            }
+            RelationAtom::ActionStringArgument { value, .. } => Some(serde_json::json!({
+                "kind": "string_constant",
+                "empty": value.is_empty(),
+            })),
+            RelationAtom::ActionBooleanArgument { .. } => {
+                Some(serde_json::json!({"kind": "boolean_constant"}))
+            }
+            RelationAtom::ActionFunction { .. } => {
+                Some(serde_json::json!({"kind": "function_transport"}))
+            }
+            RelationAtom::ActionCustomTool { .. } => {
+                Some(serde_json::json!({"kind": "custom_tool_transport"}))
+            }
+            RelationAtom::ActionInnerTool { .. } => {
+                Some(serde_json::json!({"kind": "inner_tool_transport"}))
+            }
+            RelationAtom::ActionResultProjection { .. } => {
+                Some(serde_json::json!({"kind": "result_projection"}))
+            }
+            RelationAtom::ActionOutputProjection { .. } => {
+                Some(serde_json::json!({"kind": "output_projection"}))
+            }
+            RelationAtom::ActionJsonResultProjection => {
+                Some(serde_json::json!({"kind": "json_result_projection"}))
+            }
+            RelationAtom::ActionValueProjection { format, renderer } => Some(serde_json::json!({
+                "kind": "value_projection",
+                "format": format,
+                "renderer_kind": collection_renderer_kind(renderer),
+            })),
+            RelationAtom::ActionStatusProjection { .. } => {
+                Some(serde_json::json!({"kind": "status_projection"}))
+            }
+            RelationAtom::ActionPlanAdvance => Some(serde_json::json!({"kind": "plan_advance"})),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    effect_atoms.sort_by_cached_key(|atom| serde_json::to_vec(atom).unwrap_or_default());
+    (!effect_atoms.is_empty()).then(|| {
+        digest_json(&serde_json::json!({
+            "schema": "nando.teacher-transfer-family.v1",
+            "effect_atoms": effect_atoms,
+        }))
+    })
+}
+
+/// Post-completion identity of the semantic effect shared by physical call
+/// adapters. Function/tool names and argument names are transport details;
+/// typed roles and semantic constant values remain part of the law.
+#[must_use]
+pub fn teacher_semantic_law_signature(frame: &RelationFrame) -> Option<String> {
+    let action_slot_types = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::TypedSlot {
+                slot_id,
+                value_type,
+                source: AtomSource::Action | AtomSource::Outcome,
+                ..
+            } => Some((*slot_id, *value_type)),
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
+    let call_transport = frame.atoms.iter().any(|atom| {
+        matches!(
+            atom,
+            RelationAtom::ActionFunction { .. }
+                | RelationAtom::ActionCustomTool { .. }
+                | RelationAtom::ActionInnerTool { .. }
+        )
+    });
+    let mut effect_atoms = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::ActionRoleArgument {
+                slot_id,
+                value_type,
+                ..
+            } => Some(semantic_role_argument_atom(
+                frame,
+                *slot_id,
+                value_type.or_else(|| action_slot_types.get(slot_id).copied()),
+            )),
+            RelationAtom::ActionIntegerArgument { name, value }
+                if !is_execution_budget_argument(name) =>
+            {
+                Some(serde_json::json!({"kind": "integer_constant", "value": value}))
+            }
+            RelationAtom::ActionStringArgument { value, .. } if value.is_empty() => None,
+            RelationAtom::ActionStringArgument { value, .. } => Some(serde_json::json!({
+                "kind": "string_constant",
+                "value": value,
+            })),
+            RelationAtom::ActionBooleanArgument { value, .. } => Some(serde_json::json!({
+                "kind": "boolean_constant",
+                "value": value,
+            })),
+            RelationAtom::ActionFunction { .. }
+            | RelationAtom::ActionCustomTool { .. }
+            | RelationAtom::ActionInnerTool { .. } => None,
+            RelationAtom::ActionResultProjection { .. } if call_transport => None,
+            RelationAtom::ActionResultProjection { .. } => {
+                Some(serde_json::json!({"kind": "result_projection"}))
+            }
+            RelationAtom::ActionOutputProjection { .. } if call_transport => None,
+            RelationAtom::ActionOutputProjection { .. } => {
+                Some(serde_json::json!({"kind": "output_projection"}))
+            }
+            RelationAtom::ActionJsonResultProjection if call_transport => None,
+            RelationAtom::ActionJsonResultProjection => {
+                Some(serde_json::json!({"kind": "json_result_projection"}))
+            }
+            RelationAtom::ActionValueProjection { format, renderer } => Some(serde_json::json!({
+                "kind": "value_projection",
+                "format": format,
+                "renderer_kind": collection_renderer_kind(renderer),
+            })),
+            RelationAtom::ActionStatusProjection { mapping } => Some(serde_json::json!({
+                "kind": "status_projection",
+                "mapping": mapping,
+            })),
+            RelationAtom::ActionPlanAdvance => Some(serde_json::json!({"kind": "plan_advance"})),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if call_transport && effect_atoms.is_empty() {
+        // Legacy traces may expose only the completed call. Keep its terminal
+        // operator as a teacher-only fallback; runtime routing never sees it.
+        let terminal_operator = frame
+            .atoms
+            .iter()
+            .find_map(|atom| match atom {
+                RelationAtom::ActionInnerTool { value } => Some(value.as_str()),
+                _ => None,
+            })
+            .or_else(|| {
+                frame.atoms.iter().find_map(|atom| match atom {
+                    RelationAtom::ActionFunction { value } => Some(value.as_str()),
+                    _ => None,
+                })
+            })
+            .or_else(|| {
+                frame.atoms.iter().find_map(|atom| match atom {
+                    RelationAtom::ActionCustomTool { value } => Some(value.as_str()),
+                    _ => None,
+                })
+            });
+        if let Some(terminal_operator) = terminal_operator {
+            effect_atoms.push(serde_json::json!({
+                "kind": "terminal_operator",
+                "value": terminal_operator,
+            }));
+        }
+    } else if call_transport {
+        effect_atoms.push(serde_json::json!({"kind": "call_transport"}));
+    }
+    effect_atoms.sort_by_cached_key(|atom| serde_json::to_vec(atom).unwrap_or_default());
+    effect_atoms.dedup();
+    (!effect_atoms.is_empty()).then(|| {
+        digest_json(&serde_json::json!({
+            "schema": "nando.teacher-semantic-law.v1",
+            "effect_atoms": effect_atoms,
+        }))
+    })
+}
+
+fn semantic_role_argument_atom(
+    frame: &RelationFrame,
+    action_slot: u16,
+    physical_type: Option<crate::AtomValueType>,
+) -> serde_json::Value {
+    let source_slots = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            RelationAtom::SlotEquality {
+                left_slot,
+                right_slot,
+            } if *left_slot == action_slot => Some(*right_slot),
+            RelationAtom::SlotEquality {
+                left_slot,
+                right_slot,
+            } if *right_slot == action_slot => Some(*left_slot),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let source_shape = (source_slots.len() == 1).then(|| {
+        let source_slot = source_slots.first().copied()?;
+        let source = frame.atoms.iter().find_map(|atom| match atom {
+            RelationAtom::TypedSlot {
+                slot_id, source, ..
+            } if *slot_id == source_slot => Some(*source),
+            _ => None,
+        })?;
+        let unique = frame.atoms.iter().any(
+            |atom| matches!(atom, RelationAtom::UniqueSlot { slot_id } if *slot_id == source_slot),
+        );
+        Some((source, unique))
+    });
+    source_shape.flatten().map_or_else(
+        || {
+            serde_json::json!({
+                "kind": "role_argument",
+                "unresolved_physical_type": physical_type,
+            })
+        },
+        |(source, unique)| {
+            serde_json::json!({
+                "kind": "role_argument",
+                "source": source,
+                "unique": unique,
+            })
+        },
+    )
 }
 
 /// Restores the exact wire schema from an independently captured runtime
@@ -418,6 +682,7 @@ fn collection_renderer_kind(renderer: &crate::CollectionOutputRenderer) -> &'sta
         crate::CollectionOutputRenderer::Direct => "direct",
         crate::CollectionOutputRenderer::RenderTemplate { .. } => "template",
         crate::CollectionOutputRenderer::RenderSequence { .. } => "sequence",
+        crate::CollectionOutputRenderer::RequestTemplate { .. } => "request_template",
     }
 }
 
@@ -440,82 +705,6 @@ pub fn teacher_action_symbol(frame: &RelationFrame) -> String {
         (Some(outer), None) => format!("custom_tool:{outer}"),
         _ => "unknown".to_owned(),
     }
-}
-
-/// Accepted teacher actions can use different transport APIs while expressing
-/// the same pre-action effect. Keep those rows as transfer evidence instead of
-/// teaching CEGIS that one valid continuation is a counterexample to another.
-pub(crate) fn teacher_actions_have_compatible_effect(
-    left: &RelationFrame,
-    right: &RelationFrame,
-) -> bool {
-    teacher_action_is_non_destructive_continuation(left)
-        && teacher_action_is_non_destructive_continuation(right)
-}
-
-pub(crate) fn program_has_compatible_teacher_effect(
-    program: &ResponseProgram,
-    frame: &RelationFrame,
-) -> bool {
-    program_is_non_destructive_continuation(program)
-        && teacher_action_is_non_destructive_continuation(frame)
-}
-
-fn teacher_action_is_non_destructive_continuation(frame: &RelationFrame) -> bool {
-    let has_transport = frame.atoms.iter().any(|atom| {
-        matches!(
-            atom,
-            RelationAtom::ActionFunction { .. } | RelationAtom::ActionCustomTool { .. }
-        )
-    });
-    if !has_transport
-        || frame.atoms.iter().any(|atom| {
-            matches!(atom, RelationAtom::ActionBooleanArgument { value: true, .. })
-                || matches!(atom, RelationAtom::ActionStringArgument { value, .. } if !value.is_empty())
-                || matches!(atom, RelationAtom::ActionIntegerArgument { name, .. } if !is_execution_budget_argument(name))
-        })
-    {
-        return false;
-    }
-    ground_roles(frame).into_iter().any(|hypothesis| {
-        let Some(target_index) = hypothesis.bindings.get(&SemanticRole::TargetValue) else {
-            return false;
-        };
-        if !hypothesis
-            .bindings
-            .contains_key(&SemanticRole::ContinuationHandle)
-        {
-            return false;
-        }
-        let Some(RelationAtom::TypedSlot { slot_id, .. }) = frame.atoms.get(*target_index) else {
-            return false;
-        };
-        frame.atoms.iter().any(
-            |atom| matches!(atom, RelationAtom::ActionRoleArgument { slot_id: argument_slot, .. } if argument_slot == slot_id),
-        )
-    })
-}
-
-fn program_is_non_destructive_continuation(program: &ResponseProgram) -> bool {
-    let arguments = match &program.operation {
-        ResponseOperation::FunctionCallFromRoles { arguments, .. }
-        | ResponseOperation::CustomToolCallFromRoles { arguments, .. } => arguments,
-        _ => return false,
-    };
-    arguments.iter().any(|argument| {
-        matches!(
-            argument,
-            ResponseArgument::Role {
-                role: SemanticRole::ContinuationHandle,
-                ..
-            }
-        )
-    }) && arguments.iter().all(|argument| match argument {
-        ResponseArgument::Boolean { value, .. } => !value,
-        ResponseArgument::String { value, .. } => value.is_empty(),
-        ResponseArgument::Integer { name, .. } => is_execution_budget_argument(name),
-        ResponseArgument::Role { .. } => true,
-    })
 }
 
 #[must_use]
@@ -578,6 +767,196 @@ mod tests {
         assert_eq!(
             teacher_program_signature(&frame(atoms)),
             teacher_program_signature(&frame(reversed))
+        );
+    }
+
+    #[test]
+    fn transfer_family_ignores_wire_names_but_exact_teacher_does_not() {
+        let first = frame(vec![
+            RelationAtom::ActionFunction {
+                value: "wait".to_owned(),
+            },
+            RelationAtom::ActionRoleArgument {
+                name: "cell_id".to_owned(),
+                slot_id: 7,
+                value_type: Some(crate::AtomValueType::Integer),
+            },
+        ]);
+        let second = frame(vec![
+            RelationAtom::ActionFunction {
+                value: "continue_process".to_owned(),
+            },
+            RelationAtom::ActionRoleArgument {
+                name: "session".to_owned(),
+                slot_id: 9,
+                value_type: Some(crate::AtomValueType::Integer),
+            },
+        ]);
+
+        assert_ne!(
+            teacher_program_signature(&first),
+            teacher_program_signature(&second)
+        );
+        assert_eq!(
+            teacher_transfer_family_signature(&first),
+            teacher_transfer_family_signature(&second)
+        );
+    }
+
+    #[test]
+    fn transfer_family_separates_poll_from_nonempty_input() {
+        let poll = frame(vec![
+            RelationAtom::ActionFunction {
+                value: "write_stdin".to_owned(),
+            },
+            RelationAtom::ActionStringArgument {
+                name: "chars".to_owned(),
+                value: String::new(),
+            },
+        ]);
+        let input = frame(vec![
+            RelationAtom::ActionFunction {
+                value: "write_stdin".to_owned(),
+            },
+            RelationAtom::ActionStringArgument {
+                name: "chars".to_owned(),
+                value: "q".to_owned(),
+            },
+        ]);
+
+        assert_ne!(
+            teacher_transfer_family_signature(&poll),
+            teacher_transfer_family_signature(&input)
+        );
+    }
+
+    #[test]
+    fn semantic_law_groups_physical_call_adapters_but_preserves_effect_constants() {
+        let direct = frame(vec![
+            RelationAtom::TypedSlot {
+                slot_id: 1,
+                value_type: crate::AtomValueType::Identifier,
+                source: AtomSource::Observation,
+                value_sha256: "a".repeat(64),
+            },
+            RelationAtom::ObservationSelector {
+                slot_id: 1,
+                selector: crate::ResponseValueSelector::ContentLinePrefix {
+                    prefix: "Script running with cell ID ".to_owned(),
+                    value_type: crate::AtomValueType::Identifier,
+                },
+            },
+            RelationAtom::ActionFunction {
+                value: "wait".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 7,
+                value_type: crate::AtomValueType::Identifier,
+                source: AtomSource::Action,
+                value_sha256: "a".repeat(64),
+            },
+            RelationAtom::ActionRoleArgument {
+                name: "cell_id".to_owned(),
+                slot_id: 7,
+                value_type: Some(crate::AtomValueType::Identifier),
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 1,
+                right_slot: 7,
+            },
+        ]);
+        let custom_atoms = vec![
+            RelationAtom::TypedSlot {
+                slot_id: 1,
+                value_type: crate::AtomValueType::Integer,
+                source: AtomSource::Observation,
+                value_sha256: "b".repeat(64),
+            },
+            RelationAtom::ObservationSelector {
+                slot_id: 1,
+                selector: crate::ResponseValueSelector::ContentLinePrefix {
+                    prefix: "Process running with session ID ".to_owned(),
+                    value_type: crate::AtomValueType::Integer,
+                },
+            },
+            RelationAtom::ActionCustomTool {
+                value: "exec".to_owned(),
+            },
+            RelationAtom::ActionInnerTool {
+                value: "write_stdin".to_owned(),
+            },
+            RelationAtom::ActionOutputProjection {
+                output_field: "output".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 9,
+                value_type: crate::AtomValueType::Integer,
+                source: AtomSource::Action,
+                value_sha256: "b".repeat(64),
+            },
+            RelationAtom::ActionRoleArgument {
+                name: "session_id".to_owned(),
+                slot_id: 9,
+                value_type: Some(crate::AtomValueType::Integer),
+            },
+            RelationAtom::ActionStringArgument {
+                name: "chars".to_owned(),
+                value: String::new(),
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 1,
+                right_slot: 9,
+            },
+        ];
+        let custom = frame(custom_atoms.clone());
+        let mut nonempty_atoms = custom_atoms;
+        nonempty_atoms.retain(|atom| {
+            !matches!(atom, RelationAtom::ActionStringArgument { name, .. } if name == "chars")
+        });
+        nonempty_atoms.push(RelationAtom::ActionStringArgument {
+            name: "chars".to_owned(),
+            value: "q".to_owned(),
+        });
+        let nonempty = frame(nonempty_atoms);
+
+        assert_ne!(
+            teacher_program_signature(&direct),
+            teacher_program_signature(&custom)
+        );
+        assert_eq!(
+            teacher_semantic_law_signature(&direct),
+            teacher_semantic_law_signature(&custom)
+        );
+        assert_ne!(
+            teacher_semantic_law_signature(&direct),
+            teacher_semantic_law_signature(&nonempty)
+        );
+    }
+
+    #[test]
+    fn semantic_law_uses_terminal_operator_when_legacy_call_has_no_grounded_effect() {
+        let wait = frame(vec![RelationAtom::ActionFunction {
+            value: "wait".to_owned(),
+        }]);
+        let direct_write = frame(vec![RelationAtom::ActionFunction {
+            value: "write_stdin".to_owned(),
+        }]);
+        let wrapped_write = frame(vec![
+            RelationAtom::ActionCustomTool {
+                value: "exec".to_owned(),
+            },
+            RelationAtom::ActionInnerTool {
+                value: "write_stdin".to_owned(),
+            },
+        ]);
+
+        assert_ne!(
+            teacher_semantic_law_signature(&wait),
+            teacher_semantic_law_signature(&direct_write)
+        );
+        assert_eq!(
+            teacher_semantic_law_signature(&direct_write),
+            teacher_semantic_law_signature(&wrapped_write)
         );
     }
 
@@ -694,90 +1073,5 @@ mod tests {
                 .iter()
                 .any(|atom| matches!(atom, RelationAtom::SlotEquality { .. }))
         );
-    }
-
-    fn continuation_frame(custom_transport: bool, terminate: bool) -> RelationFrame {
-        let mut atoms = vec![
-            RelationAtom::TypedSlot {
-                slot_id: 1,
-                value_type: crate::AtomValueType::Identifier,
-                source: crate::AtomSource::Observation,
-                value_sha256: "6".repeat(64),
-            },
-            RelationAtom::TypedSlot {
-                slot_id: 2,
-                value_type: crate::AtomValueType::Identifier,
-                source: crate::AtomSource::Action,
-                value_sha256: "6".repeat(64),
-            },
-            RelationAtom::ObservationSelector {
-                slot_id: 1,
-                selector: crate::ResponseValueSelector::ContentLinePrefix {
-                    prefix: "Script running with cell ID ".to_owned(),
-                    value_type: crate::AtomValueType::Identifier,
-                },
-            },
-            RelationAtom::UniqueSlot { slot_id: 1 },
-            RelationAtom::SlotEquality {
-                left_slot: 1,
-                right_slot: 2,
-            },
-            RelationAtom::CompletionState {
-                value: "pending".to_owned(),
-            },
-        ];
-        if custom_transport {
-            atoms.extend([
-                RelationAtom::ActionCustomTool {
-                    value: "exec".to_owned(),
-                },
-                RelationAtom::ActionInnerTool {
-                    value: "write_stdin".to_owned(),
-                },
-                RelationAtom::ActionRoleArgument {
-                    name: "session_id".to_owned(),
-                    slot_id: 2,
-                    value_type: None,
-                },
-                RelationAtom::ActionStringArgument {
-                    name: "chars".to_owned(),
-                    value: String::new(),
-                },
-            ]);
-        } else {
-            atoms.extend([
-                RelationAtom::ActionFunction {
-                    value: "wait".to_owned(),
-                },
-                RelationAtom::ActionRoleArgument {
-                    name: "cell_id".to_owned(),
-                    slot_id: 2,
-                    value_type: None,
-                },
-            ]);
-        }
-        if terminate {
-            atoms.push(RelationAtom::ActionBooleanArgument {
-                name: "terminate".to_owned(),
-                value: true,
-            });
-        }
-        frame(atoms)
-    }
-
-    #[test]
-    fn continuation_transport_alias_is_transfer_but_terminate_is_negative() {
-        let function_wait = continuation_frame(false, false);
-        let custom_wait = continuation_frame(true, false);
-        let terminate = continuation_frame(false, true);
-
-        assert!(teacher_actions_have_compatible_effect(
-            &function_wait,
-            &custom_wait
-        ));
-        assert!(!teacher_actions_have_compatible_effect(
-            &function_wait,
-            &terminate
-        ));
     }
 }

@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Nando live-transition admission status
+
+[Timer]
+OnBootSec=5s
+OnUnitInactiveSec=5min
+AccuracySec=15s
+Unit=nando-live-transition-gate.service
+
+[Install]
+WantedBy=timers.target

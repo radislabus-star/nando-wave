@@ -1,0 +1,13 @@
+[Unit]
+Description=Run bounded Nando Codex transition capture
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+RandomizedDelaySec=10s
+AccuracySec=5s
+Unit=nando-phase-center-codex-capture.service
+
+[Install]
+WantedBy=timers.target
+

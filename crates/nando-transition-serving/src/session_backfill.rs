@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -9,13 +9,19 @@ use std::time::{Duration, Instant};
 use nando_response_actor::{
     CanonicalEventGraph, CollectionSynthesisExample, DeterministicEvidenceGraphStore,
     DeterministicEvidenceLedger, EvidenceGraphBuilder, EvidenceGraphPolicy, EvidencePolicyV1,
-    OnlineCollectionMiner, OnlineCollectionObservation, RawEvidenceEnvelope, canonical_json_bytes,
-    canonicalize_evidence_envelope, sha256_bytes,
+    LegacyReplayRehydrationStats, OnlineCollectionBucketStatus,
+    OnlineCollectionConsensusDiagnostic, OnlineCollectionMiner, OnlineCollectionObservation,
+    RawEvidenceEnvelope, ResponsePackage, canonical_json_bytes, canonicalize_evidence_envelope,
+    sha256_bytes,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+
+use crate::{
+    verified_collection_observations_from_session, verified_session_identity_sha256_candidates,
+};
 
 const BACKFILL_SCHEMA_V1: &str = "nando.session-evidence-backfill.v2";
 const MAX_TURN_EVENTS: usize = 64;
@@ -56,14 +62,41 @@ pub struct CollectionMigrationReport {
     pub files_seen: u64,
     pub bytes_scanned: u64,
     pub turns_scanned: u64,
+    pub synthesis_budget_skips: u64,
+    pub revalidated_program_receipt_links: u64,
     pub observations_before: u64,
     pub observations_after: u64,
+    pub exact_executable_observations: u64,
+    pub semantic_executable_observations: u64,
+    pub teacher_only_observations: u64,
+    pub accounted_executable: u64,
+    pub accounted_ambiguous: u64,
+    pub accounted_irreducible: u64,
+    pub observation_accounting_complete: bool,
     pub supported_observations: u64,
     pub unsupported_observations: u64,
+    pub privacy_rejected_observations: u64,
+    pub unsupported_dynamic_zero: u64,
+    pub unsupported_dynamic_partial: u64,
+    pub unsupported_dynamic_full: u64,
+    pub unsupported_partial_with_request_source: u64,
+    pub unsupported_partial_with_tool_source: u64,
+    pub synthesis_errors: u64,
+    pub policy_rejection_reasons: BTreeMap<String, u64>,
+    pub program_kind_bucket_memberships: BTreeMap<String, usize>,
     pub bucket_count: usize,
     pub support_rows: usize,
     pub support_tokens: u64,
+    pub runtime_parity_cases: usize,
     pub frozen_buckets: usize,
+    pub quarantine_packages: Vec<ResponsePackage>,
+    pub buckets: Vec<OnlineCollectionBucketStatus>,
+    pub consensus_diagnostics: Vec<OnlineCollectionConsensusDiagnostic>,
+    pub future_rows_before: usize,
+    pub future_rows_after: usize,
+    pub frozen_future_rows_claimed: usize,
+    pub support_only: bool,
+    pub legacy_rehydration: LegacyReplayRehydrationStats,
 }
 
 #[derive(Clone)]
@@ -111,23 +144,91 @@ pub fn run_collection_migration_pass(
     config: nando_response_actor::OnlineCollectionConfig,
     max_duration: Duration,
 ) -> Result<CollectionMigrationReport, String> {
+    run_collection_pass(
+        root,
+        migration_checkpoint_path,
+        collection_checkpoint_path,
+        config,
+        max_duration,
+        false,
+    )
+}
+
+pub fn run_collection_rehydration_pass(
+    root: &Path,
+    migration_checkpoint_path: &Path,
+    collection_checkpoint_path: &Path,
+    config: nando_response_actor::OnlineCollectionConfig,
+    max_duration: Duration,
+) -> Result<CollectionMigrationReport, String> {
+    run_collection_pass(
+        root,
+        migration_checkpoint_path,
+        collection_checkpoint_path,
+        config,
+        max_duration,
+        true,
+    )
+}
+
+fn run_collection_pass(
+    root: &Path,
+    migration_checkpoint_path: &Path,
+    collection_checkpoint_path: &Path,
+    config: nando_response_actor::OnlineCollectionConfig,
+    max_duration: Duration,
+    rehydrate_only: bool,
+) -> Result<CollectionMigrationReport, String> {
     const SCHEMA: &str = "nando.collection-migration.v1";
     let started = Instant::now();
     let mut checkpoint = load_collection_migration_checkpoint(migration_checkpoint_path, SCHEMA)?;
     let mut miner = OnlineCollectionMiner::open(collection_checkpoint_path, config)?;
-    let observations_before = miner.status().observations_total;
+    let status_before = miner.status();
+    let revalidated_program_receipt_links = if rehydrate_only {
+        miner.revalidate_replayable_support_buffered()?
+    } else {
+        0
+    };
+    let observations_before = status_before.observations_total;
+    let future_rows_before = status_before
+        .buckets
+        .iter()
+        .map(|bucket| bucket.future_rows)
+        .sum::<usize>();
     let mut files_seen = 0_u64;
     let mut bytes_scanned = 0_u64;
     let mut turns_scanned = 0_u64;
+    let mut synthesis_budget_skips = 0_u64;
+    let mut legacy_rehydration = LegacyReplayRehydrationStats::default();
     let mut deadline_reached = false;
     let mut paths = session_files(root);
-    paths.sort_by(|left, right| {
-        let left_modified = fs::metadata(left).and_then(|value| value.modified()).ok();
-        let right_modified = fs::metadata(right).and_then(|value| value.modified()).ok();
-        right_modified
-            .cmp(&left_modified)
-            .then_with(|| left.cmp(right))
-    });
+    if rehydrate_only {
+        let target_sessions = rehydration_target_sessions(&status_before, config.support_rows);
+        paths.retain(|path| {
+            verified_session_identity_sha256_candidates(path).is_ok_and(|identities| {
+                identities
+                    .iter()
+                    .any(|session_id| target_sessions.contains(session_id))
+            })
+        });
+        paths.sort_by(|left, right| {
+            let left_len = fs::metadata(left)
+                .map(|value| value.len())
+                .unwrap_or(u64::MAX);
+            let right_len = fs::metadata(right)
+                .map(|value| value.len())
+                .unwrap_or(u64::MAX);
+            left_len.cmp(&right_len).then_with(|| left.cmp(right))
+        });
+    } else {
+        paths.sort_by(|left, right| {
+            let left_modified = fs::metadata(left).and_then(|value| value.modified()).ok();
+            let right_modified = fs::metadata(right).and_then(|value| value.modified()).ok();
+            right_modified
+                .cmp(&left_modified)
+                .then_with(|| left.cmp(right))
+        });
+    }
 
     'files: for path in paths {
         if started.elapsed() >= max_duration {
@@ -149,7 +250,34 @@ pub fn run_collection_migration_pass(
             .metadata()
             .map_err(|error| format!("collection_migration_metadata:{error}"))?
             .len();
-        if is_new_source {
+        if rehydrate_only {
+            if source.offset < length {
+                let source_session_identities = verified_session_identity_sha256_candidates(&path)?;
+                let observations = verified_collection_observations_from_session(&path)?;
+                turns_scanned = turns_scanned.saturating_add(observations.len() as u64);
+                for observation in observations {
+                    miner.rehydrate_replay_training_buffered(observation.clone())?;
+                    legacy_rehydration.merge(miner.rehydrate_legacy_replay_training_buffered(
+                        observation,
+                        &source_session_identities,
+                    )?);
+                }
+                bytes_scanned = bytes_scanned.saturating_add(length);
+                source.offset = length;
+            }
+            checkpoint.sources.insert(source_sha256, source);
+            miner.flush()?;
+            persist_collection_migration_checkpoint(migration_checkpoint_path, &checkpoint)?;
+            if rehydration_deficits_closed(&miner.status(), config.support_rows) {
+                break 'files;
+            }
+            if started.elapsed() >= max_duration {
+                deadline_reached = true;
+                break 'files;
+            }
+            continue;
+        }
+        if is_new_source && !rehydrate_only {
             source.offset = length.saturating_sub(MAX_INITIAL_COLLECTION_TAIL_BYTES);
         } else if source.offset > length {
             source = BackfillSource::default();
@@ -172,7 +300,15 @@ pub fn run_collection_migration_pass(
                 .map_err(|error| format!("collection_migration_read:{error}"))?;
             if bytes == 0 || !line.ends_with(b"\n") {
                 if !rows.is_empty() {
-                    observe_collection_turn(&source_id, source.turn_index, &rows, &mut miner)?;
+                    if !observe_collection_turn_for_migration(
+                        &source_id,
+                        source.turn_index,
+                        &rows,
+                        &mut miner,
+                        rehydrate_only,
+                    )? {
+                        synthesis_budget_skips = synthesis_budget_skips.saturating_add(1);
+                    }
                     turns_scanned = turns_scanned.saturating_add(1);
                 }
                 source.offset = position;
@@ -194,7 +330,15 @@ pub fn run_collection_migration_pass(
                 waiting_for_initial_boundary = false;
             }
             if is_turn_boundary(&value) && !rows.is_empty() {
-                observe_collection_turn(&source_id, source.turn_index, &rows, &mut miner)?;
+                if !observe_collection_turn_for_migration(
+                    &source_id,
+                    source.turn_index,
+                    &rows,
+                    &mut miner,
+                    rehydrate_only,
+                )? {
+                    synthesis_budget_skips = synthesis_budget_skips.saturating_add(1);
+                }
                 turns_scanned = turns_scanned.saturating_add(1);
                 rows.clear();
                 retained_bytes = 0;
@@ -236,7 +380,26 @@ pub fn run_collection_migration_pass(
 
     miner.flush()?;
     persist_collection_migration_checkpoint(migration_checkpoint_path, &checkpoint)?;
+    let consensus_diagnostics = miner.consensus_diagnostics();
     let status = miner.status();
+    let quarantine_packages = miner.quarantine_packages()?;
+    let future_rows_after = status
+        .buckets
+        .iter()
+        .map(|bucket| bucket.future_rows)
+        .sum::<usize>();
+    let frozen_future_rows_claimed = future_rows_after.saturating_sub(future_rows_before);
+    if frozen_future_rows_claimed != 0 {
+        return Err("collection_migration_claimed_frozen_future".to_owned());
+    }
+    let mut program_kind_bucket_memberships = BTreeMap::<String, usize>::new();
+    for bucket in &status.buckets {
+        for kind in &bucket.program_kinds {
+            *program_kind_bucket_memberships
+                .entry(kind.clone())
+                .or_default() += 1;
+        }
+    }
     Ok(CollectionMigrationReport {
         schema: SCHEMA.to_owned(),
         elapsed_millis: started.elapsed().as_millis(),
@@ -244,12 +407,31 @@ pub fn run_collection_migration_pass(
         files_seen,
         bytes_scanned,
         turns_scanned,
+        synthesis_budget_skips,
+        revalidated_program_receipt_links,
         observations_before,
         observations_after: status.observations_total,
+        exact_executable_observations: status.exact_executable_observations_total,
+        semantic_executable_observations: status.semantic_executable_observations_total,
+        teacher_only_observations: status.teacher_only_observations_total,
+        accounted_executable: status.accounted_executable_total,
+        accounted_ambiguous: status.accounted_ambiguous_total,
+        accounted_irreducible: status.accounted_irreducible_total,
+        observation_accounting_complete: status.observation_accounting_complete,
         supported_observations: status
             .observations_total
             .saturating_sub(status.unsupported_total),
         unsupported_observations: status.unsupported_total,
+        privacy_rejected_observations: status.privacy_rejected_observations_total,
+        unsupported_dynamic_zero: status.unsupported_dynamic_zero_total,
+        unsupported_dynamic_partial: status.unsupported_dynamic_partial_total,
+        unsupported_dynamic_full: status.unsupported_dynamic_full_total,
+        unsupported_partial_with_request_source: status
+            .unsupported_partial_with_request_source_total,
+        unsupported_partial_with_tool_source: status.unsupported_partial_with_tool_source_total,
+        synthesis_errors: status.synthesis_error_total,
+        policy_rejection_reasons: status.policy_rejection_reasons,
+        program_kind_bucket_memberships,
         bucket_count: status.buckets.len(),
         support_rows: status
             .buckets
@@ -261,8 +443,60 @@ pub fn run_collection_migration_pass(
             .iter()
             .map(|bucket| bucket.support_tokens)
             .sum(),
+        runtime_parity_cases: status.runtime_parity_cases_total,
         frozen_buckets: status.buckets.iter().filter(|bucket| bucket.frozen).count(),
+        quarantine_packages,
+        buckets: status.buckets,
+        consensus_diagnostics,
+        future_rows_before,
+        future_rows_after,
+        frozen_future_rows_claimed,
+        support_only: true,
+        legacy_rehydration,
     })
+}
+
+fn rehydration_target_sessions(
+    status: &nando_response_actor::OnlineCollectionStatus,
+    required_support_rows: usize,
+) -> BTreeSet<String> {
+    status
+        .buckets
+        .iter()
+        .filter(|bucket| {
+            !bucket.frozen
+                && bucket.best_abstract_law_support_rows >= required_support_rows
+                && bucket.best_abstract_law_replayable_support_rows < required_support_rows
+        })
+        .flat_map(|bucket| bucket.best_abstract_law_session_ids_sha256.iter().cloned())
+        .collect()
+}
+
+fn rehydration_deficits_closed(
+    status: &nando_response_actor::OnlineCollectionStatus,
+    required_support_rows: usize,
+) -> bool {
+    status.buckets.iter().all(|bucket| {
+        bucket.frozen
+            || bucket.best_abstract_law_support_rows < required_support_rows
+            || bucket.best_abstract_law_replayable_support_rows >= required_support_rows
+    })
+}
+
+fn observe_collection_turn_for_migration(
+    source_id: &str,
+    turn_index: u64,
+    rows: &[BackfillRow],
+    miner: &mut OnlineCollectionMiner,
+    rehydrate_only: bool,
+) -> Result<bool, String> {
+    match observe_collection_turn(source_id, turn_index, rows, miner, rehydrate_only) {
+        Ok(()) => Ok(true),
+        Err(error) if error == "online_collection_synthesis:collection_candidate_budget" => {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn observe_collection_turn(
@@ -270,6 +504,7 @@ fn observe_collection_turn(
     turn_index: u64,
     rows: &[BackfillRow],
     miner: &mut OnlineCollectionMiner,
+    rehydrate_only: bool,
 ) -> Result<(), String> {
     let Some((example, estimated_input_tokens)) = collection_example(rows, true) else {
         return Ok(());
@@ -284,14 +519,19 @@ fn observe_collection_turn(
         &canonical_json_bytes(&(source_id, turn_index, event_material))
             .map_err(|error| format!("collection_migration_digest:{error}"))?,
     );
-    miner.observe_buffered(OnlineCollectionObservation {
+    let observation = OnlineCollectionObservation {
         evidence_graph_sha256,
         client_intent_id_sha256: sha256_bytes(intent.as_bytes()),
         session_id_sha256: sha256_bytes(source_id.as_bytes()),
         event_time_unix_nanos: rows.iter().rev().find_map(|row| event_time(&row.value)),
         estimated_input_tokens,
         example,
-    })
+    };
+    if rehydrate_only {
+        miner.rehydrate_replay_training_buffered(observation)
+    } else {
+        miner.observe_replay_training_buffered(observation)
+    }
 }
 
 fn is_collection_migration_event(row: &Value) -> bool {
@@ -932,6 +1172,11 @@ fn event_time(row: &Value) -> Option<u64> {
 }
 
 fn session_files(root: &Path) -> Vec<PathBuf> {
+    if root.is_file() {
+        return (root.extension().and_then(|value| value.to_str()) == Some("jsonl"))
+            .then(|| vec![root.to_owned()])
+            .unwrap_or_default();
+    }
     let mut output = Vec::new();
     let mut pending = vec![root.to_owned()];
     while let Some(path) = pending.pop() {
@@ -1228,9 +1473,14 @@ mod tests {
             accounting_before_generation_replay
         );
         for path in [root.join("collection.json"), root.join("graphs.jsonl")] {
-            let durable = String::from_utf8(fs::read(path).expect("durable")).expect("utf8");
+            let durable = fs::read(path).expect("durable");
             for private in ["private-session", "surface_", "private", "Count records"] {
-                assert!(!durable.contains(private), "durable leak: {private}");
+                assert!(
+                    !durable
+                        .windows(private.len())
+                        .any(|window| window == private.as_bytes()),
+                    "durable leak: {private}"
+                );
             }
         }
         fs::remove_dir_all(root).expect("cleanup");

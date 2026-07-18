@@ -3,6 +3,12 @@ use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use http_body_util::{BodyExt, Empty};
+use hyper::body::Bytes;
+use hyper::{Request, Uri};
+use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::rt::TokioExecutor;
 use nando_gateway_control::{
     ControlConfig, GatewayMode, admission_status, apply_mode, read_state, reconcile_startup,
     service_statuses,
@@ -13,6 +19,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+const LIVE_MINER_REPORT_URL: &str = "http://127.0.0.1:18789/v2/miner/report";
+const LIVE_MINER_REPORT_TIMEOUT: Duration = Duration::from_millis(250);
 
 #[derive(Clone)]
 struct AppState {
@@ -83,9 +92,16 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     }
     let current = read_state(&state.config.state_path);
     let admission = admission_status(&state.config);
+    let cpu_disabled = if admission.cpu_allowed {
+        ""
+    } else {
+        " disabled"
+    };
     let economics = read_json(&state.config.economics_path);
     let response_registry = read_json(&state.config.response_registry_path);
     let online_miner = read_json(&state.config.response_online_miner_report_path);
+    let live_miner = read_live_miner_report().await;
+    let build_manifest = read_json(&state.config.build_manifest_path);
     let admission_receipt = read_json(&state.config.admission_path);
     let runtime_admission = admission_receipt
         .pointer("/sections/runtime_admission")
@@ -102,11 +118,6 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             )
         })
         .collect::<String>();
-    let cpu_disabled = if admission.cpu_allowed {
-        ""
-    } else {
-        " disabled"
-    };
     let active_profiles = metric_u64(runtime_admission, "active_profile_count");
     let avoided_calls = metric_u64(&economics, "avoided_calls");
     let tokens_saved = metric_u64(&economics, "avoided_input_tokens");
@@ -196,21 +207,36 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let package_bytes = metric_u64(runtime_admission, "package_bytes");
     let active_future_rows = metric_u64(runtime_admission, "active_future_rows");
     let shadow_executions = metric_u64(runtime_admission, "shadow_executions");
-    let online_generated_at = online_miner
-        .get("generated_at_unix_ms")
+    let response_miner = live_miner
+        .get("response")
+        .filter(|value| value.is_object())
+        .or_else(|| online_miner.get("miner"))
+        .unwrap_or(&Value::Null);
+    let collection_status = live_miner
+        .pointer("/collection/status")
+        .unwrap_or(&Value::Null);
+    let worker_status = live_miner.get("worker").unwrap_or(&Value::Null);
+    let collection_outcomes = live_miner
+        .pointer("/collection/candidate_outcomes")
+        .unwrap_or(&Value::Null);
+    let online_generated_at = live_miner
+        .get("generated_at_unix")
         .and_then(Value::as_u64)
-        .unwrap_or(0)
-        / 1_000;
+        .unwrap_or_else(|| {
+            online_miner
+                .get("generated_at_unix_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                / 1_000
+        });
     let online_age = unix_now().saturating_sub(online_generated_at);
-    let online_status = if online_miner.get("schema").and_then(Value::as_str)
-        == Some("nando.embedded-response-online-miner.v1")
-    {
+    let online_status = if response_miner.is_object() {
         "READY"
     } else {
         "MISSING"
     };
-    let self_training = online_miner
-        .pointer("/miner/self_training_v2")
+    let self_training = response_miner
+        .get("self_training_v2")
         .unwrap_or(&Value::Null);
     let online_discovery = self_training.get("discovery").unwrap_or(&Value::Null);
     let online_cegis = self_training.get("cegis").unwrap_or(&Value::Null);
@@ -233,24 +259,127 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         metric_u64(strongest_generation, "runtime_parity_rows")
     );
     let online_teacher_programs = teacher_programs_text(online_discovery);
-    let online_candidates = online_miner
-        .pointer("/miner/candidate_bucket_count")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let online_admission_ready = metric_u64(self_training, "admission_ready_cohorts");
-    let online_warm_bytes = online_miner
-        .pointer("/miner/warm_bytes_estimate")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
+    let online_candidates = metric_u64(response_miner, "candidate_bucket_count");
+    let online_admission_ready = metric_u64(response_miner, "admission_ready_cohorts");
+    let online_emitted = metric_u64(response_miner, "emitted_candidate_cohorts");
+    let online_blocked = metric_u64(response_miner, "explicitly_blocked_cohorts");
+    let online_admission_accounting = yes_no(
+        response_miner
+            .get("admission_accounting_complete")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    );
+    let online_admission_blockers = admission_blockers_text(response_miner);
+    let online_warm_bytes = metric_u64(response_miner, "warm_bytes_estimate");
     let online_product_window = format!(
         "{} intents / {} tokens / {}",
         metric_u64(online_opportunity, "verified_intents"),
         metric_u64(online_opportunity, "verified_tokens"),
         format_ratio_milli(metric_u64(online_opportunity, "verified_token_share_milli"))
     );
+    let worker_queue = format!(
+        "{} / {}",
+        metric_u64(worker_status, "queue_backlog_estimate"),
+        metric_u64(worker_status, "queue_capacity")
+    );
+    let worker_processed = format!(
+        "{} / {}",
+        metric_u64(worker_status, "processed"),
+        metric_u64(worker_status, "failed")
+    );
+    let worker_synthesis_latency = format!(
+        "last {} / max {}",
+        format_micros(metric_u64(worker_status, "synthesis_last_micros")),
+        format_micros(metric_u64(worker_status, "synthesis_max_micros"))
+    );
+    let checkpoint_interval_seconds = match metric_u64(worker_status, "checkpoint_interval_seconds")
+    {
+        0 => 60,
+        value => value,
+    };
+    let worker_checkpoint_policy = format!(
+        "{} events / {} с",
+        metric_u64(worker_status, "checkpoint_events"),
+        checkpoint_interval_seconds
+    );
+    let worker_checkpoint_latency = format!(
+        "{}; total {}",
+        format_micros(metric_u64(worker_status, "checkpoint_last_micros")),
+        metric_u64(worker_status, "checkpoints")
+    );
+    let collection_observations = metric_u64(collection_status, "observations_total");
+    let collection_executable = metric_u64(collection_status, "accounted_executable_total");
+    let collection_exact = metric_u64(collection_status, "exact_executable_observations_total");
+    let collection_semantic =
+        metric_u64(collection_status, "semantic_executable_observations_total");
+    let collection_ambiguous = metric_u64(collection_status, "accounted_ambiguous_total");
+    let collection_irreducible = metric_u64(collection_status, "accounted_irreducible_total");
+    let collection_accounting = yes_no(
+        collection_status
+            .get("observation_accounting_complete")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    );
+    let collection_frozen = metric_u64(collection_status, "frozen_buckets_total");
+    let collection_future_receipts = metric_u64(collection_status, "future_receipts_unique_total");
+    let collection_rejected_wrong_candidates = metric_u64(collection_status, "wrong_accepts_total");
+    let collection_revoked = metric_u64(collection_status, "revoked_candidates_total");
+    let collection_quarantine = live_miner
+        .pointer("/collection/quarantine_packages")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let collection_outcome_accounting = yes_no(
+        collection_outcomes
+            .get("outcome_identity_holds")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    );
+    let collection_candidate_progress = format!(
+        "emitted {} / blocked {} / accounting {}",
+        metric_u64(collection_outcomes, "emitted_candidates"),
+        metric_u64(collection_outcomes, "explicitly_blocked_candidates"),
+        collection_outcome_accounting
+    );
+    let collection_blockers = collection_blockers_text(collection_status);
+    let opportunity_intents = metric_u64(online_opportunity, "ordinary_intents");
+    let opportunity_tokens = metric_u64(online_opportunity, "ordinary_tokens");
+    let upper_bound_tokens = metric_u64(
+        online_opportunity,
+        "optimistic_executable_upper_bound_tokens",
+    );
+    let upper_bound_share = if opportunity_tokens == 0 {
+        "NOT EVALUATED".to_owned()
+    } else {
+        format_ratio_milli(metric_u64(
+            online_opportunity,
+            "optimistic_executable_upper_bound_share_milli",
+        ))
+    };
+    let upper_bound_accounting = yes_no(
+        online_opportunity
+            .get("classification_identity_holds")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            && online_opportunity
+                .get("upper_bound_identity_holds")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+    );
+    let m3_upper_bound_reachable = if opportunity_tokens == 0 {
+        "NOT EVALUATED"
+    } else {
+        yes_no(
+            online_opportunity
+                .get("m3_reachable_under_upper_bound")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+    };
     let false_accepts = metric_u64(runtime_admission, "global_false_accepts");
     let parity_mismatches = metric_u64(runtime_admission, "global_runtime_parity_mismatches");
     let policy_version = metric_str(runtime_admission, "policy_version", "MISSING");
+    let build_id = metric_str(&build_manifest, "build_id", "MISSING");
+    let module_version_rows = module_version_rows(&build_manifest);
     let body = format!(
         r#"<!doctype html>
 <html lang="ru">
@@ -285,7 +414,7 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
 </style>
 </head>
 <body>
-<header><h1>Nando Gateway</h1><div class="mode">{mode}</div></header>
+<header><h1>Nando Gateway <small>{build_id}</small></h1><div class="mode">{mode}</div></header>
 <main>
 <div class="controls">
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="BYPASS"><button class="bypass">ОБХОД NANDO</button></form>
@@ -293,6 +422,7 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="CPU"><button{cpu_disabled}>CPU</button></form>
 </div>
 <section class="band"><h2>Сервисы</h2><table>{service_rows}</table></section>
+	<section class="band"><h2>Версии сборок и модулей</h2><table>{module_version_rows}</table></section>
 	<section class="band"><h2>CPU admission</h2><table>
 <tr><td>Composite gate</td><td>{verdict}</td></tr>
 <tr><td>Future eligibility</td><td>{eligible}</td></tr>
@@ -337,14 +467,40 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
 	</table></section>
 	<section class="band"><h2>Поточный Rust-майнер</h2><table>
 	<tr><td>Состояние / возраст snapshot</td><td>{online_status} / {online_age} с</td></tr>
+	<tr><td>Очередь / ёмкость</td><td>{worker_queue}</td></tr>
+	<tr><td>Обработано / ошибок worker</td><td>{worker_processed}</td></tr>
+	<tr><td>Задержка synthesis</td><td>{worker_synthesis_latency}</td></tr>
+	<tr><td>Checkpoint policy</td><td>{worker_checkpoint_policy}</td></tr>
+	<tr><td>Последний checkpoint / всего</td><td>{worker_checkpoint_latency}</td></tr>
 	<tr><td>Teacher transitions / pools</td><td>{online_transitions} / {online_teacher_pools}</td></tr>
 	<tr><td>Teacher programs</td><td>{online_teacher_programs}</td></tr>
 	<tr><td>CEGIS cohorts / winners / exact checks</td><td>{online_cegis_cohorts} / {online_cegis_winners} / {online_exact_checks}</td></tr>
 	<tr><td>Candidates / admission-ready</td><td>{online_candidates} / {online_admission_ready}</td></tr>
+	<tr><td>Admission emitted / blocked / accounting</td><td>{online_emitted} / {online_blocked} / {online_admission_accounting}</td></tr>
+	<tr><td>Точный admission blocker</td><td>{online_admission_blockers}</td></tr>
 	<tr><td>Лучшее frozen generation</td><td>{online_generation}</td></tr>
 	<tr><td>Горячее состояние</td><td>{online_warm_bytes} Б</td></tr>
 	<tr><td>False accepts / parity failures</td><td>{online_false_accepts} / {online_parity_failures}</td></tr>
 	<tr><td>Текущее verified-окно</td><td>{online_product_window}</td></tr>
+	</table></section>
+	</div>
+	<div class="metric-grid">
+	<section class="band"><h2>Collection synthesis</h2><table>
+	<tr><td>Наблюдения</td><td>{collection_observations}</td></tr>
+	<tr><td>Exact / semantic / accounted executable</td><td>{collection_exact} / {collection_semantic} / {collection_executable}</td></tr>
+	<tr><td>Ambiguous / irreducible</td><td>{collection_ambiguous} / {collection_irreducible}</td></tr>
+	<tr><td>Accounting identity</td><td>{collection_accounting}</td></tr>
+	<tr><td>Frozen / QUARANTINE / future receipts</td><td>{collection_frozen} / {collection_quarantine} / {collection_future_receipts}</td></tr>
+	<tr><td>Candidate emitted / blocked / accounting</td><td>{collection_candidate_progress}</td></tr>
+	<tr><td>Точные blockers</td><td>{collection_blockers}</td></tr>
+	<tr><td>Отозванные / ошибочные гипотезы</td><td>{collection_revoked} / {collection_rejected_wrong_candidates}</td></tr>
+	</table></section>
+	<section class="band"><h2>Верхняя граница CPU</h2><table>
+	<tr><td>Authoritative окно</td><td>{opportunity_intents} intents / {opportunity_tokens} tokens</td></tr>
+	<tr><td>Optimistic executable upper bound</td><td>{upper_bound_tokens} tokens / {upper_bound_share}</td></tr>
+	<tr><td>Irreducible / unresolved tokens</td><td>{irreducible_tokens} / {unresolved_tokens}</td></tr>
+	<tr><td>Upper-bound accounting</td><td>{upper_bound_accounting}</td></tr>
+	<tr><td>M3 достижим в этом окне</td><td>{m3_upper_bound_reachable}</td></tr>
 	</table></section>
 	</div>
 <section class="band"><h2>Граница</h2><p class="note">{reason}. Кнопка BYPASS останавливает Nando-наблюдение и майнер, но Nginx продолжает передавать Codex-трафик в OpenAI.</p></section>
@@ -352,9 +508,11 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
 </body>
 </html>"#,
         mode = current.mode,
+        service_rows = service_rows,
+        build_id = html_escape(build_id),
         key = html_escape(&key),
         cpu_disabled = cpu_disabled,
-        service_rows = service_rows,
+        module_version_rows = module_version_rows,
         verdict = html_escape(&admission.verdict),
         eligible = yes_no(admission.eligible_for_local_accept),
         fresh = yes_no(admission.fresh),
@@ -399,11 +557,42 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
         online_exact_checks = metric_u64(online_cegis, "exact_checks"),
         online_candidates = online_candidates,
         online_admission_ready = online_admission_ready,
+        online_emitted = online_emitted,
+        online_blocked = online_blocked,
+        online_admission_accounting = online_admission_accounting,
+        online_admission_blockers = html_escape(&online_admission_blockers),
         online_generation = html_escape(&online_generation),
         online_warm_bytes = online_warm_bytes,
         online_false_accepts = metric_u64(online_opportunity, "false_accepts"),
         online_parity_failures = metric_u64(online_opportunity, "parity_failures"),
         online_product_window = html_escape(&online_product_window),
+        worker_queue = html_escape(&worker_queue),
+        worker_processed = html_escape(&worker_processed),
+        worker_synthesis_latency = html_escape(&worker_synthesis_latency),
+        worker_checkpoint_policy = html_escape(&worker_checkpoint_policy),
+        worker_checkpoint_latency = html_escape(&worker_checkpoint_latency),
+        collection_observations = collection_observations,
+        collection_exact = collection_exact,
+        collection_semantic = collection_semantic,
+        collection_executable = collection_executable,
+        collection_ambiguous = collection_ambiguous,
+        collection_irreducible = collection_irreducible,
+        collection_accounting = collection_accounting,
+        collection_frozen = collection_frozen,
+        collection_quarantine = collection_quarantine,
+        collection_future_receipts = collection_future_receipts,
+        collection_candidate_progress = html_escape(&collection_candidate_progress),
+        collection_blockers = html_escape(&collection_blockers),
+        collection_revoked = collection_revoked,
+        collection_rejected_wrong_candidates = collection_rejected_wrong_candidates,
+        opportunity_intents = opportunity_intents,
+        opportunity_tokens = opportunity_tokens,
+        upper_bound_tokens = upper_bound_tokens,
+        upper_bound_share = upper_bound_share,
+        irreducible_tokens = metric_u64(online_opportunity, "proven_irreducible_tokens"),
+        unresolved_tokens = metric_u64(online_opportunity, "unresolved_tokens"),
+        upper_bound_accounting = upper_bound_accounting,
+        m3_upper_bound_reachable = m3_upper_bound_reachable,
         false_accepts = false_accepts,
         parity_mismatches = parity_mismatches,
         policy_version = html_escape(policy_version),
@@ -424,8 +613,35 @@ async fn control_state(Path(key): Path<String>, State(state): State<AppState>) -
         ,"response_registry": read_json(&state.config.response_registry_path)
         ,"response_miner_status": read_json(&state.config.response_miner_status_path)
         ,"response_online_miner": read_json(&state.config.response_online_miner_report_path)
+        ,"build_manifest": read_json(&state.config.build_manifest_path)
     }))
     .into_response()
+}
+
+async fn read_live_miner_report() -> Value {
+    let Ok(uri) = LIVE_MINER_REPORT_URL.parse::<Uri>() else {
+        return Value::Null;
+    };
+    let request = match Request::get(uri).body(Empty::<Bytes>::new()) {
+        Ok(request) => request,
+        Err(_) => return Value::Null,
+    };
+    let client: Client<HttpConnector, Empty<Bytes>> =
+        Client::builder(TokioExecutor::new()).build_http();
+    let Ok(Ok(response)) =
+        tokio::time::timeout(LIVE_MINER_REPORT_TIMEOUT, client.request(request)).await
+    else {
+        return Value::Null;
+    };
+    if !response.status().is_success() {
+        return Value::Null;
+    }
+    let Ok(Ok(body)) =
+        tokio::time::timeout(LIVE_MINER_REPORT_TIMEOUT, response.into_body().collect()).await
+    else {
+        return Value::Null;
+    };
+    serde_json::from_slice(&body.to_bytes()).unwrap_or(Value::Null)
 }
 
 fn read_json(path: &std::path::Path) -> Value {
@@ -433,6 +649,47 @@ fn read_json(path: &std::path::Path) -> Value {
         .ok()
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
         .unwrap_or(Value::Null)
+}
+
+fn admission_blockers_text(report: &Value) -> String {
+    let blockers = report
+        .get("admission_candidate_blockers")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|row| row.get("blocker").and_then(Value::as_str))
+        .take(3)
+        .collect::<Vec<_>>();
+    if blockers.is_empty() {
+        "нет".to_owned()
+    } else {
+        blockers.join("; ")
+    }
+}
+
+fn collection_blockers_text(status: &Value) -> String {
+    let mut counts = BTreeMap::<String, u64>::new();
+    for blocker in status
+        .get("buckets")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|bucket| bucket.get("admission_blocker").and_then(Value::as_str))
+    {
+        *counts.entry(blocker.to_owned()).or_default() += 1;
+    }
+    let mut blockers = counts.into_iter().collect::<Vec<_>>();
+    blockers.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    if blockers.is_empty() {
+        "нет".to_owned()
+    } else {
+        blockers
+            .into_iter()
+            .take(3)
+            .map(|(blocker, count)| format!("{blocker} ×{count}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
 }
 
 fn metric_u64(metrics: &Value, key: &str) -> u64 {
@@ -466,6 +723,42 @@ fn teacher_programs_text(discovery: &Value) -> String {
         .map(|(action, rows)| format!("{action}: {rows}"))
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+fn module_version_rows(manifest: &Value) -> String {
+    let Some(modules) = manifest.get("modules").and_then(Value::as_array) else {
+        return "<tr><td>Manifest</td><td class=\"off\">MISSING</td></tr>".to_owned();
+    };
+    modules
+        .iter()
+        .map(|module| {
+            let name = metric_str(module, "name", "unknown");
+            let version = metric_str(module, "version", "MISSING");
+            let contract = metric_str(module, "contract", "MISSING");
+            let sha = metric_str(module, "sha256", "");
+            let short_sha = sha.get(..12).unwrap_or(sha);
+            let value = if short_sha.is_empty() {
+                format!("{version} | {contract}")
+            } else {
+                format!("{version} | {contract} | {short_sha}")
+            };
+            format!(
+                "<tr><td>{}</td><td>{}</td></tr>",
+                html_escape(name),
+                html_escape(&value)
+            )
+        })
+        .collect()
+}
+
+fn format_micros(value: u64) -> String {
+    if value >= 1_000_000 {
+        format!("{:.2} с", value as f64 / 1_000_000.0)
+    } else if value >= 1_000 {
+        format!("{:.1} мс", value as f64 / 1_000.0)
+    } else {
+        format!("{value} мкс")
+    }
 }
 
 fn format_ratio_milli(value: u64) -> String {

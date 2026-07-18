@@ -5,6 +5,7 @@ mod cegis;
 mod collection_synthesis;
 mod contracts;
 mod decidability;
+mod effect_graph;
 mod evidence;
 mod evidence_graph;
 mod family_discovery;
@@ -23,6 +24,7 @@ mod package;
 mod program;
 mod rollover;
 mod runtime;
+mod semantic_alias;
 mod synthesis;
 mod teacher_join;
 mod training_types;
@@ -30,6 +32,7 @@ mod verifier;
 mod version_space;
 
 pub use admission_bundle::{
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt,
     ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1, OnlineAdmissionCandidateBundle, RuntimeParityCase,
 };
 pub use authority::{
@@ -40,13 +43,13 @@ pub use authority::{
     RESPONSE_POST_VERIFIER_ADMISSION_SCHEMA_V1, RESPONSE_POST_VERIFIER_RECEIPT_SCHEMA_V1,
     RESPONSE_PROOF_RECEIPT_BINDING_SCHEMA_V1, RESPONSE_REGISTRY_SCHEMA_V6,
     RESPONSE_RUNTIME_CONTRACT_SCHEMA_V1, RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1,
-    RESPONSE_RUNTIME_RECEIPT_SCHEMA_V2, RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseAuthorityV2,
-    ResponsePackageAuthorityBindingV2, RuntimeVerificationReceiptV2, RuntimeVerificationResultV2,
-    canonical_json_bytes, canonical_json_sha256, finalize_post_verifier_receipt,
-    response_actor_program_digest, response_execution_payload_digest,
-    response_independent_verifier_program_digest, response_package_digest,
-    response_proof_receipts_digest, response_registry_digest, response_runtime_contract_sha256,
-    sha256_bytes, valid_nonzero_sha256,
+    RESPONSE_RUNTIME_RECEIPT_SCHEMA_V2, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseAuthorityV2, ResponsePackageAuthorityBindingV2,
+    RuntimeVerificationReceiptV2, RuntimeVerificationResultV2, canonical_json_bytes,
+    canonical_json_sha256, finalize_post_verifier_receipt, response_actor_program_digest,
+    response_execution_payload_digest, response_independent_verifier_program_digest,
+    response_package_digest, response_proof_receipts_digest, response_registry_digest,
+    response_runtime_contract_sha256, sha256_bytes, valid_nonzero_sha256,
 };
 pub use causal::{
     GroundedWaveCausalReport, evaluate_grounded_wave_causality,
@@ -62,23 +65,30 @@ pub use collection_synthesis::{
     diagnose_response_dynamic_coverage, enumerate_source_neutral_collection_programs,
     enumerate_source_neutral_response_programs, is_learned_bounded_response_program,
     is_privacy_safe_online_response_program, is_source_neutral_collection_program,
-    is_source_neutral_response_program, response_program_exactly_matches_example,
-    response_program_matches_example, source_neutral_verifier_for_program,
-    synthesize_collection_program, synthesize_unique_collection_program,
+    is_source_neutral_response_program, response_program_authority_matches_example,
+    response_program_exactly_matches_example, response_program_matches_example,
+    source_neutral_verifier_for_program, synthesize_collection_program,
+    synthesize_unique_collection_program,
 };
 pub use contracts::{
     AtomSource, AtomValueType, FrozenSplitError, GuardCandidate, INGRESS_EVENT_SCHEMA,
     IngressEvent, PROGRAM_CANDIDATE_SCHEMA, RELATION_FRAME_SCHEMA, ROLE_HYPOTHESIS_SCHEMA,
     RelationAtom, RelationFrame, ResponseProgramCandidate, ResponseValueSelector, RoleHypothesis,
-    SemanticRole, TrafficClass, VERIFIER_RECEIPT_SCHEMA, VerifierProgram, VerifierReceipt,
-    validate_frozen_future_split,
+    SemanticRole, TrafficClass, VERIFIER_RECEIPT_SCHEMA, VerifierConsensusVariant, VerifierProgram,
+    VerifierReceipt, validate_frozen_future_split,
 };
 pub use decidability::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
+pub use effect_graph::{
+    EFFECT_GRAPH_SCHEMA_V1, EffectEdge, EffectEdgeKind, EffectGraph, EffectGraphBuilder,
+    EffectGraphCompleteness, EffectGraphPolicy, EffectNode, EffectNodeKind, EffectOperationKind,
+    EffectSource,
+};
 pub use evidence::{
     CanonicalEventGraph, CanonicalEventNode, DeterministicEvidenceLedger,
     EVIDENCE_LEDGER_SCHEMA_V1, EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceEventTime,
     EvidenceIngestOutcome, EvidenceKey, EvidenceLedgerRecord, EvidencePolicyV1, EvidenceRejection,
     RawEvidenceEnvelope, canonicalize_evidence_envelope, evidence_payload_sha256,
+    evidence_session_id_sha256,
 };
 pub use evidence_graph::{
     DeterministicEvidenceGraphStore, EvidenceGraph, EvidenceGraphAtom, EvidenceGraphBuilder,
@@ -111,26 +121,28 @@ pub use online::{
     OnlineResponseStreamStatus, OnlineResponseTailConfig, run_online_response_tail,
 };
 pub use online_admission::{
-    OnlineAdmissionSnapshot, build_online_admission_snapshot,
+    OnlineAdmissionSnapshot, build_durable_runtime_parity_receipt, build_online_admission_snapshot,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
 };
 pub use online_checkpoint::{
     FramedCborLedger, FramedLedgerStatus, FramedRecordRef, read_framed_cbor, write_atomic_cbor,
 };
 pub use online_collection::{
-    OnlineCollectionAdmissionCandidate, OnlineCollectionBucketStatus, OnlineCollectionConfig,
-    OnlineCollectionMiner, OnlineCollectionObservation, OnlineCollectionReceipt,
+    LegacyReplayRehydrationStats, OnlineCollectionAdmissionCandidate, OnlineCollectionBucketStatus,
+    OnlineCollectionConfig, OnlineCollectionConsensusDiagnostic, OnlineCollectionMiner,
+    OnlineCollectionObservation, OnlineCollectionReceipt, OnlineCollectionRehydrationHint,
     OnlineCollectionStatus, OnlineCollectionWaveCausalReport,
     online_collection_future_manifest_digest, online_collection_support_manifest_digest,
 };
 pub use online_state::{
     MinerSignalStageReport, MinerSignalTreeReport, SELF_TRAINING_STATE_SCHEMA_V2,
-    SelfTrainingAdmissionCohort, SelfTrainingGenerationReport, SelfTrainingStateReport,
-    StreamingSelfTrainingState,
+    SELF_TRAINING_STATE_SCHEMA_V3, SelfTrainingAdmissionCohort, SelfTrainingGenerationReport,
+    SelfTrainingStateReport, StreamingSelfTrainingState,
 };
 pub use opportunity::{
-    M3WindowReport, OPPORTUNITY_BOARD_SCHEMA_V2, OpportunityBoard, OpportunityBoardConfig,
-    OpportunityBoardReport, OpportunityClassReport, ReducibilityClass, TeacherOpportunityReport,
+    M3WindowReport, OPPORTUNITY_BOARD_SCHEMA_V2, OPPORTUNITY_BOARD_SCHEMA_V3, OpportunityBoard,
+    OpportunityBoardConfig, OpportunityBoardReport, OpportunityClassReport, ReducibilityClass,
+    TeacherOpportunityReport,
 };
 pub use outcome_example::{
     COMPLETED_TURN_EXAMPLE_SCHEMA_V1, COMPLETED_TURN_EXAMPLE_SCHEMA_V2, CompletedTurnExample,
@@ -151,17 +163,24 @@ pub use package::{
     relation_frame_routing_atom_ids, request_phase_atom_ids,
     response_program_external_verifier_schema, response_program_required_routing_atom_ids,
 };
+pub(crate) use package::{response_pre_action_context_atom_ids, stable_atom_id};
 pub use program::{
     CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
     CollectionScalarType, CustomToolResultProjection, MAX_PROJECT_STATUS_CODE,
-    ProjectStatusMapping, ProjectStatusValue, ResponseArgument, ResponseOperation, ResponseProgram,
-    ResponseRenderSegment, ResponseScalarLiteral, ValueProjectionFormat,
+    ProjectStatusMapping, ProjectStatusValue, RequestTemplateMarker, ResponseAdapterWaveConsensus,
+    ResponseAdapterWaveRoute, ResponseAdapterWaveSubcenter, ResponseArgument,
+    ResponseConsensusVariant, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ResponseScalarLiteral, ValueProjectionFormat,
 };
 pub use rollover::{
     FROZEN_PARTITION_VERSION, FrozenGeneration, RolloverPolicy, freeze_generation,
     generation_monotonically_improves, refresh_frozen_generation, successor_generation,
 };
 pub use runtime::{ResponseExecution, ResponseExecutionStatus, execute_response};
+pub use semantic_alias::{
+    SEMANTIC_ALIAS_GRAPH_SCHEMA_V1, SemanticAliasEdge, SemanticAliasGraph, SemanticAliasReport,
+    SemanticAliasState, SemanticEffectEvidence,
+};
 pub use synthesis::{
     SynthesisError, SynthesizedResponseOperator, partition_teacher_training_families,
     synthesize_response_operator, verify_operator_structure,
@@ -169,7 +188,9 @@ pub use synthesis::{
 pub use teacher_join::{
     TeacherJoin, TeacherJoinKey, TeacherJoinRejection, TeacherJoinReport, teacher_action_ast,
     teacher_action_symbol, teacher_join_key, teacher_outcome_from_completed,
-    teacher_program_signature, teacher_transition_from_completed,
+    teacher_program_signature, teacher_program_signature_from_action_atoms,
+    teacher_semantic_law_signature, teacher_transfer_family_signature,
+    teacher_transition_from_completed,
 };
 pub use training_types::{
     ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, RUNTIME_FRAME_SCHEMA_V1, RuntimeFrame,
@@ -1733,6 +1754,7 @@ mod tests {
                     verifier: Some(VerifierProgram::ProjectStatus {
                         selector,
                         mapping: ProjectStatusMapping::ZeroIsSuccess,
+                        renderer: CollectionOutputRenderer::Direct,
                         completion_state: "completed".to_owned(),
                         require_unique_value: true,
                     }),
@@ -2505,6 +2527,7 @@ mod tests {
         VerifierProgram::ProjectStatus {
             selector,
             mapping: ProjectStatusMapping::ZeroIsSuccess,
+            renderer: CollectionOutputRenderer::Direct,
             completion_state: "completed".to_owned(),
             require_unique_value: true,
         }

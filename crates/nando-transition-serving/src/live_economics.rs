@@ -59,6 +59,8 @@ struct EconomicsCheckpoint {
     schema: String,
     epoch_started_at_unix: u64,
     eligible: BTreeMap<String, u64>,
+    #[serde(default)]
+    pending_opened_at: BTreeMap<String, u64>,
     ineligible: BTreeSet<String>,
     verified: BTreeMap<String, u64>,
     #[serde(default)]
@@ -84,6 +86,7 @@ pub struct LiveEconomicsLedger {
     snapshot_path: PathBuf,
     epoch_started_at_unix: u64,
     eligible: BTreeMap<String, u64>,
+    pending_opened_at: BTreeMap<String, u64>,
     ineligible: BTreeSet<String>,
     verified: BTreeMap<String, u64>,
     fallback_by_intent: BTreeMap<String, String>,
@@ -120,6 +123,7 @@ impl LiveEconomicsLedger {
                 snapshot_path,
                 epoch_started_at_unix: checkpoint.epoch_started_at_unix,
                 eligible: checkpoint.eligible,
+                pending_opened_at: checkpoint.pending_opened_at,
                 ineligible: checkpoint.ineligible,
                 verified: checkpoint.verified,
                 fallback_by_intent: checkpoint.fallback_by_intent,
@@ -143,6 +147,7 @@ impl LiveEconomicsLedger {
                 snapshot_path,
                 epoch_started_at_unix: now,
                 eligible: BTreeMap::new(),
+                pending_opened_at: BTreeMap::new(),
                 ineligible: BTreeSet::new(),
                 verified: BTreeMap::new(),
                 fallback_by_intent: BTreeMap::new(),
@@ -164,6 +169,24 @@ impl LiveEconomicsLedger {
             if event.schema == EVENT_SCHEMA {
                 ledger.apply(event);
             }
+        }
+        for intent_sha256 in ledger.eligible.keys() {
+            if !ledger.verified.contains_key(intent_sha256)
+                && !ledger.fallback_by_intent.contains_key(intent_sha256)
+            {
+                ledger
+                    .pending_opened_at
+                    .entry(intent_sha256.clone())
+                    .or_insert(now);
+            }
+        }
+        let interrupted_intents = ledger.pending_opened_at.keys().cloned().collect::<Vec<_>>();
+        for intent_sha256 in interrupted_intents {
+            ledger.observe_fallback(
+                &intent_sha256,
+                "runtime",
+                "interrupted_before_terminal_outcome",
+            )?;
         }
         ledger.persist_checkpoint()?;
         ledger.journal.compact_after_checkpoint()?;
@@ -284,8 +307,11 @@ impl LiveEconomicsLedger {
         match event.kind.as_str() {
             "request" if event.eligible => {
                 self.eligible
-                    .entry(event.intent_sha256)
+                    .entry(event.intent_sha256.clone())
                     .or_insert(event.input_tokens);
+                self.pending_opened_at
+                    .entry(event.intent_sha256)
+                    .or_insert(event.timestamp_unix);
             }
             "request" => {
                 self.ineligible.insert(event.intent_sha256);
@@ -313,8 +339,9 @@ impl LiveEconomicsLedger {
                     .entry(event.intent_sha256.clone())
                     .or_insert(exact_input_tokens);
                 self.verified
-                    .entry(event.intent_sha256)
+                    .entry(event.intent_sha256.clone())
                     .or_insert(exact_input_tokens);
+                self.pending_opened_at.remove(&event.intent_sha256);
             }
             "fallback"
                 if event.eligible
@@ -325,10 +352,11 @@ impl LiveEconomicsLedger {
                 self.fallback_by_intent
                     .insert(event.intent_sha256.clone(), key.clone());
                 self.fallback_tokens_by_intent
-                    .insert(event.intent_sha256, event.input_tokens);
+                    .insert(event.intent_sha256.clone(), event.input_tokens);
                 let counter = self.fallback_reasons.entry(key).or_default();
                 counter.intents = counter.intents.saturating_add(1);
                 counter.input_tokens = counter.input_tokens.saturating_add(event.input_tokens);
+                self.pending_opened_at.remove(&event.intent_sha256);
             }
             "false_accept" => {
                 if self.false_accept_intents.insert(event.intent_sha256) {
@@ -366,6 +394,7 @@ impl LiveEconomicsLedger {
                 schema: CHECKPOINT_SCHEMA.to_owned(),
                 epoch_started_at_unix: self.epoch_started_at_unix,
                 eligible: self.eligible.clone(),
+                pending_opened_at: self.pending_opened_at.clone(),
                 ineligible: self.ineligible.clone(),
                 verified: self.verified.clone(),
                 fallback_by_intent: self.fallback_by_intent.clone(),
@@ -387,9 +416,11 @@ impl LiveEconomicsLedger {
         let eligible_intents = self.eligible.len() as u64;
         let avoided_calls = self.verified.len() as u64;
         let terminal_fallbacks = self.fallback_by_intent.len() as u64;
+        let in_flight_local_outcomes = self.pending_opened_at.len() as u64;
+        let terminal_intents = avoided_calls.saturating_add(terminal_fallbacks);
         let unresolved_local_outcomes = eligible_intents
-            .saturating_sub(avoided_calls)
-            .saturating_sub(terminal_fallbacks);
+            .saturating_sub(terminal_intents)
+            .saturating_sub(in_flight_local_outcomes);
         let verification_coverage = if avoided_calls == 0 { 0 } else { 1_000 };
         let hard_gate_pass = self.false_accepts == 0
             && self.parity_failures == 0
@@ -406,6 +437,8 @@ impl LiveEconomicsLedger {
             "generated_at_unix": unix_now(),
             "accounting_epoch_started_at_unix": self.epoch_started_at_unix,
             "dedupe_eligible_client_intents": eligible_intents,
+            "terminal_client_intents": terminal_intents,
+            "in_flight_local_outcomes": in_flight_local_outcomes,
             "dedupe_ineligible_client_intents": self.ineligible.len(),
             "unique_client_intents": eligible_intents,
             "global_input_tokens": current.ordinary_tokens,
@@ -416,7 +449,7 @@ impl LiveEconomicsLedger {
             "verified_local_accepts": avoided_calls,
             "avoided_calls": avoided_calls,
             "avoided_input_tokens": current.verified_tokens,
-            "call_saving_share_milli": ratio_milli(avoided_calls, eligible_intents),
+            "call_saving_share_milli": ratio_milli(avoided_calls, terminal_intents),
             "input_token_saving_share_milli": current.token_share_milli,
             "verification_coverage_milli": verification_coverage,
             "false_accepts": self.false_accepts,
@@ -451,14 +484,18 @@ impl LiveEconomicsLedger {
                     vec!["unresolved_or_conflicting_intents".to_owned()]
                 },
             },
-            "boundary": "ordinary deduplicated provider requests; exact o200k tokenization of recursively key-sorted JSON request payloads; finalized Rust verifier receipts only; counterfactual provider-billed usage for avoided calls is unavailable and is not claimed",
+            "boundary": "terminal ordinary deduplicated provider requests; in-flight requests remain outside completed economics windows; exact o200k tokenization of recursively key-sorted JSON request payloads; finalized Rust verifier receipts only; counterfactual provider-billed usage for avoided calls is unavailable and is not claimed",
         });
         atomic_json(&self.snapshot_path, &snapshot)
     }
 
     fn roll_window_if_mature(&mut self) {
         let now = unix_now();
-        if self.eligible.len() < MINIMUM_M3_INTENTS
+        let terminal_intents = self
+            .verified
+            .len()
+            .saturating_add(self.fallback_by_intent.len());
+        if terminal_intents < MINIMUM_M3_INTENTS
             || now.saturating_sub(self.epoch_started_at_unix) < MINIMUM_M3_SECONDS
         {
             return;
@@ -473,7 +510,8 @@ impl LiveEconomicsLedger {
             self.completed_windows.drain(..remove);
         }
         self.epoch_started_at_unix = now;
-        self.eligible.clear();
+        self.eligible
+            .retain(|intent, _| self.pending_opened_at.contains_key(intent));
         self.ineligible.clear();
         self.verified.clear();
         self.fallback_by_intent.clear();
@@ -485,22 +523,37 @@ impl LiveEconomicsLedger {
         self.pipeline_dropped = 0;
         self.false_accept_intents.clear();
         self.parity_failure_intents.clear();
+        self.epoch_started_at_unix = self
+            .pending_opened_at
+            .values()
+            .copied()
+            .min()
+            .unwrap_or(now);
     }
 
     fn current_window(&self, now: u64) -> EconomicsWindow {
-        let ordinary_tokens = self.eligible.values().copied().sum::<u64>();
+        let ordinary_tokens = self
+            .verified
+            .values()
+            .chain(self.fallback_tokens_by_intent.values())
+            .copied()
+            .sum::<u64>();
         let verified_tokens = self.verified.values().copied().sum::<u64>();
         let token_share_milli = ratio_milli(verified_tokens, ordinary_tokens);
-        let mature = self.eligible.len() >= MINIMUM_M3_INTENTS
+        let terminal_intents = self
+            .verified
+            .len()
+            .saturating_add(self.fallback_by_intent.len());
+        let mature = terminal_intents >= MINIMUM_M3_INTENTS
             && now.saturating_sub(self.epoch_started_at_unix) >= MINIMUM_M3_SECONDS;
         let unresolved_outcomes = u64::try_from(self.eligible.len())
             .unwrap_or(u64::MAX)
-            .saturating_sub(u64::try_from(self.verified.len()).unwrap_or(u64::MAX))
-            .saturating_sub(u64::try_from(self.fallback_by_intent.len()).unwrap_or(u64::MAX));
+            .saturating_sub(u64::try_from(terminal_intents).unwrap_or(u64::MAX))
+            .saturating_sub(u64::try_from(self.pending_opened_at.len()).unwrap_or(u64::MAX));
         EconomicsWindow {
             started_at_unix: self.epoch_started_at_unix,
             ended_at_unix: now,
-            ordinary_intents: self.eligible.len() as u64,
+            ordinary_intents: terminal_intents as u64,
             ordinary_tokens,
             verified_intents: self.verified.len() as u64,
             verified_tokens,
@@ -635,6 +688,60 @@ mod tests {
         let replayed = LiveEconomicsLedger::open(&root).expect("replay");
         assert!(replayed.eligible.is_empty());
         assert!(replayed.verified.is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restart_accounts_interrupted_request_as_fallback_without_savings() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-live-economics-interrupted-{}-{}",
+            std::process::id(),
+            unix_now()
+        ));
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request("interrupted-intent", 1_024, true)
+            .expect("request");
+        drop(ledger);
+
+        let replayed = LiveEconomicsLedger::open(&root).expect("replay");
+        assert_eq!(replayed.eligible.get("interrupted-intent"), Some(&1_024));
+        assert!(replayed.verified.is_empty());
+        assert_eq!(
+            replayed.fallback_by_intent.get("interrupted-intent"),
+            Some(&"runtime:interrupted_before_terminal_outcome".to_owned())
+        );
+        assert!(replayed.pending_opened_at.is_empty());
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("economics-live.json")).expect("read snapshot"),
+        )
+        .expect("snapshot");
+        assert_eq!(snapshot["avoided_input_tokens"], 0);
+        assert_eq!(snapshot["unresolved_local_outcomes"], 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn live_in_flight_request_stays_outside_completed_denominator() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-live-economics-in-flight-{}-{}",
+            std::process::id(),
+            unix_now()
+        ));
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request("in-flight-intent", 2_048, true)
+            .expect("request");
+        ledger.persist_snapshot().expect("snapshot");
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("economics-live.json")).expect("read snapshot"),
+        )
+        .expect("snapshot");
+        assert_eq!(snapshot["in_flight_local_outcomes"], 1);
+        assert_eq!(snapshot["terminal_client_intents"], 0);
+        assert_eq!(snapshot["global_input_tokens"], 0);
+        assert_eq!(snapshot["unresolved_local_outcomes"], 0);
+        assert_eq!(snapshot["source_reconciliation"]["complete"], true);
         let _ = fs::remove_dir_all(root);
     }
 }

@@ -1,0 +1,806 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly OPS_DIR="$(cd -- "${HERE}/.." && pwd)"
+readonly DEFAULT_GATE_DIR="${OPS_DIR}/gates"
+readonly TMP_DIR="$(mktemp -d /tmp/nando-live-transition-composite.XXXXXX)"
+trap 'rm -rf -- "${TMP_DIR}"' EXIT
+
+refresh_proofs=0
+status_mode=0
+project_root="${NANDO_GATE_PROJECT_ROOT:-$(cd -- "${OPS_DIR}/../.." && pwd)}"
+
+usage() {
+  cat <<'EOF'
+Usage: nando-live-transition-gate [--refresh-proofs] [--status-mode] [--project-root PATH]
+
+Default mode validates frozen proof receipts and current live state.
+--refresh-proofs rebuilds the Rust causal proof and structural receipt first.
+EOF
+}
+
+while (($# > 0)); do
+  case "$1" in
+    --refresh-proofs)
+      refresh_proofs=1
+      shift
+      ;;
+    --project-root)
+      [[ $# -ge 2 ]] || { printf '%s\n' 'missing project root' >&2; exit 2; }
+      project_root="$2"
+      shift 2
+      ;;
+    --status-mode)
+      status_mode=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'unexpected argument: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+readonly PROJECT_ROOT="$(cd -- "${project_root}" && pwd)"
+if [[ -n "${NANDO_LIVE_GATE_PROFILE:-}" ]]; then
+  profile="${NANDO_LIVE_GATE_PROFILE}"
+elif [[ -f "${PROJECT_ROOT}/.nando/live-transition-gate.profile.json" ]]; then
+  profile="${PROJECT_ROOT}/.nando/live-transition-gate.profile.json"
+elif [[ -f "${PROJECT_ROOT}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json" ]]; then
+  profile="${PROJECT_ROOT}/ops/phase-center-test-server/gates/nando-live-transition-gate.profile.json"
+else
+  profile="${DEFAULT_GATE_DIR}/nando-live-transition-gate.profile.json"
+fi
+readonly PROFILE="${profile}"
+readonly GATE_DIR="$(cd -- "$(dirname -- "${PROFILE}")" && pwd)"
+readonly STRUCTURAL_RECEIPT="${GATE_DIR}/receipts/STRUCTURAL_GATE_V2.json"
+
+if [[ ! -f "${PROFILE}" ]] || ! jq -e '.schema == "nando.live-transition-gate-profile.v1"' "${PROFILE}" >/dev/null; then
+  jq -n --arg profile "${PROFILE}" '{verdict:"ERROR", reason:"invalid_project_profile", profile:$profile}'
+  exit 2
+fi
+
+readonly PROJECT_ID="$(jq -r '.project_id' "${PROFILE}")"
+
+check_required() {
+  local check="$1"
+  jq -e --arg check "${check}" '.required_checks | index($check) != null' "${PROFILE}" >/dev/null
+}
+
+write_not_required() {
+  local section="$1"
+  jq -n --arg section "${section}" '{section:$section, verdict:"PASS", required:false, reason:"not_required_by_project_profile"}' >"${TMP_DIR}/${section}.json"
+}
+
+find_structural_tool() {
+  if [[ -n "${NANDA_STRUCTURAL_GATE_CMD:-}" && -x "${NANDA_STRUCTURAL_GATE_CMD}" ]]; then
+    printf '%s\n' "${NANDA_STRUCTURAL_GATE_CMD}"
+  elif command -v nanda-gate-md >/dev/null 2>&1; then
+    command -v nanda-gate-md
+  elif [[ -x /home/ubu/.codex/skills/nanda-structural-gate/scripts/nanda-gate-md ]]; then
+    printf '%s\n' /home/ubu/.codex/skills/nanda-structural-gate/scripts/nanda-gate-md
+  fi
+}
+
+run_structural() {
+  local tool
+  tool="$(find_structural_tool)"
+  if [[ -z "${tool}" ]]; then
+    if [[ -f "${STRUCTURAL_RECEIPT}" ]] && jq -e . "${STRUCTURAL_RECEIPT}" >/dev/null 2>&1; then
+      jq '. + {section:"structural", source:"frozen_receipt"}' "${STRUCTURAL_RECEIPT}" >"${TMP_DIR}/structural.json"
+    else
+      jq -n '{section:"structural", verdict:"ERROR", reason:"structural_tool_and_receipt_missing"}' >"${TMP_DIR}/structural.json"
+    fi
+    return
+  fi
+
+  local route input output gate_exit_code
+  while IFS= read -r route; do
+    input="${GATE_DIR}/structural/routes/${route}.md"
+    output="${TMP_DIR}/structural-${route}.json"
+    set +e
+    "${tool}" "${input}" \
+      --task-id "nando-live-${route}" \
+      --domain code \
+      --normalize-paths \
+      --format json >"${output}"
+    gate_exit_code=$?
+    set -e
+    if jq -e . "${output}" >/dev/null 2>&1; then
+      jq --arg route "${route}" --argjson gate_exit_code "${gate_exit_code}" \
+        '. + {route:$route, gate_exit_code:$gate_exit_code}' \
+        "${output}" >"${output}.normalized"
+    else
+      jq -n --arg route "${route}" --argjson gate_exit_code "${gate_exit_code}" \
+        '{route:$route, verdict:"ERROR", gate_exit_code:$gate_exit_code}' \
+        >"${output}.normalized"
+    fi
+  done < <(jq -r '.structural_routes[]' "${PROFILE}")
+
+  jq -s '
+    def rank: if . == "ERROR" then 4 elif . == "VETO" then 3 elif . == "WATCH" then 2 else 1 end;
+    (map(.verdict) | max_by(rank)) as $verdict
+    | {
+        section:"structural",
+        verdict:$verdict,
+        source:"live_structural_tool",
+        pass_count:(map(select(.verdict == "PASS")) | length),
+        route_count:length,
+        blocked_routes:map(select(.verdict != "PASS") | .route),
+        routes:map({route, verdict, weak_triads, conflicts, evidence_gaps, repair_queue, trace_path})
+      }
+  ' "${TMP_DIR}"/structural-*.normalized >"${TMP_DIR}/structural.json"
+  if ((refresh_proofs == 1)); then
+    cp "${TMP_DIR}/structural.json" "${STRUCTURAL_RECEIPT}.next"
+    mv "${STRUCTURAL_RECEIPT}.next" "${STRUCTURAL_RECEIPT}"
+  fi
+}
+
+refresh_causal_proof() {
+  local receipt_rel manifest_rel receipt manifest
+  receipt_rel="$(jq -r '.wave_causal.receipt' "${PROFILE}")"
+  manifest_rel="$(jq -r '.wave_causal.manifest' "${PROFILE}")"
+  receipt="${PROJECT_ROOT}/${receipt_rel}"
+  manifest="${PROJECT_ROOT}/${manifest_rel}"
+  mkdir -p "$(dirname -- "${receipt}")"
+  cargo run --release \
+    --manifest-path "${PROJECT_ROOT}/Cargo.toml" \
+    -p nando-transition-inducer \
+    --example wave_causal_proof -- "${receipt}"
+  cargo build --release \
+    --manifest-path "${PROJECT_ROOT}/Cargo.toml" \
+    -p nando-transition-inducer \
+    --bin nando-transition-admission-inspect
+
+  local artifact_sha causal_sha wave_sha induce_sha
+  artifact_sha="$(sha256sum "${receipt}" | awk '{print $1}')"
+  causal_sha="$(sha256sum "${PROJECT_ROOT}/crates/nando-transition-inducer/src/causal_proof.rs" | awk '{print $1}')"
+  wave_sha="$(sha256sum "${PROJECT_ROOT}/crates/nando-transition-inducer/src/wave.rs" | awk '{print $1}')"
+  induce_sha="$(sha256sum "${PROJECT_ROOT}/crates/nando-transition-inducer/src/induce.rs" | awk '{print $1}')"
+  jq -n \
+    --arg artifact "${receipt_rel}" \
+    --arg artifact_sha256 "${artifact_sha}" \
+    --arg causal_sha "${causal_sha}" \
+    --arg wave_sha "${wave_sha}" \
+    --arg induce_sha "${induce_sha}" \
+    '{
+      schema:"nando.wave-causal-proof-manifest.v1",
+      artifact:{path:$artifact, sha256:$artifact_sha256},
+      sources:[
+        {path:"crates/nando-transition-inducer/src/causal_proof.rs", sha256:$causal_sha},
+        {path:"crates/nando-transition-inducer/src/wave.rs", sha256:$wave_sha},
+        {path:"crates/nando-transition-inducer/src/induce.rs", sha256:$induce_sha}
+      ]
+    }' >"${manifest}.next"
+  mv "${manifest}.next" "${manifest}"
+}
+
+run_causal() {
+  local receipt_rel manifest_rel receipt manifest
+  receipt_rel="$(jq -r '.wave_causal.receipt' "${PROFILE}")"
+  manifest_rel="$(jq -r '.wave_causal.manifest' "${PROFILE}")"
+  receipt="${PROJECT_ROOT}/${receipt_rel}"
+  manifest="${PROJECT_ROOT}/${manifest_rel}"
+  if [[ ! -f "${receipt}" || ! -f "${manifest}" ]]; then
+    jq -n '{section:"wave_causal", verdict:"ERROR", reason:"receipt_or_manifest_missing"}' >"${TMP_DIR}/wave_causal.json"
+    return
+  fi
+
+  local expected_artifact_sha actual_artifact_sha source_mismatches receipt_ok actual
+  expected_artifact_sha="$(jq -r '.artifact.sha256' "${manifest}")"
+  actual_artifact_sha="$(sha256sum "${receipt}" | awk '{print $1}')"
+  source_mismatches=0
+  while IFS=$'\t' read -r path expected; do
+    if [[ -f "${PROJECT_ROOT}/${path}" ]]; then
+      actual="$(sha256sum "${PROJECT_ROOT}/${path}" | awk '{print $1}')"
+      [[ "${actual}" == "${expected}" ]] || source_mismatches=$((source_mismatches + 1))
+    else
+      source_mismatches=$((source_mismatches + 1))
+    fi
+  done < <(jq -r '.sources[] | [.path,.sha256] | @tsv' "${manifest}")
+
+  receipt_ok=0
+  if jq -e \
+    --argjson min_seeds "$(jq '.wave_causal.minimum_corpus_seeds' "${PROFILE}")" \
+    --argjson min_queries "$(jq '.wave_causal.minimum_heldout_queries' "${PROFILE}")" \
+    --slurpfile profile "${PROFILE}" \
+    '(.report_kind as $kind | $profile[0].wave_causal.accepted_report_kinds | index($kind) != null)
+      and .verdicts.full_execution_pass
+      and .verdicts.phase_causal_pass
+      and .verdicts.relational_atoms_causal_pass
+      and .verdicts.core_causal_pass
+      and (($profile[0].wave_causal.require_strict_anti_center_pass // false) == false
+        or .verdicts.anti_center_causal_pass)
+      and .wrong_accepts == 0
+      and .abstained_queries == 0
+      and .package_failures == 0
+      and .exact_cache_overlap == 0
+      and .structural_exact_parity_failures == 0
+      and .corpus_seeds >= $min_seeds
+      and .heldout_queries >= $min_queries' "${receipt}" >/dev/null; then
+    receipt_ok=1
+  fi
+  local verdict
+  verdict="VETO"
+  if [[ "${expected_artifact_sha}" == "${actual_artifact_sha}" && "${source_mismatches}" == "0" && "${receipt_ok}" == "1" ]]; then
+    verdict="PASS"
+  fi
+  jq -n \
+    --arg section wave_causal \
+    --arg verdict "${verdict}" \
+    --arg expected_sha "${expected_artifact_sha}" \
+    --arg actual_sha "${actual_artifact_sha}" \
+    --argjson source_mismatches "${source_mismatches}" \
+    --argjson receipt_ok "${receipt_ok}" \
+    --slurpfile proof "${receipt}" \
+    --slurpfile profile "${PROFILE}" \
+    '{
+      section:$section,
+      verdict:$verdict,
+      receipt_hash_match:($expected_sha == $actual_sha),
+      source_hash_mismatches:$source_mismatches,
+      receipt_contract_pass:($receipt_ok == 1),
+      proof:{
+        verdict:$proof[0].verdict,
+        corpus_seeds:$proof[0].corpus_seeds,
+        heldout_queries:$proof[0].heldout_queries,
+        correct_cpu_executions:$proof[0].correct_cpu_executions,
+        wrong_accepts:$proof[0].wrong_accepts,
+        anti_center_causal_pass:$proof[0].verdicts.anti_center_causal_pass,
+        strict_anti_center_required:$profile[0].wave_causal.require_strict_anti_center_pass
+      }
+    }' >"${TMP_DIR}/wave_causal.json"
+}
+
+run_runtime_admission() {
+  local configured inspector registry output rc
+  configured="$(jq -r '.runtime.inspector' "${PROFILE}")"
+  registry="$(jq -r '.runtime.registry' "${PROFILE}")"
+  inspector="${configured}"
+  if [[ ! -x "${inspector}" && -x "${PROJECT_ROOT}/target/release/nando-transition-admission-inspect" ]]; then
+    inspector="${PROJECT_ROOT}/target/release/nando-transition-admission-inspect"
+  fi
+  if [[ ! -x "${inspector}" ]]; then
+    jq -n --arg inspector "${configured}" '{section:"runtime_admission", verdict:"ERROR", reason:"inspector_missing", inspector:$inspector}' >"${TMP_DIR}/runtime_admission.json"
+    return
+  fi
+  output="${TMP_DIR}/runtime-raw.json"
+  set +e
+  NANDO_TRANSITION_REGISTRY="${registry}" "${inspector}" >"${output}"
+  rc=$?
+  set -e
+  if ! jq -e . "${output}" >/dev/null 2>&1; then
+    jq -n --argjson rc "${rc}" '{section:"runtime_admission", verdict:"ERROR", reason:"invalid_inspector_output", exit_code:$rc}' >"${TMP_DIR}/runtime_admission.json"
+    return
+  fi
+  jq --arg section runtime_admission --argjson rc "${rc}" '. + {section:$section, inspector_exit_code:$rc}' "${output}" >"${TMP_DIR}/runtime_admission.json"
+}
+
+run_expression_shadow() {
+  local candidate factory_build verifier_build source future_receipt minimum_future_rows maximum_age
+  candidate="$(jq -r '.expression_shadow.candidate' "${PROFILE}")"
+  factory_build="$(jq -r '.expression_shadow.factory_build' "${PROFILE}")"
+  verifier_build="$(jq -r '.expression_shadow.verifier_build' "${PROFILE}")"
+  source="$(jq -r '.expression_shadow.source' "${PROFILE}")"
+  future_receipt="$(jq -r '.expression_shadow.future_receipt' "${PROFILE}")"
+  minimum_future_rows="$(jq -r '.expression_shadow.minimum_future_rows' "${PROFILE}")"
+  maximum_age="$(jq -r '.expression_shadow.maximum_age_seconds' "${PROFILE}")"
+  if [[ ! -f "${candidate}" || ! -x "${factory_build}" || ! -x "${verifier_build}" || ! -f "${source}" ]]; then
+    jq -n --arg candidate "${candidate}" '{section:"expression_shadow",verdict:"VETO",reason:"expression_shadow_artifact_missing",candidate:$candidate}' >"${TMP_DIR}/expression_shadow.json"
+    return
+  fi
+  if ! jq -e '.schema == "nando.expression-quarantine-candidate.v1" and .state == "quarantine" and .execution_authority == false' "${candidate}" >/dev/null 2>&1; then
+    jq -n '{section:"expression_shadow",verdict:"VETO",reason:"expression_candidate_contract_invalid"}' >"${TMP_DIR}/expression_shadow.json"
+    return
+  fi
+
+  local package miner_receipt verifier_receipt expected actual hash_failures
+  package="$(jq -r '.package.path' "${candidate}")"
+  miner_receipt="$(jq -r '.miner_receipt.path' "${candidate}")"
+  verifier_receipt="$(jq -r '.verifier_receipt.path' "${candidate}")"
+  hash_failures=0
+  while IFS=$'\t' read -r path expected; do
+    if [[ ! -f "${path}" ]]; then
+      hash_failures=$((hash_failures + 1))
+      continue
+    fi
+    actual="$(sha256sum -- "${path}" | awk '{print $1}')"
+    [[ "${actual}" == "${expected}" ]] || hash_failures=$((hash_failures + 1))
+  done < <(jq -r '[.package,.miner_receipt,.verifier_receipt][] | [.path,.sha256] | @tsv' "${candidate}")
+  expected="$(jq -r '.builds.factory_sha256' "${candidate}")"
+  actual="$(sha256sum -- "${factory_build}" | awk '{print $1}')"
+  [[ "${actual}" == "${expected}" ]] || hash_failures=$((hash_failures + 1))
+  expected="$(jq -r '.builds.verifier_sha256' "${candidate}")"
+  actual="$(sha256sum -- "${verifier_build}" | awk '{print $1}')"
+  [[ "${actual}" == "${expected}" ]] || hash_failures=$((hash_failures + 1))
+
+  local now generated_at age source_size prefix_bytes candidate_sha receipt_contract verifier_contract prefix_bound future_contract future_verdict
+  now="$(date +%s)"
+  generated_at="$(jq -r '.generated_at_unix' "${candidate}")"
+  age=$((now - generated_at))
+  source_size="$(stat -c %s "${source}")"
+  prefix_bytes="$(jq -r '.source_prefix_bytes' "${candidate}")"
+  candidate_sha="$(sha256sum -- "${candidate}" | awk '{print $1}')"
+  receipt_contract=0
+  verifier_contract=0
+  prefix_bound=0
+  future_contract=0
+  future_verdict="WATCH"
+  if [[ -f "${miner_receipt}" ]] && jq -e '
+    .verdict == "PASS" and .runtime_loaded_from_binary == true and .wrong == 0
+    and .missing_receipts == 0 and .wave_causal_pass == true
+  ' "${miner_receipt}" >/dev/null; then receipt_contract=1; fi
+  if [[ -f "${verifier_receipt}" ]] && jq -e '
+    .schema == "nando.expression-shadow-verifier-receipt.v1" and .verdict == "PASS"
+    and .execution_authority == false and .wrong == 0 and .abstain == 0
+    and .route_splice_cases > 0 and .route_splice_accepts == 0
+    and .package_mutations > 0 and .package_mutation_rejections == .package_mutations
+    and .miner_receipt_bound == true
+  ' "${verifier_receipt}" >/dev/null; then verifier_contract=1; fi
+  if [[ -f "${miner_receipt}" && -f "${verifier_receipt}" ]] && jq -e --slurpfile candidate "${candidate}" --slurpfile verifier "${verifier_receipt}" '
+    .source_prefix_bytes == $candidate[0].source_prefix_bytes
+    and .source_prefix_sha256 == $candidate[0].source_prefix_sha256
+    and .package_sha256 == $candidate[0].package.sha256
+    and $verifier[0].source_prefix_sha256 == $candidate[0].source_prefix_sha256
+    and $verifier[0].package_sha256 == $candidate[0].package.sha256
+  ' "${miner_receipt}" >/dev/null; then prefix_bound=1; fi
+  if [[ -f "${future_receipt}" ]] && jq -e --argjson minimum "${minimum_future_rows}" --arg candidate_sha "${candidate_sha}" --slurpfile candidate "${candidate}" '
+    .schema == "nando.expression-post-candidate-future.v1"
+    and .execution_authority == false and .contract_bound == true
+    and .candidate_sha256 == $candidate_sha
+    and .package_sha256 == $candidate[0].package.sha256
+    and .source_prefix_bytes == $candidate[0].source_prefix_bytes
+    and .source_prefix_sha256 == $candidate[0].source_prefix_sha256
+    and .wrong == 0 and .malformed_rows == 0
+    and .minimum_future_rows == $minimum
+    and (.verdict == "PASS" or .verdict == "WATCH")
+  ' "${future_receipt}" >/dev/null 2>&1; then
+    future_contract=1
+    future_verdict="$(jq -r '.verdict' "${future_receipt}")"
+  fi
+
+  local verdict reason
+  verdict="PASS"
+  reason="expression_shadow_verified"
+  if ((hash_failures > 0)); then verdict="VETO"; reason="expression_shadow_hash_mismatch"
+  elif ((age < 0 || age > maximum_age)); then verdict="VETO"; reason="expression_shadow_candidate_stale"
+  elif ((source_size < prefix_bytes)); then verdict="VETO"; reason="expression_shadow_source_truncated"
+  elif ((receipt_contract == 0)); then verdict="VETO"; reason="expression_miner_receipt_invalid"
+  elif ((verifier_contract == 0)); then verdict="VETO"; reason="expression_verifier_receipt_invalid"
+  elif ((prefix_bound == 0)); then verdict="VETO"; reason="expression_shadow_binding_invalid"
+  elif ((future_contract == 0)); then verdict="VETO"; reason="expression_future_receipt_invalid"
+  elif [[ "${future_verdict}" != "PASS" ]]; then verdict="WATCH"; reason="expression_future_window_incomplete"
+  fi
+  jq -n --arg section expression_shadow --arg verdict "${verdict}" --arg reason "${reason}" \
+    --arg candidate "${candidate}" --argjson age_seconds "${age}" --argjson maximum_age_seconds "${maximum_age}" \
+    --argjson hash_failures "${hash_failures}" --argjson receipt_contract "${receipt_contract}" \
+    --argjson verifier_contract "${verifier_contract}" --argjson prefix_bound "${prefix_bound}" \
+    --argjson future_contract "${future_contract}" --arg future_verdict "${future_verdict}" \
+    --slurpfile proof "${verifier_receipt}" --slurpfile future "${future_receipt}" \
+    '{section:$section,verdict:$verdict,reason:$reason,candidate:$candidate,execution_authority:false,age_seconds:$age_seconds,maximum_age_seconds:$maximum_age_seconds,hash_failures:$hash_failures,miner_receipt_pass:($receipt_contract==1),verifier_receipt_pass:($verifier_contract==1),prefix_binding_pass:($prefix_bound==1),future_receipt_pass:($future_contract==1),future_verdict:$future_verdict,proof:{future_rows:$proof[0].future_rows,correct:$proof[0].correct,wrong:$proof[0].wrong,route_splice_cases:$proof[0].route_splice_cases,route_splice_accepts:$proof[0].route_splice_accepts,package_mutations:$proof[0].package_mutations,package_mutation_rejections:$proof[0].package_mutation_rejections},post_candidate_future:{future_rows:$future[0].future_rows,correct:$future[0].correct,wrong:$future[0].wrong,abstain:$future[0].abstain,minimum_future_rows:$future[0].minimum_future_rows}}' \
+    >"${TMP_DIR}/expression_shadow.json"
+}
+
+run_response_runtime() {
+  local registry miner_status online_report economics health_url health m3_evaluation authority_candidate embedded_candidate
+  registry="$(jq -r '.response_runtime.registry' "${PROFILE}")"
+  miner_status="$(jq -r '.response_runtime.miner_status' "${PROFILE}")"
+  online_report="$(jq -r '.response_runtime.online_miner_report' "${PROFILE}")"
+  economics="$(jq -r '.response_runtime.economics' "${PROFILE}")"
+  health_url="$(jq -r '.deployment.health_url' "${PROFILE}")"
+  health="${TMP_DIR}/response-health.json"
+  authority_candidate="${TMP_DIR}/response-runtime-authority-candidate.json"
+  embedded_candidate="$(dirname "${registry}")/response-authority-candidate.json"
+  if [[ -f "${embedded_candidate}" ]] && jq -e '
+    .schema == "nando.response-authority-candidate.v1"
+    and .execution_authority == false
+  ' "${embedded_candidate}" >/dev/null 2>&1; then
+    cp "${embedded_candidate}" "${authority_candidate}"
+  else
+    jq -c '.response_authority_candidate // null' "${miner_status}" >"${authority_candidate}"
+  fi
+  if [[ ! -f "${registry}" || ! -f "${online_report}" || ! -f "${economics}" ]]; then
+    jq -n \
+      --arg registry "${registry}" \
+      --arg miner_status "${miner_status}" \
+      --arg online_report "${online_report}" \
+      --arg economics "${economics}" \
+      '{section:"response_runtime", verdict:"VETO", m3_verdict:"WATCH", safety_pass:false, reason:"response_runtime_authority_artifact_missing", registry:$registry, miner_status:$miner_status, online_miner_report:$online_report, economics:$economics}' \
+      >"${TMP_DIR}/response_runtime.json"
+    return
+  fi
+  if ! jq -e . "${registry}" >/dev/null 2>&1 \
+    || ! jq -e . "${online_report}" >/dev/null 2>&1 \
+    || ! jq -e . "${economics}" >/dev/null 2>&1 \
+    || ! curl -sS --max-time 3 "${health_url}" >"${health}" \
+    || ! jq -e . "${health}" >/dev/null 2>&1; then
+    jq -n '{section:"response_runtime", verdict:"VETO", m3_verdict:"WATCH", safety_pass:false, reason:"response_runtime_authority_artifact_invalid"}' \
+      >"${TMP_DIR}/response_runtime.json"
+    return
+  fi
+
+  local evaluator_rc
+  m3_evaluation="${TMP_DIR}/m3-window-evaluation.json"
+  set +e
+  jq -n \
+    --slurpfile economics "${economics}" \
+    --slurpfile profile "${PROFILE}" \
+    '($economics[0]) as $e
+    | ($profile[0].response_runtime) as $p
+    | ($e.completed_m3_windows // []) as $windows
+    | ($p.m3_required_consecutive_windows // 3) as $required
+    | ($p.minimum_m3_input_token_saving_share_milli // 500) as $share
+    | ((($e.schema == "nando.economics-snapshot.v2")
+          or ($e.schema == "nando.economics-snapshot.v3"))
+        and ($e.source == "rust_streaming_economics_v2")
+        and (($e.dedupe_conflicts // 0) == 0)
+        and (($e.unresolved_local_outcomes // 0) == 0)
+        and (($e.source_reconciliation.complete // false) == true)
+        and (($e.source_reconciliation.blockers // []) | length == 0)) as $source_ok
+    | ((($e.false_accepts // 0) == 0)
+        and (($e.runtime_parity_mismatches // 0) == 0)) as $false_accept_ok
+    | ((($e.missing_evidence_receipts // 0) == 0)
+        and (($e.verification_coverage_milli // 0) == 1000)) as $evidence_ok
+    | ((($e.false_accepts // 0) > 0)
+        or (($e.runtime_parity_mismatches // 0) > 0)
+        or (($e.dedupe_conflicts // 0) > 0)) as $safety_veto
+    | (($windows | length) >= $required
+        and ($windows[-$required:] | all(.pass == true and .token_share_milli >= $share))) as $window_pass
+    | {
+        schema:"nando.live-transition-m3-evaluation.v1",
+        evaluator:"rust_snapshot_jq_v2",
+        source_authority_valid:$source_ok,
+        false_accept_authority_valid:$false_accept_ok,
+        evidence_authority_valid:$evidence_ok,
+        safety_veto:$safety_veto,
+        m3_verdict:(if ($window_pass and $source_ok and $false_accept_ok and $evidence_ok and ($safety_veto|not)) then "PASS" else "WATCH" end),
+        completed_windows:($windows|length),
+        required_consecutive_windows:$required,
+        windows:$windows,
+        m3_blockers:([]
+          + (if ($windows|length) >= $required then [] else ["m3_windows_below_required"] end)
+          + (if $window_pass then [] else ["m3_window_coverage_below_threshold"] end)
+          + (if $source_ok then [] else ["source_authority_invalid"] end)
+          + (if $false_accept_ok then [] else ["false_accept_authority_invalid"] end)
+          + (if $evidence_ok then [] else ["evidence_authority_invalid"] end)
+          + (if $safety_veto then ["m3_window_safety_veto"] else [] end))
+      }' >"${m3_evaluation}"
+  evaluator_rc=$?
+  set -e
+  if [[ "${evaluator_rc}" != "0" ]] \
+    || ! jq -e '
+      .schema == "nando.live-transition-m3-evaluation.v1"
+      and (.safety_veto | type == "boolean")
+      and (.m3_verdict == "PASS" or .m3_verdict == "WATCH")
+      and (.m3_blockers | type == "array")
+    ' "${m3_evaluation}" >/dev/null 2>&1; then
+    jq -n --argjson evaluator_exit_code "${evaluator_rc}" \
+      '{section:"response_runtime", verdict:"VETO", m3_verdict:"WATCH", safety_pass:false, reason:"m3_window_evaluator_invalid", evaluator_exit_code:$evaluator_exit_code}' \
+      >"${TMP_DIR}/response_runtime.json"
+    return
+  fi
+
+  local baseline_safety_pass safety_pass active_packages m3_threshold lifetime_token_share
+  local m3_pass m3_window_pass m3_window_safety_veto registry_schema
+  active_packages="$(jq '[.packages[] | select(.state == "active")] | length' "${registry}")"
+  registry_schema="$(jq -r '.schema' "${registry}")"
+  m3_threshold="$(jq '.response_runtime.minimum_m3_input_token_saving_share_milli' "${PROFILE}")"
+  lifetime_token_share="$(jq '.input_token_saving_share_milli // 0' "${economics}")"
+  m3_window_pass="$(jq -r '.m3_verdict == "PASS"' "${m3_evaluation}")"
+  m3_window_safety_veto="$(jq -r '.safety_veto' "${m3_evaluation}")"
+  baseline_safety_pass=0
+  if jq -e \
+    --argjson active_packages "${active_packages}" \
+    --slurpfile online "${online_report}" \
+    --slurpfile candidate "${authority_candidate}" \
+    --slurpfile economics "${economics}" \
+    --slurpfile health "${health}" \
+    --slurpfile m3 "${m3_evaluation}" \
+    '.schema == "nando.response-registry.v6"
+      and all(.packages[] | select(.state == "active");
+        .origin == "grounded_synthesis"
+        and .verifier != null
+        and (.required_routing_atom_ids | length) > 0
+        and .proof.support_rows >= 32
+        and .proof.future_rows >= 32
+        and .proof.distinct_sessions >= 3
+        and .proof.distinct_surfaces >= 2
+        and .proof.wrong_accepts == 0
+        and .proof.runtime_parity_failures == 0
+        and .proof.exact_cache_overlap == 0
+        and .proof.wave_causal_pass == true)
+      and $online[0].schema == "nando.embedded-response-online-miner.v1"
+      and $online[0].tail_follow_active == true
+      and $online[0].execution_authority == false
+      and ((now * 1000 - ($online[0].generated_at_unix_ms // 0)) <= 120000)
+      and ($online[0].miner.admission_accounting_complete // false) == true
+      and ($online[0].miner.false_accepts // 0) == 0
+      and ($health[0].transition_false_accepts // 0) == 0
+      and ($health[0].response_online.false_accepts // 0) == 0
+      and ($candidate[0].schema // "") == "nando.response-authority-candidate.v1"
+      and ($candidate[0].authority_schema // "") == "nando.response-authority.v2"
+      and ($candidate[0].registry_schema // "") == "nando.response-registry.v6"
+      and ($candidate[0].registry_revision // 0) == .revision
+      and $candidate[0].execution_authority == false
+      and (($candidate[0].packages // []) | length) == $active_packages' \
+    "${registry}" >/dev/null; then
+    baseline_safety_pass=1
+  fi
+  safety_pass="${baseline_safety_pass}"
+  m3_pass=0
+  if [[ "${safety_pass}" == "1" && "${registry_schema}" == "nando.response-registry.v6" \
+    && "${active_packages}" -gt 0 \
+    && "${m3_window_pass}" == "true" ]]; then
+    m3_pass=1
+  fi
+
+  jq -n \
+    --arg verdict "$([[ "${safety_pass}" == "1" ]] && printf PASS || printf VETO)" \
+    --arg m3_verdict "$([[ "${m3_pass}" == "1" ]] && printf PASS || printf WATCH)" \
+    --argjson baseline_safety_pass "${baseline_safety_pass}" \
+    --argjson safety_pass "${safety_pass}" \
+    --argjson active_packages "${active_packages}" \
+    --argjson lifetime_token_share "${lifetime_token_share}" \
+    --argjson m3_threshold "${m3_threshold}" \
+    --arg registry_schema "${registry_schema}" \
+    --slurpfile registry "${registry}" \
+    --slurpfile online "${online_report}" \
+    --slurpfile economics "${economics}" \
+    --slurpfile m3 "${m3_evaluation}" \
+    '{
+      section:"response_runtime",
+      verdict:$verdict,
+      m3_verdict:$m3_verdict,
+      baseline_safety_pass:($baseline_safety_pass == 1),
+      safety_pass:($safety_pass == 1),
+      registry_schema:$registry[0].schema,
+      registry_revision:$registry[0].revision,
+      active_packages:$active_packages,
+      quarantined_packages:([$registry[0].packages[] | select(.state == "quarantine")] | length),
+      automatic_lifecycle:true,
+      manual_profile_approval:false,
+      future_wrong_accepts:([$registry[0].packages[] | select(.state == "active") | (.proof.wrong_accepts // 0)] | add // 0),
+      cross_family_negative_accepts:0,
+      runtime_parity_failures:([$registry[0].packages[] | select(.state == "active") | (.proof.runtime_parity_failures // 0)] | add // 0),
+      online_miner_report_schema:$online[0].schema,
+      online_miner_report_generated_at_unix_ms:$online[0].generated_at_unix_ms,
+      verified_avoided_input_tokens:$economics[0].avoided_input_tokens,
+      global_deduplicated_input_tokens:$economics[0].global_input_tokens,
+      input_token_saving_share_milli:$lifetime_token_share,
+      minimum_m3_input_token_saving_share_milli:$m3_threshold,
+      false_accepts:$economics[0].false_accepts,
+      false_accept_evidence_available:($economics[0].false_accept_evidence_available // false),
+      false_accept_evidence_reason:($economics[0].false_accept_evidence_reason // null),
+      source_reconciliation_complete:($economics[0].source_reconciliation.complete // false),
+      source_reconciliation_blockers:($economics[0].source_reconciliation.blockers // ["source_reconciliation_missing"]),
+      source_authority_valid:($m3[0].source_authority_valid // false),
+      false_accept_authority_valid:($m3[0].false_accept_authority_valid // false),
+      evidence_authority_valid:($m3[0].evidence_authority_valid // false),
+      m3_window_evaluation:$m3[0],
+      m3_blockers:(
+        []
+        + (if $registry_schema == "nando.response-registry.v6" then [] else ["response_registry_not_v6"] end)
+        + (if $active_packages > 0 then [] else ["no_active_response_package"] end)
+        + ($m3[0].m3_blockers // [])
+        + (if $baseline_safety_pass == 1 then [] else ["response_baseline_safety_veto"] end)
+        + (if $m3[0].source_authority_valid == true then [] else ["source_authority_invalid"] end)
+        + (if $m3[0].evidence_authority_valid == true then [] else ["evidence_authority_invalid"] end)
+        + (if $m3[0].false_accept_authority_valid == true then [] else ["false_accept_authority_invalid"] end)
+        + (if $economics[0].false_accept_evidence_available == true then [] else ["false_accept_evidence_unavailable"] end)
+        + (if $m3[0].safety_veto then ["m3_window_safety_veto"] else [] end)
+      )
+    }' >"${TMP_DIR}/response_runtime.json"
+}
+
+run_deployment() {
+  local health_url health service service_failures
+  health_url="$(jq -r '.deployment.health_url' "${PROFILE}")"
+  health="${TMP_DIR}/health.json"
+  if ! curl -sS --max-time 3 "${health_url}" >"${health}" || ! jq -e . "${health}" >/dev/null 2>&1; then
+    jq -n --arg health_url "${health_url}" '{section:"deployment", verdict:"VETO", health_url:$health_url, reason:"health_unavailable"}' >"${TMP_DIR}/deployment.json"
+    return
+  fi
+  service_failures=0
+  while IFS= read -r service; do
+    systemctl is-active --quiet "${service}" || service_failures=$((service_failures + 1))
+  done < <(jq -r '.deployment.services[]' "${PROFILE}")
+  local health_pass verdict
+  health_pass=0
+  if jq -e '
+    .ok == true
+    and .service == "nando-transition-serving"
+    and .default_client_api_version == "v2"
+    and .local_accept_enabled == true
+    and .client_allow_local_accept == true
+    and .fallback_managed_by_nginx == true
+    and .executor_cache_ready == true
+    and .transition_false_accepts == 0
+  ' "${health}" >/dev/null; then
+    health_pass=1
+  fi
+  verdict="VETO"
+  if [[ "${health_pass}" == "1" && "${service_failures}" == "0" ]]; then
+    verdict="PASS"
+  fi
+  jq -n \
+    --arg verdict "${verdict}" \
+    --argjson health_pass "${health_pass}" \
+    --argjson service_failures "${service_failures}" \
+    --slurpfile health "${health}" \
+    '{
+      section:"deployment",
+      verdict:$verdict,
+      health_pass:($health_pass == 1),
+      service_failures:$service_failures,
+      health:{
+        ok:$health[0].ok,
+        service:$health[0].service,
+        fallback_managed_by_nginx:$health[0].fallback_managed_by_nginx,
+        executor_cache_ready:$health[0].executor_cache_ready,
+        transition_profile_state:$health[0].transition_profile_state,
+        transition_active_profiles:$health[0].transition_active_profiles,
+        transition_false_accepts:$health[0].transition_false_accepts,
+        upstream_configured:$health[0].upstream_configured
+      }
+    }' >"${TMP_DIR}/deployment.json"
+}
+
+unknown_checks="$(jq -r '.required_checks[] | select(. != "structural" and . != "wave_causal" and . != "expression_shadow" and . != "runtime_admission" and . != "response_runtime" and . != "deployment")' "${PROFILE}")"
+if [[ -n "${unknown_checks}" ]]; then
+  jq -n --arg unknown_checks "${unknown_checks}" '{verdict:"ERROR", reason:"unknown_required_checks", unknown_checks:($unknown_checks | split("\n"))}'
+  exit 2
+fi
+
+if ((refresh_proofs == 1)) && check_required wave_causal; then
+  refresh_causal_proof
+fi
+if check_required structural; then run_structural; else write_not_required structural; fi
+if check_required wave_causal; then run_causal; else write_not_required wave_causal; fi
+if check_required expression_shadow; then run_expression_shadow; else write_not_required expression_shadow; fi
+if check_required runtime_admission; then run_runtime_admission; else write_not_required runtime_admission; fi
+if check_required response_runtime; then run_response_runtime; else write_not_required response_runtime; fi
+if check_required deployment; then run_deployment; else write_not_required deployment; fi
+
+generated_at_unix="$(date +%s)"
+expires_at_unix="$((generated_at_unix + 30))"
+response_miner_status="$(jq -r '.response_runtime.miner_status' "${PROFILE}")"
+response_registry_path="$(jq -r '.response_runtime.registry' "${PROFILE}")"
+gate_build_path="$(jq -r '.deployment.gate_build // empty' "${PROFILE}")"
+runtime_build_path="$(jq -r '.deployment.response_runtime_build // empty' "${PROFILE}")"
+[[ -f "${gate_build_path}" ]] || gate_build_path="${BASH_SOURCE[0]}"
+gate_build_sha256="$(sha256sum -- "${gate_build_path}" | awk '{print $1}')"
+runtime_build_sha256=""
+runtime_contract_tool="${NANDO_RESPONSE_ADMISSION_BUILD:-${runtime_build_path}}"
+if [[ ! -x "${runtime_contract_tool}" ]]; then
+  runtime_contract_tool="/opt/nando-wave/bin/nando-response-admission"
+fi
+if [[ -x "${runtime_contract_tool}" ]]; then
+  runtime_build_sha256="$("${runtime_contract_tool}" --print-runtime-contract-sha256 2>/dev/null || true)"
+fi
+if [[ ! "${runtime_build_sha256}" =~ ^[0-9a-f]{64}$ ]] && [[ -f "${runtime_build_path}" ]]; then
+  runtime_build_sha256="$(sha256sum -- "${runtime_build_path}" | awk '{print $1}')"
+fi
+embedded_authority_candidate="$(dirname "${response_registry_path}")/response-authority-candidate.json"
+if [[ -f "${embedded_authority_candidate}" ]] && jq -e '
+  .schema == "nando.response-authority-candidate.v1"
+  and .execution_authority == false
+' "${embedded_authority_candidate}" >/dev/null 2>&1; then
+  cp "${embedded_authority_candidate}" "${TMP_DIR}/response-authority-candidate.json"
+else
+  jq -c '.response_authority_candidate // null' "${response_miner_status}" >"${TMP_DIR}/response-authority-candidate.json"
+fi
+authority_refresher="${NANDO_RESPONSE_AUTHORITY_INSPECT:-/opt/nando-wave/bin/nando-response-authority-inspect}"
+if [[ -x "${authority_refresher}" && -f "${response_registry_path}" ]]; then
+  if "${authority_refresher}" --refresh-candidate \
+    "${response_registry_path}" \
+    "${TMP_DIR}/response-authority-candidate.json" \
+    >"${TMP_DIR}/response-authority-candidate.refreshed.json"; then
+    mv "${TMP_DIR}/response-authority-candidate.refreshed.json" \
+      "${TMP_DIR}/response-authority-candidate.json"
+  fi
+fi
+candidate_valid=0
+if [[ -n "${runtime_build_sha256}" ]] && jq -e '
+  .schema == "nando.response-authority-candidate.v1"
+  and .authority_schema == "nando.response-authority.v2"
+  and .registry_schema == "nando.response-registry.v6"
+  and .execution_authority == false
+  and (.registry_revision | type) == "number"
+  and (.registry_sha256 | test("^[0-9a-f]{64}$"))
+  and (.packages | type) == "array"
+  and (.packages | length) > 0
+' "${TMP_DIR}/response-authority-candidate.json" >/dev/null; then
+  candidate_valid=1
+fi
+jq -s \
+  --arg project_id "${PROJECT_ID}" \
+  --arg project_root "${PROJECT_ROOT}" \
+  --arg gate_build_sha256 "${gate_build_sha256}" \
+  --arg runtime_build_sha256 "${runtime_build_sha256}" \
+  --argjson generated_at_unix "${generated_at_unix}" \
+  --argjson expires_at_unix "${expires_at_unix}" \
+  --argjson candidate_valid "${candidate_valid}" \
+  --slurpfile authority_candidate "${TMP_DIR}/response-authority-candidate.json" '
+  def rank: if . == "ERROR" then 4 elif . == "VETO" then 3 elif . == "WATCH" then 2 else 1 end;
+  (map(.verdict) | max_by(rank)) as $verdict
+  | {
+      schema:"nando.live-transition-composite-gate.v2",
+      project_id:$project_id,
+      project_root:$project_root,
+      generated_at_unix:$generated_at_unix,
+      expires_at_unix:$expires_at_unix,
+      verdict:$verdict,
+      eligible_for_local_accept:($verdict == "PASS" and $candidate_valid == 1),
+      response_authority:(
+        if $verdict == "PASS" and $candidate_valid == 1 then {
+          schema:$authority_candidate[0].authority_schema,
+          registry_schema:$authority_candidate[0].registry_schema,
+          registry_revision:$authority_candidate[0].registry_revision,
+          registry_sha256:$authority_candidate[0].registry_sha256,
+          gate_build_sha256:$gate_build_sha256,
+          runtime_build_sha256:$runtime_build_sha256,
+          packages:$authority_candidate[0].packages
+        } else {
+          schema:"nando.response-authority.v2",
+          registry_schema:"nando.response-registry.v6",
+          registry_revision:0,
+          registry_sha256:("0" * 64),
+          gate_build_sha256:$gate_build_sha256,
+          runtime_build_sha256:($runtime_build_sha256 // ""),
+          packages:[]
+        } end
+      ),
+      m3_complete:(map(select(.section == "response_runtime") | .m3_verdict) | first) == "PASS",
+      enabled_checks:map(select(.required != false) | .section),
+      required_actions:map(
+        select(.verdict != "PASS")
+        | {
+            section,
+            verdict,
+            reason:(
+              .reason
+              // ((.active_policy_failures // []) | first)
+              // ((.blocked_routes // []) | first)
+              // "repair_section_receipts"
+            ),
+            automatic_action:(
+              if .section == "runtime_admission" and ((.active_policy_failures // []) | map(contains("grounded_future_denominator")) | any)
+              then "collect_grounded_future_observations"
+              elif .section == "structural" then "repair_structural_route"
+              elif .section == "wave_causal" then "refresh_causal_proof"
+              elif .section == "deployment" then "restore_fail_open_services"
+              else "repair_section_receipts"
+              end
+            ),
+            command_hint:(
+              if .section == "runtime_admission" then "nando-transition observe < applied-result.json"
+              elif .section == "wave_causal" then "nando-live-transition-gate --refresh-proofs"
+              else "nando-live-transition-gate"
+              end
+            )
+          }
+      ),
+      sections:(reduce .[] as $item ({}; .[$item.section] = $item)),
+      policy:{
+        automatic_project_profile:true,
+        manual_per_profile_controls_allowed:false,
+        fail_closed_for_local_accept:true,
+        preserve_provider_fallback:true
+      }
+    }
+  ' "${TMP_DIR}/structural.json" "${TMP_DIR}/wave_causal.json" "${TMP_DIR}/expression_shadow.json" "${TMP_DIR}/runtime_admission.json" "${TMP_DIR}/response_runtime.json" "${TMP_DIR}/deployment.json" >"${TMP_DIR}/final.json"
+
+status_path="${NANDO_TRANSITION_ADMISSION_JSON:-$(jq -r '.runtime.admission_status' "${PROFILE}")}"
+mkdir -p "$(dirname -- "${status_path}")"
+cp "${TMP_DIR}/final.json" "${status_path}.next"
+mv "${status_path}.next" "${status_path}"
+cat "${TMP_DIR}/final.json"
+if ((status_mode == 1)); then
+  exit 0
+fi
+[[ "$(jq -r '.verdict' "${TMP_DIR}/final.json")" == "PASS" ]]

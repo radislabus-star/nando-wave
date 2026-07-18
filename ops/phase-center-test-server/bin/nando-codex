@@ -2,153 +2,211 @@
 set -euo pipefail
 
 REAL_CODEX="${NANDO_REAL_CODEX:-/home/ubu/.nvm/versions/node/v22.22.2/lib/node_modules/@openai/codex/bin/codex.js}"
-EVENTS_JSONL="${NANDO_GATEWAY_EVENTS_JSONL:-${HOME}/.local/state/nando-wave/streaming/nando-llm-gateway.events.jsonl}"
-CLIENT_ENV="${NANDO_CODEX_CLIENT_ENV:-${HOME}/.config/nando-wave/client.env}"
-HEALTH_TIMEOUT_MS="${NANDO_CODEX_HEALTH_TIMEOUT_MS:-300}"
-PROVIDER_BRIDGE_MODE="${NANDO_CODEX_PROVIDER_BRIDGE:-auto}"
-REQUIRE_UPSTREAM="${NANDO_CODEX_REQUIRE_UPSTREAM:-1}"
+EVENTS_JSONL="${NANDO_GATEWAY_EVENTS_JSONL:-${HOME}/.local/state/nando-wave/streaming/nando-codex-launcher.events.jsonl}"
+HEALTH_URL="${NANDO_CODEX_HEALTH_URL:-http://127.0.0.1:8787/health}"
+HEALTH_TIMEOUT_SECONDS="${NANDO_CODEX_HEALTH_TIMEOUT_SECONDS:-0.5}"
+MODEL_PROVIDER="${NANDO_CODEX_MODEL_PROVIDER:-nando_nginx}"
+SELECTED_BASE_URL="http://127.0.0.1:8787/v2"
+MODEL_PROVIDER_OVERRIDE="model_provider=\"${MODEL_PROVIDER}\""
 
-ORIG_OPENAI_BASE_URL_SET=0
-ORIG_OPENAI_API_BASE_SET=0
-ORIG_OPENAI_API_KEY_SET=0
-[[ -v OPENAI_BASE_URL ]] && ORIG_OPENAI_BASE_URL_SET=1 && ORIG_OPENAI_BASE_URL="${OPENAI_BASE_URL}"
-[[ -v OPENAI_API_BASE ]] && ORIG_OPENAI_API_BASE_SET=1 && ORIG_OPENAI_API_BASE="${OPENAI_API_BASE}"
-[[ -v OPENAI_API_KEY ]] && ORIG_OPENAI_API_KEY_SET=1 && ORIG_OPENAI_API_KEY="${OPENAI_API_KEY}"
-ORIG_OPENAI_API_KEY_PRESENT=false
-if [[ "${ORIG_OPENAI_API_KEY_SET}" == "1" && -n "${ORIG_OPENAI_API_KEY}" && "${ORIG_OPENAI_API_KEY}" != "nando-local" ]]; then
-  ORIG_OPENAI_API_KEY_PRESENT=true
-fi
+route_mode="direct_fallback"
+route_reason="gateway_not_checked"
+health_ok=false
+health_service="unknown"
+transport="unknown"
+config_override_scope="none"
+config_override_insert_index=-1
+config_override_position_verified=false
+CODEX_ARGS=("$@")
 
-export NANDO_PHASE_CENTER_ENV="${NANDO_PHASE_CENTER_ENV:-/etc/nando-wave/phase-center.env}"
-if [[ ! -r "${NANDO_PHASE_CENTER_ENV}" && -r "${HOME}/.config/nando-wave/phase-center.env" ]]; then
-  export NANDO_PHASE_CENTER_ENV="${HOME}/.config/nando-wave/phase-center.env"
-fi
-if [[ -r "${NANDO_PHASE_CENTER_ENV}" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "${NANDO_PHASE_CENTER_ENV}"
-  set +a
-fi
-export NANDO_OFFLOAD="${NANDO_OFFLOAD:-1}"
-export NANDO_GATEWAY_TIMEOUT_MS="${NANDO_GATEWAY_TIMEOUT_MS:-200}"
-export NANDO_LOCAL_ACCEPT_ENABLED="${NANDO_LOCAL_ACCEPT_ENABLED:-0}"
-export NANDO_GATEWAY_CAPTURE_RAW="${NANDO_GATEWAY_CAPTURE_RAW:-0}"
+is_config_value_option() {
+  case "$1" in
+    -c|--config|-i|--image|-m|--model|-p|--profile|-s|--sandbox|-C|--cd|--add-dir|-a|--ask-for-approval|--remote|--remote-auth-token-env)
+      return 0
+      ;;
+  esac
+  return 1
+}
 
-restore_openai_env() {
-  if [[ "${ORIG_OPENAI_BASE_URL_SET}" == "1" ]]; then
-    export OPENAI_BASE_URL="${ORIG_OPENAI_BASE_URL}"
-  else
-    unset OPENAI_BASE_URL
-  fi
-  if [[ "${ORIG_OPENAI_API_BASE_SET}" == "1" ]]; then
-    export OPENAI_API_BASE="${ORIG_OPENAI_API_BASE}"
-  else
-    unset OPENAI_API_BASE
-  fi
-  if [[ "${ORIG_OPENAI_API_KEY_SET}" == "1" ]]; then
-    export OPENAI_API_KEY="${ORIG_OPENAI_API_KEY}"
-  else
+is_codex_subcommand() {
+  case "$1" in
+    exec|review|login|logout|mcp|plugin|mcp-server|app-server|remote-control|completion|update|doctor|sandbox|debug|apply|resume|archive|delete|unarchive|fork|cloud|exec-server|features|help)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+is_model_subcommand() {
+  case "$1" in
+    exec|review|resume|fork)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+build_nando_codex_args() {
+  local -a original=("$@")
+  local expect_value=0
+  local index token insert_at
+
+  for index in "${!original[@]}"; do
+    token="${original[$index]}"
+    if (( expect_value )); then
+      expect_value=0
+      continue
+    fi
+    if is_config_value_option "${token}"; then
+      expect_value=1
+      continue
+    fi
+    case "${token}" in
+      --*=*|-*)
+        continue
+        ;;
+    esac
+    if is_codex_subcommand "${token}"; then
+      if is_model_subcommand "${token}"; then
+        insert_at=$((index + 1))
+        CODEX_ARGS=(
+          "${original[@]:0:${insert_at}}"
+          -c "${MODEL_PROVIDER_OVERRIDE}"
+          "${original[@]:${insert_at}}"
+        )
+        config_override_scope="${token}"
+        config_override_insert_index="${insert_at}"
+        config_override_position_verified=true
+      else
+        CODEX_ARGS=("${original[@]}")
+        config_override_scope="utility:${token}"
+      fi
+      return
+    fi
+
+    # The first positional value is an interactive prompt.
+    break
+  done
+
+  CODEX_ARGS=(-c "${MODEL_PROVIDER_OVERRIDE}" "${original[@]}")
+  config_override_scope="interactive"
+  config_override_insert_index=0
+  config_override_position_verified=true
+}
+
+sanitize_direct_env() {
+  case "${OPENAI_BASE_URL:-}" in
+    http://127.0.0.1:8787/*|http://127.0.0.1:18787/*) unset OPENAI_BASE_URL ;;
+  esac
+  case "${OPENAI_API_BASE:-}" in
+    http://127.0.0.1:8787/*|http://127.0.0.1:18787/*) unset OPENAI_API_BASE ;;
+  esac
+  if [[ "${OPENAI_API_KEY:-}" == "nando-local" ]]; then
     unset OPENAI_API_KEY
   fi
 }
 
-timeout_arg() {
-  local ms="$1"
-  [[ "${ms}" =~ ^[0-9]+$ ]] || ms=300
-  printf '%d.%03ds' "$((ms / 1000))" "$((ms % 1000))"
+gateway_requested() {
+  [[ "${NANDO_CODEX_FORCE_DIRECT:-0}" != "1" ]] || { route_reason="forced_direct"; return 1; }
+  [[ "${NANDO_CODEX_ALIAS:-1}" != "0" ]] || { route_reason="alias_bypass"; return 1; }
+  [[ "${NANDO_CODEX_GATEWAY:-1}" != "0" ]] || { route_reason="gateway_bypass"; return 1; }
+  [[ "${NANDO_OFFLOAD:-1}" != "0" ]] || { route_reason="offload_disabled"; return 1; }
 }
 
-route_mode="direct_fallback"
-route_reason="not_checked"
-health_ok=false
-upstream_configured=false
-server_api_key_present=false
-default_client_api_version="unknown"
-selected_base_url="${OPENAI_BASE_URL:-}"
-
-try_nando_provider_bridge() {
-  [[ "${NANDO_CODEX_ALIAS:-1}" != "0" ]] || { route_reason="codex_alias_bypass"; return 1; }
-  [[ "${NANDO_CODEX_GATEWAY:-1}" != "0" ]] || { route_reason="codex_gateway_bypass"; return 1; }
-  [[ "${NANDO_OFFLOAD}" != "0" ]] || { route_reason="nando_offload_disabled"; return 1; }
-  [[ "${PROVIDER_BRIDGE_MODE}" != "0" ]] || { route_reason="provider_bridge_disabled"; return 1; }
-  [[ -f "${CLIENT_ENV}" ]] || { route_reason="client_env_missing"; return 1; }
-
-  # shellcheck disable=SC1090
-  . "${CLIENT_ENV}"
-  local health_url="${NANDO_CPU_OPENAI_BASE_URL_V2:-${OPENAI_BASE_URL:-http://127.0.0.1:8787/v2}}/health"
+gateway_healthy() {
   local body
-  body="$(timeout "$(timeout_arg "${HEALTH_TIMEOUT_MS}")" curl -fsS "${health_url}" 2>/dev/null || true)"
+  body="$(curl --silent --show-error --fail \
+    --connect-timeout "${HEALTH_TIMEOUT_SECONDS}" \
+    --max-time "${HEALTH_TIMEOUT_SECONDS}" \
+    "${HEALTH_URL}" 2>/dev/null || true)"
   if [[ -z "${body}" ]]; then
     route_reason="health_timeout_or_down"
-    restore_openai_env
     return 1
-  fi
-  health_ok="$(printf '%s' "${body}" | jq -r '(.ok // false) | tostring' 2>/dev/null || echo false)"
-  upstream_configured="$(printf '%s' "${body}" | jq -r '(.upstream_configured // false) | tostring' 2>/dev/null || echo false)"
-  server_api_key_present="$(printf '%s' "${body}" | jq -r '(.api_key_present // false) | tostring' 2>/dev/null || echo false)"
-  default_client_api_version="$(printf '%s' "${body}" | jq -r '(.default_client_api_version // "unknown") | tostring' 2>/dev/null || echo unknown)"
-  if [[ "${health_ok}" != "true" || "${default_client_api_version}" != "v2" ]]; then
-    route_reason="health_not_ready"
-    restore_openai_env
-    return 1
-  fi
-  if [[ "${REQUIRE_UPSTREAM}" == "1" && "${upstream_configured}" != "true" && "${ORIG_OPENAI_API_KEY_PRESENT}" != "true" ]]; then
-    route_reason="upstream_auth_missing"
-    restore_openai_env
-    return 1
-  fi
-  if [[ "${ORIG_OPENAI_API_KEY_PRESENT}" == "true" ]]; then
-    export OPENAI_API_KEY="${ORIG_OPENAI_API_KEY}"
   fi
 
-  route_mode="nando_v2"
-  route_reason="bridge_healthy"
-  selected_base_url="${OPENAI_BASE_URL:-}"
+  health_ok="$(jq -r '(.ok // false) | tostring' <<<"${body}" 2>/dev/null || echo false)"
+  health_service="$(jq -r '.service // "unknown"' <<<"${body}" 2>/dev/null || echo unknown)"
+  transport="$(jq -r '.transport // "unknown"' <<<"${body}" 2>/dev/null || echo unknown)"
+  if [[ "${health_ok}" != "true" || "${health_service}" != "nando-nginx-gateway" || "${transport}" != "nginx" ]]; then
+    route_reason="unexpected_health_contract"
+    return 1
+  fi
+
+  route_mode="nando_nginx"
+  route_reason="nginx_transport_healthy"
   return 0
 }
 
-if ! try_nando_provider_bridge; then
-  restore_openai_env
-  selected_base_url="${OPENAI_BASE_URL:-}"
+if gateway_requested && gateway_healthy; then
+  build_nando_codex_args "$@"
+else
+  sanitize_direct_env
+  MODEL_PROVIDER_OVERRIDE='model_provider="openai"'
+  build_nando_codex_args "$@"
 fi
 
 mkdir -p "$(dirname "${EVENTS_JSONL}")" 2>/dev/null || true
 jq -cn \
-  --arg ts "$(date -Is)" \
+  --arg timestamp "$(date -Is)" \
   --arg cwd "${PWD}" \
-  --arg real_codex "${REAL_CODEX}" \
   --arg route_mode "${route_mode}" \
   --arg route_reason "${route_reason}" \
-  --arg selected_base_url "${selected_base_url}" \
-  --arg default_client_api_version "${default_client_api_version}" \
-  --argjson offload_enabled "$(if [[ "${NANDO_OFFLOAD}" == "0" ]]; then echo false; else echo true; fi)" \
-  --argjson local_accept_enabled "$(if [[ "${NANDO_LOCAL_ACCEPT_ENABLED}" == "1" ]]; then echo true; else echo false; fi)" \
-  --argjson bridge_health_ok "$(if [[ "${health_ok}" == "true" ]]; then echo true; else echo false; fi)" \
-  --argjson upstream_configured "$(if [[ "${upstream_configured}" == "true" ]]; then echo true; else echo false; fi)" \
-  --argjson server_api_key_present "$(if [[ "${server_api_key_present}" == "true" ]]; then echo true; else echo false; fi)" \
-  --argjson original_api_key_present "$(if [[ "${ORIG_OPENAI_API_KEY_PRESENT}" == "true" ]]; then echo true; else echo false; fi)" \
-  --argjson require_upstream "$(if [[ "${REQUIRE_UPSTREAM}" == "1" ]]; then echo true; else echo false; fi)" \
+  --arg health_service "${health_service}" \
+  --arg transport "${transport}" \
+  --arg selected_model_provider "$(if [[ "${route_mode}" == "nando_nginx" ]]; then printf '%s' "${MODEL_PROVIDER}"; else printf 'openai'; fi)" \
+  --arg selected_base_url "$(if [[ "${route_mode}" == "nando_nginx" ]]; then printf '%s' "${SELECTED_BASE_URL}"; fi)" \
+  --arg config_override_scope "${config_override_scope}" \
+  --argjson config_override_insert_index "${config_override_insert_index}" \
+  --argjson config_override_position_verified "${config_override_position_verified}" \
+  --argjson health_ok "${health_ok}" \
   '{
-    schema_version: "nando_codex_launcher_event_v1",
-    timestamp: $ts,
+    schema: "nando_codex_launcher_event_v2",
+    timestamp: $timestamp,
     cwd: $cwd,
-    real_codex: $real_codex,
     route_mode: $route_mode,
     route_reason: $route_reason,
+    health_service: $health_service,
+    transport: $transport,
+    selected_model_provider: $selected_model_provider,
     selected_base_url: $selected_base_url,
-    default_client_api_version: $default_client_api_version,
-    offload_enabled: $offload_enabled,
-    local_accept_enabled: $local_accept_enabled,
-    bridge_health_ok: $bridge_health_ok,
-    upstream_configured: $upstream_configured,
-    server_api_key_present: $server_api_key_present,
-    original_api_key_present: $original_api_key_present,
-    require_upstream: $require_upstream,
-    boundary: "Codex launcher fail-open: route through Nando v2 only when health is ok and upstream policy is satisfied; otherwise restore original OpenAI env and launch direct Codex"
-  }' >> "${EVENTS_JSONL}" 2>/dev/null || true
+    config_override_scope: $config_override_scope,
+    config_override_insert_index: $config_override_insert_index,
+    config_override_position_verified: $config_override_position_verified,
+    health_ok: $health_ok,
+    python_transport: false,
+    local_accept_decision: "not_in_launcher",
+    boundary: "healthy local Nginx transport or direct official Codex"
+  }' >>"${EVENTS_JSONL}" 2>/dev/null || true
 
-if [[ "${NANDO_CODEX_GATEWAY:-1}" == "0" || "${NANDO_CODEX_ALIAS:-1}" == "0" ]]; then
-  exec node "${REAL_CODEX}" "$@"
+if [[ "${NANDO_CODEX_DRY_RUN:-0}" == "1" ]]; then
+  jq -n \
+    --arg route_mode "${route_mode}" \
+    --arg route_reason "${route_reason}" \
+    --arg health_service "${health_service}" \
+    --arg transport "${transport}" \
+    --arg selected_model_provider "$(if [[ "${route_mode}" == "nando_nginx" ]]; then printf '%s' "${MODEL_PROVIDER}"; else printf 'openai'; fi)" \
+    --arg selected_base_url "$(if [[ "${route_mode}" == "nando_nginx" ]]; then printf '%s' "${SELECTED_BASE_URL}"; fi)" \
+    --arg config_override_scope "${config_override_scope}" \
+    --argjson config_override_insert_index "${config_override_insert_index}" \
+    --argjson config_override_position_verified "${config_override_position_verified}" \
+    --argjson health_ok "${health_ok}" \
+    '{
+      route_mode: $route_mode,
+      route_reason: $route_reason,
+      health_service: $health_service,
+      transport: $transport,
+      selected_model_provider: $selected_model_provider,
+      selected_base_url: $selected_base_url,
+      config_override_scope: $config_override_scope,
+      config_override_insert_index: $config_override_insert_index,
+      config_override_position_verified: $config_override_position_verified,
+      health_ok: $health_ok
+    }'
+  exit 0
 fi
 
-exec node "${REAL_CODEX}" "$@"
+if [[ "${route_mode}" == "nando_nginx" ]]; then
+  exec node "${REAL_CODEX}" "${CODEX_ARGS[@]}"
+fi
+
+exec node "${REAL_CODEX}" "${CODEX_ARGS[@]}"

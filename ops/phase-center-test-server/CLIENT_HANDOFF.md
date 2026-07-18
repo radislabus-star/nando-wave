@@ -1,5 +1,32 @@
 # Nando Client Handoff
 
+## Verified Transition Runtime
+
+Try CPU execution before calling the LLM:
+
+```bash
+printf '%s' '{"before":{"count":1},"action":{"kind":"increment","amount":2}}' \
+  | nando-transition execute | jq
+```
+
+If CPU returns `fallback_required`, use the normal LLM/provider path. After the
+application or tool has actually applied and independently verified the state,
+submit the observation:
+
+```bash
+printf '%s' '{
+  "before":{"count":1},
+  "action":{"kind":"increment","amount":2},
+  "after":{"count":3},
+  "evidence_source":"application_state",
+  "evidence_verifier":"state_store_commit"
+}' | nando-transition observe | jq
+```
+
+The client computes a content-bound SHA-256 receipt. Upstream LLM text is not
+accepted as grounded transition evidence. Check automatic admission with
+`nando-live-transition-gate`.
+
 Purpose: give another local agent/window the shortest safe way to route traffic
 through the NANDA CPU canary server.
 
@@ -132,7 +159,9 @@ Broad prompt behavior:
 
 ```text
 if NANDO_PROVIDER_UPSTREAM_BASE_URL is configured on the server:
-  proxy to upstream and record provider boundary metadata
+  proxy to upstream and record provider boundary metadata; Authorization may be
+  forwarded from the Codex/client request, so the server does not need to store
+  a provider API key
 
 if upstream is not configured:
   return upstream_missing instead of faking an answer
@@ -159,13 +188,13 @@ timeout / miss / daemon error / broad prompt -> normal provider command
 
 This is the safer default while upstream readiness is not PASS.
 
-For Codex windows use `nando-codex`, not a blind `OPENAI_BASE_URL` export, when
-work continuity matters. The launcher checks `/v2/health` with a short timeout
-and chooses:
+For Codex windows use `nando-codex` or the installed `~/.local/bin/codex` shim,
+not a blind `OPENAI_BASE_URL` export, when work continuity matters. The
+launcher checks `/v2/health` with a short timeout and chooses:
 
 ```text
-health ok + upstream configured -> OPENAI_BASE_URL=http://127.0.0.1:8787/v2
-health down / upstream missing -> original direct Codex/OpenAI environment
+health ok + upstream base configured -> OPENAI_BASE_URL=http://127.0.0.1:8787/v2
+health down / upstream base missing -> original direct Codex/OpenAI environment
 ```
 
 The emergency bypass stays:
@@ -223,8 +252,9 @@ export OPENAI_API_KEY=nando-local
 export NANDO_CPU_API_VERSION=v2
 
 Внимание: ручной OPENAI_BASE_URL не умеет сам откатиться, если локальный bridge
-умрёт. Для Codex по умолчанию используйте nando-codex: он fail-open и не
-переключает полный OpenAI-трафик на Nando, пока upstream не настроен.
+умрёт. Для Codex по умолчанию используйте `codex`/`nando-codex`: установленный
+`~/.local/bin/codex` shim ведёт в fail-open launcher и не переключает полный
+OpenAI-трафик на Nando, пока upstream base не настроен.
 
 Endpoint:
 

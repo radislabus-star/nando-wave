@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="${NANDO_PROJECT_ROOT:-$(git rev-parse --show-toplevel)}"
+STATE_DIR="${NANDO_BUILD_STATE_DIR:-/var/lib/nando-wave/transition}"
+SERVING_BIN="${NANDO_SERVING_BIN:-/opt/nando-wave/bin/nando-transition-serving}"
+GATEWAY_BIN="${NANDO_GATEWAY_BIN:-/opt/nando-wave/bin/nando-gateway-control}"
+GATE_BIN="${NANDO_GATE_BIN:-/opt/nando-wave/bin/nando-live-transition-gate}"
+MANIFEST="${STATE_DIR}/build-manifest.json"
+HISTORY="${STATE_DIR}/build-history.jsonl"
+GIT=(git -c "safe.directory=${ROOT_DIR}" -C "${ROOT_DIR}")
+
+today="$(date +%Y.%m.%d)"
+previous="$(jq -r '.build_id // empty' "${MANIFEST}" 2>/dev/null || true)"
+sequence=1
+if [[ "${previous}" =~ ^${today}-b([0-9]{3})$ ]]; then
+  sequence=$((10#${BASH_REMATCH[1]} + 1))
+fi
+build_id="$(printf '%s-b%03d' "${today}" "${sequence}")"
+generated_at_unix="$(date +%s)"
+git_commit="$("${GIT[@]}" rev-parse HEAD)"
+source_state_sha256="$({
+  "${GIT[@]}" rev-parse HEAD
+  "${GIT[@]}" status --porcelain=v1 -- \
+    Cargo.toml Cargo.lock crates/nando-response-actor \
+    crates/nando-transition-serving crates/nando-gateway-control \
+    ops/phase-center-test-server/bin/nando-live-transition-gate \
+    ops/phase-center-test-server/bin/nando-record-build
+  "${GIT[@]}" diff --binary -- \
+    Cargo.toml Cargo.lock crates/nando-response-actor \
+    crates/nando-transition-serving crates/nando-gateway-control \
+    ops/phase-center-test-server/bin/nando-live-transition-gate \
+    ops/phase-center-test-server/bin/nando-record-build
+} | sha256sum | cut -d' ' -f1)"
+serving_sha256="$(sha256sum "${SERVING_BIN}" | cut -d' ' -f1)"
+gateway_sha256="$(sha256sum "${GATEWAY_BIN}" | cut -d' ' -f1)"
+gate_sha256="$(sha256sum "${GATE_BIN}" | cut -d' ' -f1)"
+health="$(curl -fsS http://127.0.0.1:18789/health)"
+online_report="$(curl -fsS http://127.0.0.1:18789/v2/miner/report)"
+admission="$(cat "${STATE_DIR}/admission.json")"
+economics="$(cat "${STATE_DIR}/economics-live.json")"
+registry="$(cat "${STATE_DIR}/response-registry.json")"
+
+runtime_contract="$(jq -r '.response_runtime_contract_sha256 // "MISSING"' <<<"${health}")"
+relation_schema="$(jq -r '.response.self_training_v2.schema // "MISSING"' <<<"${online_report}")"
+opportunity_schema="$(jq -r '.response.self_training_v2.opportunity.schema // "MISSING"' <<<"${online_report}")"
+collection_strategy="$(jq -r '.collection.status.pooling_strategy_version // 0' <<<"${online_report}")"
+checkpoint_events="$(jq -r '.worker.checkpoint_events // 0' <<<"${online_report}")"
+checkpoint_interval="$(jq -r '.worker.checkpoint_interval_seconds // 60' <<<"${online_report}")"
+admission_schema="$(jq -r '.schema // "MISSING"' <<<"${admission}")"
+economics_schema="$(jq -r '.schema // "MISSING"' <<<"${economics}")"
+registry_schema="$(jq -r '.schema // "MISSING"' <<<"${registry}")"
+
+tmp="$(mktemp "${STATE_DIR}/.build-manifest.XXXXXX")"
+trap 'rm -f "${tmp}"' EXIT
+jq -n \
+  --arg build_id "${build_id}" \
+  --argjson generated_at_unix "${generated_at_unix}" \
+  --arg git_commit "${git_commit}" \
+  --arg source_state_sha256 "${source_state_sha256}" \
+  --arg serving_sha256 "${serving_sha256}" \
+  --arg gateway_sha256 "${gateway_sha256}" \
+  --arg gate_sha256 "${gate_sha256}" \
+  --arg runtime_contract "${runtime_contract}" \
+  --arg relation_schema "${relation_schema}" \
+  --arg opportunity_schema "${opportunity_schema}" \
+  --argjson collection_strategy "${collection_strategy}" \
+  --argjson checkpoint_events "${checkpoint_events}" \
+  --argjson checkpoint_interval "${checkpoint_interval}" \
+  --arg admission_schema "${admission_schema}" \
+  --arg economics_schema "${economics_schema}" \
+  --arg registry_schema "${registry_schema}" \
+  '{
+    schema: "nando.build-manifest.v1",
+    build_id: $build_id,
+    generated_at_unix: $generated_at_unix,
+    git_commit: $git_commit,
+    source_state_sha256: $source_state_sha256,
+    modules: [
+      {name:"Rust serving", version:"0.1.0", contract:$runtime_contract, sha256:$serving_sha256},
+      {name:"Gateway control", version:"0.1.0", contract:"control-plane.v2", sha256:$gateway_sha256},
+      {name:"Streaming worker", version:"event-driven.v2", contract:(($checkpoint_events|tostring) + "-events-or-" + ($checkpoint_interval|tostring) + "s"), sha256:$serving_sha256},
+      {name:"Teacher/student miner", version:"strategy.v3", contract:$relation_schema, sha256:$serving_sha256},
+      {name:"Frozen future", version:"partition.v9", contract:"event-time-disjoint", sha256:$serving_sha256},
+      {name:"Collection miner", version:("pooling.v" + ($collection_strategy|tostring)), contract:"NCO3", sha256:$serving_sha256},
+      {name:"Typed DSL + verifier", version:$registry_schema, contract:$runtime_contract, sha256:$serving_sha256},
+      {name:"Admission", version:$admission_schema, contract:"proof-carrying", sha256:$gate_sha256},
+      {name:"Economics", version:$economics_schema, contract:"verified-only", sha256:$serving_sha256},
+      {name:"Opportunity accounting", version:$opportunity_schema, contract:"authoritative-denominator+upper-bound", sha256:$serving_sha256}
+    ]
+  }' >"${tmp}"
+chmod 0644 "${tmp}"
+mv "${tmp}" "${MANIFEST}"
+trap - EXIT
+jq -c . "${MANIFEST}" >>"${HISTORY}"
+printf '%s\n' "${build_id}"

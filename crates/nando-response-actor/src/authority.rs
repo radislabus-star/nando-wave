@@ -29,6 +29,7 @@ pub const RESPONSE_FUTURE_VERIFIER_RECEIPT_SCHEMA_V2: &str =
     "nando.response-future-verifier-receipt.v2";
 pub const RESPONSE_PROOF_RECEIPT_BINDING_SCHEMA_V1: &str =
     "nando.response-proof-receipt-binding.v1";
+pub const RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1: &str = "nando.semantic-alias-proof.v1";
 pub const RESPONSE_RUNTIME_CONTRACT_SCHEMA_V1: &str = "nando.response-runtime-contract.v1";
 
 const MAX_ADMISSION_FUTURE_SKEW_SECONDS: u64 = 5;
@@ -74,6 +75,10 @@ pub struct ResponsePackageAuthorityBindingV2 {
     pub runtime_parity_receipt_set_sha256: String,
     pub future_verifier_receipt_set_schema: String,
     pub future_verifier_receipt_set_sha256: String,
+    #[serde(default)]
+    pub semantic_alias_proof_schema: String,
+    #[serde(default)]
+    pub semantic_alias_proof_sha256: String,
     pub proof_receipts_sha256: String,
 }
 
@@ -93,6 +98,7 @@ pub(crate) struct AuthorizedResponsePackage {
     pub exact_causal_proof_sha256: String,
     pub runtime_parity_receipt_set_sha256: String,
     pub future_verifier_receipt_set_sha256: String,
+    pub semantic_alias_proof_sha256: String,
     pub proof_receipts_sha256: String,
 }
 
@@ -133,6 +139,7 @@ pub struct RuntimeVerificationReceiptV2 {
     pub exact_causal_proof_sha256: String,
     pub runtime_parity_receipt_set_sha256: String,
     pub future_verifier_receipt_set_sha256: String,
+    pub semantic_alias_proof_sha256: String,
     pub proof_receipts_sha256: String,
     pub gate_build_sha256: String,
     pub runtime_build_sha256: String,
@@ -217,6 +224,8 @@ struct ProofReceiptBindingDigestMaterial<'a> {
     runtime_parity_receipt_set_sha256: &'a str,
     future_verifier_receipt_set_schema: &'a str,
     future_verifier_receipt_set_sha256: &'a str,
+    semantic_alias_proof_schema: &'a str,
+    semantic_alias_proof_sha256: &'a str,
 }
 
 pub fn canonical_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, &'static str> {
@@ -340,6 +349,8 @@ pub fn response_proof_receipts_digest(
         runtime_parity_receipt_set_sha256: &binding.runtime_parity_receipt_set_sha256,
         future_verifier_receipt_set_schema: &binding.future_verifier_receipt_set_schema,
         future_verifier_receipt_set_sha256: &binding.future_verifier_receipt_set_sha256,
+        semantic_alias_proof_schema: &binding.semantic_alias_proof_schema,
+        semantic_alias_proof_sha256: &binding.semantic_alias_proof_sha256,
     })
 }
 
@@ -460,6 +471,7 @@ pub(crate) fn validate_response_authority(
                 future_verifier_receipt_set_sha256: binding
                     .future_verifier_receipt_set_sha256
                     .clone(),
+                semantic_alias_proof_sha256: binding.semantic_alias_proof_sha256.clone(),
                 proof_receipts_sha256: binding.proof_receipts_sha256.clone(),
             },
         );
@@ -508,6 +520,7 @@ pub(crate) fn finalize_runtime_receipt(
             .authority
             .future_verifier_receipt_set_sha256
             .clone(),
+        semantic_alias_proof_sha256: verified.authority.semantic_alias_proof_sha256.clone(),
         proof_receipts_sha256: verified.authority.proof_receipts_sha256.clone(),
         gate_build_sha256: verified.authority.gate_build_sha256.clone(),
         runtime_build_sha256: verified.authority.runtime_build_sha256.clone(),
@@ -624,6 +637,12 @@ fn validate_binding(
         RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2,
         &binding.future_verifier_receipt_set_sha256,
         "response_authority_future_verifier_receipt_invalid",
+    )?;
+    validate_external_receipt(
+        &binding.semantic_alias_proof_schema,
+        RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+        &binding.semantic_alias_proof_sha256,
+        "response_authority_semantic_alias_proof_invalid",
     )?;
     if response_proof_receipts_digest(binding)? != binding.proof_receipts_sha256 {
         return Err("response_authority_proof_receipts_digest_mismatch");

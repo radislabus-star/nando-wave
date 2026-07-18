@@ -1,11 +1,16 @@
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
+use nando_core::wave::{phase_margin_to_micro, phase_vector_from_atom_ids};
 use serde_json::Value;
 
 use crate::program::{
     CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
-    CollectionScalarType, CustomToolResultProjection, ProjectStatusMapping, ResponseArgument,
-    ResponseOperation, ResponseProgram, ResponseRenderSegment, ValueProjectionFormat,
+    CollectionScalarType, CustomToolResultProjection, ProjectStatusMapping, RequestTemplateMarker,
+    ResponseAdapterWaveRoute, ResponseArgument, ResponseOperation, ResponseProgram,
+    ResponseRenderSegment, ValueProjectionFormat,
 };
 use crate::runtime::{
     classify_test_output, immediate_function_output, immediate_yielded_build_or_test,
@@ -42,6 +47,79 @@ pub fn verify_response(
     candidate: &str,
 ) -> Result<(), ResponseVerificationError> {
     let expected = match &program.operation {
+        ResponseOperation::UniqueConsensus {
+            variants,
+            adapter_wave,
+        } => {
+            let layout = verifier_structural_layout_sha256(provider_payload)?;
+            let request_atoms = independently_request_text(provider_payload)
+                .map(|text| crate::request_phase_atom_ids(&text))
+                .unwrap_or_default();
+            let mut applicable = variants
+                .iter()
+                .enumerate()
+                .filter(|(_, variant)| {
+                    (variant.allowed_layout_sha256.is_empty()
+                        || variant.allowed_layout_sha256.binary_search(&layout).is_ok())
+                        && variant
+                            .required_request_atom_ids
+                            .iter()
+                            .all(|atom| request_atoms.binary_search(atom).is_ok())
+                })
+                .map(|(index, variant)| {
+                    let margin = adapter_wave
+                        .as_ref()
+                        .and_then(|wave| wave.routes.get(index))
+                        .and_then(|route| {
+                            independently_adapter_wave_margin(
+                                &variant.program,
+                                provider_payload,
+                                route,
+                            )
+                        })
+                        .unwrap_or(i64::MIN);
+                    (index, variant, margin)
+                })
+                .collect::<Vec<_>>();
+            if let Some(wave) = adapter_wave {
+                applicable.retain(|(_, _, margin)| *margin != i64::MIN);
+                applicable.sort_unstable_by(|left, right| {
+                    right.2.cmp(&left.2).then_with(|| left.0.cmp(&right.0))
+                });
+                let Some(best_margin) = applicable.first().map(|value| value.2) else {
+                    return Err(ResponseVerificationError("adapter_wave_no_candidate"));
+                };
+                let tied = applicable
+                    .iter()
+                    .filter(|value| value.2 == best_margin)
+                    .count();
+                if tied > usize::from(wave.exact_budget) {
+                    return Err(ResponseVerificationError("adapter_wave_tie_budget"));
+                }
+                applicable.retain(|value| value.2 == best_margin);
+            }
+            let expected = applicable
+                .into_iter()
+                .filter_map(|(_, variant, _)| {
+                    independently_expected_response_variant(&variant.program, provider_payload).ok()
+                })
+                .collect::<BTreeSet<_>>();
+            if expected.len() != 1 {
+                return Err(ResponseVerificationError("unique_consensus_disagreement"));
+            }
+            expected
+                .into_iter()
+                .next()
+                .ok_or(ResponseVerificationError("unique_consensus_no_match"))?
+        }
+        ResponseOperation::AdvancePlan { function_name } => {
+            let expected = independently_expected_plan_call(provider_payload, function_name)?;
+            return if serde_json::from_str::<Value>(candidate).ok().as_ref() == Some(&expected) {
+                Ok(())
+            } else {
+                Err(ResponseVerificationError("response_mismatch"))
+            };
+        }
         ResponseOperation::FunctionCallFromRoles {
             function_name,
             selector,
@@ -117,8 +195,14 @@ pub fn verify_response(
             independently_apply_value_renderer(provider_payload, computed, renderer)?
         }
         ResponseOperation::ProjectStatus {
-            selector, mapping, ..
-        } => independently_project_status(provider_payload, selector, *mapping)?.to_owned(),
+            selector,
+            mapping,
+            renderer,
+            ..
+        } => {
+            let computed = independently_project_status(provider_payload, selector, *mapping)?;
+            independently_apply_value_renderer(provider_payload, computed.to_owned(), renderer)?
+        }
         ResponseOperation::ComposeCollection {
             steps,
             format,
@@ -244,11 +328,914 @@ pub fn verify_response(
     }
 }
 
+fn independently_adapter_wave_margin(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+    route: &ResponseAdapterWaveRoute,
+) -> Option<i64> {
+    let atoms = independently_adapter_phase_atom_ids(program, provider_payload);
+    independently_adapter_wave_margin_from_atoms(atoms, route)
+}
+
+fn independently_verifier_adapter_wave_margin(
+    verifier: &VerifierProgram,
+    provider_payload: &Value,
+    route: &ResponseAdapterWaveRoute,
+) -> Option<i64> {
+    let atoms = independently_verifier_adapter_phase_atom_ids(verifier, provider_payload);
+    independently_adapter_wave_margin_from_atoms(atoms, route)
+}
+
+fn independently_adapter_wave_margin_from_atoms(
+    atoms: Vec<u64>,
+    route: &ResponseAdapterWaveRoute,
+) -> Option<i64> {
+    if atoms.is_empty() {
+        return None;
+    }
+    let anchor_matches = route
+        .anchor_atom_ids
+        .iter()
+        .any(|atom| atoms.binary_search(atom).is_ok());
+    let fingerprint_matches = route
+        .positive_fingerprint_ids
+        .binary_search(&independently_adapter_wave_atom_fingerprint(&atoms))
+        .is_ok();
+    if (!route.anchor_atom_ids.is_empty() || !route.positive_fingerprint_ids.is_empty())
+        && !anchor_matches
+        && !fingerprint_matches
+    {
+        return None;
+    }
+    let query = phase_vector_from_atom_ids(atoms, usize::from(route.cells));
+    let score = |center: &[i32]| {
+        phase_margin_to_micro(
+            query
+                .iter()
+                .zip(center.chunks_exact(2))
+                .map(|(query, center)| {
+                    query.re * f64::from(center[0]) / 1_000_000.0
+                        + query.im * f64::from(center[1]) / 1_000_000.0
+                })
+                .sum::<f64>()
+                / f64::from(route.cells),
+        )
+        .ok()
+    };
+    std::iter::once((&route.center_delta_micro, route.threshold_micro))
+        .chain(
+            route
+                .subcenters
+                .iter()
+                .map(|center| (&center.center_delta_micro, center.threshold_micro)),
+        )
+        .filter_map(|(center, threshold)| {
+            score(center)
+                .filter(|margin| *margin >= threshold)
+                .map(|margin| margin.saturating_sub(threshold))
+        })
+        .max()
+}
+
+fn independently_adapter_wave_atom_fingerprint(atoms: &[u64]) -> u64 {
+    let mut fingerprint = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in atoms.iter().flat_map(|atom| atom.to_le_bytes()) {
+        fingerprint = (fingerprint ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+    }
+    fingerprint
+}
+
+fn independently_verifier_adapter_phase_atom_ids(
+    verifier: &VerifierProgram,
+    provider_payload: &Value,
+) -> Vec<u64> {
+    if matches!(
+        verifier,
+        VerifierProgram::FunctionCallFromRoles { .. }
+            | VerifierProgram::CustomToolCallFromRoles { .. }
+    ) {
+        return independently_call_grounded_routing_atom_ids(verifier, provider_payload);
+    }
+    let mut atoms = Vec::new();
+    let mut identifiers = Vec::<String>::new();
+    match verifier {
+        VerifierProgram::FunctionCallFromRoles { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:call"));
+            independently_adapter_transport_relation_atom("function", provider_payload, &mut atoms);
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+            if independently_expected_verifier_variant(verifier, provider_payload).is_ok() {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        VerifierProgram::CustomToolCallFromRoles { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:call"));
+            independently_adapter_transport_relation_atom("custom", provider_payload, &mut atoms);
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+            if independently_expected_verifier_variant(verifier, provider_payload).is_ok() {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        VerifierProgram::ProjectSelectedValue { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:project"));
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+        }
+        VerifierProgram::ProjectStatus { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:status"));
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+        }
+        VerifierProgram::ComposeCollection { steps, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:collection"));
+            for step in steps {
+                match step {
+                    CollectionProgramStep::SelectTurnOutput { output_ordinal } => {
+                        atoms.push(crate::stable_atom_id(&format!(
+                            "adapter:collection_output_ordinal:{output_ordinal}"
+                        )));
+                    }
+                    CollectionProgramStep::SelectField { field }
+                    | CollectionProgramStep::FilterFieldEquals { field, .. }
+                    | CollectionProgramStep::ProjectField { field } => {
+                        identifiers.push(field.clone());
+                    }
+                    CollectionProgramStep::SelectOnlyArrayField
+                    | CollectionProgramStep::FilterUniqueFieldEquals { .. }
+                    | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+                    | CollectionProgramStep::ProjectUniqueFieldByType { .. }
+                    | CollectionProgramStep::ProjectOnlyNonFilterField
+                    | CollectionProgramStep::AggregateUniqueIntegerField { .. }
+                    | CollectionProgramStep::Count => {}
+                }
+            }
+            if independently_expected_verifier_variant(verifier, provider_payload).is_ok() {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        _ => return Vec::new(),
+    }
+    let request_tokens = independently_request_text(provider_payload)
+        .map(|text| independently_identifier_tokens(&text))
+        .unwrap_or_default();
+    atoms.extend(independently_adapter_request_lexical_atoms(&request_tokens));
+    let mentioned = identifiers
+        .iter()
+        .filter(|identifier| independently_request_mentions_identifier(&request_tokens, identifier))
+        .count();
+    let relation = if identifiers.is_empty() {
+        "none_available"
+    } else if mentioned == 0 {
+        "none_mentioned"
+    } else if mentioned == identifiers.len() {
+        "all_mentioned"
+    } else {
+        "some_mentioned"
+    };
+    atoms.push(crate::stable_atom_id(&format!(
+        "adapter:request_identifier_relation:{relation}"
+    )));
+    atoms.extend(crate::response_pre_action_context_atom_ids(
+        provider_payload,
+    ));
+    atoms.sort_unstable();
+    atoms.dedup();
+    atoms
+}
+
+fn independently_adapter_phase_atom_ids(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> Vec<u64> {
+    if matches!(
+        program.operation,
+        ResponseOperation::FunctionCallFromRoles { .. }
+            | ResponseOperation::CustomToolCallFromRoles { .. }
+    ) {
+        return crate::source_neutral_verifier_for_program(program)
+            .map(|verifier| {
+                independently_call_grounded_routing_atom_ids(&verifier, provider_payload)
+            })
+            .unwrap_or_default();
+    }
+    let mut atoms = Vec::new();
+    let mut identifiers = Vec::<String>::new();
+    match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:call"));
+            independently_adapter_transport_relation_atom("function", provider_payload, &mut atoms);
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+            if independently_expected_response_variant(program, provider_payload).is_ok() {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        ResponseOperation::CustomToolCallFromRoles { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:call"));
+            independently_adapter_transport_relation_atom("custom", provider_payload, &mut atoms);
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+            if independently_expected_response_variant(program, provider_payload).is_ok() {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        ResponseOperation::ProjectSelectedValue { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:project"));
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+        }
+        ResponseOperation::ProjectStatus { selector, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:status"));
+            independently_selector_adapter_atoms(
+                selector,
+                provider_payload,
+                &mut atoms,
+                &mut identifiers,
+            );
+        }
+        ResponseOperation::ComposeCollection { steps, .. } => {
+            atoms.push(crate::stable_atom_id("adapter:operation:collection"));
+            for step in steps {
+                match step {
+                    CollectionProgramStep::SelectTurnOutput { output_ordinal } => {
+                        atoms.push(crate::stable_atom_id(&format!(
+                            "adapter:collection_output_ordinal:{output_ordinal}"
+                        )));
+                    }
+                    CollectionProgramStep::SelectField { field }
+                    | CollectionProgramStep::FilterFieldEquals { field, .. }
+                    | CollectionProgramStep::ProjectField { field } => {
+                        identifiers.push(field.clone());
+                    }
+                    CollectionProgramStep::SelectOnlyArrayField
+                    | CollectionProgramStep::FilterUniqueFieldEquals { .. }
+                    | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+                    | CollectionProgramStep::ProjectUniqueFieldByType { .. }
+                    | CollectionProgramStep::ProjectOnlyNonFilterField
+                    | CollectionProgramStep::AggregateUniqueIntegerField { .. }
+                    | CollectionProgramStep::Count => {}
+                }
+            }
+            if independently_expected_response_variant(program, provider_payload).is_ok() {
+                atoms.push(crate::stable_atom_id("adapter:executes"));
+            }
+        }
+        _ => return Vec::new(),
+    }
+    let request_tokens = independently_request_text(provider_payload)
+        .map(|text| independently_identifier_tokens(&text))
+        .unwrap_or_default();
+    atoms.extend(independently_adapter_request_lexical_atoms(&request_tokens));
+    let mentioned = identifiers
+        .iter()
+        .filter(|identifier| independently_request_mentions_identifier(&request_tokens, identifier))
+        .count();
+    let relation = if identifiers.is_empty() {
+        "none_available"
+    } else if mentioned == 0 {
+        "none_mentioned"
+    } else if mentioned == identifiers.len() {
+        "all_mentioned"
+    } else {
+        "some_mentioned"
+    };
+    atoms.push(crate::stable_atom_id(&format!(
+        "adapter:request_identifier_relation:{relation}"
+    )));
+    atoms.extend(crate::response_pre_action_context_atom_ids(
+        provider_payload,
+    ));
+    atoms.sort_unstable();
+    atoms.dedup();
+    atoms
+}
+
+fn independently_call_grounded_routing_atom_ids(
+    verifier: &VerifierProgram,
+    provider_payload: &Value,
+) -> Vec<u64> {
+    let (selector, completion) = match verifier {
+        VerifierProgram::FunctionCallFromRoles {
+            selector,
+            require_pending_state,
+            ..
+        } => (
+            selector,
+            if *require_pending_state {
+                "pending"
+            } else {
+                "completed"
+            },
+        ),
+        VerifierProgram::CustomToolCallFromRoles { selector, .. } => (selector, "pending"),
+        _ => return Vec::new(),
+    };
+    let Ok(scalar) = independently_select_scalar(provider_payload, selector) else {
+        return Vec::new();
+    };
+    let selector_canonical = crate::contracts::canonical_response_value_selector(selector);
+    let mut atoms = vec![
+        crate::stable_atom_id("relation:tool_kind"),
+        crate::stable_atom_id(&format!("completion:{completion}")),
+        crate::stable_atom_id(&format!(
+            "slot:{}:observation",
+            independently_adapter_value_type_name(scalar.value_type)
+        )),
+        crate::stable_atom_id("relation:unique_slot"),
+        crate::stable_atom_id(&format!("selector:{selector_canonical}")),
+    ];
+    if let Some((shape, tool_kind)) = independently_immediate_observation_metadata(provider_payload)
+    {
+        atoms.push(crate::stable_atom_id(&format!(
+            "observation_call_shape:{shape}"
+        )));
+        atoms.push(crate::stable_atom_id(&format!("tool_kind:{tool_kind}")));
+    }
+    atoms.extend(crate::response_pre_action_context_atom_ids(
+        provider_payload,
+    ));
+    atoms.sort_unstable();
+    atoms.dedup();
+    atoms
+}
+
+fn independently_immediate_observation_metadata(
+    provider_payload: &Value,
+) -> Option<(String, String)> {
+    let input = provider_payload.get("input")?.as_array()?;
+    let (output_index, call_id) = input.iter().enumerate().rev().find_map(|(index, item)| {
+        if !matches!(
+            item.get("type").and_then(Value::as_str),
+            Some("function_call_output" | "custom_tool_call_output")
+        ) {
+            return None;
+        }
+        item.get("call_id")
+            .and_then(Value::as_str)
+            .map(|call_id| (index, call_id))
+    })?;
+    input[..output_index].iter().rev().find_map(|item| {
+        let shape = item.get("type").and_then(Value::as_str)?;
+        if !matches!(shape, "function_call" | "custom_tool_call")
+            || item.get("call_id").and_then(Value::as_str) != Some(call_id)
+        {
+            return None;
+        }
+        let tool_kind = item.get("name").and_then(Value::as_str)?;
+        Some((shape.to_owned(), tool_kind.to_owned()))
+    })
+}
+
+fn independently_adapter_transport_relation_atom(
+    expected: &str,
+    provider_payload: &Value,
+    atoms: &mut Vec<u64>,
+) {
+    let observed = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .and_then(|items| items.last())
+        .and_then(|item| item.get("type"))
+        .and_then(Value::as_str)
+        .and_then(|kind| match kind {
+            "function_call_output" => Some("function"),
+            "custom_tool_call_output" => Some("custom"),
+            _ => None,
+        });
+    let relation = match observed {
+        Some(observed) if observed == expected => "match",
+        Some(_) => "mismatch",
+        None => "missing",
+    };
+    atoms.push(crate::stable_atom_id(&format!(
+        "adapter:transport_relation:{relation}"
+    )));
+}
+
+fn independently_adapter_request_lexical_atoms(tokens: &[String]) -> Vec<u64> {
+    let bounded = tokens
+        .iter()
+        .filter(|token| !token.is_empty() && token.len() <= 64)
+        .take(32)
+        .collect::<Vec<_>>();
+    let mut atoms = bounded
+        .iter()
+        .map(|token| crate::stable_atom_id(&format!("adapter:request_unigram:{token}")))
+        .collect::<Vec<_>>();
+    atoms.extend(bounded.windows(2).map(|window| {
+        crate::stable_atom_id(&format!(
+            "adapter:request_bigram:{}:{}",
+            window[0], window[1]
+        ))
+    }));
+    atoms
+}
+
+fn independently_selector_adapter_atoms(
+    selector: &ResponseValueSelector,
+    provider_payload: &Value,
+    atoms: &mut Vec<u64>,
+    identifiers: &mut Vec<String>,
+) {
+    let (family, position, value_type) = match selector {
+        ResponseValueSelector::UniqueScalar { value_type } => {
+            ("unique_scalar", None, Some(value_type))
+        }
+        ResponseValueSelector::UniqueTurnScalar { value_type } => {
+            ("unique_turn_scalar", None, Some(value_type))
+        }
+        ResponseValueSelector::ContentLinePrefix { value_type, .. } => {
+            ("line_prefix", None, Some(value_type))
+        }
+        ResponseValueSelector::JsonField { field, value_type } => {
+            identifiers.push(field.clone());
+            ("json_field", None, Some(value_type))
+        }
+        ResponseValueSelector::JsonScalarOrdinal {
+            ordinal,
+            value_type,
+        } => ("json_ordinal", Some(u64::from(*ordinal)), Some(value_type)),
+        ResponseValueSelector::UniqueTurnJsonField { field, value_type } => {
+            identifiers.push(field.clone());
+            ("turn_json_field", None, Some(value_type))
+        }
+        ResponseValueSelector::UniqueActiveTurnJsonField { field, value_type } => {
+            identifiers.push(field.clone());
+            ("active_turn_json_field", None, Some(value_type))
+        }
+        ResponseValueSelector::RequestReferencedJsonField { value_type } => {
+            ("request_referenced", None, Some(value_type))
+        }
+        ResponseValueSelector::TurnOutputLine {
+            output_ordinal,
+            line_index,
+            value_type,
+        } => (
+            "turn_output_line",
+            Some((u64::from(*output_ordinal) << 16) | u64::from(*line_index)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            output_ordinal,
+            scalar_ordinal,
+            value_type,
+        } => (
+            "turn_output_scalar",
+            Some((u64::from(*output_ordinal) << 16) | u64::from(*scalar_ordinal)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::LatestTurnOutputLine {
+            line_index,
+            value_type,
+        } => (
+            "latest_line",
+            Some(u64::from(*line_index)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => (
+            "latest_scalar",
+            Some(u64::from(*scalar_ordinal)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => (
+            "latest_scalar_from_end",
+            Some(u64::from(*reverse_ordinal)),
+            Some(value_type),
+        ),
+        ResponseValueSelector::CommandOutputBody => ("command_body", None, None),
+        ResponseValueSelector::RequestLastToken => ("request_last_token", None, None),
+        ResponseValueSelector::RequestUniqueLiteral => ("request_unique_literal", None, None),
+    };
+    atoms.push(crate::stable_atom_id(&format!(
+        "adapter:selector_family:{family}"
+    )));
+    if let Some(position) = position {
+        atoms.push(crate::stable_atom_id(&format!(
+            "adapter:position:{position}"
+        )));
+    }
+    if let Some(value_type) = value_type {
+        atoms.push(crate::stable_atom_id(&format!(
+            "adapter:value_type:{}",
+            independently_adapter_value_type_name(*value_type)
+        )));
+    }
+    if let Ok(selected) = independently_select_scalar(provider_payload, selector) {
+        atoms.push(crate::stable_atom_id("adapter:executes"));
+        if identifiers.is_empty()
+            && let Some(identifier) =
+                independently_unique_output_key_for_scalar(provider_payload, &selected.value)
+        {
+            identifiers.push(identifier);
+        }
+    }
+}
+
+fn independently_unique_output_key_for_scalar(
+    provider_payload: &Value,
+    selected: &Value,
+) -> Option<String> {
+    let mut identifiers = BTreeSet::new();
+    let input = provider_payload.get("input")?.as_array()?;
+    for item in input {
+        if !matches!(
+            item.get("type").and_then(Value::as_str),
+            Some("function_call_output" | "custom_tool_call_output")
+        ) {
+            continue;
+        }
+        let Some(output) = item.get("output") else {
+            continue;
+        };
+        if let Some(text) = output.as_str() {
+            for object in independently_embedded_json_objects(text) {
+                independently_collect_scalar_keys(
+                    &Value::Object(object),
+                    selected,
+                    &mut identifiers,
+                    0,
+                );
+            }
+        } else {
+            independently_collect_scalar_keys(output, selected, &mut identifiers, 0);
+        }
+        if identifiers.len() > 1 {
+            return None;
+        }
+    }
+    (identifiers.len() == 1)
+        .then(|| identifiers.into_iter().next())
+        .flatten()
+}
+
+fn independently_collect_scalar_keys(
+    value: &Value,
+    selected: &Value,
+    identifiers: &mut BTreeSet<String>,
+    depth: usize,
+) {
+    if depth > 8 || identifiers.len() > 1 {
+        return;
+    }
+    match value {
+        Value::Object(object) => {
+            for (key, value) in object {
+                if value == selected {
+                    identifiers.insert(key.clone());
+                }
+                independently_collect_scalar_keys(
+                    value,
+                    selected,
+                    identifiers,
+                    depth.saturating_add(1),
+                );
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                independently_collect_scalar_keys(
+                    value,
+                    selected,
+                    identifiers,
+                    depth.saturating_add(1),
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
+const fn independently_adapter_value_type_name(value_type: AtomValueType) -> &'static str {
+    match value_type {
+        AtomValueType::String => "string",
+        AtomValueType::Integer => "integer",
+        AtomValueType::Boolean => "boolean",
+        AtomValueType::Identifier => "identifier",
+        AtomValueType::Collection => "collection",
+    }
+}
+
+fn independently_expected_response_variant(
+    program: &ResponseProgram,
+    provider_payload: &Value,
+) -> Result<String, ResponseVerificationError> {
+    match &program.operation {
+        ResponseOperation::ProjectSelectedValue {
+            selector,
+            format,
+            renderer,
+            ..
+        } => {
+            let selected = independently_select_scalar(provider_payload, selector)?;
+            let computed = independently_format_selected_value(&selected, *format)?;
+            independently_apply_value_renderer(provider_payload, computed.to_owned(), renderer)
+        }
+        ResponseOperation::ProjectStatus {
+            selector,
+            mapping,
+            renderer,
+            ..
+        } => {
+            let computed = independently_project_status(provider_payload, selector, *mapping)?;
+            independently_apply_value_renderer(provider_payload, computed.to_owned(), renderer)
+        }
+        ResponseOperation::ComposeCollection {
+            steps,
+            format,
+            renderer,
+            max_items,
+            ..
+        } => {
+            independently_execute_collection(provider_payload, steps, *format, renderer, *max_items)
+        }
+        ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => {
+            let verifier = crate::source_neutral_verifier_for_program(program)
+                .map_err(ResponseVerificationError)?;
+            independently_expected_verifier_variant(&verifier, provider_payload)
+        }
+        _ => Err(ResponseVerificationError(
+            "unique_consensus_variant_unsupported",
+        )),
+    }
+}
+
+fn independently_expected_verifier_variant(
+    verifier: &VerifierProgram,
+    provider_payload: &Value,
+) -> Result<String, ResponseVerificationError> {
+    match verifier {
+        VerifierProgram::ProjectSelectedValue {
+            selector,
+            format,
+            renderer,
+            completion_state,
+            require_unique_value,
+        } => {
+            if !*require_unique_value
+                || !matches!(completion_state.as_str(), "pending" | "completed")
+            {
+                return Err(ResponseVerificationError("value_projection_guard_missing"));
+            }
+            if !independently_safe_collection_renderer(renderer) {
+                return Err(ResponseVerificationError("value_renderer_unsafe"));
+            }
+            let selected = independently_select_scalar(provider_payload, selector)?;
+            let computed = independently_format_selected_value(&selected, *format)?;
+            independently_apply_value_renderer(provider_payload, computed.to_owned(), renderer)
+        }
+        VerifierProgram::ProjectStatus {
+            selector,
+            mapping,
+            renderer,
+            completion_state,
+            require_unique_value,
+        } => {
+            if !*require_unique_value
+                || !matches!(completion_state.as_str(), "pending" | "completed")
+            {
+                return Err(ResponseVerificationError("status_projection_guard_missing"));
+            }
+            if !independently_safe_collection_renderer(renderer) {
+                return Err(ResponseVerificationError("status_renderer_unsafe"));
+            }
+            let computed = independently_project_status(provider_payload, selector, *mapping)?;
+            independently_apply_value_renderer(provider_payload, computed.to_owned(), renderer)
+        }
+        VerifierProgram::ComposeCollection {
+            steps,
+            format,
+            renderer,
+            completion_state,
+            max_items,
+        } => {
+            if !matches!(completion_state.as_str(), "pending" | "completed") {
+                return Err(ResponseVerificationError(
+                    "collection_completion_guard_missing",
+                ));
+            }
+            independently_execute_collection(provider_payload, steps, *format, renderer, *max_items)
+        }
+        VerifierProgram::FunctionCallFromRoles { .. }
+        | VerifierProgram::CustomToolCallFromRoles { .. } => serde_json::to_string(
+            &independently_expected_call_value(verifier, provider_payload)?,
+        )
+        .map_err(|_| ResponseVerificationError("call_response_encode")),
+        _ => Err(ResponseVerificationError(
+            "unique_consensus_verifier_variant_unsupported",
+        )),
+    }
+}
+
+fn independently_expected_call_value(
+    verifier: &VerifierProgram,
+    provider_payload: &Value,
+) -> Result<Value, ResponseVerificationError> {
+    match verifier {
+        VerifierProgram::CustomToolCallFromRoles {
+            custom_tool_name,
+            inner_tool_name,
+            selector,
+            arguments,
+            projection,
+            require_pending_state,
+            require_unique_handle,
+        } => {
+            if !*require_pending_state || !*require_unique_handle {
+                return Err(ResponseVerificationError("custom_tool_guard_missing"));
+            }
+            expected_custom_tool_call(
+                provider_payload,
+                custom_tool_name,
+                inner_tool_name,
+                selector,
+                arguments,
+                projection,
+            )
+        }
+        VerifierProgram::FunctionCallFromRoles {
+            function_name,
+            selector,
+            role_arguments,
+            role_argument_types,
+            integer_arguments,
+            string_arguments,
+            boolean_arguments,
+            require_pending_state,
+            require_unique_handle,
+        } => {
+            let scalar = independently_select_scalar(provider_payload, selector)?;
+            if *require_pending_state
+                && !matches!(
+                    selector,
+                    ResponseValueSelector::ContentLinePrefix { .. }
+                        | ResponseValueSelector::JsonField { .. }
+                )
+            {
+                return Err(ResponseVerificationError("pending_selector_missing"));
+            }
+            if *require_unique_handle && scalar.value.is_null() {
+                return Err(ResponseVerificationError("continuation_handle_missing"));
+            }
+            let mut arguments = serde_json::Map::new();
+            for (name, role) in role_arguments {
+                match role {
+                    SemanticRole::ContinuationHandle | SemanticRole::SourceValue => {
+                        arguments.insert(
+                            name.clone(),
+                            verifier_role_value(
+                                &scalar.value,
+                                role_argument_types.get(name).copied(),
+                            )?,
+                        );
+                    }
+                    _ => return Err(ResponseVerificationError("unsupported_verifier_role")),
+                }
+            }
+            for (name, value) in integer_arguments {
+                arguments.insert(name.clone(), Value::from(*value));
+            }
+            for (name, value) in string_arguments {
+                arguments.insert(name.clone(), Value::String(value.clone()));
+            }
+            for (name, value) in boolean_arguments {
+                arguments.insert(name.clone(), Value::Bool(*value));
+            }
+            Ok(serde_json::json!({
+                "name": function_name,
+                "arguments": arguments,
+            }))
+        }
+        _ => Err(ResponseVerificationError("expected_call_program_kind")),
+    }
+}
+
 pub fn verify_response_independently(
     verifier: &VerifierProgram,
     provider_payload: &Value,
     candidate: &str,
 ) -> Result<(), ResponseVerificationError> {
+    if let VerifierProgram::UniqueConsensus {
+        variants,
+        adapter_wave,
+    } = verifier
+    {
+        if !(1..=crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS).contains(&variants.len()) {
+            return Err(ResponseVerificationError(
+                "unique_consensus_verifier_variant_count",
+            ));
+        }
+        let layout = verifier_structural_layout_sha256(provider_payload)?;
+        let request_atoms = independently_request_text(provider_payload)
+            .map(|text| crate::request_phase_atom_ids(&text))
+            .unwrap_or_default();
+        let mut applicable = variants
+            .iter()
+            .enumerate()
+            .filter(|(_, variant)| {
+                (variant.allowed_layout_sha256.is_empty()
+                    || variant.allowed_layout_sha256.binary_search(&layout).is_ok())
+                    && variant
+                        .required_request_atom_ids
+                        .iter()
+                        .all(|atom| request_atoms.binary_search(atom).is_ok())
+            })
+            .map(|(index, variant)| {
+                let margin = adapter_wave
+                    .as_ref()
+                    .and_then(|wave| wave.routes.get(index))
+                    .and_then(|route| {
+                        independently_verifier_adapter_wave_margin(
+                            &variant.verifier,
+                            provider_payload,
+                            route,
+                        )
+                    })
+                    .unwrap_or(i64::MIN);
+                (index, variant, margin)
+            })
+            .collect::<Vec<_>>();
+        if let Some(wave) = adapter_wave {
+            applicable.retain(|(_, _, margin)| *margin != i64::MIN);
+            applicable.sort_unstable_by(|left, right| {
+                right.2.cmp(&left.2).then_with(|| left.0.cmp(&right.0))
+            });
+            let Some(best_margin) = applicable.first().map(|value| value.2) else {
+                return Err(ResponseVerificationError("adapter_wave_no_candidate"));
+            };
+            let tied = applicable
+                .iter()
+                .filter(|value| value.2 == best_margin)
+                .count();
+            if tied > usize::from(wave.exact_budget) {
+                return Err(ResponseVerificationError("adapter_wave_tie_budget"));
+            }
+            applicable.retain(|value| value.2 == best_margin);
+        }
+        let expected = applicable
+            .into_iter()
+            .filter_map(|(_, variant, _)| {
+                independently_expected_verifier_variant(&variant.verifier, provider_payload).ok()
+            })
+            .collect::<BTreeSet<_>>();
+        if expected.len() != 1 {
+            return Err(ResponseVerificationError(
+                "unique_consensus_verifier_disagreement",
+            ));
+        }
+        return (expected.contains(candidate))
+            .then_some(())
+            .ok_or(ResponseVerificationError("response_mismatch"));
+    }
+    if let VerifierProgram::AdvancePlan {
+        function_name,
+        require_explicit_tool_success,
+        require_canonical_plan,
+    } = verifier
+    {
+        if !*require_explicit_tool_success || !*require_canonical_plan {
+            return Err(ResponseVerificationError("plan_verifier_guard_missing"));
+        }
+        let expected = independently_expected_plan_call(provider_payload, function_name)?;
+        return (serde_json::from_str::<Value>(candidate).ok().as_ref() == Some(&expected))
+            .then_some(())
+            .ok_or(ResponseVerificationError("response_mismatch"));
+    }
     if let VerifierProgram::ComposeCollection {
         steps,
         format,
@@ -276,6 +1263,7 @@ pub fn verify_response_independently(
     if let VerifierProgram::ProjectStatus {
         selector,
         mapping,
+        renderer,
         completion_state,
         require_unique_value,
     } = verifier
@@ -283,7 +1271,12 @@ pub fn verify_response_independently(
         if !*require_unique_value || !matches!(completion_state.as_str(), "pending" | "completed") {
             return Err(ResponseVerificationError("status_projection_guard_missing"));
         }
-        let expected = independently_project_status(provider_payload, selector, *mapping)?;
+        if !independently_safe_collection_renderer(renderer) {
+            return Err(ResponseVerificationError("status_renderer_unsafe"));
+        }
+        let computed = independently_project_status(provider_payload, selector, *mapping)?;
+        let expected =
+            independently_apply_value_renderer(provider_payload, computed.to_owned(), renderer)?;
         return if candidate == expected {
             Ok(())
         } else {
@@ -433,6 +1426,184 @@ pub fn verify_response_independently(
     }
 }
 
+fn verifier_structural_layout_sha256(value: &Value) -> Result<String, ResponseVerificationError> {
+    crate::canonical_json_sha256(&verifier_structural_layout(value))
+        .map_err(ResponseVerificationError)
+}
+
+fn verifier_structural_layout(value: &Value) -> Value {
+    match value {
+        Value::Null => Value::String("null".to_owned()),
+        Value::Bool(_) => Value::String("bool".to_owned()),
+        Value::Number(number) if number.is_i64() || number.is_u64() => {
+            Value::String("integer".to_owned())
+        }
+        Value::Number(_) => Value::String("number".to_owned()),
+        Value::String(value) => serde_json::from_str::<Value>(value)
+            .ok()
+            .filter(|parsed| !matches!(parsed, Value::String(_)))
+            .map_or_else(
+                || Value::String("string".to_owned()),
+                |parsed| verifier_structural_layout(&parsed),
+            ),
+        Value::Array(values) => {
+            Value::Array(values.iter().map(verifier_structural_layout).collect())
+        }
+        Value::Object(values) => {
+            let mut shapes = values
+                .iter()
+                .map(|(key, value)| {
+                    Value::Array(vec![
+                        Value::String(crate::sha256_bytes(key.as_bytes())),
+                        verifier_structural_layout(value),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            shapes.sort_by_cached_key(|shape| serde_json::to_vec(shape).unwrap_or_default());
+            Value::Array(shapes)
+        }
+    }
+}
+
+fn independently_expected_plan_call(
+    provider_payload: &Value,
+    function_name: &str,
+) -> Result<Value, ResponseVerificationError> {
+    let input = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .ok_or(ResponseVerificationError("plan_input_missing"))?;
+    let immediate = input
+        .last()
+        .filter(|item| {
+            matches!(
+                item.get("type").and_then(Value::as_str),
+                Some("function_call_output" | "custom_tool_call_output")
+            )
+        })
+        .and_then(|item| item.get("output"))
+        .ok_or(ResponseVerificationError(
+            "plan_immediate_tool_output_missing",
+        ))?;
+    if !verifier_explicit_tool_success(immediate) {
+        return Err(ResponseVerificationError("plan_tool_success_missing"));
+    }
+    let previous = input[..input.len().saturating_sub(1)]
+        .iter()
+        .rev()
+        .find(|item| {
+            item.get("type").and_then(Value::as_str) == Some("function_call")
+                && item.get("name").and_then(Value::as_str) == Some(function_name)
+        })
+        .ok_or(ResponseVerificationError("plan_previous_call_missing"))?;
+    let raw_arguments = previous
+        .get("arguments")
+        .ok_or(ResponseVerificationError("plan_previous_arguments_missing"))?;
+    let decoded;
+    let arguments = match raw_arguments.as_str() {
+        Some(raw) => {
+            decoded = serde_json::from_str::<Value>(raw)
+                .map_err(|_| ResponseVerificationError("plan_previous_arguments_invalid"))?;
+            &decoded
+        }
+        None => raw_arguments,
+    };
+    let mut plan = arguments
+        .get("plan")
+        .and_then(Value::as_array)
+        .filter(|steps| !steps.is_empty() && steps.len() <= 32)
+        .cloned()
+        .ok_or(ResponseVerificationError("plan_previous_state_missing"))?;
+    let mut active_index = None;
+    for (index, value) in plan.iter().enumerate() {
+        let step = value
+            .as_object()
+            .filter(|step| step.len() == 2)
+            .ok_or(ResponseVerificationError("plan_step_schema_mismatch"))?;
+        let text = step
+            .get("step")
+            .and_then(Value::as_str)
+            .filter(|text| {
+                !text.is_empty() && text.len() <= 1_024 && !text.chars().any(char::is_control)
+            })
+            .ok_or(ResponseVerificationError("plan_step_text_invalid"))?;
+        let _ = text;
+        let status = step
+            .get("status")
+            .and_then(Value::as_str)
+            .ok_or(ResponseVerificationError("plan_step_status_missing"))?;
+        match (active_index, status) {
+            (None, "completed") => {}
+            (None, "in_progress") => active_index = Some(index),
+            (Some(_), "pending") => {}
+            _ => return Err(ResponseVerificationError("plan_status_order_invalid")),
+        }
+    }
+    let active_index =
+        active_index.ok_or(ResponseVerificationError("plan_active_step_ambiguous"))?;
+    plan[active_index]["status"] = Value::String("completed".to_owned());
+    if let Some(next) = plan.get_mut(active_index.saturating_add(1)) {
+        next["status"] = Value::String("in_progress".to_owned());
+    }
+    Ok(serde_json::json!({
+        "name": function_name,
+        "arguments": {"plan": plan},
+    }))
+}
+
+fn verifier_explicit_tool_success(output: &Value) -> bool {
+    if let Some(object) = output.as_object() {
+        if object.contains_key("exit_code") {
+            return object.get("exit_code").and_then(Value::as_i64) == Some(0);
+        }
+        if object.contains_key("ok") {
+            return object.get("ok").and_then(Value::as_bool) == Some(true);
+        }
+        if let Some(status) = object.get("status").and_then(Value::as_str) {
+            return ["success", "succeeded", "pass", "passed", "ok", "completed"]
+                .contains(&status.to_ascii_lowercase().as_str());
+        }
+        return object
+            .get("result")
+            .is_some_and(verifier_explicit_tool_success);
+    }
+    if let Some(text) = output.as_str().filter(|text| text.len() <= 131_072) {
+        if let Ok(decoded) = serde_json::from_str::<Value>(text) {
+            return verifier_explicit_tool_success(&decoded);
+        }
+        return ["success", "succeeded", "pass", "passed", "ok", "completed"]
+            .contains(&text.trim().to_ascii_lowercase().as_str())
+            || verifier_transport_exit_success(text);
+    }
+    output.as_array().is_some_and(|parts| {
+        parts.len() == 1
+            && parts[0]
+                .get("text")
+                .is_some_and(verifier_explicit_tool_success)
+    })
+}
+
+fn verifier_transport_exit_success(text: &str) -> bool {
+    const PREFIX: &str = "Process exited with code ";
+    let mut exit_code = None;
+    for line in text.lines() {
+        let Some(raw_code) = line.strip_prefix(PREFIX) else {
+            continue;
+        };
+        if exit_code.is_some()
+            || raw_code.is_empty()
+            || !raw_code.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return false;
+        }
+        let Ok(code) = raw_code.parse::<u16>() else {
+            return false;
+        };
+        exit_code = Some(code);
+    }
+    exit_code == Some(0)
+}
+
 fn independently_execute_collection(
     provider_payload: &Value,
     steps: &[CollectionProgramStep],
@@ -440,17 +1611,36 @@ fn independently_execute_collection(
     renderer: &CollectionOutputRenderer,
     max_items: usize,
 ) -> Result<String, ResponseVerificationError> {
-    if steps.is_empty() || steps.len() > 8 || max_items == 0 || max_items > 4_096 {
+    let has_explicit_source = matches!(
+        steps.first(),
+        Some(CollectionProgramStep::SelectTurnOutput { .. })
+    );
+    if steps.is_empty()
+        || steps.len().saturating_sub(usize::from(has_explicit_source)) > 8
+        || max_items == 0
+        || max_items > 4_096
+    {
         return Err(ResponseVerificationError("collection_program_budget"));
     }
     if !independently_safe_collection_renderer(renderer) {
         return Err(ResponseVerificationError("collection_renderer_unsafe"));
     }
-    let output = independently_latest_tool_output(provider_payload)?;
+    let (output, transform_steps) = match steps.first() {
+        Some(CollectionProgramStep::SelectTurnOutput { output_ordinal }) => (
+            independently_active_turn_output_value(provider_payload, Some(*output_ordinal))?,
+            &steps[1..],
+        ),
+        _ => (independently_latest_tool_output(provider_payload)?, steps),
+    };
     let mut current = independently_parse_collection_value(output)?;
     let mut filter_field = None::<String>;
-    for step in steps {
+    for step in transform_steps {
         current = match step {
+            CollectionProgramStep::SelectTurnOutput { .. } => {
+                return Err(ResponseVerificationError(
+                    "collection_output_selector_position",
+                ));
+            }
             CollectionProgramStep::SelectOnlyArrayField => {
                 let object = current
                     .as_object()
@@ -809,6 +1999,7 @@ fn independently_request_contains_value(request: &str, value: &Value) -> bool {
 }
 
 fn independently_apply_output_renderer(
+    provider_payload: &Value,
     computed: String,
     renderer: &CollectionOutputRenderer,
 ) -> Result<String, ResponseVerificationError> {
@@ -820,6 +2011,9 @@ fn independently_apply_output_renderer(
         CollectionOutputRenderer::RenderSequence { .. } => Err(ResponseVerificationError(
             "collection_render_sequence_unsupported",
         )),
+        CollectionOutputRenderer::RequestTemplate { marker } => {
+            independently_apply_request_template(provider_payload, computed, *marker)
+        }
     }
 }
 
@@ -829,7 +2023,7 @@ fn independently_apply_value_renderer(
     renderer: &CollectionOutputRenderer,
 ) -> Result<String, ResponseVerificationError> {
     let CollectionOutputRenderer::RenderSequence { segments } = renderer else {
-        return independently_apply_output_renderer(computed, renderer);
+        return independently_apply_output_renderer(provider_payload, computed, renderer);
     };
     let mut output = String::new();
     for segment in segments {
@@ -844,6 +2038,40 @@ fn independently_apply_value_renderer(
         if output.len() > MAX_VERIFIER_OUTPUT_BYTES {
             return Err(ResponseVerificationError("projection_output_budget"));
         }
+    }
+    Ok(output)
+}
+
+fn independently_apply_request_template(
+    provider_payload: &Value,
+    computed: String,
+    marker: RequestTemplateMarker,
+) -> Result<String, ResponseVerificationError> {
+    let request = independently_request_text(provider_payload)?;
+    let mut templates = BTreeMap::<String, ()>::new();
+    for delimiter in ['`', '\'', '"'] {
+        let parts = request.split(delimiter).collect::<Vec<_>>();
+        for value in parts.iter().skip(1).step_by(2) {
+            let value = value.trim();
+            if !value.is_empty()
+                && value.len() <= 512
+                && !value.contains(['\n', '\r'])
+                && value.matches(marker.token()).count() == 1
+            {
+                templates.insert(value.to_owned(), ());
+            }
+        }
+    }
+    if templates.len() != 1 {
+        return Err(ResponseVerificationError("request_template_cardinality"));
+    }
+    let template = templates
+        .into_keys()
+        .next()
+        .ok_or(ResponseVerificationError("request_template_missing"))?;
+    let output = template.replacen(marker.token(), &computed, 1);
+    if output.is_empty() || output.len() > MAX_VERIFIER_OUTPUT_BYTES {
+        return Err(ResponseVerificationError("request_template_output_budget"));
     }
     Ok(output)
 }
@@ -863,11 +2091,8 @@ fn independently_safe_collection_renderer(renderer: &CollectionOutputRenderer) -
                 .iter()
                 .filter(|segment| matches!(segment, ResponseRenderSegment::Selected { .. }))
                 .count();
-            if !(2..=32).contains(&segments.len())
-                || primary_count == 0
-                || primary_count > 8
-                || primary_count.saturating_add(selected_count) < 2
-            {
+            let dynamic_count = primary_count.saturating_add(selected_count);
+            if !(1..=64).contains(&segments.len()) || dynamic_count == 0 || dynamic_count > 16 {
                 return false;
             }
             let static_text = segments
@@ -879,6 +2104,7 @@ fn independently_safe_collection_renderer(renderer: &CollectionOutputRenderer) -
                 .collect::<String>();
             (static_text, String::new())
         }
+        CollectionOutputRenderer::RequestTemplate { .. } => return true,
     };
     if prefix.len().saturating_add(suffix.len()) > 512 {
         return false;
@@ -890,10 +2116,7 @@ fn independently_safe_collection_renderer(renderer: &CollectionOutputRenderer) -
     {
         return false;
     }
-    if !independently_renderer_static_grammar_allowed(&combined) {
-        return false;
-    }
-    let lower = combined.to_ascii_lowercase();
+    let lower = combined.to_lowercase();
     ![
         "authorization",
         "bearer ",
@@ -909,6 +2132,15 @@ fn independently_safe_collection_renderer(renderer: &CollectionOutputRenderer) -
         "privatekey",
         "cookie",
         "token",
+        "customer ",
+        "client ",
+        "phone ",
+        "address ",
+        "клиент ",
+        "телефон ",
+        "адрес ",
+        "улица ",
+        "проспект ",
     ]
     .iter()
     .any(|term| lower.contains(term))
@@ -921,141 +2153,28 @@ fn independently_safe_collection_renderer(renderer: &CollectionOutputRenderer) -
         && !independently_contains_email_like(&combined)
         && !independently_contains_windows_path(&combined)
         && !independently_contains_high_entropy_run(&combined)
+        && !independently_contains_phone_like(&combined)
+        && !(combined.contains('\n') && combined.chars().any(char::is_alphabetic))
 }
 
-fn independently_renderer_static_grammar_allowed(value: &str) -> bool {
-    let mut word = String::new();
+fn independently_contains_phone_like(value: &str) -> bool {
+    let mut digits = 0_usize;
+    let mut span = 0_usize;
     for character in value.chars().chain(std::iter::once(' ')) {
-        if character.is_alphabetic() {
-            word.extend(character.to_lowercase());
-            continue;
-        }
-        if !word.is_empty() {
-            if !independently_renderer_word_allowed(&word) {
-                return false;
+        if character.is_ascii_digit() {
+            digits = digits.saturating_add(1);
+            span = span.saturating_add(1);
+        } else if matches!(character, '+' | '-' | '(' | ')' | ' ') && digits > 0 {
+            span = span.saturating_add(1);
+        } else {
+            if digits >= 7 && span <= 24 {
+                return true;
             }
-            word.clear();
-        }
-        if !character.is_whitespace()
-            && !matches!(
-                character,
-                '.' | ','
-                    | ':'
-                    | ';'
-                    | '!'
-                    | '?'
-                    | '('
-                    | ')'
-                    | '['
-                    | ']'
-                    | '{'
-                    | '}'
-                    | '\''
-                    | '"'
-                    | '-'
-                    | '/'
-                    | '_'
-                    | '*'
-                    | '`'
-                    | '#'
-                    | '+'
-                    | '|'
-                    | '<'
-                    | '>'
-                    | '%'
-            )
-        {
-            return false;
+            digits = 0;
+            span = 0;
         }
     }
-    true
-}
-
-fn independently_renderer_word_allowed(word: &str) -> bool {
-    matches!(
-        word,
-        "selected"
-            | "select"
-            | "value"
-            | "values"
-            | "result"
-            | "results"
-            | "count"
-            | "total"
-            | "status"
-            | "item"
-            | "items"
-            | "row"
-            | "rows"
-            | "record"
-            | "records"
-            | "entry"
-            | "entries"
-            | "matching"
-            | "matched"
-            | "filtered"
-            | "found"
-            | "output"
-            | "data"
-            | "is"
-            | "are"
-            | "was"
-            | "were"
-            | "success"
-            | "failure"
-            | "passed"
-            | "failed"
-            | "true"
-            | "false"
-            | "none"
-            | "empty"
-            | "выбрано"
-            | "выбранные"
-            | "значение"
-            | "значения"
-            | "результат"
-            | "результаты"
-            | "количество"
-            | "всего"
-            | "статус"
-            | "элемент"
-            | "элементы"
-            | "строка"
-            | "строки"
-            | "запись"
-            | "записи"
-            | "найдено"
-            | "найденные"
-            | "отфильтровано"
-            | "успешно"
-            | "ошибка"
-            | "да"
-            | "нет"
-            | "пусто"
-            | "данные"
-            | "на"
-            | "не"
-            | "это"
-            | "его"
-            | "уже"
-            | "был"
-            | "есть"
-            | "то"
-            | "только"
-            | "проверка"
-            | "готово"
-            | "заблокирован"
-            | "подтвердила"
-            | "должен"
-            | "обновлять"
-            | "автоматически"
-            | "обновил"
-            | "остался"
-            | "тронул"
-            | "apt"
-            | "chrome"
-            | "hold"
-    )
+    false
 }
 
 fn independently_contains_email_like(value: &str) -> bool {
@@ -1300,7 +2419,12 @@ fn independently_project_status(
         | ResponseValueSelector::JsonScalarOrdinal { value_type, .. }
         | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
-        | ResponseValueSelector::TurnOutputLine { value_type, .. } => *value_type,
+        | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::TurnOutputLine { value_type, .. }
+        | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { value_type, .. } => *value_type,
         ResponseValueSelector::CommandOutputBody
         | ResponseValueSelector::RequestLastToken
         | ResponseValueSelector::RequestUniqueLiteral => AtomValueType::String,
@@ -1417,6 +2541,9 @@ fn independently_select_scalar(
         ResponseValueSelector::UniqueActiveTurnJsonField { field, value_type } => {
             independently_unique_active_turn_json_field(provider_payload, field, *value_type)
         }
+        ResponseValueSelector::RequestReferencedJsonField { value_type } => {
+            independently_request_referenced_json_field(provider_payload, *value_type)
+        }
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,
@@ -1425,6 +2552,36 @@ fn independently_select_scalar(
             provider_payload,
             *output_ordinal,
             *line_index,
+            *value_type,
+        ),
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            output_ordinal,
+            scalar_ordinal,
+            value_type,
+        } => independently_turn_output_scalar_ordinal(
+            provider_payload,
+            *output_ordinal,
+            *scalar_ordinal,
+            *value_type,
+        ),
+        ResponseValueSelector::LatestTurnOutputLine {
+            line_index,
+            value_type,
+        } => independently_latest_turn_output_line(provider_payload, *line_index, *value_type),
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal,
+            value_type,
+        } => independently_latest_turn_output_scalar_ordinal(
+            provider_payload,
+            *scalar_ordinal,
+            *value_type,
+        ),
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal,
+            value_type,
+        } => independently_latest_turn_output_scalar_from_end(
+            provider_payload,
+            *reverse_ordinal,
             *value_type,
         ),
         ResponseValueSelector::CommandOutputBody => Ok(VerifierScalar {
@@ -1581,6 +2738,126 @@ fn independently_collect_json_field(
         _ => {}
     }
     Ok(())
+}
+
+fn independently_request_referenced_json_field(
+    provider_payload: &Value,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    let input = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .ok_or(ResponseVerificationError("selector_request_input_missing"))?;
+    let request = input
+        .iter()
+        .rev()
+        .find(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+        .and_then(|item| item.get("content"))
+        .and_then(independently_request_content_text)
+        .ok_or(ResponseVerificationError("selector_request_text_missing"))?;
+    let request_tokens = independently_identifier_tokens(&request);
+    let output = independently_latest_tool_output(provider_payload)?;
+    let mut matches = Vec::<(String, VerifierScalar)>::new();
+    for text in independently_bounded_output_text_parts(output)? {
+        for object in independently_embedded_json_objects(text) {
+            independently_collect_request_referenced_fields(
+                &Value::Object(object),
+                &request_tokens,
+                value_type,
+                0,
+                &mut matches,
+            )?;
+        }
+    }
+    matches.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.value.to_string().cmp(&right.1.value.to_string()))
+    });
+    matches.dedup();
+    if matches.len() != 1 {
+        return Err(ResponseVerificationError(
+            "selector_request_field_cardinality",
+        ));
+    }
+    matches
+        .pop()
+        .map(|(_, scalar)| scalar)
+        .ok_or(ResponseVerificationError("selector_request_field_missing"))
+}
+
+fn independently_collect_request_referenced_fields(
+    value: &Value,
+    request_tokens: &[String],
+    value_type: AtomValueType,
+    depth: usize,
+    output: &mut Vec<(String, VerifierScalar)>,
+) -> Result<(), ResponseVerificationError> {
+    if depth > 8 || output.len() >= 64 {
+        return Err(ResponseVerificationError(
+            "selector_request_field_structure_budget",
+        ));
+    }
+    match value {
+        Value::Object(object) => {
+            for (field, value) in object {
+                if independently_request_mentions_identifier(request_tokens, field)
+                    && let Ok(scalar) = independently_typed_scalar(value.clone(), value_type)
+                {
+                    output.push((field.clone(), scalar));
+                }
+                independently_collect_request_referenced_fields(
+                    value,
+                    request_tokens,
+                    value_type,
+                    depth.saturating_add(1),
+                    output,
+                )?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                independently_collect_request_referenced_fields(
+                    value,
+                    request_tokens,
+                    value_type,
+                    depth.saturating_add(1),
+                    output,
+                )?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn independently_request_content_text(content: &Value) -> Option<String> {
+    if let Some(text) = content.as_str() {
+        return (!text.is_empty()).then(|| text.to_owned());
+    }
+    let text = content
+        .as_array()?
+        .iter()
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
+    (!text.is_empty()).then_some(text)
+}
+
+fn independently_identifier_tokens(text: &str) -> Vec<String> {
+    text.split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_lowercase)
+        .take(256)
+        .collect()
+}
+
+fn independently_request_mentions_identifier(request_tokens: &[String], identifier: &str) -> bool {
+    let identifier_tokens = independently_identifier_tokens(identifier);
+    !identifier_tokens.is_empty()
+        && request_tokens
+            .windows(identifier_tokens.len())
+            .any(|window| window == identifier_tokens)
 }
 
 fn independently_request_unique_literal(
@@ -1779,30 +3056,28 @@ fn independently_turn_output_line(
             "turn_output_line_selector_invalid",
         ));
     }
-    let items = provider_payload
-        .get("input")
-        .and_then(Value::as_array)
-        .ok_or(ResponseVerificationError("turn_input_missing"))?;
-    let turn_start = items
-        .iter()
-        .rposition(|item| {
-            item.get("type").and_then(Value::as_str) == Some("message")
-                && item.get("role").and_then(Value::as_str) == Some("user")
-        })
-        .map_or(0, |index| index.saturating_add(1));
-    let item = items[turn_start..]
-        .iter()
-        .filter(|item| {
-            matches!(
-                item.get("type").and_then(Value::as_str),
-                Some("function_call_output" | "custom_tool_call_output")
-            )
-        })
-        .nth(usize::from(output_ordinal - 1))
-        .ok_or(ResponseVerificationError("turn_output_ordinal_missing"))?;
-    let output = item
-        .get("output")
-        .ok_or(ResponseVerificationError("turn_output_missing"))?;
+    let output = independently_active_turn_output_value(provider_payload, Some(output_ordinal))?;
+    independently_output_line_scalar(output, line_index)
+}
+
+fn independently_latest_turn_output_line(
+    provider_payload: &Value,
+    line_index: u16,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    if value_type != AtomValueType::String {
+        return Err(ResponseVerificationError(
+            "latest_turn_output_line_selector_invalid",
+        ));
+    }
+    let output = independently_active_turn_output_value(provider_payload, None)?;
+    independently_output_line_scalar(output, line_index)
+}
+
+fn independently_output_line_scalar(
+    output: &Value,
+    line_index: u16,
+) -> Result<VerifierScalar, ResponseVerificationError> {
     let lines = independently_bounded_output_text_parts(output)?
         .into_iter()
         .flat_map(str::lines)
@@ -1814,6 +3089,191 @@ fn independently_turn_output_line(
         .filter(|line| line.len() <= 512)
         .ok_or(ResponseVerificationError("turn_output_line_missing"))?;
     independently_typed_scalar(Value::String((*line).to_owned()), AtomValueType::String)
+}
+
+fn independently_turn_output_scalar_ordinal(
+    provider_payload: &Value,
+    output_ordinal: u16,
+    scalar_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    if output_ordinal == 0 || matches!(value_type, AtomValueType::Collection) {
+        return Err(ResponseVerificationError(
+            "turn_output_scalar_ordinal_selector_invalid",
+        ));
+    }
+    let output = independently_active_turn_output_value(provider_payload, Some(output_ordinal))?;
+    independently_output_scalar_ordinal(output, scalar_ordinal, value_type)
+}
+
+fn independently_latest_turn_output_scalar_ordinal(
+    provider_payload: &Value,
+    scalar_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    if matches!(value_type, AtomValueType::Collection) {
+        return Err(ResponseVerificationError(
+            "latest_turn_output_scalar_ordinal_selector_invalid",
+        ));
+    }
+    let output = independently_active_turn_output_value(provider_payload, None)?;
+    independently_output_scalar_ordinal(output, scalar_ordinal, value_type)
+}
+
+fn independently_latest_turn_output_scalar_from_end(
+    provider_payload: &Value,
+    reverse_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    if matches!(value_type, AtomValueType::Collection) {
+        return Err(ResponseVerificationError(
+            "latest_turn_output_scalar_from_end_selector_invalid",
+        ));
+    }
+    let output = independently_active_turn_output_value(provider_payload, None)?;
+    let mut scalars = Vec::new();
+    for text in independently_bounded_output_text_parts(output)? {
+        independently_collect_output_scalars(text, &mut scalars)?;
+    }
+    scalars
+        .into_iter()
+        .filter(|scalar| {
+            scalar.value_type == value_type
+                || matches!(
+                    (scalar.value_type, value_type),
+                    (AtomValueType::Identifier, AtomValueType::String)
+                )
+        })
+        .rev()
+        .nth(usize::from(reverse_ordinal))
+        .map(|mut scalar| {
+            scalar.value_type = value_type;
+            scalar
+        })
+        .ok_or(ResponseVerificationError(
+            "latest_turn_output_scalar_from_end_missing",
+        ))
+}
+
+fn independently_active_turn_output_value(
+    provider_payload: &Value,
+    output_ordinal: Option<u16>,
+) -> Result<&Value, ResponseVerificationError> {
+    let items = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .ok_or(ResponseVerificationError("turn_input_missing"))?;
+    let turn_start = items
+        .iter()
+        .rposition(|item| {
+            item.get("type").and_then(Value::as_str) == Some("message")
+                && item.get("role").and_then(Value::as_str) == Some("user")
+        })
+        .map_or(0, |index| index.saturating_add(1));
+    let mut outputs = items[turn_start..].iter().filter(|item| {
+        matches!(
+            item.get("type").and_then(Value::as_str),
+            Some("function_call_output" | "custom_tool_call_output")
+        )
+    });
+    let item = match output_ordinal {
+        Some(ordinal) if ordinal > 0 => outputs.nth(usize::from(ordinal - 1)),
+        Some(_) => None,
+        None => outputs.next_back(),
+    }
+    .ok_or(ResponseVerificationError("turn_output_ordinal_missing"))?;
+    item.get("output")
+        .ok_or(ResponseVerificationError("turn_output_missing"))
+}
+
+fn independently_output_scalar_ordinal(
+    output: &Value,
+    scalar_ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    let mut scalars = Vec::new();
+    for text in independently_bounded_output_text_parts(output)? {
+        independently_collect_output_scalars(text, &mut scalars)?;
+    }
+    scalars
+        .into_iter()
+        .filter(|scalar| {
+            scalar.value_type == value_type
+                || matches!(
+                    (scalar.value_type, value_type),
+                    (AtomValueType::Identifier, AtomValueType::String)
+                )
+        })
+        .nth(usize::from(scalar_ordinal))
+        .map(|mut scalar| {
+            scalar.value_type = value_type;
+            scalar
+        })
+        .ok_or(ResponseVerificationError(
+            "turn_output_scalar_ordinal_missing",
+        ))
+}
+
+fn independently_collect_output_scalars(
+    text: &str,
+    output: &mut Vec<VerifierScalar>,
+) -> Result<(), ResponseVerificationError> {
+    if output.len() >= MAX_VERIFIER_SCALARS {
+        return Err(ResponseVerificationError(
+            "turn_output_scalar_ordinal_budget",
+        ));
+    }
+    if let Ok(value) = serde_json::from_str::<Value>(text) {
+        return independently_collect_scalars(&value, 0, output);
+    }
+    let embedded = independently_embedded_json_objects(text);
+    if !embedded.is_empty() {
+        for object in embedded {
+            independently_collect_scalars(&Value::Object(object), 0, output)?;
+        }
+        return Ok(());
+    }
+    independently_collect_plain_text_scalars(text, output)
+}
+
+fn independently_collect_plain_text_scalars(
+    text: &str,
+    output: &mut Vec<VerifierScalar>,
+) -> Result<(), ResponseVerificationError> {
+    for (start, token) in text
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .scan(0_usize, |offset, token| {
+            let relative = text[*offset..].find(token).unwrap_or(0);
+            let start = (*offset).saturating_add(relative);
+            *offset = start.saturating_add(token.len());
+            Some((start, token))
+        })
+    {
+        if token.is_empty() {
+            continue;
+        }
+        if output.len() >= MAX_VERIFIER_SCALARS {
+            return Err(ResponseVerificationError(
+                "turn_output_scalar_ordinal_budget",
+            ));
+        }
+        let end = start.saturating_add(token.len());
+        let decimal_neighbor = text[..start].ends_with('.') || text[end..].starts_with('.');
+        if token.bytes().all(|byte| byte.is_ascii_digit()) && !decimal_neighbor {
+            if let Ok(value) = token.parse::<u64>() {
+                output.push(VerifierScalar {
+                    value: Value::from(value),
+                    value_type: AtomValueType::Integer,
+                });
+            }
+        } else if token.eq_ignore_ascii_case("true") || token.eq_ignore_ascii_case("false") {
+            output.push(VerifierScalar {
+                value: Value::Bool(token.eq_ignore_ascii_case("true")),
+                value_type: AtomValueType::Boolean,
+            });
+        }
+    }
+    Ok(())
 }
 
 fn independently_unique_turn_json_field(
@@ -2281,6 +3741,77 @@ mod tests {
     }
 
     #[test]
+    fn call_adapter_wave_atoms_have_actor_and_independent_parity() {
+        let program = crate::ResponseProgram::function_call_from_roles(
+            "wait",
+            ResponseValueSelector::ContentLinePrefix {
+                prefix: "Script running with cell ID ".to_owned(),
+                value_type: AtomValueType::Identifier,
+            },
+            vec![crate::ResponseArgument::Role {
+                name: "cell_id".to_owned(),
+                role: crate::SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::Identifier),
+            }],
+        );
+        let payload = serde_json::json!({
+            "input": [
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "wait for script"}]
+                },
+                {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": "call-1",
+                    "arguments": "{}"
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "call-1",
+                    "output": "Script running with cell ID handle-1"
+                }
+            ]
+        });
+        let actor = crate::runtime::actor_adapter_phase_atom_ids(&program, &payload);
+        let independent = independently_adapter_phase_atom_ids(&program, &payload);
+        let verifier = crate::source_neutral_verifier_for_program(&program).expect("verifier");
+        let compiled = independently_verifier_adapter_phase_atom_ids(&verifier, &payload);
+
+        assert!(!actor.is_empty());
+        assert!(actor.contains(&crate::stable_atom_id(
+            "observation_call_shape:function_call"
+        )));
+        assert!(actor.contains(&crate::stable_atom_id("tool_kind:exec_command")));
+        assert_eq!(actor, independent);
+        assert_eq!(actor, compiled);
+
+        let custom_program = crate::ResponseProgram::custom_tool_call_from_roles(
+            "exec",
+            "write_stdin",
+            ResponseValueSelector::ContentLinePrefix {
+                prefix: "Script running with cell ID ".to_owned(),
+                value_type: AtomValueType::Identifier,
+            },
+            vec![crate::ResponseArgument::Role {
+                name: "session_id".to_owned(),
+                role: crate::SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::Identifier),
+            }],
+            crate::CustomToolResultProjection::JsonStringifyResult,
+        );
+        let custom_actor = crate::runtime::actor_adapter_phase_atom_ids(&custom_program, &payload);
+        let custom_independent = independently_adapter_phase_atom_ids(&custom_program, &payload);
+        let custom_verifier =
+            crate::source_neutral_verifier_for_program(&custom_program).expect("custom verifier");
+        let custom_compiled =
+            independently_verifier_adapter_phase_atom_ids(&custom_verifier, &payload);
+
+        assert_eq!(custom_actor, custom_independent);
+        assert_eq!(custom_actor, custom_compiled);
+    }
+
+    #[test]
     fn independent_value_projection_verifier_recomputes_and_rejects_mutation() {
         let verifier = projection_verifier(true);
         assert!(verify_response_independently(&verifier, &projection_payload(), "ready").is_ok());
@@ -2347,6 +3878,7 @@ mod tests {
         VerifierProgram::ProjectStatus {
             selector,
             mapping: ProjectStatusMapping::ZeroIsSuccess,
+            renderer: CollectionOutputRenderer::Direct,
             completion_state: "completed".to_owned(),
             require_unique_value: true,
         }
@@ -2542,6 +4074,92 @@ mod tests {
         assert_eq!(
             verify_response_independently(&verifier, &payload, "1"),
             Err(ResponseVerificationError("collection_renderer_unsafe"))
+        );
+    }
+
+    #[test]
+    fn advance_plan_actor_and_independent_verifier_require_canonical_success() {
+        let payload = serde_json::json!({
+            "input": [
+                {
+                    "type": "function_call",
+                    "name": "update_plan",
+                    "call_id": "plan-1",
+                    "arguments": serde_json::json!({
+                        "plan": [
+                            {"step":"Inspect","status":"completed"},
+                            {"step":"Implement","status":"in_progress"},
+                            {"step":"Verify","status":"pending"}
+                        ]
+                    }).to_string()
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "tool-1",
+                    "output": "Chunk ID: plan\nWall time: 0.1 seconds\nProcess exited with code 0\nFinal output:\nverified"
+                }
+            ]
+        });
+        let program = ResponseProgram::advance_plan("update_plan");
+        let expected = serde_json::json!({
+            "name": "update_plan",
+            "arguments": {
+                "plan": [
+                    {"step":"Inspect","status":"completed"},
+                    {"step":"Implement","status":"completed"},
+                    {"step":"Verify","status":"in_progress"}
+                ]
+            }
+        });
+        let execution = crate::execute_response(&program, "", &payload);
+        let response = execution.response.expect("actor response");
+        assert_eq!(
+            serde_json::from_str::<Value>(&response).expect("plan response json"),
+            expected
+        );
+        let verifier = VerifierProgram::AdvancePlan {
+            function_name: "update_plan".to_owned(),
+            require_explicit_tool_success: true,
+            require_canonical_plan: true,
+        };
+        assert!(verify_response_independently(&verifier, &payload, &response).is_ok());
+
+        let mut failed = payload.clone();
+        failed["input"][1]["output"] = Value::String(
+            "Chunk ID: plan\nProcess exited with code 1\nFinal output:\nfailed".to_owned(),
+        );
+        assert!(
+            crate::execute_response(&program, "", &failed)
+                .response
+                .is_none()
+        );
+        assert!(verify_response_independently(&verifier, &failed, &response).is_err());
+
+        let mut contradictory = payload.clone();
+        contradictory["input"][1]["output"] =
+            Value::String("Process exited with code 0\nProcess exited with code 1".to_owned());
+        assert!(
+            crate::execute_response(&program, "", &contradictory)
+                .response
+                .is_none()
+        );
+        assert!(verify_response_independently(&verifier, &contradictory, &response).is_err());
+
+        let mut noncanonical = payload;
+        noncanonical["input"][0]["arguments"] = Value::String(
+            serde_json::json!({
+                "plan": [
+                    {"step":"Inspect","status":"completed"},
+                    {"step":"Implement","status":"pending"},
+                    {"step":"Verify","status":"in_progress"}
+                ]
+            })
+            .to_string(),
+        );
+        assert!(
+            crate::execute_response(&program, "", &noncanonical)
+                .response
+                .is_none()
         );
     }
 }
