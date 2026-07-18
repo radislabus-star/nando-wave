@@ -498,6 +498,9 @@ dependencies = [
 [[package]]
 name = "nando-core"
 version = "0.1.0"
+dependencies = [
+ "sha2",
+]
 
 [[package]]
 name = "nando-eval"
