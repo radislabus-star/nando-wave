@@ -774,6 +774,12 @@ receipt chain, production `VerifiedDeltaReceipt`, immutable generational
 exact episodic authority, and the five-contour proof remain implementation
 obligations until verified by artifacts and live runtime evidence.
 
+Canonical implementation plan:
+
+```text
+plans/operator-grokking-core-v1/OPERATOR_GROKKING_CORE_V1.md
+```
+
 ## 4. Canonical Learning Path
 
 Training may inspect a completed trace, including the action and answer that
