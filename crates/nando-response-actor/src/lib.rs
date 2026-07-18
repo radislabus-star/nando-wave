@@ -30,6 +30,7 @@ mod semantic_alias;
 mod synthesis;
 mod teacher_join;
 mod training_types;
+mod transferable_operator_v2;
 mod verified_delta;
 mod verifier;
 mod version_space;
@@ -204,6 +205,9 @@ pub use training_types::{
     TEACHER_OUTCOME_SCHEMA_V1, TEACHER_TRANSITION_SCHEMA_V1, TeacherActionAst, TeacherOutcome,
     TeacherTransition, TeacherVerifierEvidence, relation_atom_is_teacher_only,
     relation_frame_learning_digest,
+};
+pub use transferable_operator_v2::{
+    ProvenTransferableOperatorV2, ShadowTransferableOperatorV2, TransferableOperatorV2Error,
 };
 pub use verified_delta::{
     TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1, TypedExecutionStage, TypedExecutionStageReceipt,

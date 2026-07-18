@@ -457,7 +457,7 @@ pub fn response_program_external_verifier_schema(
     }
 }
 
-fn response_program_verifier_matches(
+pub(crate) fn response_program_verifier_matches(
     program: &ResponseProgram,
     verifier: Option<&VerifierProgram>,
 ) -> bool {
