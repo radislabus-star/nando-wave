@@ -29,4 +29,6 @@ Before editing core behavior:
 
 Do not replace the Wave discovery core with a template/DSL selector. Do not
 remove completed-trace teacher labels from training. Do not use future action
-or response data at runtime.
+or response data at runtime. Treat `ForwardWave -> typed receipts ->
+VerifiedDeltaReceipt -> BackwardWave -> immutable generation g+1` as the
+canonical system core; do not mutate an ACTIVE generation in place.

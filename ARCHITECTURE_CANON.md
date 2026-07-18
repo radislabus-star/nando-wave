@@ -110,11 +110,16 @@ crates/nando-response-actor/src/online_subcenter.rs
 crates/nando-response-actor/src/cegis.rs
 ```
 
-### JEPA-inspired latent consequence model: a separate predictive layer
+### Optional JEPA-inspired research layer, not the system core
 
 The phrase "hidden part" in the product architecture refers to a compact
 JEPA-inspired latent world model, not to hidden Wave memory and not to another
 name for L3 phase centers.
+
+This is an optional future research layer. It is not required for extracting
+repeatable operators from completed LLM traffic, is not part of the production
+hot path, and must not block the CPU-coverage goal. The canonical core is the
+bidirectional transferable Wave operator defined below.
 
 Its conceptual contract is:
 
@@ -156,7 +161,192 @@ https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/
 https://arxiv.org/abs/2506.09985
 ```
 
-## 3. Canonical Learning Path
+## 3. Canonical System Core: Bidirectional Transferable Operator
+
+The core of the whole system is a generational, bidirectional Wave operator:
+
+```text
+state / observation
+-> ForwardWave
+-> transferable law instance
+-> actor execution
+-> independent typed receipts
+-> VerifiedDeltaReceipt
+-> BackwardWave
+-> candidate generation g+1
+```
+
+The symbolic representation expresses a law. `ForwardWave` transfers that law
+to the current structural state. `BackwardWave` converts independently verified
+consequences into a bounded change of the operator field. Neither direction may
+bypass independent proof.
+
+### TransferableOperatorV2
+
+The canonical operator representation is:
+
+```text
+TransferableOperatorV2
++-- RoleGraph
+|   +-- structural roles
+|   `-- binding constraints
++-- RelationProgram
+|   +-- equality / delta / cardinality
+|   +-- selection
+|   `-- frame preservation
++-- TypedTransform
+|   +-- projection
+|   +-- computation
+|   +-- filtering
+|   `-- aggregation
++-- CompositionDag
+|   `-- ordered dependent transformations
++-- RendererContract
+|   `-- response form without field-name or exact-surface authority
++-- VerifierContract
++-- ForwardWave
+`-- BackwardWave
+```
+
+This representation must be rich enough for one law to combine independent
+surfaces that currently fragment into separate exact programs. The miner finds
+repeated evidence; the operator is responsible for expressing and transferring
+the law.
+
+### ForwardWave
+
+```text
+state_before + current observation
+-> structural role binding
+-> relation evaluation
+-> transform and composition
+-> renderer
+-> predicted relation frame
+-> actor result
+```
+
+`ForwardWave` does not mean unconstrained prediction. It instantiates a known
+operator law on the current state. Runtime receives no target response,
+`state_after`, or future action.
+
+### Independent typed execution trace
+
+The actor cannot describe its own success. Each stage emits a bounded receipt:
+
+```text
+RoleBindingReceipt
+-> RelationEvaluationReceipt
+-> TransformReceipt
+-> CompositionReceipt
+-> RendererReceipt
+-> VerifierReceipt
+-> VerifiedDeltaReceipt
+```
+
+Every receipt binds at least the generation, operator, input relation hashes,
+output relation hash, stage result, event time, evidence source, and previous
+receipt hash.
+
+In production, the residual is derived without teacher authority:
+
+```text
+observed_relation_frame - predicted_relation_frame
+-> typed residual wave
+```
+
+The observed frame must come from independent tool output, state transition, or
+verifier evidence. A teacher response may be used for support and development
+experiments after a trace is complete, but it is not production runtime
+authority. With no independent observation, the outcome is censored `UNKNOWN`.
+
+### BackwardWave
+
+`BackwardWave` is a typed transformation from verified residual to a bounded
+phase update, not a metaphor and not a discrete rejection table:
+
+```text
+zero verified residual
+-> phase-aligned reinforcement
+
+repeatable applicability residual
+-> phase-inverted counter-wave
+-> distributed anti-center / narrower applicability field
+
+hard structural residual
+-> localize RoleGraph / RelationProgram / Transform / Composition / Renderer
+-> center bifurcation, repair, split, or revoke
+
+censored outcome
+-> no semantic phase update
+-> optional bounded availability/uncertainty accounting only
+```
+
+### Generation firewall
+
+An ACTIVE operator is immutable. Feedback never mutates production authority in
+place:
+
+```text
+ACTIVE generation g                         immutable
+-> verified feedback
+-> bounded BackwardWave accumulator
+-> candidate generation g+1                 shadow
+-> replay + frozen future + causal ablation
+-> external admission
+-> ACTIVE generation g+1                    immutable
+```
+
+This firewall preserves the proof for generation `g`, prevents feedback
+oscillation, and gives every behavioral change a new evidence lineage.
+
+### Canonical matched-capacity experiment
+
+The system core is accepted only through four frozen contours:
+
+```text
+A. old operator
+   current baseline
+
+B. rich oracle operator without BackwardWave
+   tests whether TransferableOperatorV2 is expressive enough
+   claim_authority = false
+
+C. rich automatically induced operator without BackwardWave
+   tests automatic operator induction
+
+D. rich automatically induced operator with BackwardWave
+   tests Wave self-correction
+```
+
+Interpretation:
+
+```text
+B - A = expressive-capacity gain
+C / B = automatic-induction quality relative to the oracle ceiling
+D - C = causal contribution of BackwardWave
+```
+
+Freeze the stream, teacher groups, support/future partition, verifier, top-k,
+hypothesis budget, runtime budget, and package budget. Required BackwardWave
+controls are shuffled residual phase, magnitude-only residual, discrete
+anti-center only, and no backward feedback. Product authority belongs only to
+the automatically induced contour.
+
+Primary measurements are independent surfaces per law, frozen-future
+executions, eliminated exact checks, package bytes, p99, and wrong accepts.
+Potential coverage is secondary and is never counted as actual CPU savings.
+
+### Implementation status boundary
+
+This section is the canonical target core, not a claim that every component is
+already complete. The repository already contains phase centers, negative Wave
+training, anti-wave scoring, CEGIS repair, typed actor/verifier pieces, frozen
+future, and external admission. `TransferableOperatorV2`, the complete typed
+receipt chain, production `VerifiedDeltaReceipt`, immutable generational
+`BackwardWave`, and the four-contour proof remain implementation obligations
+until verified by artifacts and live runtime evidence.
+
+## 4. Canonical Learning Path
 
 Training may inspect a completed trace, including the action and answer that
 actually occurred. That is the teacher signal. This is legitimate
@@ -209,7 +399,7 @@ independent verification and admission
   crates/nando-response-actor/src/bin/nando-response-admission.rs
 ```
 
-## 4. The Required Feedback Loop
+## 5. The Required Feedback Loop
 
 Every evaluated outcome must first be classified. It is incorrect to collapse
 all non-PASS outcomes into one negative class:
@@ -295,7 +485,7 @@ authority. The latent predictor does not authorize actions. Wave phase centers
 remain a separate compact memory for recognition and applicability; they are
 not the JEPA latent state.
 
-## 5. Runtime Boundary
+## 6. Runtime Boundary
 
 Runtime is intentionally narrower than training:
 
@@ -320,7 +510,7 @@ Typed programs and renderers are an execution and proof language around a law
 discovered by the Wave. They are useful, but they are not the intelligence
 core. Never turn discovery into selection among a few pre-named programs.
 
-## 6. Non-Negotiable Invariants
+## 7. Non-Negotiable Invariants
 
 1. Completed action/response is allowed and required as a training label.
 2. Future action/response is forbidden in runtime routing and guards.
@@ -348,6 +538,10 @@ core. Never turn discovery into selection among a few pre-named programs.
 15. JEPA-like latent predictions, Wave applicability evidence, and verifier
     truth are three different signals. They must have separate state and update
     rules; none may masquerade as another.
+16. ACTIVE generations are immutable. Verified feedback can only construct a
+    separately proven candidate generation.
+17. BackwardWave updates require a typed `VerifiedDeltaReceipt` whose observed
+    side is independent from the actor.
 
 Accounting identities must have no silent loss:
 
@@ -362,7 +556,7 @@ local_accepts
 = independently_verified_accepts
 ```
 
-## 7. Truthful Proof and Economics
+## 8. Truthful Proof and Economics
 
 Always report these levels separately:
 
@@ -389,7 +583,7 @@ runtime parity mismatches = 0
 economics hard gate = YES
 ```
 
-## 8. Behavioral Oracle
+## 9. Behavioral Oracle
 
 For changes to discovery, grouping, Wave feedback, or transferable actions,
 compare behavior with the preserved pre-refactor tree:
@@ -405,7 +599,7 @@ shell. Restore useful learning behavior inside that shell, one mechanism at a
 time, and keep an improvement only when live coverage grows without a safety
 regression.
 
-## 9. Known Destructive Failure Modes
+## 10. Known Destructive Failure Modes
 
 These mistakes have already damaged coverage and must not be repeated:
 
@@ -430,8 +624,12 @@ These mistakes have already damaged coverage and must not be repeated:
   reproducing the original L1/L2/L3 behavior.
 - Mixing a move-only refactor with a learning/scoring change, making regressions
   impossible to attribute.
+- Mutating an ACTIVE center in place from live feedback. Result: destroyed proof
+  lineage, oscillation, and behavior with no frozen generation boundary.
+- Calling a counter or discrete reject list `BackwardWave` without proving a
+  typed residual-to-phase update and its causal phase ablation.
 
-## 10. Required Protocol Before Core Changes
+## 11. Required Protocol Before Core Changes
 
 Every agent must do this before editing core behavior:
 
@@ -451,7 +649,7 @@ Every agent must do this before editing core behavior:
 9. Commit the change with a narrow message.
 10. Update this canon only when the architecture itself changes.
 
-## 11. Supporting Documents
+## 12. Supporting Documents
 
 The canon is short by design. Deeper evidence and implementation detail live
 here:
