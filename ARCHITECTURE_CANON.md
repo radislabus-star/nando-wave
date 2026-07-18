@@ -101,10 +101,6 @@ the authority: their common law has stabilized into a compact center. At L3,
 the important result is a transferable action, including its applicability
 boundary, not merely a recognized phrase.
 
-The later latent/hidden action-state work augments this layer. It may recover a
-law whose decisive state is not directly named in the surface. It must not
-replace the observable Wave path or bypass proof.
-
 Relevant implementation:
 
 ```text
@@ -112,6 +108,52 @@ crates/nando-core/src/wave/l3_semantic_grokking.rs
 crates/nando-core/src/wave/phase_center_runtime.rs
 crates/nando-response-actor/src/online_subcenter.rs
 crates/nando-response-actor/src/cegis.rs
+```
+
+### JEPA-inspired latent consequence model: a separate predictive layer
+
+The phrase "hidden part" in the product architecture refers to a compact
+JEPA-inspired latent world model, not to hidden Wave memory and not to another
+name for L3 phase centers.
+
+Its conceptual contract is:
+
+```text
+current structural state
+-> encoder -> latent state z_t
+
+z_t + candidate action
+-> action-conditioned predictor
+-> predicted latent consequence z_t+1
+```
+
+For this repository the latent state is expected to describe structured
+software/runtime consequences, such as diagnostic graphs, AST relations,
+state deltas, or tool outcomes. It does not reconstruct a full textual world.
+It predicts which candidate actions are promising before an expensive probe or
+execution.
+
+This layer has no authority to execute. A latent prediction is search evidence,
+not truth. A real actor and independent verifier must still evaluate the
+consequence. Prediction error updates latent dynamics; it must not be silently
+converted into an applicability anti-center.
+
+The existing file:
+
+```text
+crates/nando-cli/src/phase_streaming_cmd/live_store_adapter/hidden_state.rs
+```
+
+does **not** by itself implement this JEPA-like contract. It derives bounded
+cross-layer and combination atoms for subcenter/quarantine refinement. Its
+historical `hidden_state` name must not be used as evidence that an
+action-conditioned latent consequence predictor already exists.
+
+Primary conceptual references:
+
+```text
+https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/
+https://arxiv.org/abs/2506.09985
 ```
 
 ## 3. Canonical Learning Path
@@ -225,8 +267,8 @@ If no action-neutral pre-decision distinction exists, the correct result is
 These are distinct responsibilities, not competing implementations:
 
 ```text
-latent Wave memory
-  recognizes state and stores interference/phase structure
+JEPA-inspired latent consequence model
+  encodes state z_t and predicts z_t+1 under a candidate action
 
 self-correcting Wave operator
   binds a known law to an actor and learns when it is applicable
@@ -238,16 +280,20 @@ external causal law discovery (for example, MICRO-12 research)
 Their loop is:
 
 ```text
-external discovery proposes a new verified law
+latent predictor ranks candidate consequences
+-> external discovery probes and proposes a new verified law
 -> Wave compresses repeated experience into centers
 -> actor executes the law
 -> verifier classifies the consequence
--> Wave refines applicability
+-> prediction error updates latent dynamics
+-> applicability evidence updates Wave boundaries
 -> unexplained hard contradiction returns to causal discovery
 ```
 
 The external researcher is not part of the hot runtime and has no execution
-authority. The latent Wave does not invent arbitrary new actions by itself.
+authority. The latent predictor does not authorize actions. Wave phase centers
+remain a separate compact memory for recognition and applicability; they are
+not the JEPA latent state.
 
 ## 5. Runtime Boundary
 
@@ -299,6 +345,9 @@ core. Never turn discovery into selection among a few pre-named programs.
 13. Serving and learning remain streaming, event-driven Rust with low idle CPU.
 14. One algorithmic mechanism changes at a time; refactoring and scoring changes
     are separate commits.
+15. JEPA-like latent predictions, Wave applicability evidence, and verifier
+    truth are three different signals. They must have separate state and update
+    rules; none may masquerade as another.
 
 Accounting identities must have no silent loss:
 
