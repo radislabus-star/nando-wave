@@ -1842,6 +1842,18 @@ fn response_law_key_with_policy(
     program: &ResponseProgram,
     include_renderer: bool,
 ) -> Result<Vec<u8>, &'static str> {
+    if let ResponseOperation::UniqueConsensus { variants, .. } = &program.operation {
+        let mut keys = variants
+            .iter()
+            .map(|variant| response_law_key_with_policy(&variant.program, include_renderer));
+        let first = keys.next().ok_or("response_law_key_consensus_empty")??;
+        for key in keys {
+            if key? != first {
+                return Err("response_law_key_consensus_mixed");
+            }
+        }
+        return Ok(first);
+    }
     let canonical = canonical_direct_response_program(program)?;
     let renderer = match &canonical.operation {
         ResponseOperation::ProjectSelectedValue { renderer, .. }
@@ -4407,6 +4419,48 @@ mod tests {
         assert_eq!(
             response_law_key(&first_output).expect("first output law"),
             response_law_key(&second_output).expect("second output law")
+        );
+    }
+
+    #[test]
+    fn law_quotient_requires_consensus_variants_to_share_one_law() {
+        let project = |selector| {
+            ResponseProgram::project_selected_value(
+                selector,
+                ValueProjectionFormat::PlainText,
+                "completed",
+            )
+        };
+        let integer_alpha = project(ResponseValueSelector::JsonField {
+            field: "alpha".to_owned(),
+            value_type: AtomValueType::Integer,
+        });
+        let integer_beta = project(ResponseValueSelector::JsonField {
+            field: "beta".to_owned(),
+            value_type: AtomValueType::Integer,
+        });
+        let boolean = project(ResponseValueSelector::UniqueScalar {
+            value_type: AtomValueType::Boolean,
+        });
+        let variant = |program| crate::ResponseConsensusVariant {
+            program,
+            allowed_layout_sha256: Vec::new(),
+            required_request_atom_ids: Vec::new(),
+        };
+        let unanimous = ResponseProgram::unique_consensus(vec![
+            variant(integer_alpha.clone()),
+            variant(integer_beta),
+        ]);
+        assert_eq!(
+            response_law_key(&unanimous).expect("unanimous consensus law"),
+            response_law_key(&integer_alpha).expect("integer law")
+        );
+
+        let mixed =
+            ResponseProgram::unique_consensus(vec![variant(integer_alpha), variant(boolean)]);
+        assert_eq!(
+            response_law_key(&mixed),
+            Err("response_law_key_consensus_mixed")
         );
     }
 }
