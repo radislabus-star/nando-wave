@@ -89,6 +89,9 @@ mod l3_semantic_grokking;
 mod learn;
 mod math;
 mod morphology_wave;
+mod operator_circuit;
+mod operator_grokking;
+mod operator_grokking_proof;
 mod organ;
 mod phase_center_runtime;
 mod semantic_extract;
@@ -137,6 +140,20 @@ pub use morphology_wave::{
     MORPHOLOGY_ATOM_BYTES, MorphologyAtom, MorphologyExtraction, MorphologyGrokkingProof,
     MorphologyGrokkingVerdict, MorphologyScalingReport, MorphologyScalingRow, MorphologyWaveBank,
     MorphologyWaveConfig,
+};
+pub use operator_circuit::{
+    OPERATOR_CIRCUIT_MAX_RELATIONS, OPERATOR_CIRCUIT_MAX_ROLES, OPERATOR_WAVE_MAX_SAMPLES,
+    OperatorCircuit, OperatorCircuitError, OperatorCircuitRelation, OperatorRelationCell,
+    TernaryRelationState, VerifiedPartialRelationWave, VerifiedRelationSample, VerifiedWaveOutcome,
+};
+pub use operator_grokking::{
+    CandidateCubeField, CandidateCubeFieldError, CoherentOperatorCandidate, OperatorCircuitScore,
+    OperatorCircuitStage, OperatorConsolidationReport, OperatorGrokkingConfig,
+    OperatorGrokkingConsolidator,
+};
+pub use operator_grokking_proof::{
+    OperatorGrokkingAblation, OperatorGrokkingAblationReceipt, OperatorGrokkingProofStage,
+    OperatorGrokkingProofTracker, ProvenOperatorGrokking,
 };
 pub use organ::{
     LiveCycle, LivePrediction, LocalUpdateReport, OrganState, Stage2Organ, stage2_organ,
