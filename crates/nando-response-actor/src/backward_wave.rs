@@ -27,6 +27,11 @@ pub enum BackwardWaveError {
 pub struct BackwardWave;
 
 impl BackwardWave {
+    #[must_use]
+    pub fn receipt_id(receipt: &VerifiedDeltaReceipt) -> u64 {
+        digest_id(receipt.receipt_sha256())
+    }
+
     pub fn apply(
         field: &mut CandidateCubeField,
         operator_fingerprint64: u64,
@@ -63,7 +68,7 @@ impl BackwardWave {
             })
             .collect::<Vec<_>>();
         let wave = VerifiedPartialRelationWave::new(
-            digest_id(receipt.receipt_sha256()),
+            Self::receipt_id(receipt),
             digest_id(receipt.surface_id_sha256()),
             digest_id(receipt.session_id_sha256()),
             receipt.generation(),

@@ -790,10 +790,45 @@ exact episodic runtime-authority cleanup, and real CPU economics remain open.
 Simple traces that already contain a complete law may train an operator, but
 they cannot satisfy the grokking claim.
 
+### Missing bridge: fragments must create new circuits
+
+The consolidator must not be limited to choosing among externally registered
+complete circuits. The canonical discovery path is:
+
+```text
+independently verified support residuals
+-> RelationFragmentGenerator
+-> bounded CircuitSynthesizer
+-> newly constructed connected circuit topologies
+-> frozen candidate topology set
+-> disjoint future relation waves
+-> OperatorGrokkingConsolidator
+```
+
+`CircuitSynthesizer` proposes connected law shapes. It does not decide truth,
+grant authority, or constitute grokking. The whole operator circuit groks only
+when disjoint future waves phase-lock across surfaces and planes and one circuit
+obtains a causal coherence margin.
+
+WARNING: support events used to infer topology or phase anchors must never be
+reused as future proof. Fitting candidate anchors and scoring coherence on the
+same waves is circular and can make shuffled phase look successful. Support and
+future are disjoint evidence partitions under the same immutable source
+operator generation `g`; only a proven circuit becomes operator generation
+`g+1`. Confusing evidence partitions with operator generations incorrectly
+skips to `g+2` and is a contract violation.
+
+The first implementation is deliberately bounded. Every positive verified
+sample becomes an accounted structural fragment; censored, applicability
+negative, and hard-contradiction outcomes cannot create topology. Every missing
+candidate has an explicit blocker such as no positive evidence, non-canonical
+roles, disconnected graph, zero phase magnitude, or capacity exhaustion.
+
 Canonical implementation plan:
 
 ```text
 plans/operator-grokking-core-v1/OPERATOR_GROKKING_CORE_V1.md
+plans/operator-circuit-synthesis-v1/OPERATOR_CIRCUIT_SYNTHESIS_V1.md
 ```
 
 ## 4. Canonical Learning Path

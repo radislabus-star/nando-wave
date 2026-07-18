@@ -1,7 +1,9 @@
 use nando_core::wave::{
-    CandidateCubeField, CandidateCubeFieldError, CoherentOperatorCandidate, OperatorCircuit,
+    CandidateCubeField, CandidateCubeFieldError, CircuitSynthesisConfig, CircuitSynthesisError,
+    CircuitSynthesizer, CoherentOperatorCandidate, FrozenCircuitSetError,
+    FrozenSynthesizedCircuitSet, OperatorCircuit, OperatorCircuitSynthesisReport,
     OperatorConsolidationReport, OperatorGrokkingConfig, OperatorGrokkingConsolidator,
-    OperatorPage32, OperatorPage32Error, ProvenOperatorGrokking,
+    OperatorPage32, OperatorPage32Error, ProvenOperatorGrokking, VerifiedPartialRelationWave,
 };
 
 use crate::{BackwardWave, BackwardWaveError, BackwardWaveUpdate, VerifiedDeltaReceipt};
@@ -11,6 +13,10 @@ pub enum OperatorGenerationError {
     InvalidActivePage(OperatorPage32Error),
     CandidateField(CandidateCubeFieldError),
     BackwardWave(BackwardWaveError),
+    CircuitSynthesis(CircuitSynthesisError),
+    FrozenCircuitSet(FrozenCircuitSetError),
+    SupportGenerationMismatch,
+    SupportReceiptReused,
     CandidateGenerationMismatch,
     CandidateFingerprintMismatch,
     ProofMismatch,
@@ -31,6 +37,7 @@ pub struct OperatorGenerationFirewall {
     active_generation: u64,
     active_operator_fingerprint64: u64,
     candidate_field: CandidateCubeField,
+    support_receipt_ids: Box<[u64]>,
 }
 
 impl OperatorGenerationFirewall {
@@ -38,6 +45,43 @@ impl OperatorGenerationFirewall {
         active_page: OperatorPage32,
         candidate_circuits: Vec<OperatorCircuit>,
         config: OperatorGrokkingConfig,
+    ) -> Result<Self, OperatorGenerationError> {
+        Self::new_with_support_receipts(active_page, candidate_circuits, config, Box::new([]))
+    }
+
+    pub fn from_synthesized_support(
+        active_page: OperatorPage32,
+        support_waves: &[VerifiedPartialRelationWave],
+        synthesis_config: CircuitSynthesisConfig,
+        grokking_config: OperatorGrokkingConfig,
+    ) -> Result<(Self, OperatorCircuitSynthesisReport), OperatorGenerationError> {
+        let header = active_page
+            .header()
+            .map_err(OperatorGenerationError::InvalidActivePage)?;
+        if support_waves
+            .iter()
+            .any(|wave| wave.generation != header.generation)
+        {
+            return Err(OperatorGenerationError::SupportGenerationMismatch);
+        }
+        let report = CircuitSynthesizer::synthesize(support_waves, synthesis_config)
+            .map_err(OperatorGenerationError::CircuitSynthesis)?;
+        let frozen = FrozenSynthesizedCircuitSet::freeze(header.generation, &report)
+            .map_err(OperatorGenerationError::FrozenCircuitSet)?;
+        let firewall = Self::new_with_support_receipts(
+            active_page,
+            frozen.circuits().to_vec(),
+            grokking_config,
+            frozen.support_receipt_ids().to_vec().into_boxed_slice(),
+        )?;
+        Ok((firewall, report))
+    }
+
+    fn new_with_support_receipts(
+        active_page: OperatorPage32,
+        candidate_circuits: Vec<OperatorCircuit>,
+        config: OperatorGrokkingConfig,
+        support_receipt_ids: Box<[u64]>,
     ) -> Result<Self, OperatorGenerationError> {
         let header = active_page
             .header()
@@ -57,6 +101,7 @@ impl OperatorGenerationFirewall {
             active_generation: header.generation,
             active_operator_fingerprint64: header.circuit_fingerprint64,
             candidate_field,
+            support_receipt_ids,
         })
     }
 
@@ -64,6 +109,13 @@ impl OperatorGenerationFirewall {
         &mut self,
         receipt: &VerifiedDeltaReceipt,
     ) -> Result<BackwardWaveUpdate, OperatorGenerationError> {
+        if self
+            .support_receipt_ids
+            .binary_search(&BackwardWave::receipt_id(receipt))
+            .is_ok()
+        {
+            return Err(OperatorGenerationError::SupportReceiptReused);
+        }
         BackwardWave::apply(
             &mut self.candidate_field,
             self.active_operator_fingerprint64,
@@ -132,6 +184,11 @@ impl OperatorGenerationFirewall {
     #[must_use]
     pub fn candidate_field(&self) -> &CandidateCubeField {
         &self.candidate_field
+    }
+
+    #[must_use]
+    pub fn support_receipt_ids(&self) -> &[u64] {
+        &self.support_receipt_ids
     }
 }
 
@@ -307,5 +364,52 @@ mod tests {
         assert_eq!(candidate.candidate_generation, 8);
         assert_eq!(firewall.active_page().as_bytes(), &original_bytes);
         assert_eq!(firewall.active_generation(), 7);
+    }
+
+    #[test]
+    fn support_receipts_synthesize_their_own_circuit_before_disjoint_future() {
+        let support_receipts = [
+            receipt(1, 0, 0, 1, 1_000_000, 0),
+            receipt(2, 0, 1, 2, 0, 1_000_000),
+            receipt(3, 1, 0, 2, -1_000_000, 0),
+        ];
+        let mut support_field =
+            CandidateCubeField::new(7, OperatorGrokkingConfig::default()).expect("support field");
+        for receipt in &support_receipts {
+            BackwardWave::apply(&mut support_field, 42, receipt).expect("support wave");
+        }
+
+        let (mut firewall, synthesis) = OperatorGenerationFirewall::from_synthesized_support(
+            active_page(),
+            support_field.waves(),
+            CircuitSynthesisConfig::default(),
+            OperatorGrokkingConfig::default(),
+        )
+        .expect("autonomous circuit generation");
+
+        assert_eq!(synthesis.emitted_circuits, 1);
+        assert_eq!(firewall.candidate_field().circuits().len(), 1);
+        assert!(firewall.candidate_field().waves().is_empty());
+        assert_eq!(
+            firewall.observe_verified_delta(&support_receipts[0]),
+            Err(OperatorGenerationError::SupportReceiptReused)
+        );
+
+        for receipt in [
+            receipt(4, 0, 0, 1, 1_000_000, 0),
+            receipt(5, 0, 1, 2, 0, 1_000_000),
+            receipt(6, 1, 0, 2, -1_000_000, 0),
+        ] {
+            firewall
+                .observe_verified_delta(&receipt)
+                .expect("disjoint future feedback");
+        }
+
+        let candidate = firewall
+            .consolidate()
+            .candidate
+            .expect("phase-coherent synthesized candidate");
+        assert_eq!(candidate.source_generation, 7);
+        assert_eq!(candidate.candidate_generation, 8);
     }
 }

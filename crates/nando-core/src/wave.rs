@@ -90,6 +90,7 @@ mod learn;
 mod math;
 mod morphology_wave;
 mod operator_circuit;
+mod operator_circuit_synthesis;
 mod operator_grokking;
 mod operator_grokking_proof;
 mod operator_page;
@@ -146,6 +147,12 @@ pub use operator_circuit::{
     OPERATOR_CIRCUIT_MAX_RELATIONS, OPERATOR_CIRCUIT_MAX_ROLES, OPERATOR_WAVE_MAX_SAMPLES,
     OperatorCircuit, OperatorCircuitError, OperatorCircuitRelation, OperatorRelationCell,
     TernaryRelationState, VerifiedPartialRelationWave, VerifiedRelationSample, VerifiedWaveOutcome,
+};
+pub use operator_circuit_synthesis::{
+    CIRCUIT_SYNTHESIS_MAX_FRAGMENTS, CircuitSynthesisBlocker, CircuitSynthesisBlockerCount,
+    CircuitSynthesisConfig, CircuitSynthesisError, CircuitSynthesizer, FrozenCircuitSetError,
+    FrozenFutureCircuitField, FrozenSynthesizedCircuitSet, OperatorCircuitSynthesisReport,
+    RelationFragment, RelationFragmentGenerator, RelationFragmentReport,
 };
 pub use operator_grokking::{
     CandidateCubeField, CandidateCubeFieldError, CoherentOperatorCandidate, OperatorCircuitScore,
