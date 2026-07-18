@@ -74,6 +74,8 @@ const MAX_UNFROZEN_ROUTE_PROGRAMS: usize = 8;
 const MAX_ACTIVE_WITNESS_ROUNDS: u8 = 4;
 const MAX_EXACT_RECEIPT_MIGRATION_SEEDS_PER_BUCKET: usize = 8;
 const MAX_STRUCTURAL_RESYNTHESIS_SEEDS_PER_BUCKET: usize = 2;
+const MIN_APPLICABILITY_NEGATIVE_SESSIONS: usize = 3;
+const MAX_APPLICABILITY_NEGATIVE_ATOMS_PER_BUCKET: usize = 64;
 type ArchetypeProgramPool = (String, BTreeMap<String, ResponseProgram>);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -485,6 +487,8 @@ struct OnlineCollectionCheckpoint {
     legacy_partial_receipts_discarded_total: u64,
     #[serde(default)]
     unreplayable_support_discarded_total: u64,
+    #[serde(default)]
+    applicability_negative_sessions: BTreeMap<String, BTreeMap<u64, BTreeSet<String>>>,
     buckets: Vec<OnlineCollectionBucket>,
 }
 
@@ -585,6 +589,7 @@ impl OnlineCollectionMiner {
                 legacy_partial_buckets_discarded_total: 0,
                 legacy_partial_receipts_discarded_total: 0,
                 unreplayable_support_discarded_total: 0,
+                applicability_negative_sessions: BTreeMap::new(),
                 buckets: Vec::new(),
             }
         };
@@ -2089,6 +2094,40 @@ impl OnlineCollectionMiner {
             .collect()
     }
 
+    fn learn_applicability_anti_atoms(&mut self, index: usize, negative: &OnlineCollectionReceipt) {
+        let Some(bucket) = self.checkpoint.buckets.get(index) else {
+            return;
+        };
+        let support_atoms = bucket
+            .support
+            .iter()
+            .flat_map(|receipt| receipt.request_atom_ids.iter().copied())
+            .collect::<BTreeSet<_>>();
+        let candidates = negative
+            .request_atom_ids
+            .iter()
+            .copied()
+            .filter(|atom| !support_atoms.contains(atom))
+            .collect::<BTreeSet<_>>();
+        if candidates.is_empty() {
+            return;
+        }
+        let bucket_id = bucket.bucket_id.clone();
+        let evidence = self
+            .checkpoint
+            .applicability_negative_sessions
+            .entry(bucket_id)
+            .or_default();
+        let learned = update_applicability_negative_sessions(
+            evidence,
+            candidates,
+            &negative.session_id_sha256,
+        );
+        if let Some(bucket) = self.checkpoint.buckets.get_mut(index) {
+            bucket.learned_anti_atom_ids.extend(learned);
+        }
+    }
+
     fn collection_causal_report(
         &self,
         bucket: &OnlineCollectionBucket,
@@ -2603,6 +2642,7 @@ impl OnlineCollectionMiner {
                     }
                     ActiveWitnessDecision::Irreducible => {
                         if !is_hard_teacher_counterexample(reason) {
+                            self.learn_applicability_anti_atoms(index, &routed_receipt);
                             route_applicability_abstain =
                                 route_applicability_abstain.saturating_add(1);
                             continue;
@@ -5243,6 +5283,34 @@ fn receipt_routes_phase(
     let negative = phase_vector_from_atom_ids(anti_centers.iter().copied(), 16);
     phase_margin_to_micro(phase_coherence(&query, &positive) - phase_coherence(&query, &negative))
         .is_ok_and(|margin| margin >= threshold)
+}
+
+fn update_applicability_negative_sessions(
+    evidence: &mut BTreeMap<u64, BTreeSet<String>>,
+    candidates: BTreeSet<u64>,
+    session_id_sha256: &str,
+) -> BTreeSet<u64> {
+    for atom in candidates
+        .into_iter()
+        .take(MAX_APPLICABILITY_NEGATIVE_ATOMS_PER_BUCKET)
+    {
+        evidence
+            .entry(atom)
+            .or_default()
+            .insert(session_id_sha256.to_owned());
+    }
+    while evidence.len() > MAX_APPLICABILITY_NEGATIVE_ATOMS_PER_BUCKET {
+        let Some(atom) = evidence.keys().next_back().copied() else {
+            break;
+        };
+        evidence.remove(&atom);
+    }
+    evidence
+        .iter()
+        .filter_map(|(atom, sessions)| {
+            (sessions.len() >= MIN_APPLICABILITY_NEGATIVE_SESSIONS).then_some(*atom)
+        })
+        .collect()
 }
 
 fn structural_layout_sha256(value: &Value) -> Result<String, String> {
@@ -9724,5 +9792,28 @@ mod tests {
         assert_eq!(snapshot.registry.packages.len(), 1);
         assert!(snapshot.admission.eligible_for_local_accept);
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn applicability_anti_atom_requires_three_distinct_sessions() {
+        let mut evidence = BTreeMap::new();
+        let candidates = BTreeSet::from([7, 9]);
+
+        assert!(
+            update_applicability_negative_sessions(&mut evidence, candidates.clone(), "session-a")
+                .is_empty()
+        );
+        assert!(
+            update_applicability_negative_sessions(&mut evidence, candidates.clone(), "session-a")
+                .is_empty()
+        );
+        assert!(
+            update_applicability_negative_sessions(&mut evidence, candidates.clone(), "session-b")
+                .is_empty()
+        );
+        assert_eq!(
+            update_applicability_negative_sessions(&mut evidence, candidates, "session-c"),
+            BTreeSet::from([7, 9])
+        );
     }
 }
