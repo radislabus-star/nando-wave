@@ -902,10 +902,15 @@ crates/nando-core/src/wave/operator_blueprint.rs
 crates/nando-core/tests/operator_blueprint_causal.rs
 ```
 
-The pure bounded proof now constructs competing blueprints from local partial
-graphs and resolves one only on full-lineage future phase evidence. This is a
-laboratory mechanism PASS. Live bundle extraction, streaming persistence,
-external admission, CPU execution, and economics remain BLOCK.
+The pure bounded proof now constructs competing relation/phase blueprints from
+local partial graphs and resolves one only on full-lineage future phase
+evidence. Its causal fixture has no program atoms, and renderer/verifier fields
+are commitments rather than executable contracts. Therefore the precise PASS
+is structural relation-circuit birth and selection, not a complete transferable
+action operator. Symmetric role ambiguity is proven separately but is not yet
+combined with future selection in one proof. Live bundle extraction, executable
+crystallization, streaming persistence, external admission, CPU execution, and
+economics remain BLOCK.
 
 Canonical implementation plan:
 

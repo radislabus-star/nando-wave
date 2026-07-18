@@ -126,6 +126,7 @@ local bundle and role signatures         PASS
 three-round structural role colors       PASS
 bounded role alignment                   PASS
 competing blueprint beam                 PASS
+silent alignment/beam truncation         FIXED: incomplete -> freeze denied
 full-lineage frozen future               PASS (laboratory)
 X/Y/Z phase causal proof                 PASS (laboratory)
 no/shuffled/magnitude/random controls     ABSTAIN
@@ -133,6 +134,32 @@ focused nando-core Clippy                 PASS
 live integration                         BLOCK
 external admission                       BLOCK
 ordinary CPU economics                   BLOCK
+```
+
+Exact capability boundary:
+
+```text
+REAL
+  local SurfaceFragmentBundle
+  -> competing relation/phase blueprints
+  -> frozen set
+  -> future coherence
+  -> winner fingerprint
+
+PARTIAL
+  TransformProgram
+  CompositionDag
+
+PLACEHOLDER COMMITMENTS
+  RendererContract
+  VerifierContract
+
+ABSENT
+  executable CrystallizedOperator
+  OperatorPage32 compilation
+  actor/verifier binding
+  external admission
+  CPU execution
 ```
 
 Implemented files:
@@ -144,8 +171,15 @@ crates/nando-core/tests/operator_blueprint_causal.rs
 
 The causal proof uses six support surfaces. Every support surface contains one
 local relation only, local role numbering is permuted, and the bounded beam
-constructs multiple complete blueprints. Support memory is dropped after the
-candidate-set freeze. Three new full-lineage future surfaces select one circuit
-under full phase; no-phase, shuffled-phase, magnitude-only, and matched-random
-controls produce no winner. This proves the bounded pure-core mechanism, not
-organic live discovery or runtime authority.
+constructs multiple complete relation/phase blueprints. `program_atoms` is
+empty in this proof, so it proves relation-circuit formation rather than a full
+action program. Support memory is dropped after the candidate-set freeze.
+Three new full-lineage future surfaces select one circuit under full phase;
+no-phase, shuffled-phase, magnitude-only, and matched-random controls produce
+no winner.
+
+Role ambiguity and future phase selection are currently separate proofs. The
+causal fixture uses structurally easy role signatures; a single combined proof
+with symmetric role ambiguity remains open. This proves the bounded pure-core
+relation mechanism, not organic live discovery, complete action synthesis, or
+runtime authority.

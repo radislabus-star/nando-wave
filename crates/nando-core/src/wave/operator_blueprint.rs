@@ -184,6 +184,7 @@ pub enum BlueprintSynthesisBlocker {
     DisconnectedRelations,
     BeamDepthReached,
     ExpansionBudgetReached,
+    BeamWidthReached,
     TransformCapacityReached,
     InvalidCircuit,
     NoBlueprint,
@@ -571,6 +572,15 @@ impl BoundedRoleAligner {
                                 .saturating_add(compatible.len().saturating_sub(1));
                         }
                         for canonical_role in compatible {
+                            if expanded.len() >= config.max_hypotheses {
+                                return RoleAlignmentReport {
+                                    hypotheses: Box::new([]),
+                                    expansions,
+                                    symmetric_branches,
+                                    complete: false,
+                                    blocker: Some(RoleAlignmentBlocker::BudgetExhausted),
+                                };
+                            }
                             expansions = expansions.saturating_add(1);
                             if expansions > config.max_expansions {
                                 return RoleAlignmentReport {
@@ -597,12 +607,6 @@ impl BoundedRoleAligner {
                                     branch.canonical_role_count.saturating_add(1);
                             }
                             expanded.push(branch);
-                            if expanded.len() >= config.max_hypotheses {
-                                break;
-                            }
-                        }
-                        if expanded.len() >= config.max_hypotheses {
-                            break;
                         }
                     }
                     partial = deduplicate_alignment_states(expanded, config.max_hypotheses);
@@ -610,9 +614,17 @@ impl BoundedRoleAligner {
                         return blocked_alignment(RoleAlignmentBlocker::NoCompatibleAlignment);
                     }
                 }
-                next.extend(partial);
-                if next.len() >= config.max_hypotheses {
-                    break;
+                for hypothesis in partial {
+                    if next.len() >= config.max_hypotheses {
+                        return RoleAlignmentReport {
+                            hypotheses: Box::new([]),
+                            expansions,
+                            symmetric_branches,
+                            complete: false,
+                            blocker: Some(RoleAlignmentBlocker::BudgetExhausted),
+                        };
+                    }
+                    next.push(hypothesis);
                 }
             }
             states = deduplicate_alignment_states(next, config.max_hypotheses);
@@ -717,7 +729,7 @@ impl BoundedCircuitBeam {
         let mut expansions = 0_usize;
         let mut complete = true;
 
-        for alignment in &alignments.hypotheses {
+        'alignments: for alignment in &alignments.hypotheses {
             let mapped = mapped_relation_modes(bundles, alignment);
             if mapped.is_empty() {
                 add_blueprint_blocker(
@@ -747,6 +759,14 @@ impl BoundedCircuitBeam {
                 let mut expanded = BTreeMap::<Commitment256, Vec<OperatorCircuitRelation>>::new();
                 for partial in beam {
                     for (mode, aggregate) in &mapped[&cell] {
+                        if expanded.len() >= config.max_blueprints {
+                            complete = false;
+                            add_blueprint_blocker(
+                                &mut blocker_counts,
+                                BlueprintSynthesisBlocker::BeamWidthReached,
+                            );
+                            break;
+                        }
                         expansions = expansions.saturating_add(1);
                         if expansions > config.max_expansions {
                             complete = false;
@@ -772,12 +792,8 @@ impl BoundedCircuitBeam {
                         expanded
                             .entry(relation_assignment_commitment(&branch))
                             .or_insert(branch);
-                        if expanded.len() >= config.max_blueprints {
-                            break;
-                        }
                     }
-                    if expansions > config.max_expansions || expanded.len() >= config.max_blueprints
-                    {
+                    if !complete || expansions > config.max_expansions {
                         break;
                     }
                 }
@@ -824,6 +840,16 @@ impl BoundedCircuitBeam {
                             &renderer_hypothesis,
                             &verifier_contract,
                         );
+                        if !blueprints.contains_key(&fingerprint_sha256)
+                            && blueprints.len() >= config.max_blueprints
+                        {
+                            complete = false;
+                            add_blueprint_blocker(
+                                &mut blocker_counts,
+                                BlueprintSynthesisBlocker::BeamWidthReached,
+                            );
+                            break 'alignments;
+                        }
                         blueprints.entry(fingerprint_sha256).or_insert(
                             CandidateOperatorBlueprint {
                                 role_graph,
@@ -835,9 +861,6 @@ impl BoundedCircuitBeam {
                                 fingerprint_sha256,
                             },
                         );
-                        if blueprints.len() >= config.max_blueprints {
-                            break;
-                        }
                     }
                     Err(OperatorCircuitError::DisconnectedCircuit) => add_blueprint_blocker(
                         &mut blocker_counts,
@@ -848,9 +871,6 @@ impl BoundedCircuitBeam {
                         BlueprintSynthesisBlocker::InvalidCircuit,
                     ),
                 }
-            }
-            if blueprints.len() >= config.max_blueprints {
-                break;
             }
         }
 
@@ -1891,6 +1911,22 @@ mod tests {
     }
 
     #[test]
+    fn alignment_width_truncation_is_incomplete() {
+        let report = BoundedRoleAligner::align(
+            &[
+                symmetric_bundle(1, 11, false),
+                symmetric_bundle(2, 12, true),
+            ],
+            RoleAlignmentConfig {
+                max_hypotheses: 1,
+                ..RoleAlignmentConfig::default()
+            },
+        );
+        assert!(!report.complete);
+        assert_eq!(report.blocker, Some(RoleAlignmentBlocker::BudgetExhausted));
+    }
+
+    #[test]
     fn symmetric_local_graphs_create_competing_frozen_blueprints() {
         let bundles = [
             symmetric_bundle(1, 11, false),
@@ -1958,6 +1994,32 @@ mod tests {
                 blocker: BlueprintSynthesisBlocker::InvalidConfig,
                 count: 1,
             }]
+        );
+    }
+
+    #[test]
+    fn blueprint_width_truncation_cannot_freeze() {
+        let bundles = [
+            symmetric_bundle(1, 11, false),
+            symmetric_bundle(2, 12, true),
+            symmetric_bundle(3, 13, false),
+        ];
+        let alignments = BoundedRoleAligner::align(&bundles, RoleAlignmentConfig::default());
+        let config = BlueprintBeamConfig {
+            max_blueprints: 1,
+            ..BlueprintBeamConfig::default()
+        };
+        let report = BoundedCircuitBeam::synthesize(&bundles, &alignments, config);
+        assert!(!report.complete);
+        assert!(
+            report
+                .blockers
+                .iter()
+                .any(|blocker| { blocker.blocker == BlueprintSynthesisBlocker::BeamWidthReached })
+        );
+        assert_eq!(
+            FrozenOperatorBlueprintSet::freeze(7, &bundles, config, &report),
+            Err(FrozenBlueprintError::IncompleteSynthesis)
         );
     }
 }
