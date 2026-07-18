@@ -5,6 +5,7 @@ mod causal;
 mod cegis;
 mod collection_synthesis;
 mod contracts;
+mod crystallized_operator;
 mod decidability;
 mod effect_graph;
 mod evidence;
@@ -81,6 +82,12 @@ pub use contracts::{
     RelationAtom, RelationFrame, ResponseProgramCandidate, ResponseValueSelector, RoleHypothesis,
     SemanticRole, TrafficClass, VERIFIER_RECEIPT_SCHEMA, VerifierConsensusVariant, VerifierProgram,
     VerifierReceipt, validate_frozen_future_split,
+};
+pub use crystallized_operator::{
+    CrystallizationParityReceipt, CrystallizedFeedbackError, CrystallizedOperator,
+    CrystallizedOperatorError, TRANSFORM_FLAG_CANONICAL_JSON,
+    TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_IDENTIFIER,
+    TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, compile_blueprint_actor,
 };
 pub use decidability::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
 pub use effect_graph::{

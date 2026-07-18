@@ -111,12 +111,38 @@ pub enum RoleAlignmentBlocker {
     BudgetExhausted,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SearchStage {
+    InputValidation,
+    RoleAlignment,
+    CircuitBeam,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SearchCompletion {
+    Complete {
+        explored: usize,
+    },
+    Exhausted {
+        stage: SearchStage,
+        explored: usize,
+        frontier_remaining: usize,
+    },
+}
+
+impl SearchCompletion {
+    #[must_use]
+    pub const fn is_complete(self) -> bool {
+        matches!(self, Self::Complete { .. })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoleAlignmentReport {
     pub hypotheses: Box<[RoleAlignmentHypothesis]>,
     pub expansions: usize,
     pub symmetric_branches: usize,
-    pub complete: bool,
+    pub completion: SearchCompletion,
     pub blocker: Option<RoleAlignmentBlocker>,
 }
 
@@ -200,7 +226,7 @@ pub struct BlueprintSynthesisBlockerCount {
 pub struct BlueprintSynthesisReport {
     pub blueprints: Box<[CandidateOperatorBlueprint]>,
     pub expansions: usize,
-    pub complete: bool,
+    pub completion: SearchCompletion,
     pub blockers: Box<[BlueprintSynthesisBlockerCount]>,
 }
 
@@ -311,8 +337,67 @@ struct PhaseModeKey {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct PhaseModeAggregate {
-    re: f64,
-    im: f64,
+    re_fixed: i64,
+    im_fixed: i64,
+}
+
+struct FutureMappingSearch<'a> {
+    bundle: &'a SurfaceFragmentBundle,
+    role_graph: &'a RoleGraph,
+    limit: usize,
+    output: Vec<Vec<u8>>,
+    complete: bool,
+}
+
+impl FutureMappingSearch<'_> {
+    fn visit(&mut self, local_role: usize, current: &mut Vec<u8>, used: &mut BTreeSet<u8>) {
+        if self.output.len() >= self.limit {
+            self.complete = false;
+            return;
+        }
+        if local_role == self.bundle.roles.len() {
+            self.output.push(current.clone());
+            return;
+        }
+        for (canonical_role, signature) in self.role_graph.canonical_roles.iter().enumerate() {
+            let canonical_role = canonical_role as u8;
+            if used.contains(&canonical_role)
+                || !role_signatures_compatible(&self.bundle.roles[local_role], signature)
+            {
+                continue;
+            }
+            used.insert(canonical_role);
+            current.push(canonical_role);
+            self.visit(local_role + 1, current, used);
+            current.pop();
+            used.remove(&canonical_role);
+            if self.output.len() >= self.limit {
+                return;
+            }
+        }
+    }
+}
+
+impl PhaseModeAggregate {
+    const SCALE: f64 = 1_000_000_000.0;
+
+    fn add(&mut self, phase: PhaseCenterCell) {
+        // Integer accumulation is commutative, so support ordering cannot alter
+        // a blueprint fingerprint through floating-point rounding.
+        self.re_fixed = self
+            .re_fixed
+            .saturating_add((phase.re * Self::SCALE).round() as i64);
+        self.im_fixed = self
+            .im_fixed
+            .saturating_add((phase.im * Self::SCALE).round() as i64);
+    }
+
+    fn components(self) -> (f64, f64) {
+        (
+            self.re_fixed as f64 / Self::SCALE,
+            self.im_fixed as f64 / Self::SCALE,
+        )
+    }
 }
 
 impl StructuralRoleSignature {
@@ -539,11 +624,14 @@ impl BoundedRoleAligner {
             .iter()
             .map(|bundle| StructuralRoleCanonicalizer::colors(bundle, config.color_rounds))
             .collect::<Vec<_>>();
-        let first = &bundles[0];
+        // Full lineage commitments, not caller order, define the traversal.
+        let bundle_order = canonical_bundle_order(bundles);
+        let first_index = bundle_order[0];
+        let first = &bundles[first_index];
         let mut states = vec![AlignmentState {
             bindings: (0..first.roles.len())
                 .map(|role| RoleBinding {
-                    bundle_index: 0,
+                    bundle_index: first_index as u8,
                     local_role: role as u8,
                     canonical_role: role as u8,
                 })
@@ -553,7 +641,7 @@ impl BoundedRoleAligner {
         let mut expansions = 0_usize;
         let mut symmetric_branches = 0_usize;
 
-        for bundle_index in 1..bundles.len() {
+        for &bundle_index in &bundle_order[1..] {
             let mut next = Vec::new();
             for state in states {
                 let mut partial = vec![state];
@@ -577,7 +665,11 @@ impl BoundedRoleAligner {
                                     hypotheses: Box::new([]),
                                     expansions,
                                     symmetric_branches,
-                                    complete: false,
+                                    completion: SearchCompletion::Exhausted {
+                                        stage: SearchStage::RoleAlignment,
+                                        explored: expansions,
+                                        frontier_remaining: 1,
+                                    },
                                     blocker: Some(RoleAlignmentBlocker::BudgetExhausted),
                                 };
                             }
@@ -587,7 +679,11 @@ impl BoundedRoleAligner {
                                     hypotheses: Box::new([]),
                                     expansions,
                                     symmetric_branches,
-                                    complete: false,
+                                    completion: SearchCompletion::Exhausted {
+                                        stage: SearchStage::RoleAlignment,
+                                        explored: expansions,
+                                        frontier_remaining: 1,
+                                    },
                                     blocker: Some(RoleAlignmentBlocker::BudgetExhausted),
                                 };
                             }
@@ -609,7 +705,8 @@ impl BoundedRoleAligner {
                             expanded.push(branch);
                         }
                     }
-                    partial = deduplicate_alignment_states(expanded, config.max_hypotheses);
+                    partial =
+                        deduplicate_alignment_states(expanded, bundles, config.max_hypotheses);
                     if partial.is_empty() {
                         return blocked_alignment(RoleAlignmentBlocker::NoCompatibleAlignment);
                     }
@@ -620,21 +717,25 @@ impl BoundedRoleAligner {
                             hypotheses: Box::new([]),
                             expansions,
                             symmetric_branches,
-                            complete: false,
+                            completion: SearchCompletion::Exhausted {
+                                stage: SearchStage::RoleAlignment,
+                                explored: expansions,
+                                frontier_remaining: 1,
+                            },
                             blocker: Some(RoleAlignmentBlocker::BudgetExhausted),
                         };
                     }
                     next.push(hypothesis);
                 }
             }
-            states = deduplicate_alignment_states(next, config.max_hypotheses);
+            states = deduplicate_alignment_states(next, bundles, config.max_hypotheses);
         }
 
         let mut hypotheses = states
             .into_iter()
             .map(|mut state| {
                 state.bindings.sort_unstable();
-                let fingerprint_sha256 = alignment_commitment(&state.bindings);
+                let fingerprint_sha256 = alignment_commitment(&state.bindings, bundles);
                 RoleAlignmentHypothesis {
                     bindings: state.bindings.into_boxed_slice(),
                     canonical_role_count: state.canonical_role_count,
@@ -648,7 +749,9 @@ impl BoundedRoleAligner {
             hypotheses: hypotheses.into_boxed_slice(),
             expansions,
             symmetric_branches,
-            complete: true,
+            completion: SearchCompletion::Complete {
+                explored: expansions,
+            },
             blocker: None,
         }
     }
@@ -704,12 +807,20 @@ impl BoundedCircuitBeam {
         config: BlueprintBeamConfig,
     ) -> BlueprintSynthesisReport {
         let mut blocker_counts = BTreeMap::new();
-        if !alignments.complete {
+        if !alignments.completion.is_complete() {
             add_blueprint_blocker(
                 &mut blocker_counts,
                 BlueprintSynthesisBlocker::AlignmentIncomplete,
             );
-            return blueprint_report(Vec::new(), 0, false, blocker_counts);
+            return blueprint_report(
+                Vec::new(),
+                SearchCompletion::Exhausted {
+                    stage: SearchStage::RoleAlignment,
+                    explored: alignments.expansions,
+                    frontier_remaining: 1,
+                },
+                blocker_counts,
+            );
         }
         if config.max_blueprints == 0
             || config.max_blueprints > OPERATOR_BLUEPRINT_MAX_ALIGNMENTS
@@ -722,12 +833,21 @@ impl BoundedCircuitBeam {
                 &mut blocker_counts,
                 BlueprintSynthesisBlocker::InvalidConfig,
             );
-            return blueprint_report(Vec::new(), 0, false, blocker_counts);
+            return blueprint_report(
+                Vec::new(),
+                SearchCompletion::Exhausted {
+                    stage: SearchStage::InputValidation,
+                    explored: 0,
+                    frontier_remaining: 0,
+                },
+                blocker_counts,
+            );
         }
 
         let mut blueprints = BTreeMap::<Commitment256, CandidateOperatorBlueprint>::new();
         let mut expansions = 0_usize;
         let mut complete = true;
+        let mut frontier_remaining = 0_usize;
 
         'alignments: for alignment in &alignments.hypotheses {
             let mapped = mapped_relation_modes(bundles, alignment);
@@ -747,6 +867,7 @@ impl BoundedCircuitBeam {
             };
             if ordered_cells.len() > config.max_depth {
                 complete = false;
+                frontier_remaining = frontier_remaining.saturating_add(1);
                 add_blueprint_blocker(
                     &mut blocker_counts,
                     BlueprintSynthesisBlocker::BeamDepthReached,
@@ -761,6 +882,7 @@ impl BoundedCircuitBeam {
                     for (mode, aggregate) in &mapped[&cell] {
                         if expanded.len() >= config.max_blueprints {
                             complete = false;
+                            frontier_remaining = frontier_remaining.saturating_add(1);
                             add_blueprint_blocker(
                                 &mut blocker_counts,
                                 BlueprintSynthesisBlocker::BeamWidthReached,
@@ -770,13 +892,15 @@ impl BoundedCircuitBeam {
                         expansions = expansions.saturating_add(1);
                         if expansions > config.max_expansions {
                             complete = false;
+                            frontier_remaining = frontier_remaining.saturating_add(1);
                             add_blueprint_blocker(
                                 &mut blocker_counts,
                                 BlueprintSynthesisBlocker::ExpansionBudgetReached,
                             );
                             break;
                         }
-                        let magnitude = aggregate.re.hypot(aggregate.im);
+                        let (aggregate_re, aggregate_im) = aggregate.components();
+                        let magnitude = aggregate_re.hypot(aggregate_im);
                         if magnitude <= f64::EPSILON {
                             continue;
                         }
@@ -785,8 +909,8 @@ impl BoundedCircuitBeam {
                             cell,
                             state: mode.state,
                             phase_anchor: PhaseCenterCell {
-                                re: aggregate.re / magnitude,
-                                im: aggregate.im / magnitude,
+                                re: aggregate_re / magnitude,
+                                im: aggregate_im / magnitude,
                             },
                         });
                         expanded
@@ -844,6 +968,7 @@ impl BoundedCircuitBeam {
                             && blueprints.len() >= config.max_blueprints
                         {
                             complete = false;
+                            frontier_remaining = frontier_remaining.saturating_add(1);
                             add_blueprint_blocker(
                                 &mut blocker_counts,
                                 BlueprintSynthesisBlocker::BeamWidthReached,
@@ -877,10 +1002,20 @@ impl BoundedCircuitBeam {
         if blueprints.is_empty() {
             add_blueprint_blocker(&mut blocker_counts, BlueprintSynthesisBlocker::NoBlueprint);
         }
+        let completion = if complete {
+            SearchCompletion::Complete {
+                explored: expansions,
+            }
+        } else {
+            SearchCompletion::Exhausted {
+                stage: SearchStage::CircuitBeam,
+                explored: expansions,
+                frontier_remaining,
+            }
+        };
         blueprint_report(
             blueprints.into_values().collect(),
-            expansions,
-            complete,
+            completion,
             blocker_counts,
         )
     }
@@ -968,7 +1103,7 @@ impl FrozenOperatorBlueprintSet {
         config: BlueprintBeamConfig,
         report: &BlueprintSynthesisReport,
     ) -> Result<Self, FrozenBlueprintError> {
-        if !report.complete {
+        if !report.completion.is_complete() {
             return Err(FrozenBlueprintError::IncompleteSynthesis);
         }
         if report.blueprints.is_empty() {
@@ -1171,12 +1306,23 @@ fn score_blueprint_future(
     let mut ambiguous_bindings = 0_usize;
 
     for (bundle_index, bundle) in future_bundles.iter().enumerate() {
-        let mappings = future_role_mappings(bundle, &blueprint.role_graph, 2);
-        if mappings.len() != 1 {
+        let (mappings, mappings_complete) = future_role_mappings(
+            bundle,
+            &blueprint.role_graph,
+            OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
+        );
+        let Some(mapping) = select_future_mapping(
+            &mappings,
+            mappings_complete,
+            bundle,
+            bundle_index,
+            relations,
+            controlled_phases,
+            control,
+        ) else {
             ambiguous_bindings = ambiguous_bindings.saturating_add(1);
             continue;
-        }
-        let mapping = &mappings[0];
+        };
         for (relation_index, observed) in bundle.relations.iter().enumerate() {
             let Some(sample_phase) = controlled_phases
                 .get(&(bundle_index, relation_index))
@@ -1294,60 +1440,72 @@ fn future_role_mappings(
     bundle: &SurfaceFragmentBundle,
     role_graph: &RoleGraph,
     limit: usize,
-) -> Vec<Vec<u8>> {
-    fn visit(
-        bundle: &SurfaceFragmentBundle,
-        role_graph: &RoleGraph,
-        local_role: usize,
-        current: &mut Vec<u8>,
-        used: &mut BTreeSet<u8>,
-        limit: usize,
-        output: &mut Vec<Vec<u8>>,
-    ) {
-        if output.len() >= limit {
-            return;
-        }
-        if local_role == bundle.roles.len() {
-            output.push(current.clone());
-            return;
-        }
-        for (canonical_role, signature) in role_graph.canonical_roles.iter().enumerate() {
-            let canonical_role = canonical_role as u8;
-            if used.contains(&canonical_role)
-                || !role_signatures_compatible(&bundle.roles[local_role], signature)
-            {
-                continue;
-            }
-            used.insert(canonical_role);
-            current.push(canonical_role);
-            visit(
-                bundle,
-                role_graph,
-                local_role + 1,
-                current,
-                used,
-                limit,
-                output,
-            );
-            current.pop();
-            used.remove(&canonical_role);
-            if output.len() >= limit {
-                return;
-            }
-        }
-    }
-
-    let mut output = Vec::new();
-    visit(
+) -> (Vec<Vec<u8>>, bool) {
+    let mut search = FutureMappingSearch {
         bundle,
         role_graph,
-        0,
-        &mut Vec::new(),
-        &mut BTreeSet::new(),
         limit,
-        &mut output,
-    );
-    output
+        output: Vec::new(),
+        complete: true,
+    };
+    search.visit(0, &mut Vec::new(), &mut BTreeSet::new());
+    (search.output, search.complete)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn select_future_mapping<'a>(
+    mappings: &'a [Vec<u8>],
+    mappings_complete: bool,
+    bundle: &SurfaceFragmentBundle,
+    bundle_index: usize,
+    expected_relations: &[OperatorCircuitRelation],
+    controlled_phases: &BTreeMap<(usize, usize), Option<PhaseCenterCell>>,
+    control: BlueprintPhaseControl,
+) -> Option<&'a Vec<u8>> {
+    if !mappings_complete || mappings.is_empty() {
+        return None;
+    }
+    let mut ranked = mappings
+        .iter()
+        .filter_map(|mapping| {
+            let mut matched_edges = 0_usize;
+            let mut phase_fit_fixed = 0_i64;
+            for (relation_index, observed) in bundle.relations.iter().enumerate() {
+                let sample_phase = controlled_phases
+                    .get(&(bundle_index, relation_index))
+                    .copied()
+                    .flatten()?;
+                let cell = OperatorRelationCell {
+                    plane: observed.plane,
+                    source_role: mapping[usize::from(observed.source_local_role)],
+                    target_role: mapping[usize::from(observed.target_local_role)],
+                };
+                let expected = expected_relations
+                    .iter()
+                    .find(|expected| expected.cell == cell && expected.state == observed.state)?;
+                let expected_anchor = match control {
+                    BlueprintPhaseControl::MatchedRandomCenter => {
+                        random_phase_anchor(expected.cell)
+                    }
+                    _ => expected.phase_anchor,
+                };
+                let aligned = align_phase(sample_phase, expected_anchor);
+                phase_fit_fixed = phase_fit_fixed
+                    .saturating_add((aligned.re * PhaseModeAggregate::SCALE).round() as i64);
+                matched_edges = matched_edges.saturating_add(1);
+            }
+            (matched_edges > 0).then_some((matched_edges, phase_fit_fixed, mapping))
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_unstable_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
+    let best = ranked.first()?;
+    if ranked
+        .get(1)
+        .is_some_and(|runner_up| (runner_up.0, runner_up.1) == (best.0, best.1))
+    {
+        return None;
+    }
+    Some(best.2)
 }
 
 fn controlled_future_phases(
@@ -1492,8 +1650,7 @@ fn mapped_relation_modes(
                 .or_insert_with(BTreeMap::new)
                 .entry(mode)
                 .or_insert_with(PhaseModeAggregate::default);
-            aggregate.re += relation.phase_anchor.re;
-            aggregate.im += relation.phase_anchor.im;
+            aggregate.add(relation.phase_anchor);
         }
     }
     mapped
@@ -1663,15 +1820,19 @@ fn update_relation_hasher(hasher: &mut Sha256, relation: &OperatorCircuitRelatio
 
 fn blueprint_report(
     mut blueprints: Vec<CandidateOperatorBlueprint>,
-    expansions: usize,
-    complete: bool,
+    completion: SearchCompletion,
     blocker_counts: BTreeMap<BlueprintSynthesisBlocker, usize>,
 ) -> BlueprintSynthesisReport {
     blueprints.sort_by_key(|blueprint| blueprint.fingerprint_sha256);
+    let expansions = match completion {
+        SearchCompletion::Complete { explored } | SearchCompletion::Exhausted { explored, .. } => {
+            explored
+        }
+    };
     BlueprintSynthesisReport {
         blueprints: blueprints.into_boxed_slice(),
         expansions,
-        complete,
+        completion,
         blockers: blocker_counts
             .into_iter()
             .map(|(blocker, count)| BlueprintSynthesisBlockerCount { blocker, count })
@@ -1756,12 +1917,22 @@ fn relation_planes_overlap_or_empty(left: &[u8], right: &[u8]) -> bool {
         || left.iter().any(|plane| right.binary_search(plane).is_ok())
 }
 
-fn deduplicate_alignment_states(states: Vec<AlignmentState>, limit: usize) -> Vec<AlignmentState> {
+fn canonical_bundle_order(bundles: &[SurfaceFragmentBundle]) -> Vec<usize> {
+    let mut order = (0..bundles.len()).collect::<Vec<_>>();
+    order.sort_unstable_by_key(|index| bundles[*index].lineage_sha256);
+    order
+}
+
+fn deduplicate_alignment_states(
+    states: Vec<AlignmentState>,
+    bundles: &[SurfaceFragmentBundle],
+    limit: usize,
+) -> Vec<AlignmentState> {
     let mut by_fingerprint = BTreeMap::new();
     for mut state in states {
         state.bindings.sort_unstable();
         by_fingerprint
-            .entry(alignment_commitment(&state.bindings))
+            .entry(alignment_commitment(&state.bindings, bundles))
             .or_insert(state);
         if by_fingerprint.len() >= limit {
             break;
@@ -1771,11 +1942,20 @@ fn deduplicate_alignment_states(states: Vec<AlignmentState>, limit: usize) -> Ve
 }
 
 fn blocked_alignment(blocker: RoleAlignmentBlocker) -> RoleAlignmentReport {
+    let completion = if blocker == RoleAlignmentBlocker::NoCompatibleAlignment {
+        SearchCompletion::Complete { explored: 0 }
+    } else {
+        SearchCompletion::Exhausted {
+            stage: SearchStage::InputValidation,
+            explored: 0,
+            frontier_remaining: 0,
+        }
+    };
     RoleAlignmentReport {
         hypotheses: Box::new([]),
         expansions: 0,
         symmetric_branches: 0,
-        complete: false,
+        completion,
         blocker: Some(blocker),
     }
 }
@@ -1803,15 +1983,26 @@ fn role_signature_commitment(role: &StructuralRoleSignature) -> Commitment256 {
     hasher.finalize().into()
 }
 
-fn alignment_commitment(bindings: &[RoleBinding]) -> Commitment256 {
+fn alignment_commitment(
+    bindings: &[RoleBinding],
+    bundles: &[SurfaceFragmentBundle],
+) -> Commitment256 {
+    let mut canonical = bindings
+        .iter()
+        .map(|binding| {
+            (
+                bundles[usize::from(binding.bundle_index)].lineage_sha256,
+                binding.local_role,
+                binding.canonical_role,
+            )
+        })
+        .collect::<Vec<_>>();
+    canonical.sort_unstable();
     let mut hasher = Sha256::new();
     hasher.update(b"nando.role-alignment.v1");
-    for binding in bindings {
-        hasher.update([
-            binding.bundle_index,
-            binding.local_role,
-            binding.canonical_role,
-        ]);
+    for (lineage, local_role, canonical_role) in canonical {
+        hasher.update(lineage);
+        hasher.update([local_role, canonical_role]);
     }
     hasher.finalize().into()
 }
@@ -1870,7 +2061,7 @@ mod tests {
             RoleAlignmentConfig::default(),
         );
 
-        assert!(report.complete);
+        assert!(report.completion.is_complete());
         assert_eq!(report.blocker, None);
         assert!(report.hypotheses.len() >= 2);
         assert!(report.symmetric_branches >= 1);
@@ -1892,7 +2083,7 @@ mod tests {
             RoleAlignmentConfig::default(),
         );
         assert_eq!(report.blocker, Some(RoleAlignmentBlocker::DuplicateLineage));
-        assert!(!report.complete);
+        assert!(!report.completion.is_complete());
     }
 
     #[test]
@@ -1922,7 +2113,15 @@ mod tests {
                 ..RoleAlignmentConfig::default()
             },
         );
-        assert!(!report.complete);
+        assert!(!report.completion.is_complete());
+        assert_eq!(
+            report.completion,
+            SearchCompletion::Exhausted {
+                stage: SearchStage::RoleAlignment,
+                explored: report.expansions,
+                frontier_remaining: 1,
+            }
+        );
         assert_eq!(report.blocker, Some(RoleAlignmentBlocker::BudgetExhausted));
     }
 
@@ -1937,7 +2136,7 @@ mod tests {
         let synthesis =
             BoundedCircuitBeam::synthesize(&bundles, &alignments, BlueprintBeamConfig::default());
 
-        assert!(synthesis.complete);
+        assert!(synthesis.completion.is_complete());
         assert!(synthesis.blueprints.len() >= 2);
         assert!(synthesis.blueprints.len() <= OPERATOR_BLUEPRINT_MAX_ALIGNMENTS);
         assert!(
@@ -1973,6 +2172,81 @@ mod tests {
     }
 
     #[test]
+    fn support_input_order_does_not_change_candidate_set() {
+        let first = vec![
+            symmetric_bundle(1, 11, false),
+            symmetric_bundle(2, 12, true),
+            symmetric_bundle(3, 13, false),
+        ];
+        let second = vec![first[2].clone(), first[0].clone(), first[1].clone()];
+
+        let build = |bundles: &[SurfaceFragmentBundle]| {
+            let alignments = BoundedRoleAligner::align(bundles, RoleAlignmentConfig::default());
+            let synthesis = BoundedCircuitBeam::synthesize(
+                bundles,
+                &alignments,
+                BlueprintBeamConfig::default(),
+            );
+            FrozenOperatorBlueprintSet::freeze(
+                7,
+                bundles,
+                BlueprintBeamConfig::default(),
+                &synthesis,
+            )
+            .expect("complete canonical candidate set")
+        };
+
+        let left = build(&first);
+        let right = build(&second);
+        assert_eq!(left.candidate_set_sha256(), right.candidate_set_sha256());
+        assert_eq!(
+            left.blueprints()
+                .iter()
+                .map(CandidateOperatorBlueprint::fingerprint_sha256)
+                .collect::<Vec<_>>(),
+            right
+                .blueprints()
+                .iter()
+                .map(CandidateOperatorBlueprint::fingerprint_sha256)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn symmetric_local_role_renaming_does_not_change_candidate_set() {
+        let original = vec![
+            symmetric_bundle(1, 11, false),
+            symmetric_bundle(2, 12, true),
+            symmetric_bundle(3, 13, false),
+        ];
+        let renamed = vec![
+            symmetric_bundle(1, 11, true),
+            symmetric_bundle(2, 12, false),
+            symmetric_bundle(3, 13, true),
+        ];
+
+        let candidate_set = |bundles: &[SurfaceFragmentBundle]| {
+            let alignments = BoundedRoleAligner::align(bundles, RoleAlignmentConfig::default());
+            let synthesis = BoundedCircuitBeam::synthesize(
+                bundles,
+                &alignments,
+                BlueprintBeamConfig::default(),
+            );
+            FrozenOperatorBlueprintSet::freeze(
+                7,
+                bundles,
+                BlueprintBeamConfig::default(),
+                &synthesis,
+            )
+            .expect("complete canonical candidate set")
+            .candidate_set_sha256()
+            .to_owned()
+        };
+
+        assert_eq!(candidate_set(&original), candidate_set(&renamed));
+    }
+
+    #[test]
     fn caller_cannot_raise_beam_budgets() {
         let bundles = [
             symmetric_bundle(1, 11, false),
@@ -1987,7 +2261,7 @@ mod tests {
                 ..BlueprintBeamConfig::default()
             },
         );
-        assert!(!report.complete);
+        assert!(!report.completion.is_complete());
         assert_eq!(
             report.blockers.as_ref(),
             &[BlueprintSynthesisBlockerCount {
@@ -2010,7 +2284,15 @@ mod tests {
             ..BlueprintBeamConfig::default()
         };
         let report = BoundedCircuitBeam::synthesize(&bundles, &alignments, config);
-        assert!(!report.complete);
+        assert!(!report.completion.is_complete());
+        assert!(matches!(
+            report.completion,
+            SearchCompletion::Exhausted {
+                stage: SearchStage::CircuitBeam,
+                frontier_remaining: 1..,
+                ..
+            }
+        ));
         assert!(
             report
                 .blockers

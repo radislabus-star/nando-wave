@@ -902,15 +902,85 @@ crates/nando-core/src/wave/operator_blueprint.rs
 crates/nando-core/tests/operator_blueprint_causal.rs
 ```
 
-The pure bounded proof now constructs competing relation/phase blueprints from
+The pure bounded core proof constructs competing relation/phase blueprints from
 local partial graphs and resolves one only on full-lineage future phase
-evidence. Its causal fixture has no program atoms, and renderer/verifier fields
-are commitments rather than executable contracts. Therefore the precise PASS
-is structural relation-circuit birth and selection, not a complete transferable
-action operator. Symmetric role ambiguity is proven separately but is not yet
-combined with future selection in one proof. Live bundle extraction, executable
-crystallization, streaming persistence, external admission, CPU execution, and
-economics remain BLOCK.
+evidence. The response-actor proof now extends that route with a non-empty
+generic transform, automatic actor compilation, an independently generated
+verifier, exact future parity receipts, a 4,032-byte `OperatorPage32`, and
+verified execution. Live bundle extraction, external admission, production CPU
+execution, and economics remain BLOCK for this new operator generation.
+
+### Canonical route from blueprint to executable operator
+
+```text
+Blueprint winner
+-> SearchCompletion::Complete proof
+-> order-independent canonical role orbit
+-> CrystallizedOperator
+-> bind roles on a new surface
+-> existing response actor
+-> independent verifier
+-> typed BackwardWave into immutable generation g+1
+```
+
+Search completion is an enum, never a boolean or an inferred absence of errors:
+
+```text
+Complete {
+    explored,
+}
+
+Exhausted {
+    stage,
+    explored,
+    frontier_remaining,
+}
+```
+
+`FrozenOperatorBlueprintSet` and crystallization reject `Exhausted` regardless
+of the quality of candidates already found. A future branch-and-bound proof may
+replace exhaustive enumeration only when it carries a certificate that every
+discarded branch has an upper bound below the winner.
+
+Canonicalization is independent of input order. Surfaces are ordered by full
+lineage SHA-256, structurally identical role colors remain a bounded symmetry
+orbit, and candidate-set identity is tested under support reordering and local
+role renaming. If the orbit exceeds the bounded search budget, the result is
+`Exhausted`, not a caller-order tie-break. Phase accumulation and future mapping
+ranking use deterministic fixed-point arithmetic before conversion to runtime
+phase cells.
+
+WARNING: future evidence cannot lawfully resolve roles that remain identical in
+all pre-action observables. Such a case remains an equivalence orbit or ABSTAIN.
+Future may select one circuit only when independently observed phase/history
+relations break the symmetry without teacher-only or post-action leakage.
+
+Crystallization belongs in `nando-response-actor`, not in the pure wave core.
+`CrystallizedOperator` compiles the supported generic `TransformOp8` into the
+existing `ResponseProgram`, builds an independent `VerifierProgram`, requires
+one exact parity receipt per admitted future lineage, and binds actor/verifier
+digests into `OperatorPage32`. Unknown opcodes, empty transforms, cyclic
+composition, incomplete receipts, or ambiguous future mappings fail closed.
+Renderer/verifier hashes alone are insufficient.
+
+Future role ambiguity is resolved only after all bounded mappings are scored
+against the full observed relation-phase circuit. A unique fixed-point maximum
+is accepted; a tie or an exhausted mapping frontier remains ABSTAIN. Structural
+fingerprints never break a semantic tie.
+
+Backward feedback never mutates ACTIVE generation `g`:
+
+```text
+VerifiedPass            -> reinforce candidate g+1
+ApplicabilityNegative   -> applicability counter-wave in g+1
+HardContradiction       -> localized residual -> split / repair / revoke
+CensoredUnknown         -> uncertainty only, no semantic update
+```
+
+The first executable compiler opcode is generic unique-scalar projection. More
+transform families must be added only with the same actor/verifier parity
+contract. Checkpoint, JEPA ranking, live admission, and economics follow after
+the compiler covers the intended operator family.
 
 Canonical implementation plan:
 

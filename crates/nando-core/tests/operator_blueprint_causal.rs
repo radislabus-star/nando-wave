@@ -77,10 +77,10 @@ fn local_partial_graphs_create_competing_circuits_resolved_only_by_future_phase(
     let support = support_surfaces();
     assert!(support.iter().all(|bundle| bundle.relations().len() == 1));
     let alignments = BoundedRoleAligner::align(&support, RoleAlignmentConfig::default());
-    assert!(alignments.complete);
+    assert!(alignments.completion.is_complete());
     let synthesis =
         BoundedCircuitBeam::synthesize(&support, &alignments, BlueprintBeamConfig::default());
-    assert!(synthesis.complete);
+    assert!(synthesis.completion.is_complete());
     assert!(synthesis.blueprints.len() >= 3);
 
     let frozen =

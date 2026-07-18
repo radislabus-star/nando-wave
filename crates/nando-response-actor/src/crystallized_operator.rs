@@ -1,0 +1,613 @@
+use std::collections::BTreeSet;
+
+use nando_core::wave::{
+    BlueprintFutureReport, BlueprintPhaseControl, CandidateCubeField, CandidateCubeFieldError,
+    CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow,
+    OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES, OPERATOR_PAGE32_RENDERER_BYTES,
+    OperatorCircuit, OperatorGrokkingConfig, OperatorPage32, OperatorPage32Error,
+    OperatorPage32Metadata, StructuralRole16, TernaryOperatorCube32,
+};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+
+use crate::{
+    AtomValueType, BackwardWave, BackwardWaveError, BackwardWaveUpdate, ResponseExecutionStatus,
+    ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifiedDeltaReceipt,
+    VerifierProgram, execute_response, is_source_neutral_response_program,
+    response_actor_program_digest, response_independent_verifier_program_digest,
+    source_neutral_verifier_for_program, verify_response_independently,
+};
+
+pub const TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR: u8 = 1;
+pub const TRANSFORM_VALUE_STRING: u16 = 0;
+pub const TRANSFORM_VALUE_INTEGER: u16 = 1;
+pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
+pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
+pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CrystallizationParityReceipt {
+    pub future_lineage_sha256: Commitment256,
+    pub request_text: String,
+    pub provider_payload: Value,
+    pub expected_response: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CrystallizedOperator {
+    page: OperatorPage32,
+    actor: ResponseProgram,
+    verifier: VerifierProgram,
+    relation_program: OperatorCircuit,
+    blueprint_sha256: Commitment256,
+    candidate_set_sha256: Commitment256,
+    actor_sha256: String,
+    verifier_sha256: String,
+    verified_future_lineages: Box<[Commitment256]>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrystallizedOperatorError {
+    FutureNotFullPhase,
+    FutureHasBlocker,
+    MissingWinner,
+    WinnerNotFrozen,
+    EmptyTransformProgram,
+    CyclicComposition,
+    InvalidActor,
+    UnsupportedTransformProgram,
+    NonSourceNeutralActor,
+    VerifierBuildFailed,
+    ActorVerifierMismatch,
+    EmptyFutureWindow,
+    DuplicateParityLineage,
+    UnknownParityLineage,
+    MissingParityReceipt,
+    ActorDidNotExecute,
+    ActorResponseMismatch,
+    IndependentVerifierRejected,
+    DigestFailure,
+    InvalidDigest,
+    InvalidPage(OperatorPage32Error),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrystallizedFeedbackError {
+    InvalidPage(OperatorPage32Error),
+    InvalidField(CandidateCubeFieldError),
+    WrongFieldGeneration,
+    WrongReceiptGeneration,
+    BackwardWave(BackwardWaveError),
+}
+
+impl CrystallizedOperator {
+    pub fn crystallize(
+        future_window: &FrozenBlueprintFutureWindow,
+        future_report: &BlueprintFutureReport,
+        receipts: &[CrystallizationParityReceipt],
+    ) -> Result<Self, CrystallizedOperatorError> {
+        if future_report.control != BlueprintPhaseControl::Full {
+            return Err(CrystallizedOperatorError::FutureNotFullPhase);
+        }
+        if future_report.blocker.is_some() {
+            return Err(CrystallizedOperatorError::FutureHasBlocker);
+        }
+        let winner_sha256 = future_report
+            .winner_fingerprint_sha256
+            .ok_or(CrystallizedOperatorError::MissingWinner)?;
+        let frozen = future_window.frozen();
+        let blueprint = frozen
+            .blueprints()
+            .iter()
+            .find(|candidate| candidate.fingerprint_sha256() == &winner_sha256)
+            .ok_or(CrystallizedOperatorError::WinnerNotFrozen)?;
+        if blueprint.transform_program().is_empty() {
+            return Err(CrystallizedOperatorError::EmptyTransformProgram);
+        }
+        if !composition_is_acyclic(blueprint) {
+            return Err(CrystallizedOperatorError::CyclicComposition);
+        }
+        let actor = compile_blueprint_actor(blueprint)?;
+        actor
+            .validate()
+            .map_err(|_| CrystallizedOperatorError::InvalidActor)?;
+        if !is_source_neutral_response_program(&actor) {
+            return Err(CrystallizedOperatorError::NonSourceNeutralActor);
+        }
+        let verifier = source_neutral_verifier_for_program(&actor)
+            .map_err(|_| CrystallizedOperatorError::VerifierBuildFailed)?;
+        if !crate::package::response_program_verifier_matches(&actor, Some(&verifier)) {
+            return Err(CrystallizedOperatorError::ActorVerifierMismatch);
+        }
+
+        let verified_future_lineages =
+            verify_future_receipts(future_window, &actor, &verifier, receipts)?;
+        let actor_sha256 = response_actor_program_digest(&actor)
+            .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
+            .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let page = build_operator_page(
+            blueprint,
+            frozen.source_generation().saturating_add(1),
+            frozen.candidate_set_sha256(),
+            frozen.support_lineages_sha256(),
+            &verified_future_lineages,
+            &actor_sha256,
+            &verifier_sha256,
+        )?;
+
+        Ok(Self {
+            page,
+            actor,
+            verifier,
+            relation_program: blueprint.relation_program().clone(),
+            blueprint_sha256: winner_sha256,
+            candidate_set_sha256: *frozen.candidate_set_sha256(),
+            actor_sha256,
+            verifier_sha256,
+            verified_future_lineages: verified_future_lineages.into_boxed_slice(),
+        })
+    }
+
+    pub fn execute_verified(
+        &self,
+        request_text: &str,
+        provider_payload: &Value,
+    ) -> Result<String, CrystallizedOperatorError> {
+        let execution = execute_response(&self.actor, request_text, provider_payload);
+        if execution.status != ResponseExecutionStatus::Executed {
+            return Err(CrystallizedOperatorError::ActorDidNotExecute);
+        }
+        let response = execution
+            .response
+            .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+        verify_response_independently(&self.verifier, provider_payload, &response)
+            .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
+        Ok(response)
+    }
+
+    pub fn feedback_field(
+        &self,
+        config: OperatorGrokkingConfig,
+    ) -> Result<CandidateCubeField, CrystallizedFeedbackError> {
+        let generation = self
+            .page
+            .header()
+            .map_err(CrystallizedFeedbackError::InvalidPage)?
+            .generation;
+        let mut field = CandidateCubeField::new(generation, config)
+            .map_err(CrystallizedFeedbackError::InvalidField)?;
+        field
+            .register_circuit(self.relation_program.clone())
+            .map_err(CrystallizedFeedbackError::InvalidField)?;
+        Ok(field)
+    }
+
+    pub fn apply_verified_feedback(
+        &self,
+        field: &mut CandidateCubeField,
+        receipt: &VerifiedDeltaReceipt,
+    ) -> Result<BackwardWaveUpdate, CrystallizedFeedbackError> {
+        let header = self
+            .page
+            .header()
+            .map_err(CrystallizedFeedbackError::InvalidPage)?;
+        if field.generation() != header.generation {
+            return Err(CrystallizedFeedbackError::WrongFieldGeneration);
+        }
+        if receipt.generation() != header.generation {
+            return Err(CrystallizedFeedbackError::WrongReceiptGeneration);
+        }
+        BackwardWave::apply(field, header.circuit_fingerprint64, receipt)
+            .map_err(CrystallizedFeedbackError::BackwardWave)
+    }
+
+    #[must_use]
+    pub const fn page(&self) -> &OperatorPage32 {
+        &self.page
+    }
+
+    #[must_use]
+    pub const fn actor(&self) -> &ResponseProgram {
+        &self.actor
+    }
+
+    #[must_use]
+    pub const fn verifier(&self) -> &VerifierProgram {
+        &self.verifier
+    }
+
+    #[must_use]
+    pub const fn relation_program(&self) -> &OperatorCircuit {
+        &self.relation_program
+    }
+
+    #[must_use]
+    pub const fn blueprint_sha256(&self) -> &Commitment256 {
+        &self.blueprint_sha256
+    }
+
+    #[must_use]
+    pub const fn candidate_set_sha256(&self) -> &Commitment256 {
+        &self.candidate_set_sha256
+    }
+
+    #[must_use]
+    pub fn actor_sha256(&self) -> &str {
+        &self.actor_sha256
+    }
+
+    #[must_use]
+    pub fn verifier_sha256(&self) -> &str {
+        &self.verifier_sha256
+    }
+
+    #[must_use]
+    pub fn verified_future_lineages(&self) -> &[Commitment256] {
+        &self.verified_future_lineages
+    }
+}
+
+pub fn compile_blueprint_actor(
+    blueprint: &CandidateOperatorBlueprint,
+) -> Result<ResponseProgram, CrystallizedOperatorError> {
+    let [transform] = blueprint.transform_program() else {
+        return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+    };
+    if transform.opcode != TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR
+        || !blueprint.composition_dag().edges().is_empty()
+        || transform.flags & !TRANSFORM_FLAG_CANONICAL_JSON != 0
+    {
+        return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+    }
+    let value_type = match transform.parameter {
+        TRANSFORM_VALUE_STRING => AtomValueType::String,
+        TRANSFORM_VALUE_INTEGER => AtomValueType::Integer,
+        TRANSFORM_VALUE_BOOLEAN => AtomValueType::Boolean,
+        TRANSFORM_VALUE_IDENTIFIER => AtomValueType::Identifier,
+        _ => return Err(CrystallizedOperatorError::UnsupportedTransformProgram),
+    };
+    let format = if transform.flags & TRANSFORM_FLAG_CANONICAL_JSON == 0 {
+        ValueProjectionFormat::PlainText
+    } else {
+        ValueProjectionFormat::CanonicalJson
+    };
+    Ok(ResponseProgram::project_selected_value(
+        ResponseValueSelector::UniqueScalar { value_type },
+        format,
+        "completed",
+    ))
+}
+
+fn verify_future_receipts(
+    future_window: &FrozenBlueprintFutureWindow,
+    actor: &ResponseProgram,
+    verifier: &VerifierProgram,
+    receipts: &[CrystallizationParityReceipt],
+) -> Result<Vec<Commitment256>, CrystallizedOperatorError> {
+    let expected = future_window.future_lineages_sha256();
+    if expected.is_empty() {
+        return Err(CrystallizedOperatorError::EmptyFutureWindow);
+    }
+    let mut seen = BTreeSet::new();
+    for receipt in receipts {
+        if !expected.contains(&receipt.future_lineage_sha256) {
+            return Err(CrystallizedOperatorError::UnknownParityLineage);
+        }
+        if !seen.insert(receipt.future_lineage_sha256) {
+            return Err(CrystallizedOperatorError::DuplicateParityLineage);
+        }
+        let execution = execute_response(actor, &receipt.request_text, &receipt.provider_payload);
+        if execution.status != ResponseExecutionStatus::Executed {
+            return Err(CrystallizedOperatorError::ActorDidNotExecute);
+        }
+        let response = execution
+            .response
+            .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+        if response != receipt.expected_response {
+            return Err(CrystallizedOperatorError::ActorResponseMismatch);
+        }
+        verify_response_independently(verifier, &receipt.provider_payload, &response)
+            .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
+    }
+    if seen != *expected {
+        return Err(CrystallizedOperatorError::MissingParityReceipt);
+    }
+    Ok(seen.into_iter().collect())
+}
+
+fn composition_is_acyclic(blueprint: &CandidateOperatorBlueprint) -> bool {
+    let node_count = blueprint.transform_program().len();
+    let mut indegree = vec![0_usize; node_count];
+    let mut outgoing = vec![Vec::new(); node_count];
+    for edge in blueprint.composition_dag().edges() {
+        let producer = usize::from(edge.producer_step);
+        let consumer = usize::from(edge.consumer_step);
+        if producer >= node_count || consumer >= node_count || producer == consumer {
+            return false;
+        }
+        outgoing[producer].push(consumer);
+        indegree[consumer] = indegree[consumer].saturating_add(1);
+    }
+    let mut ready = indegree
+        .iter()
+        .enumerate()
+        .filter_map(|(index, degree)| (*degree == 0).then_some(index))
+        .collect::<Vec<_>>();
+    let mut visited = 0_usize;
+    while let Some(node) = ready.pop() {
+        visited = visited.saturating_add(1);
+        for &consumer in &outgoing[node] {
+            indegree[consumer] = indegree[consumer].saturating_sub(1);
+            if indegree[consumer] == 0 {
+                ready.push(consumer);
+            }
+        }
+    }
+    visited == node_count
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_operator_page(
+    blueprint: &CandidateOperatorBlueprint,
+    generation: u64,
+    candidate_set_sha256: &Commitment256,
+    support_lineages: &[Commitment256],
+    future_lineages: &[Commitment256],
+    actor_sha256: &str,
+    verifier_sha256: &str,
+) -> Result<OperatorPage32, CrystallizedOperatorError> {
+    let mut cube = TernaryOperatorCube32::default();
+    let mut phase_profile = [0_u8; OPERATOR_PAGE32_PHASE_BYTES];
+    let mut plane_count = 0_u8;
+    for (index, relation) in blueprint.relation_program().relations().iter().enumerate() {
+        cube.set(
+            relation.cell.plane,
+            relation.cell.source_role,
+            relation.cell.target_role,
+            relation.state,
+        )
+        .map_err(CrystallizedOperatorError::InvalidPage)?;
+        plane_count = plane_count.max(relation.cell.plane.saturating_add(1));
+        let offset = index * 4;
+        let re = quantize_phase(relation.phase_anchor.re).to_le_bytes();
+        let im = quantize_phase(relation.phase_anchor.im).to_le_bytes();
+        phase_profile[offset..offset + 2].copy_from_slice(&re);
+        phase_profile[offset + 2..offset + 4].copy_from_slice(&im);
+    }
+
+    let roles = blueprint
+        .role_graph()
+        .canonical_roles()
+        .iter()
+        .map(|role| {
+            let signature = structural_role_commitment(role);
+            StructuralRole16 {
+                type_class: role.type_class(),
+                cardinality_class: role.cardinality_class(),
+                temporal_class: role.temporal_position(),
+                relation_flags: role
+                    .neighboring_relation_planes()
+                    .iter()
+                    .filter(|plane| **plane < 8)
+                    .fold(0_u8, |flags, plane| flags | (1_u8 << plane)),
+                constraint_mask: role.constraint_mask(),
+                role_signature_hash: u32::from_le_bytes([
+                    signature[0],
+                    signature[1],
+                    signature[2],
+                    signature[3],
+                ]),
+                ..StructuralRole16::default()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut composition = [0_u8; OPERATOR_PAGE32_COMPOSITION_BYTES];
+    for (index, edge) in blueprint.composition_dag().edges().iter().enumerate() {
+        let offset = index * 2;
+        if offset + 1 >= composition.len() {
+            return Err(CrystallizedOperatorError::InvalidPage(
+                OperatorPage32Error::InvalidCompositionCount,
+            ));
+        }
+        composition[offset] = edge.producer_step;
+        composition[offset + 1] = edge.consumer_step;
+    }
+
+    let actor_digest = decode_sha256(actor_sha256)?;
+    let verifier_digest = decode_sha256(verifier_sha256)?;
+    let mut renderer = [0_u8; OPERATOR_PAGE32_RENDERER_BYTES];
+    renderer[..32].copy_from_slice(blueprint.fingerprint_sha256());
+    renderer[32..64].copy_from_slice(candidate_set_sha256);
+    renderer[64..96].copy_from_slice(&actor_digest);
+    renderer[96..128].copy_from_slice(&verifier_digest);
+
+    let proof_lineage = lineage_commitment(support_lineages, future_lineages);
+    let role_commitment = roles_commitment(&roles);
+    OperatorPage32::build(
+        OperatorPage32Metadata {
+            generation,
+            circuit_fingerprint64: blueprint.relation_program().fingerprint64(),
+            verifier_binding_fingerprint64: first_u64(&verifier_digest),
+            proof_lineage_fingerprint64: first_u64(&proof_lineage),
+            role_signature_fingerprint64: first_u64(&role_commitment),
+            relation_plane_count: plane_count,
+            composition_node_count: blueprint.composition_dag().edges().len() as u8,
+            renderer_instruction_count: 4,
+            flags: 0,
+        },
+        &phase_profile,
+        &roles,
+        &cube,
+        blueprint.transform_program(),
+        &composition,
+        &renderer,
+    )
+    .map_err(CrystallizedOperatorError::InvalidPage)
+}
+
+fn quantize_phase(value: f64) -> i16 {
+    (value.clamp(-1.0, 1.0) * f64::from(i16::MAX)).round() as i16
+}
+
+fn structural_role_commitment(role: &nando_core::wave::StructuralRoleSignature) -> Commitment256 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.crystallized-role.v1");
+    hasher.update([
+        role.type_class(),
+        role.cardinality_class(),
+        role.temporal_position(),
+    ]);
+    hasher.update(role.constraint_mask().to_le_bytes());
+    hasher.update(role.neighboring_relation_planes());
+    hasher.finalize().into()
+}
+
+fn lineage_commitment(support: &[Commitment256], future: &[Commitment256]) -> Commitment256 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.crystallized-lineage.v1");
+    for lineage in support.iter().chain(future) {
+        hasher.update(lineage);
+    }
+    hasher.finalize().into()
+}
+
+fn roles_commitment(roles: &[StructuralRole16]) -> Commitment256 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.crystallized-roles.v1");
+    for role in roles {
+        hasher.update(role.encode());
+    }
+    hasher.finalize().into()
+}
+
+fn first_u64(digest: &Commitment256) -> u64 {
+    u64::from_le_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+    ])
+}
+
+fn decode_sha256(value: &str) -> Result<Commitment256, CrystallizedOperatorError> {
+    if value.len() != 64 {
+        return Err(CrystallizedOperatorError::InvalidDigest);
+    }
+    let mut output = [0_u8; 32];
+    for (index, byte) in output.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16)
+            .map_err(|_| CrystallizedOperatorError::InvalidDigest)?;
+    }
+    Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use nando_core::wave::{
+        BlueprintBeamConfig, BlueprintSynthesisReport, BoundedCircuitBeam, BoundedRoleAligner,
+        LocalRelationFragment, OperatorGrokkingConfig, PhaseCenterCell, RoleAlignmentConfig,
+        StructuralRoleSignature, SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom,
+    };
+    use serde_json::json;
+
+    use super::*;
+    fn digest(byte: u8) -> Commitment256 {
+        [byte; 32]
+    }
+
+    fn bundle(lineage: u8, phase: PhaseCenterCell) -> SurfaceFragmentBundle {
+        SurfaceFragmentBundle::new(
+            digest(lineage),
+            digest(lineage.saturating_add(20)),
+            vec![
+                StructuralRoleSignature::new(1, 1, 0, 0, vec![0]),
+                StructuralRoleSignature::new(2, 1, 1, 0, vec![0]),
+            ],
+            vec![LocalRelationFragment {
+                plane: 0,
+                source_local_role: 0,
+                target_local_role: 1,
+                state: TernaryRelationState::Supported,
+                phase_anchor: phase,
+            }],
+            vec![TypedProgramAtom {
+                opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+                output_local_role: 1,
+                source_a_local_role: 0,
+                source_b_local_role: 0,
+                parameter: TRANSFORM_VALUE_INTEGER,
+                flags: 0,
+            }],
+        )
+        .expect("valid bundle")
+    }
+
+    fn frozen_blueprints() -> (
+        FrozenBlueprintFutureWindow,
+        BlueprintSynthesisReport,
+        SurfaceFragmentBundle,
+    ) {
+        let support = vec![
+            bundle(1, PhaseCenterCell { re: 1.0, im: 0.0 }),
+            bundle(2, PhaseCenterCell { re: 1.0, im: 0.0 }),
+        ];
+        let alignments = BoundedRoleAligner::align(&support, RoleAlignmentConfig::default());
+        let synthesis =
+            BoundedCircuitBeam::synthesize(&support, &alignments, BlueprintBeamConfig::default());
+        let frozen = nando_core::wave::FrozenOperatorBlueprintSet::freeze(
+            7,
+            &support,
+            BlueprintBeamConfig::default(),
+            &synthesis,
+        )
+        .expect("complete frozen set");
+        let future_bundle = bundle(3, PhaseCenterCell { re: 1.0, im: 0.0 });
+        let mut future = frozen.future_window();
+        future
+            .admit_lineage(&future_bundle)
+            .expect("independent future lineage");
+        (future, synthesis, future_bundle)
+    }
+
+    #[test]
+    fn winner_crystallizes_into_page_and_existing_verified_actor() {
+        let (future, synthesis, future_bundle) = frozen_blueprints();
+        let winner = *synthesis.blueprints[0].fingerprint_sha256();
+        let report = BlueprintFutureReport {
+            control: BlueprintPhaseControl::Full,
+            scores: Box::new([]),
+            winner_fingerprint_sha256: Some(winner),
+            runner_up_margin: 1.0,
+            blocker: None,
+        };
+        let payload = json!({
+            "input": [{"type":"function_call_output", "output":"{\"total\":7}"}]
+        });
+        let receipt = CrystallizationParityReceipt {
+            future_lineage_sha256: *future_bundle.lineage_sha256(),
+            request_text: String::new(),
+            provider_payload: payload.clone(),
+            expected_response: "7".to_owned(),
+        };
+
+        let operator =
+            CrystallizedOperator::crystallize(&future, &report, std::slice::from_ref(&receipt))
+                .expect("verified crystallized operator");
+
+        assert_eq!(operator.blueprint_sha256(), &winner);
+        assert_eq!(operator.verified_future_lineages(), &[digest(3)]);
+        assert_eq!(operator.page().as_bytes().len(), 4_032);
+        assert_eq!(operator.execute_verified("", &payload).as_deref(), Ok("7"));
+        let feedback = operator
+            .feedback_field(OperatorGrokkingConfig::default())
+            .expect("immutable next-generation accumulator");
+        assert_eq!(
+            feedback.generation(),
+            operator.page().header().expect("header").generation
+        );
+        assert_eq!(feedback.circuits(), &[operator.relation_program().clone()]);
+        assert_eq!(
+            CrystallizedOperator::crystallize(&future, &report, &[]),
+            Err(CrystallizedOperatorError::MissingParityReceipt)
+        );
+    }
+}
