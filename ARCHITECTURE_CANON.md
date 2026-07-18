@@ -27,8 +27,11 @@ The central mechanism is:
 ```text
 repeated signal
 -> signed interference
+-> competing partial operator circuits
+-> globally coherent circuit formation
 -> stable center of mass / phase center
--> transferable action law
+-> exact-memory cleanup
+-> transferable action law stored as a compact operator page
 -> verifier-safe CPU execution
 ```
 
@@ -173,6 +176,8 @@ state / observation
 -> independent typed receipts
 -> VerifiedDeltaReceipt
 -> BackwardWave
+-> CandidateCubeField
+-> OperatorGrokkingConsolidator
 -> candidate generation g+1
 ```
 
@@ -180,6 +185,11 @@ The symbolic representation expresses a law. `ForwardWave` transfers that law
 to the current structural state. `BackwardWave` converts independently verified
 consequences into a bounded change of the operator field. Neither direction may
 bypass independent proof.
+
+The frozen cube is not the mechanism that groks. It is the compact crystallized
+memory produced after circuit formation. Grokking occurs in the candidate field
+when several incomplete, competing residual waves become one globally coherent
+operator circuit.
 
 ### TransferableOperatorV2
 
@@ -368,7 +378,9 @@ operators in the expected few-KiB range.
 immutable Cube generation g
 -> typed signed residual
 -> CubeEvidenceAccumulator
--> candidate Cube generation g+1
+-> CandidateCubeField
+-> OperatorGrokkingConsolidator
+-> crystallized candidate Cube generation g+1
 -> replay / frozen future / ablation
 -> admission
 ```
@@ -377,6 +389,110 @@ For core relation planes, a contradiction to `+1` becomes unresolved and
 triggers split or relearning before any polarity change. Direct learned
 opposition is primarily allowed in the applicability plane after repeated
 independent evidence. This prevents one failure from flipping the semantic law.
+
+### Operator grokking: field to circuit to cube
+
+Per-cell threshold updates are not grokking:
+
+```text
+three votes for one cell
+-> set the cell to +1
+```
+
+is ordinary online table learning. The canonical grokking path is circuit-level:
+
+```text
+partial evidence from independent surface A
+-> competing circuit hypotheses X / Y / Z
+
+partial evidence from independent surface B
+-> competing circuits X / Y
+
+partial evidence from independent surface C+
+-> cross-plane phase coherence selects X globally
+-> linked role, relation, transform, composition, and renderer states resolve
+   as one circuit
+-> immutable TernaryOperatorCube and typed program crystallize together
+```
+
+No individual surface is required to contain the whole law. Surface count alone
+must never trigger crystallization. Independent surfaces are an evidence gate;
+global phase coherence and circuit consistency perform the selection.
+
+Before crystallization, candidate state lives outside the hot operator page:
+
+```text
+CandidateCubeField
++-- unresolved ternary cells
++-- signed amplitudes
++-- verified residual phases
++-- competing cube circuits
++-- transform/program hypotheses
++-- cross-plane coherence
+`-- bounded exact episodic support
+```
+
+`OperatorGrokkingConsolidator` evaluates whole connected circuits, not isolated
+cells. A circuit includes compatible `RoleGraph`, relation planes,
+`TransformProgram`, `CompositionDag`, and `RendererProgram`. It may emit only
+one of:
+
+```text
+CRYSTALLIZED candidate generation g+1
+COMPETING_CIRCUITS -> keep accumulating evidence and ABSTAIN
+INCONSISTENT -> split or reject the hypothesis
+CENSORED -> no semantic update
+```
+
+The learning stages are:
+
+```text
+memorization
+-> exact episodic support, competing circuits, future ABSTAIN
+
+circuit formation
+-> abrupt coherent resolution of one transferable operator
+-> frozen-future transfer appears
+
+cleanup
+-> exact episodic authority is removed
+-> transfer and decisions remain identical
+```
+
+Cleanup is mandatory proof that the operator is carried by the circuit rather
+than lookup. Proof receipts and immutable support manifests remain available as
+cold audit evidence; they are not runtime exact-memory authority.
+
+The causal grokking battery is:
+
+```text
+full phase             -> circuit forms and transfers
+no phase               -> tie or ABSTAIN
+shuffled residual      -> tie or ABSTAIN
+magnitude only         -> tie or ABSTAIN
+matched random center  -> tie or ABSTAIN
+phase restored         -> same circuit and transfer return
+exact memory removed   -> transfer remains
+false accepts          -> 0
+```
+
+A grokking claim additionally requires an observable delayed transition from
+memorization to circuit formation, independent heldout surfaces, no exact
+lookup overlap, and an immutable artifact containing the crystallized circuit.
+
+The A4 laboratory result is supporting evidence for this shape: it exhibited
+`memorization -> circuit formation -> cleanup`, transfer `0 -> 1440/1440`, and
+exact memory `13 -> 0`. It remains a grokking candidate rather than proof of
+organic live grokking because its cross-surface threshold and cleanup policy
+were architecture-defined. The production claim remains open until the live
+`OperatorGrokkingConsolidator` forms and cleans up a circuit under the stronger
+contract above.
+
+Supporting A4 artifact:
+
+```text
+/home/ubu/projects/rsmod/results/raw-phase-grokking-a4-2026-07-10/PROOF_REPORT.md
+```
 
 ### Mandatory compact-operator tests
 
@@ -479,7 +595,7 @@ oscillation, and gives every behavioral change a new evidence lineage.
 
 ### Canonical matched-capacity experiment
 
-The system core is accepted only through four frozen contours:
+The system core is accepted only through five frozen contours:
 
 ```text
 A. old operator
@@ -493,7 +609,12 @@ C. rich automatically induced operator without BackwardWave
    tests automatic operator induction
 
 D. rich automatically induced operator with BackwardWave
-   tests Wave self-correction
+   but only independent per-cell threshold consolidation
+   tests feedback without circuit-level grokking
+
+E. rich automatically induced operator with BackwardWave
+   and OperatorGrokkingConsolidator
+   tests circuit formation and cleanup
 ```
 
 Interpretation:
@@ -501,7 +622,8 @@ Interpretation:
 ```text
 B - A = expressive-capacity gain
 C / B = automatic-induction quality relative to the oracle ceiling
-D - C = causal contribution of BackwardWave
+D - C = contribution of ordinary backward feedback
+E - D = contribution of circuit-level grokking consolidation
 ```
 
 Freeze the stream, teacher groups, support/future partition, verifier, top-k,
@@ -521,8 +643,9 @@ already complete. The repository already contains phase centers, negative Wave
 training, anti-wave scoring, CEGIS repair, typed actor/verifier pieces, frozen
 future, and external admission. `TransferableOperatorV2`, the complete typed
 receipt chain, production `VerifiedDeltaReceipt`, immutable generational
-`BackwardWave`, and the four-contour proof remain implementation obligations
-until verified by artifacts and live runtime evidence.
+`BackwardWave`, `CandidateCubeField`, `OperatorGrokkingConsolidator`, cleanup of
+exact episodic authority, and the five-contour proof remain implementation
+obligations until verified by artifacts and live runtime evidence.
 
 ## 4. Canonical Learning Path
 
@@ -720,6 +843,10 @@ core. Never turn discovery into selection among a few pre-named programs.
     separately proven candidate generation.
 17. BackwardWave updates require a typed `VerifiedDeltaReceipt` whose observed
     side is independent from the actor.
+18. Independent per-cell thresholds are ordinary online learning and must never
+    be reported as grokking. Grokking requires coherent whole-circuit formation.
+19. A grokked operator must preserve heldout transfer after exact episodic
+    runtime authority is removed.
 
 Accounting identities must have no silent loss:
 
@@ -810,8 +937,10 @@ These mistakes have already damaged coverage and must not be repeated:
   recognition survives while role binding, transformation state, and transfer
   capacity disappear.
 - Replacing balanced ternary operator state with unsigned presence bits. Result:
-  loss of neutral state, counter-phase symmetry, and the original Setun-inspired
-  interference semantics.
+  loss of neutral state, signed relation opposition, and the original
+  Setun-inspired interference semantics.
+- Calling gradual per-cell threshold updates grokking. Result: a rule table is
+  mistaken for emergent circuit formation, and the central Wave claim is lost.
 
 ## 11. Required Protocol Before Core Changes
 
@@ -842,6 +971,7 @@ here:
 docs/NORTH_STAR.md
 docs/NANDA_WAVE_THEOREM.md
 docs/NANDO_WAVE_SIGNAL_PATH_L1_TO_OPERATOR.md
+docs/L3_SEMANTIC_GROKKING.md
 docs/SYMBOL_CELL8_ARCHITECTURE.md
 docs/LEXICON_FOUNDATION_V1.md
 docs/OPERATOR_PRODUCT_LINES_AND_CAPACITY.md

@@ -32,3 +32,7 @@ remove completed-trace teacher labels from training. Do not use future action
 or response data at runtime. Treat `ForwardWave -> typed receipts ->
 VerifiedDeltaReceipt -> BackwardWave -> immutable generation g+1` as the
 canonical system core; do not mutate an ACTIVE generation in place.
+The cube stores a crystallized law; it does not grok by itself. Circuit
+formation must pass through `CandidateCubeField` and
+`OperatorGrokkingConsolidator`, resolve a whole connected operator, and survive
+exact-memory cleanup plus causal phase ablations.
