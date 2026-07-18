@@ -89,6 +89,7 @@ mod l3_semantic_grokking;
 mod learn;
 mod math;
 mod morphology_wave;
+mod operator_blueprint;
 mod operator_circuit;
 mod operator_circuit_synthesis;
 mod operator_grokking;
@@ -143,16 +144,32 @@ pub use morphology_wave::{
     MorphologyGrokkingVerdict, MorphologyScalingReport, MorphologyScalingRow, MorphologyWaveBank,
     MorphologyWaveConfig,
 };
+pub use operator_blueprint::{
+    BlueprintBeamConfig, BlueprintFutureBlocker, BlueprintFutureConfig, BlueprintFutureEvaluator,
+    BlueprintFutureReport, BlueprintFutureScore, BlueprintPhaseControl, BlueprintSynthesisBlocker,
+    BlueprintSynthesisBlockerCount, BlueprintSynthesisReport, BoundedCircuitBeam,
+    BoundedRoleAligner, CandidateOperatorBlueprint, Commitment256, CompositionDag, CompositionEdge,
+    FrozenBlueprintError, FrozenBlueprintFutureWindow, FrozenOperatorBlueprintSet,
+    LocalRelationFragment, OPERATOR_BLUEPRINT_CANONICALIZER_VERSION,
+    OPERATOR_BLUEPRINT_MAX_ALIGNMENTS, OPERATOR_BLUEPRINT_MAX_BEAM_DEPTH,
+    OPERATOR_BLUEPRINT_MAX_BUNDLES, OPERATOR_BLUEPRINT_MAX_EXPANSIONS,
+    OPERATOR_BLUEPRINT_MAX_PROGRAM_ATOMS, OPERATOR_BLUEPRINT_MAX_RELATIONS,
+    OPERATOR_BLUEPRINT_MAX_ROLES, OPERATOR_ROLE_COLOR_ROUNDS, RendererContract,
+    RoleAlignmentBlocker, RoleAlignmentConfig, RoleAlignmentHypothesis, RoleAlignmentReport,
+    RoleBinding, RoleGraph, StructuralRoleCanonicalizer, StructuralRoleSignature,
+    SurfaceFragmentBundle, SurfaceFragmentBundleError, TypedProgramAtom, VerifierContract,
+};
 pub use operator_circuit::{
     OPERATOR_CIRCUIT_MAX_RELATIONS, OPERATOR_CIRCUIT_MAX_ROLES, OPERATOR_WAVE_MAX_SAMPLES,
     OperatorCircuit, OperatorCircuitError, OperatorCircuitRelation, OperatorRelationCell,
     TernaryRelationState, VerifiedPartialRelationWave, VerifiedRelationSample, VerifiedWaveOutcome,
 };
 pub use operator_circuit_synthesis::{
-    CIRCUIT_SYNTHESIS_MAX_FRAGMENTS, CircuitSynthesisBlocker, CircuitSynthesisBlockerCount,
-    CircuitSynthesisConfig, CircuitSynthesisError, CircuitSynthesizer, FrozenCircuitSetError,
-    FrozenFutureCircuitField, FrozenSynthesizedCircuitSet, OperatorCircuitSynthesisReport,
-    RelationFragment, RelationFragmentGenerator, RelationFragmentReport,
+    CIRCUIT_SYNTHESIS_MAX_CIRCUITS, CIRCUIT_SYNTHESIS_MAX_FRAGMENTS, CircuitSynthesisBlocker,
+    CircuitSynthesisBlockerCount, CircuitSynthesisConfig, CircuitSynthesisError,
+    CircuitSynthesizer, FrozenCircuitSetError, FrozenFutureCircuitField,
+    FrozenSynthesizedCircuitSet, OperatorCircuitSynthesisReport, RelationFragment,
+    RelationFragmentGenerator, RelationFragmentReport,
 };
 pub use operator_grokking::{
     CandidateCubeField, CandidateCubeFieldError, CoherentOperatorCandidate, OperatorCircuitScore,

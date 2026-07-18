@@ -7,6 +7,7 @@ use super::{
 };
 
 pub const CIRCUIT_SYNTHESIS_MAX_FRAGMENTS: usize = 256;
+pub const CIRCUIT_SYNTHESIS_MAX_CIRCUITS: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RelationFragment {
@@ -54,7 +55,7 @@ pub struct CircuitSynthesisConfig {
 impl Default for CircuitSynthesisConfig {
     fn default() -> Self {
         Self {
-            max_circuits: 64,
+            max_circuits: CIRCUIT_SYNTHESIS_MAX_CIRCUITS,
             max_fragments: CIRCUIT_SYNTHESIS_MAX_FRAGMENTS,
         }
     }
@@ -170,7 +171,11 @@ impl CircuitSynthesizer {
         support_waves: &[VerifiedPartialRelationWave],
         config: CircuitSynthesisConfig,
     ) -> Result<OperatorCircuitSynthesisReport, CircuitSynthesisError> {
-        if config.max_circuits == 0 || config.max_fragments == 0 {
+        if config.max_circuits == 0
+            || config.max_circuits > CIRCUIT_SYNTHESIS_MAX_CIRCUITS
+            || config.max_fragments == 0
+            || config.max_fragments > CIRCUIT_SYNTHESIS_MAX_FRAGMENTS
+        {
             return Err(CircuitSynthesisError::InvalidConfig);
         }
 

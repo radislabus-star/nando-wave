@@ -108,7 +108,7 @@ RelationFragmentGenerator                  PASS
 bounded CircuitSynthesizer                 PASS
 target-absent construction test            PASS
 support receipt reuse firewall             PASS
-disjoint future causal proof               PASS (laboratory)
+identity-disjoint future validation        WATCH (superseded)
 generation firewall integration            PASS (library path)
 live stage receipt integration             BLOCK
 streaming checkpoint of frozen set         BLOCK
@@ -141,3 +141,11 @@ candidate.
 
 This is not yet an organic live-grokking or product claim. No production binary
 was deployed by this phase.
+
+The global-role V1 path is retained only as a compatibility experiment. Its
+receipt-ID firewall and single synthesized circuit are insufficient for the
+canonical claim. The replacement proof is documented in:
+
+```text
+plans/local-role-operator-blueprints-v1/LOCAL_ROLE_OPERATOR_BLUEPRINTS_V1.md
+```

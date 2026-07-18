@@ -215,6 +215,11 @@ impl VerifiedDeltaReceipt {
     }
 
     #[must_use]
+    pub fn input_relation_sha256(&self) -> &str {
+        &self.input_relation_sha256
+    }
+
+    #[must_use]
     pub const fn outcome(&self) -> VerifiedDeltaOutcome {
         self.outcome
     }

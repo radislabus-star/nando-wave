@@ -824,6 +824,89 @@ negative, and hard-contradiction outcomes cannot create topology. Every missing
 candidate has an explicit blocker such as no positive evidence, non-canonical
 roles, disconnected graph, zero phase magnitude, or capacity exhaustion.
 
+### Canonical correction: roles are local to each surface
+
+WARNING: a transferable operator must not be synthesized by unioning relation
+fragments that already share caller-assigned global role IDs. Every completed
+surface owns a private local role namespace. Transferability is born while the
+system maintains competing structural role-alignment hypotheses across those
+namespaces.
+
+```text
+SurfaceFragmentBundle A: local roles a0, a1, a2
+SurfaceFragmentBundle B: local roles b0, b1
+SurfaceFragmentBundle C: local roles c0, c1, c2
+        |
+        v
+StructuralRoleSignature + graph-color refinement
+        |
+        v
+RoleAlignmentHypothesis X / Y / Z
+        |
+        v
+bounded dependency-closed circuit beam
+        |
+        v
+CandidateOperatorBlueprint X / Y / Z
+        |
+        v
+FrozenOperatorBlueprintSet
+        |
+        v
+independent future binding and cross-plane phase coherence
+```
+
+Support creates a version space; it never chooses the winner. A blueprint
+contains a role graph, relation program, existing typed transform program,
+composition DAG, renderer hypothesis, verifier obligations, and phase anchors.
+The actor and verifier engines are reused; circuit synthesis must not introduce
+a second execution language.
+
+The frozen set commits full 32-byte support lineages, its canonical candidate
+set, canonicalizer version, bounded synthesis configuration, and source operator
+generation. Receipt IDs are indexing aids and are never sufficient provenance.
+Future evidence must have lineages absent from support. Structural equivalence
+to support is allowed and required for transfer; byte-identical evidence lineage
+reuse is forbidden.
+
+Circuit ranking uses one contribution per lineage for each edge, then edge
+coherence, plane coherence, and whole-circuit closure. Raw sample frequency must
+not let one common relation drown a weak mandatory edge. Crystallization requires
+minimum edge coverage, all mandatory planes, a whole-circuit coherence floor,
+and margin over the runner-up.
+
+Absolute core limits are not caller-expandable:
+
+```text
+blueprints <= 64
+beam depth <= 12
+beam expansions <= 4096
+roles <= 32
+relations <= 256
+```
+
+Budget exhaustion preserves the incomplete training state but yields ABSTAIN,
+never the first candidate. A JEPA-like predictor may later rank expansions and
+probes, but it cannot create evidence, crystallize a circuit, or grant authority.
+
+Canonical implementation plan:
+
+```text
+plans/local-role-operator-blueprints-v1/LOCAL_ROLE_OPERATOR_BLUEPRINTS_V1.md
+```
+
+Pure-core implementation:
+
+```text
+crates/nando-core/src/wave/operator_blueprint.rs
+crates/nando-core/tests/operator_blueprint_causal.rs
+```
+
+The pure bounded proof now constructs competing blueprints from local partial
+graphs and resolves one only on full-lineage future phase evidence. This is a
+laboratory mechanism PASS. Live bundle extraction, streaming persistence,
+external admission, CPU execution, and economics remain BLOCK.
+
 Canonical implementation plan:
 
 ```text
