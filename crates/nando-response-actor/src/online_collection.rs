@@ -66,6 +66,7 @@ const ONLINE_COLLECTION_POOLING_STRATEGY_V28: u32 = 28;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V29: u32 = 29;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V31: u32 = 31;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V32: u32 = 32;
+const ONLINE_COLLECTION_POOLING_STRATEGY_V33: u32 = 33;
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V2: &[u8; 4] = b"NCO2";
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NCO3";
 const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
@@ -536,7 +537,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V32,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V33,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -851,6 +852,13 @@ impl OnlineCollectionMiner {
             // routing atoms are recovered from durable pre-action receipts.
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V32;
         }
+        let durable_law_subcenter_refresh_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V33;
+        if durable_law_subcenter_refresh_migrated {
+            // Matched program digests are exact teacher proofs, so V33 can
+            // recover law subcenters without retaining provider payloads.
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V33;
+        }
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -881,14 +889,17 @@ impl OnlineCollectionMiner {
             || turn_output_adapter_migrated
             || concrete_adapter_law_migrated
             || canonical_alignment_refresh_migrated
-            || durable_phase_adapter_refresh_migrated;
+            || durable_phase_adapter_refresh_migrated
+            || durable_law_subcenter_refresh_migrated;
         if checkpoint_migrated {
             if pre_v17_migrated {
                 miner.merge_converged_unfrozen_buckets()?;
             }
             let migration_indices = if pre_v17_migrated {
                 (0..miner.checkpoint.buckets.len()).collect::<Vec<_>>()
-            } else if durable_phase_adapter_refresh_migrated {
+            } else if durable_phase_adapter_refresh_migrated
+                || durable_law_subcenter_refresh_migrated
+            {
                 miner
                     .checkpoint
                     .buckets
@@ -4083,17 +4094,19 @@ fn support_law_subcenters(
     for (law_key, adapters) in law_groups {
         let mut support = Vec::new();
         for receipt in &bucket.support {
-            let Some(example) = bucket.runtime_examples.get(&receipt.evidence_graph_sha256) else {
+            if !receipt.verifier_pass {
                 continue;
-            };
+            }
+            // matched_program_sha256 is written only after the program has
+            // reproduced the complete teacher response. Requiring the raw
+            // example again made a valid proof disappear after restart.
             let matched_program_sha256 = adapters
                 .iter()
-                .filter(|(program_sha256, program)| {
+                .filter(|(program_sha256, _)| {
                     receipt
                         .matched_program_sha256
                         .iter()
                         .any(|digest| digest == *program_sha256)
-                        && independently_verified_teacher_match(program, example)
                 })
                 .map(|(program_sha256, _)| program_sha256.clone())
                 .collect::<Vec<_>>();
@@ -4723,7 +4736,7 @@ fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V32
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V33
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -7436,10 +7449,75 @@ mod tests {
         let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
         assert_eq!(
             migrated.checkpoint.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert_eq!(migrated.status().frozen_buckets_total, 1);
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
+        let plain = ResponseProgram::project_selected_value(
+            crate::ResponseValueSelector::JsonField {
+                field: "value".to_owned(),
+                value_type: crate::AtomValueType::Integer,
+            },
+            crate::ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let json = ResponseProgram::project_selected_value(
+            crate::ResponseValueSelector::JsonField {
+                field: "value".to_owned(),
+                value_type: crate::AtomValueType::Integer,
+            },
+            crate::ValueProjectionFormat::CanonicalJson,
+            "completed",
+        );
+        let plain_digest = canonical_json_sha256(&plain).expect("plain digest");
+        let json_digest = canonical_json_sha256(&json).expect("json digest");
+        let support = (0..60)
+            .map(|index| OnlineCollectionReceipt {
+                evidence_graph_sha256: format!("{:064x}", index + 70_000),
+                client_intent_id_sha256: format!("{:064x}", index + 80_000),
+                session_id_sha256: format!("{:064x}", index % 8 + 90_000),
+                event_time_unix_nanos: Some(index as u64 + 1),
+                layout_sha256: "a".repeat(64),
+                estimated_input_tokens: 100,
+                verifier_pass: true,
+                request_atom_ids: vec![crate::stable_atom_id("request:project")],
+                matched_program_sha256: vec![if index < 40 {
+                    plain_digest.clone()
+                } else {
+                    json_digest.clone()
+                }],
+                witness_class_commitment_sha256: None,
+                witness_round: None,
+                witness_candidates_before: None,
+                witness_candidates_after: None,
+            })
+            .collect();
+        let bucket = OnlineCollectionBucket {
+            bucket_id: "1".repeat(64),
+            archetype_id: "2".repeat(64),
+            programs: BTreeMap::from([(plain_digest.clone(), plain), (json_digest, json)]),
+            common_request_atom_ids: BTreeSet::new(),
+            support,
+            future: Vec::new(),
+            runtime_examples: BTreeMap::new(),
+            durable_runtime_parity_receipts: BTreeMap::new(),
+            frozen_program_sha256: None,
+            support_watermark_event_time_unix_nanos: None,
+            support_manifest_sha256: None,
+            rejected_program_sha256: BTreeSet::new(),
+            learned_anti_atom_ids: BTreeSet::new(),
+            wrong_accepts: 0,
+        };
+
+        let subcenters = support_law_subcenters(&bucket, 32, 128).expect("law subcenters");
+        assert_eq!(subcenters.len(), 1);
+        assert_eq!(subcenters[0].support.len(), 40);
+        assert_eq!(subcenters[0].programs.len(), 1);
+        assert!(subcenters[0].programs.contains_key(&plain_digest));
     }
 
     #[test]
@@ -8763,7 +8841,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert_eq!(status.frozen_buckets_total, 0);
         assert_eq!(status.future_receipts_unique_total, 0);
@@ -8842,7 +8920,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
         assert_eq!(status.support_receipts_unique_total, 0);
@@ -8912,7 +8990,7 @@ mod tests {
         let bucket = migrated.checkpoint.buckets.first().expect("bucket");
         assert_eq!(
             migrated.status().pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert!(bucket.rejected_program_sha256.contains(&historical_digest));
         assert!(bucket.learned_anti_atom_ids.is_empty());
@@ -9183,7 +9261,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert_eq!(status.observations_total, observations);
         assert_eq!(status.support_receipts_unique_total, support);
@@ -9283,7 +9361,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert_eq!(status.future_receipts_unique_total, 0);
         assert_eq!(status.wrong_accepts_total, 0);
@@ -9745,7 +9823,7 @@ mod tests {
         let status = miner.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+            ONLINE_COLLECTION_POOLING_STRATEGY_V33
         );
         assert!(
             status
