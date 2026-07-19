@@ -14,6 +14,7 @@ use crate::{
 
 const MAX_SEARCH_ROWS: usize = 1_024;
 const MAX_CANDIDATES: usize = 16_384;
+const MAX_LEARNED_SELECTOR_CANDIDATES: usize = 128;
 const MAX_TURN_COLLECTION_OUTPUTS: usize = 16;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1273,7 +1274,40 @@ pub(crate) fn learned_selector_candidates(payload: &Value) -> Vec<ResponseValueS
     }
     selectors.sort();
     selectors.dedup();
+    // Bound physical adapters before renderer/version-space expansion. Keep
+    // request relations and latest-output anchors ahead of broad turn history;
+    // otherwise a bounded 128 KiB payload can still create an unbounded
+    // quadratic selector composition step.
+    selectors.sort_by(|left, right| {
+        learned_selector_priority(left)
+            .cmp(&learned_selector_priority(right))
+            .then_with(|| left.cmp(right))
+    });
+    selectors.truncate(MAX_LEARNED_SELECTOR_CANDIDATES);
+    selectors.sort();
     selectors
+}
+
+const fn learned_selector_priority(selector: &ResponseValueSelector) -> u8 {
+    match selector {
+        ResponseValueSelector::RequestReferencedJsonField { .. }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
+        | ResponseValueSelector::RequestLastToken
+        | ResponseValueSelector::RequestUniqueLiteral => 0,
+        ResponseValueSelector::ContentLinePrefix { .. }
+        | ResponseValueSelector::CommandOutputBody
+        | ResponseValueSelector::LatestTurnOutputLine { .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
+        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. } => 1,
+        ResponseValueSelector::UniqueScalar { .. }
+        | ResponseValueSelector::UniqueTurnScalar { .. }
+        | ResponseValueSelector::JsonField { .. }
+        | ResponseValueSelector::JsonScalarOrdinal { .. } => 2,
+        ResponseValueSelector::UniqueTurnJsonField { .. }
+        | ResponseValueSelector::UniqueActiveTurnJsonField { .. } => 3,
+        ResponseValueSelector::TurnOutputLine { .. }
+        | ResponseValueSelector::TurnOutputScalarOrdinal { .. } => 4,
+    }
 }
 
 fn collect_scalar_ordinal_candidates(
@@ -3495,6 +3529,32 @@ mod tests {
             ResponseExecutionStatus::Abstain
         );
         assert!(verify_response_independently(&verifier, &ambiguous, "[11]").is_err());
+    }
+
+    #[test]
+    fn selector_beam_bounds_broad_turn_before_program_expansion() {
+        let outputs = (0..16)
+            .map(|output_ordinal| {
+                let output = (0..256)
+                    .map(|line| format!("metric_{output_ordinal}_{line}: {line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                json!({"type":"function_call_output", "output":output})
+            })
+            .collect::<Vec<_>>();
+        let payload = json!({"input": outputs});
+        let selectors = learned_selector_candidates(&payload);
+
+        assert!(selectors.len() <= MAX_LEARNED_SELECTOR_CANDIDATES);
+        assert!(selectors.iter().any(|selector| matches!(
+            selector,
+            ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal: 0, .. }
+        )));
+        assert!(selectors.iter().any(|selector| matches!(
+            selector,
+            ResponseValueSelector::LatestTurnOutputLine { .. }
+                | ResponseValueSelector::ContentLinePrefix { .. }
+        )));
     }
 
     #[test]

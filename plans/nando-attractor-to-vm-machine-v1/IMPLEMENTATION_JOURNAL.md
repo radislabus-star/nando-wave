@@ -1403,3 +1403,34 @@ Focused remote receipts:
 64-128 KiB bounded active-turn payload remains executable evidence  1/1 PASS  0.02 s
 nando-response-actor all-targets check                                  PASS  7.26 s
 ```
+
+## 2026-07-20 - Bound selectors before version-space expansion (v78)
+
+The v77 live learner accepted the newly aligned 128 KiB envelopes, but one
+broad frame prevented the stream worker from committing any input:
+
+```text
+worker enqueued / processed / backlog  479 / 0 / 479
+failed                                  0
+```
+
+The selector collectors were individually bounded, but their combined set was
+not. The `MAX_CANDIDATES` guard ran only after renderer and sequence expansion,
+so up to 16 outputs and 256 lines per output could create a large quadratic
+version space before the guard fired.
+
+Strategy v78 applies a deterministic 128-selector beam before program
+expansion. Request-bound structural selectors are retained first, followed by
+content-prefix and latest-output anchors, then JSON and broader turn adapters.
+No function name or field name is used as semantic authority. The downstream
+candidate limit and all admission gates remain unchanged.
+
+Focused remote receipts:
+
+```text
+broad 16-output selector beam                         1/1 PASS  0.01 s
+physical adapter quotient                             1/1 PASS  0.05 s
+custom-tool crystallize/admit/restart/CPU lifecycle   1/1 PASS  3.39 s
+multi-role phase-selected Rich Operator lifecycle     1/1 PASS  2.56 s
+nando-response-actor all-targets check                    PASS  0.04 s cached
+```
