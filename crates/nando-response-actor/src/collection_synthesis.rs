@@ -1377,20 +1377,18 @@ pub fn is_source_neutral_collection_program(program: &ResponseProgram) -> bool {
     let crate::ResponseOperation::ComposeCollection { steps, .. } = &program.operation else {
         return false;
     };
-    steps.iter().all(|step| {
-        match step {
-            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { selector, .. } => {
-                is_source_neutral_request_selector(selector)
-            }
-            CollectionProgramStep::SelectTurnOutput { .. }
-            | CollectionProgramStep::SelectOnlyArrayField
-            | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
-            | CollectionProgramStep::ProjectUniqueFieldByType { .. }
-            | CollectionProgramStep::ProjectOnlyNonFilterField
-            | CollectionProgramStep::AggregateUniqueIntegerField { .. }
-            | CollectionProgramStep::Count => true,
-            _ => false,
+    steps.iter().all(|step| match step {
+        CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { selector, .. } => {
+            is_source_neutral_request_selector(selector)
         }
+        CollectionProgramStep::SelectTurnOutput { .. }
+        | CollectionProgramStep::SelectOnlyArrayField
+        | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+        | CollectionProgramStep::ProjectUniqueFieldByType { .. }
+        | CollectionProgramStep::ProjectOnlyNonFilterField
+        | CollectionProgramStep::AggregateUniqueIntegerField { .. }
+        | CollectionProgramStep::Count => true,
+        _ => false,
     })
 }
 
@@ -1449,9 +1447,7 @@ pub fn is_source_neutral_response_program(program: &ResponseProgram) -> bool {
         }
         | ResponseOperation::ProjectStatus {
             selector, renderer, ..
-        } => {
-            source_neutral_selector(selector) && response_renderer_is_surface_neutral(renderer)
-        }
+        } => source_neutral_selector(selector) && response_renderer_is_surface_neutral(renderer),
         ResponseOperation::ComposeCollection { renderer, .. } => {
             is_source_neutral_collection_program(program)
                 && response_renderer_is_surface_neutral(renderer)
@@ -1531,7 +1527,9 @@ pub fn is_privacy_safe_online_response_program(program: &ResponseProgram) -> boo
                     .all(|variant| is_privacy_safe_online_response_program(&variant.program))
         }
         ResponseOperation::ProjectSelectedValue { .. }
-        | ResponseOperation::ProjectStatus { .. } => program.validate().is_ok(),
+        | ResponseOperation::ProjectStatus { .. }
+        | ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => program.validate().is_ok(),
         ResponseOperation::ComposeCollection { renderer, .. } => {
             is_source_neutral_collection_program(program)
                 && match renderer {
@@ -1557,7 +1555,9 @@ pub fn is_learned_bounded_response_program(program: &ResponseProgram) -> bool {
                     .all(|variant| is_learned_bounded_response_program(&variant.program))
         }
         ResponseOperation::ProjectSelectedValue { .. }
-        | ResponseOperation::ProjectStatus { .. } => true,
+        | ResponseOperation::ProjectStatus { .. }
+        | ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => true,
         ResponseOperation::ComposeCollection { steps, .. } => steps.iter().all(|step| {
             matches!(
                 step,

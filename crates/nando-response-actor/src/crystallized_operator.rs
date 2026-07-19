@@ -17,11 +17,11 @@ use sha2::{Digest, Sha256};
 use crate::runtime::{ObservedRoleCandidate, ObservedSourceClass, observed_request_ordinal_roles};
 use crate::{
     AtomValueType, BackwardWave, BackwardWaveError, BackwardWaveUpdate, ResponseExecutionStatus,
-    ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifiedDeltaReceipt,
-    VerifierProgram, execute_response, is_privacy_safe_online_response_program,
-    is_source_neutral_response_program, response_actor_program_digest,
-    response_independent_verifier_program_digest, source_neutral_verifier_for_program,
-    verify_response_independently_with_request,
+    ResponseOperation, ResponseProgram, ResponseValueSelector, ValueProjectionFormat,
+    VerifiedDeltaReceipt, VerifierProgram, execute_response,
+    is_privacy_safe_online_response_program, is_source_neutral_response_program,
+    response_actor_program_digest, response_independent_verifier_program_digest,
+    source_neutral_verifier_for_program, verify_response_independently_with_request,
 };
 
 pub const TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR: u8 = 1;
@@ -324,6 +324,11 @@ impl CrystallizedOperator {
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
         let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let uses_typed_actor_renderer = matches!(
+            &actor.operation,
+            crate::ResponseOperation::FunctionCallFromRoles { .. }
+                | crate::ResponseOperation::CustomToolCallFromRoles { .. }
+        );
         let page = build_operator_page(
             blueprint,
             frozen.source_generation().saturating_add(1),
@@ -331,6 +336,7 @@ impl CrystallizedOperator {
             frozen.support_lineages_sha256(),
             &verified_future_lineages,
             &renderer,
+            uses_typed_actor_renderer,
             &actor_sha256,
             &verifier_sha256,
         )?;
@@ -757,10 +763,7 @@ fn observed_scalar_runtime_surface(
     let source = 1_u8;
     let roles = vec![
         StructuralRoleSignature::new(5, 1, 0, 1, vec![0]),
-        // A single unique scalar has no observable semantic selector class.
-        // Binding still retains the concrete selector as an ephemeral anchor,
-        // while the circuit sees only type/cardinality/temporal structure.
-        StructuralRoleSignature::new(runtime_value_type_tag(value_type), 1, 1, 2, vec![0]),
+        runtime_role_signature_for_selector(&selector, 0),
     ];
     let phase_atoms = [
         format!("scalar_type:{}", runtime_value_type_tag(value_type)),
@@ -871,8 +874,12 @@ fn bind_raw_pre_action_components(
     if transforms.len() == 1 {
         let expected_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
         let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
-        for selector in runtime_selector_candidates(provider_payload, expected_type)
-            .filter(|selector| selector_value_type(selector) == Some(expected_type))
+        for selector in runtime_selector_candidates(
+            provider_payload,
+            expected_type,
+            actor_primary_selector(actor_template),
+        )
+        .filter(|selector| selector_value_type(selector) == Some(expected_type))
         {
             let Ok(evidence) = observed_scalar_runtime_surface(
                 request_text,
@@ -1138,11 +1145,12 @@ impl BoundCrystallizedOperator {
             .response
             .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
         let response = match &self.vm_page {
-            Some(page) => crate::operator_vm::execute_operator_page(
+            Some(page) => crate::operator_vm::execute_operator_page_with_actor(
                 page,
                 &self.bound_selectors,
                 &self.request_text,
                 &self.provider_payload,
+                &self.actor,
             )
             .map_err(|_| CrystallizedOperatorError::OperatorVmRejected)?,
             None => reference_response.clone(),
@@ -1418,8 +1426,12 @@ fn independently_bind_verifier(
             String,
             std::collections::BTreeMap<String, ResponseProgram>,
         >::new();
-        for selector in runtime_selector_candidates(provider_payload, expected_type)
-            .filter(|selector| selector_value_type(selector) == Some(expected_type))
+        for selector in runtime_selector_candidates(
+            provider_payload,
+            expected_type,
+            actor_primary_selector(actor_template),
+        )
+        .filter(|selector| selector_value_type(selector) == Some(expected_type))
         {
             let program = instantiate_bound_actor(
                 actor_template,
@@ -1561,6 +1573,10 @@ fn actor_renderer_contract(
         crate::ResponseOperation::ProjectSelectedValue { renderer, .. }
         | crate::ResponseOperation::ProjectStatus { renderer, .. }
         | crate::ResponseOperation::ComposeCollection { renderer, .. } => Ok(renderer.clone()),
+        crate::ResponseOperation::FunctionCallFromRoles { .. }
+        | crate::ResponseOperation::CustomToolCallFromRoles { .. } => {
+            Ok(crate::CollectionOutputRenderer::Direct)
+        }
         crate::ResponseOperation::UniqueConsensus { variants, .. } => {
             let mut renderer = None;
             for variant in variants {
@@ -1694,6 +1710,13 @@ fn bind_program_selectors(
     selectors: &[ResponseValueSelector],
 ) -> Result<(), CrystallizedOperatorError> {
     match &mut program.operation {
+        crate::ResponseOperation::FunctionCallFromRoles { selector, .. }
+        | crate::ResponseOperation::CustomToolCallFromRoles { selector, .. } => {
+            let [primary] = selectors else {
+                return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+            };
+            *selector = primary.clone();
+        }
         crate::ResponseOperation::ProjectSelectedValue {
             selector, renderer, ..
         } => {
@@ -1821,15 +1844,29 @@ fn selector_value_type(selector: &ResponseValueSelector) -> Option<AtomValueType
 fn runtime_selector_candidates(
     provider_payload: &Value,
     expected_type: AtomValueType,
+    preferred: Option<&ResponseValueSelector>,
 ) -> impl Iterator<Item = ResponseValueSelector> {
-    let candidates = if expected_type == AtomValueType::Collection {
+    let mut candidates = preferred.cloned().into_iter().collect::<Vec<_>>();
+    candidates.extend(if expected_type == AtomValueType::Collection {
         vec![ResponseValueSelector::UniqueScalar {
             value_type: AtomValueType::Collection,
         }]
     } else {
         crate::collection_synthesis::learned_selector_candidates(provider_payload)
-    };
+    });
+    candidates.sort();
+    candidates.dedup();
     candidates.into_iter()
+}
+
+fn actor_primary_selector(program: &ResponseProgram) -> Option<&ResponseValueSelector> {
+    match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { selector, .. }
+        | ResponseOperation::CustomToolCallFromRoles { selector, .. }
+        | ResponseOperation::ProjectSelectedValue { selector, .. }
+        | ResponseOperation::ProjectStatus { selector, .. } => Some(selector),
+        _ => None,
+    }
 }
 
 pub(crate) fn runtime_role_signature_for_selector(
@@ -1846,16 +1883,38 @@ pub(crate) fn runtime_role_signature_for_selector(
             (1, 0x0300 | u32::from(*ordinal))
         }
         ResponseValueSelector::CommandOutputBody => (1, 0x0400),
+        ResponseValueSelector::JsonScalarOrdinal { ordinal, .. } => {
+            (1, 0x0001_0000 | u32::from(*ordinal))
+        }
+        ResponseValueSelector::TurnOutputScalarOrdinal {
+            output_ordinal,
+            scalar_ordinal,
+            ..
+        } => (
+            1,
+            0x0002_0000 | (u32::from(*output_ordinal) << 8) | u32::from(*scalar_ordinal),
+        ),
+        ResponseValueSelector::LatestTurnOutputScalarOrdinal { scalar_ordinal, .. } => {
+            (1, 0x0003_0000 | u32::from(*scalar_ordinal))
+        }
+        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal, ..
+        } => (1, 0x0004_0000 | u32::from(*reverse_ordinal)),
+        ResponseValueSelector::TurnOutputLine {
+            output_ordinal,
+            line_index,
+            ..
+        } => (
+            1,
+            0x0005_0000 | (u32::from(*output_ordinal) << 8) | u32::from(*line_index),
+        ),
+        ResponseValueSelector::LatestTurnOutputLine { line_index, .. } => {
+            (1, 0x0006_0000 | u32::from(*line_index))
+        }
         ResponseValueSelector::ContentLinePrefix { .. }
         | ResponseValueSelector::JsonField { .. }
-        | ResponseValueSelector::JsonScalarOrdinal { .. }
         | ResponseValueSelector::UniqueTurnJsonField { .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { .. }
-        | ResponseValueSelector::TurnOutputLine { .. }
-        | ResponseValueSelector::TurnOutputScalarOrdinal { .. }
-        | ResponseValueSelector::LatestTurnOutputLine { .. }
-        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
-        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
         | ResponseValueSelector::UniqueScalar { .. }
         | ResponseValueSelector::UniqueTurnScalar { .. } => (1, 0x0200),
     };
@@ -2350,6 +2409,7 @@ fn build_operator_page(
     support_lineages: &[Commitment256],
     future_lineages: &[Commitment256],
     output_renderer: &crate::CollectionOutputRenderer,
+    uses_typed_actor_renderer: bool,
     actor_sha256: &str,
     verifier_sha256: &str,
 ) -> Result<OperatorPage32, CrystallizedOperatorError> {
@@ -2425,8 +2485,11 @@ fn build_operator_page(
 
     let _actor_digest = decode_sha256(actor_sha256)?;
     let verifier_digest = decode_sha256(verifier_sha256)?;
-    let (renderer, renderer_instruction_count) =
-        crate::operator_vm::encode_renderer_program(output_renderer, &ordered_transforms)?;
+    let (renderer, renderer_instruction_count) = if uses_typed_actor_renderer {
+        crate::operator_vm::encode_typed_actor_renderer_program(&ordered_transforms)?
+    } else {
+        crate::operator_vm::encode_renderer_program(output_renderer, &ordered_transforms)?
+    };
 
     let proof_lineage = lineage_commitment(support_lineages, future_lineages);
     let role_commitment = roles_commitment(&roles);

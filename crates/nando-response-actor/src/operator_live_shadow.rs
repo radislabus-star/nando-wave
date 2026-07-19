@@ -14,9 +14,9 @@ use sha2::{Digest, Sha256};
 use crate::{
     AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionScalarType,
     CollectionSynthesisExample, CrystallizationParityReceipt, CrystallizedOperator,
-    ProjectStatusMapping, ResponseOperation, ResponsePackage, ResponsePackageOrigin,
-    ResponsePackageProof, ResponsePackageState, ResponseProgram, ResponseRenderSegment,
-    ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
+    ProjectStatusMapping, ResponseArgument, ResponseOperation, ResponsePackage,
+    ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponseProgram,
+    ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
     TRANSFORM_OPCODE_COUNT_COLLECTION, TRANSFORM_OPCODE_FILTER_REQUEST_VALUE,
     TRANSFORM_OPCODE_PROJECT_STATUS, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
     TRANSFORM_STATUS_ZERO_IS_OK, TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS,
@@ -25,11 +25,12 @@ use crate::{
     ValueProjectionFormat, enumerate_source_neutral_response_programs, execute_response,
     is_privacy_safe_online_response_program, is_source_neutral_response_program,
     response_actor_program_digest, response_independent_verifier_program_digest,
-    source_neutral_verifier_for_program,
+    source_neutral_verifier_for_program, synthesize_response_operator,
 };
 
 const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
 const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
+const TEACHER_CALL_SELECTOR_BUDGET: usize = 512;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveScalarCircuitSample {
@@ -52,6 +53,52 @@ pub enum LiveScalarShadowBlocker {
     MissingParityCase,
     PayloadTooLarge,
     NoExactSourceNeutralProgram,
+    ProgramEnumerationFailed,
+    CandidateBudgetExhausted,
+    EmptyVersionSpace,
+    TeacherSynthesisEmptySupport,
+    TeacherSynthesisAmbiguousRoles,
+    TeacherSynthesisInconsistentRoleFamily,
+    TeacherSynthesisMissingPendingState,
+    TeacherSynthesisMissingCompletionState,
+    TeacherSynthesisMissingUniqueHandle,
+    TeacherSynthesisNoConsistentProgram,
+    TeacherSynthesisAmbiguousPrograms,
+    TeacherProgramNotCall,
+    TeacherProgramParityMismatch,
+    TeacherProgramRuntimeAbstain,
+    TeacherProgramImmediateToolOutputMissing,
+    TeacherProgramSelectorPrefixMissing,
+    TeacherProgramSelectorPrefixAmbiguous,
+    TeacherProgramSelectorTypeMismatch,
+    TeacherProgramOutputTextInvalid,
+    TeacherProgramSelectorParseFailed,
+    TeacherProgramRoleParseFailed,
+    TeacherProgramVerificationFailed,
+    TeacherProgramInvalid,
+    TeacherProgramWireEnvelopeMismatch,
+    TeacherProgramSymbolMismatch,
+    TeacherProgramInputMismatch,
+    TeacherProgramInputWhitespaceMismatch,
+    TeacherProgramInputTokenValueMismatch,
+    TeacherProgramInputSingleNumericMismatch,
+    TeacherProgramInputMultipleNumericMismatch,
+    TeacherProgramInputQuotedLiteralMismatch,
+    TeacherProgramInputIdentifierMismatch,
+    TeacherProgramInputMixedTokenMismatch,
+    TeacherProgramDynamicRoleNumericMismatch,
+    TeacherProgramDynamicRoleStringMismatch,
+    TeacherProgramStaticIntegerMismatch,
+    TeacherProgramStaticStringMismatch,
+    TeacherProgramRoleValueUnavailable,
+    TeacherProgramRoleValueNotObserved,
+    TeacherProgramRoleValueCandidateMismatch,
+    TeacherProgramRoleValueInRequestText,
+    TeacherProgramRoleValueInPayloadScalar,
+    TeacherProgramRoleValueInPayloadText,
+    TeacherProgramRoleValueAbsentFromPayload,
+    TeacherProgramInputSyntaxShapeMismatch,
+    TeacherProgramResponseShapeMismatch,
     ExactStatusProgram,
     ExactCollectionProgram,
     UnsupportedRendererProgram,
@@ -405,30 +452,35 @@ fn evaluate_live_law(
     // would test support selectors against future surfaces and reject every
     // transferable operator. Crystallization below re-extracts and binds each
     // raw future surface, then independently repeats the binding in verifier.
-    let direct_actor_mismatches =
-        if rich_scalar_program_roles(&actor_template).is_some_and(|roles| roles.len() > 1) {
-            0
-        } else {
-            future
-                .iter()
-                .filter(|sample| {
-                    let Ok(provider_view) = crate::runtime::provider_payload_view(
-                        &sample.request_text,
-                        &sample.provider_payload,
-                    ) else {
-                        return true;
-                    };
-                    execute_response(
-                        &actor_template,
-                        &sample.request_text,
-                        provider_view.as_ref(),
-                    )
-                    .response
-                    .as_deref()
-                        != Some(sample.expected_response.as_str())
-                })
-                .count()
-        };
+    let direct_actor_mismatches = if rich_scalar_program_roles(&actor_template)
+        .is_some_and(|roles| roles.len() > 1)
+        || matches!(
+            &actor_template.operation,
+            ResponseOperation::FunctionCallFromRoles { .. }
+                | ResponseOperation::CustomToolCallFromRoles { .. }
+        ) {
+        0
+    } else {
+        future
+            .iter()
+            .filter(|sample| {
+                let Ok(provider_view) = crate::runtime::provider_payload_view(
+                    &sample.request_text,
+                    &sample.provider_payload,
+                ) else {
+                    return true;
+                };
+                execute_response(
+                    &actor_template,
+                    &sample.request_text,
+                    provider_view.as_ref(),
+                )
+                .response
+                .as_deref()
+                    != Some(sample.expected_response.as_str())
+            })
+            .count()
+    };
     if direct_actor_mismatches != 0 {
         increment_report_blocker(
             report,
@@ -675,13 +727,8 @@ fn live_admission_candidate(
     let verifier = operator
         .routing_verifier()
         .map_err(|_| "admission_routing_verifier_failed".to_owned())?;
-    let verifier_schema = match &program.operation {
-        ResponseOperation::ComposeCollection { .. } => crate::COLLECTION_EXTERNAL_VERIFIER_SCHEMA,
-        ResponseOperation::ProjectStatus { .. } => {
-            crate::STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA
-        }
-        _ => crate::VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA,
-    };
+    let verifier_schema = crate::response_program_external_verifier_schema(&program)
+        .ok_or_else(|| "admission_verifier_schema_missing".to_owned())?;
     let distinct_sessions = law
         .support
         .iter()
@@ -796,10 +843,21 @@ pub fn extract_live_scalar_circuit_sample(
         provider_payload: synthesis_payload.clone(),
         expected_response: parity.expected_response.clone(),
     };
-    let version_space = enumerate_source_neutral_response_programs(&example)
-        .map_err(|_| LiveScalarShadowBlocker::NoExactSourceNeutralProgram)?;
-    if version_space.programs.is_empty() {
-        return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
+    let version_space = enumerate_source_neutral_response_programs(&example).map_err(|error| {
+        if error == "collection_candidate_budget" {
+            LiveScalarShadowBlocker::CandidateBudgetExhausted
+        } else {
+            LiveScalarShadowBlocker::ProgramEnumerationFailed
+        }
+    })?;
+    let teacher_programs = teacher_action_programs(transition, parity, &synthesis_payload);
+    let teacher_programs = match teacher_programs {
+        Ok(programs) => programs,
+        Err(blocker) if version_space.programs.is_empty() => return Err(blocker),
+        Err(_) => Vec::new(),
+    };
+    if version_space.programs.is_empty() && teacher_programs.is_empty() {
+        return Err(LiveScalarShadowBlocker::EmptyVersionSpace);
     }
     let exact_count = version_space
         .programs
@@ -858,7 +916,9 @@ pub fn extract_live_scalar_circuit_sample(
         .programs
         .iter()
         .find(|program| rich_scalar_program_roles(program).is_some_and(|roles| roles.len() > 1));
-    let selected_template = if let Some(program) = &exact_count {
+    let selected_template = if let Some(program) = teacher_programs.first() {
+        program.clone()
+    } else if let Some(program) = &exact_count {
         program.clone()
     } else if let Some(program) = &exact_status {
         program.clone()
@@ -878,7 +938,18 @@ pub fn extract_live_scalar_circuit_sample(
             .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?
     };
     let exact_typed = exact_count.as_ref().or(exact_status.as_ref());
-    let mut actor_hypotheses = if !exact_filters.is_empty() {
+    let mut actor_hypotheses = if !teacher_programs.is_empty() {
+        teacher_programs
+            .iter()
+            .filter_map(|program| {
+                canonicalize_scalar_program_roles(
+                    program,
+                    &parity.request_text,
+                    &parity.provider_payload,
+                )
+            })
+            .collect()
+    } else if !exact_filters.is_empty() {
         exact_filters
             .iter()
             .filter_map(|program| {
@@ -1008,6 +1079,609 @@ pub fn extract_live_scalar_circuit_sample(
         extractor_version: extractor_version(&transition.before.extractor_version),
         law_sha256,
     })
+}
+
+fn teacher_action_programs(
+    transition: &TeacherTransition,
+    parity: &crate::RuntimeParityCase,
+    provider_payload: &Value,
+) -> Result<Vec<ResponseProgram>, LiveScalarShadowBlocker> {
+    let frame = transition.as_training_relation_frame();
+    let synthesized = synthesize_response_operator(std::slice::from_ref(&frame)).map_err(
+        |error| match error {
+            crate::SynthesisError::EmptySupport => {
+                LiveScalarShadowBlocker::TeacherSynthesisEmptySupport
+            }
+            crate::SynthesisError::AmbiguousRoles => {
+                LiveScalarShadowBlocker::TeacherSynthesisAmbiguousRoles
+            }
+            crate::SynthesisError::InconsistentRoleFamily => {
+                LiveScalarShadowBlocker::TeacherSynthesisInconsistentRoleFamily
+            }
+            crate::SynthesisError::MissingPendingState => {
+                LiveScalarShadowBlocker::TeacherSynthesisMissingPendingState
+            }
+            crate::SynthesisError::MissingCompletionState => {
+                LiveScalarShadowBlocker::TeacherSynthesisMissingCompletionState
+            }
+            crate::SynthesisError::MissingUniqueHandle => {
+                LiveScalarShadowBlocker::TeacherSynthesisMissingUniqueHandle
+            }
+            crate::SynthesisError::NoConsistentProgram => {
+                LiveScalarShadowBlocker::TeacherSynthesisNoConsistentProgram
+            }
+            crate::SynthesisError::AmbiguousPrograms => {
+                LiveScalarShadowBlocker::TeacherSynthesisAmbiguousPrograms
+            }
+        },
+    )?;
+    let program = synthesized.candidate.program;
+    if !matches!(
+        &program.operation,
+        ResponseOperation::FunctionCallFromRoles { .. }
+            | ResponseOperation::CustomToolCallFromRoles { .. }
+    ) {
+        return Err(LiveScalarShadowBlocker::TeacherProgramNotCall);
+    }
+    let selector_type = rich_scalar_program_roles(&program)
+        .and_then(|roles| roles.first().map(|role| selector_value_type(&role.0)))
+        .ok_or(LiveScalarShadowBlocker::RoleTypeInferenceFailed)?;
+    let mut candidates = vec![program.clone()];
+    let teacher_alignment = match teacher_call_role_value(&program, &parity.expected_response) {
+        Some(teacher_value) => {
+            match crate::runtime::structural_output_selectors_for_teacher_value(
+                provider_payload,
+                &teacher_value,
+                selector_type,
+            ) {
+                Ok(selectors) => {
+                    candidates.extend(
+                        selectors
+                            .into_iter()
+                            .filter_map(|selector| replace_call_selector(&program, selector)),
+                    );
+                    LiveScalarShadowBlocker::TeacherProgramRoleValueCandidateMismatch
+                }
+                Err(_) => teacher_role_value_location(
+                    &parity.request_text,
+                    provider_payload,
+                    &teacher_value,
+                ),
+            }
+        }
+        None => LiveScalarShadowBlocker::TeacherProgramRoleValueUnavailable,
+    };
+    if let ResponseOperation::FunctionCallFromRoles { selector, .. }
+    | ResponseOperation::CustomToolCallFromRoles { selector, .. } = &program.operation
+        && let Some((field, value_type)) = teacher_field_selector_hint(selector)
+        && let Ok(selectors) = crate::runtime::structural_output_selectors_for_field_hint(
+            provider_payload,
+            field,
+            value_type,
+        )
+    {
+        candidates.extend(
+            selectors
+                .into_iter()
+                .filter_map(|selector| replace_call_selector(&program, selector)),
+        );
+    }
+    candidates.extend(
+        crate::collection_synthesis::learned_selector_candidates(provider_payload)
+            .into_iter()
+            .filter(|selector| {
+                selector_value_type(selector) == selector_type
+                    && teacher_call_selector_is_structural(selector)
+            })
+            .filter_map(|selector| replace_call_selector(&program, selector)),
+    );
+    // Collection synthesis intentionally caps broad ordinal expansion at 16.
+    // Tool-call outputs can contain larger diagnostic objects, while the
+    // continuation role can remain outside the broad 16-scalar search.
+    // Extend only this typed call version space, preferring tail positions
+    // where continuation handles commonly occur, without using field names.
+    for ordinal in 16_u16..64 {
+        for selector in [
+            ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+                reverse_ordinal: ordinal,
+                value_type: selector_type,
+            },
+            ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+                scalar_ordinal: ordinal,
+                value_type: selector_type,
+            },
+        ] {
+            if let Some(candidate) = replace_call_selector(&program, selector) {
+                candidates.push(candidate);
+            }
+        }
+    }
+    let mut exact = BTreeMap::new();
+    let mut evaluated = BTreeSet::new();
+    let mut first_execution = None;
+    let mut first_structural_response = None;
+    for candidate in candidates {
+        let candidate_key = serde_cbor::to_vec(&candidate)
+            .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
+        if !evaluated.insert(candidate_key.clone()) {
+            continue;
+        }
+        if evaluated.len() > TEACHER_CALL_SELECTOR_BUDGET {
+            return Err(LiveScalarShadowBlocker::CandidateBudgetExhausted);
+        }
+        let execution = execute_response(&candidate, &parity.request_text, provider_payload);
+        first_execution.get_or_insert_with(|| (candidate.clone(), execution.clone()));
+        if let Some(response) = &execution.response {
+            first_structural_response.get_or_insert_with(|| (candidate.clone(), response.clone()));
+        }
+        if execution.response.as_deref() != Some(parity.expected_response.as_str()) {
+            continue;
+        }
+        exact.entry(candidate_key).or_insert(candidate);
+        if exact.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+            return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
+        }
+    }
+    if exact.is_empty() {
+        if let Some((candidate, response)) = first_structural_response {
+            let blocker = teacher_program_parity_blocker(
+                &parity.expected_response,
+                &response,
+                Some(&candidate),
+            );
+            return Err(dynamic_role_alignment_blocker(blocker, teacher_alignment));
+        }
+        let (candidate, execution) =
+            first_execution.ok_or(LiveScalarShadowBlocker::TeacherProgramRuntimeAbstain)?;
+        return Err(match execution.response {
+            Some(response) => dynamic_role_alignment_blocker(
+                teacher_program_parity_blocker(
+                    &parity.expected_response,
+                    &response,
+                    Some(&candidate),
+                ),
+                teacher_alignment,
+            ),
+            None => teacher_program_runtime_blocker(&execution.reason),
+        });
+    }
+    Ok(exact.into_values().collect())
+}
+
+fn dynamic_role_alignment_blocker(
+    blocker: LiveScalarShadowBlocker,
+    alignment: LiveScalarShadowBlocker,
+) -> LiveScalarShadowBlocker {
+    if matches!(
+        blocker,
+        LiveScalarShadowBlocker::TeacherProgramDynamicRoleNumericMismatch
+            | LiveScalarShadowBlocker::TeacherProgramDynamicRoleStringMismatch
+    ) {
+        alignment
+    } else {
+        blocker
+    }
+}
+
+fn teacher_call_role_value(program: &ResponseProgram, expected_response: &str) -> Option<Value> {
+    let response = serde_json::from_str::<Value>(expected_response).ok()?;
+    let arguments = if let Some(input) = response.get("input").and_then(Value::as_str) {
+        call_input_arguments(input)?
+    } else {
+        response.get("arguments")?.clone()
+    };
+    let arguments = arguments.as_object()?;
+    let role_name = match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { arguments, .. }
+        | ResponseOperation::CustomToolCallFromRoles { arguments, .. } => {
+            arguments.iter().find_map(|argument| match argument {
+                ResponseArgument::Role { name, .. } => Some(name.as_str()),
+                _ => None,
+            })?
+        }
+        _ => return None,
+    };
+    arguments.get(role_name).cloned()
+}
+
+fn teacher_role_value_location(
+    request_text: &str,
+    provider_payload: &Value,
+    teacher_value: &Value,
+) -> LiveScalarShadowBlocker {
+    let Some(text) = scalar_value_text(teacher_value) else {
+        return LiveScalarShadowBlocker::TeacherProgramRoleValueNotObserved;
+    };
+    if contains_bounded_token(request_text, &text) {
+        return LiveScalarShadowBlocker::TeacherProgramRoleValueInRequestText;
+    }
+    if payload_contains_exact_scalar(provider_payload, teacher_value) {
+        return LiveScalarShadowBlocker::TeacherProgramRoleValueInPayloadScalar;
+    }
+    if payload_contains_text_token(provider_payload, &text) {
+        return LiveScalarShadowBlocker::TeacherProgramRoleValueInPayloadText;
+    }
+    LiveScalarShadowBlocker::TeacherProgramRoleValueAbsentFromPayload
+}
+
+fn scalar_value_text(value: &Value) -> Option<String> {
+    match value {
+        Value::Bool(value) => Some(value.to_string()),
+        Value::Number(value) if value.is_i64() || value.is_u64() => Some(value.to_string()),
+        Value::String(value) if !value.is_empty() && value.len() <= 512 => Some(value.clone()),
+        _ => None,
+    }
+}
+
+fn payload_contains_exact_scalar(value: &Value, target: &Value) -> bool {
+    if value == target {
+        return true;
+    }
+    match value {
+        Value::Array(values) => values
+            .iter()
+            .any(|value| payload_contains_exact_scalar(value, target)),
+        Value::Object(values) => values
+            .values()
+            .any(|value| payload_contains_exact_scalar(value, target)),
+        _ => false,
+    }
+}
+
+fn payload_contains_text_token(value: &Value, target: &str) -> bool {
+    match value {
+        Value::String(value) => contains_bounded_token(value, target),
+        Value::Array(values) => values
+            .iter()
+            .any(|value| payload_contains_text_token(value, target)),
+        Value::Object(values) => values
+            .values()
+            .any(|value| payload_contains_text_token(value, target)),
+        _ => false,
+    }
+}
+
+fn contains_bounded_token(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() || needle.len() > 512 || haystack.len() > 64 * 1024 {
+        return false;
+    }
+    haystack.match_indices(needle).any(|(start, _)| {
+        let end = start.saturating_add(needle.len());
+        let left = haystack[..start].chars().next_back();
+        let right = haystack[end..].chars().next();
+        !left.is_some_and(is_identifier_character) && !right.is_some_and(is_identifier_character)
+    })
+}
+
+fn is_identifier_character(character: char) -> bool {
+    character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.' | ':' | '/')
+}
+
+// Field labels are post-action teacher hints only; crystallized actors retain
+// the ordinal selector derived from the observed output, never this label.
+fn teacher_field_selector_hint(selector: &ResponseValueSelector) -> Option<(&str, AtomValueType)> {
+    match selector {
+        ResponseValueSelector::JsonField { field, value_type }
+        | ResponseValueSelector::UniqueTurnJsonField { field, value_type }
+        | ResponseValueSelector::UniqueActiveTurnJsonField { field, value_type } => {
+            Some((field, *value_type))
+        }
+        _ => None,
+    }
+}
+
+fn replace_call_selector(
+    program: &ResponseProgram,
+    selector: ResponseValueSelector,
+) -> Option<ResponseProgram> {
+    let mut candidate = program.clone();
+    match &mut candidate.operation {
+        ResponseOperation::FunctionCallFromRoles {
+            selector: current, ..
+        }
+        | ResponseOperation::CustomToolCallFromRoles {
+            selector: current, ..
+        } => *current = selector,
+        _ => return None,
+    }
+    Some(candidate)
+}
+
+fn teacher_call_selector_is_structural(selector: &ResponseValueSelector) -> bool {
+    !matches!(
+        selector,
+        ResponseValueSelector::JsonField { .. }
+            | ResponseValueSelector::UniqueTurnJsonField { .. }
+            | ResponseValueSelector::UniqueActiveTurnJsonField { .. }
+    )
+}
+
+fn teacher_program_runtime_blocker(reason: &str) -> LiveScalarShadowBlocker {
+    if reason.starts_with("verification:") {
+        return LiveScalarShadowBlocker::TeacherProgramVerificationFailed;
+    }
+    if reason.starts_with("invalid_program:") {
+        return LiveScalarShadowBlocker::TeacherProgramInvalid;
+    }
+    match reason {
+        "immediate_tool_output_missing" => {
+            LiveScalarShadowBlocker::TeacherProgramImmediateToolOutputMissing
+        }
+        "selector_prefix_missing" => LiveScalarShadowBlocker::TeacherProgramSelectorPrefixMissing,
+        "selector_prefix_ambiguous" => {
+            LiveScalarShadowBlocker::TeacherProgramSelectorPrefixAmbiguous
+        }
+        "selector_type_mismatch" => LiveScalarShadowBlocker::TeacherProgramSelectorTypeMismatch,
+        "selector_integer_parse"
+        | "selector_boolean_parse"
+        | "selector_collection_parse"
+        | "selector_collection_unsupported"
+        | "selector_scalar_unsupported" => {
+            LiveScalarShadowBlocker::TeacherProgramSelectorParseFailed
+        }
+        "role_integer_parse"
+        | "role_boolean_parse"
+        | "role_string_parse"
+        | "role_collection_unsupported"
+        | "unsupported_runtime_role" => LiveScalarShadowBlocker::TeacherProgramRoleParseFailed,
+        "scalar_output_budget"
+        | "tool_output_not_text"
+        | "output_part_cardinality"
+        | "unsupported_output_part_type"
+        | "output_part_text_missing" => LiveScalarShadowBlocker::TeacherProgramOutputTextInvalid,
+        _ => LiveScalarShadowBlocker::TeacherProgramRuntimeAbstain,
+    }
+}
+
+fn teacher_program_parity_blocker(
+    expected: &str,
+    actual: &str,
+    program: Option<&ResponseProgram>,
+) -> LiveScalarShadowBlocker {
+    let (Ok(expected), Ok(actual)) = (
+        serde_json::from_str::<Value>(expected),
+        serde_json::from_str::<Value>(actual),
+    ) else {
+        return LiveScalarShadowBlocker::TeacherProgramParityMismatch;
+    };
+    let (Some(expected), Some(actual)) = (expected.as_object(), actual.as_object()) else {
+        return LiveScalarShadowBlocker::TeacherProgramResponseShapeMismatch;
+    };
+    let expected_kind = expected.get("kind").or_else(|| expected.get("type"));
+    let actual_kind = actual.get("kind").or_else(|| actual.get("type"));
+    if expected.get("name") != actual.get("name") {
+        return LiveScalarShadowBlocker::TeacherProgramSymbolMismatch;
+    }
+    if expected.get("input") != actual.get("input") {
+        let (Some(expected_input), Some(actual_input)) = (
+            expected.get("input").and_then(Value::as_str),
+            actual.get("input").and_then(Value::as_str),
+        ) else {
+            return LiveScalarShadowBlocker::TeacherProgramInputMismatch;
+        };
+        if expected_input
+            .chars()
+            .filter(|character| !character.is_ascii_whitespace())
+            .eq(actual_input
+                .chars()
+                .filter(|character| !character.is_ascii_whitespace()))
+        {
+            return LiveScalarShadowBlocker::TeacherProgramInputWhitespaceMismatch;
+        }
+        if wire_token_shape(expected_input) == wire_token_shape(actual_input) {
+            if let Some(blocker) = program.and_then(|program| {
+                classify_call_argument_mismatch(expected_input, actual_input, program)
+            }) {
+                return blocker;
+            }
+            return classify_wire_token_value_mismatch(expected_input, actual_input);
+        }
+        return LiveScalarShadowBlocker::TeacherProgramInputSyntaxShapeMismatch;
+    }
+    if expected_kind == actual_kind {
+        return LiveScalarShadowBlocker::TeacherProgramWireEnvelopeMismatch;
+    }
+    LiveScalarShadowBlocker::TeacherProgramResponseShapeMismatch
+}
+
+fn classify_call_argument_mismatch(
+    expected: &str,
+    actual: &str,
+    program: &ResponseProgram,
+) -> Option<LiveScalarShadowBlocker> {
+    let expected = call_input_arguments(expected)?;
+    let actual = call_input_arguments(actual)?;
+    let expected = expected.as_object()?;
+    let actual = actual.as_object()?;
+    let differing = expected
+        .iter()
+        .filter(|(name, value)| actual.get(*name) != Some(*value))
+        .map(|(name, value)| (name.as_str(), value))
+        .collect::<Vec<_>>();
+    if differing.len() != 1 || expected.len() != actual.len() {
+        return None;
+    }
+    let (name, expected_value) = differing[0];
+    let arguments = match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { arguments, .. }
+        | ResponseOperation::CustomToolCallFromRoles { arguments, .. } => arguments,
+        _ => return None,
+    };
+    arguments.iter().find_map(|argument| match argument {
+        ResponseArgument::Role {
+            name: argument_name,
+            ..
+        } if argument_name == name && expected_value.is_number() => {
+            Some(LiveScalarShadowBlocker::TeacherProgramDynamicRoleNumericMismatch)
+        }
+        ResponseArgument::Role {
+            name: argument_name,
+            ..
+        } if argument_name == name && expected_value.is_string() => {
+            Some(LiveScalarShadowBlocker::TeacherProgramDynamicRoleStringMismatch)
+        }
+        ResponseArgument::Integer {
+            name: argument_name,
+            ..
+        } if argument_name == name => {
+            Some(LiveScalarShadowBlocker::TeacherProgramStaticIntegerMismatch)
+        }
+        ResponseArgument::String {
+            name: argument_name,
+            ..
+        } if argument_name == name => {
+            Some(LiveScalarShadowBlocker::TeacherProgramStaticStringMismatch)
+        }
+        _ => None,
+    })
+}
+
+fn call_input_arguments(input: &str) -> Option<Value> {
+    if let Ok(arguments) = serde_json::from_str::<Value>(input)
+        && arguments.is_object()
+    {
+        return Some(arguments);
+    }
+    let tool = input.find("tools.")?;
+    let arguments = input[tool..].find('(')?.saturating_add(tool + 1);
+    serde_json::Deserializer::from_str(&input[arguments..])
+        .into_iter::<Value>()
+        .next()?
+        .ok()
+        .filter(Value::is_object)
+}
+
+fn classify_wire_token_value_mismatch(expected: &str, actual: &str) -> LiveScalarShadowBlocker {
+    let expected = wire_tokens(expected);
+    let actual = wire_tokens(actual);
+    if expected.len() != actual.len() {
+        return LiveScalarShadowBlocker::TeacherProgramInputTokenValueMismatch;
+    }
+    let mut numeric = 0_usize;
+    let mut quoted = 0_usize;
+    let mut identifiers = 0_usize;
+    for ((expected_kind, expected_value), (actual_kind, actual_value)) in
+        expected.iter().zip(&actual)
+    {
+        if expected_kind != actual_kind || expected_value == actual_value {
+            continue;
+        }
+        match expected_kind {
+            b'N' => numeric = numeric.saturating_add(1),
+            b'Q' => quoted = quoted.saturating_add(1),
+            b'A' => identifiers = identifiers.saturating_add(1),
+            _ => return LiveScalarShadowBlocker::TeacherProgramInputMixedTokenMismatch,
+        }
+    }
+    match (numeric, quoted, identifiers) {
+        (1, 0, 0) => LiveScalarShadowBlocker::TeacherProgramInputSingleNumericMismatch,
+        (2.., 0, 0) => LiveScalarShadowBlocker::TeacherProgramInputMultipleNumericMismatch,
+        (0, 1.., 0) => LiveScalarShadowBlocker::TeacherProgramInputQuotedLiteralMismatch,
+        (0, 0, 1..) => LiveScalarShadowBlocker::TeacherProgramInputIdentifierMismatch,
+        (0, 0, 0) => LiveScalarShadowBlocker::TeacherProgramInputTokenValueMismatch,
+        _ => LiveScalarShadowBlocker::TeacherProgramInputMixedTokenMismatch,
+    }
+}
+
+fn wire_tokens(value: &str) -> Vec<(u8, String)> {
+    let mut tokens = Vec::new();
+    let chars = value.char_indices().collect::<Vec<_>>();
+    let mut index = 0_usize;
+    while index < chars.len() {
+        let (start, character) = chars[index];
+        if character.is_ascii_whitespace() {
+            index += 1;
+            continue;
+        }
+        if character == '"' || character == '\'' {
+            let quote = character;
+            let mut escaped = false;
+            let mut end = value.len();
+            index += 1;
+            while index < chars.len() {
+                let (offset, next) = chars[index];
+                if escaped {
+                    escaped = false;
+                } else if next == '\\' {
+                    escaped = true;
+                } else if next == quote {
+                    end = offset + next.len_utf8();
+                    index += 1;
+                    break;
+                }
+                index += 1;
+            }
+            tokens.push((b'Q', value[start..end].to_owned()));
+            continue;
+        }
+        if character.is_ascii_digit() {
+            index += 1;
+            while index < chars.len() && chars[index].1.is_ascii_digit() {
+                index += 1;
+            }
+            let end = chars.get(index).map_or(value.len(), |value| value.0);
+            tokens.push((b'N', value[start..end].to_owned()));
+            continue;
+        }
+        if character.is_ascii_alphabetic() || character == '_' {
+            index += 1;
+            while index < chars.len()
+                && (chars[index].1.is_ascii_alphanumeric() || chars[index].1 == '_')
+            {
+                index += 1;
+            }
+            let end = chars.get(index).map_or(value.len(), |value| value.0);
+            tokens.push((b'A', value[start..end].to_owned()));
+            continue;
+        }
+        index += 1;
+    }
+    tokens
+}
+
+fn wire_token_shape(value: &str) -> Vec<u8> {
+    let mut shape = Vec::with_capacity(value.len().min(4_096));
+    let mut chars = value.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character.is_ascii_whitespace() {
+            continue;
+        }
+        if character == '"' || character == '\'' {
+            let quote = character;
+            let mut escaped = false;
+            for next in chars.by_ref() {
+                if escaped {
+                    escaped = false;
+                } else if next == '\\' {
+                    escaped = true;
+                } else if next == quote {
+                    break;
+                }
+            }
+            shape.push(b'Q');
+        } else if character.is_ascii_digit() {
+            while chars.peek().is_some_and(|next| next.is_ascii_digit()) {
+                chars.next();
+            }
+            shape.push(b'N');
+        } else if character.is_ascii_alphabetic() || character == '_' {
+            while chars
+                .peek()
+                .is_some_and(|next| next.is_ascii_alphanumeric() || *next == '_')
+            {
+                chars.next();
+            }
+            shape.push(b'A');
+        } else if character.is_ascii() {
+            shape.push(character as u8);
+        } else {
+            shape.push(b'U');
+        }
+        if shape.len() >= 4_096 {
+            break;
+        }
+    }
+    shape
 }
 
 fn canonical_rich_actor_hypotheses(
@@ -1383,6 +2057,45 @@ fn structural_scalar_law_shape(
 }
 
 fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
+    match &program.operation {
+        ResponseOperation::FunctionCallFromRoles {
+            function_name,
+            arguments,
+            selector,
+            ..
+        } => {
+            let arguments = serde_cbor::to_vec(arguments).ok()?;
+            let mut shape = vec![10, value_type_tag(selector_value_type(selector))];
+            shape.extend_from_slice(&digest_parts(
+                b"nando.live-function-call-law.v1",
+                &[function_name.as_bytes(), &arguments],
+            ));
+            return Some(shape);
+        }
+        ResponseOperation::CustomToolCallFromRoles {
+            custom_tool_name,
+            inner_tool_name,
+            arguments,
+            projection,
+            selector,
+            ..
+        } => {
+            let arguments = serde_cbor::to_vec(arguments).ok()?;
+            let projection = serde_cbor::to_vec(projection).ok()?;
+            let mut shape = vec![11, value_type_tag(selector_value_type(selector))];
+            shape.extend_from_slice(&digest_parts(
+                b"nando.live-custom-tool-law.v1",
+                &[
+                    custom_tool_name.as_bytes(),
+                    inner_tool_name.as_bytes(),
+                    &arguments,
+                    &projection,
+                ],
+            ));
+            return Some(shape);
+        }
+        _ => {}
+    }
     if let ResponseOperation::ComposeCollection {
         steps,
         renderer,
@@ -1513,6 +2226,11 @@ fn synthesis_payload_with_request(
 fn rich_scalar_program_roles(
     program: &ResponseProgram,
 ) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+    if let ResponseOperation::FunctionCallFromRoles { selector, .. }
+    | ResponseOperation::CustomToolCallFromRoles { selector, .. } = &program.operation
+    {
+        return Some(vec![(selector.clone(), ValueProjectionFormat::PlainText)]);
+    }
     if let ResponseOperation::ComposeCollection {
         steps,
         completion_state,
@@ -1600,6 +2318,27 @@ fn canonicalize_scalar_program_roles(
     request_text: &str,
     provider_payload: &Value,
 ) -> Option<ResponseProgram> {
+    if let ResponseOperation::FunctionCallFromRoles { .. }
+    | ResponseOperation::CustomToolCallFromRoles { .. } = &program.operation
+    {
+        let mut canonical = program.clone();
+        let selector = match &mut canonical.operation {
+            ResponseOperation::FunctionCallFromRoles { selector, .. }
+            | ResponseOperation::CustomToolCallFromRoles { selector, .. } => selector,
+            _ => unreachable!(),
+        };
+        *selector = match selector {
+            ResponseValueSelector::JsonField { .. }
+            | ResponseValueSelector::UniqueTurnJsonField { .. }
+            | ResponseValueSelector::UniqueActiveTurnJsonField { .. } => {
+                ResponseValueSelector::UniqueScalar {
+                    value_type: selector_value_type(selector),
+                }
+            }
+            _ => selector.clone(),
+        };
+        return Some(canonical);
+    }
     if program_transform_opcode(program) == Some(TRANSFORM_OPCODE_FILTER_REQUEST_VALUE) {
         let mut canonical = program.clone();
         let ResponseOperation::ComposeCollection {
@@ -1686,6 +2425,10 @@ fn canonical_role_selector(
         ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral => {
             Some(selector.clone())
         }
+        // Content-line selectors are learned structural anchors into tool
+        // output, not surface field names. Collapsing one to UniqueScalar
+        // loses the only path from a continuation marker to its bound role.
+        ResponseValueSelector::ContentLinePrefix { .. } => Some(selector.clone()),
         ResponseValueSelector::JsonField { .. } => {
             crate::runtime::canonical_request_ordinal_selector(
                 request_text,
@@ -1760,7 +2503,7 @@ fn observed_rich_scalar_surface(
         let value_type = selector_value_type(selector);
         let phase = if program_roles.len() == 1 {
             roles[usize::from(source)] =
-                StructuralRoleSignature::new(value_type_tag(value_type), 1, 1, 2, vec![plane]);
+                crate::crystallized_operator::runtime_role_signature_for_selector(selector, plane);
             let phase_atoms = [
                 format!("scalar_type:{}", value_type_tag(value_type)),
                 "cardinality:unique".to_owned(),
@@ -2172,7 +2915,9 @@ const fn transform_parameter(value_type: AtomValueType) -> u16 {
 
 fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
     match &program.operation {
-        ResponseOperation::ProjectSelectedValue { .. } => {
+        ResponseOperation::ProjectSelectedValue { .. }
+        | ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => {
             Some(TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR)
         }
         ResponseOperation::ProjectStatus { .. } => Some(TRANSFORM_OPCODE_PROJECT_STATUS),
@@ -2203,6 +2948,8 @@ fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
 
 fn program_transform_flags(program: &ResponseProgram) -> Option<u16> {
     match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => Some(0),
         ResponseOperation::ProjectSelectedValue { format, .. } => {
             Some(u16::from(*format == ValueProjectionFormat::CanonicalJson))
         }
@@ -2319,9 +3066,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, RUNTIME_FRAME_SCHEMA_V1, RuntimeFrame,
-        TEACHER_OUTCOME_SCHEMA_V1, TEACHER_TRANSITION_SCHEMA_V1, TeacherActionAst, TeacherOutcome,
-        TeacherVerifierEvidence,
+        AtomSource, ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, RUNTIME_FRAME_SCHEMA_V1,
+        RelationAtom, RuntimeFrame, SOURCE_NEUTRAL_EXTRACTOR_VERSION, TEACHER_OUTCOME_SCHEMA_V1,
+        TEACHER_TRANSITION_SCHEMA_V1, TeacherActionAst, TeacherOutcome, TeacherVerifierEvidence,
     };
 
     fn transition(field: &str, accepted: bool) -> TeacherTransition {
@@ -2392,6 +3139,120 @@ mod tests {
             }]
         });
         parity.expected_response = expected_response.to_owned();
+        row
+    }
+
+    fn custom_tool_transition(index: u64) -> TeacherTransition {
+        let mut row = transition("unused", true);
+        let observation_slot = 3;
+        let action_slot = 8;
+        let selected = index + 1000;
+        row.before.extractor_version = SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned();
+        row.before.atoms = vec![
+            RelationAtom::ToolKind {
+                value: "exec_command".to_owned(),
+            },
+            RelationAtom::ObservationCallShape {
+                value: "custom_tool_call".to_owned(),
+            },
+            RelationAtom::CompletionState {
+                value: "pending".to_owned(),
+            },
+            RelationAtom::ResponseShape {
+                value: "custom_tool_call".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: observation_slot,
+                value_type: AtomValueType::Integer,
+                source: AtomSource::Observation,
+                value_sha256: format!("{selected:064x}"),
+            },
+            RelationAtom::UniqueSlot {
+                slot_id: observation_slot,
+            },
+            RelationAtom::ObservationSelector {
+                slot_id: observation_slot,
+                selector: ResponseValueSelector::ContentLinePrefix {
+                    prefix: "SESSION_ID=".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+            },
+        ];
+        row.outcome.action.action_symbol = "custom_tool:exec/write_stdin".to_owned();
+        row.outcome.action.atoms = vec![
+            RelationAtom::TypedSlot {
+                slot_id: action_slot,
+                value_type: AtomValueType::Integer,
+                source: AtomSource::Action,
+                value_sha256: format!("{selected:064x}"),
+            },
+            RelationAtom::SlotEquality {
+                left_slot: observation_slot,
+                right_slot: action_slot,
+            },
+            RelationAtom::ActionCustomTool {
+                value: "exec".to_owned(),
+            },
+            RelationAtom::ActionInnerTool {
+                value: "write_stdin".to_owned(),
+            },
+            RelationAtom::ActionRoleArgument {
+                name: "session_id".to_owned(),
+                slot_id: action_slot,
+                value_type: None,
+            },
+            RelationAtom::ActionStringArgument {
+                name: "chars".to_owned(),
+                value: String::new(),
+            },
+            RelationAtom::ActionIntegerArgument {
+                name: "yield_time_ms".to_owned(),
+                value: 30_000,
+            },
+            RelationAtom::ActionIntegerArgument {
+                name: "max_output_tokens".to_owned(),
+                value: 12_000,
+            },
+            RelationAtom::ActionResultProjection {
+                output_field: "output".to_owned(),
+                continuation_field: "session_id".to_owned(),
+                continuation_prefix: "SESSION_ID=".to_owned(),
+            },
+        ];
+        let arguments = serde_json::to_string(&json!({
+            "chars": "",
+            "max_output_tokens": 12000,
+            "session_id": selected,
+            "yield_time_ms": 30000,
+        }))
+        .expect("custom tool arguments");
+        let input = format!(
+            "const r=await tools.write_stdin({arguments});text(r.output);if(r.session_id)text(\"SESSION_ID=\"+r.session_id);"
+        );
+        let parity = row.runtime_parity_case.as_mut().expect("parity case");
+        parity.request_text = "Continue the running process".to_owned();
+        parity.provider_payload = json!({
+            "tools": [{"type": "custom", "name": "exec"}],
+            "input": [
+                {
+                    "type": "custom_tool_call",
+                    "name": "exec",
+                    "call_id": format!("call-{index}"),
+                    "input": "source"
+                },
+                {
+                    "type": "custom_tool_call_output",
+                    "call_id": format!("call-{index}"),
+                    "output": [{"type": "text", "text": format!("still running\nSESSION_ID={selected}")}]
+                }
+            ]
+        });
+        parity.expected_response = serde_json::to_string(&json!({
+            "kind": "custom_tool_call",
+            "name": "exec",
+            "input": input,
+        }))
+        .expect("custom tool response");
         row
     }
 
@@ -2842,6 +3703,72 @@ mod tests {
             ),
             Err("crystallized_admission_resynthesis_mismatch")
         ));
+    }
+
+    #[test]
+    fn typed_custom_tool_rows_reach_verified_crystallized_operator() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 0..64_u64 {
+            let mut row = custom_tool_transition(index);
+            row.before.frame_id_sha256 = format!("{:064x}", index + 1);
+            row.before.session_id_sha256 = format!("{:064x}", index + 101);
+            row.before.client_intent_id_sha256 = format!("{:064x}", index + 201);
+            state.observe(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.executable, 64, "{report:#?}");
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
+        assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let candidates = state.admission_candidates();
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &candidates,
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission evaluates sealed operator")
+        .expect("sealed operator reaches registry");
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("registry restores typed call operator");
+        let runtime = custom_tool_transition(777);
+        let parity = runtime.runtime_parity_case.expect("runtime parity");
+        let execution = executor.execute_shadow(&parity.request_text, &parity.provider_payload);
+        assert_eq!(
+            execution.response.as_deref(),
+            Some(parity.expected_response.as_str()),
+            "{execution:#?}"
+        );
+    }
+
+    #[test]
+    fn all_teacher_field_selectors_can_become_structural_hints() {
+        for selector in [
+            ResponseValueSelector::JsonField {
+                field: "opaque".to_owned(),
+                value_type: AtomValueType::Integer,
+            },
+            ResponseValueSelector::UniqueTurnJsonField {
+                field: "opaque".to_owned(),
+                value_type: AtomValueType::Integer,
+            },
+            ResponseValueSelector::UniqueActiveTurnJsonField {
+                field: "opaque".to_owned(),
+                value_type: AtomValueType::Integer,
+            },
+        ] {
+            assert_eq!(
+                teacher_field_selector_hint(&selector),
+                Some(("opaque", AtomValueType::Integer))
+            );
+        }
     }
 
     #[test]

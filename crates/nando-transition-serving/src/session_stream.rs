@@ -329,6 +329,7 @@ struct SessionState {
     collection_expected_response: Option<String>,
     collection_completion_reason: Option<TurnCompletionReason>,
     runtime_provider_payload: Option<Value>,
+    runtime_provider_payload_overflow: bool,
     latest_plan_call_item: Option<Value>,
     request_phase_atom_ids: Vec<u64>,
     capability_atom_ids: Vec<u64>,
@@ -1508,6 +1509,7 @@ fn reset_turn(state: &mut SessionState) {
     state.collection_expected_response = None;
     state.collection_completion_reason = None;
     state.runtime_provider_payload = None;
+    state.runtime_provider_payload_overflow = false;
     state.latest_plan_call_item = None;
     state.request_phase_atom_ids.clear();
     state.capability_atom_ids.clear();
@@ -1579,13 +1581,25 @@ fn remember_output(payload: &serde_json::Map<String, Value>, state: &mut Session
     let Some(output) = payload.get("output") else {
         return;
     };
-    state.runtime_provider_payload = immediate_runtime_provider_payload(
-        state.collection_request_item.as_ref(),
-        state.latest_plan_call_item.as_ref(),
-        call_id,
-        &call,
-        output,
-    );
+    if !state.runtime_provider_payload_overflow {
+        match append_runtime_provider_output(
+            state.runtime_provider_payload.as_ref(),
+            state.collection_request_item.as_ref(),
+            state.latest_plan_call_item.as_ref(),
+            call_id,
+            &call,
+            output,
+        ) {
+            Some(payload) => state.runtime_provider_payload = Some(payload),
+            None => {
+                // A partial turn would create false structural authority. Once
+                // the bounded view overflows, parity remains unavailable until
+                // reset_turn starts a complete new event-time partition.
+                state.runtime_provider_payload = None;
+                state.runtime_provider_payload_overflow = true;
+            }
+        }
+    }
     if let Some(mut collection_payload) = collection_provider_payload(output) {
         if let Some(input) = collection_payload
             .get_mut("input")
@@ -1684,7 +1698,8 @@ fn bounded_session_output_text_parts(output: &Value) -> Option<Vec<&str>> {
     (total_bytes > 0 && total_bytes <= 65_536).then_some(texts)
 }
 
-fn immediate_runtime_provider_payload(
+fn append_runtime_provider_output(
+    current: Option<&Value>,
     request: Option<&Value>,
     latest_plan_call: Option<&Value>,
     call_id: &str,
@@ -1699,12 +1714,22 @@ fn immediate_runtime_provider_payload(
         "custom_tool_call" => "custom_tool_call_output",
         _ => return None,
     };
-    let mut input = Vec::with_capacity(4);
-    if let Some(request) = request {
-        input.push(request.clone());
-    }
-    if let Some(plan) = latest_plan_call {
-        input.push(plan.clone());
+    let mut input = current
+        .and_then(|payload| payload.get("input"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_else(|| {
+            let mut input = Vec::with_capacity(4);
+            if let Some(request) = request {
+                input.push(request.clone());
+            }
+            if let Some(plan) = latest_plan_call {
+                input.push(plan.clone());
+            }
+            input
+        });
+    if input.len() > 126 {
+        return None;
     }
     input.push(serde_json::json!({
         "type": call.shape,
@@ -2781,6 +2806,41 @@ mod tests {
         ) -> Result<(), String> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn runtime_provider_payload_retains_all_outputs_in_the_active_turn() {
+        let first_call = CallShape {
+            name: "first".to_owned(),
+            shape: "function_call".to_owned(),
+        };
+        let second_call = CallShape {
+            name: "second".to_owned(),
+            shape: "function_call".to_owned(),
+        };
+        let first = append_runtime_provider_output(
+            None,
+            None,
+            None,
+            "call-1",
+            &first_call,
+            &json!({"role": 41}),
+        )
+        .expect("first bounded output");
+        let second = append_runtime_provider_output(
+            Some(&first),
+            None,
+            None,
+            "call-2",
+            &second_call,
+            &json!({"noise": 7}),
+        )
+        .expect("second bounded output");
+
+        let input = second["input"].as_array().expect("provider input");
+        assert_eq!(input.len(), 4);
+        assert_eq!(input[1]["output"]["role"], 41);
+        assert_eq!(input[3]["output"]["noise"], 7);
     }
 
     #[test]

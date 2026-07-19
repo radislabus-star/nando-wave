@@ -12,14 +12,15 @@ use crate::crystallized_operator::{
 };
 use crate::runtime::selected_value_with_request;
 use crate::{
-    CollectionOutputRenderer, MAX_PROJECT_STATUS_CODE, ResponseRenderSegment,
-    ResponseValueSelector, ValueProjectionFormat,
+    CollectionOutputRenderer, MAX_PROJECT_STATUS_CODE, ResponseExecutionStatus, ResponseOperation,
+    ResponseProgram, ResponseRenderSegment, ResponseValueSelector, ValueProjectionFormat,
 };
 
 const OPERATOR_VM_MAX_OUTPUT_BYTES: usize = 16_384;
 const RENDERER_VERSION: u8 = 1;
 const RENDERER_STATIC: u8 = 1;
 const RENDERER_VALUE: u8 = 2;
+const RENDERER_TYPED_ACTOR: u8 = 3;
 const RENDERER_EMIT: u8 = 255;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -37,11 +38,32 @@ pub(crate) enum OperatorVmError {
 /// Executes crystallized transform bytecode. Runtime selectors are operands
 /// produced by role grounding; selectors embedded in the legacy actor are not
 /// consulted and therefore cannot override the circuit-selected source roles.
+#[cfg(test)]
 pub(crate) fn execute_operator_page(
     page: &OperatorPage32,
     selectors: &[ResponseValueSelector],
     request_text: &str,
     provider_payload: &Value,
+) -> Result<String, OperatorVmError> {
+    execute_operator_page_internal(page, selectors, request_text, provider_payload, None)
+}
+
+pub(crate) fn execute_operator_page_with_actor(
+    page: &OperatorPage32,
+    selectors: &[ResponseValueSelector],
+    request_text: &str,
+    provider_payload: &Value,
+    actor: &ResponseProgram,
+) -> Result<String, OperatorVmError> {
+    execute_operator_page_internal(page, selectors, request_text, provider_payload, Some(actor))
+}
+
+fn execute_operator_page_internal(
+    page: &OperatorPage32,
+    selectors: &[ResponseValueSelector],
+    request_text: &str,
+    provider_payload: &Value,
+    actor: Option<&ResponseProgram>,
 ) -> Result<String, OperatorVmError> {
     page.validate().map_err(|_| OperatorVmError::InvalidPage)?;
     let transforms = decode_transforms(page)?;
@@ -76,9 +98,7 @@ pub(crate) fn execute_operator_page(
             .cloned()
             .ok_or(OperatorVmError::MissingOperand)?;
         let output = match transform.opcode {
-            TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR => {
-                source_a
-            }
+            TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR => source_a,
             TRANSFORM_OPCODE_COUNT_COLLECTION
                 if transform.flags == 0
                     && transform.parameter & 0x00ff == TRANSFORM_VALUE_COLLECTION =>
@@ -157,14 +177,26 @@ pub(crate) fn execute_operator_page(
         values.push(render_transform_value(transform, &output)?);
     }
 
-    let response = execute_renderer(page, &values)?;
+    let response = if renderer_uses_typed_actor(page)? {
+        execute_typed_actor_renderer(
+            page,
+            actor.ok_or(OperatorVmError::UnsupportedRenderer)?,
+            request_text,
+            provider_payload,
+        )?
+    } else {
+        execute_renderer(page, &values)?
+    };
     if response.is_empty() || response.len() > OPERATOR_VM_MAX_OUTPUT_BYTES {
         return Err(OperatorVmError::OutputBudget);
     }
     Ok(response)
 }
 
-fn render_transform_value(transform: &TransformOp8, value: &Value) -> Result<String, OperatorVmError> {
+fn render_transform_value(
+    transform: &TransformOp8,
+    value: &Value,
+) -> Result<String, OperatorVmError> {
     if transform.opcode == TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR {
         return match transform_format(transform.flags)? {
             ValueProjectionFormat::PlainText => match value {
@@ -173,15 +205,17 @@ fn render_transform_value(transform: &TransformOp8, value: &Value) -> Result<Str
                 Value::Number(value) => Ok(value.to_string()),
                 _ => Err(OperatorVmError::ProjectionFailed),
             },
-            ValueProjectionFormat::CanonicalJson =>
-                serde_json::to_string(value).map_err(|_| OperatorVmError::ProjectionFailed),
+            ValueProjectionFormat::CanonicalJson => {
+                serde_json::to_string(value).map_err(|_| OperatorVmError::ProjectionFailed)
+            }
         };
     }
     match value {
         Value::String(text) => Ok(text.clone()),
         Value::Number(number) => Ok(number.to_string()),
-        Value::Array(_) | Value::Object(_) if transform.flags == TRANSFORM_FLAG_CANONICAL_JSON =>
-            serde_json::to_string(value).map_err(|_| OperatorVmError::ProjectionFailed),
+        Value::Array(_) | Value::Object(_) if transform.flags == TRANSFORM_FLAG_CANONICAL_JSON => {
+            serde_json::to_string(value).map_err(|_| OperatorVmError::ProjectionFailed)
+        }
         _ => Err(OperatorVmError::ProjectionFailed),
     }
 }
@@ -248,7 +282,8 @@ pub(crate) fn encode_renderer_program(
     if matches!(
         renderer,
         CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. }
-    ) && unique_sink_transform(transforms).is_err() {
+    ) && unique_sink_transform(transforms).is_err()
+    {
         return Err(crate::CrystallizedOperatorError::UnsupportedTransformProgram);
     }
     instructions.push(RENDERER_EMIT);
@@ -265,7 +300,20 @@ pub(crate) fn encode_renderer_program(
     Ok((encoded, instruction_count))
 }
 
-fn unique_sink_transform(transforms: &[TransformOp8]) -> Result<usize, crate::CrystallizedOperatorError> {
+pub(crate) fn encode_typed_actor_renderer_program(
+    transforms: &[TransformOp8],
+) -> Result<([u8; OPERATOR_PAGE32_RENDERER_BYTES], u8), crate::CrystallizedOperatorError> {
+    if transforms.len() != 1 || unique_sink_transform(transforms).is_err() {
+        return Err(crate::CrystallizedOperatorError::UnsupportedTransformProgram);
+    }
+    let mut encoded = [0_u8; OPERATOR_PAGE32_RENDERER_BYTES];
+    encoded[..4].copy_from_slice(&[RENDERER_VERSION, 2, RENDERER_TYPED_ACTOR, RENDERER_EMIT]);
+    Ok((encoded, 2))
+}
+
+fn unique_sink_transform(
+    transforms: &[TransformOp8],
+) -> Result<usize, crate::CrystallizedOperatorError> {
     let consumed = transforms
         .iter()
         .flat_map(|transform| [transform.source_a, transform.source_b])
@@ -332,20 +380,20 @@ fn decode_transforms(page: &OperatorPage32) -> Result<Vec<TransformOp8>, Operato
         }
     }
     for (index, transform) in transforms.iter().enumerate() {
-        if transform.output == transform.source_a
-            || usize::from(transform.parameter >> 8) != index
+        if transform.output == transform.source_a || usize::from(transform.parameter >> 8) != index
         {
             return Err(OperatorVmError::InvalidProgram);
         }
         if transform.source_b != TRANSFORM_ROLE_NONE
-            && (transform.source_b == transform.output
-                || transform.source_b == transform.source_a)
+            && (transform.source_b == transform.output || transform.source_b == transform.source_a)
         {
             return Err(OperatorVmError::InvalidProgram);
         }
         for source in [transform.source_a, transform.source_b] {
             if source != TRANSFORM_ROLE_NONE
-                && outputs.get(&source).is_some_and(|producer| *producer >= index)
+                && outputs
+                    .get(&source)
+                    .is_some_and(|producer| *producer >= index)
             {
                 return Err(OperatorVmError::InvalidProgram);
             }
@@ -418,6 +466,40 @@ fn execute_renderer(page: &OperatorPage32, values: &[String]) -> Result<String, 
     Ok(output)
 }
 
+fn renderer_uses_typed_actor(page: &OperatorPage32) -> Result<bool, OperatorVmError> {
+    let header = page.header().map_err(|_| OperatorVmError::InvalidPage)?;
+    let program = page.renderer_program();
+    if program[0] != RENDERER_VERSION {
+        return Err(OperatorVmError::InvalidProgram);
+    }
+    Ok(header.renderer_instruction_count == 2
+        && program[1] == 2
+        && program[2] == RENDERER_TYPED_ACTOR
+        && program[3] == RENDERER_EMIT)
+}
+
+fn execute_typed_actor_renderer(
+    page: &OperatorPage32,
+    actor: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Result<String, OperatorVmError> {
+    if !renderer_uses_typed_actor(page)?
+        || !matches!(
+            &actor.operation,
+            ResponseOperation::FunctionCallFromRoles { .. }
+                | ResponseOperation::CustomToolCallFromRoles { .. }
+        )
+    {
+        return Err(OperatorVmError::UnsupportedRenderer);
+    }
+    let execution = crate::runtime::execute_response(actor, request_text, provider_payload);
+    if execution.status != ResponseExecutionStatus::Executed {
+        return Err(OperatorVmError::ProjectionFailed);
+    }
+    execution.response.ok_or(OperatorVmError::ProjectionFailed)
+}
+
 fn transform_format(flags: u16) -> Result<ValueProjectionFormat, OperatorVmError> {
     match flags {
         0 => Ok(ValueProjectionFormat::PlainText),
@@ -436,7 +518,9 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::{AtomValueType, ResponseProgram};
+    use crate::{
+        AtomValueType, ResponseArgument, ResponseProgram, SemanticRole, TRANSFORM_VALUE_IDENTIFIER,
+    };
 
     fn page(transforms: &[TransformOp8], renderer: &CollectionOutputRenderer) -> OperatorPage32 {
         let (renderer_program, renderer_instruction_count) =
@@ -458,9 +542,7 @@ mod tests {
         }
         let role_count = transforms
             .iter()
-            .flat_map(|transform| {
-                [transform.output, transform.source_a, transform.source_b]
-            })
+            .flat_map(|transform| [transform.output, transform.source_a, transform.source_b])
             .filter(|role| *role != TRANSFORM_ROLE_NONE)
             .max()
             .map_or(0, |role| usize::from(role) + 1);
@@ -484,6 +566,31 @@ mod tests {
             &renderer_program,
         )
         .expect("valid test page")
+    }
+
+    fn typed_actor_page(transform: TransformOp8) -> OperatorPage32 {
+        let (renderer, renderer_instruction_count) =
+            encode_typed_actor_renderer_program(&[transform]).expect("typed actor renderer");
+        OperatorPage32::build(
+            OperatorPage32Metadata {
+                generation: 1,
+                circuit_fingerprint64: 1,
+                verifier_binding_fingerprint64: 2,
+                proof_lineage_fingerprint64: 3,
+                role_signature_fingerprint64: 4,
+                relation_plane_count: 1,
+                composition_node_count: 0,
+                renderer_instruction_count,
+                flags: 0,
+            },
+            &[0; OPERATOR_PAGE32_PHASE_BYTES],
+            &[StructuralRole16::default(); 3],
+            &TernaryOperatorCube32::default(),
+            &[transform],
+            &[0; OPERATOR_PAGE32_COMPOSITION_BYTES],
+            &renderer,
+        )
+        .expect("valid typed actor page")
     }
 
     fn transform(source: u8, order: u16) -> TransformOp8 {
@@ -561,6 +668,55 @@ mod tests {
                 }),
             ),
             Ok("1".to_owned())
+        );
+    }
+
+    #[test]
+    fn typed_actor_renderer_executes_bound_function_call() {
+        let selector = ResponseValueSelector::UniqueScalar {
+            value_type: AtomValueType::Identifier,
+        };
+        let actor = ResponseProgram::function_call_from_roles(
+            "continue_job",
+            selector.clone(),
+            vec![ResponseArgument::Role {
+                name: "job_id".to_owned(),
+                role: SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::Identifier),
+            }],
+        );
+        let page = typed_actor_page(TransformOp8 {
+            parameter: TRANSFORM_VALUE_IDENTIFIER,
+            ..transform(0, 0)
+        });
+        let payload = json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": "{\"job\":\"task-991\"}"
+            }]
+        });
+
+        let response = execute_operator_page_with_actor(
+            &page,
+            &[selector],
+            "Continue the job",
+            &payload,
+            &actor,
+        )
+        .expect("typed actor VM execution");
+        let call: Value = serde_json::from_str(&response).expect("function call JSON");
+        assert_eq!(call["name"], "continue_job");
+        assert_eq!(call["arguments"]["job_id"], "task-991");
+        assert_eq!(
+            execute_operator_page(
+                &page,
+                &[ResponseValueSelector::UniqueScalar {
+                    value_type: AtomValueType::Identifier,
+                }],
+                "Continue the job",
+                &payload,
+            ),
+            Err(OperatorVmError::UnsupportedRenderer)
         );
     }
 

@@ -29,6 +29,8 @@ pub struct ResponseExecution {
     pub verification_receipt_id: Option<String>,
 }
 
+const RUNTIME_OUTPUT_SCALAR_BUDGET: usize = 2_048;
+
 impl ResponseExecution {
     fn rejected(status: ResponseExecutionStatus, reason: impl Into<String>) -> Self {
         Self {
@@ -2195,6 +2197,195 @@ fn immediate_selected_scalar_with_request(
     }
 }
 
+pub(crate) fn structural_output_selectors_for_field_hint(
+    provider_payload: &Value,
+    field_hint: &str,
+    value_type: AtomValueType,
+) -> Result<Vec<ResponseValueSelector>, &'static str> {
+    if field_hint.is_empty() || field_hint.len() > 128 || value_type == AtomValueType::Collection {
+        return Err("field_hint_invalid");
+    }
+    let output =
+        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let mut scalar_index = 0_usize;
+    let mut matched_indices = Vec::new();
+    for text in output_text_parts(output)? {
+        if let Ok(value) = serde_json::from_str::<Value>(text) {
+            collect_field_hint_scalar_ordinals(
+                &value,
+                field_hint,
+                value_type,
+                0,
+                &mut scalar_index,
+                &mut matched_indices,
+            )?;
+            continue;
+        }
+        for object in runtime_embedded_json_objects(text) {
+            collect_field_hint_scalar_ordinals(
+                &Value::Object(object),
+                field_hint,
+                value_type,
+                0,
+                &mut scalar_index,
+                &mut matched_indices,
+            )?;
+        }
+    }
+    if scalar_index == 0 || matched_indices.is_empty() {
+        return Err("field_hint_ordinal_missing");
+    }
+    let mut selectors = BTreeSet::new();
+    for index in matched_indices {
+        let ordinal = u16::try_from(index).map_err(|_| "field_hint_ordinal_budget")?;
+        let reverse = scalar_index
+            .checked_sub(index.saturating_add(1))
+            .and_then(|value| u16::try_from(value).ok())
+            .ok_or("field_hint_ordinal_budget")?;
+        selectors.insert(ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal: ordinal,
+            value_type,
+        });
+        selectors.insert(ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+            reverse_ordinal: reverse,
+            value_type,
+        });
+    }
+    Ok(selectors.into_iter().collect())
+}
+
+/// Uses a completed action value only to discover name-free structural
+/// positions during training. Returned selectors contain no teacher value and
+/// runtime execution still reads solely from the observed output.
+pub(crate) fn structural_output_selectors_for_teacher_value(
+    provider_payload: &Value,
+    teacher_value: &Value,
+    value_type: AtomValueType,
+) -> Result<Vec<ResponseValueSelector>, &'static str> {
+    if value_type == AtomValueType::Collection {
+        return Err("teacher_value_type_invalid");
+    }
+    let mut outputs = Vec::new();
+    for output_ordinal in 1_u16..=64 {
+        let Ok(output) = active_turn_output_value(provider_payload, Some(output_ordinal)) else {
+            break;
+        };
+        let mut scalars = Vec::new();
+        for text in output_text_parts(output)? {
+            collect_runtime_output_scalars(text, &mut scalars)?;
+        }
+        outputs.push((
+            output_ordinal,
+            compatible_runtime_scalars(scalars, value_type),
+        ));
+    }
+    let last_output_ordinal = outputs.last().map(|(ordinal, _)| *ordinal);
+    let mut selectors = BTreeSet::new();
+    for (output_ordinal, compatible) in outputs {
+        for (index, scalar) in compatible.iter().enumerate() {
+            if scalar.value != *teacher_value {
+                continue;
+            }
+            let ordinal = u16::try_from(index).map_err(|_| "teacher_value_ordinal_budget")?;
+            selectors.insert(ResponseValueSelector::TurnOutputScalarOrdinal {
+                output_ordinal,
+                scalar_ordinal: ordinal,
+                value_type,
+            });
+            if Some(output_ordinal) == last_output_ordinal {
+                let reverse = compatible
+                    .len()
+                    .checked_sub(index.saturating_add(1))
+                    .and_then(|value| u16::try_from(value).ok())
+                    .ok_or("teacher_value_ordinal_budget")?;
+                selectors.insert(ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+                    scalar_ordinal: ordinal,
+                    value_type,
+                });
+                selectors.insert(ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+                    reverse_ordinal: reverse,
+                    value_type,
+                });
+            }
+        }
+    }
+    if selectors.is_empty() {
+        return Err("teacher_value_ordinal_missing");
+    }
+    Ok(selectors.into_iter().collect())
+}
+
+fn compatible_runtime_scalars(
+    scalars: Vec<ExtractedScalar>,
+    value_type: AtomValueType,
+) -> Vec<ExtractedScalar> {
+    scalars
+        .into_iter()
+        .filter(|scalar| {
+            scalar.value_type == value_type
+                || matches!(
+                    (scalar.value_type, value_type),
+                    (AtomValueType::Identifier, AtomValueType::String)
+                )
+        })
+        .collect()
+}
+
+fn collect_field_hint_scalar_ordinals(
+    value: &Value,
+    field_hint: &str,
+    value_type: AtomValueType,
+    depth: usize,
+    scalar_index: &mut usize,
+    matched_indices: &mut Vec<usize>,
+) -> Result<(), &'static str> {
+    if depth > 8 || *scalar_index >= RUNTIME_OUTPUT_SCALAR_BUDGET {
+        return Err("field_hint_structure_budget");
+    }
+    match value {
+        Value::Object(values) => {
+            for (field, value) in values {
+                if extracted_scalar(value.clone(), value_type).is_ok() {
+                    if field == field_hint {
+                        matched_indices.push(*scalar_index);
+                    }
+                    *scalar_index = scalar_index.saturating_add(1);
+                } else {
+                    collect_field_hint_scalar_ordinals(
+                        value,
+                        field_hint,
+                        value_type,
+                        depth.saturating_add(1),
+                        scalar_index,
+                        matched_indices,
+                    )?;
+                }
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                if extracted_scalar(value.clone(), value_type).is_ok() {
+                    *scalar_index = scalar_index.saturating_add(1);
+                } else {
+                    collect_field_hint_scalar_ordinals(
+                        value,
+                        field_hint,
+                        value_type,
+                        depth.saturating_add(1),
+                        scalar_index,
+                        matched_indices,
+                    )?;
+                }
+            }
+        }
+        _ if extracted_scalar(value.clone(), value_type).is_ok() => {
+            *scalar_index = scalar_index.saturating_add(1);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn unique_turn_scalar(
     provider_payload: &Value,
     value_type: AtomValueType,
@@ -2817,16 +3008,21 @@ fn collect_runtime_output_scalars(
     text: &str,
     output: &mut Vec<ExtractedScalar>,
 ) -> Result<(), &'static str> {
-    if output.len() >= 64 {
+    if output.len() >= RUNTIME_OUTPUT_SCALAR_BUDGET {
         return Err("turn_output_scalar_ordinal_budget");
     }
     if let Ok(value) = serde_json::from_str::<Value>(text) {
-        return collect_scalar_values(&value, 0, output);
+        return collect_scalar_values_bounded(&value, 0, output, RUNTIME_OUTPUT_SCALAR_BUDGET);
     }
     let embedded = runtime_embedded_json_objects(text);
     if !embedded.is_empty() {
         for object in embedded {
-            collect_scalar_values(&Value::Object(object), 0, output)?;
+            collect_scalar_values_bounded(
+                &Value::Object(object),
+                0,
+                output,
+                RUNTIME_OUTPUT_SCALAR_BUDGET,
+            )?;
         }
         return Ok(());
     }
@@ -2849,7 +3045,7 @@ fn collect_plain_text_scalars(
         if token.is_empty() {
             continue;
         }
-        if output.len() >= 64 {
+        if output.len() >= RUNTIME_OUTPUT_SCALAR_BUDGET {
             return Err("turn_output_scalar_ordinal_budget");
         }
         let end = start.saturating_add(token.len());
@@ -3074,7 +3270,16 @@ fn collect_scalar_values(
     depth: usize,
     scalars: &mut Vec<ExtractedScalar>,
 ) -> Result<(), &'static str> {
-    if depth > 8 || scalars.len() >= 64 {
+    collect_scalar_values_bounded(value, depth, scalars, 64)
+}
+
+fn collect_scalar_values_bounded(
+    value: &Value,
+    depth: usize,
+    scalars: &mut Vec<ExtractedScalar>,
+    scalar_budget: usize,
+) -> Result<(), &'static str> {
+    if depth > 8 || scalars.len() >= scalar_budget {
         return Err("scalar_structure_budget");
     }
     match value {
@@ -3100,12 +3305,12 @@ fn collect_scalar_values(
         }),
         Value::Array(values) => {
             for value in values {
-                collect_scalar_values(value, depth + 1, scalars)?;
+                collect_scalar_values_bounded(value, depth + 1, scalars, scalar_budget)?;
             }
         }
         Value::Object(values) => {
             for value in values.values() {
-                collect_scalar_values(value, depth + 1, scalars)?;
+                collect_scalar_values_bounded(value, depth + 1, scalars, scalar_budget)?;
             }
         }
     }
@@ -3392,5 +3597,131 @@ pub(crate) fn classify_test_output(output: &str) -> Result<&'static str, &'stati
         Ok("Validation passed.")
     } else {
         Err("test_result_ambiguous")
+    }
+}
+
+#[cfg(test)]
+mod runtime_scalar_budget_tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn reverse_ordinal_reaches_continuation_after_large_scalar_prefix() {
+        let mut values = (0_u64..100).map(Value::from).collect::<Vec<_>>();
+        values.push(Value::from(9_999_u64));
+        let payload = json!({
+            "input": [{
+                "type": "custom_tool_call_output",
+                "output": serde_json::to_string(&values).expect("bounded output")
+            }]
+        });
+
+        let selected = latest_turn_output_scalar_from_end(&payload, 0, AtomValueType::Integer)
+            .expect("tail scalar beyond legacy 64-value budget");
+        assert_eq!(selected.value, Value::from(9_999_u64));
+    }
+
+    #[test]
+    fn teacher_value_compiles_to_name_free_structural_ordinals() {
+        let mut values = (0_u64..100).map(Value::from).collect::<Vec<_>>();
+        values.push(Value::from(9_999_u64));
+        let payload = json!({
+            "input": [{
+                "type": "custom_tool_call_output",
+                "output": serde_json::to_string(&values).expect("bounded output")
+            }]
+        });
+
+        let selectors = structural_output_selectors_for_teacher_value(
+            &payload,
+            &Value::from(9_999_u64),
+            AtomValueType::Integer,
+        )
+        .expect("teacher value aligns to observed ordinals");
+        assert!(selectors.iter().all(|selector| matches!(
+            selector,
+            ResponseValueSelector::TurnOutputScalarOrdinal { .. }
+                | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
+                | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
+        )));
+        assert!(selectors.iter().any(|selector| matches!(
+            selector,
+            ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+                reverse_ordinal: 0,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn teacher_value_can_bind_an_earlier_turn_output() {
+        let payload = json!({
+            "input": [
+                {
+                    "type": "function_call_output",
+                    "output": "{\"candidate\":9999}"
+                },
+                {
+                    "type": "function_call_output",
+                    "output": "{\"noise\":7}"
+                }
+            ]
+        });
+
+        let selectors = structural_output_selectors_for_teacher_value(
+            &payload,
+            &Value::from(9_999_u64),
+            AtomValueType::Integer,
+        )
+        .expect("teacher value aligns across the active turn");
+        assert!(selectors.iter().any(|selector| matches!(
+            selector,
+            ResponseValueSelector::TurnOutputScalarOrdinal {
+                output_ordinal: 1,
+                scalar_ordinal: 0,
+                ..
+            }
+        )));
+        assert!(!selectors.iter().any(|selector| matches!(
+            selector,
+            ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
+                | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
+        )));
+    }
+
+    #[test]
+    fn field_hint_compiles_to_name_free_structural_ordinals() {
+        let noise = (0_u64..100).collect::<Vec<_>>();
+        let payload = json!({
+            "input": [{
+                "type": "custom_tool_call_output",
+                "output": serde_json::to_string(&json!({
+                    "first": {"session_id": 111},
+                    "noise": noise,
+                    "second": {"session_id": 999}
+                }))
+                .expect("bounded output")
+            }]
+        });
+        let selectors = structural_output_selectors_for_field_hint(
+            &payload,
+            "session_id",
+            AtomValueType::Integer,
+        )
+        .expect("field hint ordinals");
+        assert!(!selectors.is_empty());
+        assert!(selectors.iter().all(|selector| matches!(
+            selector,
+            ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
+                | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
+        )));
+        let values = selectors
+            .iter()
+            .filter_map(|selector| immediate_selected_scalar(&payload, selector).ok())
+            .map(|selected| selected.value.to_string())
+            .collect::<BTreeSet<_>>();
+        assert!(values.contains("111"));
+        assert!(values.contains("999"));
     }
 }

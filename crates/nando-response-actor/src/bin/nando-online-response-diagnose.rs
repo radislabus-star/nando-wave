@@ -40,15 +40,23 @@ fn main() -> Result<(), String> {
     std::fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     let report = root.join("report.json");
     let checkpoint = root.join("checkpoint.cbor");
-    if let Some(source_checkpoint) = std::env::args_os().nth(2) {
+    let checkpoint_supplied = if let Some(source_checkpoint) = std::env::args_os().nth(2) {
         std::fs::copy(source_checkpoint, &checkpoint).map_err(|error| error.to_string())?;
-    }
-    let result = OnlineResponseStream::open(OnlineResponseTailConfig {
+        true
+    } else {
+        false
+    };
+    let config = OnlineResponseTailConfig {
         input_path: input,
         report_path: report.clone(),
         checkpoint_path: checkpoint,
         idle_sleep: Duration::from_millis(10),
-    });
+    };
+    let result = if checkpoint_supplied {
+        OnlineResponseStream::open_streaming(config)
+    } else {
+        OnlineResponseStream::open(config)
+    };
     if let Ok(miner) = &result {
         if std::env::var_os("NANDO_DIAGNOSE_ADMISSION").is_some() {
             let candidates = miner.admission_candidates();

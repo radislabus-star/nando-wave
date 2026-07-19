@@ -1061,3 +1061,97 @@ frozen support 32
 -> ACTIVE
 -> verified CPU accepts
 ```
+
+## 2026-07-19 - R1 outcome-guided role grounding
+
+The typed call path now compiles completed teacher actions into name-free
+runtime selectors. The teacher value is used only after trace completion to
+align an observed structural position; neither the value nor the field label
+is retained in the actor, route, or package.
+
+```text
+completed teacher action value
+-> all structurally observed turn outputs
+-> output/scalar ordinal hypotheses
+-> exact teacher parity
+-> name-free runtime selector
+```
+
+Focused remote receipts:
+
+```text
+teacher-value ordinal tests                         2/2 PASS 13.64 s
+custom-tool crystallize/admit/restart/CPU lifecycle 1/1 PASS  6.44 s
+response-actor cargo check                              PASS  5.93 s
+```
+
+Read-only migration of the retained 79 MiB v71 checkpoint takes 62.3-63.3
+seconds and peaks at approximately 394 MiB RSS on the remote builder. No
+production service or future partition is modified by these diagnostics.
+
+The diagnostic sequence narrowed eight rejected traces without exposing their
+payload values:
+
+```text
+wire shape mismatch                    8
+-> dynamic numeric role mismatch       6
+-> dynamic string role mismatch        2
+-> teacher role value extracted        8/8
+-> value observed in turn outputs      0/8
+```
+
+Current exact boundary:
+
+```text
+teacher role value
+-> request text / non-output payload / absent capture   IN PROGRESS
+-> structural role selector                             BLOCKED
+```
+
+The next diagnostic classifies only the structural source of the value. It
+must not log or persist the value itself.
+
+The source classifier then proved the capture boundary:
+
+```text
+teacher role value absent from captured pre-action payload  6
+teacher role value not representable as current scalar      2
+teacher role value present in retained turn outputs          0
+```
+
+`session_stream.rs` was overwriting `runtime_provider_payload` on every tool
+output. A later action could therefore use a value from an earlier output while
+the CPU parity case retained only the most recent output. This was replaced by
+bounded single-pass accumulation for the active turn:
+
+```text
+tool call/output pairs                         append in event order
+maximum retained input items                   128
+maximum serialized provider payload            128 KiB
+overflow                                       parity disabled until next turn
+partial payload authority                      forbidden
+```
+
+Remote receipt:
+
+```text
+two-output active-turn retention test          1/1 PASS 0.17 s
+nando-transition-serving cargo check               PASS 0.14 s
+```
+
+The old v71 checkpoint cannot recover values that capture discarded. Only new
+completed live traces may supply support/future evidence for this fixed path.
+
+Final focused remote gate for the v72 source set:
+
+```text
+nando-response-actor all-targets check                 PASS 10.15 s
+nando-transition-serving all-targets check             PASS  7.48 s
+typed Operator VM actor                                1/1  14.41 s
+custom-tool crystallize/admit/restart/CPU lifecycle    1/1   6.63 s
+templated crystallize/admit/restart/CPU lifecycle      1/1  40.01 s
+multi-output active-turn capture                       1/1  29.36 s
+```
+
+The template and serving test binaries are the expensive focused checks. Do
+not repeat them after documentation-only or diagnostic-only edits.
