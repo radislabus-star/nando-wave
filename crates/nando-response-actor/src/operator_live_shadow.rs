@@ -50,7 +50,6 @@ pub enum LiveScalarShadowBlocker {
     UnsupportedScalarProgram,
     InvalidCommitment,
     InvalidBundle,
-    SupportSessionReused,
     FutureSessionReused,
     FutureCapacityReached,
     HistoricalSupportCapacityReached,
@@ -124,17 +123,6 @@ impl LiveScalarShadowState {
             return;
         }
         if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS {
-            if law
-                .support
-                .iter()
-                .any(|row| row.before.session_id_sha256 == transition.before.session_id_sha256)
-            {
-                *self
-                    .blockers
-                    .entry(LiveScalarShadowBlocker::SupportSessionReused)
-                    .or_default() += 1;
-                return;
-            }
             law.support.push(transition.clone());
             return;
         }
@@ -192,17 +180,6 @@ impl LiveScalarShadowState {
             *self
                 .blockers
                 .entry(LiveScalarShadowBlocker::HistoricalSupportCapacityReached)
-                .or_default() += 1;
-            return;
-        }
-        if law
-            .support
-            .iter()
-            .any(|row| row.before.session_id_sha256 == transition.before.session_id_sha256)
-        {
-            *self
-                .blockers
-                .entry(LiveScalarShadowBlocker::SupportSessionReused)
                 .or_default() += 1;
             return;
         }
@@ -272,9 +249,19 @@ fn evaluate_live_law(
     };
     let support_bundles = support
         .iter()
+        .fold(BTreeMap::new(), |mut sessions, sample| {
+            sessions
+                .entry(*sample.bundle.lineage_sha256())
+                .or_insert_with(|| sample.bundle.clone());
+            sessions
+        })
+        .into_values()
         .take(3)
-        .map(|sample| sample.bundle.clone())
         .collect::<Vec<_>>();
+    if support_bundles.len() < 3 {
+        increment_report_blocker(report, "support_sessions_below_3");
+        return;
+    }
     let alignments = BoundedRoleAligner::align(&support_bundles, RoleAlignmentConfig::default());
     if !alignments.completion.is_complete() {
         increment_report_blocker(report, "role_alignment_exhausted");
@@ -1144,6 +1131,21 @@ mod tests {
                 .copied(),
             Some(8)
         );
+    }
+
+    #[test]
+    fn repeated_support_session_fills_rows_but_cannot_freeze() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {
+            let mut row = transition("total", true);
+            row.before.frame_id_sha256 = format!("{index:064x}");
+            state.observe_historical_support(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
+        assert_eq!(report.future_rows, 0);
+        assert_eq!(report.blockers.get("support_sessions_below_3"), Some(&1));
     }
 
     #[test]

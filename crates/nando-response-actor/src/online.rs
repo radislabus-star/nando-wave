@@ -25,7 +25,7 @@ use crate::{
 use crate::online_subcenter::OnlineSubcenterDiscovery;
 
 const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 67;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 68;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
