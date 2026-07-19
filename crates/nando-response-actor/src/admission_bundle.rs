@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
@@ -10,6 +12,7 @@ pub const ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1: &str =
     "nando.online-admission-candidate-bundle.v1";
 pub const DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1: &str =
     "nando.durable-runtime-parity-receipt.v1";
+const MAX_RUNTIME_PARITY_PAYLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct RuntimeParityCase {
@@ -29,6 +32,8 @@ struct RuntimeParityCaseWire {
     provider_payload: Option<Value>,
     #[serde(default)]
     provider_payload_json: Option<Box<str>>,
+    #[serde(default)]
+    provider_payload_zstd: Option<serde_bytes::ByteBuf>,
     expected_response: String,
 }
 
@@ -42,6 +47,20 @@ impl<'de> Deserialize<'de> for RuntimeParityCase {
             payload
         } else if let Some(json) = wire.provider_payload_json {
             serde_json::from_str(&json).map_err(serde::de::Error::custom)?
+        } else if let Some(compressed) = wire.provider_payload_zstd {
+            let decoder = zstd::stream::read::Decoder::new(compressed.as_slice())
+                .map_err(serde::de::Error::custom)?;
+            let mut json = Vec::new();
+            decoder
+                .take(MAX_RUNTIME_PARITY_PAYLOAD_BYTES.saturating_add(1))
+                .read_to_end(&mut json)
+                .map_err(serde::de::Error::custom)?;
+            if u64::try_from(json.len()).unwrap_or(u64::MAX) > MAX_RUNTIME_PARITY_PAYLOAD_BYTES {
+                return Err(serde::de::Error::custom(
+                    "runtime parity payload exceeds decompression budget",
+                ));
+            }
+            serde_json::from_slice(&json).map_err(serde::de::Error::custom)?
         } else {
             return Err(serde::de::Error::missing_field("provider_payload"));
         };
@@ -117,5 +136,22 @@ mod tests {
 
         assert_eq!(restored.provider_payload, json!({"input": [{"value": 7}]}));
         assert_eq!(restored.expected_response, "7");
+    }
+
+    #[test]
+    fn runtime_parity_reads_zstd_checkpoint_payload() {
+        let payload = json!({"input": [{"value": 9}], "mode": "zstd"});
+        let encoded = serde_json::to_vec(&payload).expect("payload JSON");
+        let compressed = zstd::stream::encode_all(encoded.as_slice(), 1).expect("payload Zstd");
+        let restored: RuntimeParityCase = serde_json::from_value(json!({
+            "evidence_ref_sha256": "b".repeat(64),
+            "request_text": "continue",
+            "provider_payload_zstd": compressed,
+            "expected_response": "9"
+        }))
+        .expect("Zstd checkpoint parity");
+
+        assert_eq!(restored.provider_payload, payload);
+        assert_eq!(restored.expected_response, "9");
     }
 }
