@@ -390,6 +390,15 @@ pub(crate) fn actor_adapter_phase_atom_ids(
                     | CollectionProgramStep::ProjectField { field } => {
                         identifiers.push(field.clone());
                     }
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                        selector,
+                        ..
+                    } => actor_selector_adapter_atoms(
+                        selector,
+                        provider_payload,
+                        &mut atoms,
+                        &mut identifiers,
+                    ),
                     CollectionProgramStep::SelectOnlyArrayField
                     | CollectionProgramStep::FilterUniqueFieldEquals { .. }
                     | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
@@ -955,6 +964,43 @@ fn execute_compose_collection(
                         .collect(),
                 )
             }
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                selector,
+                value_type,
+            } => {
+                let rows = value.as_array().ok_or("collection_filter_not_array")?;
+                if rows.is_empty() || rows.len() > max_items {
+                    return Err("collection_item_budget");
+                }
+                let selected = immediate_selected_scalar(provider_payload, selector)?;
+                if collection_atom_value_type(selected.value_type) != Some(*value_type) {
+                    return Err("collection_filter_value_type");
+                }
+                let expected = selected.value;
+                let first = rows[0]
+                    .as_object()
+                    .ok_or("collection_filter_row_not_object")?;
+                let mut fields = first.keys().filter(|field| {
+                    rows.iter().all(|row| {
+                        row.as_object()
+                            .is_some_and(|object| object.contains_key(*field))
+                    }) && rows.iter().any(|row| row.get(*field) == Some(&expected))
+                });
+                let field = fields
+                    .next()
+                    .cloned()
+                    .ok_or("collection_filter_field_missing")?;
+                if fields.next().is_some() {
+                    return Err("collection_filter_field_ambiguous");
+                }
+                filter_field = Some(field.clone());
+                Value::Array(
+                    rows.iter()
+                        .filter(|row| row.get(&field) == Some(&expected))
+                        .cloned()
+                        .collect(),
+                )
+            }
             CollectionProgramStep::ProjectField { field } => {
                 if let Some(rows) = value.as_array() {
                     if rows.len() > max_items {
@@ -1160,6 +1206,15 @@ fn collection_value_type(value: &Value) -> Option<CollectionScalarType> {
         }
         Value::Bool(_) => Some(CollectionScalarType::Boolean),
         _ => None,
+    }
+}
+
+const fn collection_atom_value_type(value_type: AtomValueType) -> Option<CollectionScalarType> {
+    match value_type {
+        AtomValueType::String | AtomValueType::Identifier => Some(CollectionScalarType::String),
+        AtomValueType::Integer => Some(CollectionScalarType::Integer),
+        AtomValueType::Boolean => Some(CollectionScalarType::Boolean),
+        AtomValueType::Collection => None,
     }
 }
 

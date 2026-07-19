@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use crate::runtime::{ObservedRoleCandidate, observed_request_ordinal_roles};
+use crate::runtime::{ObservedRoleCandidate, ObservedSourceClass, observed_request_ordinal_roles};
 use crate::{
     AtomValueType, BackwardWave, BackwardWaveError, BackwardWaveUpdate, ResponseExecutionStatus,
     ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifiedDeltaReceipt,
@@ -27,6 +27,7 @@ use crate::{
 pub const TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR: u8 = 1;
 pub const TRANSFORM_OPCODE_COUNT_COLLECTION: u8 = 2;
 pub const TRANSFORM_OPCODE_PROJECT_STATUS: u8 = 3;
+pub const TRANSFORM_OPCODE_FILTER_REQUEST_VALUE: u8 = 4;
 pub const TRANSFORM_VALUE_STRING: u16 = 0;
 pub const TRANSFORM_VALUE_INTEGER: u16 = 1;
 pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
@@ -216,6 +217,8 @@ pub enum CrystallizedOperatorError {
     RuntimeBindingExhausted,
     RuntimeRelationMismatch,
     MissingRuntimeAnchor,
+    RuntimeOperandArityMismatch,
+    RuntimeOperandTypeMismatch,
     AmbiguousRuntimeAction,
     OperatorVmRejected,
 }
@@ -466,6 +469,18 @@ impl VerifiedCrystallizedOperator {
             evidence,
         )
         .map(|bound| bound.with_vm_page(self.operator.page.clone()))
+    }
+
+    #[must_use]
+    pub fn runtime_route_margin(&self, bound: &BoundCrystallizedOperator) -> i64 {
+        let relation_count = self.operator.relation_program.relations().len().max(1) as i64;
+        bound
+            .environment
+            .phase_fit_fixed
+            .saturating_div(relation_count)
+            .saturating_add(nando_core::wave::OPERATOR_BLUEPRINT_SCORE_SCALE)
+            .saturating_add(1)
+            .max(1)
     }
 
     pub fn feedback_field(
@@ -799,6 +814,52 @@ fn bind_raw_pre_action_components(
         b"nando.observed-runtime-surface.v1",
         &[request_text.as_bytes(), &payload],
     );
+    if transforms.len() == 1 && transforms[0].opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+        let predicate_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
+        let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
+        let mut first_blocker = None;
+        let mut deepest_blocker = None;
+        for evidence in filter_runtime_evidence_candidates(
+            request_text,
+            provider_payload,
+            lineage_sha256,
+            surface_sha256,
+            predicate_type,
+        )? {
+            let bound = match bind_operator_components(
+                role_graph,
+                relation_program,
+                transform_program,
+                actor_template,
+                evidence,
+            ) {
+                Ok(bound) => bound,
+                Err(error) => {
+                    first_blocker.get_or_insert(error);
+                    if error != CrystallizedOperatorError::RuntimeRelationMismatch {
+                        deepest_blocker.get_or_insert(error);
+                    }
+                    continue;
+                }
+            };
+            let response = match bound.execute_verified() {
+                Ok(response) => response,
+                Err(error) => {
+                    first_blocker.get_or_insert(error);
+                    deepest_blocker.get_or_insert(error);
+                    continue;
+                }
+            };
+            actions.entry(response).or_insert(bound);
+        }
+        return match actions.len() {
+            0 => Err(deepest_blocker
+                .or(first_blocker)
+                .unwrap_or(CrystallizedOperatorError::MissingRuntimeAnchor)),
+            1 => Ok(actions.into_values().next().expect("one action class")),
+            _ => Err(CrystallizedOperatorError::AmbiguousRuntimeAction),
+        };
+    }
     if transforms.len() == 1 {
         let expected_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
         let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
@@ -911,6 +972,62 @@ fn observed_multi_role_runtime_surface(
         provider_payload: provider_payload.clone(),
         anchors: anchors.into_boxed_slice(),
     })
+}
+
+fn filter_runtime_evidence_candidates(
+    request_text: &str,
+    provider_payload: &Value,
+    lineage_sha256: Commitment256,
+    surface_sha256: Commitment256,
+    predicate_type: AtomValueType,
+) -> Result<Vec<RuntimeSurfaceEvidence>, CrystallizedOperatorError> {
+    if request_text.trim().is_empty() {
+        return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    }
+    let collection_selector = ResponseValueSelector::UniqueScalar {
+        value_type: AtomValueType::Collection,
+    };
+    let mut evidence = Vec::new();
+    for (index, predicate_selector) in
+        crate::collection_synthesis::learned_selector_candidates(provider_payload)
+            .into_iter()
+            .filter(|selector| selector_value_type(selector) == Some(predicate_type))
+            .filter(crate::collection_synthesis::is_source_neutral_request_selector)
+            .take(64)
+            .enumerate()
+    {
+        let selectors = [collection_selector.clone(), predicate_selector];
+        let observed = selectors
+            .into_iter()
+            .enumerate()
+            .map(|(role_index, selector)| ObservedRoleCandidate {
+                value_type: selector_value_type(&selector).unwrap_or(AtomValueType::String),
+                selector,
+                request_position: u16::try_from(role_index).unwrap_or(u16::MAX),
+                json_path_sha256: digest_parts(
+                    b"nando.runtime-filter-role.v1",
+                    &[
+                        &(index as u64).to_le_bytes(),
+                        &(role_index as u64).to_le_bytes(),
+                    ],
+                ),
+                source_class: ObservedSourceClass::ImmediateToolJson,
+            })
+            .collect::<Vec<_>>();
+        if let Ok(candidate) = observed_multi_role_runtime_surface(
+            request_text,
+            provider_payload,
+            &observed,
+            lineage_sha256,
+            surface_sha256,
+        ) {
+            evidence.push(candidate);
+        }
+    }
+    if evidence.is_empty() {
+        return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    }
+    Ok(evidence)
 }
 
 const fn runtime_value_type_tag(value_type: AtomValueType) -> u8 {
@@ -1106,11 +1223,11 @@ fn bind_operator_components(
     let ordered_transforms = ordered_role_transforms(transform_program)?;
     let mut actions = std::collections::BTreeMap::<Commitment256, Vec<_>>::new();
     for mapping in report.mappings() {
-        let selectors = ordered_transforms
-            .iter()
-            .map(|transform| {
+        let selectors = ordered_transform_operand_roles(&ordered_transforms)
+            .into_iter()
+            .map(|source_role| {
                 let source_local_role = mapping
-                    .local_role_for(transform.source_a)
+                    .local_role_for(source_role)
                     .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
                 evidence
                     .anchors
@@ -1208,6 +1325,76 @@ fn independently_bind_verifier(
     actor_response: &str,
 ) -> Result<VerifierProgram, CrystallizedOperatorError> {
     let transforms = ordered_role_transforms(transform_program)?;
+    if transforms.len() == 1 && transforms[0].opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+        let payload = serde_json::to_vec(provider_payload)
+            .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
+        let predicate_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
+        let evidence = filter_runtime_evidence_candidates(
+            request_text,
+            provider_payload,
+            digest_parts(
+                b"nando.independent-filter-lineage.v1",
+                &[request_text.as_bytes(), &payload],
+            ),
+            digest_parts(
+                b"nando.independent-filter-surface.v1",
+                &[request_text.as_bytes(), &payload],
+            ),
+            predicate_type,
+        )?;
+        let mut programs = std::collections::BTreeMap::<String, ResponseProgram>::new();
+        for surface in evidence {
+            let report = RuntimeRoleBinder::bind(
+                role_graph,
+                relation_program,
+                &surface.bundle,
+                nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
+            );
+            if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
+                return Err(CrystallizedOperatorError::RuntimeBindingExhausted);
+            }
+            for mapping in report.mappings() {
+                let selectors = ordered_transform_operand_roles(&transforms)
+                    .into_iter()
+                    .map(|source_role| {
+                        let local_role = mapping
+                            .local_role_for(source_role)
+                            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
+                        surface
+                            .anchors
+                            .iter()
+                            .find(|anchor| anchor.local_role == local_role)
+                            .map(|anchor| anchor.selector.clone())
+                            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let program = instantiate_bound_actor(actor_template, &transforms, &selectors)?;
+                if execute_response(&program, request_text, provider_payload)
+                    .response
+                    .as_deref()
+                    == Some(actor_response)
+                {
+                    let digest = response_actor_program_digest(&program)
+                        .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+                    programs.entry(digest).or_insert(program);
+                }
+            }
+        }
+        let independently_bound_actor = programs
+            .into_values()
+            .next()
+            .ok_or(CrystallizedOperatorError::IndependentVerifierRejected)?;
+        let verifier = source_neutral_verifier_for_program(&independently_bound_actor)
+            .map_err(|_| CrystallizedOperatorError::VerifierBuildFailed)?;
+        verify_response_independently_with_request(
+            &verifier,
+            request_text,
+            provider_payload,
+            actor_response,
+        )
+        .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
+        return Ok(verifier);
+    }
     if transforms.len() == 1 {
         let expected_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
         let mut response_classes = std::collections::BTreeMap::<
@@ -1297,11 +1484,11 @@ fn independently_bind_verifier(
         std::collections::BTreeMap<String, ResponseProgram>,
     >::new();
     for mapping in report.mappings() {
-        let selectors = transforms
-            .iter()
-            .map(|transform| {
+        let selectors = ordered_transform_operand_roles(&transforms)
+            .into_iter()
+            .map(|source_role| {
                 let local_role = mapping
-                    .local_role_for(transform.source_a)
+                    .local_role_for(source_role)
                     .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
                 evidence
                     .anchors
@@ -1394,11 +1581,17 @@ fn ordered_role_transforms(
     let output = ordered[0].output;
     let mut sources = BTreeSet::new();
     for (index, transform) in ordered.iter().enumerate() {
-        if transform.source_b != TRANSFORM_ROLE_NONE
-            || transform.output != output
+        if transform.output != output
             || transform.output == transform.source_a
             || usize::from(transform.parameter >> 8) != index
             || !sources.insert(transform.source_a)
+        {
+            return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+        }
+        if transform.source_b != TRANSFORM_ROLE_NONE
+            && (transform.source_b == transform.output
+                || transform.source_b == transform.source_a
+                || !sources.insert(transform.source_b))
         {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
         }
@@ -1407,19 +1600,35 @@ fn ordered_role_transforms(
     Ok(ordered)
 }
 
+fn ordered_transform_operand_roles(transforms: &[TransformOp8]) -> Vec<u8> {
+    transforms
+        .iter()
+        .flat_map(|transform| {
+            [
+                Some(transform.source_a),
+                (transform.source_b != TRANSFORM_ROLE_NONE).then_some(transform.source_b),
+            ]
+            .into_iter()
+            .flatten()
+        })
+        .collect()
+}
+
 fn instantiate_bound_actor(
     template: &ResponseProgram,
     transforms: &[TransformOp8],
     selectors: &[ResponseValueSelector],
 ) -> Result<ResponseProgram, CrystallizedOperatorError> {
-    if transforms.len() != selectors.len() {
-        return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    let mut expected_types = Vec::with_capacity(selectors.len());
+    for transform in transforms {
+        expected_types.extend(transform_operand_types(transform)?);
     }
-    for (transform, selector) in transforms.iter().zip(selectors) {
-        if selector_value_type(selector)
-            != Some(transform_value_type(transform.parameter & 0x00ff)?)
-        {
-            return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    if expected_types.len() != selectors.len() {
+        return Err(CrystallizedOperatorError::RuntimeOperandArityMismatch);
+    }
+    for (expected_type, selector) in expected_types.iter().zip(selectors) {
+        if selector_value_type(selector) != Some(*expected_type) {
+            return Err(CrystallizedOperatorError::RuntimeOperandTypeMismatch);
         }
     }
     let mut actor = template.clone();
@@ -1459,15 +1668,42 @@ fn bind_program_selectors(
             }
         }
         crate::ResponseOperation::ComposeCollection { steps, .. } => {
-            if selectors.len() != 1
-                || selector_value_type(&selectors[0]) != Some(AtomValueType::Collection)
-                || steps.as_slice()
-                    != [
-                        crate::CollectionProgramStep::SelectOnlyArrayField,
-                        crate::CollectionProgramStep::Count,
-                    ]
+            let Some(collection_selector) = selectors.first() else {
+                return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+            };
+            let count = steps.as_slice()
+                == [
+                    crate::CollectionProgramStep::SelectOnlyArrayField,
+                    crate::CollectionProgramStep::Count,
+                ];
+            let filter_type = match steps.as_slice() {
+                [
+                    crate::CollectionProgramStep::SelectOnlyArrayField,
+                    crate::CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                        value_type,
+                        ..
+                    },
+                ] => Some(collection_atom_type(*value_type)),
+                _ => None,
+            };
+            if selector_value_type(collection_selector) != Some(AtomValueType::Collection)
+                || !((count && selectors.len() == 1)
+                    || (selectors.len() == 2 && filter_type == selector_value_type(&selectors[1])))
             {
                 return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+            }
+            if filter_type.is_some() {
+                let [
+                    crate::CollectionProgramStep::SelectOnlyArrayField,
+                    crate::CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                        selector,
+                        ..
+                    },
+                ] = steps.as_mut_slice()
+                else {
+                    return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+                };
+                *selector = selectors[1].clone();
             }
         }
         crate::ResponseOperation::ProjectStatus { selector, .. } => {
@@ -1603,17 +1839,30 @@ pub(crate) fn compile_blueprint_actor(
 }
 
 fn validate_typed_transform(transform: TransformOp8) -> Result<(), CrystallizedOperatorError> {
-    if transform.source_b != TRANSFORM_ROLE_NONE || transform.output == transform.source_a {
+    if transform.output == transform.source_a {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     }
     let value_type = transform_value_type(transform.parameter & 0x00ff)?;
     match transform.opcode {
-        TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR if value_type != AtomValueType::Collection => {}
+        TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR
+            if value_type != AtomValueType::Collection
+                && transform.source_b == TRANSFORM_ROLE_NONE => {}
         TRANSFORM_OPCODE_COUNT_COLLECTION
-            if value_type == AtomValueType::Collection && transform.flags == 0 => {}
+            if value_type == AtomValueType::Collection
+                && transform.source_b == TRANSFORM_ROLE_NONE
+                && transform.flags == 0 => {}
         TRANSFORM_OPCODE_PROJECT_STATUS
             if value_type == AtomValueType::Integer
+                && transform.source_b == TRANSFORM_ROLE_NONE
                 && transform.flags <= TRANSFORM_STATUS_ZERO_IS_TRUE => {}
+        TRANSFORM_OPCODE_FILTER_REQUEST_VALUE
+            if matches!(
+                value_type,
+                AtomValueType::String | AtomValueType::Integer | AtomValueType::Boolean
+            ) && transform.source_b != TRANSFORM_ROLE_NONE
+                && transform.source_b != transform.output
+                && transform.source_b != transform.source_a
+                && transform.flags == TRANSFORM_FLAG_CANONICAL_JSON => {}
         _ => return Err(CrystallizedOperatorError::UnsupportedTransformProgram),
     }
     Ok(())
@@ -1648,8 +1897,50 @@ fn actor_from_transform(
             "completed",
         )
         .with_status_renderer(renderer.clone())),
+        TRANSFORM_OPCODE_FILTER_REQUEST_VALUE => Ok(ResponseProgram::compose_collection(
+            vec![
+                crate::CollectionProgramStep::SelectOnlyArrayField,
+                crate::CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                    selector: ResponseValueSelector::RequestLastToken,
+                    value_type: atom_collection_type(value_type)?,
+                },
+            ],
+            ValueProjectionFormat::CanonicalJson,
+            "completed",
+        )
+        .with_collection_renderer(renderer.clone())),
         _ => Err(CrystallizedOperatorError::UnsupportedTransformProgram),
     }
+}
+
+fn transform_operand_types(
+    transform: &TransformOp8,
+) -> Result<Vec<AtomValueType>, CrystallizedOperatorError> {
+    let value_type = transform_value_type(transform.parameter & 0x00ff)?;
+    if transform.opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+        Ok(vec![AtomValueType::Collection, value_type])
+    } else {
+        Ok(vec![value_type])
+    }
+}
+
+const fn collection_atom_type(value_type: crate::CollectionScalarType) -> AtomValueType {
+    match value_type {
+        crate::CollectionScalarType::String => AtomValueType::String,
+        crate::CollectionScalarType::Integer => AtomValueType::Integer,
+        crate::CollectionScalarType::Boolean => AtomValueType::Boolean,
+    }
+}
+
+fn atom_collection_type(
+    value_type: AtomValueType,
+) -> Result<crate::CollectionScalarType, CrystallizedOperatorError> {
+    Ok(match value_type {
+        AtomValueType::String => crate::CollectionScalarType::String,
+        AtomValueType::Integer => crate::CollectionScalarType::Integer,
+        AtomValueType::Boolean => crate::CollectionScalarType::Boolean,
+        _ => return Err(CrystallizedOperatorError::UnsupportedTransformProgram),
+    })
 }
 
 fn transform_status_mapping(

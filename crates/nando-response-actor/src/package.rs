@@ -1006,7 +1006,7 @@ impl ResponseExecutor {
                 };
                 grounded_matches = grounded_matches.saturating_add(1);
                 guard_matches = guard_matches.saturating_add(1);
-                let margin = bound.environment().phase_fit_fixed();
+                let margin = operator.runtime_route_margin(&bound);
                 if margin > best_margin {
                     best_margin = margin;
                     best_threshold = package.wave_margin_micro;

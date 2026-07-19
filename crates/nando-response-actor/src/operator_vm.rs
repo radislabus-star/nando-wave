@@ -5,9 +5,10 @@ use serde_json::Value;
 
 use crate::crystallized_operator::{
     TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
-    TRANSFORM_OPCODE_PROJECT_STATUS, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE,
-    TRANSFORM_STATUS_ZERO_IS_OK, TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS,
-    TRANSFORM_STATUS_ZERO_IS_TRUE, TRANSFORM_VALUE_COLLECTION,
+    TRANSFORM_OPCODE_FILTER_REQUEST_VALUE, TRANSFORM_OPCODE_PROJECT_STATUS,
+    TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE, TRANSFORM_STATUS_ZERO_IS_OK,
+    TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS, TRANSFORM_STATUS_ZERO_IS_TRUE,
+    TRANSFORM_VALUE_COLLECTION,
 };
 use crate::runtime::selected_value_with_request;
 use crate::{
@@ -44,12 +45,10 @@ pub(crate) fn execute_operator_page(
 ) -> Result<String, OperatorVmError> {
     page.validate().map_err(|_| OperatorVmError::InvalidPage)?;
     let transforms = decode_transforms(page)?;
-    if transforms.len() != selectors.len() {
-        return Err(OperatorVmError::MissingOperand);
-    }
-
     let mut values = Vec::with_capacity(transforms.len());
-    for (transform, selector) in transforms.iter().zip(selectors) {
+    let mut operands = selectors.iter();
+    for transform in &transforms {
+        let selector = operands.next().ok_or(OperatorVmError::MissingOperand)?;
         let selected = selected_value_with_request(request_text, provider_payload, selector)
             .map_err(|_| OperatorVmError::ProjectionFailed)?;
         let rendered = match transform.opcode {
@@ -104,9 +103,50 @@ pub(crate) fn execute_operator_page(
                     _ => return Err(OperatorVmError::InvalidProgram),
                 }
             }
+            TRANSFORM_OPCODE_FILTER_REQUEST_VALUE => {
+                let predicate_selector = operands.next().ok_or(OperatorVmError::MissingOperand)?;
+                let predicate =
+                    selected_value_with_request(request_text, provider_payload, predicate_selector)
+                        .map_err(|_| OperatorVmError::ProjectionFailed)?
+                        .value;
+                let fields = selected
+                    .value
+                    .as_object()
+                    .ok_or(OperatorVmError::ProjectionFailed)?;
+                let mut arrays = fields.values().filter_map(Value::as_array);
+                let rows = arrays.next().ok_or(OperatorVmError::ProjectionFailed)?;
+                if arrays.next().is_some() || rows.is_empty() || rows.len() > 1_024 {
+                    return Err(OperatorVmError::ProjectionFailed);
+                }
+                let first = rows[0]
+                    .as_object()
+                    .ok_or(OperatorVmError::ProjectionFailed)?;
+                let mut matching_fields = first.keys().filter(|field| {
+                    rows.iter().all(|row| {
+                        row.as_object()
+                            .is_some_and(|object| object.contains_key(*field))
+                    }) && rows.iter().any(|row| row.get(*field) == Some(&predicate))
+                });
+                let field = matching_fields
+                    .next()
+                    .ok_or(OperatorVmError::ProjectionFailed)?;
+                if matching_fields.next().is_some() {
+                    return Err(OperatorVmError::AmbiguousResponse);
+                }
+                serde_json::to_string(
+                    &rows
+                        .iter()
+                        .filter(|row| row.get(field) == Some(&predicate))
+                        .collect::<Vec<_>>(),
+                )
+                .map_err(|_| OperatorVmError::ProjectionFailed)?
+            }
             _ => return Err(OperatorVmError::UnsupportedOpcode),
         };
         values.push(rendered);
+    }
+    if operands.next().is_some() {
+        return Err(OperatorVmError::MissingOperand);
     }
 
     let response = execute_renderer(page, &values)?;
@@ -239,11 +279,17 @@ fn decode_transforms(page: &OperatorPage32) -> Result<Vec<TransformOp8>, Operato
     let output = transforms[0].output;
     let mut sources = BTreeSet::new();
     for (index, transform) in transforms.iter().enumerate() {
-        if transform.source_b != TRANSFORM_ROLE_NONE
-            || transform.output != output
+        if transform.output != output
             || transform.output == transform.source_a
             || usize::from(transform.parameter >> 8) != index
             || !sources.insert(transform.source_a)
+        {
+            return Err(OperatorVmError::InvalidProgram);
+        }
+        if transform.source_b != TRANSFORM_ROLE_NONE
+            && (transform.source_b == transform.output
+                || transform.source_b == transform.source_a
+                || !sources.insert(transform.source_b))
         {
             return Err(OperatorVmError::InvalidProgram);
         }
@@ -397,6 +443,17 @@ mod tests {
         }
     }
 
+    fn filter_transform(collection: u8, predicate: u8) -> TransformOp8 {
+        TransformOp8 {
+            opcode: TRANSFORM_OPCODE_FILTER_REQUEST_VALUE,
+            output: 2,
+            source_a: collection,
+            source_b: predicate,
+            parameter: 0,
+            flags: TRANSFORM_FLAG_CANONICAL_JSON,
+        }
+    }
+
     #[test]
     fn page_transform_order_drives_rich_rendering() {
         let selectors = [
@@ -539,6 +596,35 @@ mod tests {
         assert_eq!(
             execute_operator_page(&page, &[selector], "Check status", &payload(7)).as_deref(),
             Ok("Status: ERROR.")
+        );
+    }
+
+    #[test]
+    fn page_filter_transform_uses_both_bound_roles() {
+        let selectors = [
+            ResponseValueSelector::UniqueScalar {
+                value_type: AtomValueType::Collection,
+            },
+            ResponseValueSelector::RequestLastToken,
+        ];
+        let page = page(&[filter_transform(0, 1)], &CollectionOutputRenderer::Direct);
+        let payload = json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": "Filter active"
+                },
+                {
+                    "type": "function_call_output",
+                    "output": "[{\"renamed_kind\":\"active\",\"value\":3},{\"renamed_kind\":\"idle\",\"value\":5}]"
+                }
+            ]
+        });
+
+        assert_eq!(
+            execute_operator_page(&page, &selectors, "Filter active", &payload).as_deref(),
+            Ok("[{\"renamed_kind\":\"active\",\"value\":3}]")
         );
     }
 

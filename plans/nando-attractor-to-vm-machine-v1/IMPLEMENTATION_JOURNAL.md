@@ -552,3 +552,86 @@ graphify update .                                      PASS 24.32 s
 graph                                                   22,978 nodes / 51,342 edges
 one-shot indexer peak RSS                               493,248 KB
 ```
+
+## 2026-07-19 - Stage 8c Rich VM Law: FILTER
+
+Added the first two-operand Rich Operator transform. The circuit now owns both
+the collection role and the request-bound predicate role:
+
+```text
+TransformOp8 FILTER_REQUEST_VALUE
+  source_a = structurally bound collection
+  source_b = structurally bound request predicate
+  output   = filtered canonical collection
+```
+
+The completed path is:
+
+```text
+64 completed verified traces
+-> exact request-conditioned filter hypothesis
+-> two-role relation circuit
+-> 32 support / 32 frozen future
+-> full-phase winner; all causal controls abstain
+-> runtime role grounding from raw request/payload
+-> OperatorPage32 FILTER bytecode
+-> independently re-grounded verifier
+-> external admission resynthesis
+-> restart
+-> CPU execution on renamed fields
+```
+
+Important defects removed during this stage:
+
+```text
+SelectedValue omitted from source-neutral policy        FIXED
+unbound Rich template executed against future           REMOVED
+request predicate collapsed to generic payload scalar   FIXED
+runtime binding failures hidden as MissingRuntimeAnchor FIXED
+circuit phase-fit compared with legacy atom threshold   FIXED
+```
+
+The runtime route is now controlled by the crystallized circuit itself. Raw
+`phase_fit_fixed` is normalized onto a positive relation-count-independent
+scale; support fixes the minimum route threshold and all frozen future rows
+must meet it. The exact RoleGraph binder remains the applicability authority.
+
+Focused verification and measured wall time:
+
+```text
+renamed two-role FILTER extraction                      PASS 1/1 14.30 s
+FILTER full lifecycle                                   PASS 1/1 54.74 s
+support / frozen future                                 32 / 32
+verified future executions                              32 / 32
+admission / restart / renamed-surface CPU               PASS
+wrong accepts / parity failures                         0 / 0
+```
+
+Post-FILTER regression and graph receipts:
+
+```text
+PROJECT scalar lifecycle regression                    PASS 18.20 s
+STATUS lifecycle regression                            PASS 10.62 s
+COUNT lifecycle regression                             PASS 30.04 s
+response-actor all-targets check                       PASS 9.25 s
+rustfmt --check                                        PASS 2.81 s
+remote Graphify update                                 PASS 17.95 s
+graph                                                  24,297 nodes / 57,345 edges
+```
+
+Strict workspace Clippy was attempted in 12.26 s. The two warnings introduced
+by this stage were fixed. The command remains non-PASS because eleven existing
+warnings remain in older online/semantic modules outside this functional cut;
+they were not mixed into the FILTER change.
+
+Current VM law boundary:
+
+```text
+PROJECT scalar                                          PASS
+COUNT collection                                        PASS
+STATUS integer mapping                                  PASS
+FILTER collection by request predicate                  PASS
+COMPOSE                                                  NEXT
+organic live ACTIVE coverage                            NOT YET MEASURED
+verified production saving >= 50%                       NOT ACHIEVED
+```

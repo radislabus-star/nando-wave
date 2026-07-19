@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{ResponseValueSelector, SemanticRole};
+use crate::{AtomValueType, ResponseValueSelector, SemanticRole};
 
 pub const MAX_PROJECT_STATUS_CODE: u64 = 1_000_000;
 pub const MAX_UNIQUE_CONSENSUS_VARIANTS: usize = 64;
@@ -207,6 +207,10 @@ pub enum CollectionProgramStep {
         value: ResponseScalarLiteral,
     },
     FilterUniqueFieldEqualsRequestValue {
+        value_type: CollectionScalarType,
+    },
+    FilterUniqueFieldEqualsSelectedValue {
+        selector: ResponseValueSelector,
         value_type: CollectionScalarType,
     },
     FilterFieldEquals {
@@ -815,6 +819,15 @@ impl ResponseProgram {
                         | CollectionProgramStep::ProjectOnlyNonFilterField
                         | CollectionProgramStep::AggregateUniqueIntegerField { .. }
                         | CollectionProgramStep::Count => {}
+                        CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                            selector,
+                            value_type,
+                        } => {
+                            validate_selector(selector)?;
+                            if collection_selector_type(selector) != Some(*value_type) {
+                                return Err("collection_filter_selector_type");
+                            }
+                        }
                     }
                 }
                 Ok(())
@@ -868,6 +881,36 @@ impl ResponseProgram {
                 Ok(())
             }
         }
+    }
+}
+
+const fn collection_selector_type(
+    selector: &ResponseValueSelector,
+) -> Option<CollectionScalarType> {
+    let value_type = match selector {
+        ResponseValueSelector::UniqueScalar { value_type }
+        | ResponseValueSelector::UniqueTurnScalar { value_type }
+        | ResponseValueSelector::ContentLinePrefix { value_type, .. }
+        | ResponseValueSelector::JsonField { value_type, .. }
+        | ResponseValueSelector::JsonScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
+        | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
+        | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
+        | ResponseValueSelector::TurnOutputLine { value_type, .. }
+        | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { value_type, .. } => *value_type,
+        ResponseValueSelector::CommandOutputBody
+        | ResponseValueSelector::RequestLastToken
+        | ResponseValueSelector::RequestUniqueLiteral => AtomValueType::String,
+    };
+    match value_type {
+        AtomValueType::String | AtomValueType::Identifier => Some(CollectionScalarType::String),
+        AtomValueType::Integer => Some(CollectionScalarType::Integer),
+        AtomValueType::Boolean => Some(CollectionScalarType::Boolean),
+        AtomValueType::Collection => None,
     }
 }
 

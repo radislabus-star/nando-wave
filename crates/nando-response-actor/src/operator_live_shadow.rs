@@ -12,11 +12,12 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionSynthesisExample,
-    CrystallizationParityReceipt, CrystallizedOperator, ProjectStatusMapping, ResponseOperation,
-    ResponsePackage, ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState,
-    ResponseProgram, ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor,
-    TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
+    AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionScalarType,
+    CollectionSynthesisExample, CrystallizationParityReceipt, CrystallizedOperator,
+    ProjectStatusMapping, ResponseOperation, ResponsePackage, ResponsePackageOrigin,
+    ResponsePackageProof, ResponsePackageState, ResponseProgram, ResponseRenderSegment,
+    ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
+    TRANSFORM_OPCODE_COUNT_COLLECTION, TRANSFORM_OPCODE_FILTER_REQUEST_VALUE,
     TRANSFORM_OPCODE_PROJECT_STATUS, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
     TRANSFORM_STATUS_ZERO_IS_OK, TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS,
     TRANSFORM_STATUS_ZERO_IS_TRUE, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_COLLECTION,
@@ -385,19 +386,29 @@ fn evaluate_live_law(
         increment_report_blocker(report, "winner_actor_contract_missing");
         return;
     };
-    let direct_actor_mismatches = future
-        .iter()
-        .filter(|sample| {
-            execute_response(
-                &actor_template,
-                &sample.request_text,
-                &sample.provider_payload,
-            )
-            .response
-            .as_deref()
-                != Some(sample.expected_response.as_str())
-        })
-        .count();
+    // A multi-role template is intentionally unbound. Executing it directly
+    // would test support selectors against future surfaces and reject every
+    // transferable operator. Crystallization below re-extracts and binds each
+    // raw future surface, then independently repeats the binding in verifier.
+    let direct_actor_mismatches = if rich_scalar_program_roles(&actor_template)
+        .is_some_and(|roles| roles.len() > 1)
+    {
+        0
+    } else {
+        future
+            .iter()
+            .filter(|sample| {
+                execute_response(
+                    &actor_template,
+                    &sample.request_text,
+                    &sample.provider_payload,
+                )
+                .response
+                .as_deref()
+                    != Some(sample.expected_response.as_str())
+            })
+            .count()
+    };
     if direct_actor_mismatches != 0 {
         increment_report_blocker(
             report,
@@ -668,6 +679,26 @@ fn live_admission_candidate(
         "crystallized-scalar-{}",
         &commitment_hex(operator.blueprint_sha256())[..16]
     );
+    let route_margin = |row: &TeacherTransition| {
+        let parity = row.runtime_parity_case.as_ref()?;
+        let bound = operator
+            .bind_pre_action(&parity.request_text, &parity.provider_payload)
+            .ok()?;
+        Some(operator.runtime_route_margin(&bound))
+    };
+    let wave_margin_micro = law
+        .support
+        .iter()
+        .filter_map(&route_margin)
+        .min()
+        .ok_or_else(|| "admission_circuit_route_missing".to_owned())?;
+    if law
+        .future
+        .iter()
+        .any(|row| route_margin(row).is_none_or(|margin| margin < wave_margin_micro))
+    {
+        return Err("admission_circuit_route_future_mismatch".to_owned());
+    }
     let package = ResponsePackage {
         schema: "nando.response-package.v1".to_owned(),
         package_id,
@@ -682,7 +713,7 @@ fn live_admission_candidate(
         // generic response-program atom masquerading as learned evidence.
         phase_centers: vec![operator.relation_program().fingerprint64()],
         anti_centers: Vec::new(),
-        wave_margin_micro: 1,
+        wave_margin_micro,
         learned_wave_route: None,
         crystallized_operator: Some(
             operator
@@ -773,6 +804,21 @@ pub fn extract_live_scalar_circuit_sample(
             )
         })
         .min_by_key(|program| serde_cbor::to_vec(program).unwrap_or_default());
+    let exact_filters = version_space
+        .programs
+        .iter()
+        .flat_map(|program| {
+            derive_exact_filter_programs(
+                program,
+                &parity.request_text,
+                &parity.provider_payload,
+                &parity.expected_response,
+            )
+        })
+        .collect::<Vec<_>>();
+    let exact_filter = exact_filters
+        .iter()
+        .min_by_key(|program| serde_cbor::to_vec(program).unwrap_or_default());
     let mut scalar_programs = version_space
         .programs
         .iter()
@@ -795,6 +841,8 @@ pub fn extract_live_scalar_circuit_sample(
         program.clone()
     } else if let Some(program) = &exact_status {
         program.clone()
+    } else if let Some(program) = exact_filter {
+        program.clone()
     } else if let Some(program) = rich_exact {
         program.clone()
     } else if let Some((_, selector, _, _, renderer)) = scalar_programs.first() {
@@ -809,7 +857,18 @@ pub fn extract_live_scalar_circuit_sample(
             .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?
     };
     let exact_typed = exact_count.as_ref().or(exact_status.as_ref());
-    let mut actor_hypotheses = if let Some(program) = exact_typed {
+    let mut actor_hypotheses = if !exact_filters.is_empty() {
+        exact_filters
+            .iter()
+            .filter_map(|program| {
+                canonicalize_scalar_program_roles(
+                    program,
+                    &parity.request_text,
+                    &parity.provider_payload,
+                )
+            })
+            .collect()
+    } else if let Some(program) = exact_typed {
         vec![
             canonicalize_scalar_program_roles(
                 program,
@@ -826,8 +885,7 @@ pub fn extract_live_scalar_circuit_sample(
             &parity.expected_response,
         )?
     };
-    let clean_actor = exact_typed
-        .is_none()
+    let clean_actor = (exact_typed.is_none() && exact_filters.is_empty())
         .then(|| {
             derive_clean_ordinal_actor(
                 &parity.request_text,
@@ -908,7 +966,9 @@ pub fn extract_live_scalar_circuit_sample(
         &parity.expected_response,
     )
     .or_else(|| {
-        (roles.len() == 1)
+        (roles.len() == 1
+            || program_transform_opcode(&canonical_program)
+                == Some(TRANSFORM_OPCODE_FILTER_REQUEST_VALUE))
             .then(|| source_neutral_scalar_program_shape(&canonical_program))
             .flatten()
     })
@@ -1301,6 +1361,28 @@ fn structural_scalar_law_shape(
 }
 
 fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
+    if let ResponseOperation::ComposeCollection {
+        steps,
+        renderer,
+        completion_state,
+        ..
+    } = &program.operation
+        && let [
+            CollectionProgramStep::SelectOnlyArrayField,
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { value_type, .. },
+        ] = steps.as_slice()
+    {
+        if completion_state != "completed" {
+            return None;
+        }
+        let mut shape = vec![8, collection_scalar_tag(*value_type)];
+        shape.push(match renderer {
+            CollectionOutputRenderer::Direct => 0,
+            CollectionOutputRenderer::RenderTemplate { .. } => 1,
+            _ => return None,
+        });
+        return Some(shape);
+    }
     if let ResponseOperation::ProjectStatus {
         mapping,
         renderer,
@@ -1419,6 +1501,31 @@ fn synthesis_payload_with_request(
 fn rich_scalar_program_roles(
     program: &ResponseProgram,
 ) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+    if let ResponseOperation::ComposeCollection {
+        steps,
+        completion_state,
+        ..
+    } = &program.operation
+        && let [
+            CollectionProgramStep::SelectOnlyArrayField,
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                selector,
+                value_type: _,
+            },
+        ] = steps.as_slice()
+    {
+        return (completion_state == "completed").then(|| {
+            vec![
+                (
+                    ResponseValueSelector::UniqueScalar {
+                        value_type: AtomValueType::Collection,
+                    },
+                    ValueProjectionFormat::CanonicalJson,
+                ),
+                (selector.clone(), ValueProjectionFormat::CanonicalJson),
+            ]
+        });
+    }
     if let ResponseOperation::ProjectStatus {
         selector,
         completion_state,
@@ -1478,6 +1585,25 @@ fn canonicalize_scalar_program_roles(
     request_text: &str,
     provider_payload: &Value,
 ) -> Option<ResponseProgram> {
+    if program_transform_opcode(program) == Some(TRANSFORM_OPCODE_FILTER_REQUEST_VALUE) {
+        let mut canonical = program.clone();
+        let ResponseOperation::ComposeCollection {
+            steps, renderer, ..
+        } = &mut canonical.operation
+        else {
+            return None;
+        };
+        let [
+            CollectionProgramStep::SelectOnlyArrayField,
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { selector, .. },
+        ] = steps.as_mut_slice()
+        else {
+            return None;
+        };
+        *selector = canonical_role_selector(selector, request_text, provider_payload)?;
+        *renderer = normalized_scalar_renderer(renderer)?;
+        return Some(canonical);
+    }
     if program_transform_opcode(program) == Some(TRANSFORM_OPCODE_PROJECT_STATUS) {
         let mut canonical = program.clone();
         let ResponseOperation::ProjectStatus {
@@ -1535,6 +1661,12 @@ fn canonical_role_selector(
             ordinal: *ordinal,
             value_type: *value_type,
         }),
+        // Preserve the structural origin of request-bound roles. Collapsing
+        // these to UniqueScalar erases the circuit edge that distinguishes a
+        // predicate supplied by the request from unrelated payload strings.
+        ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral => {
+            Some(selector.clone())
+        }
         ResponseValueSelector::JsonField { .. } => {
             crate::runtime::canonical_request_ordinal_selector(
                 request_text,
@@ -1550,6 +1682,7 @@ fn canonical_role_selector(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn observed_rich_scalar_surface(
     request_text: &str,
     provider_payload: &Value,
@@ -1607,26 +1740,39 @@ fn observed_rich_scalar_surface(
             state: TernaryRelationState::Supported,
             phase_anchor: phase,
         });
-        atoms.push(TypedProgramAtom {
-            opcode: transform_opcode,
-            output_local_role: output,
-            source_a_local_role: source,
-            source_b_local_role: OPERATOR_ROLE_NONE,
-            parameter: transform_parameter(value_type)
-                | (u16::try_from(index).unwrap_or(u16::MAX) << 8),
-            flags: match transform_opcode {
-                TRANSFORM_OPCODE_PROJECT_STATUS => transform_flags,
-                TRANSFORM_OPCODE_COUNT_COLLECTION => 0,
-                _ if *format == ValueProjectionFormat::CanonicalJson => {
-                    TRANSFORM_FLAG_CANONICAL_JSON
-                }
-                _ => 0,
-            },
-        });
+        if transform_opcode != TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+            atoms.push(TypedProgramAtom {
+                opcode: transform_opcode,
+                output_local_role: output,
+                source_a_local_role: source,
+                source_b_local_role: OPERATOR_ROLE_NONE,
+                parameter: transform_parameter(value_type)
+                    | (u16::try_from(index).unwrap_or(u16::MAX) << 8),
+                flags: match transform_opcode {
+                    TRANSFORM_OPCODE_PROJECT_STATUS => transform_flags,
+                    TRANSFORM_OPCODE_COUNT_COLLECTION => 0,
+                    _ if *format == ValueProjectionFormat::CanonicalJson => {
+                        TRANSFORM_FLAG_CANONICAL_JSON
+                    }
+                    _ => 0,
+                },
+            });
+        }
         anchors.push(RuntimeRoleAnchor {
             local_role: source,
             selector: selector.clone(),
             json_path_sha256: None,
+        });
+    }
+    if transform_opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+        let predicate_type = selector_value_type(&program_roles[1].0);
+        atoms.push(TypedProgramAtom {
+            opcode: TRANSFORM_OPCODE_FILTER_REQUEST_VALUE,
+            output_local_role: output,
+            source_a_local_role: semantic_to_local[1],
+            source_b_local_role: semantic_to_local[2],
+            parameter: transform_parameter(predicate_type),
+            flags: transform_flags,
         });
     }
     let bundle =
@@ -1753,6 +1899,67 @@ fn derive_exact_count_program(
             .as_deref()
             == Some(expected_response))
     .then_some(derived)
+}
+
+fn derive_exact_filter_programs(
+    candidate: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Vec<ResponseProgram> {
+    let ResponseOperation::ComposeCollection {
+        steps,
+        completion_state,
+        ..
+    } = &candidate.operation
+    else {
+        return Vec::new();
+    };
+    let [
+        CollectionProgramStep::SelectOnlyArrayField,
+        CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { value_type },
+    ] = steps.as_slice()
+    else {
+        return Vec::new();
+    };
+    if completion_state != "completed" {
+        return Vec::new();
+    }
+    let expected_type = collection_atom_type(*value_type);
+    crate::collection_synthesis::learned_selector_candidates(provider_payload)
+        .into_iter()
+        .filter(|selector| selector_value_type(selector) == expected_type)
+        // The broad hypothesis is explicitly request-conditioned. Letting an
+        // equal payload scalar replace that role creates a second, spurious
+        // circuit which cannot be separated while predicate and row agree.
+        .filter(crate::collection_synthesis::is_source_neutral_request_selector)
+        .filter_map(|selector| {
+            let direct = ResponseProgram::compose_collection(
+                vec![
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                        selector,
+                        value_type: *value_type,
+                    },
+                ],
+                ValueProjectionFormat::CanonicalJson,
+                completion_state.clone(),
+            );
+            if !is_source_neutral_response_program(&direct) {
+                return None;
+            }
+            let computed = execute_response(&direct, request_text, provider_payload).response?;
+            let renderer = infer_scalar_renderer(&computed, expected_response)?;
+            let derived = direct.with_collection_renderer(renderer);
+            (derived.validate().is_ok()
+                && is_privacy_safe_online_response_program(&derived)
+                && execute_response(&derived, request_text, provider_payload)
+                    .response
+                    .as_deref()
+                    == Some(expected_response))
+            .then_some(derived)
+        })
+        .collect()
 }
 
 fn derive_exact_status_program(
@@ -1915,6 +2122,17 @@ fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
         }
         ResponseOperation::ProjectStatus { .. } => Some(TRANSFORM_OPCODE_PROJECT_STATUS),
         ResponseOperation::ComposeCollection { steps, .. }
+            if matches!(
+                steps.as_slice(),
+                [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. }
+                ]
+            ) =>
+        {
+            Some(TRANSFORM_OPCODE_FILTER_REQUEST_VALUE)
+        }
+        ResponseOperation::ComposeCollection { steps, .. }
             if steps.as_slice()
                 == [
                     CollectionProgramStep::SelectOnlyArrayField,
@@ -1934,6 +2152,17 @@ fn program_transform_flags(program: &ResponseProgram) -> Option<u16> {
         }
         ResponseOperation::ProjectStatus { mapping, .. } => status_mapping_flags(*mapping),
         ResponseOperation::ComposeCollection { steps, .. }
+            if matches!(
+                steps.as_slice(),
+                [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. }
+                ]
+            ) =>
+        {
+            Some(TRANSFORM_FLAG_CANONICAL_JSON)
+        }
+        ResponseOperation::ComposeCollection { steps, .. }
             if steps.as_slice()
                 == [
                     CollectionProgramStep::SelectOnlyArrayField,
@@ -1943,6 +2172,22 @@ fn program_transform_flags(program: &ResponseProgram) -> Option<u16> {
             Some(0)
         }
         _ => None,
+    }
+}
+
+const fn collection_scalar_tag(value_type: CollectionScalarType) -> u8 {
+    match value_type {
+        CollectionScalarType::String => 1,
+        CollectionScalarType::Integer => 2,
+        CollectionScalarType::Boolean => 3,
+    }
+}
+
+const fn collection_atom_type(value_type: CollectionScalarType) -> AtomValueType {
+    match value_type {
+        CollectionScalarType::String => AtomValueType::String,
+        CollectionScalarType::Integer => AtomValueType::Integer,
+        CollectionScalarType::Boolean => AtomValueType::Boolean,
     }
 }
 
@@ -2118,6 +2363,31 @@ mod tests {
         row
     }
 
+    fn filter_transition(field: &str, predicate: &str) -> TeacherTransition {
+        let mut row = transition(field, true);
+        let parity = row.runtime_parity_case.as_mut().expect("parity case");
+        parity.request_text = format!("Filter {predicate}");
+        let rows = vec![
+            json!({(field): predicate, "value": 3}),
+            json!({(field): "other", "value": 5}),
+        ];
+        parity.provider_payload = json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": parity.request_text.clone()
+                },
+                {
+                    "type": "function_call_output",
+                    "output": serde_json::to_string(&rows).expect("rows serialize")
+                }
+            ]
+        });
+        parity.expected_response = serde_json::to_string(&rows[..1]).expect("result serialize");
+        row
+    }
+
     #[test]
     fn verified_scalar_trace_becomes_source_neutral_circuit_evidence() {
         let first =
@@ -2166,6 +2436,22 @@ mod tests {
         };
         assert_eq!(atom.opcode, TRANSFORM_OPCODE_PROJECT_STATUS);
         assert_eq!(atom.flags, TRANSFORM_STATUS_ZERO_IS_OK);
+        assert_eq!(first.law_sha256, renamed.law_sha256);
+    }
+
+    #[test]
+    fn verified_filter_trace_becomes_two_role_circuit_evidence() {
+        let first_row = filter_transition("kind", "active");
+        let first = extract_live_scalar_circuit_sample(&first_row).expect("filter trace");
+        let renamed = extract_live_scalar_circuit_sample(&filter_transition("state", "ready"))
+            .expect("renamed filter trace");
+
+        let [atom] = first.bundle.program_atoms() else {
+            panic!("one filter transform expected");
+        };
+        assert_eq!(atom.opcode, TRANSFORM_OPCODE_FILTER_REQUEST_VALUE);
+        assert_ne!(atom.source_a_local_role, atom.source_b_local_role);
+        assert_eq!(first.anchors.len(), 2);
         assert_eq!(first.law_sha256, renamed.law_sha256);
     }
 
@@ -2508,6 +2794,60 @@ mod tests {
         assert_eq!(
             execution.response.as_deref(),
             Some("Build status: OK."),
+            "{execution:#?}"
+        );
+    }
+
+    #[test]
+    fn filter_rows_reach_verified_cpu_operator() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 0..64_u8 {
+            let predicate = if index % 2 == 0 { "active" } else { "ready" };
+            let mut row = filter_transition(&format!("state_{index}"), predicate);
+            row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
+            row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
+            row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+            state.observe(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
+        assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let candidates = state.admission_candidates();
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &candidates,
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission evaluates filter operator")
+        .expect("filter operator reaches registry");
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("registry restores filter operator");
+        let rows = vec![
+            json!({"new_kind": "active", "score": 11}),
+            json!({"new_kind": "idle", "score": 12}),
+        ];
+        let payload = json!({
+            "input": [
+                {"type": "message", "role": "user", "content": "Filter active"},
+                {
+                    "type": "function_call_output",
+                    "output": serde_json::to_string(&rows).expect("rows serialize")
+                }
+            ]
+        });
+        let execution = executor.execute_shadow("Filter active", &payload);
+        assert_eq!(
+            execution.response.as_deref(),
+            Some("[{\"new_kind\":\"active\",\"score\":11}]"),
             "{execution:#?}"
         );
     }

@@ -1378,17 +1378,48 @@ pub fn is_source_neutral_collection_program(program: &ResponseProgram) -> bool {
         return false;
     };
     steps.iter().all(|step| {
-        matches!(
-            step,
+        match step {
+            CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { selector, .. } => {
+                is_source_neutral_request_selector(selector)
+            }
             CollectionProgramStep::SelectTurnOutput { .. }
-                | CollectionProgramStep::SelectOnlyArrayField
-                | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
-                | CollectionProgramStep::ProjectUniqueFieldByType { .. }
-                | CollectionProgramStep::ProjectOnlyNonFilterField
-                | CollectionProgramStep::AggregateUniqueIntegerField { .. }
-                | CollectionProgramStep::Count
-        )
+            | CollectionProgramStep::SelectOnlyArrayField
+            | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+            | CollectionProgramStep::ProjectUniqueFieldByType { .. }
+            | CollectionProgramStep::ProjectOnlyNonFilterField
+            | CollectionProgramStep::AggregateUniqueIntegerField { .. }
+            | CollectionProgramStep::Count => true,
+            _ => false,
+        }
     })
+}
+
+// These selectors describe a structural position or type. Field names and JSON
+// pointers are deliberately excluded so a learned filter survives renaming.
+fn source_neutral_selector(selector: &ResponseValueSelector) -> bool {
+    matches!(
+        selector,
+        ResponseValueSelector::UniqueScalar { .. }
+            | ResponseValueSelector::UniqueTurnScalar { .. }
+            | ResponseValueSelector::RequestReferencedJsonField { .. }
+            | ResponseValueSelector::TurnOutputScalarOrdinal { .. }
+            | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
+            | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
+            | ResponseValueSelector::LatestTurnOutputLine { .. }
+            | ResponseValueSelector::RequestLastToken
+            | ResponseValueSelector::RequestUniqueLiteral
+    )
+}
+
+#[must_use]
+pub(crate) fn is_source_neutral_request_selector(selector: &ResponseValueSelector) -> bool {
+    matches!(
+        selector,
+        ResponseValueSelector::RequestReferencedJsonField { .. }
+            | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
+            | ResponseValueSelector::RequestLastToken
+            | ResponseValueSelector::RequestUniqueLiteral
+    )
 }
 
 #[must_use]
@@ -1419,16 +1450,7 @@ pub fn is_source_neutral_response_program(program: &ResponseProgram) -> bool {
         | ResponseOperation::ProjectStatus {
             selector, renderer, ..
         } => {
-            matches!(
-                selector,
-                ResponseValueSelector::UniqueScalar { .. }
-                    | ResponseValueSelector::UniqueTurnScalar { .. }
-                    | ResponseValueSelector::RequestReferencedJsonField { .. }
-                    | ResponseValueSelector::TurnOutputScalarOrdinal { .. }
-                    | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
-                    | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
-                    | ResponseValueSelector::LatestTurnOutputLine { .. }
-            ) && response_renderer_is_surface_neutral(renderer)
+            source_neutral_selector(selector) && response_renderer_is_surface_neutral(renderer)
         }
         ResponseOperation::ComposeCollection { renderer, .. } => {
             is_source_neutral_collection_program(program)
@@ -1543,6 +1565,7 @@ pub fn is_learned_bounded_response_program(program: &ResponseProgram) -> bool {
                     | CollectionProgramStep::SelectOnlyArrayField
                     | CollectionProgramStep::SelectField { .. }
                     | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+                    | CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. }
                     | CollectionProgramStep::ProjectField { .. }
                     | CollectionProgramStep::ProjectUniqueFieldByType { .. }
                     | CollectionProgramStep::ProjectOnlyNonFilterField
@@ -2078,6 +2101,14 @@ fn abstract_collection_step(step: &CollectionProgramStep) -> serde_json::Value {
                 "value_type": value_type,
             })
         }
+        CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+            selector,
+            value_type,
+        } => serde_json::json!({
+            "step": "filter_unique_field_equals_selected_value",
+            "selector": selector_law_source(selector),
+            "value_type": value_type,
+        }),
         CollectionProgramStep::FilterFieldEquals { value, .. } => serde_json::json!({
             "step": "filter_field_role_equals",
             "value": value,
