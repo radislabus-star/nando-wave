@@ -1434,3 +1434,35 @@ custom-tool crystallize/admit/restart/CPU lifecycle   1/1 PASS  3.39 s
 multi-role phase-selected Rich Operator lifecycle     1/1 PASS  2.56 s
 nando-response-actor all-targets check                    PASS  0.04 s cached
 ```
+
+## 2026-07-20 - Make startup recovery subordinate to live traffic
+
+The v78 selector beam reduced each collection transition to a bounded slice,
+but the worker still replayed every post-checkpoint ledger record before it
+polled the live queue. The old 10% startup duty cycle made 34 valid collection
+records block live learning for about 111 seconds after restart.
+
+The worker scheduler now enforces this order:
+
+```text
+live command available  -> process live immediately
+live queue empty        -> replay exactly one bounded record
+after replay record     -> poll the live queue again
+replay exhausted        -> persist and compact once
+```
+
+Replay records are not appended back to their ledgers, have separate counters,
+and cannot trigger synthesis or collection maintenance until recovery is
+finalized. This preserves deterministic recovery while making normal learning
+single-pass and event-driven. No evidence, future receipt, or authority is
+fabricated by the scheduler.
+
+Focused remote receipt:
+
+```text
+nando-transition-serving all-targets check  PASS  4.9 s wall
+```
+
+The remaining proof is a production restart with real post-checkpoint records:
+live `processed` must advance while replay is still incomplete, with zero
+worker failures and no local authority while the composite gate is not PASS.

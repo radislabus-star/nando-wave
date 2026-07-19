@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,7 +18,6 @@ const QUEUE_CAPACITY: usize = 4_096;
 const INPUTS_PER_SYNTHESIS_SLICE: u64 = 64;
 const CHECKPOINT_EVENTS: u64 = 4_096;
 const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(60);
-const STARTUP_REPLAY_CPU_DUTY_DIVISOR: u32 = 10;
 const EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED: bool = true;
 
 #[derive(Default)]
@@ -412,96 +412,16 @@ pub fn spawn_miner_worker(
     thread::Builder::new()
         .name("nando-response-miner-v2".to_owned())
         .spawn(move || {
-            // Replay is ordered before newly queued traffic, but it is paced by
-            // measured compute time so a restart cannot monopolize a core.
+            // Live traffic always wins over historical recovery. Replay is
+            // applied one bounded record at a time only when the live queue is
+            // empty, so restart recovery cannot block the streaming path.
+            let mut teacher_replay = VecDeque::from(teacher_replay);
+            let mut collection_replay = VecDeque::from(collection_replay);
+            let mut opportunity_replay = VecDeque::from(opportunity_replay);
             let mut replay_rejected_records = 0_u64;
-            for transition in teacher_replay {
-                let started = Instant::now();
-                let result = miner
-                    .lock()
-                    .map_err(|_| "miner_worker_replay_lock_poisoned".to_owned())
-                    .and_then(|mut stream| stream.apply_teacher_transition(transition).map(|_| ()));
-                if let Err(error) = result {
-                    replay_rejected_records = replay_rejected_records.saturating_add(1);
-                    eprintln!("nando-response-miner-v2 replay rejected: {error}");
-                }
-                thread_counters
-                    .replayed_records
-                    .fetch_add(1, Ordering::Relaxed);
-                pace_startup_replay(started);
-            }
-            if let Ok(stream) = miner.lock() {
-                thread_counters.startup_replay_support_after_teacher.store(
-                    u64::try_from(stream.replay_support_parity_cases_total()).unwrap_or(u64::MAX),
-                    Ordering::Relaxed,
-                );
-            }
-            for observation in collection_replay {
-                let started = Instant::now();
-                let result = collection_miner
-                    .lock()
-                    .map_err(|_| "miner_worker_collection_replay_lock_poisoned".to_owned())
-                    .and_then(|mut collection| collection.observe_buffered(observation));
-                if let Err(error) = result {
-                    replay_rejected_records = replay_rejected_records.saturating_add(1);
-                    eprintln!("nando-response-miner-v2 collection replay rejected: {error}");
-                }
-                thread_counters
-                    .collection_replayed_records
-                    .fetch_add(1, Ordering::Relaxed);
-                pace_startup_replay(started);
-            }
-            for event in opportunity_replay {
-                let started = Instant::now();
-                match miner.lock() {
-                    Ok(mut stream) => apply_opportunity_event(&mut stream, event),
-                    Err(_) => {
-                        replay_rejected_records = replay_rejected_records.saturating_add(1);
-                        eprintln!("nando-response-miner-v2 opportunity replay lock poisoned");
-                    }
-                }
-                thread_counters
-                    .opportunity_replayed_records
-                    .fetch_add(1, Ordering::Relaxed);
-                pace_startup_replay(started);
-            }
-            if let Ok(stream) = miner.lock() {
-                thread_counters
-                    .startup_replay_support_after_opportunity
-                    .store(
-                        u64::try_from(stream.replay_support_parity_cases_total())
-                            .unwrap_or(u64::MAX),
-                        Ordering::Relaxed,
-                    );
-            }
-            thread_counters
-                .replay_rejected_records
-                .store(replay_rejected_records, Ordering::Relaxed);
-            let replay_persisted = miner
-                .lock()
-                .map_err(|_| "miner_worker_replay_persist_lock_poisoned".to_owned())
-                .and_then(|mut stream| stream.persist_now())
-                .and_then(|()| {
-                    collection_miner
-                        .lock()
-                        .map_err(|_| {
-                            "miner_worker_collection_replay_flush_lock_poisoned".to_owned()
-                        })?
-                        .flush()
-                })
-                .and_then(|()| teacher_ledger.compact_after_checkpoint())
-                .and_then(|()| collection_ledger.compact_after_checkpoint())
-                .and_then(|()| opportunity_ledger.compact_after_checkpoint());
-            if let Err(error) = replay_persisted {
-                thread_counters.failed.fetch_add(1, Ordering::Relaxed);
-                eprintln!("nando-response-miner-v2 replay checkpoint: {error}");
-            }
-            thread_counters
-                .startup_replay_micros
-                .store(elapsed_micros(startup_started), Ordering::Relaxed);
-            if let Some(trigger) = &authority_trigger {
-                let _ = trigger.try_send(());
-            }
+            let mut replay_finalized = teacher_replay.is_empty()
+                && collection_replay.is_empty()
+                && opportunity_replay.is_empty();
 
             let mut events_since_checkpoint = 0_u64;
             let mut inputs_since_synthesis = 0_u64;
@@ -510,7 +430,76 @@ pub fn spawn_miner_worker(
             let mut collection_maintenance_pending = initial_collection_maintenance_pending;
             let mut prefer_collection_maintenance = initial_collection_maintenance_pending;
             loop {
-                let command = if synthesis_pending || collection_maintenance_pending {
+                if !replay_finalized
+                    && teacher_replay.is_empty()
+                    && collection_replay.is_empty()
+                    && opportunity_replay.is_empty()
+                {
+                    if let Ok(stream) = miner.lock() {
+                        let support = u64::try_from(stream.replay_support_parity_cases_total())
+                            .unwrap_or(u64::MAX);
+                        thread_counters
+                            .startup_replay_support_after_teacher
+                            .store(support, Ordering::Relaxed);
+                        thread_counters
+                            .startup_replay_support_after_opportunity
+                            .store(support, Ordering::Relaxed);
+                    }
+                    thread_counters
+                        .replay_rejected_records
+                        .store(replay_rejected_records, Ordering::Relaxed);
+                    let replay_persisted = miner
+                        .lock()
+                        .map_err(|_| "miner_worker_replay_persist_lock_poisoned".to_owned())
+                        .and_then(|mut stream| stream.persist_now())
+                        .and_then(|()| {
+                            collection_miner
+                                .lock()
+                                .map_err(|_| {
+                                    "miner_worker_collection_replay_flush_lock_poisoned".to_owned()
+                                })?
+                                .flush()
+                        })
+                        .and_then(|()| teacher_ledger.compact_after_checkpoint())
+                        .and_then(|()| collection_ledger.compact_after_checkpoint())
+                        .and_then(|()| opportunity_ledger.compact_after_checkpoint());
+                    if let Err(error) = replay_persisted {
+                        thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                        eprintln!("nando-response-miner-v2 replay checkpoint: {error}");
+                    }
+                    thread_counters
+                        .startup_replay_micros
+                        .store(elapsed_micros(startup_started), Ordering::Relaxed);
+                    collection_maintenance_pending |= collection_miner
+                        .lock()
+                        .is_ok_and(|collection| collection.has_structural_resynthesis_work());
+                    replay_finalized = true;
+                    if let Some(trigger) = &authority_trigger {
+                        let _ = trigger.try_send(());
+                    }
+                }
+
+                let mut command_is_replay = false;
+                let live_probe = receiver.try_recv();
+                let mut replay_command = || {
+                    teacher_replay
+                        .pop_front()
+                        .map(|transition| MinerCommand::Transition(Box::new(transition)))
+                        .or_else(|| collection_replay.pop_front().map(MinerCommand::Collection))
+                        .or_else(|| {
+                            opportunity_replay
+                                .pop_front()
+                                .map(MinerCommand::Opportunity)
+                        })
+                };
+                let command = if let Ok(command) = live_probe {
+                    Some(command)
+                } else if let Some(command) = replay_command() {
+                    command_is_replay = true;
+                    Some(command)
+                } else if matches!(live_probe, Err(TryRecvError::Disconnected)) {
+                    break;
+                } else if synthesis_pending || collection_maintenance_pending {
                     match receiver.try_recv() {
                         Ok(command) => Some(command),
                         Err(TryRecvError::Empty) => None,
@@ -536,7 +525,12 @@ pub fn spawn_miner_worker(
                 match command {
                     Some(MinerCommand::Transition(transition)) => {
                         let started = Instant::now();
-                        let result = teacher_ledger.append(&transition).and_then(|_| {
+                        let result = (if command_is_replay {
+                            Ok(())
+                        } else {
+                            teacher_ledger.append(&transition).map(|_| ())
+                        })
+                        .and_then(|_| {
                             miner
                                 .lock()
                                 .map_err(|_| "miner_worker_lock_poisoned".to_owned())?
@@ -550,13 +544,23 @@ pub fn spawn_miner_worker(
                             elapsed_micros(started),
                         );
                         if let Err(error) = result {
-                            thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            if command_is_replay {
+                                replay_rejected_records = replay_rejected_records.saturating_add(1);
+                            } else {
+                                thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            }
                             eprintln!("nando-response-miner-v2 event error: {error}");
                             continue;
                         }
-                        thread_counters.processed.fetch_add(1, Ordering::Relaxed);
-                        events_since_checkpoint = events_since_checkpoint.saturating_add(1);
-                        synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED;
+                        if command_is_replay {
+                            thread_counters
+                                .replayed_records
+                                .fetch_add(1, Ordering::Relaxed);
+                        } else {
+                            thread_counters.processed.fetch_add(1, Ordering::Relaxed);
+                            events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                            synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED;
+                        }
                         collection_maintenance_pending |= collection_miner
                             .lock()
                             .is_ok_and(|collection| collection.has_structural_resynthesis_work());
@@ -566,7 +570,12 @@ pub fn spawn_miner_worker(
                     }
                     Some(MinerCommand::Collection(observation)) => {
                         let started = Instant::now();
-                        let result = collection_ledger.append(&observation).and_then(|_| {
+                        let result = (if command_is_replay {
+                            Ok(())
+                        } else {
+                            collection_ledger.append(&observation).map(|_| ())
+                        })
+                        .and_then(|_| {
                             collection_miner
                                 .lock()
                                 .map_err(|_| "miner_worker_collection_lock_poisoned".to_owned())?
@@ -579,23 +588,38 @@ pub fn spawn_miner_worker(
                             elapsed_micros(started),
                         );
                         if let Err(error) = result {
-                            thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            if command_is_replay {
+                                replay_rejected_records = replay_rejected_records.saturating_add(1);
+                            } else {
+                                thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            }
                             eprintln!("nando-response-miner-v2 collection error: {error}");
                             continue;
                         }
-                        thread_counters.processed.fetch_add(1, Ordering::Relaxed);
-                        thread_counters
-                            .collection_processed
-                            .fetch_add(1, Ordering::Relaxed);
-                        events_since_checkpoint = events_since_checkpoint.saturating_add(1);
-                        collection_maintenance_pending = true;
+                        if command_is_replay {
+                            thread_counters
+                                .collection_replayed_records
+                                .fetch_add(1, Ordering::Relaxed);
+                        } else {
+                            thread_counters.processed.fetch_add(1, Ordering::Relaxed);
+                            thread_counters
+                                .collection_processed
+                                .fetch_add(1, Ordering::Relaxed);
+                            events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                            collection_maintenance_pending = true;
+                        }
                         if let Some(trigger) = &authority_trigger {
                             let _ = trigger.try_send(());
                         }
                     }
                     Some(MinerCommand::Opportunity(event)) => {
                         let started = Instant::now();
-                        let result = opportunity_ledger.append(&event).and_then(|_| {
+                        let result = (if command_is_replay {
+                            Ok(())
+                        } else {
+                            opportunity_ledger.append(&event).map(|_| ())
+                        })
+                        .and_then(|_| {
                             let mut stream = miner
                                 .lock()
                                 .map_err(|_| "miner_worker_opportunity_lock_poisoned".to_owned())?;
@@ -609,28 +633,42 @@ pub fn spawn_miner_worker(
                             elapsed_micros(started),
                         );
                         if let Err(error) = result {
-                            thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            if command_is_replay {
+                                replay_rejected_records = replay_rejected_records.saturating_add(1);
+                            } else {
+                                thread_counters.failed.fetch_add(1, Ordering::Relaxed);
+                            }
                             eprintln!("nando-response-miner-v2 opportunity error: {error}");
                             continue;
                         }
-                        thread_counters.processed.fetch_add(1, Ordering::Relaxed);
-                        thread_counters
-                            .opportunity_processed
-                            .fetch_add(1, Ordering::Relaxed);
-                        events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                        if command_is_replay {
+                            thread_counters
+                                .opportunity_replayed_records
+                                .fetch_add(1, Ordering::Relaxed);
+                        } else {
+                            thread_counters.processed.fetch_add(1, Ordering::Relaxed);
+                            thread_counters
+                                .opportunity_processed
+                                .fetch_add(1, Ordering::Relaxed);
+                            events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                        }
                     }
                     None => {}
                 }
 
-                if input_was_available {
+                if input_was_available && !command_is_replay {
                     inputs_since_synthesis = inputs_since_synthesis.saturating_add(1);
                 }
                 let slice_due =
                     !input_was_available || inputs_since_synthesis >= INPUTS_PER_SYNTHESIS_SLICE;
                 let run_collection_maintenance = collection_maintenance_pending
+                    && replay_finalized
                     && slice_due
                     && (!synthesis_pending || prefer_collection_maintenance);
-                let run_synthesis = synthesis_pending && slice_due && !run_collection_maintenance;
+                let run_synthesis = synthesis_pending
+                    && replay_finalized
+                    && slice_due
+                    && !run_collection_maintenance;
                 if run_synthesis {
                     let started = Instant::now();
                     let checks = miner
@@ -798,12 +836,6 @@ fn apply_opportunity_event(stream: &mut OnlineResponseStream, event: MinerOpport
             stream.mark_self_training_false_accept(&intent_sha256);
         }
     }
-}
-
-fn pace_startup_replay(started: Instant) {
-    let compute = started.elapsed();
-    let idle_multiplier = STARTUP_REPLAY_CPU_DUTY_DIVISOR.saturating_sub(1);
-    thread::sleep(compute.saturating_mul(idle_multiplier));
 }
 
 fn elapsed_micros(started: Instant) -> u64 {
