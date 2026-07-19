@@ -923,6 +923,152 @@ Blueprint winner
 -> typed BackwardWave into immutable generation g+1
 ```
 
+### WARNING: The Circuit Must Cause The Computation
+
+A phase-selected circuit is not yet an executable learned law when the actor
+ignores its role graph and merely attaches a pre-typed primitive. The following
+shortcut is forbidden:
+
+```text
+phase-selected relation circuit
++ unrelated pre-typed ResponseProgram
+-> claim of an induced executable operator
+```
+
+The canonical causal route is:
+
+```text
+canonical RuntimeSurfaceEvidence
+  raw_input_sha256
+  surface_sha256
+  bundle_sha256
+  extractor_version
+-> RoleGraph + RelationProgram
+-> bounded structural Role CSP
+     Complete(mappings)
+     or Exhausted -> ABSTAIN
+-> exact RelationProgram satisfaction
+-> fixed-point phase ranking of structurally valid mappings
+-> canonical proposed action for every mapping
+-> action-equivalence classes
+-> one action class -> BoundRoleEnvironment
+   multiple action classes -> ABSTAIN
+-> TransformOp8 reads source_a/source_b and writes output
+-> RendererProgram reads the bound output slot
+-> independent verifier repeats grounding and computation
+-> ExecutableParitySeal
+-> VerifiedCrystallizedOperator
+-> external admission authority
+```
+
+Structure is evaluated before phase. Phase may rank structurally valid role
+mappings; it must never rescue a mapping that violates `RelationProgram`.
+Multiple raw mappings are acceptable only when they deterministically produce
+the same canonical action. `action_equivalence_sha256` is derived by the binder
+from those actions and is never trusted as caller input.
+
+Only a `BoundCrystallizedOperator` may execute in shadow. Only a
+`VerifiedCrystallizedOperator` carrying both proof seals may be submitted to
+external admission. A proof seal is a commitment, not production authority.
+Only external admission grants authority.
+
+#### Two sequential seals
+
+Verifier execution receipts cannot be part of the winner seal because the
+actor and verifier do not exist until after winner selection and role binding.
+The proof chain therefore has two non-cyclic stages:
+
+```text
+future evidence
+-> BlueprintFutureEvaluator::evaluate_and_seal()
+-> SealedBlueprintWinnerReceipt
+-> role binding + actor/verifier compilation
+-> independent future executions
+-> ExecutableParitySeal
+-> VerifiedCrystallizedOperator
+```
+
+`SealedBlueprintWinnerReceipt` has private fields and no public constructor or
+general deserialization route. It commits, with domain-separated SHA-256 and a
+fixed binary encoding, to:
+
+```text
+source generation
+candidate-set root
+support root
+future-evidence root
+evaluator config and version
+fixed-point score table
+winner and runner-up
+fixed-point margin
+```
+
+Every future item in that root commits to full `lineage_sha256`,
+`surface_sha256`, canonical `bundle_sha256`, `raw_input_sha256`, and extractor
+version. Same lineage with different surface or raw input is different evidence
+and must be rejected when a receipt claims otherwise.
+
+`ExecutableParitySeal` commits to:
+
+```text
+winner seal
+actor program
+independent verifier program
+binding-receipt root
+execution-receipt root
+future lineage count
+wrong accepts
+```
+
+Scores are accumulated and compared in deterministic fixed-point arithmetic.
+Converting floating-point scores to integers only at seal time is forbidden,
+because it would seal a decision made by a different and potentially
+nondeterministic ranking rule.
+
+#### Runtime role grounding contract
+
+The binder solves a bounded CSP over only pre-action structural evidence:
+
+```text
+canonical roles
+-> candidates by type/cardinality/temporal constraints
+-> exact relation constraints
+-> complete bounded mapping set
+-> phase ranking
+-> action-equivalence grouping
+```
+
+For a unary scalar transform, `source_a` resolves to a concrete structural
+anchor, `source_b` is `ROLE_NONE`, and `output` names a virtual result slot.
+Changing the bound source value must change the actor result. Renaming a local
+field must preserve behavior. Swapping semantic source roles, violating a
+relation cell, exhausting search, or producing multiple action classes must
+yield `ABSTAIN`.
+
+The verifier independently reconstructs the structural anchor, checks the
+relation program, computes the expected value, and compares it with the actor
+response. Reusing the actor's selected value as verifier truth is forbidden.
+
+Current implementation boundary at generation `d1ff627`:
+
+```text
+phase-selected relation-circuit formation       PASS
+fail-closed bounded blueprint search             PASS
+attachment of a generic scalar primitive         PASS
+circuit-driven runtime role grounding            NOT IMPLEMENTED
+sealed winner and executable parity provenance   NOT IMPLEMENTED
+whole executable learned operator                WATCH
+live authority                                   BLOCK
+```
+
+Do not expand transform opcodes until runtime role grounding, sealed
+provenance, and the full BackwardWave generation loop satisfy this contract.
+The implementation sequence is frozen in:
+
+```text
+plans/runtime-role-grounding-v1/RUNTIME_ROLE_GROUNDING_V1.md
+```
+
 Search completion is an enum, never a boolean or an inferred absence of errors:
 
 ```text
