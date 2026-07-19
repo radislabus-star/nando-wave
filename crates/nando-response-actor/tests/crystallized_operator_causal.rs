@@ -181,6 +181,7 @@ fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runt
                         field: "total".to_owned(),
                         value_type: AtomValueType::Integer,
                     },
+                    json_path_sha256: None,
                 }]
                 .into_boxed_slice(),
                 request_text: String::new(),

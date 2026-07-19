@@ -371,6 +371,7 @@ const fn selector_value_type(selector: &crate::ResponseValueSelector) -> AtomVal
         | crate::ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | crate::ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
         | crate::ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | crate::ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
         | crate::ResponseValueSelector::TurnOutputLine { value_type, .. }
         | crate::ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
         | crate::ResponseValueSelector::LatestTurnOutputLine { value_type, .. }

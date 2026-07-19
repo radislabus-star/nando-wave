@@ -229,7 +229,10 @@ pub use verified_delta::{
     VERIFIED_DELTA_MAX_RELATIONS, VERIFIED_DELTA_RECEIPT_SCHEMA_V1, VerifiedDeltaError,
     VerifiedDeltaOutcome, VerifiedDeltaReceipt, VerifiedDeltaRelation, VerifiedDeltaRelationState,
 };
-pub use verifier::{ResponseVerificationError, verify_response, verify_response_independently};
+pub use verifier::{
+    ResponseVerificationError, verify_response, verify_response_independently,
+    verify_response_independently_with_request,
+};
 pub use version_space::{
     AstNodeId, AstProgramKind, InternedProgram, VersionSpaceArena, VersionSpaceConfig,
     VersionSpaceReport, response_program_depth, response_program_kind,

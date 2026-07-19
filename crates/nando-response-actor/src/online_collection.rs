@@ -5295,6 +5295,7 @@ const fn online_selector_value_type(
         | crate::ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | crate::ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
         | crate::ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | crate::ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
         | crate::ResponseValueSelector::TurnOutputLine { value_type, .. }
         | crate::ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
         | crate::ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
@@ -6072,6 +6073,9 @@ fn response_selector_family(program: &ResponseProgram) -> &'static str {
         }
         crate::ResponseValueSelector::RequestReferencedJsonField { .. } => {
             "request_referenced_json_field"
+        }
+        crate::ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. } => {
+            "request_referenced_json_field_ordinal"
         }
         crate::ResponseValueSelector::TurnOutputLine { .. } => "turn_output_line",
         crate::ResponseValueSelector::TurnOutputScalarOrdinal { .. } => {

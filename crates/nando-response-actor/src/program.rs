@@ -1053,6 +1053,7 @@ const fn selector_value_type(selector: &ResponseValueSelector) -> crate::AtomVal
         | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
         | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
         | ResponseValueSelector::TurnOutputLine { value_type, .. }
         | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
         | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
@@ -1102,6 +1103,14 @@ fn validate_selector(selector: &ResponseValueSelector) -> Result<(), &'static st
         ResponseValueSelector::UniqueScalar { .. }
         | ResponseValueSelector::UniqueTurnScalar { .. }
         | ResponseValueSelector::RequestReferencedJsonField { .. } => Ok(()),
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal, .. }
+            if *ordinal <= 15 =>
+        {
+            Ok(())
+        }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. } => {
+            Err("request_referenced_ordinal_budget")
+        }
         ResponseValueSelector::JsonScalarOrdinal { ordinal, .. } => {
             if *ordinal < 64 {
                 Ok(())

@@ -473,30 +473,6 @@ pub fn response_program_authority_matches_example(
         .all(|scalar| contains_token(&response, scalar))
 }
 
-pub(crate) fn response_program_authority_diagnostic(
-    program: &ResponseProgram,
-    example: &CollectionSynthesisExample,
-) -> String {
-    let quality = response_program_match_quality(program, example);
-    let execution = execute_example(program, example);
-    let mentioned = mentioned_tool_scalars(example);
-    let contains_all = execution.response.as_ref().is_some_and(|response| {
-        mentioned
-            .iter()
-            .all(|scalar| contains_token(response, scalar))
-    });
-    format!(
-        "quality={quality};actor={:?};actor_reason={};source_neutral={};privacy_safe={};bounded={};grounded={};mentioned_scalars={};contains_all={contains_all}",
-        execution.status,
-        execution.reason,
-        is_source_neutral_response_program(program),
-        is_privacy_safe_online_response_program(program),
-        is_learned_bounded_response_program(program),
-        response_program_has_structurally_grounded_partial_authority(program),
-        mentioned.len(),
-    )
-}
-
 fn response_program_has_structurally_grounded_partial_authority(program: &ResponseProgram) -> bool {
     match &program.operation {
         ResponseOperation::ProjectSelectedValue {
@@ -1157,6 +1133,22 @@ pub(crate) fn learned_selector_candidates(payload: &Value) -> Vec<ResponseValueS
             value_type: AtomValueType::Boolean,
         },
     ]);
+    for ordinal in 0..16_u16 {
+        selectors.extend([
+            ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                ordinal,
+                value_type: AtomValueType::String,
+            },
+            ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                ordinal,
+                value_type: AtomValueType::Integer,
+            },
+            ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                ordinal,
+                value_type: AtomValueType::Boolean,
+            },
+        ]);
+    }
     let Some(items) = payload.get("input").and_then(Value::as_array) else {
         return selectors;
     };
@@ -1364,6 +1356,7 @@ const fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType 
         | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
         | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
         | ResponseValueSelector::TurnOutputLine { value_type, .. }
         | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
         | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
@@ -2010,6 +2003,13 @@ fn selector_law_source(selector: &ResponseValueSelector) -> serde_json::Value {
         ResponseValueSelector::RequestReferencedJsonField { .. } => serde_json::json!({
             "domain":"observation","role":"request_referenced_json_field"
         }),
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal, .. } => {
+            serde_json::json!({
+                "domain":"observation",
+                "role":"request_referenced_json_field_ordinal",
+                "ordinal":ordinal
+            })
+        }
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use nando_core::wave::{phase_margin_to_micro, phase_vector_from_atom_ids};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::program::{
     CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
@@ -87,15 +88,23 @@ pub fn execute_response(
             format,
             renderer,
             ..
-        } => project_selected_value(provider_payload, selector, *format)
-            .and_then(|computed| apply_value_renderer(provider_payload, computed, renderer)),
+        } => project_selected_value_with_request(request_text, provider_payload, selector, *format)
+            .and_then(|computed| {
+                apply_value_renderer_with_request(
+                    request_text,
+                    provider_payload,
+                    computed,
+                    renderer,
+                )
+            }),
         ResponseOperation::ProjectStatus {
             selector,
             mapping,
             renderer,
             ..
-        } => project_status(provider_payload, selector, *mapping)
-            .and_then(|computed| apply_value_renderer(provider_payload, computed, renderer)),
+        } => project_status(provider_payload, selector, *mapping).and_then(|computed| {
+            apply_value_renderer_with_request(request_text, provider_payload, computed, renderer)
+        }),
         ResponseOperation::ComposeCollection {
             steps,
             format,
@@ -495,6 +504,14 @@ fn actor_selector_adapter_atoms<'a>(
         ResponseValueSelector::RequestReferencedJsonField { value_type } => {
             ("request_referenced", None, Some(value_type))
         }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => (
+            "request_referenced_ordinal",
+            Some(u64::from(*ordinal)),
+            Some(value_type),
+        ),
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,
@@ -1191,6 +1208,24 @@ fn apply_value_renderer(
     computed: String,
     renderer: &CollectionOutputRenderer,
 ) -> Result<String, &'static str> {
+    apply_value_renderer_inner(None, provider_payload, computed, renderer)
+}
+
+fn apply_value_renderer_with_request(
+    request_text: &str,
+    provider_payload: &Value,
+    computed: String,
+    renderer: &CollectionOutputRenderer,
+) -> Result<String, &'static str> {
+    apply_value_renderer_inner(Some(request_text), provider_payload, computed, renderer)
+}
+
+fn apply_value_renderer_inner(
+    request_text: Option<&str>,
+    provider_payload: &Value,
+    computed: String,
+    renderer: &CollectionOutputRenderer,
+) -> Result<String, &'static str> {
     let CollectionOutputRenderer::RenderSequence { segments } = renderer else {
         return apply_output_renderer(provider_payload, computed, renderer);
     };
@@ -1199,9 +1234,18 @@ fn apply_value_renderer(
         match segment {
             ResponseRenderSegment::Static { text } => output.push_str(text),
             ResponseRenderSegment::Primary => output.push_str(&computed),
-            ResponseRenderSegment::Selected { selector, format } => output.push_str(
-                &project_selected_value(provider_payload, selector, *format)?,
-            ),
+            ResponseRenderSegment::Selected { selector, format } => {
+                let selected = match request_text {
+                    Some(request_text) => project_selected_value_with_request(
+                        request_text,
+                        provider_payload,
+                        selector,
+                        *format,
+                    )?,
+                    None => project_selected_value(provider_payload, selector, *format)?,
+                };
+                output.push_str(&selected);
+            }
         }
         if output.len() > 16_384 {
             return Err("projection_output_budget");
@@ -1445,6 +1489,24 @@ pub(crate) fn project_selected_value(
     format: ValueProjectionFormat,
 ) -> Result<String, &'static str> {
     let selected = immediate_selected_scalar(provider_payload, selector)?;
+    format_selected_scalar(selected, format)
+}
+
+fn project_selected_value_with_request(
+    request_text: &str,
+    provider_payload: &Value,
+    selector: &ResponseValueSelector,
+    format: ValueProjectionFormat,
+) -> Result<String, &'static str> {
+    let selected =
+        immediate_selected_scalar_with_request(request_text, provider_payload, selector)?;
+    format_selected_scalar(selected, format)
+}
+
+fn format_selected_scalar(
+    selected: ExtractedScalar,
+    format: ValueProjectionFormat,
+) -> Result<String, &'static str> {
     let projected = match format {
         ValueProjectionFormat::PlainText => match &selected.value {
             Value::String(text) if !text.contains(['\n', '\r']) => text.clone(),
@@ -1629,6 +1691,205 @@ pub(crate) struct ExtractedScalar {
     pub value_type: AtomValueType,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ObservedSourceClass {
+    ImmediateToolJson,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ObservedRoleCandidate {
+    pub selector: ResponseValueSelector,
+    pub request_position: u16,
+    pub json_path_sha256: [u8; 32],
+    pub value_type: AtomValueType,
+    pub source_class: ObservedSourceClass,
+}
+
+#[derive(Clone, Debug)]
+struct ReferencedPathScalar {
+    field: String,
+    request_position: usize,
+    path_sha256: [u8; 32],
+    value_type: AtomValueType,
+}
+
+/// Extracts only roles that are directly observable in the current request and
+/// immediate tool output. Ordinals follow request mention order; JSON map order
+/// and field names never become runtime authority.
+pub(crate) fn observed_request_ordinal_roles(
+    request: &str,
+    provider_payload: &Value,
+) -> Result<Vec<ObservedRoleCandidate>, &'static str> {
+    referenced_path_scalars(request, provider_payload)?
+        .into_iter()
+        .enumerate()
+        .map(|(ordinal, candidate)| {
+            Ok(ObservedRoleCandidate {
+                selector: ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                    ordinal: u16::try_from(ordinal).map_err(|_| "observed_request_role_count")?,
+                    value_type: candidate.value_type,
+                },
+                request_position: u16::try_from(candidate.request_position)
+                    .map_err(|_| "observed_request_position")?,
+                json_path_sha256: candidate.path_sha256,
+                value_type: candidate.value_type,
+                source_class: ObservedSourceClass::ImmediateToolJson,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn canonical_request_ordinal_selector(
+    request: &str,
+    provider_payload: &Value,
+    selector: &ResponseValueSelector,
+) -> Result<Option<ResponseValueSelector>, &'static str> {
+    let ResponseValueSelector::JsonField { field, value_type } = selector else {
+        return Ok(None);
+    };
+    let observed = referenced_path_scalars(request, provider_payload)?;
+    let mut matches = observed
+        .iter()
+        .enumerate()
+        .filter(|(_, candidate)| candidate.field == *field && candidate.value_type == *value_type);
+    let Some((ordinal, _)) = matches.next() else {
+        return Ok(None);
+    };
+    if matches.next().is_some() {
+        return Err("observed_request_role_path_ambiguous");
+    }
+    Ok(Some(
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal: u16::try_from(ordinal).map_err(|_| "observed_request_role_count")?,
+            value_type: *value_type,
+        },
+    ))
+}
+
+fn referenced_path_scalars(
+    request: &str,
+    provider_payload: &Value,
+) -> Result<Vec<ReferencedPathScalar>, &'static str> {
+    if request.is_empty() || request.len() > 16_384 {
+        return Err("selector_request_text_missing");
+    }
+    let request_tokens = identifier_tokens(request);
+    let output =
+        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let mut observed = Vec::new();
+    for (object_index, text) in output_text_parts(output)?.into_iter().enumerate() {
+        for (embedded_index, object) in runtime_embedded_json_objects(text).into_iter().enumerate()
+        {
+            let mut path = vec![format!("o:{object_index}"), format!("e:{embedded_index}")];
+            collect_observed_request_roles(
+                &Value::Object(object),
+                &request_tokens,
+                &mut path,
+                0,
+                &mut observed,
+            )?;
+        }
+    }
+    observed.sort_by_key(|candidate| candidate.request_position);
+    if observed.is_empty() || observed.len() > 16 {
+        return Err("observed_request_role_count");
+    }
+    if observed
+        .windows(2)
+        .any(|pair| pair[0].request_position == pair[1].request_position)
+    {
+        return Err("observed_request_role_path_ambiguous");
+    }
+    Ok(observed)
+}
+
+fn collect_observed_request_roles(
+    value: &Value,
+    request_tokens: &[String],
+    path: &mut Vec<String>,
+    depth: usize,
+    output: &mut Vec<ReferencedPathScalar>,
+) -> Result<(), &'static str> {
+    if depth > 8 || output.len() >= 64 {
+        return Err("observed_request_role_structure_budget");
+    }
+    match value {
+        Value::Object(object) => {
+            for (field, value) in object {
+                path.push(format!("k:{field}"));
+                let positions = request_identifier_positions(request_tokens, field);
+                if !positions.is_empty() {
+                    if positions.len() != 1 {
+                        return Err("observed_request_role_mention_ambiguous");
+                    }
+                    if let Some(value_type) = observed_scalar_type(value) {
+                        output.push(ReferencedPathScalar {
+                            field: field.clone(),
+                            request_position: positions[0],
+                            path_sha256: observed_json_path_digest(path),
+                            value_type,
+                        });
+                    }
+                }
+                collect_observed_request_roles(
+                    value,
+                    request_tokens,
+                    path,
+                    depth.saturating_add(1),
+                    output,
+                )?;
+                path.pop();
+            }
+        }
+        Value::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                path.push(format!("i:{index}"));
+                collect_observed_request_roles(
+                    value,
+                    request_tokens,
+                    path,
+                    depth.saturating_add(1),
+                    output,
+                )?;
+                path.pop();
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn observed_scalar_type(value: &Value) -> Option<AtomValueType> {
+    match value {
+        Value::String(_) => Some(AtomValueType::String),
+        Value::Number(number) if number.is_i64() || number.is_u64() => Some(AtomValueType::Integer),
+        Value::Bool(_) => Some(AtomValueType::Boolean),
+        _ => None,
+    }
+}
+
+fn request_identifier_positions(request_tokens: &[String], identifier: &str) -> Vec<usize> {
+    let identifier_tokens = identifier_tokens(identifier);
+    if identifier_tokens.is_empty() {
+        return Vec::new();
+    }
+    request_tokens
+        .windows(identifier_tokens.len())
+        .enumerate()
+        .filter_map(|(position, window)| (window == identifier_tokens).then_some(position))
+        .collect()
+}
+
+fn observed_json_path_digest(path: &[String]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.observed-json-path.v1");
+    for segment in path {
+        hasher.update((segment.len() as u64).to_le_bytes());
+        hasher.update(segment.as_bytes());
+    }
+    hasher.finalize().into()
+}
+
 pub(crate) fn immediate_unique_scalar(
     provider_payload: &Value,
 ) -> Result<ExtractedScalar, &'static str> {
@@ -1654,6 +1915,24 @@ pub(crate) fn immediate_unique_scalar(
 }
 
 pub(crate) fn immediate_selected_scalar(
+    provider_payload: &Value,
+    selector: &ResponseValueSelector,
+) -> Result<ExtractedScalar, &'static str> {
+    let request = provider_payload
+        .get("input")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .rev()
+        .find(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+        .and_then(|item| item.get("content"))
+        .and_then(runtime_request_content_text)
+        .unwrap_or_default();
+    immediate_selected_scalar_with_request(&request, provider_payload, selector)
+}
+
+fn immediate_selected_scalar_with_request(
+    request_text: &str,
     provider_payload: &Value,
     selector: &ResponseValueSelector,
 ) -> Result<ExtractedScalar, &'static str> {
@@ -1734,8 +2013,17 @@ pub(crate) fn immediate_selected_scalar(
             unique_active_turn_json_field(provider_payload, field, *value_type)
         }
         ResponseValueSelector::RequestReferencedJsonField { value_type } => {
-            request_referenced_json_field(provider_payload, *value_type)
+            request_referenced_json_field(request_text, provider_payload, *value_type)
         }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => request_referenced_json_field_ordinal(
+            request_text,
+            provider_payload,
+            *ordinal,
+            *value_type,
+        ),
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,
@@ -1922,20 +2210,14 @@ fn collect_runtime_json_field(
 }
 
 fn request_referenced_json_field(
+    request: &str,
     provider_payload: &Value,
     value_type: AtomValueType,
 ) -> Result<ExtractedScalar, &'static str> {
-    let request = provider_payload
-        .get("input")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .rev()
-        .find(|item| item.get("role").and_then(Value::as_str) == Some("user"))
-        .and_then(|item| item.get("content"))
-        .and_then(runtime_request_content_text)
-        .ok_or("selector_request_text_missing")?;
-    let request_tokens = identifier_tokens(&request);
+    if request.is_empty() {
+        return Err("selector_request_text_missing");
+    }
+    let request_tokens = identifier_tokens(request);
     let output =
         immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
     let mut matches = Vec::<(String, ExtractedScalar)>::new();
@@ -1963,6 +2245,55 @@ fn request_referenced_json_field(
         .pop()
         .map(|(_, scalar)| scalar)
         .ok_or("selector_request_field_missing")
+}
+
+fn request_referenced_json_field_ordinal(
+    request: &str,
+    provider_payload: &Value,
+    ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if request.is_empty() {
+        return Err("selector_request_text_missing");
+    }
+    let request_tokens = identifier_tokens(request);
+    let output =
+        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let mut matches = Vec::<(String, ExtractedScalar)>::new();
+    for text in output_text_parts(output)? {
+        for object in runtime_embedded_json_objects(text) {
+            collect_runtime_request_referenced_fields(
+                &Value::Object(object),
+                &request_tokens,
+                value_type,
+                0,
+                &mut matches,
+            )?;
+        }
+    }
+    matches.sort_by(|left, right| {
+        request_identifier_position(&request_tokens, &left.0)
+            .cmp(&request_identifier_position(&request_tokens, &right.0))
+            .then_with(|| left.0.cmp(&right.0))
+            .then_with(|| left.1.value.to_string().cmp(&right.1.value.to_string()))
+    });
+    matches.dedup();
+    matches
+        .into_iter()
+        .nth(usize::from(ordinal))
+        .map(|(_, scalar)| scalar)
+        .ok_or("selector_request_field_ordinal_missing")
+}
+
+fn request_identifier_position(request_tokens: &[String], identifier: &str) -> Option<usize> {
+    let identifier_tokens = identifier_tokens(identifier);
+    (!identifier_tokens.is_empty())
+        .then(|| {
+            request_tokens
+                .windows(identifier_tokens.len())
+                .position(|window| window == identifier_tokens)
+        })
+        .flatten()
 }
 
 fn collect_runtime_request_referenced_fields(

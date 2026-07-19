@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_core::wave::{
     BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence, BlueprintPhaseControl,
-    BoundedCircuitBeam, BoundedRoleAligner, FrozenOperatorBlueprintSet, LocalRelationFragment,
-    OPERATOR_ROLE_NONE, RoleAlignmentConfig, StructuralRoleSignature, SurfaceFragmentBundle,
+    BlueprintSynthesisBlockerCount, BlueprintSynthesisReport, BoundedCircuitBeam,
+    BoundedRoleAligner, FrozenOperatorBlueprintSet, LocalRelationFragment, OPERATOR_ROLE_NONE,
+    RoleAlignmentConfig, SearchCompletion, StructuralRoleSignature, SurfaceFragmentBundle,
     TernaryRelationState, TypedProgramAtom, phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,8 @@ use crate::{
     TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
     enumerate_source_neutral_response_programs, execute_response,
     is_privacy_safe_online_response_program, is_source_neutral_response_program,
+    response_actor_program_digest, response_independent_verifier_program_digest,
+    source_neutral_verifier_for_program,
 };
 
 const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
@@ -29,6 +32,7 @@ pub struct LiveScalarCircuitSample {
     pub bundle: SurfaceFragmentBundle,
     pub anchors: Box<[RuntimeRoleAnchor]>,
     pub actor_template: ResponseProgram,
+    pub actor_hypotheses: Box<[ResponseProgram]>,
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
@@ -70,6 +74,13 @@ struct LiveScalarLawState {
     future: Vec<TeacherTransition>,
 }
 
+struct CompetingBlueprintSet {
+    support_bundles: Vec<SurfaceFragmentBundle>,
+    synthesis: BlueprintSynthesisReport,
+    actors_by_blueprint: BTreeMap<[u8; 32], ResponseProgram>,
+    actor_hypothesis_count: usize,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LiveScalarShadowReport {
     pub observations: usize,
@@ -78,6 +89,8 @@ pub struct LiveScalarShadowReport {
     pub law_count: usize,
     pub support_rows: usize,
     pub future_rows: usize,
+    pub actor_hypotheses: usize,
+    pub competing_blueprints: usize,
     pub frozen_laws: usize,
     pub full_phase_winners: usize,
     pub causal_control_passes: usize,
@@ -247,49 +260,24 @@ fn evaluate_live_law(
         increment_report_blocker(report, "support_reextract_failed");
         return;
     };
-    let support_bundles = support
-        .iter()
-        .fold(BTreeMap::new(), |mut sessions, sample| {
-            sessions
-                .entry(*sample.bundle.lineage_sha256())
-                .or_insert_with(|| sample.bundle.clone());
-            sessions
-        })
-        .into_values()
-        .take(3)
-        .collect::<Vec<_>>();
-    if support_bundles.len() < 3 {
-        increment_report_blocker(report, "support_sessions_below_3");
-        return;
-    }
-    let alignments = BoundedRoleAligner::align(&support_bundles, RoleAlignmentConfig::default());
-    if !alignments.completion.is_complete() {
-        increment_report_blocker(report, "role_alignment_exhausted");
-        return;
-    }
-    let synthesis = BoundedCircuitBeam::synthesize(
-        &support_bundles,
-        &alignments,
-        BlueprintBeamConfig::default(),
-    );
-    if !synthesis.completion.is_complete() {
-        increment_report_blocker(report, "circuit_synthesis_exhausted");
-        return;
-    }
-    if synthesis.blueprints.is_empty() {
-        for blocker in &synthesis.blockers {
-            increment_report_blocker(
-                report,
-                &format!("circuit_synthesis_{:?}", blocker.blocker).to_lowercase(),
-            );
+    let competing = match build_competing_blueprint_set(&support) {
+        Ok(competing) => competing,
+        Err(blocker) => {
+            increment_report_blocker(report, &blocker);
+            return;
         }
-        return;
-    }
+    };
+    report.actor_hypotheses = report
+        .actor_hypotheses
+        .saturating_add(competing.actor_hypothesis_count);
+    report.competing_blueprints = report
+        .competing_blueprints
+        .saturating_add(competing.synthesis.blueprints.len());
     let frozen = match FrozenOperatorBlueprintSet::freeze(
         1,
-        &support_bundles,
-        Default::default(),
-        &synthesis,
+        &competing.support_bundles,
+        BlueprintBeamConfig::default(),
+        &competing.synthesis,
     ) {
         Ok(frozen) => frozen,
         Err(error) => {
@@ -317,10 +305,24 @@ fn evaluate_live_law(
     let future_evidence = future
         .iter()
         .map(|sample| {
-            BlueprintFutureEvidence::new(
+            let verifier = source_neutral_verifier_for_program(&sample.actor_template)
+                .map_err(|_| nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?;
+            let actor_sha256 = parse_commitment(
+                &response_actor_program_digest(&sample.actor_template)
+                    .map_err(|_| nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?,
+            )
+            .ok_or(nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?;
+            let verifier_sha256 = parse_commitment(
+                &response_independent_verifier_program_digest(&verifier)
+                    .map_err(|_| nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?,
+            )
+            .ok_or(nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?;
+            BlueprintFutureEvidence::new_with_executable_contracts(
                 sample.raw_input_sha256,
                 sample.extractor_version.max(1),
                 sample.bundle.clone(),
+                actor_sha256,
+                verifier_sha256,
             )
         })
         .collect::<Result<Vec<_>, _>>();
@@ -335,9 +337,72 @@ fn evaluate_live_law(
         BlueprintPhaseControl::Full,
     );
     let Some(winner) = full.winner_receipt() else {
-        increment_report_blocker(report, "full_phase_no_winner");
+        let evaluation = full.report();
+        let transform_clean = evaluation
+            .scores
+            .iter()
+            .filter(|score| score.transform_mismatches == 0)
+            .count();
+        let transform_mismatches = evaluation
+            .scores
+            .iter()
+            .map(|score| score.transform_mismatches)
+            .sum::<usize>();
+        let ambiguous_bindings = evaluation
+            .scores
+            .iter()
+            .map(|score| score.ambiguous_bindings)
+            .sum::<usize>();
+        let executable_contract_mismatches = evaluation
+            .scores
+            .iter()
+            .map(|score| score.executable_contract_mismatches)
+            .sum::<usize>();
+        let max_coherence = evaluation
+            .scores
+            .iter()
+            .map(|score| score.whole_circuit_coherence_fixed)
+            .max()
+            .unwrap_or_default();
+        increment_report_blocker(
+            report,
+            &format!(
+                "full_phase_no_winner:{:?}:scores={}:transform_clean={transform_clean}:transform_mismatches={transform_mismatches}:contract_mismatches={executable_contract_mismatches}:ambiguous={ambiguous_bindings}:max_coherence={max_coherence}",
+                evaluation.blocker,
+                evaluation.scores.len(),
+            )
+            .to_lowercase(),
+        );
         return;
     };
+    let Some(actor_template) = competing
+        .actors_by_blueprint
+        .get(winner.winner_sha256())
+        .cloned()
+    else {
+        increment_report_blocker(report, "winner_actor_contract_missing");
+        return;
+    };
+    let direct_actor_mismatches = future
+        .iter()
+        .filter(|sample| {
+            execute_response(
+                &actor_template,
+                &sample.request_text,
+                &sample.provider_payload,
+            )
+            .response
+            .as_deref()
+                != Some(sample.expected_response.as_str())
+        })
+        .count();
+    if direct_actor_mismatches != 0 {
+        increment_report_blocker(
+            report,
+            &format!("winner_actor_future_mismatches={direct_actor_mismatches}"),
+        );
+        return;
+    }
     report.full_phase_winners = report.full_phase_winners.saturating_add(1);
     let controls_pass = [
         BlueprintPhaseControl::NoPhase,
@@ -383,7 +448,13 @@ fn evaluate_live_law(
             expected_response: sample.expected_response.clone(),
         })
         .collect::<Vec<_>>();
-    match CrystallizedOperator::crystallize(&future_window, winner, &future_evidence, &receipts) {
+    match CrystallizedOperator::crystallize_with_actor_template(
+        &future_window,
+        winner,
+        &future_evidence,
+        &receipts,
+        actor_template,
+    ) {
         Ok(operator) => {
             report.verified_shadow_operators = report.verified_shadow_operators.saturating_add(1);
             report.shadow_executions = report.shadow_executions.saturating_add(receipts.len());
@@ -396,6 +467,159 @@ fn evaluate_live_law(
             increment_report_blocker(report, &format!("crystallization_{error:?}").to_lowercase())
         }
     }
+}
+
+fn build_competing_blueprint_set(
+    support: &[LiveScalarCircuitSample],
+) -> Result<CompetingBlueprintSet, String> {
+    let actors = common_support_actor_hypotheses(support)?;
+    let actor_hypothesis_count = actors.len();
+    let mut support_bundles = Vec::new();
+    let mut blueprints = BTreeMap::new();
+    let mut actors_by_blueprint = BTreeMap::new();
+    let mut blocker_counts = BTreeMap::new();
+    let mut expansions = 0_usize;
+
+    for actor in actors {
+        let roles = rich_scalar_program_roles(&actor)
+            .ok_or_else(|| "actor_hypothesis_roles_missing".to_owned())?;
+        let actor_bundles = support
+            .iter()
+            .map(|sample| {
+                observed_rich_scalar_surface(
+                    &sample.request_text,
+                    &sample.provider_payload,
+                    &roles,
+                    &commitment_hex(sample.bundle.surface_sha256()),
+                    *sample.bundle.lineage_sha256(),
+                    *sample.bundle.surface_sha256(),
+                )
+                .map(|observed| observed.bundle)
+                .map_err(|error| format!("actor_support_bundle_{error:?}").to_lowercase())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let synthesis_bundles = actor_bundles
+            .iter()
+            .fold(BTreeMap::new(), |mut lineages, bundle| {
+                lineages
+                    .entry(*bundle.lineage_sha256())
+                    .or_insert_with(|| bundle.clone());
+                lineages
+            })
+            .into_values()
+            .take(3)
+            .collect::<Vec<_>>();
+        if synthesis_bundles.len() < 3 {
+            return Err("support_sessions_below_3".to_owned());
+        }
+        let alignments =
+            BoundedRoleAligner::align(&synthesis_bundles, RoleAlignmentConfig::default());
+        if !alignments.completion.is_complete() {
+            return Err("role_alignment_exhausted".to_owned());
+        }
+        let synthesis = BoundedCircuitBeam::synthesize(
+            &synthesis_bundles,
+            &alignments,
+            BlueprintBeamConfig::default(),
+        );
+        if !synthesis.completion.is_complete() {
+            return Err("circuit_synthesis_exhausted".to_owned());
+        }
+        if synthesis.blueprints.is_empty() {
+            return Err("circuit_synthesis_no_blueprint".to_owned());
+        }
+        expansions = expansions.saturating_add(synthesis.expansions);
+        for blocker in &synthesis.blockers {
+            let count = blocker_counts.entry(blocker.blocker).or_insert(0_usize);
+            *count = count.saturating_add(blocker.count);
+        }
+
+        let verifier = source_neutral_verifier_for_program(&actor)
+            .map_err(|error| format!("actor_verifier_build:{error}"))?;
+        let actor_sha256 = parse_commitment(
+            &response_actor_program_digest(&actor)
+                .map_err(|error| format!("actor_digest:{error}"))?,
+        )
+        .ok_or_else(|| "actor_digest_invalid".to_owned())?;
+        let verifier_sha256 = parse_commitment(
+            &response_independent_verifier_program_digest(&verifier)
+                .map_err(|error| format!("verifier_digest:{error}"))?,
+        )
+        .ok_or_else(|| "verifier_digest_invalid".to_owned())?;
+        for blueprint in synthesis.blueprints {
+            let blueprint = blueprint.bind_executable_contracts(actor_sha256, verifier_sha256);
+            let fingerprint = *blueprint.fingerprint_sha256();
+            if let Some(existing) = actors_by_blueprint.get(&fingerprint) {
+                if existing != &actor {
+                    return Err("blueprint_actor_commitment_collision".to_owned());
+                }
+            } else {
+                actors_by_blueprint.insert(fingerprint, actor.clone());
+            }
+            blueprints.entry(fingerprint).or_insert(blueprint);
+        }
+        // Alternatives from one lineage are committed but never counted as
+        // independent evidence; FrozenOperatorBlueprintSet deduplicates lineage.
+        support_bundles.extend(actor_bundles);
+    }
+
+    if blueprints.is_empty() {
+        return Err("competing_blueprints_empty".to_owned());
+    }
+    Ok(CompetingBlueprintSet {
+        support_bundles,
+        synthesis: BlueprintSynthesisReport {
+            blueprints: blueprints
+                .into_values()
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            expansions,
+            completion: SearchCompletion::Complete {
+                explored: expansions,
+            },
+            blockers: blocker_counts
+                .into_iter()
+                .map(|(blocker, count)| BlueprintSynthesisBlockerCount { blocker, count })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        },
+        actors_by_blueprint,
+        actor_hypothesis_count,
+    })
+}
+
+fn common_support_actor_hypotheses(
+    support: &[LiveScalarCircuitSample],
+) -> Result<Vec<ResponseProgram>, String> {
+    let Some(first) = support.first() else {
+        return Err("actor_hypotheses_missing".to_owned());
+    };
+    let mut common = first
+        .actor_hypotheses
+        .iter()
+        .map(|program| {
+            serde_cbor::to_vec(program)
+                .map(|key| (key, program.clone()))
+                .map_err(|_| "actor_hypothesis_encode_failed".to_owned())
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    for sample in &support[1..] {
+        let keys = sample
+            .actor_hypotheses
+            .iter()
+            .map(|program| {
+                serde_cbor::to_vec(program).map_err(|_| "actor_hypothesis_encode_failed".to_owned())
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        common.retain(|key, _| keys.contains(key));
+        if common.is_empty() {
+            return Err("actor_hypotheses_no_common_version".to_owned());
+        }
+    }
+    if common.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+        return Err("actor_hypothesis_class_budget".to_owned());
+    }
+    Ok(common.into_values().collect())
 }
 
 fn live_admission_candidate(
@@ -499,8 +723,10 @@ pub fn extract_live_scalar_circuit_sample(
     if payload_bytes.len() > 64 * 1024 || parity.expected_response.len() > 4 * 1024 {
         return Err(LiveScalarShadowBlocker::PayloadTooLarge);
     }
+    let synthesis_payload =
+        synthesis_payload_with_request(&parity.request_text, &parity.provider_payload)?;
     let example = CollectionSynthesisExample {
-        provider_payload: parity.provider_payload.clone(),
+        provider_payload: synthesis_payload,
         expected_response: parity.expected_response.clone(),
     };
     let version_space = enumerate_source_neutral_response_programs(&example)
@@ -526,7 +752,7 @@ pub fn extract_live_scalar_circuit_sample(
         .programs
         .iter()
         .find(|program| rich_scalar_program_roles(program).is_some_and(|roles| roles.len() > 1));
-    let actor_template = if let Some(program) = rich_exact {
+    let selected_template = if let Some(program) = rich_exact {
         program.clone()
     } else if let Some((_, selector, _, _, renderer)) = scalar_programs.first() {
         ResponseProgram::project_selected_value(selector.clone(), scalar_programs[0].3, "completed")
@@ -539,7 +765,54 @@ pub fn extract_live_scalar_circuit_sample(
             .cloned()
             .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?
     };
-    let roles = rich_scalar_program_roles(&actor_template)
+    let mut actor_hypotheses = canonical_rich_actor_hypotheses(
+        &version_space.programs,
+        &parity.request_text,
+        &parity.provider_payload,
+        &parity.expected_response,
+    )?;
+    let clean_actor = derive_clean_ordinal_actor(
+        &parity.request_text,
+        &parity.provider_payload,
+        &parity.expected_response,
+    );
+    if let Some(actor) = &clean_actor {
+        actor_hypotheses.push(actor.clone());
+    }
+    if actor_hypotheses.is_empty() {
+        actor_hypotheses.push(
+            canonicalize_scalar_program_roles(
+                &selected_template,
+                &parity.request_text,
+                &parity.provider_payload,
+            )
+            .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?,
+        );
+    }
+    actor_hypotheses = expand_actor_hypothesis_set(
+        actor_hypotheses,
+        &parity.request_text,
+        &parity.provider_payload,
+        &parity.expected_response,
+    )?;
+    let canonical_candidates = if let Some(clean_actor) = clean_actor {
+        expand_actor_hypothesis_set(
+            vec![clean_actor],
+            &parity.request_text,
+            &parity.provider_payload,
+            &parity.expected_response,
+        )?
+    } else {
+        actor_hypotheses.clone()
+    };
+    let canonical_program = canonical_candidates
+        .iter()
+        .max_by_key(|program| rich_scalar_program_roles(program).map_or(0, |roles| roles.len()))
+        .cloned()
+        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    // The relation circuit and executable actor must be derived from the same
+    // canonical winner program; otherwise runtime roles cannot match support.
+    let roles = rich_scalar_program_roles(&canonical_program)
         .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?;
 
     let lineage_sha256 = parse_commitment(&transition.before.session_id_sha256)
@@ -565,15 +838,23 @@ pub fn extract_live_scalar_circuit_sample(
         b"nando.live-scalar-raw-input.v1",
         &[parity.request_text.as_bytes(), &payload_bytes],
     );
-    let canonical_program = canonicalize_scalar_program_roles(&actor_template)
-        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
-    let law_shape = scalar_law_shape(&actor_template)
-        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
-    let law_sha256 = digest_parts(b"nando.live-scalar-law.v3", &[&law_shape]);
+    let law_shape = structural_scalar_law_shape(
+        &parity.request_text,
+        &parity.provider_payload,
+        &parity.expected_response,
+    )
+    .or_else(|| {
+        (roles.len() == 1)
+            .then(|| source_neutral_scalar_program_shape(&canonical_program))
+            .flatten()
+    })
+    .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    let law_sha256 = digest_parts(b"nando.live-scalar-law.v4", &[&law_shape]);
     Ok(LiveScalarCircuitSample {
         bundle: observed.bundle,
         anchors: observed.anchors,
         actor_template: canonical_program,
+        actor_hypotheses: actor_hypotheses.into_boxed_slice(),
         request_text: parity.request_text.clone(),
         provider_payload: parity.provider_payload.clone(),
         expected_response: parity.expected_response.clone(),
@@ -583,58 +864,379 @@ pub fn extract_live_scalar_circuit_sample(
     })
 }
 
-fn rich_scalar_program_roles(
-    program: &ResponseProgram,
-) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+fn canonical_rich_actor_hypotheses(
+    programs: &[ResponseProgram],
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Result<Vec<ResponseProgram>, LiveScalarShadowBlocker> {
+    let mut hypotheses = BTreeMap::new();
+    for program in programs {
+        if !rich_scalar_program_roles(program).is_some_and(|roles| roles.len() > 1) {
+            continue;
+        }
+        let Some(canonical) =
+            canonicalize_scalar_program_roles(program, request_text, provider_payload)
+        else {
+            continue;
+        };
+        let Some(roles) = rich_scalar_program_roles(&canonical) else {
+            continue;
+        };
+        let distinct = roles
+            .iter()
+            .map(|(selector, _)| selector)
+            .collect::<BTreeSet<_>>();
+        if distinct.len() != roles.len()
+            || roles.iter().any(|(selector, _)| {
+                !matches!(
+                    selector,
+                    ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
+                )
+            })
+            || execute_response(&canonical, request_text, provider_payload)
+                .response
+                .as_deref()
+                != Some(expected_response)
+        {
+            continue;
+        }
+        let key = serde_cbor::to_vec(&canonical)
+            .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+        hypotheses.entry(key).or_insert(canonical);
+        if hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+            return Err(LiveScalarShadowBlocker::UnsupportedRendererProgram);
+        }
+    }
+    Ok(hypotheses.into_values().collect())
+}
+
+fn derive_clean_ordinal_actor(
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Option<ResponseProgram> {
+    let observed =
+        crate::runtime::observed_request_ordinal_roles(request_text, provider_payload).ok()?;
+    let mut selectors_by_value = BTreeMap::<String, Vec<ResponseValueSelector>>::new();
+    for role in observed {
+        let value = execute_response(
+            &ResponseProgram::project_selected_value(
+                role.selector.clone(),
+                ValueProjectionFormat::PlainText,
+                "completed",
+            ),
+            request_text,
+            provider_payload,
+        )
+        .response?;
+        if value.is_empty() {
+            return None;
+        }
+        selectors_by_value
+            .entry(value)
+            .or_default()
+            .push(role.selector);
+    }
+    let mut spans = selectors_by_value
+        .keys()
+        .flat_map(|value| {
+            expected_response
+                .match_indices(value)
+                .map(move |(start, _)| (start, start.saturating_add(value.len()), value.clone()))
+        })
+        .collect::<Vec<_>>();
+    spans.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| right.1.cmp(&left.1))
+            .then_with(|| left.2.cmp(&right.2))
+    });
+    let mut selected_spans = Vec::new();
+    let mut cursor = 0_usize;
+    for span in spans {
+        if span.0 < cursor {
+            continue;
+        }
+        cursor = span.1;
+        selected_spans.push(span);
+    }
+    if selected_spans.is_empty()
+        || selectors_by_value
+            .keys()
+            .any(|value| !selected_spans.iter().any(|span| &span.2 == value))
+    {
+        return None;
+    }
+    let primary_selector = selectors_by_value
+        .get(&selected_spans[0].2)?
+        .first()?
+        .clone();
+    let primary_format = ValueProjectionFormat::PlainText;
+    let mut segments = Vec::new();
+    let mut rendered_until = 0_usize;
+    for (start, end, value) in selected_spans {
+        if start > rendered_until {
+            segments.push(ResponseRenderSegment::Static {
+                text: expected_response[rendered_until..start].to_owned(),
+            });
+        }
+        let selector = selectors_by_value.get(&value)?.first()?.clone();
+        if selector == primary_selector {
+            segments.push(ResponseRenderSegment::Primary);
+        } else {
+            segments.push(ResponseRenderSegment::Selected {
+                selector,
+                format: ValueProjectionFormat::PlainText,
+            });
+        }
+        rendered_until = end;
+    }
+    if rendered_until < expected_response.len() {
+        segments.push(ResponseRenderSegment::Static {
+            text: expected_response[rendered_until..].to_owned(),
+        });
+    }
+    let actor =
+        ResponseProgram::project_selected_value(primary_selector, primary_format, "completed")
+            .with_value_renderer(CollectionOutputRenderer::RenderSequence { segments });
+    (execute_response(&actor, request_text, provider_payload)
+        .response
+        .as_deref()
+        == Some(expected_response))
+    .then_some(actor)
+}
+
+fn expand_actor_hypothesis_set(
+    seeds: Vec<ResponseProgram>,
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Result<Vec<ResponseProgram>, LiveScalarShadowBlocker> {
+    let mut hypotheses = BTreeMap::new();
+    for seed in seeds {
+        let seed_key = serde_cbor::to_vec(&seed)
+            .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+        hypotheses.entry(seed_key).or_insert(seed.clone());
+        if repeated_primary_slots(&seed) == 0 {
+            continue;
+        }
+        for hypothesis in bounded_ordinal_role_permutations(
+            &seed,
+            request_text,
+            provider_payload,
+            expected_response,
+        )? {
+            let key = serde_cbor::to_vec(&hypothesis)
+                .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+            hypotheses.entry(key).or_insert(hypothesis);
+            if hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+                return Err(LiveScalarShadowBlocker::UnsupportedRendererProgram);
+            }
+        }
+    }
+    Ok(hypotheses.into_values().collect())
+}
+
+fn bounded_ordinal_role_permutations(
+    seed: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Result<Vec<ResponseProgram>, LiveScalarShadowBlocker> {
+    let role_types = scalar_program_role_slot_types(seed)
+        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    let observed = crate::runtime::observed_request_ordinal_roles(request_text, provider_payload)
+        .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    let candidates = observed
+        .into_iter()
+        .map(|role| role.selector)
+        .collect::<Vec<_>>();
+    let mut assignments = Vec::new();
+    enumerate_ordinal_assignments(
+        &role_types,
+        &candidates,
+        0,
+        &mut vec![false; candidates.len()],
+        &mut Vec::new(),
+        &mut assignments,
+    )?;
+    let mut programs = BTreeMap::new();
+    for assignment in assignments {
+        let Some(program) = replace_scalar_program_selectors(seed, &assignment) else {
+            continue;
+        };
+        if execute_response(&program, request_text, provider_payload)
+            .response
+            .as_deref()
+            != Some(expected_response)
+        {
+            continue;
+        }
+        let key = serde_cbor::to_vec(&program)
+            .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+        programs.entry(key).or_insert(program);
+    }
+    Ok(programs.into_values().collect())
+}
+
+fn enumerate_ordinal_assignments(
+    role_types: &[AtomValueType],
+    candidates: &[ResponseValueSelector],
+    slot: usize,
+    used: &mut [bool],
+    current: &mut Vec<ResponseValueSelector>,
+    output: &mut Vec<Vec<ResponseValueSelector>>,
+) -> Result<(), LiveScalarShadowBlocker> {
+    if slot == role_types.len() {
+        output.push(current.clone());
+        if output.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+            return Err(LiveScalarShadowBlocker::UnsupportedRendererProgram);
+        }
+        return Ok(());
+    }
+    for (index, candidate) in candidates.iter().enumerate() {
+        if used[index] || selector_value_type(candidate) != role_types[slot] {
+            continue;
+        }
+        used[index] = true;
+        current.push(candidate.clone());
+        enumerate_ordinal_assignments(role_types, candidates, slot + 1, used, current, output)?;
+        current.pop();
+        used[index] = false;
+    }
+    Ok(())
+}
+
+fn replace_scalar_program_selectors(
+    seed: &ResponseProgram,
+    selectors: &[ResponseValueSelector],
+) -> Option<ResponseProgram> {
+    let mut program = seed.clone();
     let ResponseOperation::ProjectSelectedValue {
         selector,
         format,
         renderer,
-        completion_state,
+        ..
+    } = &mut program.operation
+    else {
+        return None;
+    };
+    let mut replacements = selectors.iter();
+    *selector = replacements.next()?.clone();
+    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
+        let mut primary_seen = false;
+        for segment in segments {
+            match segment {
+                ResponseRenderSegment::Primary if primary_seen => {
+                    *segment = ResponseRenderSegment::Selected {
+                        selector: replacements.next()?.clone(),
+                        format: *format,
+                    };
+                }
+                ResponseRenderSegment::Primary => primary_seen = true,
+                ResponseRenderSegment::Selected { selector, .. } => {
+                    *selector = replacements.next()?.clone();
+                }
+                ResponseRenderSegment::Static { .. } => {}
+            }
+        }
+    }
+    replacements.next().is_none().then_some(program)
+}
+
+fn scalar_program_role_slot_types(program: &ResponseProgram) -> Option<Vec<AtomValueType>> {
+    let ResponseOperation::ProjectSelectedValue {
+        selector, renderer, ..
     } = &program.operation
     else {
         return None;
     };
-    if completion_state != "completed" {
-        return None;
-    }
-    let mut roles = vec![(selector.clone(), *format)];
+    let primary_type = selector_value_type(selector);
+    let mut role_types = vec![primary_type];
     if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
+        let mut primary_seen = false;
         for segment in segments {
-            if let ResponseRenderSegment::Selected { selector, format } = segment {
-                roles.push((selector.clone(), *format));
+            match segment {
+                ResponseRenderSegment::Primary if primary_seen => role_types.push(primary_type),
+                ResponseRenderSegment::Primary => primary_seen = true,
+                ResponseRenderSegment::Selected { selector, .. } => {
+                    role_types.push(selector_value_type(selector));
+                }
+                ResponseRenderSegment::Static { .. } => {}
             }
         }
     }
-    (roles.len() <= 16).then_some(roles)
+    (role_types.len() <= 16).then_some(role_types)
 }
 
-fn canonicalize_scalar_program_roles(program: &ResponseProgram) -> Option<ResponseProgram> {
-    let mut canonical = program.clone();
-    let ResponseOperation::ProjectSelectedValue {
-        selector,
-        renderer,
-        completion_state,
-        ..
-    } = &mut canonical.operation
-    else {
-        return None;
+fn repeated_primary_slots(program: &ResponseProgram) -> usize {
+    let ResponseOperation::ProjectSelectedValue { renderer, .. } = &program.operation else {
+        return 0;
     };
-    if completion_state != "completed" {
+    let CollectionOutputRenderer::RenderSequence { segments } = renderer else {
+        return 0;
+    };
+    segments
+        .iter()
+        .filter(|segment| matches!(segment, ResponseRenderSegment::Primary))
+        .count()
+        .saturating_sub(1)
+}
+
+fn structural_scalar_law_shape(
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Option<Vec<u8>> {
+    let observed =
+        crate::runtime::observed_request_ordinal_roles(request_text, provider_payload).ok()?;
+    let mut values = observed
+        .iter()
+        .filter_map(|role| {
+            execute_response(
+                &ResponseProgram::project_selected_value(
+                    role.selector.clone(),
+                    ValueProjectionFormat::PlainText,
+                    "completed",
+                ),
+                request_text,
+                provider_payload,
+            )
+            .response
+        })
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if values.len() != observed.len() {
         return None;
     }
-    *selector = canonical_role_selector(selector_value_type(selector));
-    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
-        for segment in segments {
-            if let ResponseRenderSegment::Selected { selector, .. } = segment {
-                *selector = canonical_role_selector(selector_value_type(selector));
+    values.sort_by(|left, right| right.len().cmp(&left.len()).then_with(|| left.cmp(right)));
+    values.dedup();
+    let mut dynamic = vec![false; expected_response.len()];
+    for value in values {
+        for (offset, _) in expected_response.match_indices(&value) {
+            let end = offset.saturating_add(value.len());
+            if end <= dynamic.len() && !dynamic[offset..end].iter().any(|marked| *marked) {
+                dynamic[offset..end].fill(true);
             }
         }
     }
-    Some(canonical)
+    if !dynamic.iter().any(|marked| *marked) {
+        return None;
+    }
+    let mut shape = vec![4, u8::try_from(observed.len()).ok()?];
+    shape.extend(observed.iter().map(|role| value_type_tag(role.value_type)));
+    let mut previous = None;
+    for marked in dynamic {
+        if previous != Some(marked) {
+            shape.push(u8::from(marked));
+            previous = Some(marked);
+        }
+    }
+    Some(shape)
 }
 
-fn scalar_law_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
+fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
     let ResponseOperation::ProjectSelectedValue {
         selector,
         format,
@@ -648,7 +1250,7 @@ fn scalar_law_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
         return None;
     }
     let mut shape = vec![
-        1,
+        5,
         value_type_tag(selector_value_type(selector)),
         u8::from(*format == ValueProjectionFormat::CanonicalJson),
     ];
@@ -679,8 +1281,115 @@ fn scalar_law_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
     Some(shape)
 }
 
-fn canonical_role_selector(value_type: AtomValueType) -> ResponseValueSelector {
-    ResponseValueSelector::UniqueScalar { value_type }
+fn synthesis_payload_with_request(
+    request_text: &str,
+    provider_payload: &Value,
+) -> Result<Value, LiveScalarShadowBlocker> {
+    if request_text.is_empty() || request_text.len() > 16_384 {
+        return Err(LiveScalarShadowBlocker::UnsupportedScalarProgram);
+    }
+    let mut payload = provider_payload.clone();
+    let input = payload
+        .get_mut("input")
+        .and_then(Value::as_array_mut)
+        .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?;
+    if !input
+        .iter()
+        .any(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+    {
+        input.insert(
+            0,
+            serde_json::json!({
+                "type": "message",
+                "role": "user",
+                "content": request_text,
+            }),
+        );
+    }
+    Ok(payload)
+}
+
+fn rich_scalar_program_roles(
+    program: &ResponseProgram,
+) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        format,
+        renderer,
+        completion_state,
+    } = &program.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    let mut roles = vec![(selector.clone(), *format)];
+    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
+        for segment in segments {
+            if let ResponseRenderSegment::Selected { selector, format } = segment {
+                roles.push((selector.clone(), *format));
+            }
+        }
+    }
+    (roles.len() <= 16).then_some(roles)
+}
+
+fn canonicalize_scalar_program_roles(
+    program: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Option<ResponseProgram> {
+    let mut canonical = program.clone();
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        renderer,
+        completion_state,
+        ..
+    } = &mut canonical.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    *selector = canonical_role_selector(selector, request_text, provider_payload)?;
+    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
+        for segment in segments {
+            if let ResponseRenderSegment::Selected { selector, .. } = segment {
+                *selector = canonical_role_selector(selector, request_text, provider_payload)?;
+            }
+        }
+    }
+    Some(canonical)
+}
+
+fn canonical_role_selector(
+    selector: &ResponseValueSelector,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Option<ResponseValueSelector> {
+    match selector {
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => Some(ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal: *ordinal,
+            value_type: *value_type,
+        }),
+        ResponseValueSelector::JsonField { .. } => {
+            crate::runtime::canonical_request_ordinal_selector(
+                request_text,
+                provider_payload,
+                selector,
+            )
+            .ok()
+            .flatten()
+        }
+        _ => Some(ResponseValueSelector::UniqueScalar {
+            value_type: selector_value_type(selector),
+        }),
+    }
 }
 
 fn observed_rich_scalar_surface(
@@ -718,7 +1427,7 @@ fn observed_rich_scalar_surface(
         let plane = u8::try_from(index).map_err(|_| LiveScalarShadowBlocker::InvalidBundle)?;
         let value_type = selector_value_type(selector);
         roles[usize::from(source)] =
-            StructuralRoleSignature::new(value_type_tag(value_type), 1, 1, 2, vec![plane]);
+            crate::crystallized_operator::runtime_role_signature_for_selector(selector, plane);
         let phase_atom = format!("scalar_role:{index}:type:{}", value_type_tag(value_type));
         let phase = phase_vector_from_atoms([phase_atom.as_str()], 1)[0];
         relations.push(LocalRelationFragment {
@@ -744,6 +1453,7 @@ fn observed_rich_scalar_surface(
         anchors.push(RuntimeRoleAnchor {
             local_role: source,
             selector: selector.clone(),
+            json_path_sha256: None,
         });
     }
     let bundle =
@@ -907,6 +1617,7 @@ fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
         | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
         | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
         | ResponseValueSelector::TurnOutputLine { value_type, .. }
         | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
         | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
@@ -1104,7 +1815,13 @@ mod tests {
         ))
         .expect("renamed multi-value trace");
 
-        assert_eq!(first.anchors.len(), 2);
+        assert_eq!(
+            first.anchors.len(),
+            2,
+            "unexpected canonical actor: {:#?}; hypotheses: {:#?}",
+            first.actor_template,
+            first.actor_hypotheses
+        );
         assert_eq!(first.bundle.roles().len(), 4);
         assert_eq!(first.bundle.relations().len(), 2);
         assert_eq!(first.bundle.program_atoms().len(), 2);
@@ -1288,5 +2005,132 @@ mod tests {
             ),
             Err("crystallized_admission_resynthesis_mismatch")
         ));
+    }
+
+    #[test]
+    fn multi_role_rows_reach_verified_crystallized_operator() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 0..64_u8 {
+            let first = format!("total_{index}");
+            let second = format!("failed_{index}");
+            let first_value = u16::from(index) + 100;
+            let second_value = if index < 32 {
+                first_value
+            } else {
+                u16::from(index) + 10
+            };
+            let mut row = multi_value_transition(
+                &first,
+                &second,
+                &format!("Total: {first_value}; failed: {second_value}"),
+            );
+            row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
+            row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
+            row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+            row.runtime_parity_case
+                .as_mut()
+                .expect("parity")
+                .provider_payload = json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": format!(
+                        "{{\"{first}\":{first_value},\"{second}\":{second_value}}}"
+                    )
+                }]
+            });
+            if index == 0 {
+                let parity = row.runtime_parity_case.as_ref().expect("parity");
+                let observed = crate::runtime::observed_request_ordinal_roles(
+                    &parity.request_text,
+                    &parity.provider_payload,
+                )
+                .expect("observed equal roles");
+                assert_eq!(observed.len(), 2, "both JSON paths must remain observable");
+                let sample =
+                    extract_live_scalar_circuit_sample(&row).expect("equal support sample");
+                let expanded = bounded_ordinal_role_permutations(
+                    &sample.actor_template,
+                    &parity.request_text,
+                    &parity.provider_payload,
+                    &parity.expected_response,
+                )
+                .expect("bounded equal-role expansion");
+                assert_eq!(
+                    expanded.len(),
+                    2,
+                    "renderer must retain both executable role orders: {expanded:#?}"
+                );
+                assert_eq!(
+                    sample.actor_hypotheses.len(),
+                    3,
+                    "equal-value support must retain repeated-role plus both role orders: {:#?}",
+                    sample.actor_hypotheses
+                );
+            }
+            state.observe(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.executable, 64, "{report:#?}");
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
+        assert_eq!(report.frozen_laws, 1, "{report:#?}");
+        assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let candidates = state.admission_candidates();
+        let bundle = candidates[0]
+            .package
+            .crystallized_operator
+            .as_ref()
+            .expect("restart bundle");
+        let restored = crate::VerifiedCrystallizedOperator::restore(
+            bundle.page_bytes(),
+            bundle.registry_cbor(),
+        )
+        .expect("restore rich operator before admission");
+        for (index, row) in candidates[0]
+            .support
+            .iter()
+            .chain(&candidates[0].future)
+            .enumerate()
+        {
+            let parity = row.runtime_parity_case.as_ref().expect("parity row");
+            let bound = restored
+                .bind_pre_action(&parity.request_text, &parity.provider_payload)
+                .unwrap_or_else(|error| panic!("rich bind row {index}: {error:?}"));
+            let response = bound
+                .execute_verified()
+                .unwrap_or_else(|error| panic!("rich execute row {index}: {error:?}"));
+            assert_eq!(response, parity.expected_response, "rich row {index}");
+        }
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &candidates,
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission verifies rich operator")
+        .expect("rich operator reaches registry");
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("hot executor restores rich operator");
+        let execution = executor.execute_shadow(
+            "Return new_total and new_failed",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_total\":777,\"new_failed\":9}"
+                }]
+            }),
+        );
+        assert_eq!(
+            execution.response.as_deref(),
+            Some("Total: 777; failed: 9"),
+            "{execution:#?}"
+        );
     }
 }

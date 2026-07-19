@@ -190,9 +190,15 @@ pub fn verify_response(
             renderer,
             ..
         } => {
-            let selected = independently_select_scalar(provider_payload, selector)?;
+            let selected =
+                independently_select_scalar_with_request(request_text, provider_payload, selector)?;
             let computed = independently_format_selected_value(&selected, *format)?;
-            independently_apply_value_renderer(provider_payload, computed, renderer)?
+            independently_apply_value_renderer_with_request(
+                request_text,
+                provider_payload,
+                computed,
+                renderer,
+            )?
         }
         ResponseOperation::ProjectStatus {
             selector,
@@ -795,6 +801,14 @@ fn independently_selector_adapter_atoms(
         ResponseValueSelector::RequestReferencedJsonField { value_type } => {
             ("request_referenced", None, Some(value_type))
         }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => (
+            "request_referenced_ordinal",
+            Some(u64::from(*ordinal)),
+            Some(value_type),
+        ),
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,
@@ -1150,6 +1164,16 @@ pub fn verify_response_independently(
     provider_payload: &Value,
     candidate: &str,
 ) -> Result<(), ResponseVerificationError> {
+    let request = independently_request_text(provider_payload).unwrap_or_default();
+    verify_response_independently_with_request(verifier, &request, provider_payload, candidate)
+}
+
+pub fn verify_response_independently_with_request(
+    verifier: &VerifierProgram,
+    request_text: &str,
+    provider_payload: &Value,
+    candidate: &str,
+) -> Result<(), ResponseVerificationError> {
     if let VerifierProgram::UniqueConsensus {
         variants,
         adapter_wave,
@@ -1297,10 +1321,15 @@ pub fn verify_response_independently(
         if !independently_safe_collection_renderer(renderer) {
             return Err(ResponseVerificationError("value_renderer_unsafe"));
         }
-        let selected = independently_select_scalar(provider_payload, selector)?;
+        let selected =
+            independently_select_scalar_with_request(request_text, provider_payload, selector)?;
         let computed = independently_format_selected_value(&selected, *format)?;
-        let expected =
-            independently_apply_value_renderer(provider_payload, computed.clone(), renderer)?;
+        let expected = independently_apply_value_renderer_with_request(
+            request_text,
+            provider_payload,
+            computed.clone(),
+            renderer,
+        )?;
         if candidate != expected {
             return Err(ResponseVerificationError("response_mismatch"));
         }
@@ -2022,6 +2051,29 @@ fn independently_apply_value_renderer(
     computed: String,
     renderer: &CollectionOutputRenderer,
 ) -> Result<String, ResponseVerificationError> {
+    independently_apply_value_renderer_inner(None, provider_payload, computed, renderer)
+}
+
+fn independently_apply_value_renderer_with_request(
+    request_text: &str,
+    provider_payload: &Value,
+    computed: String,
+    renderer: &CollectionOutputRenderer,
+) -> Result<String, ResponseVerificationError> {
+    independently_apply_value_renderer_inner(
+        Some(request_text),
+        provider_payload,
+        computed,
+        renderer,
+    )
+}
+
+fn independently_apply_value_renderer_inner(
+    request_text: Option<&str>,
+    provider_payload: &Value,
+    computed: String,
+    renderer: &CollectionOutputRenderer,
+) -> Result<String, ResponseVerificationError> {
     let CollectionOutputRenderer::RenderSequence { segments } = renderer else {
         return independently_apply_output_renderer(provider_payload, computed, renderer);
     };
@@ -2031,7 +2083,14 @@ fn independently_apply_value_renderer(
             ResponseRenderSegment::Static { text } => output.push_str(text),
             ResponseRenderSegment::Primary => output.push_str(&computed),
             ResponseRenderSegment::Selected { selector, format } => {
-                let selected = independently_select_scalar(provider_payload, selector)?;
+                let selected = match request_text {
+                    Some(request_text) => independently_select_scalar_with_request(
+                        request_text,
+                        provider_payload,
+                        selector,
+                    )?,
+                    None => independently_select_scalar(provider_payload, selector)?,
+                };
                 output.push_str(&independently_format_selected_value(&selected, *format)?);
             }
         }
@@ -2420,6 +2479,7 @@ fn independently_project_status(
         | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
         | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
         | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { value_type, .. }
         | ResponseValueSelector::TurnOutputLine { value_type, .. }
         | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
         | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
@@ -2454,6 +2514,15 @@ fn independently_project_status(
 }
 
 fn independently_select_scalar(
+    provider_payload: &Value,
+    selector: &ResponseValueSelector,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    let request = independently_request_text(provider_payload).unwrap_or_default();
+    independently_select_scalar_with_request(&request, provider_payload, selector)
+}
+
+fn independently_select_scalar_with_request(
+    request_text: &str,
     provider_payload: &Value,
     selector: &ResponseValueSelector,
 ) -> Result<VerifierScalar, ResponseVerificationError> {
@@ -2542,8 +2611,17 @@ fn independently_select_scalar(
             independently_unique_active_turn_json_field(provider_payload, field, *value_type)
         }
         ResponseValueSelector::RequestReferencedJsonField { value_type } => {
-            independently_request_referenced_json_field(provider_payload, *value_type)
+            independently_request_referenced_json_field(request_text, provider_payload, *value_type)
         }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => independently_request_referenced_json_field_ordinal(
+            request_text,
+            provider_payload,
+            *ordinal,
+            *value_type,
+        ),
         ResponseValueSelector::TurnOutputLine {
             output_ordinal,
             line_index,
@@ -2741,21 +2819,14 @@ fn independently_collect_json_field(
 }
 
 fn independently_request_referenced_json_field(
+    request: &str,
     provider_payload: &Value,
     value_type: AtomValueType,
 ) -> Result<VerifierScalar, ResponseVerificationError> {
-    let input = provider_payload
-        .get("input")
-        .and_then(Value::as_array)
-        .ok_or(ResponseVerificationError("selector_request_input_missing"))?;
-    let request = input
-        .iter()
-        .rev()
-        .find(|item| item.get("role").and_then(Value::as_str) == Some("user"))
-        .and_then(|item| item.get("content"))
-        .and_then(independently_request_content_text)
-        .ok_or(ResponseVerificationError("selector_request_text_missing"))?;
-    let request_tokens = independently_identifier_tokens(&request);
+    if request.is_empty() {
+        return Err(ResponseVerificationError("selector_request_text_missing"));
+    }
+    let request_tokens = independently_identifier_tokens(request);
     let output = independently_latest_tool_output(provider_payload)?;
     let mut matches = Vec::<(String, VerifierScalar)>::new();
     for text in independently_bounded_output_text_parts(output)? {
@@ -2784,6 +2855,62 @@ fn independently_request_referenced_json_field(
         .pop()
         .map(|(_, scalar)| scalar)
         .ok_or(ResponseVerificationError("selector_request_field_missing"))
+}
+
+fn independently_request_referenced_json_field_ordinal(
+    request: &str,
+    provider_payload: &Value,
+    ordinal: u16,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    if request.is_empty() {
+        return Err(ResponseVerificationError("selector_request_text_missing"));
+    }
+    let request_tokens = independently_identifier_tokens(request);
+    let output = independently_latest_tool_output(provider_payload)?;
+    let mut matches = Vec::<(String, VerifierScalar)>::new();
+    for text in independently_bounded_output_text_parts(output)? {
+        for object in independently_embedded_json_objects(text) {
+            independently_collect_request_referenced_fields(
+                &Value::Object(object),
+                &request_tokens,
+                value_type,
+                0,
+                &mut matches,
+            )?;
+        }
+    }
+    matches.sort_by(|left, right| {
+        independently_request_identifier_position(&request_tokens, &left.0)
+            .cmp(&independently_request_identifier_position(
+                &request_tokens,
+                &right.0,
+            ))
+            .then_with(|| left.0.cmp(&right.0))
+            .then_with(|| left.1.value.to_string().cmp(&right.1.value.to_string()))
+    });
+    matches.dedup();
+    matches
+        .into_iter()
+        .nth(usize::from(ordinal))
+        .map(|(_, scalar)| scalar)
+        .ok_or(ResponseVerificationError(
+            "selector_request_field_ordinal_missing",
+        ))
+}
+
+fn independently_request_identifier_position(
+    request_tokens: &[String],
+    identifier: &str,
+) -> Option<usize> {
+    let identifier_tokens = independently_identifier_tokens(identifier);
+    (!identifier_tokens.is_empty())
+        .then(|| {
+            request_tokens
+                .windows(identifier_tokens.len())
+                .position(|window| window == identifier_tokens)
+        })
+        .flatten()
 }
 
 fn independently_collect_request_referenced_fields(
@@ -2829,19 +2956,6 @@ fn independently_collect_request_referenced_fields(
         _ => {}
     }
     Ok(())
-}
-
-fn independently_request_content_text(content: &Value) -> Option<String> {
-    if let Some(text) = content.as_str() {
-        return (!text.is_empty()).then(|| text.to_owned());
-    }
-    let text = content
-        .as_array()?
-        .iter()
-        .filter_map(|part| part.get("text").and_then(Value::as_str))
-        .collect::<Vec<_>>()
-        .join("");
-    (!text.is_empty()).then_some(text)
 }
 
 fn independently_identifier_tokens(text: &str) -> Vec<String> {

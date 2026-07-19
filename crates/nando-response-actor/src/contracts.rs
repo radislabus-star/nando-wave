@@ -188,6 +188,10 @@ pub enum ResponseValueSelector {
     RequestReferencedJsonField {
         value_type: AtomValueType,
     },
+    RequestReferencedJsonFieldOrdinal {
+        ordinal: u16,
+        value_type: AtomValueType,
+    },
     TurnOutputLine {
         output_ordinal: u16,
         line_index: u16,

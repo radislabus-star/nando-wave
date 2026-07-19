@@ -103,7 +103,6 @@ pub fn build_crystallized_admission_snapshot(
             return Err("crystallized_admission_support_future_session_overlap");
         }
         let mut future_lineages = BTreeSet::new();
-        let mut replay_failed = false;
         for (is_future, row) in candidate
             .support
             .iter()
@@ -113,30 +112,48 @@ pub fn build_crystallized_admission_snapshot(
             let sample = match crate::extract_live_scalar_circuit_sample(row) {
                 Ok(sample) => sample,
                 Err(_) => {
-                    replay_failed = true;
-                    break;
+                    return Err(if is_future {
+                        "crystallized_admission_future_extract_failed"
+                    } else {
+                        "crystallized_admission_support_extract_failed"
+                    });
                 }
             };
             if is_future {
                 future_lineages.insert(*sample.bundle.lineage_sha256());
             }
-            let response = operator
+            let bound = operator
                 .bind_pre_action(&sample.request_text, &sample.provider_payload)
-                .and_then(|bound| bound.execute_verified());
-            if response.as_deref() != Ok(sample.expected_response.as_str()) {
-                replay_failed = true;
-                break;
+                .map_err(|_| {
+                    if is_future {
+                        "crystallized_admission_future_bind_failed"
+                    } else {
+                        "crystallized_admission_support_bind_failed"
+                    }
+                })?;
+            let response = bound.execute_verified().map_err(|_| {
+                if is_future {
+                    "crystallized_admission_future_execute_failed"
+                } else {
+                    "crystallized_admission_support_execute_failed"
+                }
+            })?;
+            if response != sample.expected_response {
+                return Err(if is_future {
+                    "crystallized_admission_future_response_mismatch"
+                } else {
+                    "crystallized_admission_support_response_mismatch"
+                });
             }
         }
-        if replay_failed
-            || future_lineages
-                != operator
-                    .verified_future_lineages()
-                    .iter()
-                    .copied()
-                    .collect::<BTreeSet<_>>()
+        if future_lineages
+            != operator
+                .verified_future_lineages()
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>()
         {
-            return Err("crystallized_admission_replay_failed");
+            return Err("crystallized_admission_future_lineage_mismatch");
         }
         let commitments = [
             candidate.support_root_sha256.as_str(),
