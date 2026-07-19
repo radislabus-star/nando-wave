@@ -1466,3 +1466,22 @@ nando-transition-serving all-targets check  PASS  4.9 s wall
 The remaining proof is a production restart with real post-checkpoint records:
 live `processed` must advance while replay is still incomplete, with zero
 worker failures and no local authority while the composite gate is not PASS.
+
+Production receipt from commit `652b236`:
+
+```text
+release build wall / peak RSS       58.14 s / 2.36 GiB (remote)
+deployed binary SHA-256             d9566d406ccd99f074a212ac4e11a0e0057f29ef67e854869adb473b7b1ea2fa
+startup replay wall                 2.53 s (previously about 111 s)
+live enqueued / processed / backlog 326 / 326 / 0
+teacher / collection replay         1 / 1
+worker / replay failures            0 / 0
+post-deploy composite gate          PASS
+production false accepts / parity   0 / 0
+```
+
+The collection learner retains one rejected support counterexample with
+`wrong_accepts=1`. It is not frozen, has no candidate program, and is blocked
+by `support_wrong_accepts_nonzero`; production authority remains zero for that
+cohort. The next product blocker is now explicit: nine frozen `project`
+buckets have zero accepted future receipts.
