@@ -131,7 +131,9 @@ pub fn build_crystallized_admission_snapshot(
                         "crystallized_admission_support_bind_failed"
                     }
                 })?;
-            let response = bound.execute_verified().map_err(|_| {
+            let response = bound.execute_verified().map_err(|_error| {
+                #[cfg(test)]
+                eprintln!("crystallized admission replay failed: {_error:?}");
                 if is_future {
                     "crystallized_admission_future_execute_failed"
                 } else {

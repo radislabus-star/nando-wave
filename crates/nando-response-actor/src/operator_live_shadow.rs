@@ -509,6 +509,7 @@ fn build_competing_blueprint_set(
                     &roles,
                     transform_opcode,
                     transform_flags,
+                    program_has_filter_count(&actor),
                     &commitment_hex(sample.bundle.surface_sha256()),
                     *sample.bundle.lineage_sha256(),
                     *sample.bundle.surface_sha256(),
@@ -952,6 +953,7 @@ pub fn extract_live_scalar_circuit_sample(
             .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
         program_transform_flags(&canonical_program)
             .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
+        program_has_filter_count(&canonical_program),
         &transition.before.frame_id_sha256,
         lineage_sha256,
         surface_sha256,
@@ -1370,12 +1372,18 @@ fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<
         && let [
             CollectionProgramStep::SelectOnlyArrayField,
             CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { value_type, .. },
+            tail @ ..,
         ] = steps.as_slice()
     {
-        if completion_state != "completed" {
+        if completion_state != "completed"
+            || !matches!(tail, [] | [CollectionProgramStep::Count])
+        {
             return None;
         }
-        let mut shape = vec![8, collection_scalar_tag(*value_type)];
+        let mut shape = vec![
+            if tail.is_empty() { 8 } else { 9 },
+            collection_scalar_tag(*value_type),
+        ];
         shape.push(match renderer {
             CollectionOutputRenderer::Direct => 0,
             CollectionOutputRenderer::RenderTemplate { .. } => 1,
@@ -1512,9 +1520,12 @@ fn rich_scalar_program_roles(
                 selector,
                 value_type: _,
             },
+            tail @ ..,
         ] = steps.as_slice()
     {
-        return (completion_state == "completed").then(|| {
+        return (completion_state == "completed"
+            && matches!(tail, [] | [CollectionProgramStep::Count]))
+        .then(|| {
             vec![
                 (
                     ResponseValueSelector::UniqueScalar {
@@ -1596,10 +1607,14 @@ fn canonicalize_scalar_program_roles(
         let [
             CollectionProgramStep::SelectOnlyArrayField,
             CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { selector, .. },
+            tail @ ..,
         ] = steps.as_mut_slice()
         else {
             return None;
         };
+        if !matches!(tail, [] | [CollectionProgramStep::Count]) {
+            return None;
+        }
         *selector = canonical_role_selector(selector, request_text, provider_payload)?;
         *renderer = normalized_scalar_renderer(renderer)?;
         return Some(canonical);
@@ -1689,24 +1704,41 @@ fn observed_rich_scalar_surface(
     program_roles: &[(ResponseValueSelector, ValueProjectionFormat)],
     transform_opcode: u8,
     transform_flags: u16,
+    compose_count: bool,
     frame_id: &str,
     lineage_sha256: [u8; 32],
     surface_sha256: [u8; 32],
 ) -> Result<crate::RuntimeSurfaceEvidence, LiveScalarShadowBlocker> {
-    let role_count = program_roles.len().saturating_add(2);
+    let role_count = program_roles
+        .len()
+        .saturating_add(if compose_count { 3 } else { 2 });
     if !(3..=18).contains(&role_count) {
         return Err(LiveScalarShadowBlocker::InvalidBundle);
     }
     let semantic_to_local = local_role_permutation_n(frame_id, role_count);
     let context = semantic_to_local[0];
     let output = semantic_to_local[role_count - 1];
+    let intermediate = compose_count.then_some(semantic_to_local[role_count - 2]);
     let mut roles = vec![StructuralRoleSignature::new(0, 0, 0, 0, Vec::new()); role_count];
     let planes = (0..program_roles.len())
         .map(|index| u8::try_from(index).unwrap_or(u8::MAX))
         .collect::<Vec<_>>();
     roles[usize::from(context)] = StructuralRoleSignature::new(5, 1, 0, 1, planes.clone());
+    if let Some(intermediate) = intermediate {
+        roles[usize::from(intermediate)] = StructuralRoleSignature::new(
+            value_type_tag(AtomValueType::Collection),
+            1,
+            2,
+            4,
+            Vec::new(),
+        );
+    }
     roles[usize::from(output)] = StructuralRoleSignature::new(
-        value_type_tag(selector_value_type(&program_roles[0].0)),
+        value_type_tag(if compose_count {
+            AtomValueType::Integer
+        } else {
+            selector_value_type(&program_roles[0].0)
+        }),
         1,
         2,
         4,
@@ -1766,14 +1798,25 @@ fn observed_rich_scalar_surface(
     }
     if transform_opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
         let predicate_type = selector_value_type(&program_roles[1].0);
+        let filter_output = intermediate.unwrap_or(output);
         atoms.push(TypedProgramAtom {
             opcode: TRANSFORM_OPCODE_FILTER_REQUEST_VALUE,
-            output_local_role: output,
+            output_local_role: filter_output,
             source_a_local_role: semantic_to_local[1],
             source_b_local_role: semantic_to_local[2],
             parameter: transform_parameter(predicate_type),
             flags: transform_flags,
         });
+        if compose_count {
+            atoms.push(TypedProgramAtom {
+                opcode: TRANSFORM_OPCODE_COUNT_COLLECTION,
+                output_local_role: output,
+                source_a_local_role: filter_output,
+                source_b_local_role: OPERATOR_ROLE_NONE,
+                parameter: (1 << 8) | transform_parameter(AtomValueType::Collection),
+                flags: 0,
+            });
+        }
     }
     let bundle =
         SurfaceFragmentBundle::new(lineage_sha256, surface_sha256, roles, relations, atoms)
@@ -1918,11 +1961,12 @@ fn derive_exact_filter_programs(
     let [
         CollectionProgramStep::SelectOnlyArrayField,
         CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { value_type },
+        tail @ ..,
     ] = steps.as_slice()
     else {
         return Vec::new();
     };
-    if completion_state != "completed" {
+    if completion_state != "completed" || !matches!(tail, [] | [CollectionProgramStep::Count]) {
         return Vec::new();
     }
     let expected_type = collection_atom_type(*value_type);
@@ -1934,14 +1978,18 @@ fn derive_exact_filter_programs(
         // circuit which cannot be separated while predicate and row agree.
         .filter(crate::collection_synthesis::is_source_neutral_request_selector)
         .filter_map(|selector| {
+            let mut steps = vec![
+                CollectionProgramStep::SelectOnlyArrayField,
+                CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                    selector,
+                    value_type: *value_type,
+                },
+            ];
+            if !tail.is_empty() {
+                steps.push(CollectionProgramStep::Count);
+            }
             let direct = ResponseProgram::compose_collection(
-                vec![
-                    CollectionProgramStep::SelectOnlyArrayField,
-                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
-                        selector,
-                        value_type: *value_type,
-                    },
-                ],
+                steps,
                 ValueProjectionFormat::CanonicalJson,
                 completion_state.clone(),
             );
@@ -2126,9 +2174,10 @@ fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
                 steps.as_slice(),
                 [
                     CollectionProgramStep::SelectOnlyArrayField,
-                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. }
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. },
+                    ..
                 ]
-            ) =>
+            ) && matches!(steps.len(), 2 | 3) =>
         {
             Some(TRANSFORM_OPCODE_FILTER_REQUEST_VALUE)
         }
@@ -2156,9 +2205,10 @@ fn program_transform_flags(program: &ResponseProgram) -> Option<u16> {
                 steps.as_slice(),
                 [
                     CollectionProgramStep::SelectOnlyArrayField,
-                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. }
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. },
+                    ..
                 ]
-            ) =>
+            ) && matches!(steps.len(), 2 | 3) =>
         {
             Some(TRANSFORM_FLAG_CANONICAL_JSON)
         }
@@ -2173,6 +2223,21 @@ fn program_transform_flags(program: &ResponseProgram) -> Option<u16> {
         }
         _ => None,
     }
+}
+
+fn program_has_filter_count(program: &ResponseProgram) -> bool {
+    matches!(
+        &program.operation,
+        ResponseOperation::ComposeCollection { steps, .. }
+            if matches!(
+                steps.as_slice(),
+                [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. },
+                    CollectionProgramStep::Count,
+                ]
+            )
+    )
 }
 
 const fn collection_scalar_tag(value_type: CollectionScalarType) -> u8 {
@@ -2388,6 +2453,15 @@ mod tests {
         row
     }
 
+    fn filter_count_transition(field: &str, predicate: &str) -> TeacherTransition {
+        let mut row = filter_transition(field, predicate);
+        row.runtime_parity_case
+            .as_mut()
+            .expect("parity case")
+            .expected_response = "Matching records: 1.".to_owned();
+        row
+    }
+
     #[test]
     fn verified_scalar_trace_becomes_source_neutral_circuit_evidence() {
         let first =
@@ -2451,6 +2525,23 @@ mod tests {
         };
         assert_eq!(atom.opcode, TRANSFORM_OPCODE_FILTER_REQUEST_VALUE);
         assert_ne!(atom.source_a_local_role, atom.source_b_local_role);
+        assert_eq!(first.anchors.len(), 2);
+        assert_eq!(first.law_sha256, renamed.law_sha256);
+    }
+
+    #[test]
+    fn verified_filter_count_trace_becomes_composed_circuit_evidence() {
+        let first = extract_live_scalar_circuit_sample(&filter_count_transition("kind", "active"))
+            .expect("filter-count trace");
+        let renamed = extract_live_scalar_circuit_sample(&filter_count_transition("state", "ready"))
+            .expect("renamed filter-count trace");
+
+        let [filter, count] = first.bundle.program_atoms() else {
+            panic!("filter and count transforms expected");
+        };
+        assert_eq!(filter.opcode, TRANSFORM_OPCODE_FILTER_REQUEST_VALUE);
+        assert_eq!(count.opcode, TRANSFORM_OPCODE_COUNT_COLLECTION);
+        assert_eq!(filter.output_local_role, count.source_a_local_role);
         assert_eq!(first.anchors.len(), 2);
         assert_eq!(first.law_sha256, renamed.law_sha256);
     }
@@ -2848,6 +2939,59 @@ mod tests {
         assert_eq!(
             execution.response.as_deref(),
             Some("[{\"new_kind\":\"active\",\"score\":11}]"),
+            "{execution:#?}"
+        );
+    }
+
+    #[test]
+    fn filter_count_rows_reach_verified_cpu_operator() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 0..64_u8 {
+            let predicate = if index % 2 == 0 { "active" } else { "ready" };
+            let mut row = filter_count_transition(&format!("state_{index}"), predicate);
+            row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
+            row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
+            row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+            state.observe(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
+        assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &state.admission_candidates(),
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission evaluates composed operator")
+        .expect("composed operator reaches registry");
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("registry restores composed operator");
+        let rows = vec![
+            json!({"new_kind": "active", "score": 11}),
+            json!({"new_kind": "idle", "score": 12}),
+        ];
+        let payload = json!({
+            "input": [
+                {"type": "message", "role": "user", "content": "Filter active"},
+                {
+                    "type": "function_call_output",
+                    "output": serde_json::to_string(&rows).expect("rows serialize")
+                }
+            ]
+        });
+        let execution = executor.execute_shadow("Filter active", &payload);
+        assert_eq!(
+            execution.response.as_deref(),
+            Some("Matching records: 1."),
             "{execution:#?}"
         );
     }

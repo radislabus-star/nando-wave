@@ -566,7 +566,20 @@ impl SurfaceFragmentBundle {
                 return Err(SurfaceFragmentBundleError::InvalidLocalRole);
             }
         }
-        program_atoms.sort_unstable();
+        // The high parameter byte is the canonical topological step. Sorting by
+        // the derived `Ord` would put opcodes before dependencies (for example,
+        // COUNT before FILTER) and turn a composed law into a different program.
+        program_atoms.sort_unstable_by_key(|atom| {
+            (
+                atom.parameter >> 8,
+                atom.opcode,
+                atom.output_local_role,
+                atom.source_a_local_role,
+                atom.source_b_local_role,
+                atom.parameter & 0x00ff,
+                atom.flags,
+            )
+        });
         program_atoms.dedup();
         Ok(Self {
             lineage_sha256,

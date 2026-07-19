@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_core::wave::{
     BlueprintFutureEvidence, CandidateCubeField, CandidateCubeFieldError,
@@ -814,8 +814,11 @@ fn bind_raw_pre_action_components(
         b"nando.observed-runtime-surface.v1",
         &[request_text.as_bytes(), &payload],
     );
-    if transforms.len() == 1 && transforms[0].opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
-        let predicate_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
+    if let Some(filter) = transforms
+        .iter()
+        .find(|transform| transform.opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE)
+    {
+        let predicate_type = transform_value_type(filter.parameter & 0x00ff)?;
         let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
         let mut first_blocker = None;
         let mut deepest_blocker = None;
@@ -1141,6 +1144,10 @@ impl BoundCrystallizedOperator {
         // parity oracle. The executable value itself is produced from page
         // bytecode and bound runtime operands above.
         if response != reference_response {
+            #[cfg(test)]
+            eprintln!(
+                "crystallized actor/vm mismatch: actor={reference_response:?} vm={response:?}"
+            );
             return Err(CrystallizedOperatorError::ActorVerifierMismatch);
         }
         verify_response_independently_with_request(
@@ -1325,10 +1332,13 @@ fn independently_bind_verifier(
     actor_response: &str,
 ) -> Result<VerifierProgram, CrystallizedOperatorError> {
     let transforms = ordered_role_transforms(transform_program)?;
-    if transforms.len() == 1 && transforms[0].opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+    if let Some(filter) = transforms
+        .iter()
+        .find(|transform| transform.opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE)
+    {
         let payload = serde_json::to_vec(provider_payload)
             .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
-        let predicate_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
+        let predicate_type = transform_value_type(filter.parameter & 0x00ff)?;
         let evidence = filter_runtime_evidence_candidates(
             request_text,
             provider_payload,
@@ -1578,22 +1588,30 @@ fn ordered_role_transforms(
     }
     let mut ordered = transform_program.to_vec();
     ordered.sort_by_key(|transform| transform.parameter >> 8);
-    let output = ordered[0].output;
-    let mut sources = BTreeSet::new();
+    let mut outputs = BTreeMap::new();
     for (index, transform) in ordered.iter().enumerate() {
-        if transform.output != output
-            || transform.output == transform.source_a
+        if outputs.insert(transform.output, index).is_some() {
+            return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+        }
+    }
+    for (index, transform) in ordered.iter().enumerate() {
+        if transform.output == transform.source_a
             || usize::from(transform.parameter >> 8) != index
-            || !sources.insert(transform.source_a)
         {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
         }
         if transform.source_b != TRANSFORM_ROLE_NONE
             && (transform.source_b == transform.output
-                || transform.source_b == transform.source_a
-                || !sources.insert(transform.source_b))
+                || transform.source_b == transform.source_a)
         {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+        }
+        for source in [transform.source_a, transform.source_b] {
+            if source != TRANSFORM_ROLE_NONE
+                && outputs.get(&source).is_some_and(|producer| *producer >= index)
+            {
+                return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+            }
         }
         validate_typed_transform(*transform)?;
     }
@@ -1601,17 +1619,22 @@ fn ordered_role_transforms(
 }
 
 fn ordered_transform_operand_roles(transforms: &[TransformOp8]) -> Vec<u8> {
-    transforms
+    let produced = transforms
         .iter()
-        .flat_map(|transform| {
-            [
-                Some(transform.source_a),
-                (transform.source_b != TRANSFORM_ROLE_NONE).then_some(transform.source_b),
-            ]
-            .into_iter()
-            .flatten()
-        })
-        .collect()
+        .map(|transform| transform.output)
+        .collect::<BTreeSet<_>>();
+    let mut external = Vec::new();
+    for transform in transforms {
+        for source in [transform.source_a, transform.source_b] {
+            if source != TRANSFORM_ROLE_NONE
+                && !produced.contains(&source)
+                && !external.contains(&source)
+            {
+                external.push(source);
+            }
+        }
+    }
+    external
 }
 
 fn instantiate_bound_actor(
@@ -1619,10 +1642,27 @@ fn instantiate_bound_actor(
     transforms: &[TransformOp8],
     selectors: &[ResponseValueSelector],
 ) -> Result<ResponseProgram, CrystallizedOperatorError> {
-    let mut expected_types = Vec::with_capacity(selectors.len());
+    let produced = transforms
+        .iter()
+        .map(|transform| transform.output)
+        .collect::<BTreeSet<_>>();
+    let mut expected_by_role = BTreeMap::new();
     for transform in transforms {
-        expected_types.extend(transform_operand_types(transform)?);
+        let operand_roles = [transform.source_a, transform.source_b];
+        let operand_types = transform_operand_types(transform)?;
+        for (role, value_type) in operand_roles.into_iter().zip(operand_types) {
+            if role == TRANSFORM_ROLE_NONE || produced.contains(&role) {
+                continue;
+            }
+            if expected_by_role.insert(role, value_type).is_some_and(|known| known != value_type) {
+                return Err(CrystallizedOperatorError::RuntimeOperandTypeMismatch);
+            }
+        }
     }
+    let expected_types = ordered_transform_operand_roles(transforms)
+        .into_iter()
+        .filter_map(|role| expected_by_role.get(&role).copied())
+        .collect::<Vec<_>>();
     if expected_types.len() != selectors.len() {
         return Err(CrystallizedOperatorError::RuntimeOperandArityMismatch);
     }
@@ -1671,11 +1711,13 @@ fn bind_program_selectors(
             let Some(collection_selector) = selectors.first() else {
                 return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
             };
-            let count = steps.as_slice()
-                == [
+            let count = matches!(
+                steps.as_slice(),
+                [
                     crate::CollectionProgramStep::SelectOnlyArrayField,
-                    crate::CollectionProgramStep::Count,
-                ];
+                    crate::CollectionProgramStep::Count
+                ]
+            );
             let filter_type = match steps.as_slice() {
                 [
                     crate::CollectionProgramStep::SelectOnlyArrayField,
@@ -1683,6 +1725,14 @@ fn bind_program_selectors(
                         value_type,
                         ..
                     },
+                ] => Some(collection_atom_type(*value_type)),
+                [
+                    crate::CollectionProgramStep::SelectOnlyArrayField,
+                    crate::CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue {
+                        value_type,
+                        ..
+                    },
+                    crate::CollectionProgramStep::Count,
                 ] => Some(collection_atom_type(*value_type)),
                 _ => None,
             };
@@ -1699,10 +1749,16 @@ fn bind_program_selectors(
                         selector,
                         ..
                     },
+                    tail @ ..,
                 ] = steps.as_mut_slice()
                 else {
                     return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
                 };
+                // COUNT consumes FILTER's virtual collection; it does not add
+                // another externally bound selector.
+                if !matches!(tail, [] | [crate::CollectionProgramStep::Count]) {
+                    return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+                }
                 *selector = selectors[1].clone();
             }
         }
@@ -2283,6 +2339,10 @@ fn build_operator_page(
     actor_sha256: &str,
     verifier_sha256: &str,
 ) -> Result<OperatorPage32, CrystallizedOperatorError> {
+    // Compile every page section from one topological transform order. The
+    // renderer stores transform indexes, so reordering only at VM decode time
+    // would make an intermediate value look like the final sink after restart.
+    let ordered_transforms = ordered_role_transforms(blueprint.transform_program())?;
     let mut cube = TernaryOperatorCube32::default();
     let mut phase_profile = [0_u8; OPERATOR_PAGE32_PHASE_BYTES];
     let mut plane_count = 0_u8;
@@ -2330,22 +2390,31 @@ fn build_operator_page(
         .collect::<Vec<_>>();
 
     let mut composition = [0_u8; OPERATOR_PAGE32_COMPOSITION_BYTES];
-    for (index, edge) in blueprint.composition_dag().edges().iter().enumerate() {
-        let offset = index * 2;
-        if offset + 1 >= composition.len() {
-            return Err(CrystallizedOperatorError::InvalidPage(
-                OperatorPage32Error::InvalidCompositionCount,
-            ));
+    let mut composition_count = 0_u8;
+    for (producer, produced) in ordered_transforms.iter().enumerate() {
+        for (consumer, consumed) in ordered_transforms.iter().enumerate() {
+            if producer != consumer
+                && (produced.output == consumed.source_a
+                    || produced.output == consumed.source_b)
+            {
+                let offset = usize::from(composition_count) * 2;
+                if offset + 1 >= composition.len() {
+                    return Err(CrystallizedOperatorError::InvalidPage(
+                        OperatorPage32Error::InvalidCompositionCount,
+                    ));
+                }
+                composition[offset] = producer as u8;
+                composition[offset + 1] = consumer as u8;
+                composition_count = composition_count.saturating_add(1);
+            }
         }
-        composition[offset] = edge.producer_step;
-        composition[offset + 1] = edge.consumer_step;
     }
 
     let _actor_digest = decode_sha256(actor_sha256)?;
     let verifier_digest = decode_sha256(verifier_sha256)?;
     let (renderer, renderer_instruction_count) = crate::operator_vm::encode_renderer_program(
         output_renderer,
-        blueprint.transform_program(),
+        &ordered_transforms,
     )?;
 
     let proof_lineage = lineage_commitment(support_lineages, future_lineages);
@@ -2358,14 +2427,14 @@ fn build_operator_page(
             proof_lineage_fingerprint64: first_u64(&proof_lineage),
             role_signature_fingerprint64: first_u64(&role_commitment),
             relation_plane_count: plane_count,
-            composition_node_count: blueprint.composition_dag().edges().len() as u8,
+            composition_node_count: composition_count,
             renderer_instruction_count,
             flags: 0,
         },
         &phase_profile,
         &roles,
         &cube,
-        blueprint.transform_program(),
+        &ordered_transforms,
         &composition,
         &renderer,
     )

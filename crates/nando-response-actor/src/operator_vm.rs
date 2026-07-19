@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_core::wave::{OPERATOR_PAGE32_RENDERER_BYTES, OperatorPage32, TransformOp8};
 use serde_json::Value;
@@ -45,32 +45,46 @@ pub(crate) fn execute_operator_page(
 ) -> Result<String, OperatorVmError> {
     page.validate().map_err(|_| OperatorVmError::InvalidPage)?;
     let transforms = decode_transforms(page)?;
-    let mut values = Vec::with_capacity(transforms.len());
-    let mut operands = selectors.iter();
+    let produced_roles = transforms
+        .iter()
+        .map(|transform| transform.output)
+        .collect::<BTreeSet<_>>();
+    let mut external_roles = Vec::new();
     for transform in &transforms {
-        let selector = operands.next().ok_or(OperatorVmError::MissingOperand)?;
+        for role in [transform.source_a, transform.source_b] {
+            if role != TRANSFORM_ROLE_NONE
+                && !produced_roles.contains(&role)
+                && !external_roles.contains(&role)
+            {
+                external_roles.push(role);
+            }
+        }
+    }
+    if external_roles.len() != selectors.len() {
+        return Err(OperatorVmError::MissingOperand);
+    }
+    let mut role_values = BTreeMap::<u8, Value>::new();
+    for (role, selector) in external_roles.into_iter().zip(selectors) {
         let selected = selected_value_with_request(request_text, provider_payload, selector)
             .map_err(|_| OperatorVmError::ProjectionFailed)?;
-        let rendered = match transform.opcode {
+        role_values.insert(role, selected.value);
+    }
+    let mut values = Vec::with_capacity(transforms.len());
+    for transform in &transforms {
+        let source_a = role_values
+            .get(&transform.source_a)
+            .cloned()
+            .ok_or(OperatorVmError::MissingOperand)?;
+        let output = match transform.opcode {
             TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR => {
-                let format = transform_format(transform.flags)?;
-                match format {
-                    ValueProjectionFormat::PlainText => match selected.value {
-                        Value::String(text) if !text.contains(['\n', '\r']) => text,
-                        Value::Bool(value) => value.to_string(),
-                        Value::Number(value) => value.to_string(),
-                        _ => return Err(OperatorVmError::ProjectionFailed),
-                    },
-                    ValueProjectionFormat::CanonicalJson => serde_json::to_string(&selected.value)
-                        .map_err(|_| OperatorVmError::ProjectionFailed)?,
-                }
+                source_a
             }
             TRANSFORM_OPCODE_COUNT_COLLECTION
                 if transform.flags == 0
                     && transform.parameter & 0x00ff == TRANSFORM_VALUE_COLLECTION =>
             {
-                match selected.value {
-                    Value::Array(items) => items.len().to_string(),
+                let count = match source_a {
+                    Value::Array(items) => items.len(),
                     Value::Object(fields) => {
                         let mut arrays = fields.values().filter_map(Value::as_array);
                         let count = arrays
@@ -80,18 +94,18 @@ pub(crate) fn execute_operator_page(
                         if arrays.next().is_some() {
                             return Err(OperatorVmError::ProjectionFailed);
                         }
-                        count.to_string()
+                        count
                     }
                     _ => return Err(OperatorVmError::ProjectionFailed),
-                }
+                };
+                Value::Number(serde_json::Number::from(count as u64))
             }
             TRANSFORM_OPCODE_PROJECT_STATUS => {
-                let code = selected
-                    .value
+                let code = source_a
                     .as_u64()
                     .filter(|code| *code <= MAX_PROJECT_STATUS_CODE)
                     .ok_or(OperatorVmError::ProjectionFailed)?;
-                match (transform.flags, code == 0) {
+                Value::String(match (transform.flags, code == 0) {
                     (TRANSFORM_STATUS_ZERO_IS_SUCCESS, true) => "success".to_owned(),
                     (TRANSFORM_STATUS_ZERO_IS_SUCCESS, false) => "failure".to_owned(),
                     (TRANSFORM_STATUS_ZERO_IS_PASS, true) => "PASS".to_owned(),
@@ -101,16 +115,13 @@ pub(crate) fn execute_operator_page(
                     (TRANSFORM_STATUS_ZERO_IS_TRUE, true) => "true".to_owned(),
                     (TRANSFORM_STATUS_ZERO_IS_TRUE, false) => "false".to_owned(),
                     _ => return Err(OperatorVmError::InvalidProgram),
-                }
+                })
             }
             TRANSFORM_OPCODE_FILTER_REQUEST_VALUE => {
-                let predicate_selector = operands.next().ok_or(OperatorVmError::MissingOperand)?;
-                let predicate =
-                    selected_value_with_request(request_text, provider_payload, predicate_selector)
-                        .map_err(|_| OperatorVmError::ProjectionFailed)?
-                        .value;
-                let fields = selected
-                    .value
+                let predicate = role_values
+                    .get(&transform.source_b)
+                    .ok_or(OperatorVmError::MissingOperand)?;
+                let fields = source_a
                     .as_object()
                     .ok_or(OperatorVmError::ProjectionFailed)?;
                 let mut arrays = fields.values().filter_map(Value::as_array);
@@ -133,20 +144,17 @@ pub(crate) fn execute_operator_page(
                 if matching_fields.next().is_some() {
                     return Err(OperatorVmError::AmbiguousResponse);
                 }
-                serde_json::to_string(
-                    &rows
-                        .iter()
-                        .filter(|row| row.get(field) == Some(&predicate))
-                        .collect::<Vec<_>>(),
+                Value::Array(
+                    rows.iter()
+                        .filter(|row| row.get(field) == Some(predicate))
+                        .cloned()
+                        .collect(),
                 )
-                .map_err(|_| OperatorVmError::ProjectionFailed)?
             }
             _ => return Err(OperatorVmError::UnsupportedOpcode),
         };
-        values.push(rendered);
-    }
-    if operands.next().is_some() {
-        return Err(OperatorVmError::MissingOperand);
+        role_values.insert(transform.output, output.clone());
+        values.push(render_transform_value(transform, &output)?);
     }
 
     let response = execute_renderer(page, &values)?;
@@ -154,6 +162,28 @@ pub(crate) fn execute_operator_page(
         return Err(OperatorVmError::OutputBudget);
     }
     Ok(response)
+}
+
+fn render_transform_value(transform: &TransformOp8, value: &Value) -> Result<String, OperatorVmError> {
+    if transform.opcode == TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR {
+        return match transform_format(transform.flags)? {
+            ValueProjectionFormat::PlainText => match value {
+                Value::String(text) if !text.contains(['\n', '\r']) => Ok(text.clone()),
+                Value::Bool(value) => Ok(value.to_string()),
+                Value::Number(value) => Ok(value.to_string()),
+                _ => Err(OperatorVmError::ProjectionFailed),
+            },
+            ValueProjectionFormat::CanonicalJson =>
+                serde_json::to_string(value).map_err(|_| OperatorVmError::ProjectionFailed),
+        };
+    }
+    match value {
+        Value::String(text) => Ok(text.clone()),
+        Value::Number(number) => Ok(number.to_string()),
+        Value::Array(_) | Value::Object(_) if transform.flags == TRANSFORM_FLAG_CANONICAL_JSON =>
+            serde_json::to_string(value).map_err(|_| OperatorVmError::ProjectionFailed),
+        _ => Err(OperatorVmError::ProjectionFailed),
+    }
 }
 
 pub(crate) fn encode_renderer_program(
@@ -165,13 +195,13 @@ pub(crate) fn encode_renderer_program(
     let mut next_value = 0_usize;
     match renderer {
         CollectionOutputRenderer::Direct => {
-            push_value(&mut instructions, 0)?;
+            push_value(&mut instructions, unique_sink_transform(transforms)?)?;
             instruction_count = instruction_count.saturating_add(1);
         }
         CollectionOutputRenderer::RenderTemplate { prefix, suffix } => {
             instruction_count =
                 instruction_count.saturating_add(push_static(&mut instructions, prefix)?);
-            push_value(&mut instructions, 0)?;
+            push_value(&mut instructions, unique_sink_transform(transforms)?)?;
             instruction_count = instruction_count.saturating_add(1);
             instruction_count =
                 instruction_count.saturating_add(push_static(&mut instructions, suffix)?);
@@ -218,8 +248,7 @@ pub(crate) fn encode_renderer_program(
     if matches!(
         renderer,
         CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. }
-    ) && transforms.len() != 1
-    {
+    ) && unique_sink_transform(transforms).is_err() {
         return Err(crate::CrystallizedOperatorError::UnsupportedTransformProgram);
     }
     instructions.push(RENDERER_EMIT);
@@ -234,6 +263,26 @@ pub(crate) fn encode_renderer_program(
     encoded[1] = instruction_count;
     encoded[2..2 + instructions.len()].copy_from_slice(&instructions);
     Ok((encoded, instruction_count))
+}
+
+fn unique_sink_transform(transforms: &[TransformOp8]) -> Result<usize, crate::CrystallizedOperatorError> {
+    let consumed = transforms
+        .iter()
+        .flat_map(|transform| [transform.source_a, transform.source_b])
+        .filter(|role| *role != TRANSFORM_ROLE_NONE)
+        .collect::<BTreeSet<_>>();
+    let mut sinks = transforms
+        .iter()
+        .enumerate()
+        .filter_map(|(index, transform)| (!consumed.contains(&transform.output)).then_some(index));
+    let sink = sinks
+        .next()
+        .ok_or(crate::CrystallizedOperatorError::UnsupportedTransformProgram)?;
+    sinks
+        .next()
+        .is_none()
+        .then_some(sink)
+        .ok_or(crate::CrystallizedOperatorError::UnsupportedTransformProgram)
 }
 
 fn push_static(
@@ -276,22 +325,30 @@ fn decode_transforms(page: &OperatorPage32) -> Result<Vec<TransformOp8>, Operato
         .collect::<Result<Vec<_>, _>>()?;
     transforms.sort_by_key(|transform| transform.parameter >> 8);
 
-    let output = transforms[0].output;
-    let mut sources = BTreeSet::new();
+    let mut outputs = BTreeMap::new();
     for (index, transform) in transforms.iter().enumerate() {
-        if transform.output != output
-            || transform.output == transform.source_a
+        if outputs.insert(transform.output, index).is_some() {
+            return Err(OperatorVmError::InvalidProgram);
+        }
+    }
+    for (index, transform) in transforms.iter().enumerate() {
+        if transform.output == transform.source_a
             || usize::from(transform.parameter >> 8) != index
-            || !sources.insert(transform.source_a)
         {
             return Err(OperatorVmError::InvalidProgram);
         }
         if transform.source_b != TRANSFORM_ROLE_NONE
             && (transform.source_b == transform.output
-                || transform.source_b == transform.source_a
-                || !sources.insert(transform.source_b))
+                || transform.source_b == transform.source_a)
         {
             return Err(OperatorVmError::InvalidProgram);
+        }
+        for source in [transform.source_a, transform.source_b] {
+            if source != TRANSFORM_ROLE_NONE
+                && outputs.get(&source).is_some_and(|producer| *producer >= index)
+            {
+                return Err(OperatorVmError::InvalidProgram);
+            }
         }
     }
     Ok(transforms)
@@ -355,7 +412,7 @@ fn execute_renderer(page: &OperatorPage32, values: &[String]) -> Result<String, 
             return Err(OperatorVmError::OutputBudget);
         }
     }
-    if !emitted || used_values.len() != values.len() || program[cursor..].iter().any(|b| *b != 0) {
+    if !emitted || program[cursor..].iter().any(|b| *b != 0) {
         return Err(OperatorVmError::InvalidProgram);
     }
     Ok(output)
@@ -384,6 +441,29 @@ mod tests {
     fn page(transforms: &[TransformOp8], renderer: &CollectionOutputRenderer) -> OperatorPage32 {
         let (renderer_program, renderer_instruction_count) =
             encode_renderer_program(renderer, transforms).expect("encodable renderer");
+        let mut composition = [0_u8; OPERATOR_PAGE32_COMPOSITION_BYTES];
+        let mut composition_count = 0_u8;
+        for (producer, produced) in transforms.iter().enumerate() {
+            for (consumer, consumed) in transforms.iter().enumerate() {
+                if producer != consumer
+                    && (produced.output == consumed.source_a
+                        || produced.output == consumed.source_b)
+                {
+                    let offset = usize::from(composition_count) * 2;
+                    composition[offset] = producer as u8;
+                    composition[offset + 1] = consumer as u8;
+                    composition_count = composition_count.saturating_add(1);
+                }
+            }
+        }
+        let role_count = transforms
+            .iter()
+            .flat_map(|transform| {
+                [transform.output, transform.source_a, transform.source_b]
+            })
+            .filter(|role| *role != TRANSFORM_ROLE_NONE)
+            .max()
+            .map_or(0, |role| usize::from(role) + 1);
         OperatorPage32::build(
             OperatorPage32Metadata {
                 generation: 1,
@@ -392,19 +472,15 @@ mod tests {
                 proof_lineage_fingerprint64: 3,
                 role_signature_fingerprint64: 4,
                 relation_plane_count: 1,
-                composition_node_count: 0,
+                composition_node_count: composition_count,
                 renderer_instruction_count,
                 flags: 0,
             },
             &[0; OPERATOR_PAGE32_PHASE_BYTES],
-            &[
-                StructuralRole16::default(),
-                StructuralRole16::default(),
-                StructuralRole16::default(),
-            ],
+            &vec![StructuralRole16::default(); role_count],
             &TernaryOperatorCube32::default(),
             transforms,
-            &[0; OPERATOR_PAGE32_COMPOSITION_BYTES],
+            &composition,
             &renderer_program,
         )
         .expect("valid test page")
@@ -413,7 +489,7 @@ mod tests {
     fn transform(source: u8, order: u16) -> TransformOp8 {
         TransformOp8 {
             opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-            output: 2,
+            output: u8::try_from(order).expect("test transform order fits u8") + 2,
             source_a: source,
             source_b: TRANSFORM_ROLE_NONE,
             parameter: (order << 8) | 1,
@@ -452,6 +528,40 @@ mod tests {
             parameter: 0,
             flags: TRANSFORM_FLAG_CANONICAL_JSON,
         }
+    }
+
+    #[test]
+    fn page_composes_filter_then_count_through_virtual_role() {
+        let filter = filter_transform(0, 1);
+        let count = TransformOp8 {
+            opcode: TRANSFORM_OPCODE_COUNT_COLLECTION,
+            output: 3,
+            source_a: filter.output,
+            source_b: TRANSFORM_ROLE_NONE,
+            parameter: (1 << 8) | TRANSFORM_VALUE_COLLECTION,
+            flags: 0,
+        };
+        let selectors = [
+            ResponseValueSelector::UniqueScalar {
+                value_type: AtomValueType::Collection,
+            },
+            ResponseValueSelector::RequestLastToken,
+        ];
+        let page = page(&[filter, count], &CollectionOutputRenderer::Direct);
+        assert_eq!(
+            execute_operator_page(
+                &page,
+                &selectors,
+                "Filter active",
+                &json!({
+                    "input": [
+                        {"type":"message", "role":"user", "content":"Filter active"},
+                        {"type":"function_call_output", "output":"{\"items\":[{\"kind\":\"active\"},{\"kind\":\"idle\"}]}"}
+                    ]
+                }),
+            ),
+            Ok("1".to_owned())
+        );
     }
 
     #[test]

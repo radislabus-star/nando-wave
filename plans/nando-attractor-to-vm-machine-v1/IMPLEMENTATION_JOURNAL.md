@@ -635,3 +635,97 @@ COMPOSE                                                  NEXT
 organic live ACTIVE coverage                            NOT YET MEASURED
 verified production saving >= 50%                       NOT ACHIEVED
 ```
+
+## 2026-07-19 - Stage 8d Plan: Native COMPOSE
+
+The bounded collection version space already emits `FILTER -> COUNT`. No new
+semantic primitive or composite shortcut is required. The remaining cut is to
+make existing `CompositionDag` executable:
+
+```text
+external canonical roles
+-> runtime selectors
+-> typed VM value arena keyed by role
+-> FILTER writes a virtual collection role
+-> COUNT reads that virtual role
+-> renderer reads the unique sink transform
+```
+
+Required invariants:
+
+```text
+each transform output is unique
+external sources bind exactly once
+internal sources must have exactly one producer
+topological order is deterministic
+cycles / missing producers / multiple sinks -> ABSTAIN
+actor and independent verifier reproduce the same composition
+no FILTER_COUNT composite opcode
+```
+
+## 2026-07-19 - Stage 8d Result: Native FILTER -> COUNT COMPOSE
+
+The existing two primitive laws now execute as one typed dataflow program. No
+composite opcode was added:
+
+```text
+collection role + request predicate role
+-> FILTER writes virtual collection role
+-> COUNT reads virtual collection role
+-> renderer reads the unique final sink
+```
+
+The VM binds only external roles, stores typed intermediate values by canonical
+role ID, rejects duplicate producers, forward references, cycles, missing
+operands, and multiple output sinks, and executes the transforms in the step
+order encoded in the high byte of `parameter`.
+
+Two restart defects were exposed and fixed by the end-to-end proof:
+
+```text
+SurfaceFragmentBundle sorted TypedProgramAtom by opcode
+-> COUNT preceded FILTER despite its later topological step
+-> canonicalization now sorts by explicit step before opcode
+
+renderer compiled against raw [COUNT, FILTER] indexes
+while VM decoded topological [FILTER, COUNT]
+-> renderer emitted the intermediate array after restart
+-> page, composition edges, renderer, and VM now share one ordered program
+```
+
+Measured focused verification:
+
+```text
+FILTER -> COUNT structural extraction                     PASS 1/1 15.99 s
+first lifecycle blocker localization                      10.39 s
+restart parity blocker localization                       39.12 s
+exact actor/VM mismatch localization                      38.99 s
+final FILTER -> COUNT lifecycle                           PASS 1/1 43.97 s
+observations / executable                                 64 / 64
+support / frozen future                                   32 / 32
+full-phase winners / causal-control passes                1 / 1
+external admission / restart / CPU                        PASS
+wrong accepts / runtime parity failures                   0 / 0
+```
+
+The next verification cut is regression of the four existing primitive
+families, formatting, all-target compilation, and an updated exact-commit
+Graphify receipt. Organic live coverage remains unmeasured and must not be
+inferred from this laboratory lifecycle.
+
+Post-COMPOSE regression receipts:
+
+```text
+Operator VM unit tests                                  PASS 8/8 13.93 s
+PROJECT scalar lifecycle                               PASS 18.49 s
+STATUS lifecycle                                       PASS 11.03 s
+COUNT + FILTER->COUNT lifecycle                        PASS 2/2 30.99 s
+FILTER lifecycle                                       PASS 38.35 s
+nando-core operator blueprint                          PASS 9/9 2.86 s
+response-actor all-targets check                       PASS 7.47 s
+rustfmt --check                                        PASS 2.80 s
+```
+
+The VM regression exposed an invalid legacy fixture in which two independent
+transforms wrote the same canonical output role. The production invariant was
+kept fail-closed; the fixture now assigns one output role per topological step.
