@@ -32,6 +32,10 @@ const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
 const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
 const TEACHER_CALL_SELECTOR_BUDGET: usize = 512;
 const COMMON_ACTOR_TOPOLOGY_BUDGET: usize = 64;
+// Session capture already bounds one active-turn provider envelope to 128 KiB.
+// Keep the learner contract identical so bounded multi-output turns are not
+// discarded by a second, narrower limit after capture.
+const LIVE_SCALAR_MAX_PROVIDER_PAYLOAD_BYTES: usize = 128 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveScalarCircuitSample {
@@ -1044,7 +1048,9 @@ pub fn extract_live_scalar_circuit_sample(
         .ok_or(LiveScalarShadowBlocker::MissingParityCase)?;
     let payload_bytes = serde_json::to_vec(&parity.provider_payload)
         .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
-    if payload_bytes.len() > 64 * 1024 || parity.expected_response.len() > 4 * 1024 {
+    if payload_bytes.len() > LIVE_SCALAR_MAX_PROVIDER_PAYLOAD_BYTES
+        || parity.expected_response.len() > 4 * 1024
+    {
         return Err(LiveScalarShadowBlocker::PayloadTooLarge);
     }
     let synthesis_payload =
@@ -1252,7 +1258,9 @@ fn reextract_live_scalar_circuit_sample(
         .ok_or(LiveScalarShadowBlocker::MissingParityCase)?;
     let payload_bytes = serde_json::to_vec(&parity.provider_payload)
         .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
-    if payload_bytes.len() > 64 * 1024 || parity.expected_response.len() > 4 * 1024 {
+    if payload_bytes.len() > LIVE_SCALAR_MAX_PROVIDER_PAYLOAD_BYTES
+        || parity.expected_response.len() > 4 * 1024
+    {
         return Err(LiveScalarShadowBlocker::PayloadTooLarge);
     }
     let actor_hypotheses = support_actor_hypotheses
@@ -4141,6 +4149,19 @@ mod tests {
         let quotient = common_support_actor_hypotheses(&[broad, narrow])
             .expect("physical adapters share one semantic actor law");
         assert_eq!(quotient.len(), 1);
+    }
+
+    #[test]
+    fn bounded_active_turn_payload_above_64k_remains_training_evidence() {
+        let mut row = custom_tool_transition(9);
+        let parity = row.runtime_parity_case.as_mut().expect("parity case");
+        parity.provider_payload["bounded_metadata"] = Value::String("x".repeat(70 * 1024));
+        let bytes = serde_json::to_vec(&parity.provider_payload).expect("payload encoding");
+        assert!(bytes.len() > 64 * 1024);
+        assert!(bytes.len() <= LIVE_SCALAR_MAX_PROVIDER_PAYLOAD_BYTES);
+
+        extract_live_scalar_circuit_sample(&row)
+            .expect("capture-bounded active turn remains executable evidence");
     }
 
     #[test]

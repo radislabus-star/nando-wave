@@ -1372,3 +1372,34 @@ nando-response-actor all-targets check                   PASS  7.73 s
 The operator circuit groks through cross-plane phase coherence. The compact
 operator page stores the crystallized result; it does not itself perform
 grokking.
+
+## 2026-07-20 - Align active-turn evidence budgets (v77)
+
+The first v76 live deployment proved that session ingestion was healthy but
+reported 31 `payload_too_large` rejections. Session capture already bounded an
+active-turn provider envelope to 128 KiB, while the Rich Operator learner
+applied a second 64 KiB limit before synthesis. Valid bounded multi-output
+turns were therefore discarded after capture.
+
+Strategy v77 uses one 128 KiB contract across capture and operator evidence.
+The limit remains hard; no unbounded payload enters support, future, checkpoint,
+or runtime parity receipts. Historical rows are reconsidered as support only,
+and strategy migration still cannot manufacture frozen future.
+
+Live diagnosis before the change:
+
+```text
+session watcher events    37,386
+worker enqueued/processed 482/482
+worker failed/backlog     0/0
+live observations         131
+live executable/support   76/71
+payload_too_large         31
+```
+
+Focused remote receipts:
+
+```text
+64-128 KiB bounded active-turn payload remains executable evidence  1/1 PASS  0.02 s
+nando-response-actor all-targets check                                  PASS  7.26 s
+```
