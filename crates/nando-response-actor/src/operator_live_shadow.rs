@@ -13,7 +13,7 @@ use crate::{
     AtomValueType, CollectionOutputRenderer, CollectionSynthesisExample,
     CrystallizationParityReceipt, CrystallizedOperator, ResponseOperation, ResponsePackage,
     ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponseProgram,
-    ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
+    ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
     TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_IDENTIFIER,
     TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
     enumerate_source_neutral_response_programs, response_program_exactly_matches_example,
@@ -44,6 +44,9 @@ pub enum LiveScalarShadowBlocker {
     MissingParityCase,
     PayloadTooLarge,
     NoExactSourceNeutralProgram,
+    ExactStatusProgram,
+    ExactCollectionProgram,
+    UnsupportedRendererProgram,
     UnsupportedScalarProgram,
     InvalidCommitment,
     InvalidBundle,
@@ -471,15 +474,22 @@ pub fn extract_live_scalar_circuit_sample(
     };
     let version_space = enumerate_source_neutral_response_programs(&example)
         .map_err(|_| LiveScalarShadowBlocker::NoExactSourceNeutralProgram)?;
-    let mut programs = version_space
+    let exact_programs = version_space
         .programs
         .into_iter()
         .filter(|program| response_program_exactly_matches_example(program, &example))
+        .collect::<Vec<_>>();
+    if exact_programs.is_empty() {
+        return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
+    }
+    let mut programs = exact_programs
+        .iter()
+        .cloned()
         .filter_map(project_scalar_program)
         .collect::<Vec<_>>();
     programs.sort_by(|left, right| left.0.cmp(&right.0));
     let Some((_, selector, value_type, format, renderer)) = programs.into_iter().next() else {
-        return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
+        return Err(classify_exact_program_blocker(&exact_programs));
     };
 
     let local_roles = local_role_permutation(&transition.before.frame_id_sha256);
@@ -569,21 +579,64 @@ fn project_scalar_program(
     if completion_state != "completed" {
         return None;
     }
-    if !matches!(
-        renderer,
-        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. }
-    ) {
-        return None;
-    }
+    let renderer = normalized_scalar_renderer(renderer)?;
     let value_type = selector_value_type(selector);
     let bytes = serde_json::to_vec(&program).ok()?;
-    Some((
-        bytes,
-        selector.clone(),
-        value_type,
-        *format,
-        renderer.clone(),
-    ))
+    Some((bytes, selector.clone(), value_type, *format, renderer))
+}
+
+fn normalized_scalar_renderer(
+    renderer: &CollectionOutputRenderer,
+) -> Option<CollectionOutputRenderer> {
+    match renderer {
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. } => {
+            Some(renderer.clone())
+        }
+        CollectionOutputRenderer::RenderSequence { segments } => {
+            let mut prefix = String::new();
+            let mut suffix = String::new();
+            let mut primary_seen = false;
+            for segment in segments {
+                match segment {
+                    ResponseRenderSegment::Static { text } if primary_seen => {
+                        suffix.push_str(text);
+                    }
+                    ResponseRenderSegment::Static { text } => prefix.push_str(text),
+                    ResponseRenderSegment::Primary if !primary_seen => primary_seen = true,
+                    ResponseRenderSegment::Primary | ResponseRenderSegment::Selected { .. } => {
+                        return None;
+                    }
+                }
+            }
+            primary_seen.then_some(CollectionOutputRenderer::RenderTemplate { prefix, suffix })
+        }
+        CollectionOutputRenderer::RequestTemplate { .. } => None,
+    }
+}
+
+fn classify_exact_program_blocker(programs: &[ResponseProgram]) -> LiveScalarShadowBlocker {
+    if programs
+        .iter()
+        .any(|program| matches!(&program.operation, ResponseOperation::ProjectStatus { .. }))
+    {
+        LiveScalarShadowBlocker::ExactStatusProgram
+    } else if programs.iter().any(|program| {
+        matches!(
+            &program.operation,
+            ResponseOperation::ComposeCollection { .. }
+        )
+    }) {
+        LiveScalarShadowBlocker::ExactCollectionProgram
+    } else if programs.iter().any(|program| {
+        matches!(
+            &program.operation,
+            ResponseOperation::ProjectSelectedValue { .. }
+        )
+    }) {
+        LiveScalarShadowBlocker::UnsupportedRendererProgram
+    } else {
+        LiveScalarShadowBlocker::UnsupportedScalarProgram
+    }
 }
 
 fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
@@ -752,6 +805,28 @@ mod tests {
         assert_eq!(
             extract_live_scalar_circuit_sample(&transition("total", false)),
             Err(LiveScalarShadowBlocker::TeacherRejected)
+        );
+    }
+
+    #[test]
+    fn single_primary_sequence_normalizes_to_typed_template() {
+        let renderer = CollectionOutputRenderer::RenderSequence {
+            segments: vec![
+                ResponseRenderSegment::Static {
+                    text: "Total records: ".to_owned(),
+                },
+                ResponseRenderSegment::Primary,
+                ResponseRenderSegment::Static {
+                    text: ".".to_owned(),
+                },
+            ],
+        };
+        assert_eq!(
+            normalized_scalar_renderer(&renderer),
+            Some(CollectionOutputRenderer::RenderTemplate {
+                prefix: "Total records: ".to_owned(),
+                suffix: ".".to_owned(),
+            })
         );
     }
 
