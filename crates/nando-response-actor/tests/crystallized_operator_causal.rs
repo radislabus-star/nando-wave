@@ -244,6 +244,31 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
         .expect("renamed surface preserves structural role binding");
     assert_eq!(renamed_surface.execute_verified().as_deref(), Ok("11"));
 
+    let pre_action = operator
+        .bind_pre_action(
+            "",
+            &json!({
+                "input": [{
+                    "type":"function_call_output",
+                    "output":"{\"runtime_total\":13}"
+                }]
+            }),
+        )
+        .expect("restored circuit grounds a renamed pre-action scalar");
+    assert_eq!(pre_action.execute_verified().as_deref(), Ok("13"));
+    assert_eq!(
+        operator.bind_pre_action(
+            "",
+            &json!({
+                "input": [{
+                    "type":"function_call_output",
+                    "output":"{\"left\":13,\"right\":17}"
+                }]
+            }),
+        ),
+        Err(nando_response_actor::CrystallizedOperatorError::AmbiguousRuntimeAction)
+    );
+
     let semantically_swapped = complete_future_surface(32, [1, 0, 2]);
     assert_eq!(
         operator.bind(RuntimeSurfaceEvidence {

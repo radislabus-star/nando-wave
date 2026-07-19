@@ -12,15 +12,18 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     AtomValueType, CollectionOutputRenderer, CollectionSynthesisExample,
-    CrystallizationParityReceipt, CrystallizedOperator, ResponseOperation, ResponseProgram,
+    CrystallizationParityReceipt, CrystallizedOperator, ResponseOperation, ResponsePackage,
+    ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponseProgram,
     ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
     TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_IDENTIFIER,
     TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
     enumerate_source_neutral_response_programs, relation_frame_online_routing_atom_ids,
-    response_program_exactly_matches_example,
+    response_program_exactly_matches_example, response_program_required_routing_atom_ids,
 };
 
 const LIVE_SCALAR_ROLE_COUNT: usize = 3;
+const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
+const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
 const ROLE_CONTEXT: u8 = 0;
 const ROLE_SOURCE: u8 = 1;
 const ROLE_OUTPUT: u8 = 2;
@@ -80,8 +83,21 @@ pub struct LiveScalarShadowReport {
     pub causal_control_passes: usize,
     pub verified_shadow_operators: usize,
     pub shadow_executions: usize,
+    pub admission_candidates: usize,
     pub ingest_accounting_complete: bool,
     pub blockers: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LiveScalarAdmissionCandidate {
+    pub package: ResponsePackage,
+    pub support: Vec<TeacherTransition>,
+    pub future: Vec<TeacherTransition>,
+    pub support_root_sha256: String,
+    pub future_evidence_root_sha256: String,
+    pub future_lineage_root_sha256: String,
+    pub winner_seal_sha256: String,
+    pub executable_parity_seal_sha256: String,
 }
 
 impl LiveScalarShadowState {
@@ -106,7 +122,7 @@ impl LiveScalarShadowState {
             self.duplicate_rows = self.duplicate_rows.saturating_add(1);
             return;
         }
-        if law.support.len() < 3 {
+        if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS {
             if law
                 .support
                 .iter()
@@ -139,7 +155,7 @@ impl LiveScalarShadowState {
                 .or_default() += 1;
             return;
         }
-        if law.future.len() < 32 {
+        if law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
             law.future.push(transition.clone());
         } else {
             *self
@@ -173,16 +189,32 @@ impl LiveScalarShadowState {
                 .collect(),
             ..LiveScalarShadowReport::default()
         };
+        let mut candidates = Vec::new();
         for law in self.laws.values() {
-            evaluate_live_law(law, &mut report);
+            evaluate_live_law(law, &mut report, &mut candidates);
         }
+        report.admission_candidates = candidates.len();
         report
+    }
+
+    #[must_use]
+    pub fn admission_candidates(&self) -> Vec<LiveScalarAdmissionCandidate> {
+        let mut report = LiveScalarShadowReport::default();
+        let mut candidates = Vec::new();
+        for law in self.laws.values() {
+            evaluate_live_law(law, &mut report, &mut candidates);
+        }
+        candidates
     }
 }
 
-fn evaluate_live_law(law: &LiveScalarLawState, report: &mut LiveScalarShadowReport) {
-    if law.support.len() < 3 {
-        increment_report_blocker(report, "support_below_3");
+fn evaluate_live_law(
+    law: &LiveScalarLawState,
+    report: &mut LiveScalarShadowReport,
+    candidates: &mut Vec<LiveScalarAdmissionCandidate>,
+) {
+    if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS {
+        increment_report_blocker(report, "support_below_32");
         return;
     }
     let Ok(support) = law
@@ -196,6 +228,7 @@ fn evaluate_live_law(law: &LiveScalarLawState, report: &mut LiveScalarShadowRepo
     };
     let support_bundles = support
         .iter()
+        .take(3)
         .map(|sample| sample.bundle.clone())
         .collect::<Vec<_>>();
     let alignments = BoundedRoleAligner::align(&support_bundles, RoleAlignmentConfig::default());
@@ -219,8 +252,8 @@ fn evaluate_live_law(law: &LiveScalarLawState, report: &mut LiveScalarShadowRepo
         return;
     };
     report.frozen_laws = report.frozen_laws.saturating_add(1);
-    if law.future.len() < 3 {
-        increment_report_blocker(report, "future_below_3");
+    if law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
+        increment_report_blocker(report, "future_below_32");
         return;
     }
     let Ok(future) = law
@@ -302,14 +335,95 @@ fn evaluate_live_law(law: &LiveScalarLawState, report: &mut LiveScalarShadowRepo
         })
         .collect::<Vec<_>>();
     match CrystallizedOperator::crystallize(&future_window, winner, &future_evidence, &receipts) {
-        Ok(_) => {
+        Ok(operator) => {
             report.verified_shadow_operators = report.verified_shadow_operators.saturating_add(1);
             report.shadow_executions = report.shadow_executions.saturating_add(receipts.len());
+            match live_admission_candidate(law, &operator) {
+                Ok(candidate) => candidates.push(candidate),
+                Err(blocker) => increment_report_blocker(report, blocker),
+            }
         }
         Err(error) => {
             increment_report_blocker(report, &format!("crystallization_{error:?}").to_lowercase())
         }
     }
+}
+
+fn live_admission_candidate(
+    law: &LiveScalarLawState,
+    operator: &crate::VerifiedCrystallizedOperator,
+) -> Result<LiveScalarAdmissionCandidate, &'static str> {
+    if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS || law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
+        return Err("admission_rows_below_32");
+    }
+    let program = operator
+        .routing_program()
+        .map_err(|_| "admission_routing_program_failed")?;
+    let verifier = operator
+        .routing_verifier()
+        .map_err(|_| "admission_routing_verifier_failed")?;
+    let required_routing_atom_ids = response_program_required_routing_atom_ids(&program);
+    let distinct_sessions = law
+        .support
+        .iter()
+        .chain(&law.future)
+        .map(|row| row.before.session_id_sha256.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    let distinct_surfaces = law
+        .support
+        .iter()
+        .chain(&law.future)
+        .map(|row| row.before.frame_id_sha256.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    let package_id = format!(
+        "crystallized-scalar-{}",
+        &commitment_hex(operator.blueprint_sha256())[..16]
+    );
+    let package = ResponsePackage {
+        schema: "nando.response-package.v1".to_owned(),
+        package_id,
+        origin: ResponsePackageOrigin::GroundedSynthesis,
+        state: ResponsePackageState::Quarantine,
+        program,
+        verifier: Some(verifier),
+        routing_predicates: Vec::new(),
+        required_routing_atom_ids: required_routing_atom_ids.clone(),
+        phase_centers: required_routing_atom_ids,
+        anti_centers: Vec::new(),
+        wave_margin_micro: 1,
+        learned_wave_route: None,
+        crystallized_operator: Some(
+            operator
+                .restart_bundle()
+                .map_err(|_| "admission_restart_bundle_failed")?,
+        ),
+        proof: ResponsePackageProof {
+            support_rows: law.support.len(),
+            future_rows: law.future.len(),
+            distinct_sessions,
+            distinct_surfaces,
+            wrong_accepts: 0,
+            runtime_parity_failures: 0,
+            exact_cache_overlap: 0,
+            wave_causal_pass: true,
+            verifier_schema: crate::VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+        },
+    };
+    package
+        .validate()
+        .map_err(|_| "admission_package_invalid")?;
+    Ok(LiveScalarAdmissionCandidate {
+        package,
+        support: law.support.clone(),
+        future: law.future.clone(),
+        support_root_sha256: commitment_hex(operator.support_root_sha256()),
+        future_evidence_root_sha256: commitment_hex(operator.future_evidence_root_sha256()),
+        future_lineage_root_sha256: commitment_hex(operator.future_lineage_root_sha256()),
+        winner_seal_sha256: commitment_hex(operator.winner_seal_sha256()),
+        executable_parity_seal_sha256: commitment_hex(operator.parity_seal().seal_sha256()),
+    })
 }
 
 fn increment_report_blocker(report: &mut LiveScalarShadowReport, blocker: &str) {
@@ -671,7 +785,7 @@ mod tests {
     #[test]
     fn independent_live_rows_reach_verified_scalar_shadow_operator() {
         let mut state = LiveScalarShadowState::default();
-        for index in 0..6_u8 {
+        for index in 0..64_u8 {
             let mut row = transition(&format!("field_{index}"), true);
             row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
             row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
@@ -693,12 +807,74 @@ mod tests {
         }
 
         let report = state.report();
-        assert_eq!(report.executable, 6, "{report:#?}");
-        assert_eq!(report.support_rows, 3, "{report:#?}");
-        assert_eq!(report.future_rows, 3, "{report:#?}");
+        assert_eq!(report.executable, 64, "{report:#?}");
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
         assert_eq!(report.frozen_laws, 1, "{report:#?}");
         assert!(report.ingest_accounting_complete, "{report:#?}");
         assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-        assert_eq!(report.shadow_executions, 3, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let candidates = state.admission_candidates();
+        assert_eq!(candidates.len(), 1, "{report:#?}");
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &candidates,
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission evaluates sealed operator")
+        .expect("sealed operator reaches registry");
+        assert_eq!(snapshot.registry.packages.len(), 1);
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("registry restores crystallized operator");
+        let execution = executor.execute_shadow(
+            "",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_surface_total\":91}"
+                }]
+            }),
+        );
+        assert_eq!(execution.response.as_deref(), Some("91"), "{execution:#?}");
+
+        let mut tampered_support = candidates.clone();
+        tampered_support[0].support[0]
+            .runtime_parity_case
+            .as_mut()
+            .expect("support parity")
+            .expected_response = "999".to_owned();
+        assert!(matches!(
+            crate::build_crystallized_admission_snapshot(
+                &tampered_support,
+                "test-project",
+                2,
+                100,
+                30,
+                &"a".repeat(64),
+                &"b".repeat(64),
+            ),
+            Err("crystallized_admission_replay_failed")
+        ));
+
+        let mut tampered_seal = candidates;
+        tampered_seal[0].executable_parity_seal_sha256 = "c".repeat(64);
+        assert!(matches!(
+            crate::build_crystallized_admission_snapshot(
+                &tampered_seal,
+                "test-project",
+                3,
+                100,
+                30,
+                &"a".repeat(64),
+                &"b".repeat(64),
+            ),
+            Err("crystallized_admission_commitment_mismatch")
+        ));
     }
 }

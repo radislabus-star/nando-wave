@@ -136,7 +136,8 @@ pub use online::{
     OnlineResponseStreamStatus, OnlineResponseTailConfig, run_online_response_tail,
 };
 pub use online_admission::{
-    OnlineAdmissionSnapshot, build_durable_runtime_parity_receipt, build_online_admission_snapshot,
+    OnlineAdmissionSnapshot, build_crystallized_admission_snapshot,
+    build_durable_runtime_parity_receipt, build_online_admission_snapshot,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
 };
 pub use online_checkpoint::{
@@ -158,8 +159,8 @@ pub use operator_generation::{
     AdmissionReadyOperatorGeneration, OperatorGenerationError, OperatorGenerationFirewall,
 };
 pub use operator_live_shadow::{
-    LiveScalarCircuitSample, LiveScalarShadowBlocker, LiveScalarShadowReport,
-    LiveScalarShadowState, extract_live_scalar_circuit_sample,
+    LiveScalarAdmissionCandidate, LiveScalarCircuitSample, LiveScalarShadowBlocker,
+    LiveScalarShadowReport, LiveScalarShadowState, extract_live_scalar_circuit_sample,
 };
 pub use opportunity::{
     M3WindowReport, OPPORTUNITY_BOARD_SCHEMA_V2, OPPORTUNITY_BOARD_SCHEMA_V3, OpportunityBoard,
@@ -1794,6 +1795,7 @@ mod tests {
                     anti_centers: Vec::new(),
                     wave_margin_micro: 1,
                     learned_wave_route: None,
+                    crystallized_operator: None,
                     proof: ResponsePackageProof {
                         support_rows: 32,
                         future_rows: 32,
@@ -1928,6 +1930,7 @@ mod tests {
             anti_centers: vec![2],
             wave_margin_micro: 100_000,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 32,
@@ -2041,6 +2044,7 @@ mod tests {
                     anti_centers: vec![],
                     wave_margin_micro: 850_000,
                     learned_wave_route: None,
+                    crystallized_operator: None,
                     proof: ResponsePackageProof {
                         support_rows: 32,
                         future_rows: 32,

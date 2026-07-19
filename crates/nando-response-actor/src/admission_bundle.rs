@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate};
+use crate::{
+    LiveScalarAdmissionCandidate, OnlineCollectionAdmissionCandidate,
+    OnlineResponseAdmissionCandidate,
+};
 
 pub const ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1: &str =
     "nando.online-admission-candidate-bundle.v1";
@@ -40,6 +43,8 @@ pub struct OnlineAdmissionCandidateBundle {
     pub revision: u64,
     pub relation_candidates: Vec<OnlineResponseAdmissionCandidate>,
     pub collection_candidates: Vec<OnlineCollectionAdmissionCandidate>,
+    #[serde(default)]
+    pub crystallized_candidates: Vec<LiveScalarAdmissionCandidate>,
 }
 
 impl OnlineAdmissionCandidateBundle {
@@ -50,7 +55,10 @@ impl OnlineAdmissionCandidateBundle {
         if self.project_id.is_empty() || self.project_id.len() > 128 || self.revision == 0 {
             return Err("online_admission_candidate_bundle_identity_invalid");
         }
-        if self.relation_candidates.len() > 256 || self.collection_candidates.len() > 256 {
+        if self.relation_candidates.len() > 256
+            || self.collection_candidates.len() > 256
+            || self.crystallized_candidates.len() > 64
+        {
             return Err("online_admission_candidate_bundle_capacity_exceeded");
         }
         Ok(())

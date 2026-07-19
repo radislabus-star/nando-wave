@@ -1129,7 +1129,7 @@ fn canonical_render_values(
     (!values.is_empty()).then_some(values)
 }
 
-fn learned_selector_candidates(payload: &Value) -> Vec<ResponseValueSelector> {
+pub(crate) fn learned_selector_candidates(payload: &Value) -> Vec<ResponseValueSelector> {
     let mut selectors = [
         AtomValueType::String,
         AtomValueType::Integer,

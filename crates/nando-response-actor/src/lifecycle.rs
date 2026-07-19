@@ -1136,6 +1136,7 @@ pub fn compile_source_neutral_quarantine_packages(
                 anti_centers: Vec::new(),
                 wave_margin_micro: 850_000,
                 learned_wave_route: None,
+                crystallized_operator: None,
                 proof: ResponsePackageProof {
                     support_rows: positive_family.len(),
                     future_rows: 0,
@@ -1359,6 +1360,7 @@ pub fn compile_response_registry(
                 .collect(),
             wave_margin_micro: if wave_causal_pass { 850_000 } else { 1 },
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: relation_ids.len(),
                 future_rows,
@@ -1432,6 +1434,7 @@ pub fn compile_response_registry(
                 .collect(),
             wave_margin_micro: 850_000,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: support.len(),
                 future_rows: future.len(),
@@ -1505,6 +1508,7 @@ pub fn compile_response_registry(
                 .collect(),
             wave_margin_micro: 850_000,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: support.len(),
                 future_rows: future.len(),
@@ -1587,6 +1591,7 @@ pub fn compile_response_registry(
                 .collect(),
             wave_margin_micro: 850_000,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: support.len(),
                 future_rows: future.len(),

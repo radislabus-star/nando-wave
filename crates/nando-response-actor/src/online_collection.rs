@@ -2069,6 +2069,7 @@ impl OnlineCollectionMiner {
             anti_centers,
             wave_margin_micro,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: bucket.support.len(),
                 future_rows: bucket.future.len(),

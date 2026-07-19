@@ -15,21 +15,237 @@ use crate::{
     RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
     RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseAuthorityV2, ResponseExecutionStatus,
     ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram,
-    ResponseRegistry, canonical_json_sha256, compile_source_neutral_quarantine_packages,
-    evaluate_grounded_wave_causality, execute_response, frame_matches_program_action_contract,
-    online_collection_future_manifest_digest, online_collection_support_manifest_digest,
-    relation_frame_routes_to_package, relation_frame_structural_family_id,
-    response_actor_program_digest, response_execution_payload_digest,
-    response_independent_verifier_program_digest, response_package_digest,
-    response_program_authority_matches_example, response_program_required_routing_atom_ids,
-    response_proof_receipts_digest, response_registry_digest, sha256_bytes,
-    source_neutral_verifier_for_program, valid_nonzero_sha256, verify_response_independently,
+    ResponseRegistry, VerifiedCrystallizedOperator, canonical_json_sha256,
+    compile_source_neutral_quarantine_packages, evaluate_grounded_wave_causality, execute_response,
+    frame_matches_program_action_contract, online_collection_future_manifest_digest,
+    online_collection_support_manifest_digest, relation_frame_routes_to_package,
+    relation_frame_structural_family_id, response_actor_program_digest,
+    response_execution_payload_digest, response_independent_verifier_program_digest,
+    response_package_digest, response_program_authority_matches_example,
+    response_program_required_routing_atom_ids, response_proof_receipts_digest,
+    response_registry_digest, sha256_bytes, source_neutral_verifier_for_program,
+    valid_nonzero_sha256, verify_response_independently,
 };
+
+use crate::LiveScalarAdmissionCandidate;
 
 #[derive(Clone, Debug)]
 pub struct OnlineAdmissionSnapshot {
     pub registry: ResponseRegistry,
     pub admission: CompositeResponseAdmissionV2,
+}
+
+pub fn build_crystallized_admission_snapshot(
+    candidates: &[LiveScalarAdmissionCandidate],
+    project_id: &str,
+    revision: u64,
+    now_unix: u64,
+    max_age_seconds: u64,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+) -> Result<Option<OnlineAdmissionSnapshot>, &'static str> {
+    let mut packages = Vec::new();
+    let mut receipts = BTreeMap::new();
+    for candidate in candidates {
+        let mut package = candidate.package.clone();
+        if candidate.support.len() != package.proof.support_rows
+            || candidate.future.len() != package.proof.future_rows
+            || package.proof.support_rows < 32
+            || package.proof.future_rows < 32
+            || package.proof.distinct_sessions < 3
+            || package.proof.distinct_surfaces < 2
+            || package.proof.wrong_accepts != 0
+            || package.proof.runtime_parity_failures != 0
+            || package.proof.exact_cache_overlap != 0
+            || !package.proof.wave_causal_pass
+        {
+            return Err("crystallized_admission_proof_gate_failed");
+        }
+        let Some(bundle) = &package.crystallized_operator else {
+            return Err("crystallized_admission_bundle_missing");
+        };
+        let operator =
+            VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
+                .map_err(|_| "crystallized_admission_restore_failed")?;
+        let support_sessions = candidate
+            .support
+            .iter()
+            .map(|row| row.before.session_id_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        if candidate
+            .future
+            .iter()
+            .any(|row| support_sessions.contains(row.before.session_id_sha256.as_str()))
+        {
+            return Err("crystallized_admission_support_future_session_overlap");
+        }
+        let mut future_lineages = BTreeSet::new();
+        let mut replay_failed = false;
+        for (is_future, row) in candidate
+            .support
+            .iter()
+            .map(|row| (false, row))
+            .chain(candidate.future.iter().map(|row| (true, row)))
+        {
+            let sample = match crate::extract_live_scalar_circuit_sample(row) {
+                Ok(sample) => sample,
+                Err(_) => {
+                    replay_failed = true;
+                    break;
+                }
+            };
+            if is_future {
+                future_lineages.insert(*sample.bundle.lineage_sha256());
+            }
+            let response = operator
+                .bind_pre_action(&sample.request_text, &sample.provider_payload)
+                .and_then(|bound| bound.execute_verified());
+            if response.as_deref() != Ok(sample.expected_response.as_str()) {
+                replay_failed = true;
+                break;
+            }
+        }
+        if replay_failed
+            || future_lineages
+                != operator
+                    .verified_future_lineages()
+                    .iter()
+                    .copied()
+                    .collect::<BTreeSet<_>>()
+        {
+            return Err("crystallized_admission_replay_failed");
+        }
+        let commitments = [
+            candidate.support_root_sha256.as_str(),
+            candidate.future_evidence_root_sha256.as_str(),
+            candidate.future_lineage_root_sha256.as_str(),
+            candidate.winner_seal_sha256.as_str(),
+            candidate.executable_parity_seal_sha256.as_str(),
+        ];
+        if commitments
+            .iter()
+            .any(|digest| !valid_nonzero_sha256(digest))
+            || candidate.support_root_sha256 != commitment_hex(operator.support_root_sha256())
+            || candidate.future_evidence_root_sha256
+                != commitment_hex(operator.future_evidence_root_sha256())
+            || candidate.future_lineage_root_sha256
+                != commitment_hex(operator.future_lineage_root_sha256())
+            || candidate.winner_seal_sha256 != commitment_hex(operator.winner_seal_sha256())
+            || candidate.executable_parity_seal_sha256
+                != commitment_hex(operator.parity_seal().seal_sha256())
+            || operator.parity_seal().future_lineage_count() < 32
+            || operator.parity_seal().wrong_accepts() != 0
+        {
+            return Err("crystallized_admission_commitment_mismatch");
+        }
+        package.validate()?;
+        package.state = ResponsePackageState::Active;
+        let support_manifest_sha256 = canonical_json_sha256(&(
+            RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1,
+            candidate
+                .support
+                .iter()
+                .map(|row| row.before.frame_id_sha256.as_str())
+                .collect::<Vec<_>>(),
+        ))?;
+        let future_manifest_sha256 = canonical_json_sha256(&(
+            RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2,
+            candidate
+                .future
+                .iter()
+                .map(|row| row.before.evidence_ref_sha256.as_str())
+                .collect::<Vec<_>>(),
+        ))?;
+        receipts.insert(
+            package.package_id.clone(),
+            (
+                support_manifest_sha256,
+                candidate.winner_seal_sha256.clone(),
+                candidate.executable_parity_seal_sha256.clone(),
+                future_manifest_sha256,
+                candidate.future_lineage_root_sha256.clone(),
+            ),
+        );
+        packages.push(package);
+    }
+    if packages.is_empty() {
+        return Ok(None);
+    }
+    packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
+    if packages
+        .windows(2)
+        .any(|pair| pair[0].package_id == pair[1].package_id)
+    {
+        return Err("crystallized_admission_duplicate_package_id");
+    }
+    let registry = ResponseRegistry {
+        schema: RESPONSE_REGISTRY_SCHEMA_V6.to_owned(),
+        revision,
+        packages,
+    };
+    registry.validate()?;
+    let registry_sha256 = response_registry_digest(&registry)?;
+    let mut bindings = Vec::new();
+    for package in &registry.packages {
+        let (support, causal, parity, future, lineage) = receipts
+            .remove(&package.package_id)
+            .ok_or("crystallized_admission_receipts_missing")?;
+        let verifier = package
+            .verifier
+            .as_ref()
+            .ok_or("crystallized_admission_verifier_missing")?;
+        let mut binding = ResponsePackageAuthorityBindingV2 {
+            package_id: package.package_id.clone(),
+            registry_revision: revision,
+            package_sha256: response_package_digest(package)?,
+            execution_payload_sha256: response_execution_payload_digest(package)?,
+            actor_program_sha256: response_actor_program_digest(&package.program)?,
+            independent_verifier_program_sha256: response_independent_verifier_program_digest(
+                verifier,
+            )?,
+            verifier_schema: package.proof.verifier_schema.clone(),
+            support_manifest_schema: RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1.to_owned(),
+            support_manifest_sha256: support,
+            exact_causal_proof_schema: RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2.to_owned(),
+            exact_causal_proof_sha256: causal,
+            runtime_parity_receipt_set_schema: RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1
+                .to_owned(),
+            runtime_parity_receipt_set_sha256: parity,
+            future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
+                .to_owned(),
+            future_verifier_receipt_set_sha256: future,
+            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
+            semantic_alias_proof_sha256: lineage,
+            proof_receipts_sha256: String::new(),
+        };
+        binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
+        bindings.push(binding);
+    }
+    let admission = CompositeResponseAdmissionV2 {
+        schema: COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
+        project_id: project_id.to_owned(),
+        generated_at_unix: now_unix,
+        expires_at_unix: now_unix.saturating_add(max_age_seconds),
+        verdict: "PASS".to_owned(),
+        eligible_for_local_accept: true,
+        response_authority: ResponseAuthorityV2 {
+            schema: RESPONSE_AUTHORITY_SCHEMA_V2.to_owned(),
+            registry_schema: registry.schema.clone(),
+            registry_revision: revision,
+            registry_sha256,
+            gate_build_sha256: gate_build_sha256.to_owned(),
+            runtime_build_sha256: runtime_build_sha256.to_owned(),
+            packages: bindings,
+        },
+    };
+    Ok(Some(OnlineAdmissionSnapshot {
+        registry,
+        admission,
+    }))
+}
+
+fn commitment_hex(value: &[u8; 32]) -> String {
+    value.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 pub fn merge_online_admission_snapshots(

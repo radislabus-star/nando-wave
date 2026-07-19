@@ -16,7 +16,8 @@ use crate::runtime::immediate_selected_scalar;
 use crate::{
     AtomSource, AtomValueType, RelationAtom, RelationFrame, ResponseArgument,
     ResponseExecutionStatus, ResponseOperation, ResponseProgram, ResponseValueSelector,
-    SemanticRole, VerifierProgram, execute_response, verify_response_independently,
+    SemanticRole, VerifiedCrystallizedOperator, VerifiedOperatorRestartBundle, VerifierProgram,
+    execute_response, verify_response_independently,
 };
 
 pub const CONTINUATION_EXTERNAL_VERIFIER_SCHEMA: &str = "continue_handle_external_evidence.v1";
@@ -153,6 +154,8 @@ pub struct ResponsePackage {
     pub wave_margin_micro: i64,
     #[serde(default)]
     pub learned_wave_route: Option<LearnedWaveRoute>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crystallized_operator: Option<VerifiedOperatorRestartBundle>,
     pub proof: ResponsePackageProof,
 }
 
@@ -165,6 +168,27 @@ impl ResponsePackage {
             return Err("empty_package_id");
         }
         self.program.validate()?;
+        if let Some(bundle) = &self.crystallized_operator {
+            let operator =
+                VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
+                    .map_err(|_| "crystallized_operator_restore_failed")?;
+            let actor_sha256 = crate::response_actor_program_digest(&self.program)
+                .map_err(|_| "crystallized_actor_digest_failed")?;
+            if actor_sha256 != operator.actor_sha256() {
+                return Err("crystallized_actor_commitment_mismatch");
+            }
+            let verifier = self
+                .verifier
+                .as_ref()
+                .ok_or("crystallized_verifier_missing")?;
+            let verifier_sha256 = crate::response_independent_verifier_program_digest(verifier)
+                .map_err(|_| "crystallized_verifier_digest_failed")?;
+            if verifier_sha256 != operator.verifier_sha256()
+                || operator.parity_seal().wrong_accepts() != 0
+            {
+                return Err("crystallized_verifier_commitment_mismatch");
+            }
+        }
         if matches!(
             self.program.operation,
             ResponseOperation::ProjectStatus { .. }
@@ -709,6 +733,7 @@ pub struct ResponseExecutor {
     schema: String,
     revision: u64,
     packages: Vec<ResponsePackage>,
+    crystallized_operators: BTreeMap<String, VerifiedCrystallizedOperator>,
     authority: Option<ValidatedResponseAuthority>,
 }
 
@@ -722,17 +747,20 @@ impl ResponseExecutor {
 
     pub fn from_registry(registry: ResponseRegistry) -> Result<Self, &'static str> {
         registry.validate()?;
+        let packages = registry
+            .packages
+            .into_iter()
+            .filter(|package| {
+                package.eligible_for_admission_candidate()
+                    || package.origin == ResponsePackageOrigin::LegacyTemplate
+            })
+            .collect::<Vec<_>>();
+        let crystallized_operators = restore_crystallized_operators(&packages)?;
         Ok(Self {
             schema: registry.schema,
             revision: registry.revision,
-            packages: registry
-                .packages
-                .into_iter()
-                .filter(|package| {
-                    package.eligible_for_admission_candidate()
-                        || package.origin == ResponsePackageOrigin::LegacyTemplate
-                })
-                .collect(),
+            packages,
+            crystallized_operators,
             authority: None,
         })
     }
@@ -757,14 +785,17 @@ impl ResponseExecutor {
             max_age_seconds,
         )?;
         let admitted_ids = authority.packages.keys().collect::<BTreeSet<_>>();
+        let packages = registry
+            .packages
+            .into_iter()
+            .filter(|package| admitted_ids.contains(&package.package_id))
+            .collect::<Vec<_>>();
+        let crystallized_operators = restore_crystallized_operators(&packages)?;
         Ok(Self {
             schema: registry.schema,
             revision: registry.revision,
-            packages: registry
-                .packages
-                .into_iter()
-                .filter(|package| admitted_ids.contains(&package.package_id))
-                .collect(),
+            packages,
+            crystallized_operators,
             authority: Some(authority),
         })
     }
@@ -1069,21 +1100,52 @@ impl ResponseExecutor {
         if ranked[1].is_some_and(|(margin, _)| margin == top_margin) {
             return rejected("ambiguous_phase_route");
         }
-        let execution = execute_response(&package.program, request_text, provider_payload);
-        if execution.status != ResponseExecutionStatus::Executed {
-            return rejected(format!("phase_routed_actor_abstain:{}", execution.reason));
-        }
-        let Some(response) = execution.response.as_deref() else {
+        let (execution_status, execution_reason, execution_response, independently_verified) =
+            if let Some(operator) = self.crystallized_operators.get(&package.package_id) {
+                let bound = match operator.bind_pre_action(request_text, provider_payload) {
+                    Ok(bound) => bound,
+                    Err(error) => {
+                        return rejected(format!("crystallized_role_binding:{error:?}"));
+                    }
+                };
+                match bound.execute_verified() {
+                    Ok(response) => (
+                        ResponseExecutionStatus::Executed,
+                        "crystallized_operator_verified".to_owned(),
+                        Some(response),
+                        true,
+                    ),
+                    Err(error) => {
+                        return rejected(format!("crystallized_actor_verifier:{error:?}"));
+                    }
+                }
+            } else {
+                let execution = execute_response(&package.program, request_text, provider_payload);
+                if execution.status != ResponseExecutionStatus::Executed {
+                    return rejected(format!("phase_routed_actor_abstain:{}", execution.reason));
+                }
+                let Some(response) = execution.response.as_deref() else {
+                    return rejected("actor_output_missing");
+                };
+                let independently_verified = if let Some(verifier) = &package.verifier {
+                    if let Err(error) =
+                        verify_response_independently(verifier, provider_payload, response)
+                    {
+                        return rejected(format!("independent_verifier_failed:{error}"));
+                    }
+                    true
+                } else {
+                    false
+                };
+                (
+                    execution.status,
+                    execution.reason,
+                    execution.response,
+                    independently_verified,
+                )
+            };
+        let Some(response) = execution_response.as_deref() else {
             return rejected("actor_output_missing");
-        };
-        let independently_verified = if let Some(verifier) = &package.verifier {
-            if let Err(error) = verify_response_independently(verifier, provider_payload, response)
-            {
-                return rejected(format!("independent_verifier_failed:{error}"));
-            }
-            true
-        } else {
-            false
         };
         let verified = if require_authority {
             if !independently_verified {
@@ -1115,9 +1177,9 @@ impl ResponseExecutor {
             None
         };
         RoutedResponseExecution {
-            status: execution.status,
-            reason: execution.reason,
-            response: execution.response,
+            status: execution_status,
+            reason: execution_reason,
+            response: execution_response,
             package_id: Some(package.package_id.clone()),
             verification_receipt_id: None,
             verifier_schema: Some(package.proof.verifier_schema.clone()),
@@ -1127,6 +1189,27 @@ impl ResponseExecutor {
             verified,
         }
     }
+}
+
+fn restore_crystallized_operators(
+    packages: &[ResponsePackage],
+) -> Result<BTreeMap<String, VerifiedCrystallizedOperator>, &'static str> {
+    let mut operators = BTreeMap::new();
+    for package in packages {
+        let Some(bundle) = &package.crystallized_operator else {
+            continue;
+        };
+        let operator =
+            VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
+                .map_err(|_| "crystallized_operator_restore_failed")?;
+        if operators
+            .insert(package.package_id.clone(), operator)
+            .is_some()
+        {
+            return Err("duplicate_crystallized_operator_package");
+        }
+    }
+    Ok(operators)
 }
 
 pub(crate) fn response_phase_atom_ids(request_text: &str, provider_payload: &Value) -> Vec<u64> {
@@ -2436,6 +2519,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 1,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 32,
@@ -2480,6 +2564,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 1,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 32,
@@ -2549,6 +2634,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 1,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 0,

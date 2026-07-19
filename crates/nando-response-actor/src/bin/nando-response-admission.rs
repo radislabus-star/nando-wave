@@ -7,8 +7,9 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use nando_response_actor::{
     OnlineAdmissionCandidateBundle, ResponseExecutor, ResponseRegistry,
-    build_online_admission_snapshot, build_online_collection_admission_snapshot,
-    merge_online_admission_snapshots, response_runtime_contract_sha256, sha256_bytes,
+    build_crystallized_admission_snapshot, build_online_admission_snapshot,
+    build_online_collection_admission_snapshot, merge_online_admission_snapshots,
+    response_runtime_contract_sha256, sha256_bytes,
 };
 use serde::Serialize;
 
@@ -20,6 +21,7 @@ struct AdmissionControllerReport {
     candidate_revision: u64,
     relation_candidates: usize,
     collection_candidates: usize,
+    crystallized_candidates: usize,
     relation_max_future_rows: usize,
     relation_max_runtime_parity_cases: usize,
     collection_max_future_rows: usize,
@@ -297,9 +299,23 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
     )
     .map_err(str::to_owned)?;
-    let snapshot =
-        merge_online_admission_snapshots([relation, collection].into_iter().flatten().collect())
-            .map_err(str::to_owned)?;
+    let crystallized = build_crystallized_admission_snapshot(
+        &bundle.crystallized_candidates,
+        &bundle.project_id,
+        bundle.revision,
+        now_unix,
+        max_age_seconds,
+        &gate_sha256,
+        &runtime_sha256,
+    )
+    .map_err(str::to_owned)?;
+    let snapshot = merge_online_admission_snapshots(
+        [relation, collection, crystallized]
+            .into_iter()
+            .flatten()
+            .collect(),
+    )
+    .map_err(str::to_owned)?;
     let Some(snapshot) = snapshot else {
         let preserved_active_packages = last_known_good_package_count(
             &registry_path,
@@ -316,6 +332,7 @@ fn run(started: Instant) -> Result<(), String> {
                 candidate_revision: bundle.revision,
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
+                crystallized_candidates: bundle.crystallized_candidates.len(),
                 relation_max_future_rows,
                 relation_max_runtime_parity_cases,
                 collection_max_future_rows,
@@ -380,6 +397,7 @@ fn run(started: Instant) -> Result<(), String> {
             candidate_revision: bundle.revision,
             relation_candidates: bundle.relation_candidates.len(),
             collection_candidates: bundle.collection_candidates.len(),
+            crystallized_candidates: bundle.crystallized_candidates.len(),
             relation_max_future_rows,
             relation_max_runtime_parity_cases,
             collection_max_future_rows,

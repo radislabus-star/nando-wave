@@ -196,6 +196,7 @@ struct ResponseExecutionPayloadDigestMaterial<'a> {
     phase_centers: &'a [u64],
     anti_centers: &'a [u64],
     wave_margin_micro: i64,
+    crystallized_operator: &'a Option<crate::VerifiedOperatorRestartBundle>,
 }
 
 #[derive(Serialize)]
@@ -292,6 +293,7 @@ pub fn response_execution_payload_digest(
         phase_centers: &package.phase_centers,
         anti_centers: &package.anti_centers,
         wave_margin_micro: package.wave_margin_micro,
+        crystallized_operator: &package.crystallized_operator,
     })
 }
 

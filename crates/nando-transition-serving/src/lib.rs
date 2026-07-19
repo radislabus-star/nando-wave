@@ -2050,13 +2050,18 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         })
         .transpose()?
         .unwrap_or_default();
-    let relation_candidates = response_miner
+    let (relation_candidates, crystallized_candidates) = response_miner
         .as_ref()
         .map(|miner| {
             miner
                 .lock()
                 .map_err(|_| "response_miner_lock_poisoned".to_owned())
-                .map(|miner| miner.admission_candidates())
+                .map(|miner| {
+                    (
+                        miner.admission_candidates(),
+                        miner.crystallized_admission_candidates(),
+                    )
+                })
         })
         .transpose()?
         .unwrap_or_default();
@@ -2074,6 +2079,13 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
             "future_rows": candidate.future.len(),
             "runtime_parity_cases": candidate.runtime_parity_cases.len(),
             "wave_runtime_fingerprint64": candidate.candidate.wave_runtime_fingerprint64,
+        })).collect::<Vec<_>>(),
+        "crystallized": crystallized_candidates.iter().map(|candidate| serde_json::json!({
+            "package_id": candidate.package.package_id,
+            "support_root_sha256": candidate.support_root_sha256,
+            "future_evidence_root_sha256": candidate.future_evidence_root_sha256,
+            "winner_seal_sha256": candidate.winner_seal_sha256,
+            "executable_parity_seal_sha256": candidate.executable_parity_seal_sha256,
         })).collect::<Vec<_>>(),
     });
     let revision_digest = sha256_bytes(
@@ -2097,6 +2109,7 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         revision,
         relation_candidates,
         collection_candidates,
+        crystallized_candidates,
     };
     bundle.validate().map_err(str::to_owned)?;
     let bytes = serde_cbor::to_vec(&bundle)
@@ -4308,13 +4321,14 @@ mod tests {
         AtomValueType, COMPOSITE_ADMISSION_SCHEMA_V2, CompositeResponseAdmissionV2,
         ProjectStatusMapping, RESPONSE_AUTHORITY_SCHEMA_V2, RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2,
         RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
-        RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1,
-        ResponseAuthorityV2, ResponsePackage, ResponsePackageAuthorityBindingV2,
-        ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponseProgram,
-        ResponseRegistry, ResponseValueSelector, VerifierProgram, response_actor_program_digest,
-        response_execution_payload_digest, response_independent_verifier_program_digest,
-        response_package_digest, response_program_required_routing_atom_ids,
-        response_proof_receipts_digest, response_registry_digest,
+        RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
+        RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseAuthorityV2, ResponsePackage,
+        ResponsePackageAuthorityBindingV2, ResponsePackageOrigin, ResponsePackageProof,
+        ResponsePackageState, ResponseProgram, ResponseRegistry, ResponseValueSelector,
+        VerifierProgram, response_actor_program_digest, response_execution_payload_digest,
+        response_independent_verifier_program_digest, response_package_digest,
+        response_program_required_routing_atom_ids, response_proof_receipts_digest,
+        response_registry_digest,
     };
     use std::path::Path;
     use std::sync::atomic::AtomicU64;
@@ -4355,6 +4369,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 1,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 32,
@@ -4409,6 +4424,8 @@ mod tests {
             future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
                 .to_owned(),
             future_verifier_receipt_set_sha256: proof_digest,
+            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
+            semantic_alias_proof_sha256: "b".repeat(64),
             proof_receipts_sha256: String::new(),
         };
         binding.proof_receipts_sha256 =

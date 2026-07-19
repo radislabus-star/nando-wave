@@ -2305,6 +2305,7 @@ fn compile_collection_package(
         anti_centers: Vec::new(),
         wave_margin_micro: 1,
         learned_wave_route: None,
+        crystallized_operator: None,
         proof: ResponsePackageProof {
             support_rows: support.len(),
             future_rows: future_accepts,
@@ -4110,6 +4111,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 850_000,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: nando_response_actor::ResponsePackageProof {
                 support_rows: 0,
                 future_rows: 0,
@@ -4150,6 +4152,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 1,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 32,
@@ -4291,6 +4294,7 @@ mod tests {
                 anti_centers: Vec::new(),
                 wave_margin_micro: 850_000,
                 learned_wave_route: None,
+                crystallized_operator: None,
                 proof: nando_response_actor::ResponsePackageProof {
                     support_rows: 1,
                     future_rows: 0,
@@ -4432,6 +4436,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 850_000,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: nando_response_actor::ResponsePackageProof {
                 support_rows: 1,
                 future_rows: 0,
@@ -4644,6 +4649,7 @@ mod tests {
             anti_centers: Vec::new(),
             wave_margin_micro: 1,
             learned_wave_route: None,
+            crystallized_operator: None,
             proof: nando_response_actor::ResponsePackageProof {
                 support_rows: 32,
                 future_rows: 31,

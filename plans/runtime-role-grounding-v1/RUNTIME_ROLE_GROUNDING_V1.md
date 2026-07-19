@@ -11,7 +11,8 @@ R3 Executable Parity Seal And Full Backward Loop  PASS
 R4 OperatorPage32 Restart Roundtrip                PASS
 R5 Exact-Commit Architecture Receipt               PASS
 R6 Generic Scalar Live Shadow                      CODE PASS / LIVE WATCH
-R7-R8                                             PENDING
+R7 External Admission                              CODE PASS / LIVE WATCH
+R8 Extend Operator Capacity                        PENDING
 ```
 
 This plan closes the gap between a phase-selected relation circuit and an
@@ -153,6 +154,25 @@ local CPU authority.
 
 Gate: immutable ACTIVE generation, fallback intact, false accepts zero, runtime
 parity mismatches zero, and every local accept independently verified.
+
+Implemented code path:
+
+```text
+32 support + 32 future
+-> LiveScalarAdmissionCandidate
+-> CBOR candidate bundle
+-> independent replay of all 64 traces
+-> support/future/winner/parity commitment checks
+-> ACTIVE ResponsePackage with sealed restart bundle
+-> one-time executor restore
+-> pre-action circuit binding
+-> actor + independent verifier
+```
+
+Tampered support and parity seal are rejected before registry authority. The
+focused end-to-end proof reaches an ACTIVE registry and executes a renamed
+scalar surface. Live remains `WATCH` while the serving process is intentionally
+stopped and no real post-commit 32/32 window has accumulated.
 
 ## R8: Extend Operator Capacity
 

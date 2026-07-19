@@ -29,7 +29,7 @@ pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
 pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
 pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
 pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
-const CRYSTALLIZED_REGISTRY_SCHEMA_V1: &str = "nando.crystallized-registry.v1";
+const CRYSTALLIZED_REGISTRY_SCHEMA_V2: &str = "nando.crystallized-registry.v2";
 const CRYSTALLIZED_REGISTRY_MAX_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -94,20 +94,24 @@ pub struct VerifiedCrystallizedOperator {
     parity_seal: ExecutableParitySeal,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct VerifiedOperatorRestartBundle {
     page_bytes: Box<[u8]>,
     registry_cbor: Box<[u8]>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct CrystallizedRegistryV1 {
+struct CrystallizedRegistryV2 {
     schema: String,
     page_sha256: Commitment256,
     roles: Vec<RestartRole>,
     relations: Vec<RestartRelation>,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
+    support_root_sha256: Commitment256,
+    future_evidence_root_sha256: Commitment256,
+    future_lineage_root_sha256: Commitment256,
+    winner_seal_sha256: Commitment256,
     actor_sha256: String,
     verifier_sha256: String,
     verified_future_lineages: Vec<Commitment256>,
@@ -153,6 +157,10 @@ pub struct CrystallizedOperator {
     transform_program: Box<[TransformOp8]>,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
+    support_root_sha256: Commitment256,
+    future_evidence_root_sha256: Commitment256,
+    future_lineage_root_sha256: Commitment256,
+    winner_seal_sha256: Commitment256,
     actor_sha256: String,
     verifier_sha256: String,
     verified_future_lineages: Box<[Commitment256]>,
@@ -273,6 +281,10 @@ impl CrystallizedOperator {
             transform_program: blueprint.transform_program().into(),
             blueprint_sha256: winner_sha256,
             candidate_set_sha256: *frozen.candidate_set_sha256(),
+            support_root_sha256: *winner_receipt.support_root_sha256(),
+            future_evidence_root_sha256: *winner_receipt.future_evidence_root_sha256(),
+            future_lineage_root_sha256: *winner_receipt.future_lineage_root_sha256(),
+            winner_seal_sha256: *winner_receipt.seal_sha256(),
             actor_sha256,
             verifier_sha256,
             verified_future_lineages: verified_future_lineages.into_boxed_slice(),
@@ -356,6 +368,54 @@ impl CrystallizedOperator {
 }
 
 impl VerifiedCrystallizedOperator {
+    /// Grounds a restored operator directly against pre-action payload. Every
+    /// structurally valid selector is evaluated independently; authority is
+    /// withheld unless all successful bindings produce one response class.
+    pub fn bind_pre_action(
+        &self,
+        request_text: &str,
+        provider_payload: &Value,
+    ) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
+        let [transform] = self.operator.transform_program.as_ref() else {
+            return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+        };
+        let expected_type = transform_value_type(transform.parameter)?;
+        let bundle = runtime_bundle_from_operator(&self.operator, request_text, provider_payload)?;
+        let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
+        for selector in crate::collection_synthesis::learned_selector_candidates(provider_payload) {
+            if selector_value_type(&selector) != Some(expected_type) {
+                continue;
+            }
+            let evidence = RuntimeSurfaceEvidence {
+                bundle: bundle.clone(),
+                request_text: request_text.to_owned(),
+                provider_payload: provider_payload.clone(),
+                anchors: vec![RuntimeRoleAnchor {
+                    local_role: transform.source_a,
+                    selector,
+                }]
+                .into_boxed_slice(),
+            };
+            let Ok(bound) = bind_operator_components(
+                &self.operator.role_graph,
+                &self.operator.relation_program,
+                &self.operator.transform_program,
+                evidence,
+            ) else {
+                continue;
+            };
+            let Ok(response) = bound.execute_verified() else {
+                continue;
+            };
+            actions.entry(response).or_insert(bound);
+        }
+        match actions.len() {
+            0 => Err(CrystallizedOperatorError::MissingRuntimeAnchor),
+            1 => Ok(actions.into_values().next().expect("one action class")),
+            _ => Err(CrystallizedOperatorError::AmbiguousRuntimeAction),
+        }
+    }
+
     pub fn bind(
         &self,
         evidence: RuntimeSurfaceEvidence,
@@ -409,6 +469,45 @@ impl VerifiedCrystallizedOperator {
     }
 
     #[must_use]
+    pub const fn support_root_sha256(&self) -> &Commitment256 {
+        &self.operator.support_root_sha256
+    }
+
+    #[must_use]
+    pub const fn future_evidence_root_sha256(&self) -> &Commitment256 {
+        &self.operator.future_evidence_root_sha256
+    }
+
+    #[must_use]
+    pub const fn future_lineage_root_sha256(&self) -> &Commitment256 {
+        &self.operator.future_lineage_root_sha256
+    }
+
+    #[must_use]
+    pub const fn winner_seal_sha256(&self) -> &Commitment256 {
+        &self.operator.winner_seal_sha256
+    }
+
+    pub fn routing_program(&self) -> Result<ResponseProgram, CrystallizedOperatorError> {
+        let [transform] = self.operator.transform_program.as_ref() else {
+            return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+        };
+        validate_scalar_transform(*transform)?;
+        Ok(ResponseProgram::project_selected_value(
+            ResponseValueSelector::UniqueScalar {
+                value_type: transform_value_type(transform.parameter)?,
+            },
+            transform_format(transform.flags),
+            "completed",
+        ))
+    }
+
+    pub fn routing_verifier(&self) -> Result<VerifierProgram, CrystallizedOperatorError> {
+        source_neutral_verifier_for_program(&self.routing_program()?)
+            .map_err(|_| CrystallizedOperatorError::VerifierBuildFailed)
+    }
+
+    #[must_use]
     pub fn actor_sha256(&self) -> &str {
         self.operator.actor_sha256()
     }
@@ -426,8 +525,8 @@ impl VerifiedCrystallizedOperator {
     pub fn restart_bundle(
         &self,
     ) -> Result<VerifiedOperatorRestartBundle, CrystallizedOperatorError> {
-        let registry = CrystallizedRegistryV1 {
-            schema: CRYSTALLIZED_REGISTRY_SCHEMA_V1.to_owned(),
+        let registry = CrystallizedRegistryV2 {
+            schema: CRYSTALLIZED_REGISTRY_SCHEMA_V2.to_owned(),
             page_sha256: Sha256::digest(self.page().as_bytes()).into(),
             roles: self
                 .operator
@@ -458,6 +557,10 @@ impl VerifiedCrystallizedOperator {
                 .collect(),
             blueprint_sha256: self.operator.blueprint_sha256,
             candidate_set_sha256: self.operator.candidate_set_sha256,
+            support_root_sha256: self.operator.support_root_sha256,
+            future_evidence_root_sha256: self.operator.future_evidence_root_sha256,
+            future_lineage_root_sha256: self.operator.future_lineage_root_sha256,
+            winner_seal_sha256: self.operator.winner_seal_sha256,
             actor_sha256: self.operator.actor_sha256.clone(),
             verifier_sha256: self.operator.verifier_sha256.clone(),
             verified_future_lineages: self.operator.verified_future_lineages.to_vec(),
@@ -485,9 +588,9 @@ impl VerifiedCrystallizedOperator {
         }
         let page = OperatorPage32::from_bytes(page_bytes)
             .map_err(CrystallizedOperatorError::InvalidPage)?;
-        let registry: CrystallizedRegistryV1 = serde_cbor::from_slice(registry_cbor)
+        let registry: CrystallizedRegistryV2 = serde_cbor::from_slice(registry_cbor)
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
-        if registry.schema != CRYSTALLIZED_REGISTRY_SCHEMA_V1
+        if registry.schema != CRYSTALLIZED_REGISTRY_SCHEMA_V2
             || registry.page_sha256 != Commitment256::from(Sha256::digest(page_bytes))
         {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
@@ -533,6 +636,9 @@ impl VerifiedCrystallizedOperator {
             .collect::<Result<Vec<_>, _>>()?
             .into_boxed_slice();
         let parity_seal = ExecutableParitySeal::try_from(registry.parity_seal)?;
+        if parity_seal.winner_seal_sha256 != registry.winner_seal_sha256 {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
         let actor_digest = decode_sha256(&registry.actor_sha256)?;
         let verifier_digest = decode_sha256(&registry.verifier_sha256)?;
         if actor_digest != parity_seal.actor_sha256
@@ -551,6 +657,10 @@ impl VerifiedCrystallizedOperator {
                 transform_program,
                 blueprint_sha256: registry.blueprint_sha256,
                 candidate_set_sha256: registry.candidate_set_sha256,
+                support_root_sha256: registry.support_root_sha256,
+                future_evidence_root_sha256: registry.future_evidence_root_sha256,
+                future_lineage_root_sha256: registry.future_lineage_root_sha256,
+                winner_seal_sha256: registry.winner_seal_sha256,
                 actor_sha256: registry.actor_sha256,
                 verifier_sha256: registry.verifier_sha256,
                 verified_future_lineages: registry.verified_future_lineages.into_boxed_slice(),
@@ -558,6 +668,43 @@ impl VerifiedCrystallizedOperator {
             parity_seal,
         })
     }
+}
+
+fn runtime_bundle_from_operator(
+    operator: &CrystallizedOperator,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Result<SurfaceFragmentBundle, CrystallizedOperatorError> {
+    let payload = serde_json::to_vec(provider_payload)
+        .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
+    let lineage_sha256 = digest_parts(
+        b"nando.runtime-operator-lineage.v1",
+        &[request_text.as_bytes(), &payload],
+    );
+    let surface_sha256 = digest_parts(
+        b"nando.runtime-operator-surface.v1",
+        &[&operator.blueprint_sha256, &payload],
+    );
+    let relations = operator
+        .relation_program
+        .relations()
+        .iter()
+        .map(|relation| nando_core::wave::LocalRelationFragment {
+            plane: relation.cell.plane,
+            source_local_role: relation.cell.source_role,
+            target_local_role: relation.cell.target_role,
+            state: relation.state,
+            phase_anchor: relation.phase_anchor,
+        })
+        .collect();
+    SurfaceFragmentBundle::new(
+        lineage_sha256,
+        surface_sha256,
+        operator.role_graph.canonical_roles().to_vec(),
+        relations,
+        Vec::new(),
+    )
+    .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)
 }
 
 impl VerifiedOperatorRestartBundle {

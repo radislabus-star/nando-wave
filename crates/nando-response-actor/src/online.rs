@@ -783,6 +783,11 @@ impl OnlineResponseStream {
     }
 
     #[must_use]
+    pub fn crystallized_admission_candidates(&self) -> Vec<crate::LiveScalarAdmissionCandidate> {
+        self.miner.crystallized_admission_candidates()
+    }
+
+    #[must_use]
     pub fn has_admission_candidates(&self) -> bool {
         !self.miner.admission_candidates().is_empty()
     }
@@ -2451,6 +2456,11 @@ impl OnlineResponseMiner {
 
     pub fn admission_candidates(&self) -> Vec<OnlineResponseAdmissionCandidate> {
         self.combined_admission_evaluation().candidates
+    }
+
+    #[must_use]
+    pub fn crystallized_admission_candidates(&self) -> Vec<crate::LiveScalarAdmissionCandidate> {
+        self.live_scalar_shadow.admission_candidates()
     }
 
     fn bucket_for(
