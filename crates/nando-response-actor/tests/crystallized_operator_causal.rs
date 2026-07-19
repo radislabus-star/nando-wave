@@ -1,8 +1,8 @@
 use nando_core::wave::{
-    BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintPhaseControl, BoundedCircuitBeam,
-    BoundedRoleAligner, Commitment256, FrozenOperatorBlueprintSet, LocalRelationFragment,
-    PhaseCenterCell, RoleAlignmentConfig, StructuralRoleSignature, SurfaceFragmentBundle,
-    TernaryRelationState, TypedProgramAtom,
+    BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence, BlueprintPhaseControl,
+    BoundedCircuitBeam, BoundedRoleAligner, Commitment256, FrozenOperatorBlueprintSet,
+    LocalRelationFragment, PhaseCenterCell, RoleAlignmentConfig, StructuralRoleSignature,
+    SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom,
 };
 use nando_response_actor::{
     AtomValueType, CrystallizationParityReceipt, CrystallizedOperator, ResponseValueSelector,
@@ -120,12 +120,21 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
         complete_future_surface(23, [0, 2, 1]),
     ];
 
-    let full = BlueprintFutureEvaluator::evaluate(
+    let future_evidence = future
+        .iter()
+        .enumerate()
+        .map(|(index, bundle)| {
+            BlueprintFutureEvidence::new(digest(140 + index as u8), 1, bundle.clone())
+                .expect("valid future evidence")
+        })
+        .collect::<Vec<_>>();
+    let sealed = BlueprintFutureEvaluator::evaluate_and_seal(
         &frozen,
-        &future,
+        &future_evidence,
         Default::default(),
         BlueprintPhaseControl::Full,
     );
+    let full = sealed.report();
     let winner = full
         .winner_fingerprint_sha256
         .unwrap_or_else(|| panic!("full phase must select one topology: {full:#?}"));
@@ -135,9 +144,18 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
         BlueprintPhaseControl::MagnitudeOnly,
         BlueprintPhaseControl::MatchedRandomCenter,
     ] {
-        let ablated =
-            BlueprintFutureEvaluator::evaluate(&frozen, &future, Default::default(), control);
-        assert_eq!(ablated.winner_fingerprint_sha256, None, "{control:?}");
+        let ablated = BlueprintFutureEvaluator::evaluate_and_seal(
+            &frozen,
+            &future_evidence,
+            Default::default(),
+            control,
+        );
+        assert_eq!(
+            ablated.report().winner_fingerprint_sha256,
+            None,
+            "{control:?}"
+        );
+        assert_eq!(ablated.winner_receipt(), None, "{control:?}");
     }
 
     let mut future_window = frozen.future_window();
@@ -146,13 +164,17 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
             .admit_lineage(bundle)
             .expect("independent future lineage");
     }
-    let receipts = future
+    let receipts = future_evidence
         .iter()
         .enumerate()
-        .map(|(index, bundle)| {
+        .map(|(index, evidence)| {
             let value = 7 + index;
             CrystallizationParityReceipt {
-                future_lineage_sha256: *bundle.lineage_sha256(),
+                future_lineage_sha256: *evidence.bundle().lineage_sha256(),
+                future_surface_sha256: *evidence.bundle().surface_sha256(),
+                future_bundle_sha256: *evidence.bundle_sha256(),
+                raw_input_sha256: *evidence.raw_input_sha256(),
+                extractor_version: evidence.extractor_version(),
                 request_text: String::new(),
                 provider_payload: json!({
                     "input": [{
@@ -164,8 +186,13 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
             }
         })
         .collect::<Vec<_>>();
-    let operator = CrystallizedOperator::crystallize(&future_window, &full, &receipts)
-        .expect("causal winner crystallizes");
+    let operator = CrystallizedOperator::crystallize(
+        &future_window,
+        sealed.winner_receipt().expect("full phase winner seal"),
+        &future_evidence,
+        &receipts,
+    )
+    .expect("causal winner crystallizes");
 
     assert_eq!(operator.blueprint_sha256(), &winner);
     assert_eq!(operator.verified_future_lineages().len(), 3);

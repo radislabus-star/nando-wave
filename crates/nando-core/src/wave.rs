@@ -146,7 +146,8 @@ pub use morphology_wave::{
 };
 pub use operator_blueprint::{
     BlueprintBeamConfig, BlueprintFutureBlocker, BlueprintFutureConfig, BlueprintFutureEvaluator,
-    BlueprintFutureReport, BlueprintFutureScore, BlueprintPhaseControl, BlueprintSynthesisBlocker,
+    BlueprintFutureEvidence, BlueprintFutureEvidenceError, BlueprintFutureReport,
+    BlueprintFutureScore, BlueprintPhaseControl, BlueprintSynthesisBlocker,
     BlueprintSynthesisBlockerCount, BlueprintSynthesisReport, BoundedCircuitBeam,
     BoundedRoleAligner, CandidateOperatorBlueprint, Commitment256, CompositionDag, CompositionEdge,
     FrozenBlueprintError, FrozenBlueprintFutureWindow, FrozenOperatorBlueprintSet,
@@ -157,8 +158,9 @@ pub use operator_blueprint::{
     OPERATOR_BLUEPRINT_MAX_ROLES, OPERATOR_ROLE_COLOR_ROUNDS, OPERATOR_ROLE_NONE, RendererContract,
     RoleAlignmentBlocker, RoleAlignmentConfig, RoleAlignmentHypothesis, RoleAlignmentReport,
     RoleBinding, RoleGraph, RuntimeRoleBinder, RuntimeRoleBindingReport, RuntimeRoleMapping,
-    SearchCompletion, SearchStage, StructuralRoleCanonicalizer, StructuralRoleSignature,
-    SurfaceFragmentBundle, SurfaceFragmentBundleError, TypedProgramAtom, VerifierContract,
+    SealedBlueprintEvaluation, SealedBlueprintWinnerReceipt, SearchCompletion, SearchStage,
+    StructuralRoleCanonicalizer, StructuralRoleSignature, SurfaceFragmentBundle,
+    SurfaceFragmentBundleError, TypedProgramAtom, VerifierContract,
 };
 pub use operator_circuit::{
     OPERATOR_CIRCUIT_MAX_RELATIONS, OPERATOR_CIRCUIT_MAX_ROLES, OPERATOR_WAVE_MAX_SAMPLES,

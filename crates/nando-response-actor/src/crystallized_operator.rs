@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 
 use nando_core::wave::{
-    BlueprintFutureReport, BlueprintPhaseControl, CandidateCubeField, CandidateCubeFieldError,
+    BlueprintFutureEvidence, CandidateCubeField, CandidateCubeFieldError,
     CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow,
     OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES, OPERATOR_PAGE32_RENDERER_BYTES,
     OPERATOR_ROLE_NONE, OperatorCircuit, OperatorGrokkingConfig, OperatorPage32,
-    OperatorPage32Error, OperatorPage32Metadata, RoleGraph, RuntimeRoleBinder, SearchCompletion,
-    StructuralRole16, SurfaceFragmentBundle, TernaryOperatorCube32, TransformOp8,
+    OperatorPage32Error, OperatorPage32Metadata, RoleGraph, RuntimeRoleBinder,
+    SealedBlueprintWinnerReceipt, SearchCompletion, StructuralRole16, SurfaceFragmentBundle,
+    TernaryOperatorCube32, TransformOp8,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -30,6 +31,10 @@ pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrystallizationParityReceipt {
     pub future_lineage_sha256: Commitment256,
+    pub future_surface_sha256: Commitment256,
+    pub future_bundle_sha256: Commitment256,
+    pub raw_input_sha256: Commitment256,
+    pub extractor_version: u32,
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
@@ -102,6 +107,8 @@ pub enum CrystallizedOperatorError {
     DigestFailure,
     InvalidDigest,
     InvalidPage(OperatorPage32Error),
+    InvalidWinnerSeal,
+    FutureEvidenceMismatch,
     RuntimeBindingExhausted,
     RuntimeRelationMismatch,
     MissingRuntimeAnchor,
@@ -120,19 +127,18 @@ pub enum CrystallizedFeedbackError {
 impl CrystallizedOperator {
     pub fn crystallize(
         future_window: &FrozenBlueprintFutureWindow,
-        future_report: &BlueprintFutureReport,
+        winner_receipt: &SealedBlueprintWinnerReceipt,
+        future_evidence: &[BlueprintFutureEvidence],
         receipts: &[CrystallizationParityReceipt],
     ) -> Result<Self, CrystallizedOperatorError> {
-        if future_report.control != BlueprintPhaseControl::Full {
-            return Err(CrystallizedOperatorError::FutureNotFullPhase);
-        }
-        if future_report.blocker.is_some() {
-            return Err(CrystallizedOperatorError::FutureHasBlocker);
-        }
-        let winner_sha256 = future_report
-            .winner_fingerprint_sha256
-            .ok_or(CrystallizedOperatorError::MissingWinner)?;
         let frozen = future_window.frozen();
+        if !winner_receipt.matches_frozen(frozen) {
+            return Err(CrystallizedOperatorError::InvalidWinnerSeal);
+        }
+        if !winner_receipt.matches_future_evidence(future_evidence) {
+            return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
+        }
+        let winner_sha256 = *winner_receipt.winner_sha256();
         let blueprint = frozen
             .blueprints()
             .iter()
@@ -158,7 +164,7 @@ impl CrystallizedOperator {
         }
 
         let verified_future_lineages =
-            verify_future_receipts(future_window, &actor, &verifier, receipts)?;
+            verify_future_receipts(future_window, future_evidence, &actor, &verifier, receipts)?;
         let actor_sha256 = response_actor_program_digest(&actor)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
         let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
@@ -549,6 +555,7 @@ fn transform_format(flags: u16) -> ValueProjectionFormat {
 
 fn verify_future_receipts(
     future_window: &FrozenBlueprintFutureWindow,
+    future_evidence: &[BlueprintFutureEvidence],
     actor: &ResponseProgram,
     verifier: &VerifierProgram,
     receipts: &[CrystallizationParityReceipt],
@@ -557,6 +564,14 @@ fn verify_future_receipts(
     if expected.is_empty() {
         return Err(CrystallizedOperatorError::EmptyFutureWindow);
     }
+    let evidence_by_lineage = future_evidence
+        .iter()
+        .map(|evidence| (*evidence.bundle().lineage_sha256(), evidence))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    if evidence_by_lineage.len() != expected.len() || evidence_by_lineage.keys().ne(expected.iter())
+    {
+        return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
+    }
     let mut seen = BTreeSet::new();
     for receipt in receipts {
         if !expected.contains(&receipt.future_lineage_sha256) {
@@ -564,6 +579,16 @@ fn verify_future_receipts(
         }
         if !seen.insert(receipt.future_lineage_sha256) {
             return Err(CrystallizedOperatorError::DuplicateParityLineage);
+        }
+        let evidence = evidence_by_lineage
+            .get(&receipt.future_lineage_sha256)
+            .ok_or(CrystallizedOperatorError::FutureEvidenceMismatch)?;
+        if receipt.future_surface_sha256 != *evidence.bundle().surface_sha256()
+            || receipt.future_bundle_sha256 != *evidence.bundle_sha256()
+            || receipt.raw_input_sha256 != *evidence.raw_input_sha256()
+            || receipt.extractor_version != evidence.extractor_version()
+        {
+            return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
         }
         let execution = execute_response(actor, &receipt.request_text, &receipt.provider_payload);
         if execution.status != ResponseExecutionStatus::Executed {
@@ -771,7 +796,8 @@ fn decode_sha256(value: &str) -> Result<Commitment256, CrystallizedOperatorError
 #[cfg(test)]
 mod tests {
     use nando_core::wave::{
-        BlueprintBeamConfig, BlueprintSynthesisReport, BoundedCircuitBeam, BoundedRoleAligner,
+        BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence,
+        BlueprintPhaseControl, BlueprintSynthesisReport, BoundedCircuitBeam, BoundedRoleAligner,
         LocalRelationFragment, OperatorGrokkingConfig, PhaseCenterCell, RoleAlignmentConfig,
         StructuralRoleSignature, SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom,
     };
@@ -783,9 +809,17 @@ mod tests {
     }
 
     fn bundle(lineage: u8, phase: PhaseCenterCell) -> SurfaceFragmentBundle {
+        bundle_with_surface(lineage, lineage.saturating_add(20), phase)
+    }
+
+    fn bundle_with_surface(
+        lineage: u8,
+        surface: u8,
+        phase: PhaseCenterCell,
+    ) -> SurfaceFragmentBundle {
         SurfaceFragmentBundle::new(
             digest(lineage),
-            digest(lineage.saturating_add(20)),
+            digest(surface),
             vec![
                 StructuralRoleSignature::new(1, 1, 0, 0, vec![0]),
                 StructuralRoleSignature::new(2, 1, 1, 0, vec![0]),
@@ -840,26 +874,38 @@ mod tests {
     fn winner_crystallizes_into_page_and_bound_verified_actor() {
         let (future, synthesis, future_bundle) = frozen_blueprints();
         let winner = *synthesis.blueprints[0].fingerprint_sha256();
-        let report = BlueprintFutureReport {
-            control: BlueprintPhaseControl::Full,
-            scores: Box::new([]),
-            winner_fingerprint_sha256: Some(winner),
-            runner_up_margin: 1.0,
-            blocker: None,
-        };
+        let evidence = BlueprintFutureEvidence::new(digest(40), 1, future_bundle.clone())
+            .expect("valid future evidence");
+        let evidence_set = vec![evidence.clone()];
+        let sealed = BlueprintFutureEvaluator::evaluate_and_seal(
+            future.frozen(),
+            &evidence_set,
+            Default::default(),
+            BlueprintPhaseControl::Full,
+        );
+        let winner_receipt = sealed.winner_receipt().expect("winner seal");
+        assert_eq!(winner_receipt.winner_sha256(), &winner);
         let payload = json!({
             "input": [{"type":"function_call_output", "output":"{\"total\":7}"}]
         });
         let receipt = CrystallizationParityReceipt {
             future_lineage_sha256: *future_bundle.lineage_sha256(),
+            future_surface_sha256: *future_bundle.surface_sha256(),
+            future_bundle_sha256: *evidence.bundle_sha256(),
+            raw_input_sha256: *evidence.raw_input_sha256(),
+            extractor_version: evidence.extractor_version(),
             request_text: String::new(),
             provider_payload: payload.clone(),
             expected_response: "7".to_owned(),
         };
 
-        let operator =
-            CrystallizedOperator::crystallize(&future, &report, std::slice::from_ref(&receipt))
-                .expect("verified crystallized operator");
+        let operator = CrystallizedOperator::crystallize(
+            &future,
+            winner_receipt,
+            &evidence_set,
+            std::slice::from_ref(&receipt),
+        )
+        .expect("verified crystallized operator");
 
         assert_eq!(operator.blueprint_sha256(), &winner);
         assert_eq!(operator.verified_future_lineages(), &[digest(3)]);
@@ -889,8 +935,53 @@ mod tests {
         );
         assert_eq!(feedback.circuits(), &[operator.relation_program().clone()]);
         assert_eq!(
-            CrystallizedOperator::crystallize(&future, &report, &[]),
+            CrystallizedOperator::crystallize(&future, winner_receipt, &evidence_set, &[]),
             Err(CrystallizedOperatorError::MissingParityReceipt)
+        );
+        let tampered_evidence = vec![
+            BlueprintFutureEvidence::new(
+                digest(41),
+                1,
+                bundle(3, PhaseCenterCell { re: 1.0, im: 0.0 }),
+            )
+            .expect("well-formed tampered evidence"),
+        ];
+        assert_eq!(
+            CrystallizedOperator::crystallize(
+                &future,
+                winner_receipt,
+                &tampered_evidence,
+                std::slice::from_ref(&receipt),
+            ),
+            Err(CrystallizedOperatorError::FutureEvidenceMismatch)
+        );
+        let tampered_surface = vec![
+            BlueprintFutureEvidence::new(
+                digest(40),
+                1,
+                bundle_with_surface(3, 99, PhaseCenterCell { re: 1.0, im: 0.0 }),
+            )
+            .expect("well-formed surface substitution"),
+        ];
+        assert_eq!(
+            CrystallizedOperator::crystallize(
+                &future,
+                winner_receipt,
+                &tampered_surface,
+                std::slice::from_ref(&receipt),
+            ),
+            Err(CrystallizedOperatorError::FutureEvidenceMismatch)
+        );
+        let mut tampered_receipt = receipt.clone();
+        tampered_receipt.future_surface_sha256 = digest(99);
+        assert_eq!(
+            CrystallizedOperator::crystallize(
+                &future,
+                winner_receipt,
+                &evidence_set,
+                std::slice::from_ref(&tampered_receipt),
+            ),
+            Err(CrystallizedOperatorError::FutureEvidenceMismatch)
         );
     }
 }

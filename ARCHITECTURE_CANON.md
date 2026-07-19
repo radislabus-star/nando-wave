@@ -1058,7 +1058,8 @@ attachment of a generic scalar primitive         PASS
 circuit-driven runtime role grounding            PASS
 TransformOp8 source/output causally used          PASS
 independent structural verifier derivation        PASS
-sealed winner and executable parity provenance   NOT IMPLEMENTED
+sealed winner provenance                          PASS
+executable parity provenance                      NOT IMPLEMENTED
 whole executable learned operator                WATCH
 live authority                                   BLOCK
 ```

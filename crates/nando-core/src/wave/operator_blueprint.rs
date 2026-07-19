@@ -17,6 +17,7 @@ pub const OPERATOR_BLUEPRINT_MAX_EXPANSIONS: usize = 4_096;
 pub const OPERATOR_ROLE_COLOR_ROUNDS: usize = 3;
 pub const OPERATOR_ROLE_NONE: u8 = u8::MAX;
 pub const OPERATOR_BLUEPRINT_CANONICALIZER_VERSION: u32 = 1;
+pub const OPERATOR_BLUEPRINT_SCORE_SCALE: i64 = 1_000_000_000;
 
 pub type Commitment256 = [u8; 32];
 
@@ -287,10 +288,46 @@ pub struct BlueprintFutureScore {
     pub edge_coherences: Box<[f64]>,
     pub plane_coherences: Box<[f64]>,
     pub whole_circuit_coherence: f64,
+    pub whole_circuit_coherence_fixed: i64,
     pub covered_edges: usize,
     pub covered_planes: usize,
     pub ambiguous_bindings: usize,
     pub eligible: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlueprintFutureEvidenceError {
+    EmptyRawInput,
+    InvalidExtractorVersion,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlueprintFutureEvidence {
+    raw_input_sha256: Commitment256,
+    extractor_version: u32,
+    bundle_sha256: Commitment256,
+    bundle: SurfaceFragmentBundle,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SealedBlueprintWinnerReceipt {
+    source_generation: u64,
+    candidate_set_sha256: Commitment256,
+    support_root_sha256: Commitment256,
+    future_evidence_root_sha256: Commitment256,
+    future_lineage_root_sha256: Commitment256,
+    evaluator_config_sha256: Commitment256,
+    score_table_sha256: Commitment256,
+    winner_sha256: Commitment256,
+    runner_up_sha256: Commitment256,
+    margin_fixed: i64,
+    seal_sha256: Commitment256,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SealedBlueprintEvaluation {
+    report: BlueprintFutureReport,
+    winner_receipt: Option<SealedBlueprintWinnerReceipt>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -558,6 +595,119 @@ impl SurfaceFragmentBundle {
     #[must_use]
     pub fn program_atoms(&self) -> &[TypedProgramAtom] {
         &self.program_atoms
+    }
+}
+
+impl BlueprintFutureEvidence {
+    pub fn new(
+        raw_input_sha256: Commitment256,
+        extractor_version: u32,
+        bundle: SurfaceFragmentBundle,
+    ) -> Result<Self, BlueprintFutureEvidenceError> {
+        if raw_input_sha256 == [0; 32] {
+            return Err(BlueprintFutureEvidenceError::EmptyRawInput);
+        }
+        if extractor_version == 0 {
+            return Err(BlueprintFutureEvidenceError::InvalidExtractorVersion);
+        }
+        let bundle_sha256 = surface_bundle_commitment(&bundle);
+        Ok(Self {
+            raw_input_sha256,
+            extractor_version,
+            bundle_sha256,
+            bundle,
+        })
+    }
+
+    #[must_use]
+    pub const fn raw_input_sha256(&self) -> &Commitment256 {
+        &self.raw_input_sha256
+    }
+
+    #[must_use]
+    pub const fn extractor_version(&self) -> u32 {
+        self.extractor_version
+    }
+
+    #[must_use]
+    pub const fn bundle_sha256(&self) -> &Commitment256 {
+        &self.bundle_sha256
+    }
+
+    #[must_use]
+    pub const fn bundle(&self) -> &SurfaceFragmentBundle {
+        &self.bundle
+    }
+}
+
+impl SealedBlueprintEvaluation {
+    #[must_use]
+    pub const fn report(&self) -> &BlueprintFutureReport {
+        &self.report
+    }
+
+    #[must_use]
+    pub const fn winner_receipt(&self) -> Option<&SealedBlueprintWinnerReceipt> {
+        self.winner_receipt.as_ref()
+    }
+}
+
+impl SealedBlueprintWinnerReceipt {
+    #[must_use]
+    pub const fn source_generation(&self) -> u64 {
+        self.source_generation
+    }
+
+    #[must_use]
+    pub const fn candidate_set_sha256(&self) -> &Commitment256 {
+        &self.candidate_set_sha256
+    }
+
+    #[must_use]
+    pub const fn support_root_sha256(&self) -> &Commitment256 {
+        &self.support_root_sha256
+    }
+
+    #[must_use]
+    pub const fn future_evidence_root_sha256(&self) -> &Commitment256 {
+        &self.future_evidence_root_sha256
+    }
+
+    #[must_use]
+    pub const fn future_lineage_root_sha256(&self) -> &Commitment256 {
+        &self.future_lineage_root_sha256
+    }
+
+    #[must_use]
+    pub const fn winner_sha256(&self) -> &Commitment256 {
+        &self.winner_sha256
+    }
+
+    #[must_use]
+    pub const fn margin_fixed(&self) -> i64 {
+        self.margin_fixed
+    }
+
+    #[must_use]
+    pub const fn seal_sha256(&self) -> &Commitment256 {
+        &self.seal_sha256
+    }
+
+    #[must_use]
+    pub fn matches_frozen(&self, frozen: &FrozenOperatorBlueprintSet) -> bool {
+        self.source_generation == frozen.source_generation
+            && self.candidate_set_sha256 == frozen.candidate_set_sha256
+            && self.support_root_sha256
+                == commitment_root(
+                    b"nando.blueprint-support-root.v1",
+                    frozen.support_lineages_sha256.iter().copied(),
+                )
+    }
+
+    #[must_use]
+    pub fn matches_future_evidence(&self, evidence: &[BlueprintFutureEvidence]) -> bool {
+        self.future_evidence_root_sha256 == future_evidence_root(evidence)
+            && self.future_lineage_root_sha256 == future_lineage_root(evidence)
     }
 }
 
@@ -1258,8 +1408,8 @@ impl BlueprintFutureEvaluator {
             .collect::<Vec<_>>();
         scores.sort_by(|left, right| {
             right
-                .whole_circuit_coherence
-                .total_cmp(&left.whole_circuit_coherence)
+                .whole_circuit_coherence_fixed
+                .cmp(&left.whole_circuit_coherence_fixed)
                 .then_with(|| {
                     left.blueprint_fingerprint_sha256
                         .cmp(&right.blueprint_fingerprint_sha256)
@@ -1277,7 +1427,8 @@ impl BlueprintFutureEvaluator {
                 blocker: Some(BlueprintFutureBlocker::NoEligibleBlueprint),
             };
         }
-        if best.whole_circuit_coherence < config.coherence_floor {
+        let floor_fixed = coherence_fixed(config.coherence_floor);
+        if best.whole_circuit_coherence_fixed < floor_fixed {
             return BlueprintFutureReport {
                 control,
                 scores: scores.into_boxed_slice(),
@@ -1286,13 +1437,16 @@ impl BlueprintFutureEvaluator {
                 blocker: Some(BlueprintFutureBlocker::CoherenceBelowFloor),
             };
         }
-        let runner_up = scores
+        let runner_up_fixed = scores
             .iter()
             .skip(1)
             .find(|score| score.eligible)
-            .map_or(0.0, |score| score.whole_circuit_coherence);
-        let margin = best.whole_circuit_coherence - runner_up;
-        if margin < config.coherence_margin {
+            .map_or(0, |score| score.whole_circuit_coherence_fixed);
+        let margin_fixed = best
+            .whole_circuit_coherence_fixed
+            .saturating_sub(runner_up_fixed);
+        let margin = margin_fixed as f64 / OPERATOR_BLUEPRINT_SCORE_SCALE as f64;
+        if margin_fixed < coherence_fixed(config.coherence_margin) {
             return BlueprintFutureReport {
                 control,
                 scores: scores.into_boxed_slice(),
@@ -1308,6 +1462,30 @@ impl BlueprintFutureEvaluator {
             winner_fingerprint_sha256: Some(winner),
             runner_up_margin: margin,
             blocker: None,
+        }
+    }
+}
+
+impl BlueprintFutureEvaluator {
+    #[must_use]
+    pub fn evaluate_and_seal(
+        frozen: &FrozenOperatorBlueprintSet,
+        future_evidence: &[BlueprintFutureEvidence],
+        config: BlueprintFutureConfig,
+        control: BlueprintPhaseControl,
+    ) -> SealedBlueprintEvaluation {
+        let bundles = future_evidence
+            .iter()
+            .map(|evidence| evidence.bundle.clone())
+            .collect::<Vec<_>>();
+        let report = Self::evaluate(frozen, &bundles, config, control);
+        let winner_receipt = (control == BlueprintPhaseControl::Full
+            && report.blocker.is_none()
+            && report.winner_fingerprint_sha256.is_some())
+        .then(|| seal_blueprint_winner(frozen, future_evidence, config, &report));
+        SealedBlueprintEvaluation {
+            report,
+            winner_receipt,
         }
     }
 }
@@ -1534,6 +1712,7 @@ fn score_blueprint_future(
     let (cross_plane_closure, _) =
         resultant_summary(plane_summaries.iter().map(|(_, direction)| *direction));
     let whole_circuit_coherence = edge_mean * plane_mean * cross_plane_closure;
+    let whole_circuit_coherence_fixed = coherence_fixed(whole_circuit_coherence);
     let required_planes = relations
         .iter()
         .map(|relation| relation.cell.plane)
@@ -1549,6 +1728,7 @@ fn score_blueprint_future(
         edge_coherences: edge_coherences.into_boxed_slice(),
         plane_coherences: plane_coherences.into_boxed_slice(),
         whole_circuit_coherence,
+        whole_circuit_coherence_fixed,
         covered_edges,
         covered_planes,
         ambiguous_bindings,
@@ -2142,6 +2322,165 @@ fn alignment_commitment(
     for (lineage, local_role, canonical_role) in canonical {
         hasher.update(lineage);
         hasher.update([local_role, canonical_role]);
+    }
+    hasher.finalize().into()
+}
+
+fn coherence_fixed(value: f64) -> i64 {
+    if !value.is_finite() {
+        return i64::MIN;
+    }
+    (value.clamp(-1.0, 1.0) * OPERATOR_BLUEPRINT_SCORE_SCALE as f64).round() as i64
+}
+
+fn surface_bundle_commitment(bundle: &SurfaceFragmentBundle) -> Commitment256 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.surface-fragment-bundle.v1");
+    hasher.update(bundle.lineage_sha256);
+    hasher.update(bundle.surface_sha256);
+    hasher.update((bundle.roles.len() as u32).to_le_bytes());
+    for role in &bundle.roles {
+        hasher.update(role_signature_commitment(role));
+    }
+    hasher.update((bundle.relations.len() as u32).to_le_bytes());
+    for relation in &bundle.relations {
+        hasher.update([
+            relation.plane,
+            relation.source_local_role,
+            relation.target_local_role,
+            relation.state as i8 as u8,
+        ]);
+        hasher.update(relation.phase_anchor.re.to_bits().to_le_bytes());
+        hasher.update(relation.phase_anchor.im.to_bits().to_le_bytes());
+    }
+    hasher.update((bundle.program_atoms.len() as u32).to_le_bytes());
+    for atom in &bundle.program_atoms {
+        hasher.update([
+            atom.opcode,
+            atom.output_local_role,
+            atom.source_a_local_role,
+            atom.source_b_local_role,
+        ]);
+        hasher.update(atom.parameter.to_le_bytes());
+        hasher.update(atom.flags.to_le_bytes());
+    }
+    hasher.finalize().into()
+}
+
+fn future_evidence_root(evidence: &[BlueprintFutureEvidence]) -> Commitment256 {
+    let mut commitments = evidence
+        .iter()
+        .map(|item| {
+            let mut hasher = Sha256::new();
+            hasher.update(b"nando.blueprint-future-evidence.v1");
+            hasher.update(item.bundle.lineage_sha256);
+            hasher.update(item.bundle.surface_sha256);
+            hasher.update(item.bundle_sha256);
+            hasher.update(item.raw_input_sha256);
+            hasher.update(item.extractor_version.to_le_bytes());
+            Commitment256::from(hasher.finalize())
+        })
+        .collect::<Vec<_>>();
+    commitments.sort_unstable();
+    commitment_root(
+        b"nando.blueprint-future-evidence-root.v1",
+        commitments.into_iter(),
+    )
+}
+
+fn future_lineage_root(evidence: &[BlueprintFutureEvidence]) -> Commitment256 {
+    commitment_root(
+        b"nando.blueprint-future-lineage-root.v1",
+        evidence.iter().map(|item| *item.bundle.lineage_sha256()),
+    )
+}
+
+fn commitment_root(
+    domain: &[u8],
+    commitments: impl Iterator<Item = Commitment256>,
+) -> Commitment256 {
+    let mut commitments = commitments.collect::<Vec<_>>();
+    commitments.sort_unstable();
+    let mut hasher = Sha256::new();
+    hasher.update(domain);
+    hasher.update((commitments.len() as u32).to_le_bytes());
+    for commitment in commitments {
+        hasher.update(commitment);
+    }
+    hasher.finalize().into()
+}
+
+fn seal_blueprint_winner(
+    frozen: &FrozenOperatorBlueprintSet,
+    evidence: &[BlueprintFutureEvidence],
+    config: BlueprintFutureConfig,
+    report: &BlueprintFutureReport,
+) -> SealedBlueprintWinnerReceipt {
+    let winner_sha256 = report
+        .winner_fingerprint_sha256
+        .expect("sealed evaluation has a winner");
+    let runner_up_sha256 = report
+        .scores
+        .iter()
+        .find(|score| score.eligible && score.blueprint_fingerprint_sha256 != winner_sha256)
+        .map_or([0; 32], |score| score.blueprint_fingerprint_sha256);
+    let support_root_sha256 = commitment_root(
+        b"nando.blueprint-support-root.v1",
+        frozen.support_lineages_sha256.iter().copied(),
+    );
+    let future_evidence_root_sha256 = future_evidence_root(evidence);
+    let future_lineage_root_sha256 = future_lineage_root(evidence);
+    let mut config_hasher = Sha256::new();
+    config_hasher.update(b"nando.blueprint-evaluator-config.v1");
+    config_hasher.update((config.min_lineages_per_edge as u64).to_le_bytes());
+    config_hasher.update(coherence_fixed(config.coherence_floor).to_le_bytes());
+    config_hasher.update(coherence_fixed(config.coherence_margin).to_le_bytes());
+    config_hasher.update(OPERATOR_BLUEPRINT_CANONICALIZER_VERSION.to_le_bytes());
+    let evaluator_config_sha256 = config_hasher.finalize().into();
+    let score_table_sha256 = score_table_commitment(&report.scores);
+    let margin_fixed = coherence_fixed(report.runner_up_margin);
+    let mut seal_hasher = Sha256::new();
+    seal_hasher.update(b"nando.sealed-blueprint-winner.v1");
+    seal_hasher.update(frozen.source_generation.to_le_bytes());
+    seal_hasher.update(frozen.candidate_set_sha256);
+    seal_hasher.update(support_root_sha256);
+    seal_hasher.update(future_evidence_root_sha256);
+    seal_hasher.update(future_lineage_root_sha256);
+    seal_hasher.update(evaluator_config_sha256);
+    seal_hasher.update(score_table_sha256);
+    seal_hasher.update(winner_sha256);
+    seal_hasher.update(runner_up_sha256);
+    seal_hasher.update(margin_fixed.to_le_bytes());
+    let seal_sha256 = seal_hasher.finalize().into();
+    SealedBlueprintWinnerReceipt {
+        source_generation: frozen.source_generation,
+        candidate_set_sha256: frozen.candidate_set_sha256,
+        support_root_sha256,
+        future_evidence_root_sha256,
+        future_lineage_root_sha256,
+        evaluator_config_sha256,
+        score_table_sha256,
+        winner_sha256,
+        runner_up_sha256,
+        margin_fixed,
+        seal_sha256,
+    }
+}
+
+fn score_table_commitment(scores: &[BlueprintFutureScore]) -> Commitment256 {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.blueprint-score-table.v1");
+    hasher.update((scores.len() as u32).to_le_bytes());
+    for score in scores {
+        hasher.update(score.blueprint_fingerprint_sha256);
+        hasher.update(score.whole_circuit_coherence_fixed.to_le_bytes());
+        hasher.update((score.covered_edges as u32).to_le_bytes());
+        hasher.update((score.covered_planes as u32).to_le_bytes());
+        hasher.update((score.ambiguous_bindings as u32).to_le_bytes());
+        hasher.update([u8::from(score.eligible)]);
+        for value in score.edge_coherences.iter().chain(&score.plane_coherences) {
+            hasher.update(coherence_fixed(*value).to_le_bytes());
+        }
     }
     hasher.finalize().into()
 }
