@@ -465,8 +465,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         ensure_parent(&config.event_path)?;
         ensure_parent(&config.economics_path)?;
     }
-    ensure_parent(&config.streaming_evidence_path)?;
-    ensure_parent(&config.online_collection_checkpoint_path)?;
+    if config.embedded_response_miner_enabled {
+        ensure_parent(&config.streaming_evidence_path)?;
+        ensure_parent(&config.online_collection_checkpoint_path)?;
+    }
     let observations = ObservationStore::load(config.trace_path.clone())?;
     let economics_state_dir = config
         .economics_path
@@ -504,7 +506,9 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         counters: Arc::new(ServingCounters::default()),
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
-    spawn_evidence_runtime(state.clone())?;
+    if state.config.embedded_response_miner_enabled {
+        spawn_evidence_runtime(state.clone())?;
+    }
     refresh_executor(&state);
     refresh_response_authority(&state);
     spawn_response_authority_runtime(state.clone())?;

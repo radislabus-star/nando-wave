@@ -1450,7 +1450,26 @@ These mistakes have already damaged coverage and must not be repeated:
   and structural digest deduplication must precede every forward or backward
   Wave update.
 
-## 11. Required Protocol Before Core Changes
+## 11. Physical Process Ownership
+
+The hot execution path and the cold learning path are different processes:
+
+```text
+nando-transition-serving (hot)
+  admitted registry -> route -> actor -> verifier -> ACCEPT or ABSTAIN
+
+nando-response-learning (cold)
+  completed traces -> Wave/CEGIS -> checkpoint -> candidate bundle
+```
+
+The hot process must not open the online miner checkpoint, scan Codex sessions,
+run CEGIS, or own mutable candidate state. The cold process must have local
+accept disabled and cannot grant itself runtime authority. The only forward
+boundary is an immutable candidate bundle followed by independent admission;
+verified execution receipts form the bounded feedback path. Splitting files or
+threads without splitting process memory does not satisfy this contract.
+
+## 12. Required Protocol Before Core Changes
 
 Every agent must do this before editing core behavior:
 
@@ -1470,7 +1489,7 @@ Every agent must do this before editing core behavior:
 9. Commit the change with a narrow message.
 10. Update this canon only when the architecture itself changes.
 
-## 12. Supporting Documents
+## 13. Supporting Documents
 
 The canon is short by design. Deeper evidence and implementation detail live
 here:
