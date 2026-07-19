@@ -145,9 +145,9 @@ fn refresh_candidate(
         bindings.push(binding);
     }
     bindings.sort_by(|left, right| left.package_id.cmp(&right.package_id));
-    if bindings.len() != old_by_id.len() {
-        return Err("candidate_active_package_set_mismatch".to_owned());
-    }
+    // Registry revocation may only remove stale bindings. A newly eligible
+    // package still fails closed above because it has no proof-bound old
+    // binding to refresh; never synthesize authority material in this tool.
     Ok(serde_json::json!({
         "schema": "nando.response-authority-candidate.v1",
         "authority_schema": RESPONSE_AUTHORITY_SCHEMA_V2,

@@ -1586,3 +1586,11 @@ does not change as future grows. Signature-reservoir eviction cannot mutate
 generation receipts. Replay receipts may enter support but never future;
 refreeze remains available for partition upgrade, incomplete support, or a real
 law revision rather than candidate eviction.
+
+The same deployment audit exposed a separate authority-lifecycle defect. When
+the final response package was revoked, `response-registry.json` advanced to an
+empty revision but the non-authoritative candidate still named the old package.
+The Rust candidate refresher rejected this safe removal because it required the
+old and current package counts to match. Candidate refresh now permits registry
+revocation to remove stale bindings while additions remain fail-closed through
+`candidate_binding_missing`; the refresher still cannot invent proof material.
