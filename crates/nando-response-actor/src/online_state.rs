@@ -556,7 +556,13 @@ impl StreamingSelfTrainingState {
             // quiescence: a live stream may keep CEGIS busy indefinitely.
             self.refresh_generations_for_signatures(&stale_partition_signatures);
             for signature in &stale_partition_signatures {
-                self.dirty_derived_signatures.remove(signature);
+                let still_stale = self.generations.values().any(|generation| {
+                    generation.teacher_signature_sha256 == *signature
+                        && generation.partition_version < FROZEN_PARTITION_VERSION
+                });
+                if !still_stale {
+                    self.dirty_derived_signatures.remove(signature);
+                }
             }
         }
         if self.discovery.teacher_pool_count() == 0 || !self.cegis.is_empty() {
@@ -2044,8 +2050,16 @@ impl StreamingSelfTrainingState {
                         support_partition_complete(candidate.support.len(), self.rollover_policy)
                             && candidate.support != current.support
                     });
-                let repartition_improves = partition_upgrade
-                    || incomplete_support
+                let partition_upgrade_improves = partition_upgrade
+                    && refrozen.as_ref().is_some_and(|candidate| {
+                        support_partition_complete(candidate.support.len(), self.rollover_policy)
+                    });
+                let incomplete_support_improves = incomplete_support
+                    && refrozen
+                        .as_ref()
+                        .is_some_and(|candidate| candidate.support.len() > current.support.len());
+                let repartition_improves = partition_upgrade_improves
+                    || incomplete_support_improves
                     || proof_repartition_improves
                     || refrozen.as_ref().is_some_and(|candidate| {
                         candidate.support.len() >= current.support.len()

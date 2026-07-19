@@ -1604,3 +1604,9 @@ stream could keep the old partition alive indefinitely. Restored stale
 partitions are now refrozen immediately from existing winners and verified
 support receipts before the ordinary synthesis queue resumes. This migration
 cannot manufacture future evidence.
+
+The first immediate migration also proved that a partition-version bump must
+not replace complete old support with an incomplete new partition. Upgrade now
+requires a complete replacement support set; an already incomplete generation
+is replaced only by strict support growth. Otherwise the old generation remains
+dirty and fail-closed until enough verified support receipts exist.
