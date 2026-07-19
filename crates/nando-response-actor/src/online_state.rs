@@ -465,6 +465,7 @@ impl StreamingSelfTrainingState {
     }
 
     pub fn repair_missing_synthesis_state(&mut self) {
+        self.repair_parity_frames_from_discovery();
         self.enforce_parity_reservoir_limit();
         if self.transfer_discovery_version < TRANSFER_DISCOVERY_VERSION {
             self.discovery.rebuild_transfer_subcenters();
@@ -2588,7 +2589,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_seed_replaces_raw_parity_frame_with_canonical_discovery_frame() {
+    fn restored_state_replaces_raw_parity_frame_with_canonical_discovery_frame() {
         let mut canonical = frame(42);
         canonical.atoms = vec![
             crate::RelationAtom::ActionFunction {
@@ -2629,7 +2630,7 @@ mod tests {
             .runtime_parity_frames
             .insert(canonical_training.frame_id_sha256.clone(), raw);
 
-        state.prepare_replay_seed();
+        state.repair_missing_synthesis_state();
 
         assert_eq!(
             state
