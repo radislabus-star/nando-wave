@@ -5226,6 +5226,27 @@ fn bucket_program_atom_ids(bucket: &OnlineCollectionBucket) -> BTreeSet<u64> {
     common_program_atom_ids(&bucket.programs)
 }
 
+fn durable_pre_action_atom_ids(
+    bucket: &OnlineCollectionBucket,
+    receipt: &OnlineCollectionReceipt,
+) -> BTreeSet<u64> {
+    // Receipts are durable but may also contain routing atoms contributed by
+    // the support-side program pool. Remove the union of every known program
+    // atom so a teacher-derived program cannot become runtime evidence. A hash
+    // collision can only remove a real pre-action atom and reduce recall.
+    let program_atoms = bucket
+        .programs
+        .values()
+        .flat_map(response_program_required_routing_atom_ids)
+        .collect::<BTreeSet<_>>();
+    receipt
+        .request_atom_ids
+        .iter()
+        .copied()
+        .filter(|atom| !program_atoms.contains(atom))
+        .collect()
+}
+
 fn bucket_phase_center_atom_ids(bucket: &OnlineCollectionBucket) -> Vec<u64> {
     let program_atoms = bucket_program_atom_ids(bucket);
     let mut atoms = program_atoms.into_iter().collect::<Vec<_>>();
@@ -5693,13 +5714,11 @@ fn phase_guarded_layout_adapters(
     type GuardedAdapter = (String, ResponseProgram, Vec<u64>, BTreeSet<usize>);
     let row_atoms = rows
         .iter()
-        .map(|receipt| {
-            bucket
-                .runtime_examples
-                .get(&receipt.evidence_graph_sha256)
-                .and_then(request_atoms_for_example)
-        })
-        .collect::<Option<Vec<_>>>()?;
+        .map(|receipt| durable_pre_action_atom_ids(bucket, receipt))
+        .collect::<Vec<_>>();
+    if row_atoms.iter().any(BTreeSet::is_empty) {
+        return None;
+    }
     let mut safe = Vec::<GuardedAdapter>::new();
     for (digest, program) in &bucket.programs {
         let positives = rows
@@ -7293,6 +7312,91 @@ mod tests {
             SupportConsensusCandidate::Ready(_)
         ));
         assert_eq!(child.wrong_accepts, 0);
+    }
+
+    #[test]
+    fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
+        let alpha = ResponseProgram::project_selected_value(
+            crate::ResponseValueSelector::JsonField {
+                field: "alpha".to_owned(),
+                value_type: crate::AtomValueType::Integer,
+            },
+            crate::ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let beta = ResponseProgram::project_selected_value(
+            crate::ResponseValueSelector::JsonField {
+                field: "beta".to_owned(),
+                value_type: crate::AtomValueType::Integer,
+            },
+            crate::ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let alpha_digest = canonical_json_sha256(&alpha).expect("alpha digest");
+        let beta_digest = canonical_json_sha256(&beta).expect("beta digest");
+        let programs = BTreeMap::from([(alpha_digest.clone(), alpha), (beta_digest.clone(), beta)]);
+        let alpha_atom = crate::stable_atom_id("request:select-alpha");
+        let beta_atom = crate::stable_atom_id("request:select-beta");
+        let program_atoms = programs
+            .values()
+            .flat_map(response_program_required_routing_atom_ids)
+            .collect::<BTreeSet<_>>();
+        let support = (0..32)
+            .map(|index| {
+                let mut request_atom_ids = program_atoms.iter().copied().collect::<Vec<_>>();
+                request_atom_ids.push(if index < 16 { alpha_atom } else { beta_atom });
+                request_atom_ids.sort_unstable();
+                request_atom_ids.dedup();
+                OnlineCollectionReceipt {
+                    evidence_graph_sha256: format!("{:064x}", index + 40_000),
+                    client_intent_id_sha256: format!("{:064x}", index + 50_000),
+                    session_id_sha256: format!("{:064x}", index % 8 + 60_000),
+                    event_time_unix_nanos: Some(index as u64 + 1),
+                    layout_sha256: "a".repeat(64),
+                    estimated_input_tokens: 100,
+                    verifier_pass: true,
+                    request_atom_ids,
+                    matched_program_sha256: vec![if index < 16 {
+                        alpha_digest.clone()
+                    } else {
+                        beta_digest.clone()
+                    }],
+                    witness_class_commitment_sha256: None,
+                    witness_round: None,
+                    witness_candidates_before: None,
+                    witness_candidates_after: None,
+                }
+            })
+            .collect();
+        let bucket = OnlineCollectionBucket {
+            bucket_id: "d".repeat(64),
+            archetype_id: "e".repeat(64),
+            programs,
+            common_request_atom_ids: BTreeSet::new(),
+            support,
+            future: Vec::new(),
+            runtime_examples: BTreeMap::new(),
+            durable_runtime_parity_receipts: BTreeMap::new(),
+            frozen_program_sha256: None,
+            support_watermark_event_time_unix_nanos: None,
+            support_manifest_sha256: None,
+            rejected_program_sha256: BTreeSet::new(),
+            learned_anti_atom_ids: BTreeSet::new(),
+            wrong_accepts: 0,
+        };
+
+        let candidate = match support_consensus_candidate(&bucket).expect("consensus") {
+            SupportConsensusCandidate::Ready(candidate) => candidate,
+            SupportConsensusCandidate::Blocked(reason) => panic!("blocked: {reason}"),
+        };
+        let crate::ResponseOperation::UniqueConsensus { variants, .. } = candidate.operation else {
+            panic!("expected guarded consensus");
+        };
+        assert_eq!(variants.len(), 2);
+        assert!(variants.iter().all(|variant| {
+            variant.required_request_atom_ids == vec![alpha_atom]
+                || variant.required_request_atom_ids == vec![beta_atom]
+        }));
     }
 
     #[test]

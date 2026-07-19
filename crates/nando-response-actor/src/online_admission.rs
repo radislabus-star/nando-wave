@@ -448,6 +448,7 @@ fn validate_durable_runtime_parity_receipt(
         && receipt.actor_executed
         && receipt.teacher_authority_match
         && receipt.independent_verifier_pass
+        && receipt.exact_teacher_match
         && durable_runtime_parity_receipt_digest(receipt)
             .is_ok_and(|digest| digest == receipt.receipt_sha256)
 }
@@ -2475,6 +2476,34 @@ mod tests {
         assert!(!responses_match_after_execution_budget_normalization(
             actual,
             destructive
+        ));
+    }
+
+    #[test]
+    fn durable_parity_rejects_non_exact_teacher_match_with_valid_digest() {
+        let program_sha256 = "a".repeat(64);
+        let verifier_sha256 = "b".repeat(64);
+        let mut receipt = DurableRuntimeParityReceipt {
+            schema: DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1.to_owned(),
+            receipt_sha256: String::new(),
+            evidence_ref_sha256: "c".repeat(64),
+            program_sha256: program_sha256.clone(),
+            verifier_sha256: verifier_sha256.clone(),
+            input_sha256: "d".repeat(64),
+            teacher_response_sha256: "e".repeat(64),
+            actor_response_sha256: "f".repeat(64),
+            actor_executed: true,
+            teacher_authority_match: true,
+            independent_verifier_pass: true,
+            exact_teacher_match: false,
+        };
+        receipt.receipt_sha256 =
+            durable_runtime_parity_receipt_digest(&receipt).expect("receipt digest");
+
+        assert!(!validate_durable_runtime_parity_receipt(
+            &receipt,
+            &program_sha256,
+            &verifier_sha256
         ));
     }
 
