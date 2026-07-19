@@ -101,6 +101,12 @@ struct DerivedWinnerCohort {
     physical_adapter_count: usize,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct GenerationParityReceipts {
+    support: BTreeMap<String, crate::RuntimeParityCase>,
+    future: BTreeMap<String, crate::RuntimeParityCase>,
+}
+
 fn rekey_parity_to_canonical_frames(
     cases: &mut BTreeMap<String, crate::RuntimeParityCase>,
     frames: &mut BTreeMap<String, crate::RelationFrame>,
@@ -203,6 +209,11 @@ pub struct StreamingSelfTrainingState {
     replay_support_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
     #[serde(default)]
     replay_support_parity_frames: BTreeMap<String, crate::RelationFrame>,
+    /// Frozen proof ownership is per generation, never per teacher signature.
+    /// Signature reservoirs may evict candidates, but they must not mutate an
+    /// immutable support root or turn historical support into frozen future.
+    #[serde(default)]
+    generation_parity_receipts: BTreeMap<String, GenerationParityReceipts>,
 }
 
 impl StreamingSelfTrainingState {
@@ -226,6 +237,7 @@ impl StreamingSelfTrainingState {
             runtime_parity_frames: BTreeMap::new(),
             replay_support_parity_cases: BTreeMap::new(),
             replay_support_parity_frames: BTreeMap::new(),
+            generation_parity_receipts: BTreeMap::new(),
         }
     }
 
@@ -257,6 +269,30 @@ impl StreamingSelfTrainingState {
                     ),
                     parity,
                 );
+            }
+        }
+        for generation in self.generations.values() {
+            let Some(receipts) = self
+                .generation_parity_receipts
+                .get(&generation.generation_id_sha256)
+            else {
+                continue;
+            };
+            for parity_frame in generation.support.iter().chain(&generation.future) {
+                let parity = receipts
+                    .support
+                    .get(&parity_frame.frame_id_sha256)
+                    .or_else(|| receipts.future.get(&parity_frame.frame_id_sha256));
+                if let Some(parity) = parity {
+                    by_canonical_key.insert(
+                        (
+                            parity_frame.evidence_ref_sha256.as_str(),
+                            parity_frame.event_id_sha256.as_str(),
+                            parity_frame.session_id_sha256.as_str(),
+                        ),
+                        parity,
+                    );
+                }
             }
         }
         let mut seen = BTreeSet::new();
@@ -400,6 +436,7 @@ impl StreamingSelfTrainingState {
     fn prepare_rebuild(&mut self, clear_runtime_parity: bool) {
         self.cegis.prepare_strategy_migration();
         self.generations.clear();
+        self.generation_parity_receipts.clear();
         if clear_runtime_parity {
             self.runtime_parity_cases.clear();
             self.runtime_parity_frames.clear();
@@ -459,6 +496,7 @@ impl StreamingSelfTrainingState {
         self.repair_parity_frames_from_discovery();
         self.cegis.prepare_strategy_migration();
         self.generations.clear();
+        self.generation_parity_receipts.clear();
         self.negative_refresh_cursor = None;
         self.rebuild_queue = self
             .discovery
@@ -516,6 +554,7 @@ impl StreamingSelfTrainingState {
         }
         self.cegis.prepare_strategy_migration();
         self.generations.clear();
+        self.generation_parity_receipts.clear();
         self.negative_refresh_cursor = None;
         self.rebuild_queue = self
             .discovery
@@ -656,6 +695,60 @@ impl StreamingSelfTrainingState {
             .retain(|frame_id, _| retained.contains(frame_id));
     }
 
+    fn support_parity_case(&self, frame_id: &str) -> Option<crate::RuntimeParityCase> {
+        self.runtime_parity_cases
+            .get(frame_id)
+            .or_else(|| self.replay_support_parity_cases.get(frame_id))
+            .cloned()
+            .or_else(|| {
+                self.generation_parity_receipts
+                    .values()
+                    .find_map(|receipts| {
+                        receipts
+                            .support
+                            .get(frame_id)
+                            .or_else(|| receipts.future.get(frame_id))
+                    })
+                    .cloned()
+            })
+    }
+
+    fn future_parity_case(&self, frame_id: &str) -> Option<crate::RuntimeParityCase> {
+        self.runtime_parity_cases
+            .get(frame_id)
+            .cloned()
+            .or_else(|| {
+                self.generation_parity_receipts
+                    .values()
+                    .find_map(|receipts| receipts.future.get(frame_id))
+                    .cloned()
+            })
+    }
+
+    fn parity_receipts_for_generation(
+        &self,
+        generation: &FrozenGeneration,
+    ) -> GenerationParityReceipts {
+        GenerationParityReceipts {
+            support: generation
+                .support
+                .iter()
+                .filter_map(|frame| {
+                    self.support_parity_case(&frame.frame_id_sha256)
+                        .map(|receipt| (frame.frame_id_sha256.clone(), receipt))
+                })
+                .collect(),
+            future: generation
+                .future
+                .iter()
+                .filter_map(|frame| {
+                    self.future_parity_case(&frame.frame_id_sha256)
+                        .map(|receipt| (frame.frame_id_sha256.clone(), receipt))
+                })
+                .collect(),
+        }
+    }
+
     /// Continues cold synthesis without requiring another event. The worker
     /// calls this only while queued work exists and always in bounded slices.
     pub fn run_work_slice(&mut self) -> usize {
@@ -760,6 +853,11 @@ impl StreamingSelfTrainingState {
         self.runtime_parity_cases
             .keys()
             .chain(self.replay_support_parity_cases.keys())
+            .chain(
+                self.generation_parity_receipts
+                    .values()
+                    .flat_map(|receipts| receipts.support.keys().chain(receipts.future.keys())),
+            )
             .cloned()
             .collect()
     }
@@ -1036,12 +1134,7 @@ impl StreamingSelfTrainingState {
                 continue;
             };
             for frame in pool.positives {
-                let Some(case) = self
-                    .runtime_parity_cases
-                    .get(&frame.frame_id_sha256)
-                    .or_else(|| self.replay_support_parity_cases.get(&frame.frame_id_sha256))
-                    .cloned()
-                else {
+                let Some(case) = self.support_parity_case(&frame.frame_id_sha256) else {
                     continue;
                 };
                 parity_rows_by_id.insert(
@@ -1384,6 +1477,11 @@ impl StreamingSelfTrainingState {
             .runtime_parity_frames
             .values()
             .chain(self.replay_support_parity_frames.values())
+            .chain(
+                self.generations
+                    .values()
+                    .flat_map(|generation| generation.support.iter().chain(&generation.future)),
+            )
         {
             if frame.verifier_label == Some(true)
                 && crate::teacher_program_signature(frame).as_deref() == Some(signature)
@@ -1467,6 +1565,9 @@ impl StreamingSelfTrainingState {
                 let derived = winners.get(cohort_id)?;
                 let winner = derived.winner.clone();
                 let pool = self.cohort_pool_snapshot(derived)?;
+                let receipts = self
+                    .generation_parity_receipts
+                    .get(&generation.generation_id_sha256)?;
                 Some(SelfTrainingAdmissionCohort {
                     winner,
                     pool,
@@ -1480,11 +1581,10 @@ impl StreamingSelfTrainingState {
                         .iter()
                         .chain(generation.future.iter())
                         .filter_map(|frame| {
-                            self.runtime_parity_cases
+                            receipts
+                                .support
                                 .get(&frame.frame_id_sha256)
-                                .or_else(|| {
-                                    self.replay_support_parity_cases.get(&frame.frame_id_sha256)
-                                })
+                                .or_else(|| receipts.future.get(&frame.frame_id_sha256))
                                 .cloned()
                         })
                         .collect(),
@@ -1532,12 +1632,7 @@ impl StreamingSelfTrainingState {
                     .positives
                     .iter()
                     .filter(|frame| {
-                        (self
-                            .runtime_parity_cases
-                            .contains_key(&frame.frame_id_sha256)
-                            || self
-                                .replay_support_parity_cases
-                                .contains_key(&frame.frame_id_sha256))
+                        self.support_parity_case(&frame.frame_id_sha256).is_some()
                             && crate::synthesis::program_is_consistent(&winner.program, frame)
                             && crate::cegis::winner_routes_frame(winner, frame)
                     })
@@ -1635,6 +1730,9 @@ impl StreamingSelfTrainingState {
             .generations
             .values()
             .map(|generation| {
+                let receipts = self
+                    .generation_parity_receipts
+                    .get(&generation.generation_id_sha256);
                 let parity = parity_diagnostics
                     .get(&generation.cohort_id_sha256)
                     .copied()
@@ -1670,22 +1768,18 @@ impl StreamingSelfTrainingState {
                         .support
                         .iter()
                         .filter(|frame| {
-                            self.runtime_parity_cases
-                                .contains_key(&frame.frame_id_sha256)
-                                || self
-                                    .replay_support_parity_cases
-                                    .contains_key(&frame.frame_id_sha256)
+                            receipts.is_some_and(|receipts| {
+                                receipts.support.contains_key(&frame.frame_id_sha256)
+                            })
                         })
                         .count(),
                     support_runtime_parity_tokens: generation
                         .support
                         .iter()
                         .filter(|frame| {
-                            self.runtime_parity_cases
-                                .contains_key(&frame.frame_id_sha256)
-                                || self
-                                    .replay_support_parity_cases
-                                    .contains_key(&frame.frame_id_sha256)
+                            receipts.is_some_and(|receipts| {
+                                receipts.support.contains_key(&frame.frame_id_sha256)
+                            })
                         })
                         .map(|frame| frame.estimated_input_tokens)
                         .sum(),
@@ -1702,16 +1796,18 @@ impl StreamingSelfTrainingState {
                         .future
                         .iter()
                         .filter(|frame| {
-                            self.runtime_parity_cases
-                                .contains_key(&frame.frame_id_sha256)
+                            receipts.is_some_and(|receipts| {
+                                receipts.future.contains_key(&frame.frame_id_sha256)
+                            })
                         })
                         .count(),
                     runtime_parity_tokens: generation
                         .future
                         .iter()
                         .filter(|frame| {
-                            self.runtime_parity_cases
-                                .contains_key(&frame.frame_id_sha256)
+                            receipts.is_some_and(|receipts| {
+                                receipts.future.contains_key(&frame.frame_id_sha256)
+                            })
                         })
                         .map(|frame| frame.estimated_input_tokens)
                         .sum(),
@@ -1883,13 +1979,8 @@ impl StreamingSelfTrainingState {
                 })
             })
             .collect::<Vec<_>>();
-        let support_eligible_ids = self
-            .runtime_parity_cases
-            .keys()
-            .chain(self.replay_support_parity_cases.keys())
-            .cloned()
-            .collect::<std::collections::BTreeSet<_>>();
-        let future_eligible_ids = self
+        let support_eligible_ids = self.parity_support_ids();
+        let live_future_eligible_ids = self
             .runtime_parity_cases
             .keys()
             .cloned()
@@ -1917,7 +2008,8 @@ impl StreamingSelfTrainingState {
                     !support_partition_complete(current.support.len(), self.rollover_policy);
                 let incomplete_support_evidence = !generation_support_parity_complete(
                     current,
-                    &support_eligible_ids,
+                    self.generation_parity_receipts
+                        .get(&current.generation_id_sha256),
                     self.rollover_policy,
                 );
                 let can_repartition =
@@ -1934,7 +2026,7 @@ impl StreamingSelfTrainingState {
                         self.rollover_policy,
                         refrozen_generation,
                         &support_eligible_ids,
-                        &future_eligible_ids,
+                        &live_future_eligible_ids,
                     )
                 });
                 let proof_repartition_improves = incomplete_support_evidence
@@ -1956,6 +2048,13 @@ impl StreamingSelfTrainingState {
                 if repartition_improves {
                     (refrozen.expect("checked above"), true)
                 } else {
+                    let mut future_eligible_ids = live_future_eligible_ids.clone();
+                    if let Some(receipts) = self
+                        .generation_parity_receipts
+                        .get(&current.generation_id_sha256)
+                    {
+                        future_eligible_ids.extend(receipts.future.keys().cloned());
+                    }
                     (
                         refresh_frozen_generation(
                             current,
@@ -1975,7 +2074,7 @@ impl StreamingSelfTrainingState {
                         self.rollover_policy,
                         generation_number,
                         &support_eligible_ids,
-                        &future_eligible_ids,
+                        &live_future_eligible_ids,
                     ),
                     true,
                 )
@@ -1987,10 +2086,30 @@ impl StreamingSelfTrainingState {
                     allow_support_repartition || generation_evidence_improves(current, &next)
                 });
             if replace {
+                let previous_generation_id = self
+                    .generations
+                    .get(&winner.cohort_id_sha256)
+                    .map(|generation| generation.generation_id_sha256.clone());
+                let receipts = self.parity_receipts_for_generation(&next);
                 self.generations
-                    .insert(winner.cohort_id_sha256.clone(), next);
+                    .insert(winner.cohort_id_sha256.clone(), next.clone());
+                self.generation_parity_receipts
+                    .insert(next.generation_id_sha256.clone(), receipts);
+                if let Some(previous_generation_id) = previous_generation_id
+                    && previous_generation_id != next.generation_id_sha256
+                {
+                    self.generation_parity_receipts
+                        .remove(&previous_generation_id);
+                }
             }
         }
+        let live_generation_ids = self
+            .generations
+            .values()
+            .map(|generation| generation.generation_id_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        self.generation_parity_receipts
+            .retain(|generation_id, _| live_generation_ids.contains(generation_id.as_str()));
     }
 
     fn cohort_pool_snapshot(&self, cohort: &DerivedWinnerCohort) -> Option<TeacherPoolSnapshot> {
@@ -2009,9 +2128,7 @@ impl StreamingSelfTrainingState {
                         && crate::cegis::winner_routes_frame(member, &frame)
                 });
                 let parity_matches = self
-                    .runtime_parity_cases
-                    .get(&frame.frame_id_sha256)
-                    .or_else(|| self.replay_support_parity_cases.get(&frame.frame_id_sha256))
+                    .support_parity_case(&frame.frame_id_sha256)
                     .is_some_and(|parity| {
                         let execution = crate::execute_response(
                             &winner.program,
@@ -2334,13 +2451,16 @@ fn generation_evidence_improves(current: &FrozenGeneration, next: &FrozenGenerat
 
 fn generation_support_parity_complete(
     generation: &FrozenGeneration,
-    parity_ids: &BTreeSet<String>,
+    receipts: Option<&GenerationParityReceipts>,
     policy: RolloverPolicy,
 ) -> bool {
+    let Some(receipts) = receipts else {
+        return false;
+    };
     let receipt_backed = generation
         .support
         .iter()
-        .filter(|frame| parity_ids.contains(&frame.frame_id_sha256))
+        .filter(|frame| receipts.support.contains_key(&frame.frame_id_sha256))
         .count();
     support_partition_complete(receipt_backed, policy)
 }
@@ -2502,25 +2622,125 @@ mod tests {
         }
     }
 
+    fn parity_case(index: usize) -> crate::RuntimeParityCase {
+        crate::RuntimeParityCase {
+            evidence_ref_sha256: format!("{index:064x}"),
+            capture_receipt: None,
+            request_text: format!("request-{index}"),
+            provider_payload: json!({"index": index}),
+            expected_response: format!("response-{index}"),
+        }
+    }
+
     #[test]
     fn frozen_support_requires_complete_runtime_parity() {
         let generation = generation();
-        let mut parity_ids = generation
-            .support
-            .iter()
-            .take(31)
-            .map(|frame| frame.frame_id_sha256.clone())
-            .collect::<BTreeSet<_>>();
+        let mut receipts = GenerationParityReceipts::default();
+        for frame in generation.support.iter().take(31) {
+            receipts.support.insert(
+                frame.frame_id_sha256.clone(),
+                parity_case(usize::try_from(frame.observed_at_unix_nanos).unwrap_or_default()),
+            );
+        }
 
         assert!(!generation_support_parity_complete(
             &generation,
-            &parity_ids,
+            Some(&receipts),
             RolloverPolicy::default()
         ));
-        parity_ids.insert(generation.support[31].frame_id_sha256.clone());
+        receipts.support.insert(
+            generation.support[31].frame_id_sha256.clone(),
+            parity_case(31),
+        );
         assert!(generation_support_parity_complete(
             &generation,
-            &parity_ids,
+            Some(&receipts),
+            RolloverPolicy::default()
+        ));
+    }
+
+    #[test]
+    fn generation_receipts_survive_candidate_eviction_and_restart() {
+        let mut state = StreamingSelfTrainingState::new(0);
+        let mut frozen = generation();
+        let stable_generation_id = frozen.generation_id_sha256.clone();
+        let stable_support = frozen.support.clone();
+        let stable_watermark = frozen.support_watermark_unix_nanos;
+
+        for index in 0..32 {
+            let frame = frame(index);
+            let frame_id = frame.frame_id_sha256.clone();
+            state
+                .runtime_parity_cases
+                .insert(frame_id.clone(), parity_case(index));
+            state.runtime_parity_frames.insert(frame_id, frame);
+        }
+        state.enforce_parity_reservoir_limit();
+        let support_receipts = state.parity_receipts_for_generation(&frozen);
+        state
+            .generation_parity_receipts
+            .insert(stable_generation_id.clone(), support_receipts);
+
+        frozen.future = (32..64).map(frame).collect();
+        frozen.future_sessions = 32;
+        for index in 32..64 {
+            let frame = frame(index);
+            let frame_id = frame.frame_id_sha256.clone();
+            state
+                .runtime_parity_cases
+                .insert(frame_id.clone(), parity_case(index));
+            state.runtime_parity_frames.insert(frame_id, frame);
+        }
+        state.enforce_parity_reservoir_limit();
+        let complete_receipts = state.parity_receipts_for_generation(&frozen);
+        state
+            .generation_parity_receipts
+            .insert(stable_generation_id.clone(), complete_receipts);
+        state
+            .generations
+            .insert(frozen.cohort_id_sha256.clone(), frozen.clone());
+
+        for index in 64..96 {
+            let frame = frame(index);
+            let frame_id = frame.frame_id_sha256.clone();
+            state
+                .runtime_parity_cases
+                .insert(frame_id.clone(), parity_case(index));
+            state.runtime_parity_frames.insert(frame_id, frame);
+        }
+        state.enforce_parity_reservoir_limit();
+        let retained = state.parity_receipts_for_generation(&frozen);
+        state
+            .generation_parity_receipts
+            .insert(stable_generation_id.clone(), retained);
+
+        let encoded = serde_json::to_vec(&state).expect("encode self-training state");
+        let restored: StreamingSelfTrainingState =
+            serde_json::from_slice(&encoded).expect("restore self-training state");
+        let reencoded = serde_json::to_vec(&restored).expect("re-encode self-training state");
+        assert_eq!(reencoded, encoded);
+        let restored_generation = restored
+            .generations
+            .get(&frozen.cohort_id_sha256)
+            .expect("restored generation");
+        let restored_receipts = restored
+            .generation_parity_receipts
+            .get(&stable_generation_id)
+            .expect("restored generation receipts");
+        assert_eq!(
+            restored_generation.generation_id_sha256,
+            stable_generation_id
+        );
+        assert_eq!(restored_generation.support, stable_support);
+        assert_eq!(
+            restored_generation.support_watermark_unix_nanos,
+            stable_watermark
+        );
+        assert_eq!(restored_receipts.support.len(), 32);
+        assert_eq!(restored_receipts.future.len(), 32);
+        assert!(generation_support_parity_complete(
+            restored_generation,
+            Some(restored_receipts),
             RolloverPolicy::default()
         ));
     }

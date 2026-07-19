@@ -1561,6 +1561,28 @@ verified input-token saving share          1.0% (M3 WATCH)
 
 The recovery utility peaked at about 0.6 GiB RSS for roughly ten seconds. It is
 not a serving component and must not be moved into startup. The production
-learner restored the resulting checkpoint normally. Further progress for the
-frozen wait generation now requires genuinely new post-freeze completed traces;
-historical replay is no longer admissible for that partition.
+learner restored the resulting checkpoint normally. Historical replay remains
+inadmissible for frozen future.
+
+### Correction: signature reservoir caused a generation livelock
+
+The earlier conclusion that the frozen wait generation merely needed new live
+traffic was incomplete. `self_training_v2` kept only 32 parity receipts per
+teacher signature while admission requires 32 immutable support receipts plus
+32 independent future receipts. Newest-first eviction removed frozen support,
+which triggered automatic refreeze and moved the watermark instead of growing
+future.
+
+Partition v14 separates the two ownership domains:
+
+```text
+candidate parity reservoir
+  -> immutable generation support receipts[32]
+  -> post-watermark generation future receipts[32]
+```
+
+The generation ID commits cohort, generation number, and immutable support. It
+does not change as future grows. Signature-reservoir eviction cannot mutate
+generation receipts. Replay receipts may enter support but never future;
+refreeze remains available for partition upgrade, incomplete support, or a real
+law revision rather than candidate eviction.

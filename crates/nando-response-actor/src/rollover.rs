@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CegisWinner, RelationFrame, TeacherPoolSnapshot};
 
-pub const FROZEN_PARTITION_VERSION: u32 = 13;
+pub const FROZEN_PARTITION_VERSION: u32 = 14;
 const MAX_EXACT_PARTITION_SESSIONS: usize = 16;
 
 #[must_use]
@@ -56,6 +56,27 @@ pub struct FrozenGeneration {
     pub blocker: Option<String>,
 }
 
+fn frozen_generation_id(
+    partition_version: u32,
+    cohort_id_sha256: &str,
+    generation: u64,
+    support: &[RelationFrame],
+) -> String {
+    crate::sha256_bytes(
+        &serde_json::to_vec(&(
+            "nando.frozen-generation.v11",
+            partition_version,
+            cohort_id_sha256,
+            generation,
+            support
+                .iter()
+                .map(|frame| frame.frame_id_sha256.as_str())
+                .collect::<Vec<_>>(),
+        ))
+        .unwrap_or_default(),
+    )
+}
+
 #[must_use]
 pub fn freeze_generation(
     winner: &CegisWinner,
@@ -102,6 +123,8 @@ pub fn freeze_generation(
         .unwrap_or(0);
     let future_watermark = watermark.max(winner.repair_watermark_unix_nanos);
     future.retain(|frame| frame.observed_at_unix_nanos > future_watermark);
+    future.sort_by(frame_event_order);
+    future.truncate(policy.future_rows);
     let future_sessions = future
         .iter()
         .map(|frame| frame.session_id_sha256.as_str())
@@ -136,22 +159,11 @@ pub fn freeze_generation(
     } else {
         None
     };
-    let generation_id_sha256 = crate::sha256_bytes(
-        &serde_json::to_vec(&(
-            "nando.frozen-generation.v10",
-            FROZEN_PARTITION_VERSION,
-            winner.cohort_id_sha256.as_str(),
-            generation,
-            support
-                .iter()
-                .map(|frame| frame.frame_id_sha256.as_str())
-                .collect::<Vec<_>>(),
-            future
-                .iter()
-                .map(|frame| frame.frame_id_sha256.as_str())
-                .collect::<Vec<_>>(),
-        ))
-        .unwrap_or_default(),
+    let generation_id_sha256 = frozen_generation_id(
+        FROZEN_PARTITION_VERSION,
+        &winner.cohort_id_sha256,
+        generation,
+        &support,
     );
     FrozenGeneration {
         partition_version: FROZEN_PARTITION_VERSION,
@@ -226,7 +238,10 @@ pub fn refresh_frozen_generation(
     }
     let mut future = future.into_values().collect::<Vec<_>>();
     future.sort_by(frame_event_order);
-    future.truncate(policy.future_rows.saturating_mul(4));
+    // A frozen generation owns one immutable proof window. Later receipts may
+    // seed a successor candidate, but cannot rewrite or enlarge this 32/32
+    // support/future contract after it has been satisfied.
+    future.truncate(policy.future_rows);
     if !support_partition_complete(support.len(), policy) {
         future.clear();
     }
@@ -265,22 +280,11 @@ pub fn refresh_frozen_generation(
     } else {
         None
     };
-    let generation_id_sha256 = crate::sha256_bytes(
-        &serde_json::to_vec(&(
-            "nando.frozen-generation.v10",
-            current.partition_version,
-            winner.cohort_id_sha256.as_str(),
-            current.generation,
-            support
-                .iter()
-                .map(|frame| frame.frame_id_sha256.as_str())
-                .collect::<Vec<_>>(),
-            future
-                .iter()
-                .map(|frame| frame.frame_id_sha256.as_str())
-                .collect::<Vec<_>>(),
-        ))
-        .unwrap_or_default(),
+    let generation_id_sha256 = frozen_generation_id(
+        current.partition_version,
+        &winner.cohort_id_sha256,
+        current.generation,
+        &support,
     );
     FrozenGeneration {
         partition_version: current.partition_version,
@@ -385,22 +389,11 @@ pub fn successor_generation(
         None
     };
     let generation = current.generation.saturating_add(1);
-    let generation_id_sha256 = crate::sha256_bytes(
-        &serde_json::to_vec(&(
-            "nando.frozen-generation.v10",
-            current.partition_version,
-            current.cohort_id_sha256.as_str(),
-            generation,
-            support
-                .iter()
-                .map(|frame| frame.frame_id_sha256.as_str())
-                .collect::<Vec<_>>(),
-            future
-                .iter()
-                .map(|frame| frame.frame_id_sha256.as_str())
-                .collect::<Vec<_>>(),
-        ))
-        .unwrap_or_default(),
+    let generation_id_sha256 = frozen_generation_id(
+        current.partition_version,
+        &current.cohort_id_sha256,
+        generation,
+        &support,
     );
     Some(FrozenGeneration {
         partition_version: current.partition_version,
@@ -752,6 +745,35 @@ mod tests {
         let policy = RolloverPolicy::default();
         assert!(!support_partition_complete(31, policy));
         assert!(support_partition_complete(32, policy));
+    }
+
+    #[test]
+    fn generation_identity_commits_support_but_not_future_growth() {
+        let support = (0..32)
+            .map(|index| RelationFrame {
+                schema: crate::RELATION_FRAME_SCHEMA.to_owned(),
+                frame_id_sha256: format!("{index:064x}"),
+                event_id_sha256: String::new(),
+                client_intent_id_sha256: String::new(),
+                session_id_sha256: String::new(),
+                observed_at_unix_nanos: u64::try_from(index).unwrap_or_default(),
+                estimated_input_tokens: 1,
+                extractor_version: "identity-test".to_owned(),
+                verifier_label: Some(true),
+                atoms: Vec::new(),
+                evidence_ref_sha256: String::new(),
+            })
+            .collect::<Vec<_>>();
+        let before_future = frozen_generation_id(14, "cohort", 2, &support);
+        let after_future_growth = frozen_generation_id(14, "cohort", 2, &support);
+        assert_eq!(before_future, after_future_growth);
+
+        let mut changed_support = support;
+        changed_support[31].frame_id_sha256 = "f".repeat(64);
+        assert_ne!(
+            before_future,
+            frozen_generation_id(14, "cohort", 2, &changed_support)
+        );
     }
 
     #[test]
