@@ -1155,3 +1155,51 @@ multi-output active-turn capture                       1/1  29.36 s
 
 The template and serving test binaries are the expensive focused checks. Do
 not repeat them after documentation-only or diagnostic-only edits.
+
+## 2026-07-19 - Action-equivalent teacher laws (v73)
+
+The next live blocker was not a missing operator primitive. Equivalent polling
+actions were partitioned into separate laws because their teacher responses
+contained execution-budget arguments:
+
+```text
+same semantic action
++ different yield_time_ms / max_tokens / max_output_tokens
++ empty write_stdin chars
+-> different law hashes
+-> support and future fragmentation
+```
+
+Strategy v73 establishes one shared, fail-closed action-equivalence contract
+for teacher grouping, crystallization parity, and external admission replay.
+It removes only bounded execution-cost arguments and an empty poll payload.
+The tool symbol, dynamic role value, source/projection suffix, and every other
+semantic argument remain exact. Unknown source shapes are never normalized.
+
+The full custom-tool proof now crosses the complete boundary:
+
+```text
+64 budget-varying completed traces
+-> 1 teacher law
+-> support 32 / frozen future 32
+-> 4 competing blueprints
+-> 1 full-phase winner
+-> crystallized operator
+-> external admission candidate
+-> registry restart
+-> CPU execution
+```
+
+Focused remote receipts:
+
+```text
+shared normalizer adversarial test                         PASS
+custom-tool crystallize/admit/restart/CPU lifecycle  1/1  PASS 14.16 s
+wrong dynamic session role                                REJECT
+false accepts                                                  0
+nando-response-actor all-targets check                     PASS  7.86 s
+```
+
+The v72 production checkpoint must be migrated once to v73 so retained
+historical support is regrouped under this contract. Historical observations
+remain support-only; frozen future and verifier receipts are never fabricated.

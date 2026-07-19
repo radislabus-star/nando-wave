@@ -1115,7 +1115,7 @@ fn teacher_action_programs(
             }
         },
     )?;
-    let program = synthesized.candidate.program;
+    let program = canonicalize_call_execution_arguments(synthesized.candidate.program);
     if !matches!(
         &program.operation,
         ResponseOperation::FunctionCallFromRoles { .. }
@@ -1214,7 +1214,13 @@ fn teacher_action_programs(
         if let Some(response) = &execution.response {
             first_structural_response.get_or_insert_with(|| (candidate.clone(), response.clone()));
         }
-        if execution.response.as_deref() != Some(parity.expected_response.as_str()) {
+        if !execution.response.as_deref().is_some_and(|response| {
+            response == parity.expected_response
+                || crate::online_admission::responses_match_after_execution_budget_normalization(
+                    response,
+                    &parity.expected_response,
+                )
+        }) {
             continue;
         }
         exact.entry(candidate_key).or_insert(candidate);
@@ -1246,6 +1252,22 @@ fn teacher_action_programs(
         });
     }
     Ok(exact.into_values().collect())
+}
+
+fn canonicalize_call_execution_arguments(mut program: ResponseProgram) -> ResponseProgram {
+    let arguments = match &mut program.operation {
+        ResponseOperation::FunctionCallFromRoles { arguments, .. }
+        | ResponseOperation::CustomToolCallFromRoles { arguments, .. } => arguments,
+        _ => return program,
+    };
+    arguments.retain(|argument| match argument {
+        ResponseArgument::Integer { name, .. } => {
+            !crate::teacher_join::is_execution_budget_argument(name)
+        }
+        ResponseArgument::String { name, value } => !(name == "chars" && value.is_empty()),
+        _ => true,
+    });
+    program
 }
 
 fn dynamic_role_alignment_blocker(
@@ -2064,7 +2086,11 @@ fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<
             selector,
             ..
         } => {
-            let arguments = serde_cbor::to_vec(arguments).ok()?;
+            let arguments = arguments
+                .iter()
+                .filter(|argument| semantic_call_argument(argument))
+                .collect::<Vec<_>>();
+            let arguments = serde_cbor::to_vec(&arguments).ok()?;
             let mut shape = vec![10, value_type_tag(selector_value_type(selector))];
             shape.extend_from_slice(&digest_parts(
                 b"nando.live-function-call-law.v1",
@@ -2080,7 +2106,11 @@ fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<
             selector,
             ..
         } => {
-            let arguments = serde_cbor::to_vec(arguments).ok()?;
+            let arguments = arguments
+                .iter()
+                .filter(|argument| semantic_call_argument(argument))
+                .collect::<Vec<_>>();
+            let arguments = serde_cbor::to_vec(&arguments).ok()?;
             let projection = serde_cbor::to_vec(projection).ok()?;
             let mut shape = vec![11, value_type_tag(selector_value_type(selector))];
             shape.extend_from_slice(&digest_parts(
@@ -2207,6 +2237,16 @@ fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<
         }
     }
     Some(shape)
+}
+
+fn semantic_call_argument(argument: &ResponseArgument) -> bool {
+    match argument {
+        ResponseArgument::Integer { name, .. } => {
+            !crate::teacher_join::is_execution_budget_argument(name)
+        }
+        ResponseArgument::String { name, value } => !(name == "chars" && value.is_empty()),
+        _ => true,
+    }
 }
 
 fn synthesis_payload_with_request(
@@ -3147,6 +3187,8 @@ mod tests {
         let observation_slot = 3;
         let action_slot = 8;
         let selected = index + 1000;
+        let yield_time_ms = 10_000 + (index % 3) * 10_000;
+        let max_output_tokens = 1_000 + (index % 5) * 1_000;
         row.before.extractor_version = SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned();
         row.before.atoms = vec![
             RelationAtom::ToolKind {
@@ -3207,11 +3249,11 @@ mod tests {
             },
             RelationAtom::ActionIntegerArgument {
                 name: "yield_time_ms".to_owned(),
-                value: 30_000,
+                value: yield_time_ms,
             },
             RelationAtom::ActionIntegerArgument {
                 name: "max_output_tokens".to_owned(),
-                value: 12_000,
+                value: max_output_tokens,
             },
             RelationAtom::ActionResultProjection {
                 output_field: "output".to_owned(),
@@ -3221,9 +3263,9 @@ mod tests {
         ];
         let arguments = serde_json::to_string(&json!({
             "chars": "",
-            "max_output_tokens": 12000,
+            "max_output_tokens": max_output_tokens,
             "session_id": selected,
-            "yield_time_ms": 30000,
+            "yield_time_ms": yield_time_ms,
         }))
         .expect("custom tool arguments");
         let input = format!(
@@ -3741,9 +3783,13 @@ mod tests {
         let runtime = custom_tool_transition(777);
         let parity = runtime.runtime_parity_case.expect("runtime parity");
         let execution = executor.execute_shadow(&parity.request_text, &parity.provider_payload);
-        assert_eq!(
-            execution.response.as_deref(),
-            Some(parity.expected_response.as_str()),
+        assert!(
+            execution.response.as_deref().is_some_and(|response| {
+                crate::online_admission::responses_match_after_execution_budget_normalization(
+                    response,
+                    &parity.expected_response,
+                )
+            }),
             "{execution:#?}"
         );
     }

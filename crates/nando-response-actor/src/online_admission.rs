@@ -140,7 +140,15 @@ pub fn build_crystallized_admission_snapshot(
                     "crystallized_admission_support_execute_failed"
                 }
             })?;
-            if response != sample.expected_response {
+            // Replayed action identity includes the tool and all semantic
+            // arguments. Polling budgets are intentionally excluded because
+            // they alter execution cost, not the transferable action law.
+            if response != sample.expected_response
+                && !responses_match_after_execution_budget_normalization(
+                    &response,
+                    &sample.expected_response,
+                )
+            {
                 return Err(if is_future {
                     "crystallized_admission_future_response_mismatch"
                 } else {
@@ -646,22 +654,43 @@ pub(crate) fn responses_match_after_execution_budget_normalization(
     actual: &str,
     expected: &str,
 ) -> bool {
-    let (Ok(mut actual), Ok(mut expected)) = (
-        serde_json::from_str::<serde_json::Value>(actual),
-        serde_json::from_str::<serde_json::Value>(expected),
-    ) else {
-        return false;
-    };
-    for value in [&mut actual, &mut expected] {
-        let Some(arguments) = value
-            .get_mut("arguments")
-            .and_then(serde_json::Value::as_object_mut)
-        else {
-            return false;
-        };
-        arguments.retain(|name, _| !crate::teacher_join::is_execution_budget_argument(name));
+    normalized_call_response(actual).is_some_and(|actual| {
+        normalized_call_response(expected).is_some_and(|expected| actual == expected)
+    })
+}
+
+fn normalized_call_response(response: &str) -> Option<serde_json::Value> {
+    let mut response = serde_json::from_str::<serde_json::Value>(response).ok()?;
+    if let Some(arguments) = response
+        .get_mut("arguments")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        retain_semantic_call_arguments(arguments);
+        return Some(response);
     }
-    actual == expected
+    let source = response.get("input")?.as_str()?;
+    let tool = source.find("tools.")?;
+    let arguments_start = source[tool..].find('(')?.saturating_add(tool + 1);
+    let mut stream = serde_json::Deserializer::from_str(&source[arguments_start..])
+        .into_iter::<serde_json::Value>();
+    let mut arguments = stream.next()?.ok()?;
+    let arguments_end = arguments_start.checked_add(stream.byte_offset())?;
+    retain_semantic_call_arguments(arguments.as_object_mut()?);
+    let arguments = serde_json::to_string(&arguments).ok()?;
+    let normalized = format!(
+        "{}{arguments}{}",
+        &source[..arguments_start],
+        &source[arguments_end..]
+    );
+    *response.get_mut("input")? = serde_json::Value::String(normalized);
+    Some(response)
+}
+
+fn retain_semantic_call_arguments(arguments: &mut serde_json::Map<String, serde_json::Value>) {
+    arguments.retain(|name, value| {
+        !crate::teacher_join::is_execution_budget_argument(name)
+            && !(name == "chars" && value.as_str() == Some(""))
+    });
 }
 
 fn parity_response_diff(actual: Option<&str>, expected: &str) -> serde_json::Value {
@@ -2564,6 +2593,18 @@ mod tests {
         assert!(!responses_match_after_execution_budget_normalization(
             actual,
             destructive
+        ));
+
+        let custom_actual = r#"{"kind":"custom_tool_call","name":"exec","input":"const r=await tools.write_stdin({\"chars\":\"\",\"max_output_tokens\":1000,\"session_id\":7,\"yield_time_ms\":10000});text(r.output);"}"#;
+        let custom_teacher = r#"{"kind":"custom_tool_call","name":"exec","input":"const r=await tools.write_stdin({\"chars\":\"\",\"max_output_tokens\":9000,\"session_id\":7,\"yield_time_ms\":30000});text(r.output);"}"#;
+        let custom_wrong_role = r#"{"kind":"custom_tool_call","name":"exec","input":"const r=await tools.write_stdin({\"session_id\":8});text(r.output);"}"#;
+        assert!(responses_match_after_execution_budget_normalization(
+            custom_actual,
+            custom_teacher
+        ));
+        assert!(!responses_match_after_execution_budget_normalization(
+            custom_actual,
+            custom_wrong_role
         ));
     }
 

@@ -2230,7 +2230,15 @@ fn verify_future_receipts(
             &receipt.provider_payload,
         )?;
         let response = bound.execute_verified()?;
-        if response != receipt.expected_response {
+        // Execution budgets control polling cost, not the learned action. The
+        // shared normalizer removes only those bounded no-op arguments while
+        // preserving the tool, bound roles, and every semantic argument.
+        if response != receipt.expected_response
+            && !crate::online_admission::responses_match_after_execution_budget_normalization(
+                &response,
+                &receipt.expected_response,
+            )
+        {
             return Err(CrystallizedOperatorError::ActorResponseMismatch);
         }
         binding_receipts.push(digest_parts(

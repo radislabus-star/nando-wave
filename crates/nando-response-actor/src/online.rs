@@ -31,7 +31,7 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // request-independent rows receive the same source-neutral extraction as new
 // live events.
 // Historical rows remain support-only; frozen future is never reconstructed.
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 72;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 73;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
