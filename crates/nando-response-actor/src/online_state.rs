@@ -543,12 +543,22 @@ impl StreamingSelfTrainingState {
                     .insert(winner.teacher_signature_sha256);
             }
         }
-        self.dirty_derived_signatures.extend(
-            self.generations
-                .values()
-                .filter(|generation| generation.partition_version < FROZEN_PARTITION_VERSION)
-                .map(|generation| generation.teacher_signature_sha256.clone()),
-        );
+        let stale_partition_signatures = self
+            .generations
+            .values()
+            .filter(|generation| generation.partition_version < FROZEN_PARTITION_VERSION)
+            .map(|generation| generation.teacher_signature_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        self.dirty_derived_signatures
+            .extend(stale_partition_signatures.iter().cloned());
+        if !stale_partition_signatures.is_empty() && !self.cegis.is_empty() {
+            // Checkpoint schema migration cannot wait for global synthesis
+            // quiescence: a live stream may keep CEGIS busy indefinitely.
+            self.refresh_generations_for_signatures(&stale_partition_signatures);
+            for signature in &stale_partition_signatures {
+                self.dirty_derived_signatures.remove(signature);
+            }
+        }
         if self.discovery.teacher_pool_count() == 0 || !self.cegis.is_empty() {
             return;
         }

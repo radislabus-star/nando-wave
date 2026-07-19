@@ -1597,3 +1597,10 @@ revocation to remove stale bindings while additions remain fail-closed through
 The composite gate also refreshed the candidate only after evaluating the
 response-runtime section. It now performs the same fail-closed Rust refresh
 before comparing candidate revision and package count with the registry.
+
+The first v14 live restart exposed one more migration-order defect: stale
+generations were queued behind normal CEGIS work, so a continuously active
+stream could keep the old partition alive indefinitely. Restored stale
+partitions are now refrozen immediately from existing winners and verified
+support receipts before the ordinary synthesis queue resumes. This migration
+cannot manufacture future evidence.
