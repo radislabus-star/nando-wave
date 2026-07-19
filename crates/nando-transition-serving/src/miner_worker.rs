@@ -468,13 +468,16 @@ pub fn spawn_miner_worker(
     // job. New traffic schedules bounded slices below.
     let initial_synthesis_pending = false;
     let initial_collection_maintenance_pending = false;
-    let (initial_report, initial_status) = {
+    let initial_status = {
         let stream = miner
             .lock()
             .map_err(|_| "miner_worker_initial_report_lock_poisoned".to_owned())?;
-        (stream.report(), stream.status())
+        stream.status()
     };
-    let response_report = Arc::new(std::sync::RwLock::new(Some(initial_report)));
+    // Building the full report re-synthesizes every bucket. It is diagnostic
+    // output, not checkpoint restoration, so defer it until an event-driven
+    // checkpoint instead of blocking serving startup.
+    let response_report = Arc::new(std::sync::RwLock::new(None));
     let response_status = Arc::new(std::sync::RwLock::new(Some(initial_status)));
     let thread_counters = Arc::clone(&counters);
     let thread_response_report = Arc::clone(&response_report);
