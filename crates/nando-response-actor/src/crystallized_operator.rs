@@ -77,6 +77,8 @@ pub struct BoundCrystallizedOperator {
     environment: BoundRoleEnvironment,
     actor: ResponseProgram,
     verifier: VerifierProgram,
+    vm_page: Option<OperatorPage32>,
+    bound_selectors: Box<[ResponseValueSelector]>,
     request_text: String,
     provider_payload: Value,
 }
@@ -209,6 +211,7 @@ pub enum CrystallizedOperatorError {
     RuntimeRelationMismatch,
     MissingRuntimeAnchor,
     AmbiguousRuntimeAction,
+    OperatorVmRejected,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -471,6 +474,7 @@ impl VerifiedCrystallizedOperator {
             &self.operator.actor_template,
             evidence,
         )
+        .map(|bound| bound.with_vm_page(self.operator.page.clone()))
     }
 
     fn bind_pre_action_scalar(
@@ -513,7 +517,11 @@ impl VerifiedCrystallizedOperator {
         }
         match actions.len() {
             0 => Err(CrystallizedOperatorError::MissingRuntimeAnchor),
-            1 => Ok(actions.into_values().next().expect("one action class")),
+            1 => Ok(actions
+                .into_values()
+                .next()
+                .expect("one action class")
+                .with_vm_page(self.operator.page.clone())),
             _ => Err(CrystallizedOperatorError::AmbiguousRuntimeAction),
         }
     }
@@ -529,6 +537,7 @@ impl VerifiedCrystallizedOperator {
             &self.operator.actor_template,
             evidence,
         )
+        .map(|bound| bound.with_vm_page(self.operator.page.clone()))
     }
 
     pub fn feedback_field(
@@ -994,9 +1003,26 @@ impl BoundCrystallizedOperator {
         if execution.status != ResponseExecutionStatus::Executed {
             return Err(CrystallizedOperatorError::ActorDidNotExecute);
         }
-        let response = execution
+        let reference_response = execution
             .response
             .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+        let response = match &self.vm_page {
+            Some(page) => crate::operator_vm::execute_operator_page(
+                page,
+                &self.bound_selectors,
+                &self.actor,
+                &self.request_text,
+                &self.provider_payload,
+            )
+            .map_err(|_| CrystallizedOperatorError::OperatorVmRejected)?,
+            None => reference_response.clone(),
+        };
+        // During the first VM generation the old actor is retained only as a
+        // parity oracle. The executable value itself is produced from page
+        // bytecode and bound runtime operands above.
+        if response != reference_response {
+            return Err(CrystallizedOperatorError::ActorVerifierMismatch);
+        }
         verify_response_independently_with_request(
             &self.verifier,
             &self.request_text,
@@ -1005,6 +1031,11 @@ impl BoundCrystallizedOperator {
         )
         .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
         Ok(response)
+    }
+
+    fn with_vm_page(mut self, page: OperatorPage32) -> Self {
+        self.vm_page = Some(page);
+        self
     }
 
     #[must_use]
@@ -1105,7 +1136,7 @@ fn bind_operator_components(
         actions
             .entry(action_sha256)
             .or_default()
-            .push((mapping, actor));
+            .push((mapping, actor, selectors));
     }
     if actions.len() != 1 {
         return Err(CrystallizedOperatorError::AmbiguousRuntimeAction);
@@ -1117,7 +1148,7 @@ fn bind_operator_components(
             .local_to_canonical()
             .cmp(right.0.local_to_canonical())
     });
-    let (mapping, actor) = equivalent.remove(0);
+    let (mapping, actor, bound_selectors) = equivalent.remove(0);
     let response = execute_response(&actor, &evidence.request_text, &evidence.provider_payload)
         .response
         .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
@@ -1157,6 +1188,8 @@ fn bind_operator_components(
         },
         actor,
         verifier,
+        vm_page: None,
+        bound_selectors: bound_selectors.into_boxed_slice(),
         request_text: evidence.request_text,
         provider_payload: evidence.provider_payload,
     })

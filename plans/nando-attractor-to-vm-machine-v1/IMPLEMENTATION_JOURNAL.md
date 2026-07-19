@@ -101,3 +101,93 @@ remove the same operator-derived virtual output/program atom from scalar runtime
 preserve independent scalar verification
 rerun focused scalar and rich proofs
 ```
+
+## 2026-07-19 - Stage 7 Minimal Operator VM
+
+Baseline inspection:
+
+```text
+memory lookup                                      0.30 s
+Graphify execution-route query                     1.81 s
+scoped source and AST inspection                   1.50 s total
+HEAD before change                                 2cd7e11
+worktree                                           clean except graphify-out/
+```
+
+Confirmed execution gap:
+
+```text
+OperatorPage32 contained TransformOp8 bytecode
+BoundCrystallizedOperator executed the side-registry ResponseProgram
+therefore page bytecode was proof payload, not the cause of execution
+```
+
+Implemented MVP boundary:
+
+```text
+OperatorPage32 TransformOp8  -> opcode, source order, output, format
+BoundRoleEnvironment         -> runtime selector operands
+sealed actor renderer        -> response shape only
+Operator VM                  -> computed response
+legacy actor                 -> temporary parity oracle
+independent verifier         -> final truth check
+```
+
+Fail-closed limits:
+
+```text
+only PROJECT_UNIQUE_SCALAR is currently executable
+unknown opcode or transform flags                 ABSTAIN
+missing or duplicate source roles                 ABSTAIN
+RequestTemplate renderer                          ABSTAIN
+ambiguous UniqueConsensus response                ABSTAIN
+VM/reference actor mismatch                       ABSTAIN
+independent verifier mismatch                     ABSTAIN
+```
+
+This stage deliberately does not add count/filter/compose opcodes. First the
+existing crystallized relation circuit must become the actual execution cause.
+
+Implementation and focused verification:
+
+```text
+Rust 1.97 fmt check                               PASS 3.06 s
+remote source sync                                0.54 s
+remote cargo check --lib                          PASS 5.85 s
+  compiler peak RSS                               832,912 KB
+initial test relink                                28.95 s
+  exact-name filter mistake                       0 tests (not counted)
+scalar crystallized VM proof                      PASS 1/1 0.13 s
+rich multi-role VM proof                          PASS 1/1 25.53 s
+VM causal tests first run                         1/2 PASS 25.06 s
+  fixture used root JSON instead of tool output; ProjectionFailed
+VM causal tests with production payload shape     PASS 2/2 17.05 s
+rich integration after VM causal fixture          PASS 1/1 25.55 s
+  test-process peak RSS                           38,300 KB
+```
+
+Stage 7 result:
+
+```text
+page transform bytecode drives scalar execution                  PASS
+page transform order drives rich multi-role rendering            PASS
+unknown opcode fails closed                                      PASS
+role-grounded operands, not actor selectors, feed VM             PASS
+legacy actor parity guard                                        PASS
+independent verifier                                             PASS
+new count/filter/compose opcodes                                  NOT STARTED
+production deployment                                             NOT RUN
+```
+
+Graph maintenance:
+
+```text
+graphify update .                                  PASS 26.08 s
+  graph                                             22,914 nodes / 51,107 edges
+  one-shot indexer peak RSS                         536,476 KB
+graph query OperatorPage32 -> VM -> verifier        PASS 1.84 s
+```
+
+Next architectural boundary: finish Stage 9 capture-owned admission
+provenance, then expose this VM operator in generic scalar live shadow before
+adding broader opcodes.

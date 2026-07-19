@@ -21,6 +21,7 @@ mod online_state;
 mod online_subcenter;
 mod operator_generation;
 mod operator_live_shadow;
+mod operator_vm;
 mod opportunity;
 mod outcome_example;
 mod output_graph;

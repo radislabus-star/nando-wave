@@ -1492,7 +1492,7 @@ pub(crate) fn project_selected_value(
     format_selected_scalar(selected, format)
 }
 
-fn project_selected_value_with_request(
+pub(crate) fn project_selected_value_with_request(
     request_text: &str,
     provider_payload: &Value,
     selector: &ResponseValueSelector,
