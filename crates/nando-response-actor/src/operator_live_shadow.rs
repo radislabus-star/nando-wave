@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use nando_core::wave::{
     BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence, BlueprintPhaseControl,
-    BoundedCircuitBeam, BoundedRoleAligner, FrozenOperatorBlueprintSet, OPERATOR_ROLE_NONE,
-    RoleAlignmentConfig, SurfaceFragmentBundle, TransformOp8,
+    BoundedCircuitBeam, BoundedRoleAligner, FrozenOperatorBlueprintSet, LocalRelationFragment,
+    OPERATOR_ROLE_NONE, RoleAlignmentConfig, StructuralRoleSignature, SurfaceFragmentBundle,
+    TernaryRelationState, TypedProgramAtom, phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,16 +21,14 @@ use crate::{
     is_privacy_safe_online_response_program, is_source_neutral_response_program,
 };
 
-const LIVE_SCALAR_ROLE_COUNT: usize = 3;
 const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
 const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
-const ROLE_SOURCE: u8 = 1;
-const ROLE_OUTPUT: u8 = 2;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveScalarCircuitSample {
     pub bundle: SurfaceFragmentBundle,
-    pub anchor: RuntimeRoleAnchor,
+    pub anchors: Box<[RuntimeRoleAnchor]>,
+    pub actor_template: ResponseProgram,
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
@@ -347,7 +346,7 @@ fn evaluate_live_law(
             future_bundle_sha256: *evidence.bundle_sha256(),
             raw_input_sha256: sample.raw_input_sha256,
             extractor_version: sample.extractor_version.max(1),
-            anchors: vec![sample.anchor.clone()].into_boxed_slice(),
+            anchors: sample.anchors.clone(),
             request_text: sample.request_text.clone(),
             provider_payload: sample.provider_payload.clone(),
             expected_response: sample.expected_response.clone(),
@@ -478,7 +477,7 @@ pub fn extract_live_scalar_circuit_sample(
     if version_space.programs.is_empty() {
         return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
     }
-    let mut programs = version_space
+    let mut scalar_programs = version_space
         .programs
         .iter()
         .filter_map(|program| {
@@ -491,26 +490,27 @@ pub fn extract_live_scalar_circuit_sample(
         })
         .filter_map(project_scalar_program)
         .collect::<Vec<_>>();
-    programs.sort_by(|left, right| left.0.cmp(&right.0));
-    let Some((_, selector, value_type, format, renderer)) = programs.into_iter().next() else {
-        return Err(classify_exact_program_blocker(&version_space.programs));
+    scalar_programs.sort_by(|left, right| left.0.cmp(&right.0));
+    let rich_exact = version_space
+        .programs
+        .iter()
+        .find(|program| rich_scalar_program_roles(program).is_some_and(|roles| roles.len() > 1));
+    let actor_template = if let Some(program) = rich_exact {
+        program.clone()
+    } else if let Some((_, selector, _, _, renderer)) = scalar_programs.first() {
+        ResponseProgram::project_selected_value(selector.clone(), scalar_programs[0].3, "completed")
+            .with_value_renderer(renderer.clone())
+    } else {
+        version_space
+            .programs
+            .iter()
+            .find(|program| rich_scalar_program_roles(program).is_some())
+            .cloned()
+            .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?
     };
+    let roles = rich_scalar_program_roles(&actor_template)
+        .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?;
 
-    let local_roles = local_role_permutation(&transition.before.frame_id_sha256);
-    let source = local_roles[usize::from(ROLE_SOURCE)];
-    let output = local_roles[usize::from(ROLE_OUTPUT)];
-    let transform = TransformOp8 {
-        opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-        output,
-        source_a: source,
-        source_b: OPERATOR_ROLE_NONE,
-        parameter: transform_parameter(value_type),
-        flags: if format == ValueProjectionFormat::CanonicalJson {
-            TRANSFORM_FLAG_CANONICAL_JSON
-        } else {
-            0
-        },
-    };
     let lineage_sha256 = parse_commitment(&transition.before.session_id_sha256)
         .or_else(|| parse_commitment(&transition.before.client_intent_id_sha256))
         .ok_or(LiveScalarShadowBlocker::InvalidCommitment)?;
@@ -522,43 +522,207 @@ pub fn extract_live_scalar_circuit_sample(
             &payload_bytes,
         ],
     );
-    let observed = crate::crystallized_operator::observed_scalar_surface(
+    let observed = observed_rich_scalar_surface(
         &parity.request_text,
         &parity.provider_payload,
-        selector.clone(),
-        transform,
-        local_roles,
+        &roles,
+        &transition.before.frame_id_sha256,
         lineage_sha256,
         surface_sha256,
-    )
-    .map_err(|_| LiveScalarShadowBlocker::InvalidBundle)?;
+    )?;
     let raw_input_sha256 = digest_parts(
         b"nando.live-scalar-raw-input.v1",
         &[parity.request_text.as_bytes(), &payload_bytes],
     );
-    let law_sha256 = digest_parts(
-        b"nando.live-scalar-law.v2",
-        &[
-            &[value_type_tag(value_type)],
-            &[u8::from(format == ValueProjectionFormat::CanonicalJson)],
-            &serde_cbor::to_vec(&renderer)
-                .map_err(|_| LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
-        ],
-    );
+    let canonical_program = canonicalize_scalar_program_roles(&actor_template)
+        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    let law_shape = scalar_law_shape(&actor_template)
+        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    let law_sha256 = digest_parts(b"nando.live-scalar-law.v3", &[&law_shape]);
     Ok(LiveScalarCircuitSample {
         bundle: observed.bundle,
-        anchor: observed
-            .anchors
-            .into_vec()
-            .into_iter()
-            .next()
-            .ok_or(LiveScalarShadowBlocker::InvalidBundle)?,
+        anchors: observed.anchors,
+        actor_template: canonical_program,
         request_text: parity.request_text.clone(),
         provider_payload: parity.provider_payload.clone(),
         expected_response: parity.expected_response.clone(),
         raw_input_sha256,
         extractor_version: extractor_version(&transition.before.extractor_version),
         law_sha256,
+    })
+}
+
+fn rich_scalar_program_roles(
+    program: &ResponseProgram,
+) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        format,
+        renderer,
+        completion_state,
+    } = &program.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    let mut roles = vec![(selector.clone(), *format)];
+    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
+        for segment in segments {
+            if let ResponseRenderSegment::Selected { selector, format } = segment {
+                roles.push((selector.clone(), *format));
+            }
+        }
+    }
+    (roles.len() <= 16).then_some(roles)
+}
+
+fn canonicalize_scalar_program_roles(program: &ResponseProgram) -> Option<ResponseProgram> {
+    let mut canonical = program.clone();
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        renderer,
+        completion_state,
+        ..
+    } = &mut canonical.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    *selector = canonical_role_selector(selector_value_type(selector));
+    if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
+        for segment in segments {
+            if let ResponseRenderSegment::Selected { selector, .. } = segment {
+                *selector = canonical_role_selector(selector_value_type(selector));
+            }
+        }
+    }
+    Some(canonical)
+}
+
+fn scalar_law_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        format,
+        renderer,
+        completion_state,
+    } = &program.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    let mut shape = vec![
+        1,
+        value_type_tag(selector_value_type(selector)),
+        u8::from(*format == ValueProjectionFormat::CanonicalJson),
+    ];
+    match renderer {
+        CollectionOutputRenderer::Direct => shape.push(0),
+        CollectionOutputRenderer::RenderTemplate { .. } => shape.push(1),
+        CollectionOutputRenderer::RenderSequence { segments } => {
+            shape.push(2);
+            shape.extend_from_slice(&(segments.len() as u16).to_le_bytes());
+            for segment in segments {
+                match segment {
+                    ResponseRenderSegment::Static { .. } => shape.push(0),
+                    ResponseRenderSegment::Primary => shape.push(1),
+                    ResponseRenderSegment::Selected { selector, format } => {
+                        shape.extend_from_slice(&[
+                            2,
+                            value_type_tag(selector_value_type(selector)),
+                            u8::from(*format == ValueProjectionFormat::CanonicalJson),
+                        ]);
+                    }
+                }
+            }
+        }
+        CollectionOutputRenderer::RequestTemplate { marker } => {
+            shape.extend_from_slice(&[3, *marker as u8]);
+        }
+    }
+    Some(shape)
+}
+
+fn canonical_role_selector(value_type: AtomValueType) -> ResponseValueSelector {
+    ResponseValueSelector::UniqueScalar { value_type }
+}
+
+fn observed_rich_scalar_surface(
+    request_text: &str,
+    provider_payload: &Value,
+    program_roles: &[(ResponseValueSelector, ValueProjectionFormat)],
+    frame_id: &str,
+    lineage_sha256: [u8; 32],
+    surface_sha256: [u8; 32],
+) -> Result<crate::RuntimeSurfaceEvidence, LiveScalarShadowBlocker> {
+    let role_count = program_roles.len().saturating_add(2);
+    if !(3..=18).contains(&role_count) {
+        return Err(LiveScalarShadowBlocker::InvalidBundle);
+    }
+    let semantic_to_local = local_role_permutation_n(frame_id, role_count);
+    let context = semantic_to_local[0];
+    let output = semantic_to_local[role_count - 1];
+    let mut roles = vec![StructuralRoleSignature::new(0, 0, 0, 0, Vec::new()); role_count];
+    let planes = (0..program_roles.len())
+        .map(|index| u8::try_from(index).unwrap_or(u8::MAX))
+        .collect::<Vec<_>>();
+    roles[usize::from(context)] = StructuralRoleSignature::new(5, 1, 0, 1, planes.clone());
+    roles[usize::from(output)] = StructuralRoleSignature::new(
+        value_type_tag(selector_value_type(&program_roles[0].0)),
+        1,
+        2,
+        4,
+        Vec::new(),
+    );
+    let mut relations = Vec::with_capacity(program_roles.len());
+    let mut atoms = Vec::with_capacity(program_roles.len());
+    let mut anchors = Vec::with_capacity(program_roles.len());
+    for (index, (selector, format)) in program_roles.iter().enumerate() {
+        let source = semantic_to_local[index + 1];
+        let plane = u8::try_from(index).map_err(|_| LiveScalarShadowBlocker::InvalidBundle)?;
+        let value_type = selector_value_type(selector);
+        roles[usize::from(source)] =
+            StructuralRoleSignature::new(value_type_tag(value_type), 1, 1, 2, vec![plane]);
+        let phase_atom = format!("scalar_role:{index}:type:{}", value_type_tag(value_type));
+        let phase = phase_vector_from_atoms([phase_atom.as_str()], 1)[0];
+        relations.push(LocalRelationFragment {
+            plane,
+            source_local_role: context,
+            target_local_role: source,
+            state: TernaryRelationState::Supported,
+            phase_anchor: phase,
+        });
+        atoms.push(TypedProgramAtom {
+            opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+            output_local_role: output,
+            source_a_local_role: source,
+            source_b_local_role: OPERATOR_ROLE_NONE,
+            parameter: transform_parameter(value_type)
+                | (u16::try_from(index).unwrap_or(u16::MAX) << 8),
+            flags: if *format == ValueProjectionFormat::CanonicalJson {
+                TRANSFORM_FLAG_CANONICAL_JSON
+            } else {
+                0
+            },
+        });
+        anchors.push(RuntimeRoleAnchor {
+            local_role: source,
+            selector: selector.clone(),
+        });
+    }
+    let bundle =
+        SurfaceFragmentBundle::new(lineage_sha256, surface_sha256, roles, relations, atoms)
+            .map_err(|_| LiveScalarShadowBlocker::InvalidBundle)?;
+    Ok(crate::RuntimeSurfaceEvidence {
+        bundle,
+        request_text: request_text.to_owned(),
+        provider_payload: provider_payload.clone(),
+        anchors: anchors.into_boxed_slice(),
     })
 }
 
@@ -723,11 +887,16 @@ fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
     }
 }
 
-fn local_role_permutation(frame_id: &str) -> [u8; LIVE_SCALAR_ROLE_COUNT] {
+fn local_role_permutation_n(frame_id: &str, role_count: usize) -> Vec<u8> {
     let digest = Sha256::digest(frame_id.as_bytes());
-    let mut roles = [0_u8, 1, 2];
+    let mut roles = (0..role_count)
+        .map(|role| u8::try_from(role).expect("bounded live role count"))
+        .collect::<Vec<_>>();
     for index in (1..roles.len()).rev() {
-        roles.swap(index, usize::from(digest[index]) % (index + 1));
+        roles.swap(
+            index,
+            usize::from(digest[index % digest.len()]) % (index + 1),
+        );
     }
     roles
 }
@@ -846,6 +1015,24 @@ mod tests {
         }
     }
 
+    fn multi_value_transition(
+        first_field: &str,
+        second_field: &str,
+        expected_response: &str,
+    ) -> TeacherTransition {
+        let mut row = transition(first_field, true);
+        let parity = row.runtime_parity_case.as_mut().expect("parity case");
+        parity.request_text = format!("Return {first_field} and {second_field}");
+        parity.provider_payload = json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": format!("{{\"{first_field}\":7,\"{second_field}\":2}}")
+            }]
+        });
+        parity.expected_response = expected_response.to_owned();
+        row
+    }
+
     #[test]
     fn verified_scalar_trace_becomes_source_neutral_circuit_evidence() {
         let first =
@@ -860,7 +1047,7 @@ mod tests {
         assert_eq!(first.bundle.relations().len(), 1);
         assert_eq!(first.bundle.program_atoms().len(), 1);
         assert_eq!(first.law_sha256, renamed.law_sha256);
-        assert_eq!(first.anchor.selector, renamed.anchor.selector);
+        assert_eq!(first.anchors, renamed.anchors);
     }
 
     #[test]
@@ -869,6 +1056,28 @@ mod tests {
             extract_live_scalar_circuit_sample(&transition("total", false)),
             Err(LiveScalarShadowBlocker::TeacherRejected)
         );
+    }
+
+    #[test]
+    fn multi_value_surfaces_share_one_structural_law() {
+        let first = extract_live_scalar_circuit_sample(&multi_value_transition(
+            "total",
+            "failed",
+            "Total: 7; failed: 2",
+        ))
+        .expect("first multi-value trace");
+        let renamed = extract_live_scalar_circuit_sample(&multi_value_transition(
+            "records",
+            "errors",
+            "Records: 7; errors: 2",
+        ))
+        .expect("renamed multi-value trace");
+
+        assert_eq!(first.anchors.len(), 2);
+        assert_eq!(first.bundle.roles().len(), 4);
+        assert_eq!(first.bundle.relations().len(), 2);
+        assert_eq!(first.bundle.program_atoms().len(), 2);
+        assert_eq!(first.law_sha256, renamed.law_sha256);
     }
 
     #[test]
