@@ -18,9 +18,10 @@ use sha2::{Digest, Sha256};
 use crate::{
     AtomValueType, BackwardWave, BackwardWaveError, BackwardWaveUpdate, ResponseExecutionStatus,
     ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifiedDeltaReceipt,
-    VerifierProgram, execute_response, is_source_neutral_response_program,
-    response_actor_program_digest, response_independent_verifier_program_digest,
-    source_neutral_verifier_for_program, verify_response_independently,
+    VerifierProgram, execute_response, is_privacy_safe_online_response_program,
+    is_source_neutral_response_program, response_actor_program_digest,
+    response_independent_verifier_program_digest, source_neutral_verifier_for_program,
+    verify_response_independently,
 };
 
 pub const TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR: u8 = 1;
@@ -30,7 +31,7 @@ pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
 pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
 pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
 pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
-const CRYSTALLIZED_REGISTRY_SCHEMA_V2: &str = "nando.crystallized-registry.v2";
+const CRYSTALLIZED_REGISTRY_SCHEMA_V3: &str = "nando.crystallized-registry.v3";
 const CRYSTALLIZED_REGISTRY_MAX_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,6 +109,7 @@ struct CrystallizedRegistryV2 {
     page_sha256: Commitment256,
     roles: Vec<RestartRole>,
     relations: Vec<RestartRelation>,
+    renderer: crate::CollectionOutputRenderer,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
     support_root_sha256: Commitment256,
@@ -157,6 +159,7 @@ pub struct CrystallizedOperator {
     relation_program: OperatorCircuit,
     role_graph: RoleGraph,
     transform_program: Box<[TransformOp8]>,
+    renderer: crate::CollectionOutputRenderer,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
     support_root_sha256: Commitment256,
@@ -187,6 +190,7 @@ pub enum CrystallizedOperatorError {
     MissingParityReceipt,
     ActorDidNotExecute,
     ActorResponseMismatch,
+    RendererMismatch,
     IndependentVerifierRejected,
     DigestFailure,
     InvalidDigest,
@@ -237,11 +241,17 @@ impl CrystallizedOperator {
         if !composition_is_acyclic(blueprint) {
             return Err(CrystallizedOperatorError::CyclicComposition);
         }
-        let actor = compile_blueprint_actor(blueprint)?;
+        let renderer = infer_future_renderer(blueprint, future_evidence, receipts)?;
+        let actor = compile_blueprint_actor(blueprint, &renderer)?;
         actor
             .validate()
             .map_err(|_| CrystallizedOperatorError::InvalidActor)?;
-        if !is_source_neutral_response_program(&actor) {
+        // The computed law remains source-neutral. A learned static response
+        // renderer is a separately sealed surface adapter and must satisfy the
+        // bounded Rust privacy contract on every future receipt.
+        if !is_source_neutral_response_program(&actor)
+            && !is_privacy_safe_online_response_program(&actor)
+        {
             return Err(CrystallizedOperatorError::NonSourceNeutralActor);
         }
         let verifier = source_neutral_verifier_for_program(&actor)
@@ -254,7 +264,13 @@ impl CrystallizedOperator {
             lineages: verified_future_lineages,
             binding_receipts,
             execution_receipts,
-        } = verify_future_receipts(future_window, future_evidence, blueprint, receipts)?;
+        } = verify_future_receipts(
+            future_window,
+            future_evidence,
+            blueprint,
+            &renderer,
+            receipts,
+        )?;
         let actor_sha256 = response_actor_program_digest(&actor)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
         let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
@@ -265,6 +281,7 @@ impl CrystallizedOperator {
             frozen.candidate_set_sha256(),
             frozen.support_lineages_sha256(),
             &verified_future_lineages,
+            &renderer,
             &actor_sha256,
             &verifier_sha256,
         )?;
@@ -281,6 +298,7 @@ impl CrystallizedOperator {
             relation_program: blueprint.relation_program().clone(),
             role_graph: blueprint.role_graph().clone(),
             transform_program: blueprint.transform_program().into(),
+            renderer,
             blueprint_sha256: winner_sha256,
             candidate_set_sha256: *frozen.candidate_set_sha256(),
             support_root_sha256: *winner_receipt.support_root_sha256(),
@@ -410,6 +428,7 @@ impl VerifiedCrystallizedOperator {
                 &self.operator.role_graph,
                 &self.operator.relation_program,
                 &self.operator.transform_program,
+                &self.operator.renderer,
                 evidence,
             ) else {
                 continue;
@@ -434,6 +453,7 @@ impl VerifiedCrystallizedOperator {
             &self.operator.role_graph,
             &self.operator.relation_program,
             &self.operator.transform_program,
+            &self.operator.renderer,
             evidence,
         )
     }
@@ -509,7 +529,8 @@ impl VerifiedCrystallizedOperator {
             },
             transform_format(transform.flags),
             "completed",
-        ))
+        )
+        .with_value_renderer(self.operator.renderer.clone()))
     }
 
     pub fn routing_verifier(&self) -> Result<VerifierProgram, CrystallizedOperatorError> {
@@ -536,7 +557,7 @@ impl VerifiedCrystallizedOperator {
         &self,
     ) -> Result<VerifiedOperatorRestartBundle, CrystallizedOperatorError> {
         let registry = CrystallizedRegistryV2 {
-            schema: CRYSTALLIZED_REGISTRY_SCHEMA_V2.to_owned(),
+            schema: CRYSTALLIZED_REGISTRY_SCHEMA_V3.to_owned(),
             page_sha256: Sha256::digest(self.page().as_bytes()).into(),
             roles: self
                 .operator
@@ -565,6 +586,7 @@ impl VerifiedCrystallizedOperator {
                     phase_im_bits: relation.phase_anchor.im.to_bits(),
                 })
                 .collect(),
+            renderer: self.operator.renderer.clone(),
             blueprint_sha256: self.operator.blueprint_sha256,
             candidate_set_sha256: self.operator.candidate_set_sha256,
             support_root_sha256: self.operator.support_root_sha256,
@@ -600,7 +622,7 @@ impl VerifiedCrystallizedOperator {
             .map_err(CrystallizedOperatorError::InvalidPage)?;
         let registry: CrystallizedRegistryV2 = serde_cbor::from_slice(registry_cbor)
             .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
-        if registry.schema != CRYSTALLIZED_REGISTRY_SCHEMA_V2
+        if registry.schema != CRYSTALLIZED_REGISTRY_SCHEMA_V3
             || registry.page_sha256 != Commitment256::from(Sha256::digest(page_bytes))
         {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
@@ -678,6 +700,7 @@ impl VerifiedCrystallizedOperator {
                 relation_program,
                 role_graph,
                 transform_program,
+                renderer: registry.renderer,
                 blueprint_sha256: registry.blueprint_sha256,
                 candidate_set_sha256: registry.candidate_set_sha256,
                 support_root_sha256: registry.support_root_sha256,
@@ -904,6 +927,7 @@ fn bind_operator_components(
     role_graph: &RoleGraph,
     relation_program: &OperatorCircuit,
     transform_program: &[TransformOp8],
+    renderer: &crate::CollectionOutputRenderer,
     evidence: RuntimeSurfaceEvidence,
 ) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
     let report = RuntimeRoleBinder::bind(
@@ -932,7 +956,7 @@ fn bind_operator_components(
             .find(|anchor| anchor.local_role == source_local_role)
             .map(|anchor| anchor.selector.clone())
             .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
-        let actor = compile_bound_actor(*transform, selector)?;
+        let actor = compile_bound_actor(*transform, selector, renderer)?;
         let response = execute_response(&actor, &evidence.request_text, &evidence.provider_payload)
             .response
             .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
@@ -963,6 +987,7 @@ fn bind_operator_components(
         role_graph,
         relation_program,
         transform_program,
+        renderer,
         &evidence.request_text,
         &evidence.provider_payload,
         &response,
@@ -990,6 +1015,7 @@ fn independently_bind_verifier(
     role_graph: &RoleGraph,
     relation_program: &OperatorCircuit,
     transform_program: &[TransformOp8],
+    renderer: &crate::CollectionOutputRenderer,
     request_text: &str,
     provider_payload: &Value,
     actor_response: &str,
@@ -1045,7 +1071,7 @@ fn independently_bind_verifier(
             else {
                 continue;
             };
-            let verifier = compile_bound_verifier(*transform, selector)?;
+            let verifier = compile_bound_verifier(*transform, selector, renderer)?;
             if verify_response_independently(&verifier, provider_payload, actor_response).is_ok() {
                 let digest = response_independent_verifier_program_digest(&verifier)
                     .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
@@ -1062,6 +1088,7 @@ fn independently_bind_verifier(
 fn compile_bound_actor(
     transform: TransformOp8,
     selector: ResponseValueSelector,
+    renderer: &crate::CollectionOutputRenderer,
 ) -> Result<ResponseProgram, CrystallizedOperatorError> {
     validate_scalar_transform(transform)?;
     let value_type = transform_value_type(transform.parameter)?;
@@ -1072,12 +1099,14 @@ fn compile_bound_actor(
         selector,
         transform_format(transform.flags),
         "completed",
-    ))
+    )
+    .with_value_renderer(renderer.clone()))
 }
 
 fn compile_bound_verifier(
     transform: TransformOp8,
     selector: ResponseValueSelector,
+    renderer: &crate::CollectionOutputRenderer,
 ) -> Result<VerifierProgram, CrystallizedOperatorError> {
     validate_scalar_transform(transform)?;
     let value_type = transform_value_type(transform.parameter)?;
@@ -1087,7 +1116,7 @@ fn compile_bound_verifier(
     Ok(VerifierProgram::ProjectSelectedValue {
         selector,
         format: transform_format(transform.flags),
-        renderer: crate::CollectionOutputRenderer::Direct,
+        renderer: renderer.clone(),
         completion_state: "completed".to_owned(),
         require_unique_value: true,
     })
@@ -1128,6 +1157,7 @@ fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> Commitment256 {
 
 pub(crate) fn compile_blueprint_actor(
     blueprint: &CandidateOperatorBlueprint,
+    renderer: &crate::CollectionOutputRenderer,
 ) -> Result<ResponseProgram, CrystallizedOperatorError> {
     let [transform] = blueprint.transform_program() else {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
@@ -1141,7 +1171,8 @@ pub(crate) fn compile_blueprint_actor(
         ResponseValueSelector::UniqueScalar { value_type },
         transform_format(transform.flags),
         "completed",
-    ))
+    )
+    .with_value_renderer(renderer.clone()))
 }
 
 fn validate_scalar_transform(transform: TransformOp8) -> Result<(), CrystallizedOperatorError> {
@@ -1174,6 +1205,70 @@ fn transform_format(flags: u16) -> ValueProjectionFormat {
     }
 }
 
+fn infer_future_renderer(
+    blueprint: &CandidateOperatorBlueprint,
+    future_evidence: &[BlueprintFutureEvidence],
+    receipts: &[CrystallizationParityReceipt],
+) -> Result<crate::CollectionOutputRenderer, CrystallizedOperatorError> {
+    if receipts.is_empty() {
+        return Err(CrystallizedOperatorError::MissingParityReceipt);
+    }
+    let evidence_by_lineage = future_evidence
+        .iter()
+        .map(|evidence| (*evidence.bundle().lineage_sha256(), evidence))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut renderers = BTreeSet::new();
+    for receipt in receipts {
+        let evidence = evidence_by_lineage
+            .get(&receipt.future_lineage_sha256)
+            .ok_or(CrystallizedOperatorError::FutureEvidenceMismatch)?;
+        let bound = bind_operator_components(
+            blueprint.role_graph(),
+            blueprint.relation_program(),
+            blueprint.transform_program(),
+            &crate::CollectionOutputRenderer::Direct,
+            RuntimeSurfaceEvidence {
+                bundle: evidence.bundle().clone(),
+                request_text: receipt.request_text.clone(),
+                provider_payload: receipt.provider_payload.clone(),
+                anchors: receipt.anchors.clone(),
+            },
+        )?;
+        let computed = bound.execute_verified()?;
+        renderers.insert(infer_exact_renderer(&computed, &receipt.expected_response)?);
+    }
+    if renderers.len() != 1 {
+        return Err(CrystallizedOperatorError::RendererMismatch);
+    }
+    renderers
+        .into_iter()
+        .next()
+        .ok_or(CrystallizedOperatorError::RendererMismatch)
+}
+
+fn infer_exact_renderer(
+    computed: &str,
+    expected: &str,
+) -> Result<crate::CollectionOutputRenderer, CrystallizedOperatorError> {
+    if computed == expected {
+        return Ok(crate::CollectionOutputRenderer::Direct);
+    }
+    if computed.is_empty() {
+        return Err(CrystallizedOperatorError::RendererMismatch);
+    }
+    let mut matches = expected.match_indices(computed);
+    let Some((offset, _)) = matches.next() else {
+        return Err(CrystallizedOperatorError::RendererMismatch);
+    };
+    if matches.next().is_some() {
+        return Err(CrystallizedOperatorError::RendererMismatch);
+    }
+    Ok(crate::CollectionOutputRenderer::RenderTemplate {
+        prefix: expected[..offset].to_owned(),
+        suffix: expected[offset + computed.len()..].to_owned(),
+    })
+}
+
 struct FutureParityProof {
     lineages: Vec<Commitment256>,
     binding_receipts: Vec<Commitment256>,
@@ -1184,6 +1279,7 @@ fn verify_future_receipts(
     future_window: &FrozenBlueprintFutureWindow,
     future_evidence: &[BlueprintFutureEvidence],
     blueprint: &CandidateOperatorBlueprint,
+    renderer: &crate::CollectionOutputRenderer,
     receipts: &[CrystallizationParityReceipt],
 ) -> Result<FutureParityProof, CrystallizedOperatorError> {
     let expected = future_window.future_lineages_sha256();
@@ -1222,6 +1318,7 @@ fn verify_future_receipts(
             blueprint.role_graph(),
             blueprint.relation_program(),
             blueprint.transform_program(),
+            renderer,
             RuntimeSurfaceEvidence {
                 bundle: evidence.bundle().clone(),
                 request_text: receipt.request_text.clone(),
@@ -1408,6 +1505,7 @@ fn build_operator_page(
     candidate_set_sha256: &Commitment256,
     support_lineages: &[Commitment256],
     future_lineages: &[Commitment256],
+    output_renderer: &crate::CollectionOutputRenderer,
     actor_sha256: &str,
     verifier_sha256: &str,
 ) -> Result<OperatorPage32, CrystallizedOperatorError> {
@@ -1471,11 +1569,16 @@ fn build_operator_page(
 
     let actor_digest = decode_sha256(actor_sha256)?;
     let verifier_digest = decode_sha256(verifier_sha256)?;
+    let renderer_digest = renderer_commitment(output_renderer)?;
+    let execution_digest = digest_parts(
+        b"nando.crystallized-execution-programs.v1",
+        &[&actor_digest, &verifier_digest],
+    );
     let mut renderer = [0_u8; OPERATOR_PAGE32_RENDERER_BYTES];
-    renderer[..32].copy_from_slice(blueprint.fingerprint_sha256());
-    renderer[32..64].copy_from_slice(candidate_set_sha256);
-    renderer[64..96].copy_from_slice(&actor_digest);
-    renderer[96..128].copy_from_slice(&verifier_digest);
+    renderer[..32].copy_from_slice(&renderer_digest);
+    renderer[32..64].copy_from_slice(blueprint.fingerprint_sha256());
+    renderer[64..96].copy_from_slice(candidate_set_sha256);
+    renderer[96..128].copy_from_slice(&execution_digest);
 
     let proof_lineage = lineage_commitment(support_lineages, future_lineages);
     let role_commitment = roles_commitment(&roles);
@@ -1499,6 +1602,14 @@ fn build_operator_page(
         &renderer,
     )
     .map_err(CrystallizedOperatorError::InvalidPage)
+}
+
+fn renderer_commitment(
+    renderer: &crate::CollectionOutputRenderer,
+) -> Result<Commitment256, CrystallizedOperatorError> {
+    let bytes =
+        serde_cbor::to_vec(renderer).map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+    Ok(digest_parts(b"nando.crystallized-renderer.v1", &[&bytes]))
 }
 
 fn quantize_phase(value: f64) -> i16 {

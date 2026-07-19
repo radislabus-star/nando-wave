@@ -970,6 +970,14 @@ from those actions and is never trusted as caller input.
 Only a `BoundCrystallizedOperator` may execute in shadow. Only a
 `VerifiedCrystallizedOperator` carrying both proof seals may be submitted to
 external admission. A proof seal is a commitment, not production authority.
+
+The computed relation/transform law remains source-neutral. A static response
+renderer is a separate surface adapter: it may contain ordinary bounded text
+only when the Rust privacy validator accepts it and every independent future
+receipt infers exactly the same prefix/computed/suffix program. Its digest is
+bound into `OperatorPage32`, actor/verifier commitments, the law identity, and
+the restart registry. A renderer mismatch is fail-closed; it must never be
+relabelled as a source-neutral relation law.
 Only external admission grants authority.
 
 #### Two sequential seals

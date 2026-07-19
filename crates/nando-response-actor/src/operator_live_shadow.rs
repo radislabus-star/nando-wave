@@ -478,7 +478,7 @@ pub fn extract_live_scalar_circuit_sample(
         .filter_map(project_scalar_program)
         .collect::<Vec<_>>();
     programs.sort_by(|left, right| left.0.cmp(&right.0));
-    let Some((_, selector, value_type, format)) = programs.into_iter().next() else {
+    let Some((_, selector, value_type, format, renderer)) = programs.into_iter().next() else {
         return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
     };
 
@@ -523,10 +523,12 @@ pub fn extract_live_scalar_circuit_sample(
         &[parity.request_text.as_bytes(), &payload_bytes],
     );
     let law_sha256 = digest_parts(
-        b"nando.live-scalar-law.v1",
+        b"nando.live-scalar-law.v2",
         &[
             &[value_type_tag(value_type)],
             &[u8::from(format == ValueProjectionFormat::CanonicalJson)],
+            &serde_cbor::to_vec(&renderer)
+                .map_err(|_| LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
         ],
     );
     Ok(LiveScalarCircuitSample {
@@ -553,11 +555,12 @@ fn project_scalar_program(
     ResponseValueSelector,
     AtomValueType,
     ValueProjectionFormat,
+    CollectionOutputRenderer,
 )> {
     let ResponseOperation::ProjectSelectedValue {
         selector,
         format,
-        renderer: CollectionOutputRenderer::Direct,
+        renderer,
         completion_state,
     } = &program.operation
     else {
@@ -566,9 +569,21 @@ fn project_scalar_program(
     if completion_state != "completed" {
         return None;
     }
+    if !matches!(
+        renderer,
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. }
+    ) {
+        return None;
+    }
     let value_type = selector_value_type(selector);
     let bytes = serde_json::to_vec(&program).ok()?;
-    Some((bytes, selector.clone(), value_type, *format))
+    Some((
+        bytes,
+        selector.clone(),
+        value_type,
+        *format,
+        renderer.clone(),
+    ))
 }
 
 fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
@@ -741,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn independent_live_rows_reach_verified_scalar_shadow_operator() {
+    fn templated_live_rows_reach_verified_scalar_shadow_operator() {
         let mut state = LiveScalarShadowState::default();
         for index in 0..64_u8 {
             let mut row = transition(&format!("field_{index}"), true);
@@ -760,7 +775,7 @@ mod tests {
             row.runtime_parity_case
                 .as_mut()
                 .expect("parity")
-                .expected_response = (index + 7).to_string();
+                .expected_response = format!("Total records: {}.", index + 7);
             state.observe(&row);
         }
 
@@ -799,7 +814,11 @@ mod tests {
                 }]
             }),
         );
-        assert_eq!(execution.response.as_deref(), Some("91"), "{execution:#?}");
+        assert_eq!(
+            execution.response.as_deref(),
+            Some("Total records: 91."),
+            "{execution:#?}"
+        );
         let ambiguous = executor.execute_shadow(
             "",
             &json!({
