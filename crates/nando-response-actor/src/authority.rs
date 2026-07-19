@@ -196,6 +196,7 @@ struct ResponseExecutionPayloadDigestMaterial<'a> {
     phase_centers: &'a [u64],
     anti_centers: &'a [u64],
     wave_margin_micro: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     crystallized_operator: &'a Option<crate::VerifiedOperatorRestartBundle>,
 }
 
