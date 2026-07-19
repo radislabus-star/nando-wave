@@ -16,7 +16,8 @@ use crate::{
     ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
     TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_IDENTIFIER,
     TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
-    enumerate_source_neutral_response_programs, response_program_exactly_matches_example,
+    enumerate_source_neutral_response_programs, execute_response,
+    is_privacy_safe_online_response_program, is_source_neutral_response_program,
 };
 
 const LIVE_SCALAR_ROLE_COUNT: usize = 3;
@@ -474,22 +475,25 @@ pub fn extract_live_scalar_circuit_sample(
     };
     let version_space = enumerate_source_neutral_response_programs(&example)
         .map_err(|_| LiveScalarShadowBlocker::NoExactSourceNeutralProgram)?;
-    let exact_programs = version_space
-        .programs
-        .into_iter()
-        .filter(|program| response_program_exactly_matches_example(program, &example))
-        .collect::<Vec<_>>();
-    if exact_programs.is_empty() {
+    if version_space.programs.is_empty() {
         return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
     }
-    let mut programs = exact_programs
+    let mut programs = version_space
+        .programs
         .iter()
-        .cloned()
+        .filter_map(|program| {
+            derive_exact_scalar_program(
+                program,
+                &parity.request_text,
+                &parity.provider_payload,
+                &parity.expected_response,
+            )
+        })
         .filter_map(project_scalar_program)
         .collect::<Vec<_>>();
     programs.sort_by(|left, right| left.0.cmp(&right.0));
     let Some((_, selector, value_type, format, renderer)) = programs.into_iter().next() else {
-        return Err(classify_exact_program_blocker(&exact_programs));
+        return Err(classify_exact_program_blocker(&version_space.programs));
     };
 
     let local_roles = local_role_permutation(&transition.before.frame_id_sha256);
@@ -583,6 +587,65 @@ fn project_scalar_program(
     let value_type = selector_value_type(selector);
     let bytes = serde_json::to_vec(&program).ok()?;
     Some((bytes, selector.clone(), value_type, *format, renderer))
+}
+
+fn derive_exact_scalar_program(
+    candidate: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Option<ResponseProgram> {
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        format,
+        completion_state,
+        ..
+    } = &candidate.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    let direct = ResponseProgram::project_selected_value(
+        selector.clone(),
+        *format,
+        completion_state.clone(),
+    );
+    if !is_source_neutral_response_program(&direct) {
+        return None;
+    }
+    let computed = execute_response(&direct, request_text, provider_payload).response?;
+    let renderer = infer_scalar_renderer(&computed, expected_response)?;
+    let derived = direct.with_value_renderer(renderer);
+    if derived.validate().is_err()
+        || !is_privacy_safe_online_response_program(&derived)
+        || execute_response(&derived, request_text, provider_payload)
+            .response
+            .as_deref()
+            != Some(expected_response)
+    {
+        return None;
+    }
+    Some(derived)
+}
+
+fn infer_scalar_renderer(computed: &str, expected: &str) -> Option<CollectionOutputRenderer> {
+    if computed == expected {
+        return Some(CollectionOutputRenderer::Direct);
+    }
+    if computed.is_empty() {
+        return None;
+    }
+    let mut matches = expected.match_indices(computed);
+    let (offset, _) = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(CollectionOutputRenderer::RenderTemplate {
+        prefix: expected[..offset].to_owned(),
+        suffix: expected[offset + computed.len()..].to_owned(),
+    })
 }
 
 fn normalized_scalar_renderer(
@@ -797,7 +860,7 @@ mod tests {
         assert_eq!(first.bundle.relations().len(), 1);
         assert_eq!(first.bundle.program_atoms().len(), 1);
         assert_eq!(first.law_sha256, renamed.law_sha256);
-        assert_ne!(first.anchor.selector, renamed.anchor.selector);
+        assert_eq!(first.anchor.selector, renamed.anchor.selector);
     }
 
     #[test]
