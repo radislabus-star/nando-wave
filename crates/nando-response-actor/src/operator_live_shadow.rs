@@ -54,6 +54,9 @@ pub enum LiveScalarShadowBlocker {
     UnsupportedScalarProgram,
     InvalidCommitment,
     InvalidBundle,
+    // Kept for checkpoints written before support rows were separated from
+    // session-diversity evidence. New generations no longer emit this blocker.
+    SupportSessionReused,
     FutureSessionReused,
     FutureCapacityReached,
     HistoricalSupportCapacityReached,

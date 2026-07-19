@@ -1,6 +1,7 @@
 use std::io::Read;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use crate::{
@@ -14,13 +15,38 @@ pub const DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1: &str =
     "nando.durable-runtime-parity-receipt.v1";
 const MAX_RUNTIME_PARITY_PAYLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeParityCase {
     pub evidence_ref_sha256: String,
-    #[serde(default)]
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
+}
+
+impl Serialize for RuntimeParityCase {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let payload =
+            serde_json::to_vec(&self.provider_payload).map_err(serde::ser::Error::custom)?;
+        if u64::try_from(payload.len()).unwrap_or(u64::MAX) > MAX_RUNTIME_PARITY_PAYLOAD_BYTES {
+            return Err(serde::ser::Error::custom(
+                "runtime parity payload exceeds compression budget",
+            ));
+        }
+        let compressed =
+            zstd::stream::encode_all(payload.as_slice(), 1).map_err(serde::ser::Error::custom)?;
+        let mut state = serializer.serialize_struct("RuntimeParityCase", 4)?;
+        state.serialize_field("evidence_ref_sha256", &self.evidence_ref_sha256)?;
+        state.serialize_field("request_text", &self.request_text)?;
+        state.serialize_field(
+            "provider_payload_zstd",
+            serde_bytes::Bytes::new(&compressed),
+        )?;
+        state.serialize_field("expected_response", &self.expected_response)?;
+        state.end()
+    }
 }
 
 #[derive(Deserialize)]
@@ -153,5 +179,22 @@ mod tests {
 
         assert_eq!(restored.provider_payload, payload);
         assert_eq!(restored.expected_response, "9");
+    }
+
+    #[test]
+    fn runtime_parity_writes_compact_zstd_payload() {
+        let parity = RuntimeParityCase {
+            evidence_ref_sha256: "c".repeat(64),
+            request_text: "return value".to_owned(),
+            provider_payload: json!({"body": "x".repeat(32 * 1024)}),
+            expected_response: "ok".to_owned(),
+        };
+
+        let encoded = serde_cbor::to_vec(&parity).expect("compact parity CBOR");
+        let restored: RuntimeParityCase =
+            serde_cbor::from_slice(&encoded).expect("compact parity roundtrip");
+
+        assert!(encoded.len() < 1_024, "encoded bytes={}", encoded.len());
+        assert_eq!(restored, parity);
     }
 }

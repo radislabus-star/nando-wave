@@ -12,7 +12,13 @@ use crate::{
 
 const TRANSFER_DISCOVERY_VERSION: u8 = 2;
 const CROSS_POOL_NEGATIVE_REFRESH_INTERVAL: u64 = 64;
-const MAX_PARITY_RESERVOIR_CASES: usize = 1_024;
+const MAX_PARITY_SIGNATURES: usize = 64;
+const MAX_PARITY_CASES_PER_SIGNATURE: usize = 32;
+
+fn parity_teacher_signature(frame: &crate::RelationFrame) -> String {
+    crate::teacher_program_signature_from_action_atoms(&frame.atoms)
+        .unwrap_or_else(|| "unknown_teacher_signature".to_owned())
+}
 
 fn cross_pool_negative_refresh_due(transitions_seen: u64) -> bool {
     transitions_seen > 0 && transitions_seen % CROSS_POOL_NEGATIVE_REFRESH_INTERVAL == 0
@@ -582,9 +588,8 @@ impl StreamingSelfTrainingState {
         }
     }
 
-    /// Keeps one bounded proof reservoir across live and replay evidence.
-    /// Fresh live receipts take precedence; replay exists only to fill the
-    /// remaining capacity during schema migrations.
+    /// Keeps a proof-sized reservoir per learned program instead of allowing
+    /// frequent surfaces to consume one global payload-heavy cache.
     fn enforce_parity_reservoir_limit(&mut self) {
         self.runtime_parity_cases
             .retain(|frame_id, _| self.runtime_parity_frames.contains_key(frame_id));
@@ -599,20 +604,56 @@ impl StreamingSelfTrainingState {
                 && self.replay_support_parity_cases.contains_key(frame_id)
         });
 
-        while self.runtime_parity_cases.len() + self.replay_support_parity_cases.len()
-            > MAX_PARITY_RESERVOIR_CASES
-        {
-            if let Some(oldest) = self.replay_support_parity_cases.keys().next().cloned() {
-                self.replay_support_parity_cases.remove(&oldest);
-                self.replay_support_parity_frames.remove(&oldest);
-                continue;
-            }
-            let Some(oldest) = self.runtime_parity_cases.keys().next().cloned() else {
-                break;
-            };
-            self.runtime_parity_cases.remove(&oldest);
-            self.runtime_parity_frames.remove(&oldest);
+        let mut grouped = BTreeMap::<String, Vec<(bool, u64, String)>>::new();
+        for (frame_id, frame) in &self.runtime_parity_frames {
+            grouped
+                .entry(parity_teacher_signature(frame))
+                .or_default()
+                .push((true, frame.observed_at_unix_nanos, frame_id.clone()));
         }
+        for (frame_id, frame) in &self.replay_support_parity_frames {
+            grouped
+                .entry(parity_teacher_signature(frame))
+                .or_default()
+                .push((false, frame.observed_at_unix_nanos, frame_id.clone()));
+        }
+
+        let mut signatures = grouped.into_iter().collect::<Vec<_>>();
+        for (_, rows) in &mut signatures {
+            rows.sort_by(|left, right| {
+                right
+                    .0
+                    .cmp(&left.0)
+                    .then_with(|| right.1.cmp(&left.1))
+                    .then_with(|| left.2.cmp(&right.2))
+            });
+        }
+        signatures.sort_by(|left, right| {
+            right
+                .1
+                .first()
+                .map_or(0, |row| row.1)
+                .cmp(&left.1.first().map_or(0, |row| row.1))
+                .then_with(|| left.0.cmp(&right.0))
+        });
+
+        let retained = signatures
+            .into_iter()
+            .take(MAX_PARITY_SIGNATURES)
+            .flat_map(|(_, rows)| {
+                rows.into_iter()
+                    .take(MAX_PARITY_CASES_PER_SIGNATURE)
+                    .map(|(_, _, frame_id)| frame_id)
+            })
+            .collect::<BTreeSet<_>>();
+        self.runtime_parity_cases
+            .retain(|frame_id, _| retained.contains(frame_id));
+        self.runtime_parity_frames
+            .retain(|frame_id, _| retained.contains(frame_id));
+        self.replay_support_parity_cases
+            .retain(|frame_id, _| retained.contains(frame_id));
+        self.replay_support_parity_frames
+            .retain(|frame_id, _| retained.contains(frame_id));
     }
 
     /// Continues cold synthesis without requiring another event. The worker
@@ -2630,8 +2671,8 @@ mod tests {
 
         state.enforce_parity_reservoir_limit();
 
-        assert_eq!(state.runtime_parity_cases.len(), 100);
-        assert_eq!(state.replay_support_parity_cases.len(), 924);
+        assert_eq!(state.runtime_parity_cases.len(), 32);
+        assert!(state.replay_support_parity_cases.is_empty());
         assert_eq!(
             state.runtime_parity_cases.len(),
             state.runtime_parity_frames.len()

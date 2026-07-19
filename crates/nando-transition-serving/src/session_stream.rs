@@ -417,6 +417,7 @@ where
                             continue;
                         }
                     };
+                    retain_relevant_runtime_parity_cases(state, &frames);
                     if frames.is_empty() {
                         continue;
                     }
@@ -1479,8 +1480,10 @@ fn observe_row(row: &Value, state: &mut SessionState, emitted: &mut Vec<Relation
 
 fn reset_turn(state: &mut SessionState) {
     state.calls.clear();
-    state.observations.clear();
-    state.pending_frames.clear();
+    // Completed turns can contain large payload-derived allocations. Replace the
+    // buffers so inactive session states do not retain their peak capacity.
+    state.observations = Vec::new();
+    state.pending_frames = Vec::new();
     state.pending_action_call_id = None;
     state.call_count = 0;
     state.output_count = 0;
@@ -1496,7 +1499,7 @@ fn reset_turn(state: &mut SessionState) {
     state.turn_client_intent_id_sha256.clear();
     state.turn_session_id_sha256.clear();
     state.turn_event_time_unix_nanos = None;
-    state.runtime_request_text.clear();
+    state.runtime_request_text = String::new();
 }
 
 fn flush_pending(state: &mut SessionState, tokens: u64, output: &mut Vec<RelationFrame>) {
@@ -2553,6 +2556,18 @@ fn trim_runtime_parity_outbox(state: &mut SessionState) {
         };
         state.runtime_parity_cases.remove(&oldest);
     }
+}
+
+fn retain_relevant_runtime_parity_cases(state: &mut SessionState, emitted: &[RelationFrame]) {
+    let relevant = state
+        .pending_frames
+        .iter()
+        .chain(emitted)
+        .map(|frame| frame.frame_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    state
+        .runtime_parity_cases
+        .retain(|frame_id, _| relevant.contains(frame_id.as_str()));
 }
 
 fn bounded_runtime_provider_payload(state: &SessionState) -> Option<Value> {
