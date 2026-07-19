@@ -1059,8 +1059,9 @@ circuit-driven runtime role grounding            PASS
 TransformOp8 source/output causally used          PASS
 independent structural verifier derivation        PASS
 sealed winner provenance                          PASS
-executable parity provenance                      NOT IMPLEMENTED
-whole executable learned operator                WATCH
+executable parity provenance                      PASS
+immutable BackwardWave generation loop            PASS
+whole executable learned operator                 LAB PASS
 live authority                                   BLOCK
 ```
 

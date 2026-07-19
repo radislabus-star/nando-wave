@@ -7,8 +7,9 @@ Implementation status:
 ```text
 R1 Runtime Role Grounding                         PASS
 R2 Sealed Winner Provenance                       PASS
-R3 Executable Parity Seal And Full Backward Loop  NEXT
-R4-R8                                             PENDING
+R3 Executable Parity Seal And Full Backward Loop  PASS
+R4 OperatorPage32 Restart Roundtrip                NEXT
+R5-R8                                             PENDING
 ```
 
 This plan closes the gap between a phase-selected relation circuit and an

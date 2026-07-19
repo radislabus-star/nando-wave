@@ -35,6 +35,7 @@ pub struct CrystallizationParityReceipt {
     pub future_bundle_sha256: Commitment256,
     pub raw_input_sha256: Commitment256,
     pub extractor_version: u32,
+    pub anchors: Box<[RuntimeRoleAnchor]>,
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
@@ -69,6 +70,24 @@ pub struct BoundCrystallizedOperator {
     verifier: VerifierProgram,
     request_text: String,
     provider_payload: Value,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutableParitySeal {
+    winner_seal_sha256: Commitment256,
+    actor_sha256: Commitment256,
+    verifier_sha256: Commitment256,
+    binding_receipts_root: Commitment256,
+    execution_receipts_root: Commitment256,
+    future_lineage_count: u32,
+    wrong_accepts: u32,
+    seal_sha256: Commitment256,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VerifiedCrystallizedOperator {
+    operator: CrystallizedOperator,
+    parity_seal: ExecutableParitySeal,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -130,7 +149,7 @@ impl CrystallizedOperator {
         winner_receipt: &SealedBlueprintWinnerReceipt,
         future_evidence: &[BlueprintFutureEvidence],
         receipts: &[CrystallizationParityReceipt],
-    ) -> Result<Self, CrystallizedOperatorError> {
+    ) -> Result<VerifiedCrystallizedOperator, CrystallizedOperatorError> {
         let frozen = future_window.frozen();
         if !winner_receipt.matches_frozen(frozen) {
             return Err(CrystallizedOperatorError::InvalidWinnerSeal);
@@ -163,8 +182,11 @@ impl CrystallizedOperator {
             return Err(CrystallizedOperatorError::ActorVerifierMismatch);
         }
 
-        let verified_future_lineages =
-            verify_future_receipts(future_window, future_evidence, &actor, &verifier, receipts)?;
+        let FutureParityProof {
+            lineages: verified_future_lineages,
+            binding_receipts,
+            execution_receipts,
+        } = verify_future_receipts(future_window, future_evidence, blueprint, receipts)?;
         let actor_sha256 = response_actor_program_digest(&actor)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
         let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
@@ -179,7 +201,14 @@ impl CrystallizedOperator {
             &verifier_sha256,
         )?;
 
-        Ok(Self {
+        let parity_seal = build_executable_parity_seal(
+            winner_receipt,
+            &actor_sha256,
+            &verifier_sha256,
+            &binding_receipts,
+            &execution_receipts,
+        )?;
+        let operator = Self {
             page,
             relation_program: blueprint.relation_program().clone(),
             role_graph: blueprint.role_graph().clone(),
@@ -189,17 +218,14 @@ impl CrystallizedOperator {
             actor_sha256,
             verifier_sha256,
             verified_future_lineages: verified_future_lineages.into_boxed_slice(),
+        };
+        Ok(VerifiedCrystallizedOperator {
+            operator,
+            parity_seal,
         })
     }
 
-    pub fn bind(
-        &self,
-        evidence: RuntimeSurfaceEvidence,
-    ) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
-        bind_crystallized_operator(self, evidence)
-    }
-
-    pub fn feedback_field(
+    fn feedback_field(
         &self,
         config: OperatorGrokkingConfig,
     ) -> Result<CandidateCubeField, CrystallizedFeedbackError> {
@@ -216,7 +242,7 @@ impl CrystallizedOperator {
         Ok(field)
     }
 
-    pub fn apply_verified_feedback(
+    fn apply_verified_feedback(
         &self,
         field: &mut CandidateCubeField,
         receipt: &VerifiedDeltaReceipt,
@@ -236,38 +262,129 @@ impl CrystallizedOperator {
     }
 
     #[must_use]
-    pub const fn page(&self) -> &OperatorPage32 {
+    const fn page(&self) -> &OperatorPage32 {
         &self.page
     }
 
     #[must_use]
-    pub const fn relation_program(&self) -> &OperatorCircuit {
+    const fn relation_program(&self) -> &OperatorCircuit {
         &self.relation_program
     }
 
     #[must_use]
-    pub const fn blueprint_sha256(&self) -> &Commitment256 {
+    const fn blueprint_sha256(&self) -> &Commitment256 {
         &self.blueprint_sha256
     }
 
     #[must_use]
-    pub const fn candidate_set_sha256(&self) -> &Commitment256 {
+    const fn candidate_set_sha256(&self) -> &Commitment256 {
         &self.candidate_set_sha256
     }
 
     #[must_use]
-    pub fn actor_sha256(&self) -> &str {
+    fn actor_sha256(&self) -> &str {
         &self.actor_sha256
     }
 
     #[must_use]
-    pub fn verifier_sha256(&self) -> &str {
+    fn verifier_sha256(&self) -> &str {
         &self.verifier_sha256
     }
 
     #[must_use]
-    pub fn verified_future_lineages(&self) -> &[Commitment256] {
+    fn verified_future_lineages(&self) -> &[Commitment256] {
         &self.verified_future_lineages
+    }
+}
+
+impl VerifiedCrystallizedOperator {
+    pub fn bind(
+        &self,
+        evidence: RuntimeSurfaceEvidence,
+    ) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
+        bind_operator_components(
+            &self.operator.role_graph,
+            &self.operator.relation_program,
+            &self.operator.transform_program,
+            evidence,
+        )
+    }
+
+    pub fn feedback_field(
+        &self,
+        config: OperatorGrokkingConfig,
+    ) -> Result<CandidateCubeField, CrystallizedFeedbackError> {
+        self.operator.feedback_field(config)
+    }
+
+    pub fn apply_verified_feedback(
+        &self,
+        field: &mut CandidateCubeField,
+        receipt: &VerifiedDeltaReceipt,
+    ) -> Result<BackwardWaveUpdate, CrystallizedFeedbackError> {
+        self.operator.apply_verified_feedback(field, receipt)
+    }
+
+    #[must_use]
+    pub const fn parity_seal(&self) -> &ExecutableParitySeal {
+        &self.parity_seal
+    }
+
+    #[must_use]
+    pub const fn page(&self) -> &OperatorPage32 {
+        self.operator.page()
+    }
+
+    #[must_use]
+    pub const fn relation_program(&self) -> &OperatorCircuit {
+        self.operator.relation_program()
+    }
+
+    #[must_use]
+    pub const fn blueprint_sha256(&self) -> &Commitment256 {
+        self.operator.blueprint_sha256()
+    }
+
+    #[must_use]
+    pub const fn candidate_set_sha256(&self) -> &Commitment256 {
+        self.operator.candidate_set_sha256()
+    }
+
+    #[must_use]
+    pub fn actor_sha256(&self) -> &str {
+        self.operator.actor_sha256()
+    }
+
+    #[must_use]
+    pub fn verifier_sha256(&self) -> &str {
+        self.operator.verifier_sha256()
+    }
+
+    #[must_use]
+    pub fn verified_future_lineages(&self) -> &[Commitment256] {
+        self.operator.verified_future_lineages()
+    }
+}
+
+impl ExecutableParitySeal {
+    #[must_use]
+    pub const fn winner_seal_sha256(&self) -> &Commitment256 {
+        &self.winner_seal_sha256
+    }
+
+    #[must_use]
+    pub const fn future_lineage_count(&self) -> u32 {
+        self.future_lineage_count
+    }
+
+    #[must_use]
+    pub const fn wrong_accepts(&self) -> u32 {
+        self.wrong_accepts
+    }
+
+    #[must_use]
+    pub const fn seal_sha256(&self) -> &Commitment256 {
+        &self.seal_sha256
     }
 }
 
@@ -323,13 +440,15 @@ impl BoundRoleEnvironment {
     }
 }
 
-fn bind_crystallized_operator(
-    operator: &CrystallizedOperator,
+fn bind_operator_components(
+    role_graph: &RoleGraph,
+    relation_program: &OperatorCircuit,
+    transform_program: &[TransformOp8],
     evidence: RuntimeSurfaceEvidence,
 ) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
     let report = RuntimeRoleBinder::bind(
-        &operator.role_graph,
-        &operator.relation_program,
+        role_graph,
+        relation_program,
         &evidence.bundle,
         nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
     );
@@ -339,7 +458,7 @@ fn bind_crystallized_operator(
     if report.mappings().is_empty() {
         return Err(CrystallizedOperatorError::RuntimeRelationMismatch);
     }
-    let [transform] = operator.transform_program.as_ref() else {
+    let [transform] = transform_program else {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     };
     let mut actions = std::collections::BTreeMap::<Commitment256, Vec<_>>::new();
@@ -380,7 +499,14 @@ fn bind_crystallized_operator(
     let response = execute_response(&actor, &evidence.request_text, &evidence.provider_payload)
         .response
         .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
-    let verifier = independently_bind_verifier(operator, &evidence, &response, mapping)?;
+    let verifier = independently_bind_verifier(
+        role_graph,
+        relation_program,
+        transform_program,
+        &evidence,
+        &response,
+        mapping,
+    )?;
     let mapping_sha256 = digest_parts(
         b"nando.bound-role-mapping.v1",
         &[mapping.local_to_canonical()],
@@ -400,21 +526,23 @@ fn bind_crystallized_operator(
 }
 
 fn independently_bind_verifier(
-    operator: &CrystallizedOperator,
+    role_graph: &RoleGraph,
+    relation_program: &OperatorCircuit,
+    transform_program: &[TransformOp8],
     evidence: &RuntimeSurfaceEvidence,
     actor_response: &str,
     selected_mapping: &nando_core::wave::RuntimeRoleMapping,
 ) -> Result<VerifierProgram, CrystallizedOperatorError> {
     let report = RuntimeRoleBinder::bind(
-        &operator.role_graph,
-        &operator.relation_program,
+        role_graph,
+        relation_program,
         &evidence.bundle,
         nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
     );
     if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
         return Err(CrystallizedOperatorError::RuntimeBindingExhausted);
     }
-    let [transform] = operator.transform_program.as_ref() else {
+    let [transform] = transform_program else {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     };
     let mut selected_verifier = None;
@@ -553,13 +681,18 @@ fn transform_format(flags: u16) -> ValueProjectionFormat {
     }
 }
 
+struct FutureParityProof {
+    lineages: Vec<Commitment256>,
+    binding_receipts: Vec<Commitment256>,
+    execution_receipts: Vec<Commitment256>,
+}
+
 fn verify_future_receipts(
     future_window: &FrozenBlueprintFutureWindow,
     future_evidence: &[BlueprintFutureEvidence],
-    actor: &ResponseProgram,
-    verifier: &VerifierProgram,
+    blueprint: &CandidateOperatorBlueprint,
     receipts: &[CrystallizationParityReceipt],
-) -> Result<Vec<Commitment256>, CrystallizedOperatorError> {
+) -> Result<FutureParityProof, CrystallizedOperatorError> {
     let expected = future_window.future_lineages_sha256();
     if expected.is_empty() {
         return Err(CrystallizedOperatorError::EmptyFutureWindow);
@@ -573,6 +706,8 @@ fn verify_future_receipts(
         return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
     }
     let mut seen = BTreeSet::new();
+    let mut binding_receipts = Vec::with_capacity(receipts.len());
+    let mut execution_receipts = Vec::with_capacity(receipts.len());
     for receipt in receipts {
         if !expected.contains(&receipt.future_lineage_sha256) {
             return Err(CrystallizedOperatorError::UnknownParityLineage);
@@ -590,23 +725,106 @@ fn verify_future_receipts(
         {
             return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
         }
-        let execution = execute_response(actor, &receipt.request_text, &receipt.provider_payload);
-        if execution.status != ResponseExecutionStatus::Executed {
-            return Err(CrystallizedOperatorError::ActorDidNotExecute);
-        }
-        let response = execution
-            .response
-            .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+        let bound = bind_operator_components(
+            blueprint.role_graph(),
+            blueprint.relation_program(),
+            blueprint.transform_program(),
+            RuntimeSurfaceEvidence {
+                bundle: evidence.bundle().clone(),
+                request_text: receipt.request_text.clone(),
+                provider_payload: receipt.provider_payload.clone(),
+                anchors: receipt.anchors.clone(),
+            },
+        )?;
+        let response = bound.execute_verified()?;
         if response != receipt.expected_response {
             return Err(CrystallizedOperatorError::ActorResponseMismatch);
         }
-        verify_response_independently(verifier, &receipt.provider_payload, &response)
-            .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
+        binding_receipts.push(digest_parts(
+            b"nando.crystallization-binding-receipt.v1",
+            &[
+                bound.environment().surface_sha256(),
+                bound.environment().mapping_sha256(),
+                bound.environment().action_equivalence_sha256(),
+            ],
+        ));
+        let actor_digest = response_actor_program_digest(bound.actor())
+            .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        let verifier_digest = response_independent_verifier_program_digest(bound.verifier())
+            .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        execution_receipts.push(digest_parts(
+            b"nando.crystallization-execution-receipt.v1",
+            &[
+                &receipt.future_lineage_sha256,
+                actor_digest.as_bytes(),
+                verifier_digest.as_bytes(),
+                response.as_bytes(),
+            ],
+        ));
     }
     if seen != *expected {
         return Err(CrystallizedOperatorError::MissingParityReceipt);
     }
-    Ok(seen.into_iter().collect())
+    Ok(FutureParityProof {
+        lineages: seen.into_iter().collect(),
+        binding_receipts,
+        execution_receipts,
+    })
+}
+
+fn build_executable_parity_seal(
+    winner_receipt: &SealedBlueprintWinnerReceipt,
+    actor_sha256: &str,
+    verifier_sha256: &str,
+    binding_receipts: &[Commitment256],
+    execution_receipts: &[Commitment256],
+) -> Result<ExecutableParitySeal, CrystallizedOperatorError> {
+    if binding_receipts.is_empty() || binding_receipts.len() != execution_receipts.len() {
+        return Err(CrystallizedOperatorError::MissingParityReceipt);
+    }
+    let actor_sha256 = decode_sha256(actor_sha256)?;
+    let verifier_sha256 = decode_sha256(verifier_sha256)?;
+    let binding_receipts_root =
+        commitment_root(b"nando.binding-receipts-root.v1", binding_receipts);
+    let execution_receipts_root =
+        commitment_root(b"nando.execution-receipts-root.v1", execution_receipts);
+    let future_lineage_count = u32::try_from(binding_receipts.len())
+        .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+    let wrong_accepts = 0_u32;
+    let seal_sha256 = digest_parts(
+        b"nando.executable-parity-seal.v1",
+        &[
+            winner_receipt.seal_sha256(),
+            &actor_sha256,
+            &verifier_sha256,
+            &binding_receipts_root,
+            &execution_receipts_root,
+            &future_lineage_count.to_le_bytes(),
+            &wrong_accepts.to_le_bytes(),
+        ],
+    );
+    Ok(ExecutableParitySeal {
+        winner_seal_sha256: *winner_receipt.seal_sha256(),
+        actor_sha256,
+        verifier_sha256,
+        binding_receipts_root,
+        execution_receipts_root,
+        future_lineage_count,
+        wrong_accepts,
+        seal_sha256,
+    })
+}
+
+fn commitment_root(domain: &[u8], commitments: &[Commitment256]) -> Commitment256 {
+    let mut commitments = commitments.to_vec();
+    commitments.sort_unstable();
+    let mut hasher = Sha256::new();
+    hasher.update(domain);
+    hasher.update((commitments.len() as u32).to_le_bytes());
+    for commitment in commitments {
+        hasher.update(commitment);
+    }
+    hasher.finalize().into()
 }
 
 fn composition_is_acyclic(blueprint: &CandidateOperatorBlueprint) -> bool {
@@ -803,6 +1021,11 @@ mod tests {
     };
     use serde_json::json;
 
+    use crate::{
+        TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1, TypedExecutionStage, TypedExecutionStageReceipt,
+        VerifiedDeltaOutcome, VerifiedDeltaRelation, VerifiedDeltaRelationState,
+    };
+
     use super::*;
     fn digest(byte: u8) -> Commitment256 {
         [byte; 32]
@@ -894,6 +1117,14 @@ mod tests {
             future_bundle_sha256: *evidence.bundle_sha256(),
             raw_input_sha256: *evidence.raw_input_sha256(),
             extractor_version: evidence.extractor_version(),
+            anchors: vec![RuntimeRoleAnchor {
+                local_role: 0,
+                selector: ResponseValueSelector::JsonField {
+                    field: "total".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+            }]
+            .into_boxed_slice(),
             request_text: String::new(),
             provider_payload: payload.clone(),
             expected_response: "7".to_owned(),
@@ -910,6 +1141,12 @@ mod tests {
         assert_eq!(operator.blueprint_sha256(), &winner);
         assert_eq!(operator.verified_future_lineages(), &[digest(3)]);
         assert_eq!(operator.page().as_bytes().len(), 4_032);
+        assert_eq!(operator.parity_seal().future_lineage_count(), 1);
+        assert_eq!(operator.parity_seal().wrong_accepts(), 0);
+        assert_eq!(
+            operator.parity_seal().winner_seal_sha256(),
+            winner_receipt.seal_sha256()
+        );
         let bound = operator
             .bind(RuntimeSurfaceEvidence {
                 bundle: future_bundle,
@@ -926,7 +1163,8 @@ mod tests {
             })
             .expect("runtime role binding");
         assert_eq!(bound.execute_verified().as_deref(), Ok("7"));
-        let feedback = operator
+        let page_before = operator.page().as_bytes().to_vec();
+        let mut feedback = operator
             .feedback_field(OperatorGrokkingConfig::default())
             .expect("immutable next-generation accumulator");
         assert_eq!(
@@ -934,6 +1172,44 @@ mod tests {
             operator.page().header().expect("header").generation
         );
         assert_eq!(feedback.circuits(), &[operator.relation_program().clone()]);
+        let header = operator.page().header().expect("operator page header");
+        let relation = operator.relation_program().relations()[0];
+        let positive = verified_delta(
+            header.generation,
+            header.circuit_fingerprint64,
+            VerifiedDeltaOutcome::Positive,
+            vec![VerifiedDeltaRelation {
+                plane: relation.cell.plane,
+                source_role: relation.cell.source_role,
+                target_role: relation.cell.target_role,
+                state: match relation.state {
+                    TernaryRelationState::Opposed => VerifiedDeltaRelationState::Opposed,
+                    TernaryRelationState::Unresolved => VerifiedDeltaRelationState::Unresolved,
+                    TernaryRelationState::Supported => VerifiedDeltaRelationState::Supported,
+                },
+                phase_re_micro: (relation.phase_anchor.re * 1_000_000.0).round() as i32,
+                phase_im_micro: (relation.phase_anchor.im * 1_000_000.0).round() as i32,
+            }],
+            50,
+        );
+        assert_eq!(
+            operator.apply_verified_feedback(&mut feedback, &positive),
+            Ok(BackwardWaveUpdate::Applied)
+        );
+        assert_eq!(operator.page().as_bytes(), page_before.as_slice());
+        let field_before_censored = feedback.clone();
+        let censored = verified_delta(
+            header.generation,
+            header.circuit_fingerprint64,
+            VerifiedDeltaOutcome::CensoredUnknown,
+            Vec::new(),
+            51,
+        );
+        assert_eq!(
+            operator.apply_verified_feedback(&mut feedback, &censored),
+            Ok(BackwardWaveUpdate::CensoredIgnored)
+        );
+        assert_eq!(feedback, field_before_censored);
         assert_eq!(
             CrystallizedOperator::crystallize(&future, winner_receipt, &evidence_set, &[]),
             Err(CrystallizedOperatorError::MissingParityReceipt)
@@ -983,5 +1259,39 @@ mod tests {
             ),
             Err(CrystallizedOperatorError::FutureEvidenceMismatch)
         );
+    }
+
+    fn verified_delta(
+        generation: u64,
+        operator_fingerprint64: u64,
+        outcome: VerifiedDeltaOutcome,
+        relations: Vec<VerifiedDeltaRelation>,
+        identity: u8,
+    ) -> VerifiedDeltaReceipt {
+        let predicted = "4".repeat(64);
+        let observed = if outcome == VerifiedDeltaOutcome::Positive {
+            predicted.clone()
+        } else {
+            "5".repeat(64)
+        };
+        let trace = TypedExecutionStage::ALL
+            .into_iter()
+            .map(|stage| TypedExecutionStageReceipt {
+                schema: TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1.to_owned(),
+                stage,
+                generation,
+                operator_fingerprint64,
+                surface_id_sha256: format!("{identity:064x}"),
+                session_id_sha256: format!("{:064x}", identity.saturating_add(1)),
+                input_relation_sha256: "3".repeat(64),
+                predicted_relation_sha256: predicted.clone(),
+                observed_relation_sha256: observed.clone(),
+                stage_payload_sha256: format!("{:064x}", stage as u8 + 10),
+                independently_observed: stage == TypedExecutionStage::IndependentVerifier,
+                accepted: true,
+            })
+            .collect();
+        VerifiedDeltaReceipt::from_typed_trace(trace, outcome, relations)
+            .expect("valid typed feedback receipt")
     }
 }

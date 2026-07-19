@@ -175,6 +175,14 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
                 future_bundle_sha256: *evidence.bundle_sha256(),
                 raw_input_sha256: *evidence.raw_input_sha256(),
                 extractor_version: evidence.extractor_version(),
+                anchors: vec![RuntimeRoleAnchor {
+                    local_role: [1, 2, 0][index],
+                    selector: ResponseValueSelector::JsonField {
+                        field: "total".to_owned(),
+                        value_type: AtomValueType::Integer,
+                    },
+                }]
+                .into_boxed_slice(),
                 request_text: String::new(),
                 provider_payload: json!({
                     "input": [{
