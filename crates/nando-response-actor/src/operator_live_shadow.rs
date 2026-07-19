@@ -31,6 +31,7 @@ use crate::{
 const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
 const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
 const TEACHER_CALL_SELECTOR_BUDGET: usize = 512;
+const COMMON_ACTOR_TOPOLOGY_BUDGET: usize = 64;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveScalarCircuitSample {
@@ -443,11 +444,20 @@ fn update_support_actor_hypotheses(
         law.support_hypotheses_initialized = true;
         return Ok(());
     }
-    law.support_actor_hypotheses.retain(|program| {
-        serde_cbor::to_vec(program)
-            .ok()
-            .is_some_and(|key| observed.contains_key(&key))
-    });
+    let mut union = law
+        .support_actor_hypotheses
+        .drain(..)
+        .map(|program| {
+            serde_cbor::to_vec(&program)
+                .map(|key| (key, program))
+                .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    union.extend(observed);
+    if union.len() > TEACHER_CALL_SELECTOR_BUDGET {
+        return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
+    }
+    law.support_actor_hypotheses = union.into_values().collect();
     Ok(())
 }
 
@@ -462,10 +472,6 @@ fn evaluate_live_law(
     }
     if law.support_actor_hypotheses.is_empty() {
         increment_report_blocker(report, "actor_hypotheses_no_common_version");
-        return;
-    }
-    if law.support_actor_hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
-        increment_report_blocker(report, "actor_hypothesis_class_budget");
         return;
     }
     let Ok(support) = law
@@ -526,24 +532,13 @@ fn evaluate_live_law(
     let future_evidence = future
         .iter()
         .map(|sample| {
-            let verifier = source_neutral_verifier_for_program(&sample.actor_template)
-                .map_err(|_| nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?;
-            let actor_sha256 = parse_commitment(
-                &response_actor_program_digest(&sample.actor_template)
-                    .map_err(|_| nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?,
-            )
-            .ok_or(nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?;
-            let verifier_sha256 = parse_commitment(
-                &response_independent_verifier_program_digest(&verifier)
-                    .map_err(|_| nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?,
-            )
-            .ok_or(nando_core::wave::BlueprintFutureEvidenceError::EmptyRawInput)?;
-            BlueprintFutureEvidence::new_with_executable_contracts(
+            // The first seal selects a circuit from structural future only.
+            // Binding actor/verifier commitments here would reveal the winner
+            // when competing role topologies own different executable laws.
+            BlueprintFutureEvidence::new(
                 sample.raw_input_sha256,
                 sample.extractor_version.max(1),
                 sample.bundle.clone(),
-                actor_sha256,
-                verifier_sha256,
             )
         })
         .collect::<Result<Vec<_>, _>>();
@@ -722,22 +717,42 @@ fn build_competing_blueprint_set(
     let mut expansions = 0_usize;
 
     for actor in actors {
-        let roles = rich_scalar_program_roles(&actor)
-            .ok_or_else(|| "actor_hypothesis_roles_missing".to_owned())?;
-        let transform_opcode = program_transform_opcode(&actor)
-            .ok_or_else(|| "actor_hypothesis_opcode_missing".to_owned())?;
-        let transform_flags = program_transform_flags(&actor)
-            .ok_or_else(|| "actor_hypothesis_flags_missing".to_owned())?;
+        let actor_topology = source_neutral_actor_topology(
+            &actor,
+            &support[0].request_text,
+            &support[0].provider_payload,
+        )
+        .map(|(topology, _)| topology)
+        .ok_or_else(|| "actor_hypothesis_topology_missing".to_owned())?;
         let actor_bundles = support
             .iter()
             .map(|sample| {
+                let local_actor = sample
+                    .actor_hypotheses
+                    .iter()
+                    .filter(|program| {
+                        source_neutral_actor_topology(
+                            program,
+                            &sample.request_text,
+                            &sample.provider_payload,
+                        )
+                        .is_some_and(|(topology, _)| topology == actor_topology)
+                    })
+                    .min_by_key(|program| serde_cbor::to_vec(program).unwrap_or_default())
+                    .ok_or_else(|| "actor_support_local_adapter_missing".to_owned())?;
+                let roles = rich_scalar_program_roles(local_actor)
+                    .ok_or_else(|| "actor_hypothesis_roles_missing".to_owned())?;
+                let transform_opcode = program_transform_opcode(local_actor)
+                    .ok_or_else(|| "actor_hypothesis_opcode_missing".to_owned())?;
+                let transform_flags = program_transform_flags(local_actor)
+                    .ok_or_else(|| "actor_hypothesis_flags_missing".to_owned())?;
                 observed_rich_scalar_surface(
                     &sample.request_text,
                     &sample.provider_payload,
                     &roles,
                     transform_opcode,
                     transform_flags,
-                    program_has_filter_count(&actor),
+                    program_has_filter_count(local_actor),
                     &commitment_hex(sample.bundle.surface_sha256()),
                     *sample.bundle.lineage_sha256(),
                     *sample.bundle.surface_sha256(),
@@ -842,32 +857,71 @@ fn common_support_actor_hypotheses(
     let Some(first) = support.first() else {
         return Err("actor_hypotheses_missing".to_owned());
     };
-    let mut common = first
+    let mut programs_by_topology = BTreeMap::<Vec<u8>, ResponseProgram>::new();
+    let mut common_topologies = first
         .actor_hypotheses
         .iter()
-        .map(|program| {
-            serde_cbor::to_vec(program)
-                .map(|key| (key, program.clone()))
-                .map_err(|_| "actor_hypothesis_encode_failed".to_owned())
+        .filter_map(|program| {
+            source_neutral_actor_topology(program, &first.request_text, &first.provider_payload)
         })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-    for sample in &support[1..] {
-        let keys = sample
-            .actor_hypotheses
-            .iter()
-            .map(|program| {
-                serde_cbor::to_vec(program).map_err(|_| "actor_hypothesis_encode_failed".to_owned())
-            })
-            .collect::<Result<BTreeSet<_>, _>>()?;
-        common.retain(|key, _| keys.contains(key));
-        if common.is_empty() {
-            return Err("actor_hypotheses_no_common_version".to_owned());
+        .map(|(topology, program)| {
+            programs_by_topology
+                .entry(topology.clone())
+                .or_insert(program);
+            topology
+        })
+        .collect::<BTreeSet<_>>();
+    if common_topologies.is_empty() {
+        return Err("actor_hypothesis_topology_missing".to_owned());
+    }
+    for sample in support {
+        let mut local_topologies = BTreeSet::new();
+        for program in &sample.actor_hypotheses {
+            let Some((topology, canonical)) = source_neutral_actor_topology(
+                program,
+                &sample.request_text,
+                &sample.provider_payload,
+            ) else {
+                continue;
+            };
+            local_topologies.insert(topology.clone());
+            programs_by_topology.entry(topology).or_insert(canonical);
+        }
+        common_topologies.retain(|topology| local_topologies.contains(topology));
+        if common_topologies.is_empty() {
+            return Err("actor_hypotheses_no_common_semantic_law".to_owned());
         }
     }
-    if common.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
-        return Err("actor_hypothesis_class_budget".to_owned());
+    if common_topologies.len() > COMMON_ACTOR_TOPOLOGY_BUDGET {
+        return Err("actor_hypothesis_topology_budget_exhausted".to_owned());
     }
-    Ok(common.into_values().collect())
+    // Unary physical adapters collapse to one topology. Multi-role role orders
+    // remain separate competing blueprints until frozen future resolves them.
+    common_topologies
+        .into_iter()
+        .map(|topology| {
+            programs_by_topology
+                .remove(&topology)
+                .ok_or_else(|| "actor_hypothesis_canonical_program_missing".to_owned())
+        })
+        .collect()
+}
+
+fn source_neutral_actor_topology(
+    program: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Option<(Vec<u8>, ResponseProgram)> {
+    let role_count = scalar_program_role_slot_types(program)
+        .map(|roles| roles.len())
+        .or_else(|| rich_scalar_program_roles(program).map(|roles| roles.len()))?;
+    let canonical = canonicalize_scalar_program_roles(program, request_text, provider_payload)?;
+    if role_count <= 1 {
+        return source_neutral_scalar_program_shape(&canonical)
+            .map(|shape| ([vec![0], shape].concat(), canonical));
+    }
+    let encoded = serde_cbor::to_vec(&canonical).ok()?;
+    Some(([vec![1], encoded].concat(), canonical))
 }
 
 fn live_admission_candidate(
@@ -2720,16 +2774,23 @@ fn observed_rich_scalar_surface(
     lineage_sha256: [u8; 32],
     surface_sha256: [u8; 32],
 ) -> Result<crate::RuntimeSurfaceEvidence, LiveScalarShadowBlocker> {
-    let role_count = program_roles
-        .len()
-        .saturating_add(if compose_count { 3 } else { 2 });
+    let is_filter = transform_opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE;
+    let role_count = if is_filter {
+        program_roles
+            .len()
+            .saturating_add(if compose_count { 3 } else { 2 })
+    } else {
+        // Context + one source and one virtual result slot per transform.
+        // The renderer composes those result slots into the final response.
+        1_usize.saturating_add(program_roles.len().saturating_mul(2))
+    };
     if !(3..=18).contains(&role_count) {
         return Err(LiveScalarShadowBlocker::InvalidBundle);
     }
     let semantic_to_local = local_role_permutation_n(frame_id, role_count);
     let context = semantic_to_local[0];
-    let output = semantic_to_local[role_count - 1];
-    let intermediate = compose_count.then_some(semantic_to_local[role_count - 2]);
+    let output = is_filter.then_some(semantic_to_local[role_count - 1]);
+    let intermediate = (is_filter && compose_count).then_some(semantic_to_local[role_count - 2]);
     let mut roles = vec![StructuralRoleSignature::new(0, 0, 0, 0, Vec::new()); role_count];
     let planes = (0..program_roles.len())
         .map(|index| u8::try_from(index).unwrap_or(u8::MAX))
@@ -2744,17 +2805,19 @@ fn observed_rich_scalar_surface(
             Vec::new(),
         );
     }
-    roles[usize::from(output)] = StructuralRoleSignature::new(
-        value_type_tag(if compose_count {
-            AtomValueType::Integer
-        } else {
-            selector_value_type(&program_roles[0].0)
-        }),
-        1,
-        2,
-        4,
-        Vec::new(),
-    );
+    if let Some(output) = output {
+        roles[usize::from(output)] = StructuralRoleSignature::new(
+            value_type_tag(if compose_count {
+                AtomValueType::Integer
+            } else {
+                selector_value_type(&program_roles[0].0)
+            }),
+            1,
+            2,
+            4,
+            Vec::new(),
+        );
+    }
     let mut relations = Vec::with_capacity(program_roles.len());
     let mut atoms = Vec::with_capacity(program_roles.len());
     let mut anchors = Vec::with_capacity(program_roles.len());
@@ -2772,7 +2835,9 @@ fn observed_rich_scalar_surface(
             phase_vector_from_atoms(phase_atoms.iter().map(String::as_str), 1)[0]
         } else {
             roles[usize::from(source)] =
-                crate::crystallized_operator::runtime_role_signature_for_selector(selector, plane);
+                crate::crystallized_operator::runtime_multi_role_signature_for_selector(
+                    selector, plane,
+                );
             let phase_atom = format!("scalar_role:{index}:type:{}", value_type_tag(value_type));
             phase_vector_from_atoms([phase_atom.as_str()], 1)[0]
         };
@@ -2783,10 +2848,13 @@ fn observed_rich_scalar_surface(
             state: TernaryRelationState::Supported,
             phase_anchor: phase,
         });
-        if transform_opcode != TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+        if !is_filter {
+            let transform_output = semantic_to_local[1 + program_roles.len() + index];
+            roles[usize::from(transform_output)] =
+                StructuralRoleSignature::new(value_type_tag(value_type), 1, 2, 4, Vec::new());
             atoms.push(TypedProgramAtom {
                 opcode: transform_opcode,
-                output_local_role: output,
+                output_local_role: transform_output,
                 source_a_local_role: source,
                 source_b_local_role: OPERATOR_ROLE_NONE,
                 parameter: transform_parameter(value_type)
@@ -2807,8 +2875,9 @@ fn observed_rich_scalar_surface(
             json_path_sha256: None,
         });
     }
-    if transform_opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE {
+    if is_filter {
         let predicate_type = selector_value_type(&program_roles[1].0);
+        let output = output.ok_or(LiveScalarShadowBlocker::InvalidBundle)?;
         let filter_output = intermediate.unwrap_or(output);
         atoms.push(TypedProgramAtom {
             opcode: TRANSFORM_OPCODE_FILTER_REQUEST_VALUE,
@@ -4065,12 +4134,13 @@ mod tests {
         update_support_actor_hypotheses(&mut law, &broad.actor_hypotheses)
             .expect("first surface initializes the version space");
         update_support_actor_hypotheses(&mut law, &narrow.actor_hypotheses)
-            .expect("second surface intersects the version space");
+            .expect("second surface extends the bounded adapter space");
 
         assert!(!law.support_actor_hypotheses.is_empty());
-        assert!(
-            law.support_actor_hypotheses.len() <= crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS
-        );
+        assert!(law.support_actor_hypotheses.len() <= TEACHER_CALL_SELECTOR_BUDGET);
+        let quotient = common_support_actor_hypotheses(&[broad, narrow])
+            .expect("physical adapters share one semantic actor law");
+        assert_eq!(quotient.len(), 1);
     }
 
     #[test]

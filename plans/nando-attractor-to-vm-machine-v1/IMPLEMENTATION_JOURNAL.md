@@ -1314,3 +1314,61 @@ Focused remote receipt:
 ```text
 custom-tool law report + full admission/CPU lifecycle  1/1 PASS  3.45 s
 ```
+
+## 2026-07-19 - Physical adapter quotient and phase-selected role topology (v76)
+
+The per-law report exposed a `write_stdin` law with six support rows but zero
+actor hypotheses. The miner was intersecting exact physical selector programs
+across renamed surfaces. That recreated a lookup boundary inside the new
+operator path: the semantic action was stable, but its JSON/content adapter was
+not byte-identical.
+
+Strategy v76 separates three levels:
+
+```text
+bounded physical adapters (maximum 512)
+-> source-neutral unary topology or competing multi-role topologies (maximum 64)
+-> frozen blueprint set
+-> independent future phase coherence
+-> exactly one winner-owned actor or ABSTAIN
+```
+
+Unary function/custom-tool adapters now form a bounded union and quotient to
+one action law. Multi-role order is deliberately not collapsed: equal-valued
+support can retain several actor topologies, and independent future must resolve
+their role order. Request ordinal is preserved only as a structural relation in
+multi-role role signatures. Field names and JSON paths remain physical runtime
+anchors and never enter the transferable circuit.
+
+Future circuit selection uses structural `BlueprintFutureEvidence` without an
+actor commitment. Binding an actor before winner selection would reveal the
+answer. After the sealed structural winner, the second executable seal rebinds
+the committed raw surface, runs the winner-owned actor, independently rebuilds
+the verifier, and commits binding/execution receipts.
+
+Rich scalar transforms now write separate virtual result slots:
+
+```text
+source_0 -> value_slot_0
+source_1 -> value_slot_1
+[value_slot_0, value_slot_1] -> winner-owned renderer
+```
+
+This makes the learned relation circuit causal input to the VM instead of
+attaching multiple projections to one invalid output slot.
+
+Focused remote receipts:
+
+```text
+ambiguous multi-role support -> 3 competing circuits
+-> full phase winner / four controls ABSTAIN
+-> 32/32 future actor+verifier receipts              1/1 PASS  5.65 s
+custom-tool physical adapters -> one law
+-> crystallize/admit/restart/CPU                     1/1 PASS  6.59 s
+pre-action leakage guard + page/binder roundtrip     2/2 PASS  0.04 s
+nando-response-actor all-targets check                   PASS  7.73 s
+```
+
+The operator circuit groks through cross-plane phase coherence. The compact
+operator page stores the crystallized result; it does not itself perform
+grokking.

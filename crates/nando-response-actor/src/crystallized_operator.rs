@@ -961,7 +961,8 @@ fn observed_multi_role_runtime_surface(
         let plane =
             u8::try_from(index).map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
         let value_type = observed.value_type;
-        roles[usize::from(source)] = runtime_role_signature_for_selector(&observed.selector, plane);
+        roles[usize::from(source)] =
+            runtime_multi_role_signature_for_selector(&observed.selector, plane);
         let phase_atom = format!(
             "scalar_role:{index}:type:{}",
             runtime_value_type_tag(value_type)
@@ -1874,55 +1875,49 @@ pub(crate) fn runtime_role_signature_for_selector(
     plane: u8,
 ) -> StructuralRoleSignature {
     let value_type = selector_value_type(selector).unwrap_or(AtomValueType::String);
+    // A selector is a physical adapter into one surface, not part of the
+    // transferable role law. Keep only the broad request/output source class;
+    // exact ordinals and paths remain in RuntimeRoleAnchor and are rebound on
+    // every new surface. Symmetric bindings therefore ABSTAIN instead of being
+    // resolved by a historical ordinal.
     let (temporal_position, source_mask) = match selector {
         ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral => {
             (0, 0x0100)
         }
-        ResponseValueSelector::RequestReferencedJsonField { .. } => (1, 0x0220),
-        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal, .. } => {
-            (1, 0x0300 | u32::from(*ordinal))
-        }
-        ResponseValueSelector::CommandOutputBody => (1, 0x0400),
-        ResponseValueSelector::JsonScalarOrdinal { ordinal, .. } => {
-            (1, 0x0001_0000 | u32::from(*ordinal))
-        }
-        ResponseValueSelector::TurnOutputScalarOrdinal {
-            output_ordinal,
-            scalar_ordinal,
-            ..
-        } => (
-            1,
-            0x0002_0000 | (u32::from(*output_ordinal) << 8) | u32::from(*scalar_ordinal),
-        ),
-        ResponseValueSelector::LatestTurnOutputScalarOrdinal { scalar_ordinal, .. } => {
-            (1, 0x0003_0000 | u32::from(*scalar_ordinal))
-        }
-        ResponseValueSelector::LatestTurnOutputScalarFromEnd {
-            reverse_ordinal, ..
-        } => (1, 0x0004_0000 | u32::from(*reverse_ordinal)),
-        ResponseValueSelector::TurnOutputLine {
-            output_ordinal,
-            line_index,
-            ..
-        } => (
-            1,
-            0x0005_0000 | (u32::from(*output_ordinal) << 8) | u32::from(*line_index),
-        ),
-        ResponseValueSelector::LatestTurnOutputLine { line_index, .. } => {
-            (1, 0x0006_0000 | u32::from(*line_index))
-        }
-        ResponseValueSelector::ContentLinePrefix { .. }
-        | ResponseValueSelector::JsonField { .. }
-        | ResponseValueSelector::UniqueTurnJsonField { .. }
-        | ResponseValueSelector::UniqueActiveTurnJsonField { .. }
-        | ResponseValueSelector::UniqueScalar { .. }
-        | ResponseValueSelector::UniqueTurnScalar { .. } => (1, 0x0200),
+        _ => (1, 0x0200),
     };
     StructuralRoleSignature::new(
         runtime_value_type_tag(value_type),
         1,
         temporal_position,
         2 | source_mask,
+        vec![plane],
+    )
+}
+
+pub(crate) fn runtime_multi_role_signature_for_selector(
+    selector: &ResponseValueSelector,
+    plane: u8,
+) -> StructuralRoleSignature {
+    let value_type = selector_value_type(selector).unwrap_or(AtomValueType::String);
+    let temporal_position = match selector {
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { ordinal, .. } => {
+            u8::try_from(ordinal.saturating_add(1)).unwrap_or(u8::MAX)
+        }
+        ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral => 0,
+        _ => 1,
+    };
+    // In a multi-role law, request ordinal is a structural relation between
+    // roles. Field names and JSON paths remain physical RuntimeRoleAnchors.
+    StructuralRoleSignature::new(
+        runtime_value_type_tag(value_type),
+        1,
+        temporal_position,
+        2 | if temporal_position == 0 {
+            0x0100
+        } else {
+            0x0200
+        },
         vec![plane],
     )
 }
@@ -2612,7 +2607,12 @@ mod tests {
             digest(surface),
             vec![
                 StructuralRoleSignature::new(5, 1, 0, 1, vec![0]),
-                StructuralRoleSignature::new(2, 1, 1, 2, vec![0]),
+                runtime_role_signature_for_selector(
+                    &ResponseValueSelector::UniqueScalar {
+                        value_type: AtomValueType::Integer,
+                    },
+                    0,
+                ),
                 StructuralRoleSignature::new(2, 1, 2, 4, Vec::new()),
             ],
             vec![LocalRelationFragment {
