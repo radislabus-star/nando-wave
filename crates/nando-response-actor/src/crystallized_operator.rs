@@ -198,6 +198,8 @@ pub enum CrystallizedOperatorError {
     NonSourceNeutralActor,
     VerifierBuildFailed,
     ActorVerifierMismatch,
+    ActorContractMismatch,
+    VerifierContractMismatch,
     EmptyFutureWindow,
     DuplicateParityLineage,
     UnknownParityLineage,
@@ -290,6 +292,7 @@ impl CrystallizedOperator {
         if !composition_is_acyclic(blueprint) {
             return Err(CrystallizedOperatorError::CyclicComposition);
         }
+        let actor_was_external = actor_template.is_some();
         let (renderer, actor) = if let Some(actor) = actor_template {
             let renderer = actor_renderer_contract(&actor)?;
             (renderer, actor)
@@ -324,6 +327,23 @@ impl CrystallizedOperator {
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
         let verifier_sha256 = response_independent_verifier_program_digest(&verifier)
             .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+        // An externally materialized actor is data, never authority. The
+        // phase-selected blueprint owns both executable commitments before
+        // freeze; crystallization accepts only byte-identical implementations.
+        if actor_was_external {
+            if !digest_matches_commitment(
+                &actor_sha256,
+                blueprint.renderer_hypothesis().commitment_sha256(),
+            ) {
+                return Err(CrystallizedOperatorError::ActorContractMismatch);
+            }
+            if !digest_matches_commitment(
+                &verifier_sha256,
+                blueprint.verifier_contract().commitment_sha256(),
+            ) {
+                return Err(CrystallizedOperatorError::VerifierContractMismatch);
+            }
+        }
         let uses_typed_actor_renderer = matches!(
             &actor.operation,
             crate::ResponseOperation::FunctionCallFromRoles { .. }
@@ -2559,6 +2579,10 @@ fn first_u64(digest: &Commitment256) -> u64 {
     ])
 }
 
+fn digest_matches_commitment(digest: &str, expected: &Commitment256) -> bool {
+    decode_sha256(digest).is_ok_and(|actual| &actual == expected)
+}
+
 fn decode_sha256(value: &str) -> Result<Commitment256, CrystallizedOperatorError> {
     if value.len() != 64 {
         return Err(CrystallizedOperatorError::InvalidDigest);
@@ -2576,8 +2600,9 @@ mod tests {
     use nando_core::wave::{
         BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence,
         BlueprintPhaseControl, BlueprintSynthesisReport, BoundedCircuitBeam, BoundedRoleAligner,
-        LocalRelationFragment, OperatorGrokkingConfig, PhaseCenterCell, RoleAlignmentConfig,
-        StructuralRoleSignature, SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom,
+        FrozenOperatorBlueprintSet, LocalRelationFragment, OperatorGrokkingConfig, PhaseCenterCell,
+        RoleAlignmentConfig, StructuralRoleSignature, SurfaceFragmentBundle, TernaryRelationState,
+        TypedProgramAtom,
     };
     use serde_json::json;
 
@@ -2935,6 +2960,98 @@ mod tests {
             ),
             Err(CrystallizedOperatorError::FutureEvidenceMismatch)
         );
+    }
+
+    #[test]
+    fn sealed_blueprint_rejects_external_actor_substitution() {
+        let support = vec![
+            bundle(1, PhaseCenterCell { re: 1.0, im: 0.0 }),
+            bundle(2, PhaseCenterCell { re: 1.0, im: 0.0 }),
+        ];
+        let alignments = BoundedRoleAligner::align(&support, RoleAlignmentConfig::default());
+        let mut synthesis =
+            BoundedCircuitBeam::synthesize(&support, &alignments, BlueprintBeamConfig::default());
+        let committed_actor = ResponseProgram::project_selected_value(
+            ResponseValueSelector::UniqueScalar {
+                value_type: AtomValueType::Integer,
+            },
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let committed_verifier =
+            source_neutral_verifier_for_program(&committed_actor).expect("committed verifier");
+        let actor_sha256 =
+            decode_sha256(&response_actor_program_digest(&committed_actor).expect("actor digest"))
+                .expect("actor commitment");
+        let verifier_sha256 = decode_sha256(
+            &response_independent_verifier_program_digest(&committed_verifier)
+                .expect("verifier digest"),
+        )
+        .expect("verifier commitment");
+        synthesis.blueprints = synthesis
+            .blueprints
+            .iter()
+            .cloned()
+            .map(|blueprint| blueprint.bind_executable_contracts(actor_sha256, verifier_sha256))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let frozen = FrozenOperatorBlueprintSet::freeze(
+            7,
+            &support,
+            BlueprintBeamConfig::default(),
+            &synthesis,
+        )
+        .expect("frozen committed blueprints");
+        let future_bundle = bundle(3, PhaseCenterCell { re: 1.0, im: 0.0 });
+        let mut future = frozen.future_window();
+        future
+            .admit_lineage(&future_bundle)
+            .expect("independent future lineage");
+        let request = "Return total";
+        let payload = json!({
+            "input": [{"type":"function_call_output", "output":"{\"total\":7}"}]
+        });
+        let raw_input_sha256 =
+            crystallization_raw_input_sha256(request, &payload).expect("raw input commitment");
+        let evidence = BlueprintFutureEvidence::new(raw_input_sha256, 1, future_bundle.clone())
+            .expect("future evidence");
+        let evidence_set = vec![evidence.clone()];
+        let sealed = BlueprintFutureEvaluator::evaluate_and_seal(
+            &frozen,
+            &evidence_set,
+            Default::default(),
+            BlueprintPhaseControl::Full,
+        );
+        let winner = sealed.winner_receipt().expect("sealed winner");
+        let receipt = CrystallizationParityReceipt {
+            future_lineage_sha256: *future_bundle.lineage_sha256(),
+            future_surface_sha256: *future_bundle.surface_sha256(),
+            future_bundle_sha256: *evidence.bundle_sha256(),
+            raw_input_sha256,
+            extractor_version: 1,
+            anchors: Vec::new().into_boxed_slice(),
+            request_text: request.to_owned(),
+            provider_payload: payload,
+            expected_response: "7".to_owned(),
+        };
+        let substituted_actor = ResponseProgram::project_selected_value(
+            ResponseValueSelector::UniqueScalar {
+                value_type: AtomValueType::Integer,
+            },
+            ValueProjectionFormat::CanonicalJson,
+            "completed",
+        );
+
+        assert!(matches!(
+            CrystallizedOperator::crystallize_with_actor_template(
+                &future,
+                winner,
+                &evidence_set,
+                std::slice::from_ref(&receipt),
+                substituted_actor,
+            ),
+            Err(CrystallizedOperatorError::ActorContractMismatch)
+        ));
     }
 
     fn verified_delta(

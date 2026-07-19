@@ -1485,3 +1485,30 @@ The collection learner retains one rejected support counterexample with
 by `support_wrong_accepts_nonzero`; production authority remains zero for that
 cohort. The next product blocker is now explicit: nine frozen `project`
 buckets have zero accepted future receipts.
+
+## 2026-07-20 - Bind external actor bytes to the sealed winner
+
+Live Rich Operator synthesis already commits actor and independent-verifier
+digests into every competing blueprint before freeze. Those commitments are
+part of the blueprint fingerprint selected by full-phase future evidence.
+However, `crystallize_with_actor_template` previously accepted the externally
+materialized actor without comparing it to the selected blueprint contracts.
+
+Crystallization now rebuilds the verifier, hashes both executable programs,
+and requires exact equality with the phase-selected blueprint commitments
+before any future execution receipt can be created. External actor bytes remain
+transport data and cannot become authority by being passed to the crystallizer.
+
+Focused remote receipts:
+
+```text
+sealed winner + substituted valid actor       REJECT  PASS
+multi-role Rich Operator lifecycle            1/1     PASS
+typed custom-tool Rich Operator lifecycle     1/1     PASS
+```
+
+The runtime route was re-audited before changing `learned_wave_route`. A
+crystallized package is already gated and ranked by `bind_pre_action()` plus
+its circuit margin; the legacy atom-wave cannot route around it. Therefore
+`learned_wave_route: None` is correct for this package type and was not replaced
+with a fake circuit fingerprint route.
