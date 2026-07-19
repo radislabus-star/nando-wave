@@ -1610,3 +1610,9 @@ not replace complete old support with an incomplete new partition. Upgrade now
 requires a complete replacement support set; an already incomplete generation
 is replaced only by strict support growth. Otherwise the old generation remains
 dirty and fail-closed until enough verified support receipts exist.
+
+Authority load failures are now cached against the same input fingerprint used
+for successful loads. An unchanged rejected registry/admission/runtime/gate
+snapshot is not re-read or re-logged for every event. Any changed input gets a
+new fingerprint and is independently evaluated again; negative caching cannot
+turn a rejection into authority.

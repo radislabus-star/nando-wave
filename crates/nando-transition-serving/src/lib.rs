@@ -3063,10 +3063,16 @@ fn refresh_response_executor(state: &AppState) {
     if let Ok(current_fingerprint) = fingerprint.as_ref()
         && let Ok(cache) = state.response_cache.read()
         && cache.input_fingerprint.as_ref() == Some(current_fingerprint)
-        && cache.ready
-        && now.saturating_add(renewal_margin) < cache.admission_expires_at_unix
     {
-        return;
+        if cache.ready && now.saturating_add(renewal_margin) < cache.admission_expires_at_unix {
+            return;
+        }
+        // A rejected immutable authority snapshot cannot become valid until
+        // one of its fingerprinted inputs changes. Cache the negative result
+        // instead of re-reading and re-logging it for every live event.
+        if !cache.ready && !cache.last_error.is_empty() {
+            return;
+        }
     }
     let load = || -> Result<(ResponseExecutor, String, String, u64), String> {
         let registry = fs::read(&state.config.response_registry_path)
@@ -3171,11 +3177,17 @@ fn refresh_response_executor(state: &AppState) {
             }
         }
         Err(error) => {
-            eprintln!("nando-response-authority refresh: {error}");
             if let Ok(mut cache) = state.response_cache.write() {
+                let bounded_error = bounded_reason(&error);
+                let should_log = cache.input_fingerprint != fingerprint.as_ref().ok().cloned()
+                    || cache.last_error != bounded_error;
                 cache.executor = None;
                 cache.ready = false;
-                cache.last_error = bounded_reason(&error);
+                cache.input_fingerprint = fingerprint.ok();
+                cache.last_error = bounded_error;
+                if should_log {
+                    eprintln!("nando-response-authority refresh: {error}");
+                }
             }
         }
     }
@@ -4535,6 +4547,55 @@ mod tests {
         };
         refresh_response_executor(&state);
         state
+    }
+
+    #[test]
+    fn rejected_response_authority_is_cached_until_inputs_change() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-serving-negative-authority-cache-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let state = project_status_test_state(&root, &registry_path);
+        write_json(
+            &state.config.admission_path,
+            &json!({"schema": "invalid-admission-v1"}),
+        );
+        *state.response_cache.write().expect("response cache") = ResponseExecutorCache::default();
+
+        refresh_response_executor(&state);
+        let first_fingerprint = state
+            .response_cache
+            .read()
+            .expect("response cache")
+            .input_fingerprint
+            .clone()
+            .expect("negative fingerprint");
+        refresh_response_executor(&state);
+        let unchanged = state.response_cache.read().expect("response cache");
+        assert_eq!(
+            unchanged.input_fingerprint.as_ref(),
+            Some(&first_fingerprint)
+        );
+        assert!(!unchanged.ready);
+        assert!(!unchanged.last_error.is_empty());
+        drop(unchanged);
+
+        write_json(
+            &state.config.admission_path,
+            &json!({"schema": "invalid-admission-v2"}),
+        );
+        refresh_response_executor(&state);
+        let changed = state.response_cache.read().expect("response cache");
+        assert_ne!(changed.input_fingerprint.as_ref(), Some(&first_fingerprint));
+        assert!(!changed.ready);
+        fs::remove_dir_all(&root).expect("cleanup test root");
     }
 
     #[cfg(any())]
