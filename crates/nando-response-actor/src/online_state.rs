@@ -12,6 +12,7 @@ use crate::{
 
 const TRANSFER_DISCOVERY_VERSION: u8 = 2;
 const CROSS_POOL_NEGATIVE_REFRESH_INTERVAL: u64 = 64;
+const MAX_PARITY_RESERVOIR_CASES: usize = 1_024;
 
 fn cross_pool_negative_refresh_due(transitions_seen: u64) -> bool {
     transitions_seen > 0 && transitions_seen % CROSS_POOL_NEGATIVE_REFRESH_INTERVAL == 0
@@ -321,6 +322,7 @@ impl StreamingSelfTrainingState {
                 .entry(frame_id)
                 .or_insert(frame);
         }
+        self.enforce_parity_reservoir_limit();
         let retained = self
             .discovery
             .pool_snapshots()
@@ -356,11 +358,13 @@ impl StreamingSelfTrainingState {
                 .entry(frame_id)
                 .or_insert(frame);
         }
+        self.enforce_parity_reservoir_limit();
         self.prepare_rebuild(false);
     }
 
     pub fn prepare_replay_seed(&mut self) {
         self.repair_parity_frames_from_discovery();
+        self.enforce_parity_reservoir_limit();
         self.discovery
             .enforce_runtime_limits(FamilyDiscoveryConfig::default());
         self.discovery.rebuild_transfer_subcenters();
@@ -373,6 +377,7 @@ impl StreamingSelfTrainingState {
         I: IntoIterator<Item = String>,
     {
         self.repair_parity_frames_from_discovery();
+        self.enforce_parity_reservoir_limit();
         self.discovery
             .enforce_runtime_limits(FamilyDiscoveryConfig::default());
         let mut queued = self.rebuild_queue.iter().cloned().collect::<BTreeSet<_>>();
@@ -440,6 +445,7 @@ impl StreamingSelfTrainingState {
         // replay receipts so migration does not discard independently verified
         // support merely because it predates the live parity reservoir.
         self.repair_parity_frames_from_discovery();
+        self.enforce_parity_reservoir_limit();
         let mut parity_cases = self.replay_support_parity_cases.clone();
         parity_cases.extend(self.runtime_parity_cases.clone());
         self.discovery.enrich_action_schemas(&parity_cases);
@@ -459,6 +465,7 @@ impl StreamingSelfTrainingState {
     }
 
     pub fn repair_missing_synthesis_state(&mut self) {
+        self.enforce_parity_reservoir_limit();
         if self.transfer_discovery_version < TRANSFER_DISCOVERY_VERSION {
             self.discovery.rebuild_transfer_subcenters();
             self.transfer_discovery_version = TRANSFER_DISCOVERY_VERSION;
@@ -570,13 +577,40 @@ impl StreamingSelfTrainingState {
                 .insert(training_frame_id.clone(), parity_case);
             self.runtime_parity_frames
                 .insert(training_frame_id, training_frame);
-            while self.runtime_parity_cases.len() > 1_024 {
-                let Some(oldest) = self.runtime_parity_cases.keys().next().cloned() else {
-                    break;
-                };
-                self.runtime_parity_cases.remove(&oldest);
-                self.runtime_parity_frames.remove(&oldest);
+            self.enforce_parity_reservoir_limit();
+        }
+    }
+
+    /// Keeps one bounded proof reservoir across live and replay evidence.
+    /// Fresh live receipts take precedence; replay exists only to fill the
+    /// remaining capacity during schema migrations.
+    fn enforce_parity_reservoir_limit(&mut self) {
+        self.runtime_parity_cases
+            .retain(|frame_id, _| self.runtime_parity_frames.contains_key(frame_id));
+        self.runtime_parity_frames
+            .retain(|frame_id, _| self.runtime_parity_cases.contains_key(frame_id));
+        self.replay_support_parity_cases.retain(|frame_id, _| {
+            !self.runtime_parity_cases.contains_key(frame_id)
+                && self.replay_support_parity_frames.contains_key(frame_id)
+        });
+        self.replay_support_parity_frames.retain(|frame_id, _| {
+            !self.runtime_parity_cases.contains_key(frame_id)
+                && self.replay_support_parity_cases.contains_key(frame_id)
+        });
+
+        while self.runtime_parity_cases.len() + self.replay_support_parity_cases.len()
+            > MAX_PARITY_RESERVOIR_CASES
+        {
+            if let Some(oldest) = self.replay_support_parity_cases.keys().next().cloned() {
+                self.replay_support_parity_cases.remove(&oldest);
+                self.replay_support_parity_frames.remove(&oldest);
+                continue;
             }
+            let Some(oldest) = self.runtime_parity_cases.keys().next().cloned() else {
+                break;
+            };
+            self.runtime_parity_cases.remove(&oldest);
+            self.runtime_parity_frames.remove(&oldest);
         }
     }
 
@@ -2504,6 +2538,52 @@ mod tests {
             !state
                 .runtime_parity_cases
                 .contains_key(&transition.before.frame_id_sha256)
+        );
+    }
+
+    #[test]
+    fn parity_reservoir_is_bounded_across_live_and_replay() {
+        let mut state = StreamingSelfTrainingState::default();
+        for index in 0..1_100 {
+            let frame = frame(index);
+            let frame_id = frame.frame_id_sha256.clone();
+            state.replay_support_parity_cases.insert(
+                frame_id.clone(),
+                crate::RuntimeParityCase {
+                    evidence_ref_sha256: frame_id.clone(),
+                    request_text: "replay".to_owned(),
+                    provider_payload: json!({"index": index}),
+                    expected_response: "{}".to_owned(),
+                },
+            );
+            state.replay_support_parity_frames.insert(frame_id, frame);
+        }
+        for index in 1_100..1_200 {
+            let frame = frame(index);
+            let frame_id = frame.frame_id_sha256.clone();
+            state.runtime_parity_cases.insert(
+                frame_id.clone(),
+                crate::RuntimeParityCase {
+                    evidence_ref_sha256: frame_id.clone(),
+                    request_text: "live".to_owned(),
+                    provider_payload: json!({"index": index}),
+                    expected_response: "{}".to_owned(),
+                },
+            );
+            state.runtime_parity_frames.insert(frame_id, frame);
+        }
+
+        state.enforce_parity_reservoir_limit();
+
+        assert_eq!(state.runtime_parity_cases.len(), 100);
+        assert_eq!(state.replay_support_parity_cases.len(), 924);
+        assert_eq!(
+            state.runtime_parity_cases.len(),
+            state.runtime_parity_frames.len()
+        );
+        assert_eq!(
+            state.replay_support_parity_cases.len(),
+            state.replay_support_parity_frames.len()
         );
     }
 
