@@ -1437,6 +1437,14 @@ These mistakes have already damaged coverage and must not be repeated:
   Setun-inspired interference semantics.
 - Calling gradual per-cell threshold updates grokking. Result: a rule table is
   mistaken for emergent circuit formation, and the central Wave claim is lost.
+- Letting the independent admission controller write the final runtime
+  `admission.json`. Result: an internal PASS can overwrite a composite-gate
+  VETO. The controller writes `response-admission-controller.json`; only the
+  composite gate writes the final runtime authority file.
+- Treating restored unfinished search as a startup event. Result: serving burns
+  a CPU core draining historical version-space work before new traffic exists.
+  A checkpoint is materialized state; new observations alone buy bounded
+  synthesis and maintenance slices.
 
 ## 11. Required Protocol Before Core Changes
 

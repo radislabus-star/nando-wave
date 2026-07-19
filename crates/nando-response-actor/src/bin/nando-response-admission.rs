@@ -222,10 +222,12 @@ fn run(started: Instant) -> Result<(), String> {
         &state_dir,
         "response-registry.json",
     );
-    let admission_path = env_path_join(
-        "NANDO_TRANSITION_ADMISSION_JSON",
+    // The controller proof is an input to the composite gate. Only the gate may
+    // write the final admission.json consumed by serving.
+    let controller_admission_path = env_path_join(
+        "NANDO_RESPONSE_CONTROLLER_ADMISSION_JSON",
         &state_dir,
-        "admission.json",
+        "response-admission-controller.json",
     );
     let authority_candidate_path = env_path_join(
         "NANDO_RESPONSE_AUTHORITY_CANDIDATE",
@@ -319,7 +321,7 @@ fn run(started: Instant) -> Result<(), String> {
     let Some(snapshot) = snapshot else {
         let preserved_active_packages = last_known_good_package_count(
             &registry_path,
-            &admission_path,
+            &controller_admission_path,
             &authority_candidate_path,
             &marker_path,
         );
@@ -371,7 +373,11 @@ fn run(started: Instant) -> Result<(), String> {
         ]
     });
     write_json_atomic(&registry_path, &snapshot.registry, "response-registry")?;
-    write_json_atomic(&admission_path, &snapshot.admission, "response-admission")?;
+    write_json_atomic(
+        &controller_admission_path,
+        &snapshot.admission,
+        "response-controller-admission",
+    )?;
     write_json_atomic(
         &marker_path,
         &serde_json::json!({

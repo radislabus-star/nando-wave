@@ -463,15 +463,11 @@ pub fn spawn_miner_worker(
     counters
         .replay_rejected_records
         .store(replay_rejected_records, Ordering::Relaxed);
-    let initial_synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED
-        && miner
-            .lock()
-            .map_err(|_| "miner_worker_initial_work_lock_poisoned".to_owned())?
-            .has_self_training_work();
-    let initial_collection_maintenance_pending = collection_miner
-        .lock()
-        .map_err(|_| "miner_worker_initial_collection_work_lock_poisoned".to_owned())?
-        .has_structural_resynthesis_work();
+    // A restored checkpoint is already the materialized state. Historical
+    // unfinished search is not an event and must not turn startup into a batch
+    // job. New traffic schedules bounded slices below.
+    let initial_synthesis_pending = false;
+    let initial_collection_maintenance_pending = false;
     let (initial_report, initial_status) = {
         let stream = miner
             .lock()
@@ -568,6 +564,7 @@ pub fn spawn_miner_worker(
                             .collection_processed
                             .fetch_add(1, Ordering::Relaxed);
                         events_since_checkpoint = events_since_checkpoint.saturating_add(1);
+                        collection_maintenance_pending = true;
                         if let Some(trigger) = &authority_trigger {
                             let _ = trigger.try_send(());
                         }
@@ -612,12 +609,10 @@ pub fn spawn_miner_worker(
                 let run_synthesis = synthesis_pending && slice_due && !run_collection_maintenance;
                 if run_synthesis {
                     let started = Instant::now();
-                    let (checks, synthesis_work_remains) =
-                        miner.lock().ok().map_or((0, false), |mut stream| {
-                            let checks = stream.run_self_training_work_slice();
-                            let synthesis_work_remains = stream.has_self_training_work();
-                            (checks, synthesis_work_remains)
-                        });
+                    let checks = miner
+                        .lock()
+                        .ok()
+                        .map_or(0, |mut stream| stream.run_self_training_work_slice());
                     record_timing(
                         &thread_counters.synthesis_last_micros,
                         &thread_counters.synthesis_max_micros,
@@ -625,7 +620,9 @@ pub fn spawn_miner_worker(
                         elapsed_micros(started),
                     );
                     inputs_since_synthesis = 0;
-                    synthesis_pending = synthesis_work_remains;
+                    // One event burst buys one bounded search slice. Remaining
+                    // version-space work waits for the next real observation.
+                    synthesis_pending = false;
                     prefer_collection_maintenance = collection_maintenance_pending;
                     if checks > 0 {
                         thread_counters
@@ -647,9 +644,7 @@ pub fn spawn_miner_worker(
                         .lock()
                         .map_err(|_| "miner_worker_collection_maintenance_lock_poisoned".to_owned())
                         .and_then(|mut collection| {
-                            let programs_added =
-                                collection.run_structural_resynthesis_work_slice()?;
-                            Ok((programs_added, collection.has_structural_resynthesis_work()))
+                            collection.run_structural_resynthesis_work_slice()
                         });
                     record_timing(
                         &thread_counters.collection_maintenance_last_micros,
@@ -660,8 +655,10 @@ pub fn spawn_miner_worker(
                     inputs_since_synthesis = 0;
                     prefer_collection_maintenance = false;
                     match result {
-                        Ok((programs_added, work_remains)) => {
-                            collection_maintenance_pending = work_remains;
+                        Ok(programs_added) => {
+                            // Like relation synthesis, collection maintenance is
+                            // paced by real observations instead of idle CPU.
+                            collection_maintenance_pending = false;
                             thread_counters
                                 .collection_maintenance_slices
                                 .fetch_add(1, Ordering::Relaxed);
@@ -674,10 +671,7 @@ pub fn spawn_miner_worker(
                             thread::sleep(Duration::from_millis(1));
                         }
                         Err(error) => {
-                            collection_maintenance_pending =
-                                collection_miner.lock().is_ok_and(|collection| {
-                                    collection.has_structural_resynthesis_work()
-                                });
+                            collection_maintenance_pending = false;
                             thread_counters.failed.fetch_add(1, Ordering::Relaxed);
                             eprintln!("nando-response-miner-v2 collection maintenance: {error}");
                         }
