@@ -1616,3 +1616,23 @@ for successful loads. An unchanged rejected registry/admission/runtime/gate
 snapshot is not re-read or re-logged for every event. Any changed input gets a
 new fingerprint and is independently evaluated again; negative caching cannot
 turn a rejection into authority.
+
+Final deployed receipt for this repair:
+
+```text
+partition / generation                  v14 / 4
+immutable support / parity receipts     32 / 32
+genuine post-watermark future           0 / 32
+matching parity receipts available      34
+current blocker                         future_rows_below_32
+checkpoint restored                     true
+checkpoint hash across restart          byte-identical
+authority refresh errors per new PID    1, then negative-cache hit
+false accepts / parity mismatches        0 / 0
+composite gate                           PASS
+installed serving SHA-256               1a29532d1bff2176f3be86f0bf55ff4b28aae6040a35ae0f3b2699f455cd959b
+```
+
+This closes the receipt-eviction livelock, not the frozen-future requirement.
+The next matching live event can now enter generation-owned future without
+moving the support root or watermark. No historical row was counted as future.
