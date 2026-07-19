@@ -1029,3 +1029,35 @@ reclassification. It never reconstructs historical future evidence.
 Temporary release and bundle artifacts had reached 304 MiB in `/tmp`,
 including one failed full-history bundle. Obsolete copies were removed in
 0.02 seconds; only the current rollback binary was retained during deployment.
+
+Production v71 receipt:
+
+```text
+commit / binary SHA-256                           14e7b0a / bbadc8b8...63b8
+release build                                     PASS 54.64 s
+bounded checkpoint migration                      READY 10 s
+observations / executable                         52 / 40
+executable share of bounded retained evidence     76.9%
+laws / total support                              2 / 33
+frozen laws                                       1
+historical future                                 0
+selected-template canonicalization blockers       0
+legacy opaque blockers                            0
+no-exact / law-shape blockers                     10 / 2
+post-deploy composite gate                        PASS 0.39 s
+false accepts / runtime parity mismatches          0 / 0
+verified economics share                          1.0% (M3 WATCH)
+```
+
+The next product boundary is no longer extraction for the first law. It is
+event-time evidence accumulation:
+
+```text
+frozen support 32
+-> new independent completed live traces only
+-> future 32
+-> sealed candidate
+-> external admission
+-> ACTIVE
+-> verified CPU accepts
+```
