@@ -496,6 +496,9 @@ fn selector_class(selector: &ResponseValueSelector) -> &'static str {
         ResponseValueSelector::UniqueTurnJsonField { .. } => "unique_turn_json_field",
         ResponseValueSelector::UniqueActiveTurnJsonField { .. } => "active_turn_json_field",
         ResponseValueSelector::RequestReferencedJsonField { .. } => "request_referenced_json_field",
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. } => {
+            "request_referenced_json_field_ordinal"
+        }
         ResponseValueSelector::TurnOutputLine { .. } => "turn_output_line",
         ResponseValueSelector::TurnOutputScalarOrdinal { .. } => "turn_output_scalar_ordinal",
         ResponseValueSelector::LatestTurnOutputLine { .. } => "latest_turn_output_line",

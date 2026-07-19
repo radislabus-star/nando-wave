@@ -476,11 +476,15 @@ pub fn response_program_authority_matches_example(
 fn response_program_has_structurally_grounded_partial_authority(program: &ResponseProgram) -> bool {
     match &program.operation {
         ResponseOperation::ProjectSelectedValue {
-            selector: ResponseValueSelector::RequestReferencedJsonField { .. },
+            selector:
+                ResponseValueSelector::RequestReferencedJsonField { .. }
+                | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. },
             ..
         }
         | ResponseOperation::ProjectStatus {
-            selector: ResponseValueSelector::RequestReferencedJsonField { .. },
+            selector:
+                ResponseValueSelector::RequestReferencedJsonField { .. }
+                | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. },
             ..
         }
         | ResponseOperation::ComposeCollection { .. } => true,
@@ -4185,6 +4189,36 @@ mod tests {
         assert!(!response_program_authority_matches_example(
             &ordinal, &example
         ));
+    }
+
+    #[test]
+    fn request_grounded_ordinal_projection_keeps_role_order_in_actor_and_verifier() {
+        let program = ResponseProgram::project_selected_value(
+            ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                ordinal: 0,
+                value_type: AtomValueType::Integer,
+            },
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let example = CollectionSynthesisExample {
+            provider_payload: json!({
+                "input":[
+                    {"type":"message","role":"user","content":[{"type":"input_text","text":"Return ok, then failed"}]},
+                    {"type":"function_call_output","output":"{\"ok\":3,\"failed\":2}"}
+                ]
+            }),
+            expected_response: "3 and 2".to_owned(),
+        };
+
+        assert!(response_program_authority_matches_example(
+            &program, &example
+        ));
+        let execution = execute_example(&program, &example);
+        assert_eq!(execution.response.as_deref(), Some("3"));
+        let verifier = source_neutral_verifier_for_program(&program).expect("verifier");
+        assert!(verify_response_independently(&verifier, &example.provider_payload, "3").is_ok());
+        assert!(verify_response_independently(&verifier, &example.provider_payload, "2").is_err());
     }
 
     #[test]
