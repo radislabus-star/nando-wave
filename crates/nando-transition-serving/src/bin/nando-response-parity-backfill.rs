@@ -9,7 +9,7 @@ use nando_response_actor::{
 };
 use nando_transition_serving::{
     verified_training_cases_from_session_head, verified_training_cases_from_session_tail,
-    verified_write_stdin_training_cases_from_session,
+    verified_write_stdin_training_cases_from_session_for_signatures,
 };
 use serde::Serialize;
 
@@ -182,7 +182,12 @@ fn main() -> Result<(), String> {
         }
         if custom_full_scan {
             custom_prefilter_bytes = custom_prefilter_bytes.saturating_add(length);
-            let custom_cases = verified_write_stdin_training_cases_from_session(path)?;
+            // The checkpoint already identifies deficient teacher laws. Keep a full-file
+            // scan bounded to those laws instead of retaining unrelated tool traffic.
+            let custom_cases = verified_write_stdin_training_cases_from_session_for_signatures(
+                path,
+                &target_signatures,
+            )?;
             if !custom_cases.is_empty() {
                 custom_files_scanned = custom_files_scanned.saturating_add(1);
                 custom_sparse_bytes = custom_sparse_bytes.saturating_add(length);

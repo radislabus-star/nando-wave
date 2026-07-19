@@ -17,6 +17,7 @@ pub use session_stream::{
     verified_relation_frames_from_session_tail, verified_session_identity_sha256_candidates,
     verified_training_cases_from_session, verified_training_cases_from_session_head,
     verified_training_cases_from_session_tail, verified_write_stdin_training_cases_from_session,
+    verified_write_stdin_training_cases_from_session_for_signatures,
 };
 
 use axum::Router;

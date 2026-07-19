@@ -1512,3 +1512,29 @@ crystallized package is already gated and ranked by `bind_pre_action()` plus
 its circuit margin; the legacy atom-wave cannot route around it. Therefore
 `learned_wave_route: None` is correct for this package type and was not replaced
 with a fake circuit fingerprint route.
+
+## 2026-07-20 - Bounded receipt-backed support recovery
+
+The standalone Rust parity backfill now applies the checkpoint-derived target
+teacher signatures while extracting custom `write_stdin` cases. A bounded scan
+therefore retains only evidence for deficient laws instead of accumulating
+unrelated tool traffic. This remains an offline recovery utility and is not
+part of serving startup or the live hot path.
+
+Bounded scan-only receipt from commit `ad1a08c` plus the scoped change:
+
+```text
+newest session files scanned       4
+maximum bytes considered           64 MiB
+verified parity cases seen         202
+selected target cases              78 across 3 teacher signatures
+selected actions                   wait 64 / custom write_stdin 8 / function write_stdin 6
+imported support rows               0 (scan-only)
+future rows created                 0
+wall / peak RSS                     5.60 s / 267 MiB
+```
+
+Historical receipts may repair support only. They cannot satisfy frozen future,
+increase verified economics, or grant execution authority. The next controlled
+step is one support-only import while the cold learner is stopped; future must
+then accrue exclusively from new live post-freeze events.
