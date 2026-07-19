@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -11,13 +11,47 @@ pub const ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1: &str =
 pub const DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1: &str =
     "nando.durable-runtime-parity-receipt.v1";
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct RuntimeParityCase {
     pub evidence_ref_sha256: String,
     #[serde(default)]
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
+}
+
+#[derive(Deserialize)]
+struct RuntimeParityCaseWire {
+    evidence_ref_sha256: String,
+    #[serde(default)]
+    request_text: String,
+    #[serde(default)]
+    provider_payload: Option<Value>,
+    #[serde(default)]
+    provider_payload_json: Option<Box<str>>,
+    expected_response: String,
+}
+
+impl<'de> Deserialize<'de> for RuntimeParityCase {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = RuntimeParityCaseWire::deserialize(deserializer)?;
+        let provider_payload = if let Some(payload) = wire.provider_payload {
+            payload
+        } else if let Some(json) = wire.provider_payload_json {
+            serde_json::from_str(&json).map_err(serde::de::Error::custom)?
+        } else {
+            return Err(serde::de::Error::missing_field("provider_payload"));
+        };
+        Ok(Self {
+            evidence_ref_sha256: wire.evidence_ref_sha256,
+            request_text: wire.request_text,
+            provider_payload,
+            expected_response: wire.expected_response,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -62,5 +96,26 @@ impl OnlineAdmissionCandidateBundle {
             return Err("online_admission_candidate_bundle_capacity_exceeded");
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::RuntimeParityCase;
+
+    #[test]
+    fn runtime_parity_reads_compact_checkpoint_payload() {
+        let restored: RuntimeParityCase = serde_json::from_value(json!({
+            "evidence_ref_sha256": "a".repeat(64),
+            "request_text": "continue",
+            "provider_payload_json": "{\"input\":[{\"value\":7}]}",
+            "expected_response": "7"
+        }))
+        .expect("compact checkpoint parity");
+
+        assert_eq!(restored.provider_payload, json!({"input": [{"value": 7}]}));
+        assert_eq!(restored.expected_response, "7");
     }
 }
