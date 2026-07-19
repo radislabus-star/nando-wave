@@ -1289,3 +1289,28 @@ v74 checkpoint support 32 / future 8
 -> v75 migrated support 32 / future 0       1/1 PASS  1.25 s
 nando-response-actor all-targets check          PASS  7.23 s
 ```
+
+## 2026-07-19 - Per-law support accounting
+
+The v75 report showed 40 preserved support rows across eight laws, but exposed
+only aggregate counts. `LiveScalarShadowReport` now publishes one bounded row
+per law:
+
+```text
+law commitment
+teacher action symbol (diagnostic only)
+operation kind
+support / future rows
+distinct support sessions
+compact actor consensus size
+```
+
+No request text, payload value, field name, or teacher argument is emitted.
+These diagnostics never participate in routing or authority; they distinguish
+insufficient live evidence from residual structural over-partitioning.
+
+Focused remote receipt:
+
+```text
+custom-tool law report + full admission/CPU lifecycle  1/1 PASS  3.45 s
+```

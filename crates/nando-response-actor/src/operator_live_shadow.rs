@@ -177,7 +177,19 @@ pub struct LiveScalarShadowReport {
     pub shadow_executions: usize,
     pub admission_candidates: usize,
     pub ingest_accounting_complete: bool,
+    pub laws: Vec<LiveScalarLawReport>,
     pub blockers: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LiveScalarLawReport {
+    pub law_sha256: String,
+    pub teacher_action_symbol: String,
+    pub operation_kind: String,
+    pub support_rows: usize,
+    pub future_rows: usize,
+    pub distinct_support_sessions: usize,
+    pub actor_hypotheses: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -284,6 +296,39 @@ impl LiveScalarShadowState {
         let support_rows = self.laws.values().map(|law| law.support.len()).sum();
         let future_rows = self.laws.values().map(|law| law.future.len()).sum();
         let ingest_blocker_rows = self.blockers.values().copied().sum::<usize>();
+        let mut laws = self
+            .laws
+            .iter()
+            .map(|(law_sha256, law)| LiveScalarLawReport {
+                law_sha256: law_sha256.clone(),
+                teacher_action_symbol: law
+                    .support
+                    .first()
+                    .map(|row| row.outcome.action.action_symbol.clone())
+                    .unwrap_or_default(),
+                operation_kind: law
+                    .support_actor_hypotheses
+                    .first()
+                    .map(response_operation_kind)
+                    .unwrap_or("unresolved")
+                    .to_owned(),
+                support_rows: law.support.len(),
+                future_rows: law.future.len(),
+                distinct_support_sessions: law
+                    .support
+                    .iter()
+                    .map(|row| row.before.session_id_sha256.as_str())
+                    .collect::<BTreeSet<_>>()
+                    .len(),
+                actor_hypotheses: law.support_actor_hypotheses.len(),
+            })
+            .collect::<Vec<_>>();
+        laws.sort_by(|left, right| {
+            right
+                .support_rows
+                .cmp(&left.support_rows)
+                .then_with(|| left.law_sha256.cmp(&right.law_sha256))
+        });
         let mut report = LiveScalarShadowReport {
             observations: self.observations,
             executable: self.executable,
@@ -296,6 +341,7 @@ impl LiveScalarShadowState {
                     .saturating_add(future_rows)
                     .saturating_add(self.duplicate_rows)
                     .saturating_add(ingest_blocker_rows),
+            laws,
             blockers: self
                 .blockers
                 .iter()
@@ -344,6 +390,36 @@ impl LiveScalarShadowState {
                 })
         });
         support
+    }
+}
+
+fn response_operation_kind(program: &ResponseProgram) -> &'static str {
+    match &program.operation {
+        ResponseOperation::FunctionCallFromRoles { .. } => "function_call",
+        ResponseOperation::CustomToolCallFromRoles { .. } => "custom_tool_call",
+        ResponseOperation::ProjectSelectedValue { .. } => "project",
+        ResponseOperation::ProjectStatus { .. } => "status",
+        ResponseOperation::ComposeCollection { steps, .. } => {
+            let has_count = steps
+                .iter()
+                .any(|step| matches!(step, CollectionProgramStep::Count));
+            let has_filter = steps.iter().any(|step| {
+                matches!(
+                    step,
+                    CollectionProgramStep::FilterUniqueFieldEquals { .. }
+                        | CollectionProgramStep::FilterUniqueFieldEqualsRequestValue { .. }
+                        | CollectionProgramStep::FilterUniqueFieldEqualsSelectedValue { .. }
+                        | CollectionProgramStep::FilterFieldEquals { .. }
+                )
+            });
+            match (has_filter, has_count) {
+                (true, true) => "filter_count",
+                (true, false) => "filter",
+                (false, true) => "count",
+                (false, false) => "compose",
+            }
+        }
+        _ => "other",
     }
 }
 
@@ -3830,6 +3906,14 @@ mod tests {
         assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
         assert_eq!(report.shadow_executions, 32, "{report:#?}");
         assert_eq!(report.admission_candidates, 1, "{report:#?}");
+        assert_eq!(report.laws.len(), 1, "{report:#?}");
+        assert_eq!(
+            report.laws[0].teacher_action_symbol,
+            "custom_tool:exec/write_stdin"
+        );
+        assert_eq!(report.laws[0].operation_kind, "custom_tool_call");
+        assert_eq!(report.laws[0].support_rows, 32);
+        assert_eq!(report.laws[0].future_rows, 32);
 
         let candidates = state.admission_candidates();
         assert_eq!(candidates.len(), 1, "{report:#?}");
