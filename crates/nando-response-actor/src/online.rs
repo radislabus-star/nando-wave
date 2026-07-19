@@ -2228,14 +2228,32 @@ impl OnlineResponseMiner {
             };
             let state_runtime_parity_cases = self
                 .self_training_v2
-                .runtime_parity_cases_for_frames(future.iter());
+                .runtime_parity_cases_for_frames(support.iter().chain(future.iter()));
             let mut state_cases_by_ref = state_runtime_parity_cases
                 .into_iter()
                 .map(|case| (case.evidence_ref_sha256.clone(), case))
                 .collect::<BTreeMap<_, _>>();
+            let mut receipt_backed_support = Vec::new();
+            let mut runtime_parity_cases = Vec::new();
+            for frame in support {
+                if let Some(mut parity_case) = state_cases_by_ref.remove(&frame.frame_id_sha256) {
+                    parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
+                    receipt_backed_support.push(frame);
+                    runtime_parity_cases.push(parity_case);
+                }
+            }
+            if receipt_backed_support.len() < 32 {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: format!(
+                        "receipt_backed_support_rows_below_32:{}/32",
+                        receipt_backed_support.len()
+                    ),
+                });
+                continue;
+            }
             let mut seen_future_events = BTreeSet::new();
             let mut receipt_backed_future = Vec::new();
-            let mut runtime_parity_cases = Vec::new();
             for frame in future {
                 let parity_key = canonical_runtime_parity_key(&frame);
                 if !seen_future_events.insert(parity_key.clone()) {
@@ -2266,7 +2284,7 @@ impl OnlineResponseMiner {
                 self.config,
                 bucket,
                 &required_atom_ids,
-                support,
+                receipt_backed_support,
                 receipt_backed_future,
                 negatives,
                 Some(ProvenAdmissionProgram {
@@ -3829,7 +3847,13 @@ mod tests {
             .unwrap_or_else(|| panic!("restored candidate blockers={:?}", evaluation.blockers));
         assert!(candidate.support.len() >= 32);
         assert!(candidate.future.len() >= 32);
-        assert!(candidate.runtime_parity_cases.len() >= candidate.future.len());
+        assert_eq!(
+            candidate.runtime_parity_cases.len(),
+            candidate
+                .support
+                .len()
+                .saturating_add(candidate.future.len())
+        );
         assert_eq!(miner.report().false_accepts, 0);
     }
 
