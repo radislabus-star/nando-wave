@@ -53,6 +53,7 @@ pub enum LiveScalarShadowBlocker {
     SupportSessionReused,
     FutureSessionReused,
     FutureCapacityReached,
+    HistoricalSupportCapacityReached,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -163,6 +164,49 @@ impl LiveScalarShadowState {
                 .entry(LiveScalarShadowBlocker::FutureCapacityReached)
                 .or_default() += 1;
         }
+    }
+
+    /// Rebuilds bounded support after a strategy upgrade without reclassifying
+    /// historical receipts as post-freeze future evidence.
+    pub(crate) fn observe_historical_support(&mut self, transition: &TeacherTransition) {
+        self.observations = self.observations.saturating_add(1);
+        let sample = match extract_live_scalar_circuit_sample(transition) {
+            Ok(sample) => sample,
+            Err(blocker) => {
+                *self.blockers.entry(blocker).or_default() += 1;
+                return;
+            }
+        };
+        self.executable = self.executable.saturating_add(1);
+        let law_key = commitment_hex(&sample.law_sha256);
+        let law = self.laws.entry(law_key).or_default();
+        if law
+            .support
+            .iter()
+            .any(|row| row.before.frame_id_sha256 == transition.before.frame_id_sha256)
+        {
+            self.duplicate_rows = self.duplicate_rows.saturating_add(1);
+            return;
+        }
+        if law.support.len() >= LIVE_SCALAR_SUPPORT_ROWS {
+            *self
+                .blockers
+                .entry(LiveScalarShadowBlocker::HistoricalSupportCapacityReached)
+                .or_default() += 1;
+            return;
+        }
+        if law
+            .support
+            .iter()
+            .any(|row| row.before.session_id_sha256 == transition.before.session_id_sha256)
+        {
+            *self
+                .blockers
+                .entry(LiveScalarShadowBlocker::SupportSessionReused)
+                .or_default() += 1;
+            return;
+        }
+        law.support.push(transition.clone());
     }
 
     #[must_use]
@@ -1078,6 +1122,28 @@ mod tests {
         assert_eq!(first.bundle.relations().len(), 2);
         assert_eq!(first.bundle.program_atoms().len(), 2);
         assert_eq!(first.law_sha256, renamed.law_sha256);
+    }
+
+    #[test]
+    fn historical_rebuild_never_creates_frozen_future() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 1_u64..=40 {
+            let mut row = transition("total", true);
+            row.before.frame_id_sha256 = format!("{index:064x}");
+            row.before.session_id_sha256 = format!("{:064x}", index + 100);
+            state.observe_historical_support(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
+        assert_eq!(report.future_rows, 0);
+        assert_eq!(
+            report
+                .blockers
+                .get("historicalsupportcapacityreached")
+                .copied(),
+            Some(8)
+        );
     }
 
     #[test]

@@ -25,7 +25,7 @@ use crate::{
 use crate::online_subcenter::OnlineSubcenterDiscovery;
 
 const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 66;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 67;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -1315,6 +1315,21 @@ impl OnlineResponseMiner {
                 }
                 let support_frames =
                     preserved_self_training.bounded_teacher_frames_for_wave_migration();
+                let parity_cases = preserved_self_training
+                    .runtime_parity_cases_for_frames(support_frames.iter())
+                    .into_iter()
+                    .map(|case| (case.evidence_ref_sha256.clone(), case))
+                    .collect::<BTreeMap<_, _>>();
+                for frame in &support_frames {
+                    if let Some(parity_case) = parity_cases.get(&frame.frame_id_sha256)
+                        && let Ok(mut transition) = teacher_transition_from_completed(frame, None)
+                    {
+                        transition.runtime_parity_case = Some(parity_case.clone());
+                        migrated
+                            .live_scalar_shadow
+                            .observe_historical_support(&transition);
+                    }
+                }
                 for frame in support_frames {
                     migrated.process_frame(frame, false, None, false)?;
                 }
