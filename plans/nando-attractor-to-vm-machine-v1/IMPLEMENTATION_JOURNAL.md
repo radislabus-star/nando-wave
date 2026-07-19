@@ -343,3 +343,52 @@ graphify update .                                    PASS 24.18 s
   one-shot indexer peak RSS                           492,072 KB
 graphify page-renderer-verifier query                 PASS 1.79 s
 ```
+
+## 2026-07-19 - Stage 9 Closure: Raw Runtime Re-Extraction
+
+The causal proof exposed a remaining self-validation shortcut:
+
+```text
+sealed future evidence bundle
++ caller parity payload/anchors
+-> bind the evidence bundle itself
+```
+
+This could prove a circuit whose relations were not independently observable
+in the supplied raw request and payload.
+
+Implemented one shared authority path:
+
+```text
+raw request + provider payload
+-> recompute raw_input_sha256
+-> independently enumerate scalar/ordinal roles
+-> construct a fresh ObservedRuntimeSurface
+-> bounded circuit binding
+-> actor
+-> independent verifier
+```
+
+`CrystallizationParityReceipt::anchors` no longer provide binding authority.
+Teacher/future bundles still teach and phase-select the law, but execution
+authority now comes only from re-extracted pre-action structure. Empty request
+text cannot manufacture a scalar context relation.
+
+Focused verification:
+
+```text
+remote all-target cargo check                         PASS 7.37 s
+scalar raw-grounding/restart                          PASS 1/1 13.56 s
+strong phase causal proof                             PASS 1/1 0.67 s
+  full phase                                          winner
+  no/shuffled/magnitude/random controls               ABSTAIN
+  incompatible raw runtime circuit                    MissingRuntimeAnchor
+rich 64-row raw re-extraction                         PASS 1/1 10.88 s
+raw request tamper with unchanged sealed receipt      FutureEvidenceMismatch 13.68 s
+```
+
+```text
+graphify update .                                     PASS 24.16 s
+  graph                                                22,950 nodes / 51,224 edges
+  one-shot indexer peak RSS                            492,744 KB
+```

@@ -7,7 +7,7 @@ use nando_core::wave::{
 use nando_response_actor::{
     AtomValueType, CrystallizationParityReceipt, CrystallizedOperator, CrystallizedOperatorError,
     ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-    TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_INTEGER,
+    TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_INTEGER, crystallization_raw_input_sha256,
 };
 use serde_json::json;
 
@@ -83,9 +83,30 @@ fn complete_future_surface(lineage: u8, local_to_semantic: [u8; 3]) -> SurfaceFr
         digest(lineage.saturating_add(80)),
         vec![role(), role(), role()],
         relations,
-        Vec::new(),
+        vec![TypedProgramAtom {
+            opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+            output_local_role: local_role(local_to_semantic, 2),
+            source_a_local_role: local_role(local_to_semantic, 0),
+            source_b_local_role: TRANSFORM_ROLE_NONE,
+            parameter: TRANSFORM_VALUE_INTEGER,
+            flags: 0,
+        }],
     )
     .expect("valid complete future surface")
+}
+
+fn future_runtime_case(index: usize) -> (&'static str, serde_json::Value, String) {
+    let value = 7 + index;
+    (
+        "Return total",
+        json!({
+            "input": [{
+                "type":"function_call_output",
+                "output": format!("{{\"total\":{value}}}")
+            }]
+        }),
+        value.to_string(),
+    )
 }
 
 #[test]
@@ -124,7 +145,10 @@ fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runt
         .iter()
         .enumerate()
         .map(|(index, bundle)| {
-            BlueprintFutureEvidence::new(digest(140 + index as u8), 1, bundle.clone())
+            let (request, payload, _) = future_runtime_case(index);
+            let raw_input =
+                crystallization_raw_input_sha256(request, &payload).expect("raw input commitment");
+            BlueprintFutureEvidence::new(raw_input, 1, bundle.clone())
                 .expect("valid future evidence")
         })
         .collect::<Vec<_>>();
@@ -168,7 +192,7 @@ fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runt
         .iter()
         .enumerate()
         .map(|(index, evidence)| {
-            let value = 7 + index;
+            let (request, provider_payload, expected_response) = future_runtime_case(index);
             CrystallizationParityReceipt {
                 future_lineage_sha256: *evidence.bundle().lineage_sha256(),
                 future_surface_sha256: *evidence.bundle().surface_sha256(),
@@ -184,27 +208,23 @@ fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runt
                     json_path_sha256: None,
                 }]
                 .into_boxed_slice(),
-                request_text: String::new(),
-                provider_payload: json!({
-                    "input": [{
-                        "type":"function_call_output",
-                        "output": format!("{{\"total\":{value}}}")
-                    }]
-                }),
-                expected_response: value.to_string(),
+                request_text: request.to_owned(),
+                provider_payload,
+                expected_response,
             }
         })
         .collect::<Vec<_>>();
     // The payload exposes one scalar but not the three relations in the
     // selected circuit. A manual RuntimeSurfaceEvidence used to bridge this
     // gap; independent raw grounding must fail closed instead.
-    assert!(matches!(
-        CrystallizedOperator::crystallize(
-            &future_window,
-            sealed.winner_receipt().expect("full phase winner seal"),
-            &future_evidence,
-            &receipts,
-        ),
-        Err(CrystallizedOperatorError::IndependentVerifierRejected)
-    ));
+    let result = CrystallizedOperator::crystallize(
+        &future_window,
+        sealed.winner_receipt().expect("full phase winner seal"),
+        &future_evidence,
+        &receipts,
+    );
+    assert!(
+        matches!(result, Err(CrystallizedOperatorError::MissingRuntimeAnchor)),
+        "unexpected crystallization result: {result:?}"
+    );
 }
