@@ -319,6 +319,13 @@ pub fn merge_online_admission_snapshots(
             return Err("online_admission_duplicate_authority_binding");
         }
     }
+    let revision = authority_content_revision(&registry, &admission.response_authority.packages)?;
+    registry.revision = revision;
+    for binding in &mut admission.response_authority.packages {
+        binding.registry_revision = revision;
+        binding.proof_receipts_sha256 = response_proof_receipts_digest(binding)
+            .map_err(|_| "online_admission_proof_receipts_digest_failed")?;
+    }
     let registry_sha256 = response_registry_digest(&registry)
         .map_err(|_| "online_admission_registry_digest_failed")?;
     admission.response_authority.registry_sha256 = registry_sha256;
@@ -330,6 +337,28 @@ pub fn merge_online_admission_snapshots(
         registry,
         admission,
     }))
+}
+
+fn authority_content_revision(
+    registry: &ResponseRegistry,
+    bindings: &[ResponsePackageAuthorityBindingV2],
+) -> Result<u64, &'static str> {
+    let mut normalized_registry = registry.clone();
+    normalized_registry.revision = 0;
+    let mut normalized_bindings = bindings.to_vec();
+    for binding in &mut normalized_bindings {
+        binding.registry_revision = 0;
+        binding.proof_receipts_sha256.clear();
+    }
+    normalized_bindings.sort_by(|left, right| left.package_id.cmp(&right.package_id));
+    let digest = canonical_json_sha256(&(
+        "nando.response-authority-content-revision.v1",
+        normalized_registry,
+        normalized_bindings,
+    ))?;
+    u64::from_str_radix(&digest[..16], 16)
+        .map(|revision| revision.max(1))
+        .map_err(|_| "online_admission_content_revision_invalid")
 }
 
 #[derive(Serialize)]
@@ -2405,6 +2434,45 @@ mod tests {
         )
         .expect("admission evaluation");
         assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn merged_authority_revision_depends_on_active_content_not_candidate_revision() {
+        let support = (0..32).map(frame).collect::<Vec<_>>();
+        let future = (32..64)
+            .map(|index| {
+                let mut row = frame(index);
+                row.session_id_sha256 = format!("{:064x}", index + 10_000);
+                row
+            })
+            .collect::<Vec<_>>();
+        let build = |revision| {
+            let snapshot = build_online_admission_snapshot(
+                &[candidate(support.clone(), future.clone())],
+                "project",
+                revision,
+                100,
+                60,
+                &"a".repeat(64),
+                &"b".repeat(64),
+            )
+            .expect("admission evaluation")
+            .expect("complete candidate");
+            merge_online_admission_snapshots(vec![snapshot])
+                .expect("merge")
+                .expect("merged authority")
+        };
+        let first = build(7);
+        let second = build(99);
+        assert_eq!(first.registry.revision, second.registry.revision);
+        assert_eq!(
+            response_registry_digest(&first.registry),
+            response_registry_digest(&second.registry)
+        );
+        assert_eq!(
+            first.admission.response_authority.packages,
+            second.admission.response_authority.packages
+        );
     }
 
     #[test]
