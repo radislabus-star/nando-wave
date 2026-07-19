@@ -823,3 +823,83 @@ label. Treating the ID alone as the arena key was wrong. The corrected pair key
 preserves these two semantic variants while still deduplicating repeated copies
 of each. Corrected variant interning plus checkpoint roundtrip passed in
 13.98 s; final fmt and all-target check passed in 11.10 s.
+
+Corrected production restart and A/B result:
+
+```text
+corrected commit                                         a1ff1b6
+release build                                            PASS 55.35 s
+bootstrap rollback -> READY                              3.80 s
+bootstrap composite gate                                PASS 0.39 s
+corrected deploy + post-deploy gate                      PASS 1.89 s
+hot response ACTIVE / local accept                       1 / enabled
+cold restore                                             READY 4 s
+old post-purge RSS                                       267,780 KiB
+new post-purge RSS                                       258,556 KiB
+measured reduction                                       9,224 KiB / 3.4%
+```
+
+This is a bounded-growth improvement, not the complete cold-memory solution.
+Most retained frames are unique support/teacher evidence, so exact interning
+cannot collapse them. The next memory architecture step is a compact cold frame
+arena/checkpoint, but product work returns first to executable coverage.
+
+Fresh live extraction boundary:
+
+```text
+observations / executable                                585 / 88
+unsupported scalar                                      471
+support / frozen future                                  33 / 22
+live crystallized candidates                             0
+```
+
+`UnsupportedScalarProgram` currently merges request-shape, provider-payload,
+opcode, and transform-flag failures. New observations must record these as
+separate blockers before choosing the next operator extension.
+
+### 2026-07-19 - Stage 8f: exact blockers and direct-payload extraction
+
+The legacy `UnsupportedScalarProgram` counter hid six independent failure
+boundaries. New observations now retain explicit outcomes for payload
+serialization, invalid request text, missing provider input, unsupported
+transform opcode, unsupported transform flags, and unsupported program kind.
+The legacy variant remains readable so existing checkpoints are not rejected.
+
+Live capture can also retain a verified tool value directly, without the outer
+Responses API `input[]` envelope. Training now builds a source-neutral,
+ephemeral synthesis view:
+
+```text
+direct observed payload
+-> user request + function_call_output envelope
+-> bounded program enumeration and exact replay
+
+original direct payload
+-> structural role grounding
+-> runtime actor and independent verifier
+```
+
+The teacher response is never inserted into the synthesis view. Exact
+derivation and version-space enumeration use the same view, while canonical
+roles and runtime applicability continue to be derived from the original
+pre-action payload.
+
+Focused receipts:
+
+```text
+initial exact test filter (0 tests; corrected immediately)  13.97 s
+direct-payload test exposed renderer shape mismatch           0.49 s
+ownership compile correction                                  7.70 s
+direct JSON -> COUNT circuit evidence                 PASS   13.98 s
+project/status/count/filter/compose extraction        6/6     0.57 s
+response-actor all-target compile                    PASS     7.51 s
+changed Rust module rustfmt (edition 2024)            PASS     0.44 s
+```
+
+This closes one confirmed input-shape loss. It does not retroactively reclassify
+the existing 471 legacy failures; the production value is measured from new
+completed events after deployment.
+
+Workspace-wide `cargo fmt --check` still reports pre-existing formatting drift
+in committed modules outside this change. It is not silently reformatted here;
+the changed module itself was formatted with the workspace's Rust 2024 edition.

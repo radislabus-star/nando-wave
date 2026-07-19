@@ -55,6 +55,13 @@ pub enum LiveScalarShadowBlocker {
     ExactStatusProgram,
     ExactCollectionProgram,
     UnsupportedRendererProgram,
+    PayloadSerializationFailed,
+    RequestTextInvalid,
+    ProviderInputMissing,
+    UnsupportedTransformOpcode,
+    UnsupportedTransformFlags,
+    UnsupportedProgramKind,
+    // Legacy aggregate retained for checkpoint compatibility.
     UnsupportedScalarProgram,
     InvalidCommitment,
     InvalidBundle,
@@ -390,25 +397,24 @@ fn evaluate_live_law(
     // would test support selectors against future surfaces and reject every
     // transferable operator. Crystallization below re-extracts and binds each
     // raw future surface, then independently repeats the binding in verifier.
-    let direct_actor_mismatches = if rich_scalar_program_roles(&actor_template)
-        .is_some_and(|roles| roles.len() > 1)
-    {
-        0
-    } else {
-        future
-            .iter()
-            .filter(|sample| {
-                execute_response(
-                    &actor_template,
-                    &sample.request_text,
-                    &sample.provider_payload,
-                )
-                .response
-                .as_deref()
-                    != Some(sample.expected_response.as_str())
-            })
-            .count()
-    };
+    let direct_actor_mismatches =
+        if rich_scalar_program_roles(&actor_template).is_some_and(|roles| roles.len() > 1) {
+            0
+        } else {
+            future
+                .iter()
+                .filter(|sample| {
+                    execute_response(
+                        &actor_template,
+                        &sample.request_text,
+                        &sample.provider_payload,
+                    )
+                    .response
+                    .as_deref()
+                        != Some(sample.expected_response.as_str())
+                })
+                .count()
+        };
     if direct_actor_mismatches != 0 {
         increment_report_blocker(
             report,
@@ -766,14 +772,14 @@ pub fn extract_live_scalar_circuit_sample(
         .as_ref()
         .ok_or(LiveScalarShadowBlocker::MissingParityCase)?;
     let payload_bytes = serde_json::to_vec(&parity.provider_payload)
-        .map_err(|_| LiveScalarShadowBlocker::UnsupportedScalarProgram)?;
+        .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
     if payload_bytes.len() > 64 * 1024 || parity.expected_response.len() > 4 * 1024 {
         return Err(LiveScalarShadowBlocker::PayloadTooLarge);
     }
     let synthesis_payload =
         synthesis_payload_with_request(&parity.request_text, &parity.provider_payload)?;
     let example = CollectionSynthesisExample {
-        provider_payload: synthesis_payload,
+        provider_payload: synthesis_payload.clone(),
         expected_response: parity.expected_response.clone(),
     };
     let version_space = enumerate_source_neutral_response_programs(&example)
@@ -788,7 +794,7 @@ pub fn extract_live_scalar_circuit_sample(
             derive_exact_count_program(
                 program,
                 &parity.request_text,
-                &parity.provider_payload,
+                &synthesis_payload,
                 &parity.expected_response,
             )
         })
@@ -800,7 +806,7 @@ pub fn extract_live_scalar_circuit_sample(
             derive_exact_status_program(
                 program,
                 &parity.request_text,
-                &parity.provider_payload,
+                &synthesis_payload,
                 &parity.expected_response,
             )
         })
@@ -812,7 +818,7 @@ pub fn extract_live_scalar_circuit_sample(
             derive_exact_filter_programs(
                 program,
                 &parity.request_text,
-                &parity.provider_payload,
+                &synthesis_payload,
                 &parity.expected_response,
             )
         })
@@ -950,9 +956,9 @@ pub fn extract_live_scalar_circuit_sample(
         &parity.provider_payload,
         &roles,
         program_transform_opcode(&canonical_program)
-            .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
+            .ok_or(LiveScalarShadowBlocker::UnsupportedTransformOpcode)?,
         program_transform_flags(&canonical_program)
-            .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
+            .ok_or(LiveScalarShadowBlocker::UnsupportedTransformFlags)?,
         program_has_filter_count(&canonical_program),
         &transition.before.frame_id_sha256,
         lineage_sha256,
@@ -971,8 +977,8 @@ pub fn extract_live_scalar_circuit_sample(
         (roles.len() == 1
             || program_transform_opcode(&canonical_program)
                 == Some(TRANSFORM_OPCODE_FILTER_REQUEST_VALUE))
-            .then(|| source_neutral_scalar_program_shape(&canonical_program))
-            .flatten()
+        .then(|| source_neutral_scalar_program_shape(&canonical_program))
+        .flatten()
     })
     .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
     let law_sha256 = digest_parts(b"nando.live-scalar-law.v4", &[&law_shape]);
@@ -1375,9 +1381,7 @@ fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<
             tail @ ..,
         ] = steps.as_slice()
     {
-        if completion_state != "completed"
-            || !matches!(tail, [] | [CollectionProgramStep::Count])
-        {
+        if completion_state != "completed" || !matches!(tail, [] | [CollectionProgramStep::Count]) {
             return None;
         }
         let mut shape = vec![
@@ -1483,13 +1487,34 @@ fn synthesis_payload_with_request(
     provider_payload: &Value,
 ) -> Result<Value, LiveScalarShadowBlocker> {
     if request_text.is_empty() || request_text.len() > 16_384 {
-        return Err(LiveScalarShadowBlocker::UnsupportedScalarProgram);
+        return Err(LiveScalarShadowBlocker::RequestTextInvalid);
     }
     let mut payload = provider_payload.clone();
+    if payload.get("input").and_then(Value::as_array).is_none() {
+        // Some captured surfaces expose the observed tool value directly
+        // instead of retaining the provider request envelope. Rebuild only the
+        // structural envelope needed by synthesis; runtime grounding still
+        // reads the original payload and cannot use the teacher response.
+        let output = serde_json::to_string(provider_payload)
+            .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
+        payload = serde_json::json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": request_text,
+                },
+                {
+                    "type": "function_call_output",
+                    "output": output,
+                }
+            ]
+        });
+    }
     let input = payload
         .get_mut("input")
         .and_then(Value::as_array_mut)
-        .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?;
+        .ok_or(LiveScalarShadowBlocker::ProviderInputMissing)?;
     if !input
         .iter()
         .any(|item| item.get("role").and_then(Value::as_str) == Some("user"))
@@ -2113,7 +2138,7 @@ fn classify_exact_program_blocker(programs: &[ResponseProgram]) -> LiveScalarSha
     }) {
         LiveScalarShadowBlocker::UnsupportedRendererProgram
     } else {
-        LiveScalarShadowBlocker::UnsupportedScalarProgram
+        LiveScalarShadowBlocker::UnsupportedProgramKind
     }
 }
 
@@ -2499,6 +2524,28 @@ mod tests {
     }
 
     #[test]
+    fn direct_collection_payload_becomes_count_circuit_evidence() {
+        let mut row = collection_count_transition("Count the records", "Total records: ");
+        row.runtime_parity_case
+            .as_mut()
+            .expect("parity case")
+            .provider_payload = json!({
+            "records": [
+                {"value": 0},
+                {"value": 1},
+                {"value": 2}
+            ]
+        });
+
+        let sample = extract_live_scalar_circuit_sample(&row).expect("direct count trace");
+        let [atom] = sample.bundle.program_atoms() else {
+            panic!("one count transform expected");
+        };
+        assert_eq!(atom.opcode, TRANSFORM_OPCODE_COUNT_COLLECTION);
+        assert_eq!(atom.parameter & 0x00ff, TRANSFORM_VALUE_COLLECTION);
+    }
+
+    #[test]
     fn verified_status_trace_becomes_status_circuit_evidence() {
         let first = extract_live_scalar_circuit_sample(&status_transition("status", 0))
             .expect("status trace");
@@ -2533,8 +2580,9 @@ mod tests {
     fn verified_filter_count_trace_becomes_composed_circuit_evidence() {
         let first = extract_live_scalar_circuit_sample(&filter_count_transition("kind", "active"))
             .expect("filter-count trace");
-        let renamed = extract_live_scalar_circuit_sample(&filter_count_transition("state", "ready"))
-            .expect("renamed filter-count trace");
+        let renamed =
+            extract_live_scalar_circuit_sample(&filter_count_transition("state", "ready"))
+                .expect("renamed filter-count trace");
 
         let [filter, count] = first.bundle.program_atoms() else {
             panic!("filter and count transforms expected");
