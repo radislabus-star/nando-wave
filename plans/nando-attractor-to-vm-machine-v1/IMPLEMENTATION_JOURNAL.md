@@ -933,3 +933,36 @@ support-only migration and parity preservation              PASS 14.24 s
 response-actor all-target compile                           PASS  7.44 s
 changed Rust module rustfmt (edition 2024)                   PASS  0.42 s
 ```
+
+The first v69 production migration completed in 9 seconds and converted the
+opaque historical counter into an actionable bounded sample:
+
+```text
+bounded observations                                      45
+executable                                                 2
+request_text_invalid                                      37
+unsupported_renderer_program                               5
+no_exact_source_neutral_program                            1
+historical future rows                                     0
+```
+
+### 2026-07-19 - Stage 8h: request-independent evidence without text
+
+The dominant v69 blocker was not missing structural evidence. Thirty-seven of
+45 retained parity cases had a verified provider payload but no retained user
+request text. `COUNT`, scalar projection, and status mapping do not require a
+request value. The synthesis view now omits the user message when request text
+is empty instead of rejecting the whole trace. Request-dependent filters still
+fail closed because their selector cannot be derived without request evidence.
+
+Since production had already persisted checkpoint strategy v69, strategy v70
+performs one more bounded support-only migration under this rule.
+
+Focused receipts:
+
+```text
+direct payload with and without request text              2/2  14.05 s
+support-only migration after extractor change             PASS  2.81 s
+response-actor all-target compile                         PASS  7.54 s
+changed Rust modules rustfmt (edition 2024)                PASS  0.43 s
+```

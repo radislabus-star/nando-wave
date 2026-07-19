@@ -1486,7 +1486,7 @@ fn synthesis_payload_with_request(
     request_text: &str,
     provider_payload: &Value,
 ) -> Result<Value, LiveScalarShadowBlocker> {
-    if request_text.is_empty() || request_text.len() > 16_384 {
+    if request_text.len() > 16_384 {
         return Err(LiveScalarShadowBlocker::RequestTextInvalid);
     }
     let mut payload = provider_payload.clone();
@@ -1497,27 +1497,28 @@ fn synthesis_payload_with_request(
         // reads the original payload and cannot use the teacher response.
         let output = serde_json::to_string(provider_payload)
             .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
-        payload = serde_json::json!({
-            "input": [
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": request_text,
-                },
-                {
-                    "type": "function_call_output",
-                    "output": output,
-                }
-            ]
-        });
+        let mut input = Vec::with_capacity(2);
+        if !request_text.is_empty() {
+            input.push(serde_json::json!({
+                "type": "message",
+                "role": "user",
+                "content": request_text,
+            }));
+        }
+        input.push(serde_json::json!({
+            "type": "function_call_output",
+            "output": output,
+        }));
+        payload = serde_json::json!({"input": input});
     }
     let input = payload
         .get_mut("input")
         .and_then(Value::as_array_mut)
         .ok_or(LiveScalarShadowBlocker::ProviderInputMissing)?;
-    if !input
-        .iter()
-        .any(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+    if !request_text.is_empty()
+        && !input
+            .iter()
+            .any(|item| item.get("role").and_then(Value::as_str) == Some("user"))
     {
         input.insert(
             0,
@@ -2543,6 +2544,25 @@ mod tests {
         };
         assert_eq!(atom.opcode, TRANSFORM_OPCODE_COUNT_COLLECTION);
         assert_eq!(atom.parameter & 0x00ff, TRANSFORM_VALUE_COLLECTION);
+    }
+
+    #[test]
+    fn direct_collection_payload_without_request_becomes_count_evidence() {
+        let mut row = collection_count_transition("", "Total records: ");
+        row.runtime_parity_case
+            .as_mut()
+            .expect("parity case")
+            .provider_payload = json!({"records": [{"value": 0}, {"value": 1}]});
+        row.runtime_parity_case
+            .as_mut()
+            .expect("parity case")
+            .expected_response = "Total records: 2.".to_owned();
+
+        let sample = extract_live_scalar_circuit_sample(&row).expect("request-free count trace");
+        let [atom] = sample.bundle.program_atoms() else {
+            panic!("one count transform expected");
+        };
+        assert_eq!(atom.opcode, TRANSFORM_OPCODE_COUNT_COLLECTION);
     }
 
     #[test]
