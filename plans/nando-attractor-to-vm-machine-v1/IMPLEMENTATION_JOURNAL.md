@@ -1538,3 +1538,29 @@ Historical receipts may repair support only. They cannot satisfy frozen future,
 increase verified economics, or grant execution authority. The next controlled
 step is one support-only import while the cold learner is stopped; future must
 then accrue exclusively from new live post-freeze events.
+
+Two bounded support-only imports were subsequently applied with the hot serving
+process left active and the cold learner stopped. The first considered four
+newest files and imported 78 rows; the second considered sixteen files and
+imported 89 rows after frame-ID deduplication. Neither import created future
+rows or economics credit.
+
+Post-recovery live receipt:
+
+```text
+wait semantic law support / future       32 / 0
+nearest write_stdin parity support        31 / 32 required
+other function write_stdin parity rows    23 from one session
+frozen-future blocker                     future_rows_below_32
+admission emitted / explicitly blocked    0 / 9
+admission accounting complete             true
+false accepts / parity mismatches          0 / 0
+composite gate                             PASS
+verified input-token saving share          1.0% (M3 WATCH)
+```
+
+The recovery utility peaked at about 0.6 GiB RSS for roughly ten seconds. It is
+not a serving component and must not be moved into startup. The production
+learner restored the resulting checkpoint normally. Further progress for the
+frozen wait generation now requires genuinely new post-freeze completed traces;
+historical replay is no longer admissible for that partition.
