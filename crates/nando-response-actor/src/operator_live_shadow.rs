@@ -55,6 +55,14 @@ pub enum LiveScalarShadowBlocker {
     ExactStatusProgram,
     ExactCollectionProgram,
     UnsupportedRendererProgram,
+    ExactTypedCanonicalizationFailed,
+    SelectedTemplateCanonicalizationFailed,
+    CanonicalCandidateMissing,
+    LawShapeMissing,
+    HypothesisEncodingFailed,
+    HypothesisBudgetExhausted,
+    RoleTypeInferenceFailed,
+    ObservedRoleExtractionFailed,
     PayloadSerializationFailed,
     RequestTextInvalid,
     ProviderInputMissing,
@@ -404,10 +412,16 @@ fn evaluate_live_law(
             future
                 .iter()
                 .filter(|sample| {
+                    let Ok(provider_view) = crate::runtime::provider_payload_view(
+                        &sample.request_text,
+                        &sample.provider_payload,
+                    ) else {
+                        return true;
+                    };
                     execute_response(
                         &actor_template,
                         &sample.request_text,
-                        &sample.provider_payload,
+                        provider_view.as_ref(),
                     )
                     .response
                     .as_deref()
@@ -882,7 +896,7 @@ pub fn extract_live_scalar_circuit_sample(
                 &parity.request_text,
                 &parity.provider_payload,
             )
-            .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?,
+            .ok_or(LiveScalarShadowBlocker::ExactTypedCanonicalizationFailed)?,
         ]
     } else {
         canonical_rich_actor_hypotheses(
@@ -911,7 +925,7 @@ pub fn extract_live_scalar_circuit_sample(
                 &parity.request_text,
                 &parity.provider_payload,
             )
-            .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?,
+            .ok_or(LiveScalarShadowBlocker::SelectedTemplateCanonicalizationFailed)?,
         );
     }
     actor_hypotheses = expand_actor_hypothesis_set(
@@ -934,7 +948,7 @@ pub fn extract_live_scalar_circuit_sample(
         .iter()
         .max_by_key(|program| rich_scalar_program_roles(program).map_or(0, |roles| roles.len()))
         .cloned()
-        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+        .ok_or(LiveScalarShadowBlocker::CanonicalCandidateMissing)?;
     // The relation circuit and executable actor must be derived from the same
     // canonical winner program; otherwise runtime roles cannot match support.
     let roles = rich_scalar_program_roles(&canonical_program)
@@ -980,7 +994,7 @@ pub fn extract_live_scalar_circuit_sample(
         .then(|| source_neutral_scalar_program_shape(&canonical_program))
         .flatten()
     })
-    .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+    .ok_or(LiveScalarShadowBlocker::LawShapeMissing)?;
     let law_sha256 = digest_parts(b"nando.live-scalar-law.v4", &[&law_shape]);
     Ok(LiveScalarCircuitSample {
         bundle: observed.bundle,
@@ -1034,10 +1048,10 @@ fn canonical_rich_actor_hypotheses(
             continue;
         }
         let key = serde_cbor::to_vec(&canonical)
-            .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+            .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
         hypotheses.entry(key).or_insert(canonical);
         if hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
-            return Err(LiveScalarShadowBlocker::UnsupportedRendererProgram);
+            return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
         }
     }
     Ok(hypotheses.into_values().collect())
@@ -1148,7 +1162,7 @@ fn expand_actor_hypothesis_set(
     let mut hypotheses = BTreeMap::new();
     for seed in seeds {
         let seed_key = serde_cbor::to_vec(&seed)
-            .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+            .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
         hypotheses.entry(seed_key).or_insert(seed.clone());
         if repeated_primary_slots(&seed) == 0 {
             continue;
@@ -1160,10 +1174,10 @@ fn expand_actor_hypothesis_set(
             expected_response,
         )? {
             let key = serde_cbor::to_vec(&hypothesis)
-                .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+                .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
             hypotheses.entry(key).or_insert(hypothesis);
             if hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
-                return Err(LiveScalarShadowBlocker::UnsupportedRendererProgram);
+                return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
             }
         }
     }
@@ -1177,9 +1191,9 @@ fn bounded_ordinal_role_permutations(
     expected_response: &str,
 ) -> Result<Vec<ResponseProgram>, LiveScalarShadowBlocker> {
     let role_types = scalar_program_role_slot_types(seed)
-        .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+        .ok_or(LiveScalarShadowBlocker::RoleTypeInferenceFailed)?;
     let observed = crate::runtime::observed_request_ordinal_roles(request_text, provider_payload)
-        .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+        .map_err(|_| LiveScalarShadowBlocker::ObservedRoleExtractionFailed)?;
     let candidates = observed
         .into_iter()
         .map(|role| role.selector)
@@ -1206,7 +1220,7 @@ fn bounded_ordinal_role_permutations(
             continue;
         }
         let key = serde_cbor::to_vec(&program)
-            .map_err(|_| LiveScalarShadowBlocker::UnsupportedRendererProgram)?;
+            .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
         programs.entry(key).or_insert(program);
     }
     Ok(programs.into_values().collect())
@@ -1223,7 +1237,7 @@ fn enumerate_ordinal_assignments(
     if slot == role_types.len() {
         output.push(current.clone());
         if output.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
-            return Err(LiveScalarShadowBlocker::UnsupportedRendererProgram);
+            return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
         }
         return Ok(());
     }
@@ -1486,50 +1500,14 @@ fn synthesis_payload_with_request(
     request_text: &str,
     provider_payload: &Value,
 ) -> Result<Value, LiveScalarShadowBlocker> {
-    if request_text.len() > 16_384 {
-        return Err(LiveScalarShadowBlocker::RequestTextInvalid);
-    }
-    let mut payload = provider_payload.clone();
-    if payload.get("input").and_then(Value::as_array).is_none() {
-        // Some captured surfaces expose the observed tool value directly
-        // instead of retaining the provider request envelope. Rebuild only the
-        // structural envelope needed by synthesis; runtime grounding still
-        // reads the original payload and cannot use the teacher response.
-        let output = serde_json::to_string(provider_payload)
-            .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
-        let mut input = Vec::with_capacity(2);
-        if !request_text.is_empty() {
-            input.push(serde_json::json!({
-                "type": "message",
-                "role": "user",
-                "content": request_text,
-            }));
-        }
-        input.push(serde_json::json!({
-            "type": "function_call_output",
-            "output": output,
-        }));
-        payload = serde_json::json!({"input": input});
-    }
-    let input = payload
-        .get_mut("input")
-        .and_then(Value::as_array_mut)
-        .ok_or(LiveScalarShadowBlocker::ProviderInputMissing)?;
-    if !request_text.is_empty()
-        && !input
-            .iter()
-            .any(|item| item.get("role").and_then(Value::as_str) == Some("user"))
-    {
-        input.insert(
-            0,
-            serde_json::json!({
-                "type": "message",
-                "role": "user",
-                "content": request_text,
-            }),
-        );
-    }
-    Ok(payload)
+    crate::runtime::provider_payload_view(request_text, provider_payload)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|error| match error {
+            "provider_view_request_budget" => LiveScalarShadowBlocker::RequestTextInvalid,
+            "provider_view_input_missing" => LiveScalarShadowBlocker::ProviderInputMissing,
+            "provider_view_payload_budget" => LiveScalarShadowBlocker::PayloadTooLarge,
+            _ => LiveScalarShadowBlocker::PayloadSerializationFailed,
+        })
 }
 
 fn rich_scalar_program_roles(
@@ -1716,6 +1694,9 @@ fn canonical_role_selector(
             )
             .ok()
             .flatten()
+            .or(Some(ResponseValueSelector::UniqueScalar {
+                value_type: selector_value_type(selector),
+            }))
         }
         _ => Some(ResponseValueSelector::UniqueScalar {
             value_type: selector_value_type(selector),
@@ -2744,15 +2725,22 @@ mod tests {
             row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
             row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
             row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
-            row.runtime_parity_case
-                .as_mut()
-                .expect("parity")
-                .provider_payload = json!({
-                "input": [{
-                    "type": "function_call_output",
-                    "output": format!("{{\"field_{index}\":{}}}", index + 7)
-                }]
-            });
+            let parity = row.runtime_parity_case.as_mut().expect("parity");
+            if index % 2 == 0 {
+                if index % 4 == 0 {
+                    parity.request_text.clear();
+                } else {
+                    parity.request_text = "Summarize the result".to_owned();
+                }
+                parity.provider_payload = json!({format!("field_{index}"): index + 7});
+            } else {
+                parity.provider_payload = json!({
+                    "input": [{
+                        "type": "function_call_output",
+                        "output": format!("{{\"field_{index}\":{}}}", index + 7)
+                    }]
+                });
+            }
             row.runtime_parity_case
                 .as_mut()
                 .expect("parity")

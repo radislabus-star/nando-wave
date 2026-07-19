@@ -966,3 +966,66 @@ support-only migration after extractor change             PASS  2.81 s
 response-actor all-target compile                         PASS  7.54 s
 changed Rust modules rustfmt (edition 2024)                PASS  0.43 s
 ```
+
+The v70 production migration completed in 12 seconds and improved bounded
+historical extraction from 2 to 15 executable traces. A read-only copy of the
+77 MiB checkpoint was then evaluated on the remote machine to avoid repeated
+production deployments. The temporary env-gated diagnostic test was removed
+immediately after use.
+
+### 2026-07-19 - Stage 8i: raw evidence seal plus normalized execution view
+
+The checkpoint diagnostic split the remaining renderer aggregate and found the
+real blocker: synthesized `JsonField` selectors could not be transferred from
+the temporary provider envelope back to direct raw payloads. The repair keeps
+the two representations explicitly separate:
+
+```text
+raw request + raw payload
+-> raw_input_sha256 / surface commitment / sealed receipt
+
+raw payload
+-> deterministic provider_payload_view (no teacher response)
+-> role grounding / actor / independent verifier
+```
+
+Complete provider envelopes remain borrowed. Only direct values or envelopes
+missing their observed user message allocate a bounded normalized view. A
+`JsonField` becomes a request ordinal when the request proves that relation;
+otherwise it degrades to `UniqueScalar(type)`, for which the runtime binder must
+still find exactly one action-equivalence class or ABSTAIN.
+
+The single-role binder also had a search-control defect: one invalid selector
+returned early with `MissingRuntimeAnchor` instead of continuing the bounded
+candidate search. It now skips that candidate and still grants authority only
+when all successful bindings collapse to one response class.
+
+Observed progression:
+
+```text
+v69 bounded extraction                              2 / 45 executable
+v70 bounded extraction                             15 / 44 executable
+offline exact blocker split                        12 / 41 executable
+selected-template canonicalization blockers        19
+offline after structural remap                     25 / 41 executable
+remaining canonicalization / no-exact / law-shape   5 / 10 / 1
+```
+
+Focused receipts:
+
+```text
+alternating direct/envelope lifecycle exposed raw/view seal mismatch FAIL 15.94 s
+second lifecycle exposed candidate-loop early return              FAIL 15.81 s
+final support32/future32/crystallize/admit/restart/CPU lifecycle   PASS 17.83 s
+project/status/count/filter/compose extraction                     6/6  0.58 s
+direct collection with/without request                             2/2  0.46 s
+support-only migration parity                                      PASS 2.81 s
+response-actor all-target compile                                  PASS 7.52 s
+```
+
+Strategy version 71 performs the final bounded support-only
+reclassification. It never reconstructs historical future evidence.
+
+Temporary release and bundle artifacts had reached 304 MiB in `/tmp`,
+including one failed full-history bundle. Obsolete copies were removed in
+0.02 seconds; only the current rollback binary was retained during deployment.

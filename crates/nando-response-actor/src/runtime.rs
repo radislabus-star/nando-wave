@@ -172,6 +172,59 @@ pub fn execute_response(
     }
 }
 
+/// Presents a captured pre-action payload as the provider envelope expected by
+/// response programs. Existing complete envelopes stay borrowed; direct tool
+/// values are wrapped deterministically without using the teacher response.
+pub(crate) fn provider_payload_view<'a>(
+    request_text: &str,
+    provider_payload: &'a Value,
+) -> Result<std::borrow::Cow<'a, Value>, &'static str> {
+    if request_text.len() > 16_384 {
+        return Err("provider_view_request_budget");
+    }
+    if let Some(input) = provider_payload.get("input").and_then(Value::as_array) {
+        if request_text.is_empty()
+            || input
+                .iter()
+                .any(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+        {
+            return Ok(std::borrow::Cow::Borrowed(provider_payload));
+        }
+        let mut owned = provider_payload.clone();
+        owned
+            .get_mut("input")
+            .and_then(Value::as_array_mut)
+            .ok_or("provider_view_input_missing")?
+            .insert(
+                0,
+                serde_json::json!({
+                    "type": "message",
+                    "role": "user",
+                    "content": request_text,
+                }),
+            );
+        return Ok(std::borrow::Cow::Owned(owned));
+    }
+    let output = serde_json::to_string(provider_payload)
+        .map_err(|_| "provider_view_payload_serialization")?;
+    if output.len() > 65_536 {
+        return Err("provider_view_payload_budget");
+    }
+    let mut input = Vec::with_capacity(2);
+    if !request_text.is_empty() {
+        input.push(serde_json::json!({
+            "type": "message",
+            "role": "user",
+            "content": request_text,
+        }));
+    }
+    input.push(serde_json::json!({
+        "type": "function_call_output",
+        "output": output,
+    }));
+    Ok(std::borrow::Cow::Owned(serde_json::json!({"input": input})))
+}
+
 fn execute_unique_consensus(
     variants: &[ResponseConsensusVariant],
     adapter_wave: Option<&crate::ResponseAdapterWaveConsensus>,

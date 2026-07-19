@@ -746,7 +746,9 @@ fn observed_scalar_runtime_surface(
     lineage_sha256: Commitment256,
     surface_sha256: Commitment256,
 ) -> Result<RuntimeSurfaceEvidence, CrystallizedOperatorError> {
-    if request_text.trim().is_empty() {
+    if request_text.trim().is_empty()
+        && crate::collection_synthesis::is_source_neutral_request_selector(&selector)
+    {
         return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
     }
     let value_type =
@@ -814,6 +816,9 @@ fn bind_raw_pre_action_components(
         b"nando.observed-runtime-surface.v1",
         &[request_text.as_bytes(), &payload],
     );
+    let provider_view = crate::runtime::provider_payload_view(request_text, provider_payload)
+        .map_err(|_| CrystallizedOperatorError::MissingRuntimeAnchor)?;
+    let provider_payload = provider_view.as_ref();
     if let Some(filter) = transforms
         .iter()
         .find(|transform| transform.opcode == TRANSFORM_OPCODE_FILTER_REQUEST_VALUE)
@@ -869,13 +874,15 @@ fn bind_raw_pre_action_components(
         for selector in runtime_selector_candidates(provider_payload, expected_type)
             .filter(|selector| selector_value_type(selector) == Some(expected_type))
         {
-            let evidence = observed_scalar_runtime_surface(
+            let Ok(evidence) = observed_scalar_runtime_surface(
                 request_text,
                 provider_payload,
                 selector,
                 lineage_sha256,
                 surface_sha256,
-            )?;
+            ) else {
+                continue;
+            };
             let Ok(bound) = bind_operator_components(
                 role_graph,
                 relation_program,
@@ -1595,20 +1602,20 @@ fn ordered_role_transforms(
         }
     }
     for (index, transform) in ordered.iter().enumerate() {
-        if transform.output == transform.source_a
-            || usize::from(transform.parameter >> 8) != index
+        if transform.output == transform.source_a || usize::from(transform.parameter >> 8) != index
         {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
         }
         if transform.source_b != TRANSFORM_ROLE_NONE
-            && (transform.source_b == transform.output
-                || transform.source_b == transform.source_a)
+            && (transform.source_b == transform.output || transform.source_b == transform.source_a)
         {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
         }
         for source in [transform.source_a, transform.source_b] {
             if source != TRANSFORM_ROLE_NONE
-                && outputs.get(&source).is_some_and(|producer| *producer >= index)
+                && outputs
+                    .get(&source)
+                    .is_some_and(|producer| *producer >= index)
             {
                 return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
             }
@@ -1654,7 +1661,10 @@ fn instantiate_bound_actor(
             if role == TRANSFORM_ROLE_NONE || produced.contains(&role) {
                 continue;
             }
-            if expected_by_role.insert(role, value_type).is_some_and(|known| known != value_type) {
+            if expected_by_role
+                .insert(role, value_type)
+                .is_some_and(|known| known != value_type)
+            {
                 return Err(CrystallizedOperatorError::RuntimeOperandTypeMismatch);
             }
         }
@@ -2051,6 +2061,10 @@ fn infer_future_renderer(
         let evidence = evidence_by_lineage
             .get(&receipt.future_lineage_sha256)
             .ok_or(CrystallizedOperatorError::FutureEvidenceMismatch)?;
+        let provider_payload =
+            crate::runtime::provider_payload_view(&receipt.request_text, &receipt.provider_payload)
+                .map_err(|_| CrystallizedOperatorError::MissingRuntimeAnchor)?
+                .into_owned();
         let bound = bind_operator_components(
             blueprint.role_graph(),
             blueprint.relation_program(),
@@ -2059,7 +2073,7 @@ fn infer_future_renderer(
             RuntimeSurfaceEvidence {
                 bundle: evidence.bundle().clone(),
                 request_text: receipt.request_text.clone(),
-                provider_payload: receipt.provider_payload.clone(),
+                provider_payload,
                 anchors: receipt.anchors.clone(),
             },
         )?;
@@ -2394,8 +2408,7 @@ fn build_operator_page(
     for (producer, produced) in ordered_transforms.iter().enumerate() {
         for (consumer, consumed) in ordered_transforms.iter().enumerate() {
             if producer != consumer
-                && (produced.output == consumed.source_a
-                    || produced.output == consumed.source_b)
+                && (produced.output == consumed.source_a || produced.output == consumed.source_b)
             {
                 let offset = usize::from(composition_count) * 2;
                 if offset + 1 >= composition.len() {
@@ -2412,10 +2425,8 @@ fn build_operator_page(
 
     let _actor_digest = decode_sha256(actor_sha256)?;
     let verifier_digest = decode_sha256(verifier_sha256)?;
-    let (renderer, renderer_instruction_count) = crate::operator_vm::encode_renderer_program(
-        output_renderer,
-        &ordered_transforms,
-    )?;
+    let (renderer, renderer_instruction_count) =
+        crate::operator_vm::encode_renderer_program(output_renderer, &ordered_transforms)?;
 
     let proof_lineage = lineage_commitment(support_lineages, future_lineages);
     let role_commitment = roles_commitment(&roles);
