@@ -1,6 +1,7 @@
 [Unit]
 Description=Nando cold streaming response learner
-After=network.target
+After=network.target nando-gateway-control.service
+Wants=nando-gateway-control.service
 
 [Service]
 Type=simple
@@ -14,6 +15,7 @@ Environment=NANDO_LOCAL_ACCEPT_ENABLED=0
 Environment=NANDO_CLIENT_ALLOW_LOCAL_ACCEPT=0
 Environment=NANDO_GATEWAY_CPU_ROUTE_READY=0
 Environment=NANDO_FALLBACK_MANAGED_BY_NGINX=0
+Environment=MIMALLOC_PURGE_DELAY=0
 Environment=NANDO_TRANSITION_METRICS=/var/lib/nando-wave/transition/learning-runtime/metrics.json
 Environment=NANDO_TRANSITION_TRACE_JSONL=/var/lib/nando-wave/transition/learning-runtime/live-transitions.jsonl
 Environment=NANDO_TRANSITION_EXECUTION_EVENTS_JSONL=/var/lib/nando-wave/transition/learning-runtime/execution-events.jsonl

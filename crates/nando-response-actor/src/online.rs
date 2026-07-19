@@ -28,6 +28,9 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 66;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
+// Admission needs 32 independent future rows; larger full-frame reservoirs only
+// duplicate cold evidence without increasing execution authority.
+const MAX_FROZEN_FUTURE_ROWS_PER_BUCKET: usize = 32;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OnlineResponseMinerConfig {
@@ -1378,6 +1381,10 @@ impl OnlineResponseMiner {
             return Err("online_checkpoint_config_mismatch".to_owned());
         }
         for bucket in checkpoint.buckets.values_mut() {
+            trim_session_diverse_future(
+                &mut bucket.future_positives,
+                MAX_FROZEN_FUTURE_ROWS_PER_BUCKET,
+            );
             recompute_exact_guard(bucket);
         }
         let mut keys = BTreeMap::new();
@@ -1705,7 +1712,7 @@ impl OnlineResponseMiner {
                     push_session_diverse_future(
                         &mut bucket.future_positives,
                         frame.clone(),
-                        self.config.reservoir_rows.saturating_mul(4),
+                        MAX_FROZEN_FUTURE_ROWS_PER_BUCKET,
                     );
                     retained_as_frozen_future = true;
                 }
@@ -3019,6 +3026,17 @@ fn push_session_diverse_future(
         .unwrap_or(0);
     rows.remove(replacement);
     rows.push_back(row);
+}
+
+fn trim_session_diverse_future(rows: &mut VecDeque<RelationFrame>, limit: usize) {
+    if rows.len() <= limit {
+        return;
+    }
+    let mut bounded = VecDeque::with_capacity(limit);
+    for row in std::mem::take(rows) {
+        push_session_diverse_future(&mut bounded, row, limit);
+    }
+    *rows = bounded;
 }
 
 fn online_admission_precheck(
@@ -4790,5 +4808,23 @@ mod tests {
                 .all(|generation| generation.future_rows == 0)
         );
         fs::remove_dir_all(root).expect("temp cleanup");
+    }
+
+    #[test]
+    fn restored_future_reservoir_is_compacted_to_authority_bound() {
+        let mut rows = (0..128)
+            .map(|index| frame(index, "wait", true))
+            .collect::<VecDeque<_>>();
+
+        trim_session_diverse_future(&mut rows, MAX_FROZEN_FUTURE_ROWS_PER_BUCKET);
+
+        assert_eq!(rows.len(), MAX_FROZEN_FUTURE_ROWS_PER_BUCKET);
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.session_id_sha256.as_str())
+                .collect::<BTreeSet<_>>()
+                .len(),
+            4
+        );
     }
 }
