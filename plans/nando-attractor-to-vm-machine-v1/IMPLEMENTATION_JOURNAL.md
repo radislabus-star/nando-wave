@@ -1203,3 +1203,51 @@ nando-response-actor all-targets check                     PASS  7.86 s
 The v72 production checkpoint must be migrated once to v73 so retained
 historical support is regrouped under this contract. Historical observations
 remain support-only; frozen future and verifier receipts are never fabricated.
+
+## 2026-07-19 - Streaming factorized actor version space (v74)
+
+The v73 live migration merged budget-equivalent polling actions successfully:
+
+```text
+live scalar laws                         37 -> 7
+false accepts                                 0
+next blocker        hypothesisbudgetexhausted = 1
+```
+
+The blocker exposed a representation error. One semantic role repeated across
+many retained turn outputs produced more than 64 physical selectors. The law
+was already source-neutral, but every `(law, selector adapter)` pair was still
+stored as a complete actor program. Report generation then repeated that broad
+selector search over all support rows, keeping the cold learner near one CPU.
+
+Strategy v74 factorizes the version space:
+
+```text
+completed support surface
+-> bounded physical adapter set (maximum 512)
+-> one streaming intersection per new support row
+-> compact law-level actor consensus
+-> final authority budget (maximum 64)
+```
+
+No candidates are silently truncated. More than 512 per-surface adapters or
+more than 64 final consensus programs remains fail-closed. Reports and future
+evaluation re-ground the compact consensus against each committed raw surface;
+they no longer rerun broad selector induction. Raw request/provider payloads
+remain stored only in `TeacherTransition` and are not duplicated in the cache.
+
+Checkpoint v74 rebuilds this compact intersection once from retained support.
+Historical rows remain in support and cannot create frozen future.
+
+Focused remote receipts:
+
+```text
+>64 repeated physical-role adapters -> <=64 consensus  1/1 PASS  0.17 s
+custom crystallize/admit/restart/CPU lifecycle          1/1 PASS  3.47 s
+historical rebuild never creates future                 1/1 PASS  0.46 s
+nando-response-actor all-targets check                      PASS  7.26 s
+```
+
+The ready custom lifecycle evaluation improved from 14.16 seconds under v73
+to 3.47 seconds under v74 (approximately 4.1x) while preserving the same full
+admission and CPU-execution proof.

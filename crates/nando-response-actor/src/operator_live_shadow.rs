@@ -144,6 +144,13 @@ pub struct LiveScalarShadowState {
 struct LiveScalarLawState {
     support: Vec<TeacherTransition>,
     future: Vec<TeacherTransition>,
+    // Physical selectors are factored out of the semantic law and intersected
+    // once as support arrives. Keeping this compact version set here prevents
+    // every report from repeating the full selector search over all 32 rows.
+    #[serde(default)]
+    support_actor_hypotheses: Vec<ResponseProgram>,
+    #[serde(default)]
+    support_hypotheses_initialized: bool,
 }
 
 struct CompetingBlueprintSet {
@@ -208,6 +215,10 @@ impl LiveScalarShadowState {
             return;
         }
         if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS {
+            if let Err(blocker) = update_support_actor_hypotheses(law, &sample.actor_hypotheses) {
+                *self.blockers.entry(blocker).or_default() += 1;
+                return;
+            }
             law.support.push(transition.clone());
             return;
         }
@@ -261,6 +272,10 @@ impl LiveScalarShadowState {
                 .or_default() += 1;
             return;
         }
+        if let Err(blocker) = update_support_actor_hypotheses(law, &sample.actor_hypotheses) {
+            *self.blockers.entry(blocker).or_default() += 1;
+            return;
+        }
         law.support.push(transition.clone());
     }
 
@@ -307,6 +322,34 @@ impl LiveScalarShadowState {
     }
 }
 
+fn update_support_actor_hypotheses(
+    law: &mut LiveScalarLawState,
+    observed: &[ResponseProgram],
+) -> Result<(), LiveScalarShadowBlocker> {
+    let observed = observed
+        .iter()
+        .map(|program| {
+            serde_cbor::to_vec(program)
+                .map(|key| (key, program.clone()))
+                .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    if observed.is_empty() || observed.len() > TEACHER_CALL_SELECTOR_BUDGET {
+        return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
+    }
+    if !law.support_hypotheses_initialized {
+        law.support_actor_hypotheses = observed.into_values().collect();
+        law.support_hypotheses_initialized = true;
+        return Ok(());
+    }
+    law.support_actor_hypotheses.retain(|program| {
+        serde_cbor::to_vec(program)
+            .ok()
+            .is_some_and(|key| observed.contains_key(&key))
+    });
+    Ok(())
+}
+
 fn evaluate_live_law(
     law: &LiveScalarLawState,
     report: &mut LiveScalarShadowReport,
@@ -316,10 +359,20 @@ fn evaluate_live_law(
         increment_report_blocker(report, "support_below_32");
         return;
     }
+    if law.support_actor_hypotheses.is_empty() {
+        increment_report_blocker(report, "actor_hypotheses_no_common_version");
+        return;
+    }
+    if law.support_actor_hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+        increment_report_blocker(report, "actor_hypothesis_class_budget");
+        return;
+    }
     let Ok(support) = law
         .support
         .iter()
-        .map(extract_live_scalar_circuit_sample)
+        .map(|transition| {
+            reextract_live_scalar_circuit_sample(transition, &law.support_actor_hypotheses)
+        })
         .collect::<Result<Vec<_>, _>>()
     else {
         increment_report_blocker(report, "support_reextract_failed");
@@ -361,7 +414,9 @@ fn evaluate_live_law(
     let Ok(future) = law
         .future
         .iter()
-        .map(extract_live_scalar_circuit_sample)
+        .map(|transition| {
+            reextract_live_scalar_circuit_sample(transition, &law.support_actor_hypotheses)
+        })
         .collect::<Result<Vec<_>, _>>()
     else {
         increment_report_blocker(report, "future_reextract_failed");
@@ -1020,10 +1075,72 @@ pub fn extract_live_scalar_circuit_sample(
         .max_by_key(|program| rich_scalar_program_roles(program).map_or(0, |roles| roles.len()))
         .cloned()
         .ok_or(LiveScalarShadowBlocker::CanonicalCandidateMissing)?;
+    finish_live_scalar_circuit_sample(
+        transition,
+        parity,
+        payload_bytes,
+        canonical_program,
+        actor_hypotheses,
+    )
+}
+
+fn reextract_live_scalar_circuit_sample(
+    transition: &TeacherTransition,
+    support_actor_hypotheses: &[ResponseProgram],
+) -> Result<LiveScalarCircuitSample, LiveScalarShadowBlocker> {
+    if !transition.outcome.verifier.accepted {
+        return Err(LiveScalarShadowBlocker::TeacherRejected);
+    }
+    let parity = transition
+        .runtime_parity_case
+        .as_ref()
+        .ok_or(LiveScalarShadowBlocker::MissingParityCase)?;
+    let payload_bytes = serde_json::to_vec(&parity.provider_payload)
+        .map_err(|_| LiveScalarShadowBlocker::PayloadSerializationFailed)?;
+    if payload_bytes.len() > 64 * 1024 || parity.expected_response.len() > 4 * 1024 {
+        return Err(LiveScalarShadowBlocker::PayloadTooLarge);
+    }
+    let actor_hypotheses = support_actor_hypotheses
+        .iter()
+        .filter(|program| {
+            execute_response(program, &parity.request_text, &parity.provider_payload)
+                .response
+                .as_deref()
+                .is_some_and(|response| {
+                    response == parity.expected_response
+                        || crate::online_admission::responses_match_after_execution_budget_normalization(
+                            response,
+                            &parity.expected_response,
+                        )
+                })
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let canonical_program = actor_hypotheses
+        .iter()
+        .max_by_key(|program| rich_scalar_program_roles(program).map_or(0, |roles| roles.len()))
+        .cloned()
+        .ok_or(LiveScalarShadowBlocker::NoExactSourceNeutralProgram)?;
+    finish_live_scalar_circuit_sample(
+        transition,
+        parity,
+        payload_bytes,
+        canonical_program,
+        actor_hypotheses,
+    )
+}
+
+fn finish_live_scalar_circuit_sample(
+    transition: &TeacherTransition,
+    parity: &crate::RuntimeParityCase,
+    payload_bytes: Vec<u8>,
+    canonical_program: ResponseProgram,
+    actor_hypotheses: Vec<ResponseProgram>,
+) -> Result<LiveScalarCircuitSample, LiveScalarShadowBlocker> {
     // The relation circuit and executable actor must be derived from the same
     // canonical winner program; otherwise runtime roles cannot match support.
     let roles = rich_scalar_program_roles(&canonical_program)
-        .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?;
+        .ok_or_else(|| classify_exact_program_blocker(&actor_hypotheses))?;
 
     let lineage_sha256 = parse_commitment(&transition.before.session_id_sha256)
         .or_else(|| parse_commitment(&transition.before.client_intent_id_sha256))
@@ -1224,7 +1341,10 @@ fn teacher_action_programs(
             continue;
         }
         exact.entry(candidate_key).or_insert(candidate);
-        if exact.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+        // One surface may expose the same semantic role through many physical
+        // paths. Preserve the bounded adapter version space here; the support
+        // intersection must shrink it to the 64-variant authority limit.
+        if exact.len() > TEACHER_CALL_SELECTOR_BUDGET {
             return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
         }
     }
@@ -1746,7 +1866,7 @@ fn canonical_rich_actor_hypotheses(
         let key = serde_cbor::to_vec(&canonical)
             .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
         hypotheses.entry(key).or_insert(canonical);
-        if hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+        if hypotheses.len() > TEACHER_CALL_SELECTOR_BUDGET {
             return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
         }
     }
@@ -1872,7 +1992,7 @@ fn expand_actor_hypothesis_set(
             let key = serde_cbor::to_vec(&hypothesis)
                 .map_err(|_| LiveScalarShadowBlocker::HypothesisEncodingFailed)?;
             hypotheses.entry(key).or_insert(hypothesis);
-            if hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+            if hypotheses.len() > TEACHER_CALL_SELECTOR_BUDGET {
                 return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
             }
         }
@@ -1932,7 +2052,7 @@ fn enumerate_ordinal_assignments(
 ) -> Result<(), LiveScalarShadowBlocker> {
     if slot == role_types.len() {
         output.push(current.clone());
-        if output.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS {
+        if output.len() > TEACHER_CALL_SELECTOR_BUDGET {
             return Err(LiveScalarShadowBlocker::HypothesisBudgetExhausted);
         }
         return Ok(());
@@ -3298,6 +3418,31 @@ mod tests {
         row
     }
 
+    fn custom_tool_transition_with_repeated_outputs(index: u64) -> TeacherTransition {
+        let mut row = custom_tool_transition(index);
+        let selected = index + 1000;
+        let outputs = (0..64)
+            .map(|output_index| {
+                json!({
+                    "type": "custom_tool_call_output",
+                    "call_id": format!("call-{index}-{output_index}"),
+                    "output": [{
+                        "type": "text",
+                        "text": format!("still running\nSESSION_ID={selected}"),
+                    }],
+                })
+            })
+            .collect::<Vec<_>>();
+        row.runtime_parity_case
+            .as_mut()
+            .expect("parity case")
+            .provider_payload = json!({
+            "tools": [{"type": "custom", "name": "exec"}],
+            "input": outputs,
+        });
+        row
+    }
+
     fn collection_count_transition(request: &str, prefix: &str) -> TeacherTransition {
         collection_count_transition_n(request, prefix, 3)
     }
@@ -3791,6 +3936,31 @@ mod tests {
                 )
             }),
             "{execution:#?}"
+        );
+    }
+
+    #[test]
+    fn repeated_physical_call_roles_collapse_before_authority_budget() {
+        let broad =
+            extract_live_scalar_circuit_sample(&custom_tool_transition_with_repeated_outputs(1))
+                .expect("bounded physical adapter space");
+        assert!(
+            broad.actor_hypotheses.len() > crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS,
+            "the fixture must exercise the intermediate version space"
+        );
+        assert!(broad.actor_hypotheses.len() <= TEACHER_CALL_SELECTOR_BUDGET);
+
+        let narrow = extract_live_scalar_circuit_sample(&custom_tool_transition(2))
+            .expect("independent narrow surface");
+        let mut law = LiveScalarLawState::default();
+        update_support_actor_hypotheses(&mut law, &broad.actor_hypotheses)
+            .expect("first surface initializes the version space");
+        update_support_actor_hypotheses(&mut law, &narrow.actor_hypotheses)
+            .expect("second surface intersects the version space");
+
+        assert!(!law.support_actor_hypotheses.is_empty());
+        assert!(
+            law.support_actor_hypotheses.len() <= crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS
         );
     }
 
