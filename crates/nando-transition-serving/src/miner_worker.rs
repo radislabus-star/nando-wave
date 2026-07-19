@@ -387,11 +387,14 @@ pub fn spawn_miner_worker(
         u64::try_from(startup_replay_support_before).unwrap_or(u64::MAX),
         Ordering::Relaxed,
     );
-    // A restored checkpoint is already the materialized state. Historical
-    // unfinished search is not an event and must not turn startup into a batch
-    // job. New traffic schedules bounded slices below.
+    // A restored checkpoint is already the materialized state. Permit one
+    // bounded migration slice at startup; further work is paced by real
+    // transition bursts below, so restart cannot become an unbounded batch.
     let initial_synthesis_pending = false;
-    let initial_collection_maintenance_pending = false;
+    let initial_collection_maintenance_pending = collection_miner
+        .lock()
+        .map_err(|_| "miner_worker_initial_collection_lock_poisoned".to_owned())?
+        .has_structural_resynthesis_work();
     let initial_status = {
         let stream = miner
             .lock()
@@ -554,6 +557,9 @@ pub fn spawn_miner_worker(
                         thread_counters.processed.fetch_add(1, Ordering::Relaxed);
                         events_since_checkpoint = events_since_checkpoint.saturating_add(1);
                         synthesis_pending = EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED;
+                        collection_maintenance_pending |= collection_miner
+                            .lock()
+                            .is_ok_and(|collection| collection.has_structural_resynthesis_work());
                         if let Some(trigger) = &authority_trigger {
                             let _ = trigger.try_send(());
                         }
