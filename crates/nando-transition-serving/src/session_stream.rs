@@ -8,7 +8,8 @@ use std::thread;
 
 use memchr::memchr_iter;
 use nando_response_actor::{
-    AtomSource, AtomValueType, CanonicalEventGraph, CollectionOutputRenderer, CompletedTurnExample,
+    AtomSource, AtomValueType, CanonicalEventGraph, CaptureEvidenceReceipt,
+    CaptureRecordCommitment, CollectionOutputRenderer, CompletedTurnExample,
     DeterministicEvidenceGraphStore, DeterministicEvidenceLedger, EvidenceGraphBuilder,
     EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, OnlineCollectionMiner,
     OnlineCollectionObservation, RELATION_FRAME_SCHEMA, RawEvidenceEnvelope, RelationAtom,
@@ -336,6 +337,8 @@ struct SessionState {
     turn_event_time_unix_nanos: Option<u64>,
     runtime_request_text: String,
     runtime_parity_cases: BTreeMap<String, RuntimeParityCase>,
+    current_capture_record: Option<CaptureRecordCommitment>,
+    turn_capture_records: Vec<CaptureRecordCommitment>,
 }
 
 pub fn spawn_session_stream<L>(
@@ -1102,6 +1105,18 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             .lock()
             .map_err(|_| "evidence_ledger_lock_poisoned".to_owned())?
             .ingest_session_event(envelope)?;
+        state.current_capture_record = Some(CaptureRecordCommitment {
+            sequence: record.sequence,
+            record_sha256: record.record_sha256.clone(),
+        });
+        if !parsed.as_ref().is_some_and(is_turn_start) {
+            state.turn_capture_records.push(
+                state
+                    .current_capture_record
+                    .clone()
+                    .expect("capture record"),
+            );
+        }
         if state.turn_index > 0
             && parsed.as_ref().is_some_and(is_evidence_graph_event)
             && let EvidenceIngestOutcome::Normalized { graph } = record.outcome
@@ -1500,6 +1515,14 @@ fn reset_turn(state: &mut SessionState) {
     state.turn_session_id_sha256.clear();
     state.turn_event_time_unix_nanos = None;
     state.runtime_request_text = String::new();
+    // The user-message row was already committed before observe_row called
+    // reset_turn. Preserve that one record as the first commitment of the new
+    // turn and discard all commitments from the completed turn.
+    state.turn_capture_records = state.current_capture_record.clone().into_iter().collect();
+}
+
+fn current_capture_receipt(state: &SessionState) -> Option<CaptureEvidenceReceipt> {
+    CaptureEvidenceReceipt::new(state.turn_capture_records.clone()).ok()
 }
 
 fn flush_pending(state: &mut SessionState, tokens: u64, output: &mut Vec<RelationFrame>) {
@@ -2014,6 +2037,7 @@ fn action_frames(
             frame.frame_id_sha256.clone(),
             RuntimeParityCase {
                 evidence_ref_sha256: frame.frame_id_sha256.clone(),
+                capture_receipt: current_capture_receipt(state),
                 request_text: state.runtime_request_text.clone(),
                 provider_payload,
                 expected_response,
@@ -2244,6 +2268,7 @@ fn plan_advance_frames(
         frame.frame_id_sha256.clone(),
         RuntimeParityCase {
             evidence_ref_sha256: frame.frame_id_sha256.clone(),
+            capture_receipt: current_capture_receipt(state),
             request_text: state.runtime_request_text.clone(),
             provider_payload,
             expected_response: response,
@@ -2539,6 +2564,7 @@ fn assistant_frames(row: &Value, text: &str, state: &mut SessionState) -> Vec<Re
             frame.frame_id_sha256.clone(),
             RuntimeParityCase {
                 evidence_ref_sha256: frame.frame_id_sha256.clone(),
+                capture_receipt: current_capture_receipt(state),
                 request_text: state.runtime_request_text.clone(),
                 provider_payload,
                 expected_response: text.to_owned(),
@@ -3196,7 +3222,12 @@ mod tests {
             state
                 .runtime_parity_cases
                 .get(&frame.frame_id_sha256)
-                .is_some_and(|case| case.evidence_ref_sha256 == frame.frame_id_sha256)
+                .is_some_and(|case| {
+                    case.evidence_ref_sha256 == frame.frame_id_sha256
+                        && case.capture_receipt.as_ref().is_some_and(|receipt| {
+                            receipt.validate().is_ok() && !receipt.records.is_empty()
+                        })
+                })
         }));
         fs::remove_dir_all(root).expect("cleanup");
     }

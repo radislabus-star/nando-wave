@@ -18,6 +18,7 @@ const MAX_RUNTIME_PARITY_PAYLOAD_BYTES: u64 = 64 * 1024 * 1024;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeParityCase {
     pub evidence_ref_sha256: String,
+    pub capture_receipt: Option<crate::CaptureEvidenceReceipt>,
     pub request_text: String,
     pub provider_payload: Value,
     pub expected_response: String,
@@ -37,8 +38,9 @@ impl Serialize for RuntimeParityCase {
         }
         let compressed =
             zstd::stream::encode_all(payload.as_slice(), 1).map_err(serde::ser::Error::custom)?;
-        let mut state = serializer.serialize_struct("RuntimeParityCase", 4)?;
+        let mut state = serializer.serialize_struct("RuntimeParityCase", 5)?;
         state.serialize_field("evidence_ref_sha256", &self.evidence_ref_sha256)?;
+        state.serialize_field("capture_receipt", &self.capture_receipt)?;
         state.serialize_field("request_text", &self.request_text)?;
         state.serialize_field(
             "provider_payload_zstd",
@@ -52,6 +54,8 @@ impl Serialize for RuntimeParityCase {
 #[derive(Deserialize)]
 struct RuntimeParityCaseWire {
     evidence_ref_sha256: String,
+    #[serde(default)]
+    capture_receipt: Option<crate::CaptureEvidenceReceipt>,
     #[serde(default)]
     request_text: String,
     #[serde(default)]
@@ -92,6 +96,7 @@ impl<'de> Deserialize<'de> for RuntimeParityCase {
         };
         Ok(Self {
             evidence_ref_sha256: wire.evidence_ref_sha256,
+            capture_receipt: wire.capture_receipt,
             request_text: wire.request_text,
             provider_payload,
             expected_response: wire.expected_response,
@@ -185,6 +190,7 @@ mod tests {
     fn runtime_parity_writes_compact_zstd_payload() {
         let parity = RuntimeParityCase {
             evidence_ref_sha256: "c".repeat(64),
+            capture_receipt: None,
             request_text: "return value".to_owned(),
             provider_payload: json!({"body": "x".repeat(32 * 1024)}),
             expected_response: "ok".to_owned(),

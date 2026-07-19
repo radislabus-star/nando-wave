@@ -974,6 +974,7 @@ mod tests {
         ]);
         let parity = RuntimeParityCase {
             evidence_ref_sha256: legacy.frame_id_sha256.clone(),
+            capture_receipt: None,
             request_text: "continue".to_owned(),
             provider_payload: serde_json::json!({"input":[]}),
             expected_response: serde_json::json!({

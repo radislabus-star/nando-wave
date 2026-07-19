@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use nando_response_actor::{
-    OnlineAdmissionCandidateBundle, ResponseExecutor, ResponseRegistry,
+    CaptureCommitmentIndex, OnlineAdmissionCandidateBundle, ResponseExecutor, ResponseRegistry,
     build_crystallized_admission_snapshot, build_online_admission_snapshot,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
-    response_runtime_contract_sha256, sha256_bytes,
+    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance,
 };
 use serde::Serialize;
 
@@ -63,11 +63,29 @@ fn inspect_candidate_routes() -> Result<(), String> {
         &state_dir,
         "response-admission-candidates.cbor",
     );
+    let capture_index_path = env_path_join(
+        "NANDO_STREAMING_EVIDENCE_DIR",
+        &state_dir,
+        "streaming-evidence-v2",
+    )
+    .join("capture-commitment-index.cbor");
     let bytes = fs::read(&candidate_path)
         .map_err(|error| format!("candidate_bundle_read:{}:{error}", candidate_path.display()))?;
     let bundle: OnlineAdmissionCandidateBundle = serde_cbor::from_slice(&bytes)
         .map_err(|error| format!("candidate_bundle_decode:{error}"))?;
     bundle.validate().map_err(str::to_owned)?;
+    if !bundle.crystallized_candidates.is_empty() {
+        let capture_bytes = fs::read(&capture_index_path).map_err(|error| {
+            format!(
+                "capture_commitment_index_read:{}:{error}",
+                capture_index_path.display()
+            )
+        })?;
+        let capture_index: CaptureCommitmentIndex = serde_cbor::from_slice(&capture_bytes)
+            .map_err(|error| format!("capture_commitment_index_decode:{error}"))?;
+        verify_crystallized_capture_provenance(&bundle.crystallized_candidates, &capture_index)
+            .map_err(str::to_owned)?;
+    }
     let candidates = bundle
         .relation_candidates
         .iter()
@@ -254,6 +272,7 @@ fn run(started: Instant) -> Result<(), String> {
     let bundle: OnlineAdmissionCandidateBundle = serde_cbor::from_slice(&bytes)
         .map_err(|error| format!("candidate_bundle_decode:{error}"))?;
     bundle.validate().map_err(str::to_owned)?;
+    verify_capture_provenance(&bundle, &state_dir)?;
     let relation_max_future_rows = bundle
         .relation_candidates
         .iter()
@@ -441,6 +460,31 @@ fn run(started: Instant) -> Result<(), String> {
             elapsed_micros: elapsed_micros(started),
         },
     )
+}
+
+fn verify_capture_provenance(
+    bundle: &OnlineAdmissionCandidateBundle,
+    state_dir: &Path,
+) -> Result<(), String> {
+    if bundle.crystallized_candidates.is_empty() {
+        return Ok(());
+    }
+    let capture_index_path = env_path_join(
+        "NANDO_STREAMING_EVIDENCE_DIR",
+        state_dir,
+        "streaming-evidence-v2",
+    )
+    .join("capture-commitment-index.cbor");
+    let bytes = fs::read(&capture_index_path).map_err(|error| {
+        format!(
+            "capture_commitment_index_read:{}:{error}",
+            capture_index_path.display()
+        )
+    })?;
+    let index: CaptureCommitmentIndex = serde_cbor::from_slice(&bytes)
+        .map_err(|error| format!("capture_commitment_index_decode:{error}"))?;
+    verify_crystallized_capture_provenance(&bundle.crystallized_candidates, &index)
+        .map_err(str::to_owned)
 }
 
 fn write_report(path: &Path, report: AdmissionControllerReport) -> Result<(), String> {

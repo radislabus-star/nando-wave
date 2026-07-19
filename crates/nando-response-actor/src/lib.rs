@@ -1,6 +1,7 @@
 mod admission_bundle;
 mod authority;
 mod backward_wave;
+mod capture_provenance;
 mod causal;
 mod cegis;
 mod collection_synthesis;
@@ -59,6 +60,11 @@ pub use authority::{
     response_runtime_contract_sha256, sha256_bytes, valid_nonzero_sha256,
 };
 pub use backward_wave::{BackwardWave, BackwardWaveError, BackwardWaveUpdate};
+pub use capture_provenance::{
+    CAPTURE_COMMITMENT_INDEX_SCHEMA_V1, CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1, CaptureCommitmentIndex,
+    CaptureEvidenceReceipt, CaptureRecordCommitment, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
+    MAX_CAPTURE_RECEIPT_RECORDS, verify_crystallized_capture_provenance,
+};
 pub use causal::{
     GroundedWaveCausalReport, evaluate_grounded_wave_causality,
     evaluate_grounded_wave_causality_refs,

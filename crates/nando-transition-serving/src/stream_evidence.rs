@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use nando_response_actor::{
-    EVIDENCE_LEDGER_SCHEMA_V1, EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome,
-    EvidenceKey, EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger, RawEvidenceEnvelope,
-    canonical_json_sha256, canonicalize_evidence_envelope, evidence_payload_sha256,
-    read_framed_cbor, write_atomic_cbor,
+    CaptureCommitmentIndex, CaptureRecordCommitment, EVIDENCE_LEDGER_SCHEMA_V1,
+    EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome, EvidenceKey,
+    EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
+    RawEvidenceEnvelope, canonical_json_sha256, canonicalize_evidence_envelope,
+    evidence_payload_sha256, read_framed_cbor, write_atomic_cbor,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -67,12 +68,14 @@ pub struct StreamingEvidenceLedger {
     policy: EvidencePolicyV1,
     journal: FramedCborLedger,
     checkpoint_path: PathBuf,
+    capture_index_path: PathBuf,
     next_sequence: u64,
     previous_record_sha256: String,
     accounting: EvidenceAccounting,
     source_offsets: BTreeMap<String, u64>,
     recent: BTreeMap<StreamEvidenceKey, String>,
     recent_order: VecDeque<StreamEvidenceKey>,
+    recent_record_commitments: VecDeque<CaptureRecordCommitment>,
     events_since_checkpoint: u64,
     last_checkpoint: Instant,
     recovered_partial_tail_bytes: u64,
@@ -82,6 +85,17 @@ impl StreamingEvidenceLedger {
     pub fn open(directory: impl AsRef<Path>, policy: EvidencePolicyV1) -> Result<Self, String> {
         let directory = directory.as_ref();
         let checkpoint_path = directory.join("checkpoint.cbor");
+        let capture_index_path = directory.join("capture-commitment-index.cbor");
+        let recent_record_commitments = match std::fs::read(&capture_index_path) {
+            Ok(bytes) => {
+                let index = serde_cbor::from_slice::<CaptureCommitmentIndex>(&bytes)
+                    .map_err(|error| format!("capture_commitment_index_decode:{error}"))?;
+                index.validate().map_err(str::to_owned)?;
+                index.records.into()
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => VecDeque::new(),
+            Err(error) => return Err(format!("capture_commitment_index_read:{error}")),
+        };
         let checkpoint = match std::fs::read(&checkpoint_path) {
             Ok(bytes) => {
                 let checkpoint = serde_cbor::from_slice::<StreamingEvidenceCheckpoint>(&bytes)
@@ -111,12 +125,14 @@ impl StreamingEvidenceLedger {
                 policy,
                 journal: FramedCborLedger::open(directory, "canonical-event")?,
                 checkpoint_path,
+                capture_index_path,
                 next_sequence: checkpoint.next_sequence,
                 previous_record_sha256: checkpoint.previous_record_sha256,
                 accounting: checkpoint.accounting,
                 source_offsets: checkpoint.source_offsets,
                 recent,
                 recent_order,
+                recent_record_commitments,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 recovered_partial_tail_bytes: 0,
@@ -126,12 +142,14 @@ impl StreamingEvidenceLedger {
                 policy,
                 journal: FramedCborLedger::open(directory, "canonical-event")?,
                 checkpoint_path,
+                capture_index_path,
                 next_sequence: 0,
                 previous_record_sha256: "0".repeat(64),
                 accounting: EvidenceAccounting::default(),
                 source_offsets: BTreeMap::new(),
                 recent: BTreeMap::new(),
                 recent_order: VecDeque::new(),
+                recent_record_commitments,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 recovered_partial_tail_bytes: 0,
@@ -221,6 +239,7 @@ impl StreamingEvidenceLedger {
         key: StreamEvidenceKey,
         payload_sha256: String,
     ) {
+        self.remember_record_commitment(&record);
         self.apply_accounting_and_offset(&record);
         if !matches!(
             record.outcome,
@@ -250,6 +269,7 @@ impl StreamingEvidenceLedger {
         if record.record_sha256 != expected {
             return Err("streaming_evidence_record_digest_mismatch".to_owned());
         }
+        self.remember_record_commitment(&record);
         let key = outcome_key(&record.outcome);
         let payload_sha256 = outcome_payload_sha256(&record.outcome);
         self.apply_accounting_and_offset(&record);
@@ -272,6 +292,25 @@ impl StreamingEvidenceLedger {
                 self.recent.remove(&oldest);
             }
         }
+        while self.recent_record_commitments.len() > MAX_CAPTURE_COMMITMENT_INDEX_RECORDS {
+            self.recent_record_commitments.pop_front();
+        }
+    }
+
+    fn remember_record_commitment(&mut self, record: &EvidenceLedgerRecord) {
+        if self
+            .recent_record_commitments
+            .back()
+            .is_some_and(|current| current.sequence >= record.sequence)
+        {
+            return;
+        }
+        self.recent_record_commitments
+            .push_back(CaptureRecordCommitment {
+                sequence: record.sequence,
+                record_sha256: record.record_sha256.clone(),
+            });
+        self.trim_recent();
     }
 
     fn apply_accounting_and_offset(&mut self, record: &EvidenceLedgerRecord) {
@@ -308,6 +347,10 @@ impl StreamingEvidenceLedger {
         };
         checkpoint.checkpoint_sha256 = checkpoint_digest(&checkpoint)?;
         write_atomic_cbor(&self.checkpoint_path, &checkpoint)?;
+        let capture_index =
+            CaptureCommitmentIndex::new(self.recent_record_commitments.iter().cloned().collect())
+                .map_err(str::to_owned)?;
+        write_atomic_cbor(&self.capture_index_path, &capture_index)?;
         self.journal.compact_after_checkpoint()?;
         self.events_since_checkpoint = 0;
         self.last_checkpoint = Instant::now();
@@ -460,6 +503,13 @@ mod tests {
         let event = envelope(7, br#"{"value":7}"#);
         let mut ledger = StreamingEvidenceLedger::open(&root, policy).expect("open");
         ledger.ingest(event.clone()).expect("ingest");
+        ledger.persist_checkpoint().expect("persist capture index");
+        let index: CaptureCommitmentIndex = serde_cbor::from_slice(
+            &fs::read(root.join("capture-commitment-index.cbor")).expect("read capture index"),
+        )
+        .expect("decode capture index");
+        assert_eq!(index.records.len(), 1);
+        assert_eq!(index.validate(), Ok(()));
         drop(ledger);
 
         let mut restored = StreamingEvidenceLedger::open(&root, policy).expect("restore");

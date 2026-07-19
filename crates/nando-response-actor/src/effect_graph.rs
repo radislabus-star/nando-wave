@@ -654,6 +654,7 @@ mod tests {
             economics: None,
             runtime_parity_case: Some(RuntimeParityCase {
                 evidence_ref_sha256: "parity".repeat(8),
+                capture_receipt: None,
                 request_text: String::new(),
                 provider_payload: json!({"value": secret}),
                 expected_response: "ok".to_owned(),

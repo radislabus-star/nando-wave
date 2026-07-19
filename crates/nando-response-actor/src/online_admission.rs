@@ -2382,6 +2382,7 @@ mod tests {
                     .expect("runtime fixture executes");
                 crate::RuntimeParityCase {
                     evidence_ref_sha256: frame.frame_id_sha256.clone(),
+                    capture_receipt: None,
                     request_text: String::new(),
                     provider_payload,
                     expected_response,
@@ -2618,6 +2619,7 @@ mod tests {
         .to_string();
         let parity = crate::RuntimeParityCase {
             evidence_ref_sha256: support.frame_id_sha256.clone(),
+            capture_receipt: None,
             request_text: String::new(),
             provider_payload: serde_json::json!({
                 "input": [{

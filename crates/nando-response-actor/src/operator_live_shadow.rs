@@ -1744,6 +1744,7 @@ mod tests {
             }),
             runtime_parity_case: Some(crate::RuntimeParityCase {
                 evidence_ref_sha256: hash('a'),
+                capture_receipt: None,
                 request_text: "Return the count".to_owned(),
                 provider_payload: json!({
                     "input": [{

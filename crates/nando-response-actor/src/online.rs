@@ -3717,6 +3717,7 @@ mod tests {
         .to_string();
         crate::RuntimeParityCase {
             evidence_ref_sha256: format!("{:064x}", index + 90_000),
+            capture_receipt: None,
             request_text: String::new(),
             provider_payload,
             expected_response,
@@ -3728,6 +3729,7 @@ mod tests {
         // a receipt that cannot prove runtime parity.
         crate::RuntimeParityCase {
             evidence_ref_sha256: String::new(),
+            capture_receipt: None,
             request_text: String::new(),
             provider_payload: serde_json::json!({
                 "input": [{
@@ -3884,6 +3886,7 @@ mod tests {
             assert_eq!(execution.status, crate::ResponseExecutionStatus::Executed);
             transition.runtime_parity_case = Some(crate::RuntimeParityCase {
                 evidence_ref_sha256,
+                capture_receipt: None,
                 request_text: String::new(),
                 provider_payload,
                 expected_response: execution.response.expect("exact response"),
@@ -4661,6 +4664,7 @@ mod tests {
             .to_string();
             transition.runtime_parity_case = Some(crate::RuntimeParityCase {
                 evidence_ref_sha256: String::new(),
+                capture_receipt: None,
                 request_text: String::new(),
                 provider_payload,
                 expected_response,

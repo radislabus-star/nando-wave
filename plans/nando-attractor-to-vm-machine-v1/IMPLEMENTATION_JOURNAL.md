@@ -191,3 +191,70 @@ graph query OperatorPage32 -> VM -> verifier        PASS 1.84 s
 Next architectural boundary: finish Stage 9 capture-owned admission
 provenance, then expose this VM operator in generic scalar live shadow before
 adding broader opcodes.
+
+## 2026-07-19 - Stage 9 Capture-Owned Admission Provenance
+
+Confirmed boundary:
+
+```text
+external admission already resynthesized candidate programs and proof counters
+but TeacherTransition rows were not committed to the capture-owned hash chain
+evidence_ref_sha256 was an observation-output digest, not a ledger commitment
+```
+
+Implemented streaming proof route:
+
+```text
+StreamingEvidenceLedger record
+-> bounded per-turn ordered record commitments
+-> CaptureEvidenceReceipt in RuntimeParityCase
+-> bounded capture-commitment-index.cbor
+-> external admission reads index independently
+-> every crystallized support/future receipt must be indexed
+-> candidate resynthesis and ordinary proof gates continue unchanged
+```
+
+Budgets and behavior:
+
+```text
+turn receipt maximum                               512 records
+capture index maximum                              16,384 records
+index persistence                                  existing 64-event / 5-second checkpoint
+ordinary startup history scan                      none
+missing, stale, tampered, or unindexed receipt     BLOCK
+old historical rows                                support only; cannot obtain new authority
+```
+
+Focused verification:
+
+```text
+fmt application                                    2.97 s
+remote source sync                                 0.47 s
+combined package check                             BASELINE BLOCK 14.25 s
+  unrelated nando-response-miner has 3 old non-exhaustive selector matches
+actor lib + external admission check               PASS 12.72 s
+serving lib check                                  PASS 0.12 s
+capture receipt/index tests                        PASS 2/2 13.39 s
+streaming ledger restart/index test                PASS 1/1 17.27 s
+live-shaped two-turn capture receipt join          PASS 1/1 2.84 s
+rich candidate/resynthesis regression              PASS 1/1 10.94 s
+```
+
+Stage 9 result:
+
+```text
+capture-owned bounded commitment index             PASS
+turn evidence receipt                              PASS
+external admission provenance check                PASS
+tamper/missing receipt fail closed                 PASS
+candidate resynthesis retained                     PASS
+production deployment                              NOT RUN
+```
+
+Graph maintenance:
+
+```text
+graphify update .                                  PASS 24.74 s
+  graph                                             22,938 nodes / 51,194 edges
+graphify capture-to-admission path                 PASS 1.74 s
+```

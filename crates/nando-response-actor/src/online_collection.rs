@@ -2091,6 +2091,7 @@ impl OnlineCollectionMiner {
                         independently_verified_authority_response(&package.program, example)?;
                     Some(crate::RuntimeParityCase {
                         evidence_ref_sha256: receipt.evidence_graph_sha256.clone(),
+                        capture_receipt: None,
                         request_text: String::new(),
                         provider_payload: example.provider_payload.clone(),
                         expected_response: canonical_response,

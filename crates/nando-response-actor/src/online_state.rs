@@ -2475,6 +2475,7 @@ mod tests {
             crate::teacher_transition_from_completed(&frame, None).expect("teacher transition");
         transition.runtime_parity_case = Some(crate::RuntimeParityCase {
             evidence_ref_sha256: String::new(),
+            capture_receipt: None,
             request_text: request_text.to_owned(),
             provider_payload,
             expected_response: expected.response.expect("exact response"),
@@ -2616,6 +2617,7 @@ mod tests {
             economics: None,
             runtime_parity_case: Some(crate::RuntimeParityCase {
                 evidence_ref_sha256: "old".to_owned(),
+                capture_receipt: None,
                 request_text: "continue".to_owned(),
                 provider_payload: json!({"input": []}),
                 expected_response: "{}".to_owned(),
@@ -2647,6 +2649,7 @@ mod tests {
                 frame_id.clone(),
                 crate::RuntimeParityCase {
                     evidence_ref_sha256: frame_id.clone(),
+                    capture_receipt: None,
                     request_text: "replay".to_owned(),
                     provider_payload: json!({"index": index}),
                     expected_response: "{}".to_owned(),
@@ -2661,6 +2664,7 @@ mod tests {
                 frame_id.clone(),
                 crate::RuntimeParityCase {
                     evidence_ref_sha256: frame_id.clone(),
+                    capture_receipt: None,
                     request_text: "live".to_owned(),
                     provider_payload: json!({"index": index}),
                     expected_response: "{}".to_owned(),
@@ -2716,6 +2720,7 @@ mod tests {
             canonical_training.frame_id_sha256.clone(),
             crate::RuntimeParityCase {
                 evidence_ref_sha256: canonical_training.frame_id_sha256.clone(),
+                capture_receipt: None,
                 request_text: "continue".to_owned(),
                 provider_payload: json!({"input": []}),
                 expected_response: "{}".to_owned(),
