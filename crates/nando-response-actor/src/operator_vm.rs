@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use nando_core::wave::{OperatorPage32, TransformOp8};
+use nando_core::wave::{OPERATOR_PAGE32_RENDERER_BYTES, OperatorPage32, TransformOp8};
 use serde_json::Value;
 
 use crate::crystallized_operator::{
@@ -8,11 +8,14 @@ use crate::crystallized_operator::{
 };
 use crate::runtime::project_selected_value_with_request;
 use crate::{
-    CollectionOutputRenderer, ResponseOperation, ResponseProgram, ResponseRenderSegment,
-    ResponseValueSelector, ValueProjectionFormat,
+    CollectionOutputRenderer, ResponseRenderSegment, ResponseValueSelector, ValueProjectionFormat,
 };
 
 const OPERATOR_VM_MAX_OUTPUT_BYTES: usize = 16_384;
+const RENDERER_VERSION: u8 = 1;
+const RENDERER_STATIC: u8 = 1;
+const RENDERER_VALUE: u8 = 2;
+const RENDERER_EMIT: u8 = 255;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OperatorVmError {
@@ -32,7 +35,6 @@ pub(crate) enum OperatorVmError {
 pub(crate) fn execute_operator_page(
     page: &OperatorPage32,
     selectors: &[ResponseValueSelector],
-    renderer_program: &ResponseProgram,
     request_text: &str,
     provider_payload: &Value,
 ) -> Result<String, OperatorVmError> {
@@ -60,14 +62,117 @@ pub(crate) fn execute_operator_page(
         );
     }
 
-    let response = render_program(renderer_program, &values, &transforms)?;
-    if response.is_empty()
-        || response.len() > renderer_program.max_output_bytes
-        || response.len() > OPERATOR_VM_MAX_OUTPUT_BYTES
-    {
+    let response = execute_renderer(page, &values)?;
+    if response.is_empty() || response.len() > OPERATOR_VM_MAX_OUTPUT_BYTES {
         return Err(OperatorVmError::OutputBudget);
     }
     Ok(response)
+}
+
+pub(crate) fn encode_renderer_program(
+    renderer: &CollectionOutputRenderer,
+    transforms: &[TransformOp8],
+) -> Result<([u8; OPERATOR_PAGE32_RENDERER_BYTES], u8), crate::CrystallizedOperatorError> {
+    let mut instructions = Vec::new();
+    let mut instruction_count = 0_u8;
+    let mut next_value = 0_usize;
+    match renderer {
+        CollectionOutputRenderer::Direct => {
+            push_value(&mut instructions, 0)?;
+            instruction_count = instruction_count.saturating_add(1);
+        }
+        CollectionOutputRenderer::RenderTemplate { prefix, suffix } => {
+            instruction_count =
+                instruction_count.saturating_add(push_static(&mut instructions, prefix)?);
+            push_value(&mut instructions, 0)?;
+            instruction_count = instruction_count.saturating_add(1);
+            instruction_count =
+                instruction_count.saturating_add(push_static(&mut instructions, suffix)?);
+        }
+        CollectionOutputRenderer::RenderSequence { segments } => {
+            for segment in segments {
+                match segment {
+                    ResponseRenderSegment::Static { text } => {
+                        instruction_count =
+                            instruction_count.saturating_add(push_static(&mut instructions, text)?);
+                    }
+                    ResponseRenderSegment::Primary => {
+                        push_value(&mut instructions, next_value)?;
+                        instruction_count = instruction_count.saturating_add(1);
+                        next_value = next_value.saturating_add(1);
+                    }
+                    ResponseRenderSegment::Selected { format, .. } => {
+                        let transform = transforms
+                            .get(next_value)
+                            .ok_or(crate::CrystallizedOperatorError::UnsupportedTransformProgram)?;
+                        if *format
+                            != transform_format(transform.flags).map_err(|_| {
+                                crate::CrystallizedOperatorError::UnsupportedTransformProgram
+                            })?
+                        {
+                            return Err(
+                                crate::CrystallizedOperatorError::UnsupportedTransformProgram,
+                            );
+                        }
+                        push_value(&mut instructions, next_value)?;
+                        instruction_count = instruction_count.saturating_add(1);
+                        next_value = next_value.saturating_add(1);
+                    }
+                }
+            }
+            if next_value != transforms.len() {
+                return Err(crate::CrystallizedOperatorError::UnsupportedTransformProgram);
+            }
+        }
+        CollectionOutputRenderer::RequestTemplate { .. } => {
+            return Err(crate::CrystallizedOperatorError::UnsupportedTransformProgram);
+        }
+    }
+    if matches!(
+        renderer,
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. }
+    ) && transforms.len() != 1
+    {
+        return Err(crate::CrystallizedOperatorError::UnsupportedTransformProgram);
+    }
+    instructions.push(RENDERER_EMIT);
+    instruction_count = instruction_count.saturating_add(1);
+    if instructions.len().saturating_add(2) > OPERATOR_PAGE32_RENDERER_BYTES
+        || instruction_count == 0
+    {
+        return Err(crate::CrystallizedOperatorError::RendererMismatch);
+    }
+    let mut encoded = [0_u8; OPERATOR_PAGE32_RENDERER_BYTES];
+    encoded[0] = RENDERER_VERSION;
+    encoded[1] = instruction_count;
+    encoded[2..2 + instructions.len()].copy_from_slice(&instructions);
+    Ok((encoded, instruction_count))
+}
+
+fn push_static(
+    instructions: &mut Vec<u8>,
+    text: &str,
+) -> Result<u8, crate::CrystallizedOperatorError> {
+    if text.is_empty() {
+        return Ok(0);
+    }
+    let bytes = text.as_bytes();
+    let len = u8::try_from(bytes.len())
+        .map_err(|_| crate::CrystallizedOperatorError::RendererMismatch)?;
+    instructions.push(RENDERER_STATIC);
+    instructions.push(len);
+    instructions.extend_from_slice(bytes);
+    Ok(1)
+}
+
+fn push_value(
+    instructions: &mut Vec<u8>,
+    index: usize,
+) -> Result<(), crate::CrystallizedOperatorError> {
+    let index =
+        u8::try_from(index).map_err(|_| crate::CrystallizedOperatorError::RendererMismatch)?;
+    instructions.extend_from_slice(&[RENDERER_VALUE, index]);
+    Ok(())
 }
 
 fn decode_transforms(page: &OperatorPage32) -> Result<Vec<TransformOp8>, OperatorVmError> {
@@ -99,91 +204,68 @@ fn decode_transforms(page: &OperatorPage32) -> Result<Vec<TransformOp8>, Operato
     Ok(transforms)
 }
 
-fn render_program(
-    program: &ResponseProgram,
-    values: &[String],
-    transforms: &[TransformOp8],
-) -> Result<String, OperatorVmError> {
-    match &program.operation {
-        ResponseOperation::ProjectSelectedValue { renderer, .. } => {
-            render_values(renderer, values, transforms)
-        }
-        ResponseOperation::UniqueConsensus { variants, .. } => {
-            let mut responses = BTreeSet::new();
-            for variant in variants {
-                if let Ok(response) = render_program(&variant.program, values, transforms) {
-                    responses.insert(response);
-                }
-            }
-            if responses.len() != 1 {
-                return Err(OperatorVmError::AmbiguousResponse);
-            }
-            responses
-                .into_iter()
-                .next()
-                .ok_or(OperatorVmError::AmbiguousResponse)
-        }
-        _ => Err(OperatorVmError::UnsupportedRenderer),
+fn execute_renderer(page: &OperatorPage32, values: &[String]) -> Result<String, OperatorVmError> {
+    let header = page.header().map_err(|_| OperatorVmError::InvalidPage)?;
+    let program = page.renderer_program();
+    let instruction_count = usize::from(header.renderer_instruction_count);
+    if instruction_count == 0
+        || program[0] != RENDERER_VERSION
+        || usize::from(program[1]) != instruction_count
+    {
+        return Err(OperatorVmError::InvalidProgram);
     }
-}
 
-fn render_values(
-    renderer: &CollectionOutputRenderer,
-    values: &[String],
-    transforms: &[TransformOp8],
-) -> Result<String, OperatorVmError> {
-    match renderer {
-        CollectionOutputRenderer::Direct => match values {
-            [value] => Ok(value.clone()),
-            _ => Err(OperatorVmError::UnsupportedRenderer),
-        },
-        CollectionOutputRenderer::RenderTemplate { prefix, suffix } => match values {
-            [value] => Ok(format!("{prefix}{value}{suffix}")),
-            _ => Err(OperatorVmError::UnsupportedRenderer),
-        },
-        CollectionOutputRenderer::RenderSequence { segments } => {
-            let mut output = String::new();
-            let mut next_value = 0_usize;
-            for segment in segments {
-                match segment {
-                    ResponseRenderSegment::Static { text } => output.push_str(text),
-                    ResponseRenderSegment::Primary => {
-                        let value = values
-                            .get(next_value)
-                            .ok_or(OperatorVmError::MissingOperand)?;
-                        output.push_str(value);
-                        next_value += 1;
-                    }
-                    ResponseRenderSegment::Selected { format, .. } => {
-                        let value = values
-                            .get(next_value)
-                            .ok_or(OperatorVmError::MissingOperand)?;
-                        let expected = transform_format(
-                            transforms
-                                .get(next_value)
-                                .ok_or(OperatorVmError::MissingOperand)?
-                                .flags,
-                        )?;
-                        if *format != expected {
-                            return Err(OperatorVmError::InvalidProgram);
-                        }
-                        output.push_str(value);
-                        next_value += 1;
-                    }
+    let mut cursor = 2_usize;
+    let mut output = String::new();
+    let mut used_values = BTreeSet::new();
+    let mut emitted = false;
+    for instruction_index in 0..instruction_count {
+        let opcode = *program.get(cursor).ok_or(OperatorVmError::InvalidProgram)?;
+        cursor = cursor.saturating_add(1);
+        match opcode {
+            RENDERER_STATIC => {
+                if emitted {
+                    return Err(OperatorVmError::InvalidProgram);
                 }
-                if output.len() > OPERATOR_VM_MAX_OUTPUT_BYTES {
-                    return Err(OperatorVmError::OutputBudget);
+                let len = usize::from(*program.get(cursor).ok_or(OperatorVmError::InvalidProgram)?);
+                cursor = cursor.saturating_add(1);
+                let end = cursor
+                    .checked_add(len)
+                    .filter(|end| *end <= program.len())
+                    .ok_or(OperatorVmError::InvalidProgram)?;
+                let text = std::str::from_utf8(&program[cursor..end])
+                    .map_err(|_| OperatorVmError::InvalidProgram)?;
+                output.push_str(text);
+                cursor = end;
+            }
+            RENDERER_VALUE => {
+                if emitted {
+                    return Err(OperatorVmError::InvalidProgram);
                 }
+                let index =
+                    usize::from(*program.get(cursor).ok_or(OperatorVmError::InvalidProgram)?);
+                cursor = cursor.saturating_add(1);
+                if !used_values.insert(index) {
+                    return Err(OperatorVmError::AmbiguousResponse);
+                }
+                output.push_str(values.get(index).ok_or(OperatorVmError::MissingOperand)?);
             }
-            if next_value != values.len() {
-                return Err(OperatorVmError::MissingOperand);
+            RENDERER_EMIT => {
+                if emitted || instruction_index + 1 != instruction_count {
+                    return Err(OperatorVmError::InvalidProgram);
+                }
+                emitted = true;
             }
-            Ok(output)
+            _ => return Err(OperatorVmError::UnsupportedRenderer),
         }
-        CollectionOutputRenderer::RequestTemplate { .. } => {
-            Err(OperatorVmError::UnsupportedRenderer)
+        if output.len() > OPERATOR_VM_MAX_OUTPUT_BYTES {
+            return Err(OperatorVmError::OutputBudget);
         }
     }
+    if !emitted || used_values.len() != values.len() || program[cursor..].iter().any(|b| *b != 0) {
+        return Err(OperatorVmError::InvalidProgram);
+    }
+    Ok(output)
 }
 
 fn transform_format(flags: u16) -> Result<ValueProjectionFormat, OperatorVmError> {
@@ -204,9 +286,11 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::AtomValueType;
+    use crate::{AtomValueType, ResponseProgram};
 
-    fn page(transforms: &[TransformOp8]) -> OperatorPage32 {
+    fn page(transforms: &[TransformOp8], renderer: &CollectionOutputRenderer) -> OperatorPage32 {
+        let (renderer_program, renderer_instruction_count) =
+            encode_renderer_program(renderer, transforms).expect("encodable renderer");
         OperatorPage32::build(
             OperatorPage32Metadata {
                 generation: 1,
@@ -216,7 +300,7 @@ mod tests {
                 role_signature_fingerprint64: 4,
                 relation_plane_count: 1,
                 composition_node_count: 0,
-                renderer_instruction_count: 0,
+                renderer_instruction_count,
                 flags: 0,
             },
             &[0; OPERATOR_PAGE32_PHASE_BYTES],
@@ -228,7 +312,7 @@ mod tests {
             &TernaryOperatorCube32::default(),
             transforms,
             &[0; OPERATOR_PAGE32_COMPOSITION_BYTES],
-            &[0; OPERATOR_PAGE32_RENDERER_BYTES],
+            &renderer_program,
         )
         .expect("valid test page")
     }
@@ -246,7 +330,6 @@ mod tests {
 
     #[test]
     fn page_transform_order_drives_rich_rendering() {
-        let page = page(&[transform(0, 1), transform(1, 0)]);
         let selectors = [
             ResponseValueSelector::JsonField {
                 field: "failed".to_owned(),
@@ -277,12 +360,16 @@ mod tests {
                 },
             ],
         });
+        let renderer = match &program.operation {
+            crate::ResponseOperation::ProjectSelectedValue { renderer, .. } => renderer,
+            _ => unreachable!("projection program"),
+        };
+        let page = page(&[transform(0, 1), transform(1, 0)], renderer);
 
         assert_eq!(
             execute_operator_page(
                 &page,
                 &selectors,
-                &program,
                 "Return failed then total",
                 &json!({
                     "input": [{
@@ -300,22 +387,15 @@ mod tests {
     fn unknown_page_opcode_is_rejected() {
         let mut unknown = transform(0, 0);
         unknown.opcode = 255;
-        let page = page(&[unknown]);
+        let page = page(&[unknown], &CollectionOutputRenderer::Direct);
         let selector = ResponseValueSelector::JsonField {
             field: "total".to_owned(),
             value_type: AtomValueType::Integer,
         };
-        let program = ResponseProgram::project_selected_value(
-            selector.clone(),
-            ValueProjectionFormat::PlainText,
-            "completed",
-        );
-
         assert_eq!(
             execute_operator_page(
                 &page,
                 &[selector],
-                &program,
                 "",
                 &json!({
                     "input": [{
@@ -325,6 +405,52 @@ mod tests {
                 }),
             ),
             Err(OperatorVmError::UnsupportedOpcode)
+        );
+    }
+
+    #[test]
+    fn unknown_renderer_opcode_is_rejected() {
+        let transform = transform(0, 0);
+        let mut renderer = [0_u8; OPERATOR_PAGE32_RENDERER_BYTES];
+        renderer[..4].copy_from_slice(&[RENDERER_VERSION, 2, 77, RENDERER_EMIT]);
+        let page = OperatorPage32::build(
+            OperatorPage32Metadata {
+                generation: 1,
+                circuit_fingerprint64: 1,
+                verifier_binding_fingerprint64: 2,
+                proof_lineage_fingerprint64: 3,
+                role_signature_fingerprint64: 4,
+                relation_plane_count: 1,
+                composition_node_count: 0,
+                renderer_instruction_count: 2,
+                flags: 0,
+            },
+            &[0; OPERATOR_PAGE32_PHASE_BYTES],
+            &[StructuralRole16::default(), StructuralRole16::default()],
+            &TernaryOperatorCube32::default(),
+            &[transform],
+            &[0; OPERATOR_PAGE32_COMPOSITION_BYTES],
+            &renderer,
+        )
+        .expect("structurally valid page");
+        let selector = ResponseValueSelector::JsonField {
+            field: "total".to_owned(),
+            value_type: AtomValueType::Integer,
+        };
+
+        assert_eq!(
+            execute_operator_page(
+                &page,
+                &[selector],
+                "",
+                &json!({
+                    "input": [{
+                        "type": "function_call_output",
+                        "output": "{\"total\":7}"
+                    }]
+                }),
+            ),
+            Err(OperatorVmError::UnsupportedRenderer)
         );
     }
 }

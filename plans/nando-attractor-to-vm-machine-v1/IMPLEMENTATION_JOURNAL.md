@@ -258,3 +258,88 @@ graphify update .                                  PASS 24.74 s
   graph                                             22,938 nodes / 51,194 edges
 graphify capture-to-admission path                 PASS 1.74 s
 ```
+
+### Production install after Stage 9
+
+```text
+commit                                               1b8cf21
+remote release admission build                      68.57 s
+remote release serving build                        26.70 s
+composite gate before/after install                  PASS / PASS
+hot serving RSS                                      88-90 MiB
+cold learner RSS                                     about 381 MiB
+capture commitment index                             about 357 KiB
+streaming checkpoint                                 about 4.1 MiB
+hot Wave state                                       about 5.3 MiB
+```
+
+## 2026-07-19 - Stage 7 Completion: Executable Renderer Bytecode
+
+The first Stage 7 cut executed transform bytecode from `OperatorPage32`, but
+still supplied `ResponseProgram` from the side registry to render the final
+response. That made the page an incomplete execution cause.
+
+Implemented the bounded renderer VM in the 128-byte page renderer section:
+
+```text
+STATIC(u8 length, bytes)
+VALUE(u8 transform-result index)
+EMIT
+```
+
+The decoder verifies the version, exact instruction count, operand indexes,
+single final `EMIT`, UTF-8, zero padding, complete value consumption, and the
+16 KiB output budget. Unknown or truncated instructions fail closed.
+
+An old shortcut was exposed and removed: `crystallize_with_actor_template()`
+always wrote a `Direct` renderer into the page even for a rich actor. It now
+extracts one identical renderer contract from the actor variants; divergent
+renderer variants are rejected.
+
+Focused verification:
+
+```text
+initial remote actor lib check                       PASS 7.27 s
+initial VM tests                                     PASS 2/2 13.68 s
+ordinal-selector miner compile blocker repair        3 explicit match arms
+VM renderer tests                                    PASS 3/3 13.44 s
+scalar crystallization regression                    PASS 1/1 0.40 s
+rich multi-role crystallization                      PASS 1/1 24.45 s
+package-wide cargo check                             PASS 7.35 s
+focused Clippy                                       1 local issue fixed 10.40 s
+  remaining warnings                                 11 pre-existing online/runtime findings
+```
+
+Stage 7 completed boundary:
+
+```text
+page transform bytecode is execution cause           PASS
+page renderer bytecode is execution cause            PASS
+rich transform order and renderer composition        PASS
+legacy actor retained only as parity oracle          PASS
+independent verifier retained                        PASS
+unknown transform/renderer opcode                    ABSTAIN
+count/filter/compose opcodes                          NOT STARTED
+```
+
+Separate pre-existing causal-proof blocker, not hidden by this stage:
+
+```text
+crystallized_operator_causal full-phase fixture
+-> 64 blueprints
+-> transform_mismatches=3 for every blueprint
+-> NoEligibleBlueprint
+```
+
+The test now compiles after adding the missing ordinal-selector accounting,
+but the blueprint/transform fixture contract still needs repair before the
+full causal proof can be called PASS.
+
+Graph maintenance:
+
+```text
+graphify update .                                    PASS 24.18 s
+  graph                                               22,945 nodes / 51,211 edges
+  one-shot indexer peak RSS                           492,072 KB
+graphify page-renderer-verifier query                 PASS 1.79 s
+```

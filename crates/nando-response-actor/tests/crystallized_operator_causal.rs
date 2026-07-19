@@ -135,7 +135,7 @@ fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runt
         BlueprintPhaseControl::Full,
     );
     let full = sealed.report();
-    let winner = full
+    let _winner = full
         .winner_fingerprint_sha256
         .unwrap_or_else(|| panic!("full phase must select one topology: {full:#?}"));
     for control in [

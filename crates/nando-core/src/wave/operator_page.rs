@@ -388,6 +388,13 @@ impl OperatorPage32 {
     }
 
     #[must_use]
+    pub fn renderer_program(&self) -> &[u8; OPERATOR_PAGE32_RENDERER_BYTES] {
+        self.bytes[RENDERER_OFFSET..]
+            .try_into()
+            .expect("fixed renderer section")
+    }
+
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8; OPERATOR_PAGE32_BYTES] {
         &self.bytes
     }

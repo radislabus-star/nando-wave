@@ -2876,6 +2876,9 @@ fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -> Value {
                         nando_response_actor::ResponseValueSelector::RequestReferencedJsonField {
                             ..
                         } => "request_referenced_json_field",
+                        nando_response_actor::ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+                            ..
+                        } => "request_referenced_json_field_ordinal",
                         nando_response_actor::ResponseValueSelector::TurnOutputLine { .. } => {
                             "turn_output_line"
                         }
@@ -3270,6 +3273,18 @@ fn parity_provider_payload(
                 )
             },
         )
+    } else if let Some(ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+        ordinal, ..
+    }) = projection_selector.or(status_selector)
+    {
+        (0..=*ordinal).map(|index| format!("role_{index}")).fold(
+            "runtime parity".to_owned(),
+            |mut request, role| {
+                request.push(' ');
+                request.push_str(&role);
+                request
+            },
+        )
     } else if matches!(
         projection_selector.or(status_selector),
         Some(ResponseValueSelector::RequestReferencedJsonField { .. })
@@ -3370,6 +3385,10 @@ fn parity_provider_output(selector: &ResponseValueSelector, value: &Value) -> St
         ResponseValueSelector::RequestReferencedJsonField { .. } => {
             serde_json::json!({"selected": value}).to_string()
         }
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => parity_request_referenced_ordinal_output(*ordinal, *value_type, value),
         ResponseValueSelector::JsonScalarOrdinal {
             ordinal,
             value_type,
@@ -3441,6 +3460,14 @@ fn parity_projection_output(
         nando_response_actor::ResponseValueSelector::RequestReferencedJsonField { .. } => {
             Value::String(serde_json::json!({"selected": value}).to_string())
         }
+        nando_response_actor::ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => Value::String(parity_request_referenced_ordinal_output(
+            *ordinal,
+            *value_type,
+            value,
+        )),
         nando_response_actor::ResponseValueSelector::JsonScalarOrdinal {
             ordinal,
             value_type,
@@ -3497,6 +3524,31 @@ fn parity_projection_output(
                 .map_or_else(|| value.to_string(), str::to_owned),
         ),
     }
+}
+
+fn parity_request_referenced_ordinal_output(
+    ordinal: u16,
+    value_type: AtomValueType,
+    value: &Value,
+) -> String {
+    let filler = match value_type {
+        AtomValueType::String | AtomValueType::Identifier => Value::String(String::new()),
+        AtomValueType::Integer => Value::from(0),
+        AtomValueType::Boolean => Value::Bool(false),
+        AtomValueType::Collection => Value::Null,
+    };
+    let mut object = serde_json::Map::new();
+    for index in 0..=ordinal {
+        object.insert(
+            format!("role_{index}"),
+            if index == ordinal {
+                value.clone()
+            } else {
+                filler.clone()
+            },
+        );
+    }
+    serde_json::to_string(&Value::Object(object)).unwrap_or_else(|_| "{}".to_owned())
 }
 
 fn parity_scalar_ordinal_output(ordinal: u16, value_type: AtomValueType, value: &Value) -> String {

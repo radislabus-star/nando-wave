@@ -4,12 +4,11 @@ use nando_core::wave::{
     BlueprintFutureEvidence, CandidateCubeField, CandidateCubeFieldError,
     CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow, LocalRelationFragment,
     OPERATOR_PAGE32_BYTES, OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES,
-    OPERATOR_PAGE32_RENDERER_BYTES, OPERATOR_ROLE_NONE, OperatorCircuit, OperatorCircuitRelation,
-    OperatorGrokkingConfig, OperatorPage32, OperatorPage32Error, OperatorPage32Metadata,
-    OperatorRelationCell, PhaseCenterCell, RoleGraph, RuntimeRoleBinder,
-    SealedBlueprintWinnerReceipt, SearchCompletion, StructuralRole16, StructuralRoleSignature,
-    SurfaceFragmentBundle, TernaryOperatorCube32, TernaryRelationState, TransformOp8,
-    phase_vector_from_atoms,
+    OPERATOR_ROLE_NONE, OperatorCircuit, OperatorCircuitRelation, OperatorGrokkingConfig,
+    OperatorPage32, OperatorPage32Error, OperatorPage32Metadata, OperatorRelationCell,
+    PhaseCenterCell, RoleGraph, RuntimeRoleBinder, SealedBlueprintWinnerReceipt, SearchCompletion,
+    StructuralRole16, StructuralRoleSignature, SurfaceFragmentBundle, TernaryOperatorCube32,
+    TernaryRelationState, TransformOp8, phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -282,7 +281,8 @@ impl CrystallizedOperator {
             return Err(CrystallizedOperatorError::CyclicComposition);
         }
         let (renderer, actor) = if let Some(actor) = actor_template {
-            (crate::CollectionOutputRenderer::Direct, actor)
+            let renderer = actor_renderer_contract(&actor)?;
+            (renderer, actor)
         } else {
             let renderer = infer_future_renderer(blueprint, future_evidence, receipts)?;
             let actor = compile_blueprint_actor(blueprint, &renderer)?;
@@ -1010,7 +1010,6 @@ impl BoundCrystallizedOperator {
             Some(page) => crate::operator_vm::execute_operator_page(
                 page,
                 &self.bound_selectors,
-                &self.actor,
                 &self.request_text,
                 &self.provider_payload,
             )
@@ -1346,6 +1345,26 @@ fn independently_bind_verifier(
     )
     .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
     Ok(verifier)
+}
+
+fn actor_renderer_contract(
+    program: &ResponseProgram,
+) -> Result<crate::CollectionOutputRenderer, CrystallizedOperatorError> {
+    match &program.operation {
+        crate::ResponseOperation::ProjectSelectedValue { renderer, .. } => Ok(renderer.clone()),
+        crate::ResponseOperation::UniqueConsensus { variants, .. } => {
+            let mut renderer = None;
+            for variant in variants {
+                let candidate = actor_renderer_contract(&variant.program)?;
+                if renderer.as_ref().is_some_and(|known| known != &candidate) {
+                    return Err(CrystallizedOperatorError::RendererMismatch);
+                }
+                renderer = Some(candidate);
+            }
+            renderer.ok_or(CrystallizedOperatorError::RendererMismatch)
+        }
+        _ => Err(CrystallizedOperatorError::UnsupportedTransformProgram),
+    }
 }
 
 fn scalar_actor_from_transform_program(
@@ -1877,7 +1896,7 @@ fn composition_is_acyclic(blueprint: &CandidateOperatorBlueprint) -> bool {
 fn build_operator_page(
     blueprint: &CandidateOperatorBlueprint,
     generation: u64,
-    candidate_set_sha256: &Commitment256,
+    _candidate_set_sha256: &Commitment256,
     support_lineages: &[Commitment256],
     future_lineages: &[Commitment256],
     output_renderer: &crate::CollectionOutputRenderer,
@@ -1942,18 +1961,12 @@ fn build_operator_page(
         composition[offset + 1] = edge.consumer_step;
     }
 
-    let actor_digest = decode_sha256(actor_sha256)?;
+    let _actor_digest = decode_sha256(actor_sha256)?;
     let verifier_digest = decode_sha256(verifier_sha256)?;
-    let renderer_digest = renderer_commitment(output_renderer)?;
-    let execution_digest = digest_parts(
-        b"nando.crystallized-execution-programs.v1",
-        &[&actor_digest, &verifier_digest],
-    );
-    let mut renderer = [0_u8; OPERATOR_PAGE32_RENDERER_BYTES];
-    renderer[..32].copy_from_slice(&renderer_digest);
-    renderer[32..64].copy_from_slice(blueprint.fingerprint_sha256());
-    renderer[64..96].copy_from_slice(candidate_set_sha256);
-    renderer[96..128].copy_from_slice(&execution_digest);
+    let (renderer, renderer_instruction_count) = crate::operator_vm::encode_renderer_program(
+        output_renderer,
+        blueprint.transform_program(),
+    )?;
 
     let proof_lineage = lineage_commitment(support_lineages, future_lineages);
     let role_commitment = roles_commitment(&roles);
@@ -1966,7 +1979,7 @@ fn build_operator_page(
             role_signature_fingerprint64: first_u64(&role_commitment),
             relation_plane_count: plane_count,
             composition_node_count: blueprint.composition_dag().edges().len() as u8,
-            renderer_instruction_count: 4,
+            renderer_instruction_count,
             flags: 0,
         },
         &phase_profile,
@@ -1977,14 +1990,6 @@ fn build_operator_page(
         &renderer,
     )
     .map_err(CrystallizedOperatorError::InvalidPage)
-}
-
-fn renderer_commitment(
-    renderer: &crate::CollectionOutputRenderer,
-) -> Result<Commitment256, CrystallizedOperatorError> {
-    let bytes =
-        serde_cbor::to_vec(renderer).map_err(|_| CrystallizedOperatorError::DigestFailure)?;
-    Ok(digest_parts(b"nando.crystallized-renderer.v1", &[&bytes]))
 }
 
 fn quantize_phase(value: f64) -> i16 {
