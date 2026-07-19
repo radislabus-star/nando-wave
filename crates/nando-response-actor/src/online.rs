@@ -1558,6 +1558,13 @@ impl OnlineResponseMiner {
                 return Ok(());
             }
         }
+        // Every competing bucket sees the same pre-action event. Encoding it
+        // once avoids repeating the trigonometric phase projection per bucket.
+        let event_phase_vector = self
+            .encoder
+            .encode_atom_ids(atom_ids.iter().copied())
+            .map_err(|error| format!("online_response_encode:{error:?}"))?
+            .to_vec();
 
         let target_is_positive = frame.verifier_label == Some(true);
         if target_is_positive && teacher_signature.is_some() {
@@ -1663,10 +1670,9 @@ impl OnlineResponseMiner {
             let decision = if score_for_bucket && (guard_matches || calibrate_behind_guard) {
                 Some(
                     self.wave
-                        .observe_atom_ids(
-                            &mut self.encoder,
+                        .observe(
                             bucket_id,
-                            atom_ids.iter().copied(),
+                            &event_phase_vector,
                             safe_for_bucket,
                             false,
                             frame.estimated_input_tokens,
@@ -1676,12 +1682,7 @@ impl OnlineResponseMiner {
                 )
             } else {
                 self.wave
-                    .train_atom_ids(
-                        &mut self.encoder,
-                        bucket_id,
-                        atom_ids.iter().copied(),
-                        safe_for_bucket,
-                    )
+                    .train(bucket_id, &event_phase_vector, safe_for_bucket)
                     .map_err(|error| format!("online_response_train:{error:?}"))?;
                 None
             };
