@@ -9,8 +9,9 @@ R1 Runtime Role Grounding                         PASS
 R2 Sealed Winner Provenance                       PASS
 R3 Executable Parity Seal And Full Backward Loop  PASS
 R4 OperatorPage32 Restart Roundtrip                PASS
-R5 Exact-Commit Architecture Receipt               NEXT
-R6-R8                                             PENDING
+R5 Exact-Commit Architecture Receipt               PASS
+R6 Generic Scalar Live Shadow                      CODE PASS / LIVE WATCH
+R7-R8                                             PENDING
 ```
 
 This plan closes the gap between a phase-selected relation circuit and an
@@ -110,6 +111,10 @@ On the remote build host, check out the exact source commit, run
 `graphify update .`, and copy only `graphify-out/` back. The graph metadata must
 name the same commit as the source tree and must remain untracked.
 
+Receipt: `graphify-out/SOURCE_RECEIPT.md` records source commit
+`13e0107d40cf68c491825ae5a1607c685b07c7af` for the R1-R4 graph. R6 requires a
+new exact-commit graph after its source commit.
+
 ## R6: Generic Scalar Live Shadow
 
 Connect completed live traces to the new blueprint path without production
@@ -118,6 +123,27 @@ support, future evidence, or receipts.
 
 Gate: real renamed surfaces bind, ambiguous surfaces abstain, actor and verifier
 agree, and resource state remains bounded.
+
+Implemented code path:
+
+```text
+TeacherTransition + RuntimeParityCase
+-> existing bounded source-neutral response version space
+-> exact scalar projection
+-> local structural roles + relation phases
+-> SurfaceFragmentBundle
+-> 3 disjoint support sessions
+-> frozen competing blueprint set
+-> disjoint future evidence
+-> full-phase winner; four phase controls ABSTAIN
+-> actor + independent verifier
+-> VerifiedCrystallizedOperator in shadow only
+```
+
+The state is bounded, CBOR-checkpointed, and reports every extraction or proof
+blocker. Focused proof currently passes on six independent fixture sessions.
+The live gate remains `WATCH` until real post-commit traffic produces support
+and future rows; fixtures are not counted as live evidence or economics.
 
 ## R7: External Admission
 

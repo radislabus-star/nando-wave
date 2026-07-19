@@ -165,6 +165,8 @@ pub struct OnlineResponseMinerReport {
     pub candidates: Vec<OnlineResponseCandidate>,
     pub self_training_v2: SelfTrainingStateReport,
     #[serde(default)]
+    pub live_scalar_shadow: crate::LiveScalarShadowReport,
+    #[serde(default)]
     pub admission_ready_cohorts: usize,
     #[serde(default)]
     pub emitted_candidate_cohorts: usize,
@@ -260,6 +262,7 @@ pub struct OnlineResponseMiner {
     future_runtime_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
     subcenters: OnlineSubcenterDiscovery,
     self_training_v2: StreamingSelfTrainingState,
+    live_scalar_shadow: crate::LiveScalarShadowState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -318,6 +321,8 @@ struct OnlineResponseCheckpoint {
     subcenters: OnlineSubcenterDiscovery,
     #[serde(default)]
     self_training_v2: StreamingSelfTrainingState,
+    #[serde(default)]
+    live_scalar_shadow: crate::LiveScalarShadowState,
 }
 
 #[derive(Serialize)]
@@ -342,6 +347,7 @@ struct OnlineResponseCheckpointRef<'a> {
     future_runtime_parity_cases: &'a BTreeMap<String, crate::RuntimeParityCase>,
     subcenters: &'a OnlineSubcenterDiscovery,
     self_training_v2: &'a StreamingSelfTrainingState,
+    live_scalar_shadow: &'a crate::LiveScalarShadowState,
 }
 
 impl OnlineResponseStream {
@@ -1185,6 +1191,7 @@ impl OnlineResponseMiner {
             future_runtime_parity_cases: BTreeMap::new(),
             subcenters: OnlineSubcenterDiscovery::default(),
             self_training_v2: StreamingSelfTrainingState::new(unix_now_seconds()),
+            live_scalar_shadow: crate::LiveScalarShadowState::default(),
         })
     }
 
@@ -1221,6 +1228,7 @@ impl OnlineResponseMiner {
             future_runtime_parity_cases: self.future_runtime_parity_cases.clone(),
             subcenters: self.subcenters.clone(),
             self_training_v2: self.self_training_v2.clone(),
+            live_scalar_shadow: self.live_scalar_shadow.clone(),
         })
     }
 
@@ -1260,6 +1268,7 @@ impl OnlineResponseMiner {
                 future_runtime_parity_cases: &self.future_runtime_parity_cases,
                 subcenters: &self.subcenters,
                 self_training_v2: &self.self_training_v2,
+                live_scalar_shadow: &self.live_scalar_shadow,
             })
             .map_err(|error| format!("online_checkpoint_encode:{error}"))?,
         );
@@ -1392,6 +1401,7 @@ impl OnlineResponseMiner {
             future_runtime_parity_cases: checkpoint.future_runtime_parity_cases,
             subcenters: checkpoint.subcenters,
             self_training_v2: checkpoint.self_training_v2,
+            live_scalar_shadow: checkpoint.live_scalar_shadow,
         })
     }
 
@@ -1407,6 +1417,7 @@ impl OnlineResponseMiner {
         &mut self,
         transition: crate::TeacherTransition,
     ) -> Result<(), String> {
+        self.live_scalar_shadow.observe(&transition);
         let mut frame = transition.as_training_relation_frame();
         let economics = transition.economics;
         let runtime_parity_case = transition.runtime_parity_case;
@@ -2076,6 +2087,7 @@ impl OnlineResponseMiner {
             buckets: bucket_reports,
             candidates,
             self_training_v2,
+            live_scalar_shadow: self.live_scalar_shadow.report(),
             admission_ready_cohorts,
             emitted_candidate_cohorts,
             explicitly_blocked_cohorts,

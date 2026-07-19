@@ -20,6 +20,7 @@ mod online_collection;
 mod online_state;
 mod online_subcenter;
 mod operator_generation;
+mod operator_live_shadow;
 mod opportunity;
 mod outcome_example;
 mod output_graph;
@@ -155,6 +156,10 @@ pub use online_state::{
 };
 pub use operator_generation::{
     AdmissionReadyOperatorGeneration, OperatorGenerationError, OperatorGenerationFirewall,
+};
+pub use operator_live_shadow::{
+    LiveScalarCircuitSample, LiveScalarShadowBlocker, LiveScalarShadowReport,
+    LiveScalarShadowState, extract_live_scalar_circuit_sample,
 };
 pub use opportunity::{
     M3WindowReport, OPPORTUNITY_BOARD_SCHEMA_V2, OPPORTUNITY_BOARD_SCHEMA_V3, OpportunityBoard,
