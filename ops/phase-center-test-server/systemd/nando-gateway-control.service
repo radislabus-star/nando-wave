@@ -1,7 +1,6 @@
 [Unit]
 Description=Nando local gateway control plane
-After=network.target nando-transition-serving.service
-Wants=nando-transition-serving.service
+After=network.target
 
 [Service]
 Type=simple
