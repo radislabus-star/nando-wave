@@ -17,9 +17,9 @@ use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
     ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, RelationAtom, RelationFrame, ResponseProgram,
     SelfTrainingStateReport, StreamingSelfTrainingState, VerifierProgram, ground_roles,
-    is_source_neutral_relation_frame, relation_frame_online_routing_atom_ids,
-    synthesis::grounded_program_family_id, synthesize_response_operator, teacher_program_signature,
-    teacher_transition_from_completed,
+    is_source_neutral_relation_frame, relation_atom_is_teacher_only,
+    relation_frame_online_routing_atom_ids, synthesis::grounded_program_family_id,
+    synthesize_response_operator, teacher_program_signature, teacher_transition_from_completed,
 };
 
 use crate::online_subcenter::OnlineSubcenterDiscovery;
@@ -31,6 +31,7 @@ const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
 // duplicate cold evidence without increasing execution authority.
 const MAX_FROZEN_FUTURE_ROWS_PER_BUCKET: usize = 32;
+const ONLINE_ROUTING_ATOM_CACHE_ENTRIES: usize = 512;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OnlineResponseMinerConfig {
@@ -266,6 +267,9 @@ pub struct OnlineResponseMiner {
     subcenters: OnlineSubcenterDiscovery,
     self_training_v2: StreamingSelfTrainingState,
     live_scalar_shadow: crate::LiveScalarShadowState,
+    // Runtime-only cache: checkpoints retain evidence, never derived scratch.
+    routing_atom_cache: BTreeMap<Vec<RelationAtom>, Vec<u64>>,
+    routing_atom_cache_order: VecDeque<Vec<RelationAtom>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1200,6 +1204,8 @@ impl OnlineResponseMiner {
             subcenters: OnlineSubcenterDiscovery::default(),
             self_training_v2: StreamingSelfTrainingState::new(unix_now_seconds()),
             live_scalar_shadow: crate::LiveScalarShadowState::default(),
+            routing_atom_cache: BTreeMap::new(),
+            routing_atom_cache_order: VecDeque::new(),
         })
     }
 
@@ -1414,7 +1420,33 @@ impl OnlineResponseMiner {
             subcenters: checkpoint.subcenters,
             self_training_v2: checkpoint.self_training_v2,
             live_scalar_shadow: checkpoint.live_scalar_shadow,
+            routing_atom_cache: BTreeMap::new(),
+            routing_atom_cache_order: VecDeque::new(),
         })
+    }
+
+    fn cached_online_routing_atom_ids(&mut self, frame: &RelationFrame) -> Vec<u64> {
+        // The key is the complete pre-action structure, not a lossy hash. This
+        // keeps cache reuse action-neutral and makes collisions impossible.
+        let key = frame
+            .atoms
+            .iter()
+            .filter(|atom| !relation_atom_is_teacher_only(atom))
+            .cloned()
+            .collect::<Vec<_>>();
+        if let Some(ids) = self.routing_atom_cache.get(&key) {
+            return ids.clone();
+        }
+
+        let ids = relation_frame_online_routing_atom_ids(frame);
+        if self.routing_atom_cache.len() == ONLINE_ROUTING_ATOM_CACHE_ENTRIES
+            && let Some(oldest) = self.routing_atom_cache_order.pop_front()
+        {
+            self.routing_atom_cache.remove(&oldest);
+        }
+        self.routing_atom_cache_order.push_back(key.clone());
+        self.routing_atom_cache.insert(key, ids.clone());
+        ids
     }
 
     pub fn train_frame(&mut self, frame: RelationFrame) -> Result<(), String> {
@@ -1547,7 +1579,7 @@ impl OnlineResponseMiner {
         if ambiguous_grounding {
             self.rows_ambiguous = self.rows_ambiguous.saturating_add(1);
         }
-        let atom_ids = relation_frame_online_routing_atom_ids(&frame);
+        let atom_ids = self.cached_online_routing_atom_ids(&frame);
         if atom_ids.is_empty() {
             self.rows_ambiguous = self.rows_ambiguous.saturating_add(1);
             return Ok(());
