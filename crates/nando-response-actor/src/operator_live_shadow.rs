@@ -2158,5 +2158,19 @@ mod tests {
             Some("Total: 777; failed: 9"),
             "{execution:#?}"
         );
+        let reversed = executor.execute_shadow(
+            "Return new_failed and new_total",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_total\":777,\"new_failed\":9}"
+                }]
+            }),
+        );
+        assert_eq!(
+            reversed.response.as_deref(),
+            Some("Total: 9; failed: 777"),
+            "request ordinal, not field name or JSON order, owns the role: {reversed:#?}"
+        );
     }
 }

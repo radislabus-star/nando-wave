@@ -4,6 +4,7 @@ Status: canonical implementation roadmap.
 
 Architecture authority: [`../../ARCHITECTURE_CANON.md`](../../ARCHITECTURE_CANON.md).
 Product goal: [`../../docs/GOAL.md`](../../docs/GOAL.md).
+Implementation journal: [`IMPLEMENTATION_JOURNAL.md`](IMPLEMENTATION_JOURNAL.md).
 
 This roadmap replaces the old Cell32/Chat-0 and streaming-overlay roadmaps as
 the current implementation order. Those files remain historical evidence.
