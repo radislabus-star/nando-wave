@@ -2,13 +2,15 @@ use std::collections::BTreeSet;
 
 use nando_core::wave::{
     BlueprintFutureEvidence, CandidateCubeField, CandidateCubeFieldError,
-    CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow,
+    CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow, OPERATOR_PAGE32_BYTES,
     OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES, OPERATOR_PAGE32_RENDERER_BYTES,
-    OPERATOR_ROLE_NONE, OperatorCircuit, OperatorGrokkingConfig, OperatorPage32,
-    OperatorPage32Error, OperatorPage32Metadata, RoleGraph, RuntimeRoleBinder,
-    SealedBlueprintWinnerReceipt, SearchCompletion, StructuralRole16, SurfaceFragmentBundle,
-    TernaryOperatorCube32, TransformOp8,
+    OPERATOR_ROLE_NONE, OperatorCircuit, OperatorCircuitRelation, OperatorGrokkingConfig,
+    OperatorPage32, OperatorPage32Error, OperatorPage32Metadata, OperatorRelationCell,
+    PhaseCenterCell, RoleGraph, RuntimeRoleBinder, SealedBlueprintWinnerReceipt, SearchCompletion,
+    StructuralRole16, SurfaceFragmentBundle, TernaryOperatorCube32, TernaryRelationState,
+    TransformOp8,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -27,6 +29,8 @@ pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
 pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
 pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
 pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
+const CRYSTALLIZED_REGISTRY_SCHEMA_V1: &str = "nando.crystallized-registry.v1";
+const CRYSTALLIZED_REGISTRY_MAX_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrystallizationParityReceipt {
@@ -90,6 +94,57 @@ pub struct VerifiedCrystallizedOperator {
     parity_seal: ExecutableParitySeal,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedOperatorRestartBundle {
+    page_bytes: Box<[u8]>,
+    registry_cbor: Box<[u8]>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct CrystallizedRegistryV1 {
+    schema: String,
+    page_sha256: Commitment256,
+    roles: Vec<RestartRole>,
+    relations: Vec<RestartRelation>,
+    blueprint_sha256: Commitment256,
+    candidate_set_sha256: Commitment256,
+    actor_sha256: String,
+    verifier_sha256: String,
+    verified_future_lineages: Vec<Commitment256>,
+    parity_seal: RestartParitySeal,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct RestartRole {
+    type_class: u8,
+    cardinality_class: u8,
+    temporal_position: u8,
+    constraint_mask: u32,
+    neighboring_relation_planes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct RestartRelation {
+    plane: u8,
+    source_role: u8,
+    target_role: u8,
+    state: i8,
+    phase_re_bits: u64,
+    phase_im_bits: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct RestartParitySeal {
+    winner_seal_sha256: Commitment256,
+    actor_sha256: Commitment256,
+    verifier_sha256: Commitment256,
+    binding_receipts_root: Commitment256,
+    execution_receipts_root: Commitment256,
+    future_lineage_count: u32,
+    wrong_accepts: u32,
+    seal_sha256: Commitment256,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrystallizedOperator {
     page: OperatorPage32,
@@ -128,6 +183,9 @@ pub enum CrystallizedOperatorError {
     InvalidPage(OperatorPage32Error),
     InvalidWinnerSeal,
     FutureEvidenceMismatch,
+    RestartEncode,
+    RestartDecode,
+    RestartDigestMismatch,
     RuntimeBindingExhausted,
     RuntimeRelationMismatch,
     MissingRuntimeAnchor,
@@ -364,6 +422,154 @@ impl VerifiedCrystallizedOperator {
     pub fn verified_future_lineages(&self) -> &[Commitment256] {
         self.operator.verified_future_lineages()
     }
+
+    pub fn restart_bundle(
+        &self,
+    ) -> Result<VerifiedOperatorRestartBundle, CrystallizedOperatorError> {
+        let registry = CrystallizedRegistryV1 {
+            schema: CRYSTALLIZED_REGISTRY_SCHEMA_V1.to_owned(),
+            page_sha256: Sha256::digest(self.page().as_bytes()).into(),
+            roles: self
+                .operator
+                .role_graph
+                .canonical_roles()
+                .iter()
+                .map(|role| RestartRole {
+                    type_class: role.type_class(),
+                    cardinality_class: role.cardinality_class(),
+                    temporal_position: role.temporal_position(),
+                    constraint_mask: role.constraint_mask(),
+                    neighboring_relation_planes: role.neighboring_relation_planes().to_vec(),
+                })
+                .collect(),
+            relations: self
+                .operator
+                .relation_program
+                .relations()
+                .iter()
+                .map(|relation| RestartRelation {
+                    plane: relation.cell.plane,
+                    source_role: relation.cell.source_role,
+                    target_role: relation.cell.target_role,
+                    state: relation.state as i8,
+                    phase_re_bits: relation.phase_anchor.re.to_bits(),
+                    phase_im_bits: relation.phase_anchor.im.to_bits(),
+                })
+                .collect(),
+            blueprint_sha256: self.operator.blueprint_sha256,
+            candidate_set_sha256: self.operator.candidate_set_sha256,
+            actor_sha256: self.operator.actor_sha256.clone(),
+            verifier_sha256: self.operator.verifier_sha256.clone(),
+            verified_future_lineages: self.operator.verified_future_lineages.to_vec(),
+            parity_seal: RestartParitySeal::from(&self.parity_seal),
+        };
+        let registry_cbor =
+            serde_cbor::to_vec(&registry).map_err(|_| CrystallizedOperatorError::RestartEncode)?;
+        if registry_cbor.len() > CRYSTALLIZED_REGISTRY_MAX_BYTES {
+            return Err(CrystallizedOperatorError::RestartEncode);
+        }
+        Ok(VerifiedOperatorRestartBundle {
+            page_bytes: self.page().as_bytes().to_vec().into_boxed_slice(),
+            registry_cbor: registry_cbor.into_boxed_slice(),
+        })
+    }
+
+    pub fn restore(
+        page_bytes: &[u8],
+        registry_cbor: &[u8],
+    ) -> Result<Self, CrystallizedOperatorError> {
+        if page_bytes.len() != OPERATOR_PAGE32_BYTES
+            || registry_cbor.len() > CRYSTALLIZED_REGISTRY_MAX_BYTES
+        {
+            return Err(CrystallizedOperatorError::RestartDecode);
+        }
+        let page = OperatorPage32::from_bytes(page_bytes)
+            .map_err(CrystallizedOperatorError::InvalidPage)?;
+        let registry: CrystallizedRegistryV1 = serde_cbor::from_slice(registry_cbor)
+            .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        if registry.schema != CRYSTALLIZED_REGISTRY_SCHEMA_V1
+            || registry.page_sha256 != Commitment256::from(Sha256::digest(page_bytes))
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let role_graph = RoleGraph::from_canonical_roles(
+            registry
+                .roles
+                .into_iter()
+                .map(|role| {
+                    nando_core::wave::StructuralRoleSignature::new(
+                        role.type_class,
+                        role.cardinality_class,
+                        role.temporal_position,
+                        role.constraint_mask,
+                        role.neighboring_relation_planes,
+                    )
+                })
+                .collect(),
+        )
+        .ok_or(CrystallizedOperatorError::RestartDecode)?;
+        let relation_program = OperatorCircuit::new(
+            role_graph.role_count(),
+            registry
+                .relations
+                .into_iter()
+                .map(restart_relation)
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+        .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        let header = page
+            .header()
+            .map_err(CrystallizedOperatorError::InvalidPage)?;
+        if relation_program.fingerprint64() != header.circuit_fingerprint64
+            || usize::from(header.role_count) != role_graph.canonical_roles().len()
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        let transform_program = (0..usize::from(header.transform_count))
+            .map(|index| {
+                page.transform(index)
+                    .ok_or(CrystallizedOperatorError::RestartDecode)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_boxed_slice();
+        let parity_seal = ExecutableParitySeal::try_from(registry.parity_seal)?;
+        let actor_digest = decode_sha256(&registry.actor_sha256)?;
+        let verifier_digest = decode_sha256(&registry.verifier_sha256)?;
+        if actor_digest != parity_seal.actor_sha256
+            || verifier_digest != parity_seal.verifier_sha256
+            || first_u64(&verifier_digest) != header.verifier_binding_fingerprint64
+            || parity_seal.future_lineage_count as usize != registry.verified_future_lineages.len()
+            || parity_seal.wrong_accepts != 0
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        Ok(Self {
+            operator: CrystallizedOperator {
+                page,
+                relation_program,
+                role_graph,
+                transform_program,
+                blueprint_sha256: registry.blueprint_sha256,
+                candidate_set_sha256: registry.candidate_set_sha256,
+                actor_sha256: registry.actor_sha256,
+                verifier_sha256: registry.verifier_sha256,
+                verified_future_lineages: registry.verified_future_lineages.into_boxed_slice(),
+            },
+            parity_seal,
+        })
+    }
+}
+
+impl VerifiedOperatorRestartBundle {
+    #[must_use]
+    pub fn page_bytes(&self) -> &[u8] {
+        &self.page_bytes
+    }
+
+    #[must_use]
+    pub fn registry_cbor(&self) -> &[u8] {
+        &self.registry_cbor
+    }
 }
 
 impl ExecutableParitySeal {
@@ -385,6 +591,50 @@ impl ExecutableParitySeal {
     #[must_use]
     pub const fn seal_sha256(&self) -> &Commitment256 {
         &self.seal_sha256
+    }
+}
+
+impl From<&ExecutableParitySeal> for RestartParitySeal {
+    fn from(seal: &ExecutableParitySeal) -> Self {
+        Self {
+            winner_seal_sha256: seal.winner_seal_sha256,
+            actor_sha256: seal.actor_sha256,
+            verifier_sha256: seal.verifier_sha256,
+            binding_receipts_root: seal.binding_receipts_root,
+            execution_receipts_root: seal.execution_receipts_root,
+            future_lineage_count: seal.future_lineage_count,
+            wrong_accepts: seal.wrong_accepts,
+            seal_sha256: seal.seal_sha256,
+        }
+    }
+}
+
+impl TryFrom<RestartParitySeal> for ExecutableParitySeal {
+    type Error = CrystallizedOperatorError;
+
+    fn try_from(seal: RestartParitySeal) -> Result<Self, Self::Error> {
+        let expected = executable_parity_seal_digest(
+            &seal.winner_seal_sha256,
+            &seal.actor_sha256,
+            &seal.verifier_sha256,
+            &seal.binding_receipts_root,
+            &seal.execution_receipts_root,
+            seal.future_lineage_count,
+            seal.wrong_accepts,
+        );
+        if expected != seal.seal_sha256 {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
+        Ok(Self {
+            winner_seal_sha256: seal.winner_seal_sha256,
+            actor_sha256: seal.actor_sha256,
+            verifier_sha256: seal.verifier_sha256,
+            binding_receipts_root: seal.binding_receipts_root,
+            execution_receipts_root: seal.execution_receipts_root,
+            future_lineage_count: seal.future_lineage_count,
+            wrong_accepts: seal.wrong_accepts,
+            seal_sha256: seal.seal_sha256,
+        })
     }
 }
 
@@ -791,17 +1041,14 @@ fn build_executable_parity_seal(
     let future_lineage_count = u32::try_from(binding_receipts.len())
         .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
     let wrong_accepts = 0_u32;
-    let seal_sha256 = digest_parts(
-        b"nando.executable-parity-seal.v1",
-        &[
-            winner_receipt.seal_sha256(),
-            &actor_sha256,
-            &verifier_sha256,
-            &binding_receipts_root,
-            &execution_receipts_root,
-            &future_lineage_count.to_le_bytes(),
-            &wrong_accepts.to_le_bytes(),
-        ],
+    let seal_sha256 = executable_parity_seal_digest(
+        winner_receipt.seal_sha256(),
+        &actor_sha256,
+        &verifier_sha256,
+        &binding_receipts_root,
+        &execution_receipts_root,
+        future_lineage_count,
+        wrong_accepts,
     );
     Ok(ExecutableParitySeal {
         winner_seal_sha256: *winner_receipt.seal_sha256(),
@@ -812,6 +1059,59 @@ fn build_executable_parity_seal(
         future_lineage_count,
         wrong_accepts,
         seal_sha256,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn executable_parity_seal_digest(
+    winner_seal_sha256: &Commitment256,
+    actor_sha256: &Commitment256,
+    verifier_sha256: &Commitment256,
+    binding_receipts_root: &Commitment256,
+    execution_receipts_root: &Commitment256,
+    future_lineage_count: u32,
+    wrong_accepts: u32,
+) -> Commitment256 {
+    digest_parts(
+        b"nando.executable-parity-seal.v1",
+        &[
+            winner_seal_sha256,
+            actor_sha256,
+            verifier_sha256,
+            binding_receipts_root,
+            execution_receipts_root,
+            &future_lineage_count.to_le_bytes(),
+            &wrong_accepts.to_le_bytes(),
+        ],
+    )
+}
+
+fn restart_relation(
+    relation: RestartRelation,
+) -> Result<OperatorCircuitRelation, CrystallizedOperatorError> {
+    let phase_anchor = PhaseCenterCell {
+        re: f64::from_bits(relation.phase_re_bits),
+        im: f64::from_bits(relation.phase_im_bits),
+    };
+    if !phase_anchor.re.is_finite()
+        || !phase_anchor.im.is_finite()
+        || phase_anchor.re.hypot(phase_anchor.im) <= f64::EPSILON
+    {
+        return Err(CrystallizedOperatorError::RestartDecode);
+    }
+    let state = match relation.state {
+        -1 => TernaryRelationState::Opposed,
+        1 => TernaryRelationState::Supported,
+        _ => return Err(CrystallizedOperatorError::RestartDecode),
+    };
+    Ok(OperatorCircuitRelation {
+        cell: OperatorRelationCell {
+            plane: relation.plane,
+            source_role: relation.source_role,
+            target_role: relation.target_role,
+        },
+        state,
+        phase_anchor,
     })
 }
 
@@ -1147,11 +1447,21 @@ mod tests {
             operator.parity_seal().winner_seal_sha256(),
             winner_receipt.seal_sha256()
         );
+        let restart_bundle = operator.restart_bundle().expect("bounded restart bundle");
+        assert_eq!(restart_bundle.page_bytes().len(), OPERATOR_PAGE32_BYTES);
+        assert!(restart_bundle.registry_cbor().len() < CRYSTALLIZED_REGISTRY_MAX_BYTES);
+        let restored = VerifiedCrystallizedOperator::restore(
+            restart_bundle.page_bytes(),
+            restart_bundle.registry_cbor(),
+        )
+        .expect("verified operator restart");
+        assert_eq!(restored.page().as_bytes(), operator.page().as_bytes());
+        assert_eq!(restored.parity_seal(), operator.parity_seal());
         let bound = operator
             .bind(RuntimeSurfaceEvidence {
-                bundle: future_bundle,
+                bundle: future_bundle.clone(),
                 request_text: String::new(),
-                provider_payload: payload,
+                provider_payload: payload.clone(),
                 anchors: vec![RuntimeRoleAnchor {
                     local_role: 0,
                     selector: ResponseValueSelector::JsonField {
@@ -1163,6 +1473,33 @@ mod tests {
             })
             .expect("runtime role binding");
         assert_eq!(bound.execute_verified().as_deref(), Ok("7"));
+        let restored_bound = restored
+            .bind(RuntimeSurfaceEvidence {
+                bundle: future_bundle,
+                request_text: String::new(),
+                provider_payload: payload.clone(),
+                anchors: vec![RuntimeRoleAnchor {
+                    local_role: 0,
+                    selector: ResponseValueSelector::JsonField {
+                        field: "total".to_owned(),
+                        value_type: AtomValueType::Integer,
+                    },
+                }]
+                .into_boxed_slice(),
+            })
+            .expect("restored runtime role binding");
+        assert_eq!(restored_bound.execute_verified().as_deref(), Ok("7"));
+        assert_eq!(restored_bound.environment(), bound.environment());
+        let mut corrupted_registry = restart_bundle.registry_cbor().to_vec();
+        let last = corrupted_registry.len() - 1;
+        corrupted_registry[last] ^= 0x01;
+        assert!(
+            VerifiedCrystallizedOperator::restore(
+                restart_bundle.page_bytes(),
+                &corrupted_registry,
+            )
+            .is_err()
+        );
         let page_before = operator.page().as_bytes().to_vec();
         let mut feedback = operator
             .feedback_field(OperatorGrokkingConfig::default())

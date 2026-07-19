@@ -1061,6 +1061,7 @@ independent structural verifier derivation        PASS
 sealed winner provenance                          PASS
 executable parity provenance                      PASS
 immutable BackwardWave generation loop            PASS
+OperatorPage32 + bounded registry restart          PASS
 whole executable learned operator                 LAB PASS
 live authority                                   BLOCK
 ```

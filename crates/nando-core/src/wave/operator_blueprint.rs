@@ -1228,6 +1228,18 @@ impl CandidateOperatorBlueprint {
 
 impl RoleGraph {
     #[must_use]
+    pub fn from_canonical_roles(roles: Vec<StructuralRoleSignature>) -> Option<Self> {
+        if roles.is_empty() || roles.len() > OPERATOR_BLUEPRINT_MAX_ROLES {
+            return None;
+        }
+        Some(Self {
+            role_count: u8::try_from(roles.len()).ok()?,
+            bindings: Box::new([]),
+            canonical_roles: roles.into_boxed_slice(),
+        })
+    }
+
+    #[must_use]
     pub const fn role_count(&self) -> u8 {
         self.role_count
     }

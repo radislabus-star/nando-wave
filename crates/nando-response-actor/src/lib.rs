@@ -89,7 +89,7 @@ pub use crystallized_operator::{
     ExecutableParitySeal, RuntimeRoleAnchor, RuntimeSurfaceEvidence, TRANSFORM_FLAG_CANONICAL_JSON,
     TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_BOOLEAN,
     TRANSFORM_VALUE_IDENTIFIER, TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING,
-    VerifiedCrystallizedOperator,
+    VerifiedCrystallizedOperator, VerifiedOperatorRestartBundle,
 };
 pub use decidability::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
 pub use effect_graph::{

@@ -8,8 +8,9 @@ Implementation status:
 R1 Runtime Role Grounding                         PASS
 R2 Sealed Winner Provenance                       PASS
 R3 Executable Parity Seal And Full Backward Loop  PASS
-R4 OperatorPage32 Restart Roundtrip                NEXT
-R5-R8                                             PENDING
+R4 OperatorPage32 Restart Roundtrip                PASS
+R5 Exact-Commit Architecture Receipt               NEXT
+R6-R8                                             PENDING
 ```
 
 This plan closes the gap between a phase-selected relation circuit and an
