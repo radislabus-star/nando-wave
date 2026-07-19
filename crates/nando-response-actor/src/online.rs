@@ -2198,8 +2198,45 @@ impl OnlineResponseMiner {
                 .chain(bucket.future_negatives.iter())
                 .cloned()
                 .collect::<Vec<_>>();
-            let support = bucket.positives.iter().cloned().collect::<Vec<_>>();
-            let future = bucket.future_positives.iter().cloned().collect::<Vec<_>>();
+            let all_frames = bucket
+                .positives
+                .iter()
+                .chain(bucket.future_positives.iter())
+                .collect::<Vec<_>>();
+            let mut parity_cases_by_frame = self
+                .self_training_v2
+                .runtime_parity_cases_for_frames(all_frames.iter().copied())
+                .into_iter()
+                .map(|case| (case.evidence_ref_sha256.clone(), case))
+                .collect::<BTreeMap<_, _>>();
+            for frame in &all_frames {
+                let parity_key = canonical_runtime_parity_key(frame);
+                if let Some(mut parity_case) =
+                    self.future_runtime_parity_cases.get(&parity_key).cloned()
+                {
+                    parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
+                    parity_cases_by_frame
+                        .entry(frame.frame_id_sha256.clone())
+                        .or_insert(parity_case);
+                }
+            }
+            let parity_eligible_ids = parity_cases_by_frame
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            let (support, future, partition_required_atom_ids) =
+                clean_admission_partition_for_ids(bucket, &negatives, Some(&parity_eligible_ids));
+            if support.len() < 32 || future.len() < 32 {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: format!(
+                        "receipt_backed_partition_below_32:support={}:future={}",
+                        support.len(),
+                        future.len()
+                    ),
+                });
+                continue;
+            }
             let synthesized = match synthesize_response_operator(&support) {
                 Ok(synthesized) => synthesized,
                 Err(error) => {
@@ -2210,9 +2247,13 @@ impl OnlineResponseMiner {
                     continue;
                 }
             };
+            let mut exact_guard_atom_ids = bucket.exact_guard_atom_ids.clone();
+            exact_guard_atom_ids.extend(partition_required_atom_ids);
+            exact_guard_atom_ids.sort_unstable();
+            exact_guard_atom_ids.dedup();
             let (required_atom_ids, support, future) = match repair_frozen_admission_guard(
                 &synthesized.candidate.program,
-                &bucket.exact_guard_atom_ids,
+                &exact_guard_atom_ids,
                 &support,
                 &future,
                 &negatives,
@@ -2226,17 +2267,11 @@ impl OnlineResponseMiner {
                     continue;
                 }
             };
-            let state_runtime_parity_cases = self
-                .self_training_v2
-                .runtime_parity_cases_for_frames(support.iter().chain(future.iter()));
-            let mut state_cases_by_ref = state_runtime_parity_cases
-                .into_iter()
-                .map(|case| (case.evidence_ref_sha256.clone(), case))
-                .collect::<BTreeMap<_, _>>();
             let mut receipt_backed_support = Vec::new();
             let mut runtime_parity_cases = Vec::new();
             for frame in support {
-                if let Some(mut parity_case) = state_cases_by_ref.remove(&frame.frame_id_sha256) {
+                if let Some(mut parity_case) = parity_cases_by_frame.remove(&frame.frame_id_sha256)
+                {
                     parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
                     receipt_backed_support.push(frame);
                     runtime_parity_cases.push(parity_case);
@@ -2259,11 +2294,7 @@ impl OnlineResponseMiner {
                 if !seen_future_events.insert(parity_key.clone()) {
                     continue;
                 }
-                let parity_case = self
-                    .future_runtime_parity_cases
-                    .get(&parity_key)
-                    .cloned()
-                    .or_else(|| state_cases_by_ref.remove(&frame.frame_id_sha256));
+                let parity_case = parity_cases_by_frame.remove(&frame.frame_id_sha256);
                 if let Some(mut parity_case) = parity_case {
                     parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
                     receipt_backed_future.push(frame);
@@ -3209,10 +3240,21 @@ fn clean_admission_partition(
     bucket: &ResponseBucket,
     negatives: &[RelationFrame],
 ) -> (Vec<RelationFrame>, Vec<RelationFrame>, Vec<u64>) {
+    clean_admission_partition_for_ids(bucket, negatives, None)
+}
+
+fn clean_admission_partition_for_ids(
+    bucket: &ResponseBucket,
+    negatives: &[RelationFrame],
+    eligible_ids: Option<&BTreeSet<String>>,
+) -> (Vec<RelationFrame>, Vec<RelationFrame>, Vec<u64>) {
     let mut positives = bucket
         .positives
         .iter()
         .chain(bucket.future_positives.iter())
+        .filter(|frame| {
+            eligible_ids.is_none_or(|eligible| eligible.contains(&frame.frame_id_sha256))
+        })
         .cloned()
         .collect::<Vec<_>>();
     positives.sort_by(|left, right| {
@@ -3269,10 +3311,25 @@ fn clean_admission_partition(
         .map(|frame| frame.observed_at_unix_nanos)
         .max()
         .unwrap_or(0);
+    let support_sessions = support
+        .iter()
+        .map(|frame| frame.session_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let support_intents = support
+        .iter()
+        .map(|frame| frame.client_intent_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    let support_events = support
+        .iter()
+        .map(|frame| frame.event_id_sha256.as_str())
+        .collect::<BTreeSet<_>>();
     let future = positives
         .into_iter()
         .skip(support.len())
         .filter(|frame| frame.observed_at_unix_nanos > watermark)
+        .filter(|frame| !support_sessions.contains(frame.session_id_sha256.as_str()))
+        .filter(|frame| !support_intents.contains(frame.client_intent_id_sha256.as_str()))
+        .filter(|frame| !support_events.contains(frame.event_id_sha256.as_str()))
         .collect::<Vec<_>>();
     let mut required = bucket.exact_guard_atom_ids.clone();
     if let Some(separator) = separator {
@@ -3779,6 +3836,8 @@ mod tests {
         .expect("miner");
         for index in 1..=64 {
             let mut source = frame(index, "write_stdin", true);
+            source.client_intent_id_sha256 = format!("{:064x}", index + 500_000);
+            source.session_id_sha256 = format!("{:064x}", index + 600_000);
             source
                 .atoms
                 .retain(|atom| !matches!(atom, RelationAtom::ObservationSelector { .. }));
