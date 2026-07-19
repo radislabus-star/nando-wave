@@ -268,8 +268,8 @@ pub struct OnlineResponseMiner {
     self_training_v2: StreamingSelfTrainingState,
     live_scalar_shadow: crate::LiveScalarShadowState,
     // Runtime-only cache: checkpoints retain evidence, never derived scratch.
-    routing_atom_cache: BTreeMap<Vec<RelationAtom>, Vec<u64>>,
-    routing_atom_cache_order: VecDeque<Vec<RelationAtom>>,
+    routing_atom_cache: BTreeMap<[u8; 32], Vec<u64>>,
+    routing_atom_cache_order: VecDeque<[u8; 32]>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1425,17 +1425,24 @@ impl OnlineResponseMiner {
         })
     }
 
-    fn cached_online_routing_atom_ids(&mut self, frame: &RelationFrame) -> Vec<u64> {
-        // The key is the complete pre-action structure, not a lossy hash. This
-        // keeps cache reuse action-neutral and makes collisions impossible.
-        let key = frame
+    fn cached_online_routing_atom_ids(
+        &mut self,
+        frame: &RelationFrame,
+    ) -> Result<Vec<u64>, String> {
+        // Hash the complete pre-action structure. The fixed-size key keeps the
+        // scratch cache bounded without persisting payload-bearing atoms.
+        let pre_action_atoms = frame
             .atoms
             .iter()
             .filter(|atom| !relation_atom_is_teacher_only(atom))
-            .cloned()
             .collect::<Vec<_>>();
+        let key: [u8; 32] = Sha256::digest(
+            serde_json::to_vec(&pre_action_atoms)
+                .map_err(|error| format!("online_routing_cache_key:{error}"))?,
+        )
+        .into();
         if let Some(ids) = self.routing_atom_cache.get(&key) {
-            return ids.clone();
+            return Ok(ids.clone());
         }
 
         let ids = relation_frame_online_routing_atom_ids(frame);
@@ -1446,7 +1453,7 @@ impl OnlineResponseMiner {
         }
         self.routing_atom_cache_order.push_back(key.clone());
         self.routing_atom_cache.insert(key, ids.clone());
-        ids
+        Ok(ids)
     }
 
     pub fn train_frame(&mut self, frame: RelationFrame) -> Result<(), String> {
@@ -1579,7 +1586,7 @@ impl OnlineResponseMiner {
         if ambiguous_grounding {
             self.rows_ambiguous = self.rows_ambiguous.saturating_add(1);
         }
-        let atom_ids = self.cached_online_routing_atom_ids(&frame);
+        let atom_ids = self.cached_online_routing_atom_ids(&frame)?;
         if atom_ids.is_empty() {
             self.rows_ambiguous = self.rows_ambiguous.saturating_add(1);
             return Ok(());
