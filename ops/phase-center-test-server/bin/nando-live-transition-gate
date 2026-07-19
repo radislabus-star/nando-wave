@@ -404,6 +404,21 @@ run_response_runtime() {
   else
     jq -c '.response_authority_candidate // null' "${miner_status}" >"${authority_candidate}"
   fi
+  # Safety predicates must compare the registry with the refreshed candidate.
+  # Refresh may remove revoked bindings, but the Rust tool cannot create a new
+  # binding without proof material already sealed in the candidate.
+  local authority_refresher
+  authority_refresher="${NANDO_RESPONSE_AUTHORITY_INSPECT:-/opt/nando-wave/bin/nando-response-authority-inspect}"
+  if [[ -x "${authority_refresher}" ]]; then
+    if "${authority_refresher}" --refresh-candidate \
+      "${registry}" \
+      "${authority_candidate}" \
+      >"${authority_candidate}.refreshed"; then
+      mv "${authority_candidate}.refreshed" "${authority_candidate}"
+    else
+      rm -f "${authority_candidate}.refreshed"
+    fi
+  fi
   if [[ ! -f "${registry}" || ! -f "${online_report}" || ! -f "${economics}" ]]; then
     jq -n \
       --arg registry "${registry}" \

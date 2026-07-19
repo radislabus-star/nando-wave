@@ -1594,3 +1594,6 @@ The Rust candidate refresher rejected this safe removal because it required the
 old and current package counts to match. Candidate refresh now permits registry
 revocation to remove stale bindings while additions remain fail-closed through
 `candidate_binding_missing`; the refresher still cannot invent proof material.
+The composite gate also refreshed the candidate only after evaluating the
+response-runtime section. It now performs the same fail-closed Rust refresh
+before comparing candidate revision and package count with the registry.
