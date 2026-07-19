@@ -1445,6 +1445,10 @@ These mistakes have already damaged coverage and must not be repeated:
   a CPU core draining historical version-space work before new traffic exists.
   A checkpoint is materialized state; new observations alone buy bounded
   synthesis and maintenance slices.
+- Computing hidden Wave evidence before idempotence checks. Result: replayed
+  ledger rows consume phase math and can reinforce a circuit twice. Event ID
+  and structural digest deduplication must precede every forward or backward
+  Wave update.
 
 ## 11. Required Protocol Before Core Changes
 

@@ -1422,7 +1422,6 @@ impl OnlineResponseMiner {
         &mut self,
         transition: crate::TeacherTransition,
     ) -> Result<(), String> {
-        self.live_scalar_shadow.observe(&transition);
         let mut frame = transition.as_training_relation_frame();
         let economics = transition.economics;
         let runtime_parity_case = transition.runtime_parity_case;
@@ -1436,6 +1435,7 @@ impl OnlineResponseMiner {
                 .observe_runtime_parity_case(&transition);
             return Ok(());
         }
+        self.live_scalar_shadow.observe(&transition);
         self.process_frame(frame, true, Some(transition), true)
     }
 
@@ -4377,11 +4377,16 @@ mod tests {
 
         let mut restored =
             OnlineResponseStream::open_streaming(config.clone()).expect("restored stream");
+        let shadow_before_duplicate = restored.report().live_scalar_shadow;
         restored
             .apply_teacher_transition(transition)
             .expect("duplicate transition after restart");
         assert_eq!(restored.report().rows_seen, 1);
         assert_eq!(restored.report().bucket_count, 2);
+        assert_eq!(
+            restored.report().live_scalar_shadow,
+            shadow_before_duplicate
+        );
         fs::remove_dir_all(root).expect("temp cleanup");
     }
 
