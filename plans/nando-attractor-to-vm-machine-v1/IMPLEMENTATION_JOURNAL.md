@@ -1251,3 +1251,41 @@ nando-response-actor all-targets check                      PASS  7.26 s
 The ready custom lifecycle evaluation improved from 14.16 seconds under v73
 to 3.47 seconds under v74 (approximately 4.1x) while preserving the same full
 admission and CPU-execution proof.
+
+## 2026-07-19 - Lossless historical support migration (v75)
+
+The first v74 production migration exposed support loss across strategy
+versions:
+
+```text
+v73 live scalar executable support    58
+v74 live scalar executable support    32
+```
+
+Every strategy bump created a default `LiveScalarShadowState` and rebuilt it
+only from the general teacher-pool migration reservoir. The shadow miner's own
+already verified support was discarded even though it was bounded and carried
+runtime parity evidence.
+
+Strategy v75 rebuilds historical support from the union:
+
+```text
+checkpoint live-scalar support
+union teacher-pool migration reservoir
+-> dedupe by frame_id
+-> reclassify through the current extractor
+-> bounded support
+-> future = 0
+```
+
+This preserves learned support while still forbidding old-generation future
+authority. Law keys and actor consensus are recomputed under the new strategy;
+no stale derived route is trusted.
+
+Focused remote receipts:
+
+```text
+v74 checkpoint support 32 / future 8
+-> v75 migrated support 32 / future 0       1/1 PASS  1.25 s
+nando-response-actor all-targets check          PASS  7.23 s
+```

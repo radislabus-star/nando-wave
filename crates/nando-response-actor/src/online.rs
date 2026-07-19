@@ -31,7 +31,7 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // request-independent rows receive the same source-neutral extraction as new
 // live events.
 // Historical rows remain support-only; frozen future is never reconstructed.
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 74;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 75;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -1352,6 +1352,9 @@ impl OnlineResponseMiner {
                 .max(RESTORED_CORE_MIN_BUCKET_EVENTS);
             let mut migrated = Self::new(checkpoint.config)?;
             if checkpoint.self_training_v2.teacher_pool_count() > 0 {
+                let preserved_shadow_support = checkpoint
+                    .live_scalar_shadow
+                    .historical_support_transitions();
                 let mut preserved_self_training = checkpoint.self_training_v2;
                 if checkpoint.bucket_strategy_version < 33 {
                     preserved_self_training.prepare_strategy_migration();
@@ -1371,15 +1374,35 @@ impl OnlineResponseMiner {
                     .into_iter()
                     .map(|case| (case.evidence_ref_sha256.clone(), case))
                     .collect::<BTreeMap<_, _>>();
+                let mut shadow_support = preserved_shadow_support
+                    .into_iter()
+                    .map(|transition| (transition.before.frame_id_sha256.clone(), transition))
+                    .collect::<BTreeMap<_, _>>();
                 for frame in &support_frames {
                     if let Some(parity_case) = parity_cases.get(&frame.frame_id_sha256)
                         && let Ok(mut transition) = teacher_transition_from_completed(frame, None)
                     {
                         transition.runtime_parity_case = Some(parity_case.clone());
-                        migrated
-                            .live_scalar_shadow
-                            .observe_historical_support(&transition);
+                        shadow_support
+                            .entry(transition.before.frame_id_sha256.clone())
+                            .or_insert(transition);
                     }
+                }
+                let mut shadow_support = shadow_support.into_values().collect::<Vec<_>>();
+                shadow_support.sort_by(|left, right| {
+                    left.before
+                        .observed_at_unix_nanos
+                        .cmp(&right.before.observed_at_unix_nanos)
+                        .then_with(|| {
+                            left.before
+                                .frame_id_sha256
+                                .cmp(&right.before.frame_id_sha256)
+                        })
+                });
+                for transition in shadow_support {
+                    migrated
+                        .live_scalar_shadow
+                        .observe_historical_support(&transition);
                 }
                 for frame in support_frames {
                     migrated.process_frame(frame, false, None, false)?;
@@ -4682,6 +4705,35 @@ mod tests {
                 .iter()
                 .all(|bucket| bucket.frozen_future_rows == 0)
         );
+    }
+
+    #[test]
+    fn v74_migration_preserves_shadow_support_without_future_claims() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");
+        for index in 0..40 {
+            let mut transition =
+                crate::teacher_transition_from_completed(&frame(index, "write_stdin", true), None)
+                    .expect("teacher transition");
+            transition.before.session_id_sha256 = format!("{:064x}", index + 1_000);
+            transition.runtime_parity_case = Some(write_stdin_parity_case(
+                index,
+                "Script running with cell ID ",
+            ));
+            miner
+                .observe_teacher_transition(transition)
+                .expect("observe teacher transition");
+        }
+        let before = miner.report().live_scalar_shadow;
+        assert_eq!(before.support_rows, 32, "{before:#?}");
+        assert_eq!(before.future_rows, 8, "{before:#?}");
+
+        let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+        checkpoint.bucket_strategy_version = 74;
+        let restored = OnlineResponseMiner::from_checkpoint(checkpoint).expect("migrated miner");
+        let after = restored.report().live_scalar_shadow;
+        assert_eq!(after.support_rows, before.support_rows, "{after:#?}");
+        assert_eq!(after.future_rows, 0, "{after:#?}");
     }
 
     #[test]

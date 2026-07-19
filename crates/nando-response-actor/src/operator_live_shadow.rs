@@ -320,6 +320,31 @@ impl LiveScalarShadowState {
         }
         candidates
     }
+
+    /// Returns only already completed support rows for strategy migration.
+    /// Frozen future belongs to the old generation and must never be replayed
+    /// into a new strategy as either support or future authority.
+    pub(crate) fn historical_support_transitions(&self) -> Vec<TeacherTransition> {
+        let mut support = self
+            .laws
+            .values()
+            .flat_map(|law| law.support.iter().cloned())
+            .map(|transition| (transition.before.frame_id_sha256.clone(), transition))
+            .collect::<BTreeMap<_, _>>()
+            .into_values()
+            .collect::<Vec<_>>();
+        support.sort_by(|left, right| {
+            left.before
+                .observed_at_unix_nanos
+                .cmp(&right.before.observed_at_unix_nanos)
+                .then_with(|| {
+                    left.before
+                        .frame_id_sha256
+                        .cmp(&right.before.frame_id_sha256)
+                })
+        });
+        support
+    }
 }
 
 fn update_support_actor_hypotheses(
