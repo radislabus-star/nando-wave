@@ -3158,7 +3158,7 @@ fn push_bounded<T>(rows: &mut VecDeque<T>, row: T, limit: usize) {
 }
 
 fn intern_bucket_evidence(buckets: &mut BTreeMap<u32, ResponseBucket>) -> Result<(), String> {
-    let mut arena = BTreeMap::<String, (String, SharedRelationFrame)>::new();
+    let mut arena = BTreeMap::<(String, String), SharedRelationFrame>::new();
     for bucket in buckets.values_mut() {
         for rows in [
             &mut bucket.positives,
@@ -3167,16 +3167,13 @@ fn intern_bucket_evidence(buckets: &mut BTreeMap<u32, ResponseBucket>) -> Result
             &mut bucket.future_negatives,
         ] {
             for frame in rows {
-                let frame_id = frame.frame_id_sha256.clone();
                 let digest = crate::relation_frame_learning_digest(frame.as_frame())
                     .map_err(|error| format!("online_frame_digest:{error}"))?;
-                if let Some((known_digest, shared)) = arena.get(&frame_id) {
-                    if known_digest != &digest {
-                        return Err("online_checkpoint_frame_id_content_conflict".to_owned());
-                    }
+                let key = (frame.frame_id_sha256.clone(), digest);
+                if let Some(shared) = arena.get(&key) {
                     *frame = shared.clone();
                 } else {
-                    arena.insert(frame_id, (digest, frame.clone()));
+                    arena.insert(key, frame.clone());
                 }
             }
         }
@@ -5076,7 +5073,7 @@ mod tests {
     }
 
     #[test]
-    fn restored_bucket_evidence_is_interned_and_conflicts_fail_closed() {
+    fn restored_bucket_evidence_interns_equal_learning_variants() {
         fn bucket(id: u64, evidence: RelationFrame) -> ResponseBucket {
             ResponseBucket {
                 structural_family_id: id,
@@ -5119,9 +5116,10 @@ mod tests {
             (1, bucket(1, buckets[&1].positives[0].materialize())),
             (2, bucket(2, conflicting)),
         ]);
-        assert_eq!(
-            intern_bucket_evidence(&mut conflict_buckets),
-            Err("online_checkpoint_frame_id_content_conflict".to_owned())
-        );
+        intern_bucket_evidence(&mut conflict_buckets).expect("distinct variants remain valid");
+        assert!(!Arc::ptr_eq(
+            &conflict_buckets[&1].positives[0].0,
+            &conflict_buckets[&2].positives[0].0,
+        ));
     }
 }

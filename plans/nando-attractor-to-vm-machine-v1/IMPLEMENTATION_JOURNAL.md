@@ -800,11 +800,26 @@ response-actor all-targets check                        PASS 7.43 s
 bounded reservoir behavior                              PASS 15.98 s
 checkpoint CBOR roundtrip                               PASS 0.45 s
 future reservoir restore compaction                     PASS 0.41 s
-restore interning + conflict fail-closed                PASS 13.84 s
+restore interning of equal learning variants            PASS 13.84 s
 final fmt + all-targets                                 PASS 10.96 s
 ```
 
 The interning digest intentionally excludes economics-only metadata such as
-estimated token count. A test first exposed this distinction; the final
-conflict proof mutates a structural relation atom under the same frame ID and
-is rejected.
+estimated token count. A test first exposed this distinction. The arena key is
+the pair `(frame_id, learning_digest)`: equal learning variants share storage,
+while structurally different variants remain separate.
+
+The first production restart correctly failed before claiming readiness:
+
+```text
+warmup phase                                            failed
+blocker                                                 online_checkpoint_frame_id_content_conflict
+RSS while failed                                        91.5 MiB
+```
+
+The checkpoint legitimately contains both the original positive frame and a
+synthetic cross-bucket negative with the same frame ID but a different verifier
+label. Treating the ID alone as the arena key was wrong. The corrected pair key
+preserves these two semantic variants while still deduplicating repeated copies
+of each. Corrected variant interning plus checkpoint roundtrip passed in
+13.98 s; final fmt and all-target check passed in 11.10 s.
