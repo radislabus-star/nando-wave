@@ -13,13 +13,15 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionSynthesisExample,
-    CrystallizationParityReceipt, CrystallizedOperator, ResponseOperation, ResponsePackage,
-    ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponseProgram,
-    ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
-    TRANSFORM_OPCODE_COUNT_COLLECTION, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-    TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_COLLECTION, TRANSFORM_VALUE_IDENTIFIER,
-    TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
-    enumerate_source_neutral_response_programs, execute_response,
+    CrystallizationParityReceipt, CrystallizedOperator, ProjectStatusMapping, ResponseOperation,
+    ResponsePackage, ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState,
+    ResponseProgram, ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor,
+    TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
+    TRANSFORM_OPCODE_PROJECT_STATUS, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+    TRANSFORM_STATUS_ZERO_IS_OK, TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS,
+    TRANSFORM_STATUS_ZERO_IS_TRUE, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_COLLECTION,
+    TRANSFORM_VALUE_IDENTIFIER, TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition,
+    ValueProjectionFormat, enumerate_source_neutral_response_programs, execute_response,
     is_privacy_safe_online_response_program, is_source_neutral_response_program,
     response_actor_program_digest, response_independent_verifier_program_digest,
     source_neutral_verifier_for_program,
@@ -485,6 +487,8 @@ fn build_competing_blueprint_set(
             .ok_or_else(|| "actor_hypothesis_roles_missing".to_owned())?;
         let transform_opcode = program_transform_opcode(&actor)
             .ok_or_else(|| "actor_hypothesis_opcode_missing".to_owned())?;
+        let transform_flags = program_transform_flags(&actor)
+            .ok_or_else(|| "actor_hypothesis_flags_missing".to_owned())?;
         let actor_bundles = support
             .iter()
             .map(|sample| {
@@ -493,6 +497,7 @@ fn build_competing_blueprint_set(
                     &sample.provider_payload,
                     &roles,
                     transform_opcode,
+                    transform_flags,
                     &commitment_hex(sample.bundle.surface_sha256()),
                     *sample.bundle.lineage_sha256(),
                     *sample.bundle.surface_sha256(),
@@ -640,6 +645,9 @@ fn live_admission_candidate(
         .map_err(|_| "admission_routing_verifier_failed".to_owned())?;
     let verifier_schema = match &program.operation {
         ResponseOperation::ComposeCollection { .. } => crate::COLLECTION_EXTERNAL_VERIFIER_SCHEMA,
+        ResponseOperation::ProjectStatus { .. } => {
+            crate::STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA
+        }
         _ => crate::VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA,
     };
     let distinct_sessions = law
@@ -753,6 +761,18 @@ pub fn extract_live_scalar_circuit_sample(
             )
         })
         .min_by_key(|program| serde_cbor::to_vec(program).unwrap_or_default());
+    let exact_status = version_space
+        .programs
+        .iter()
+        .filter_map(|program| {
+            derive_exact_status_program(
+                program,
+                &parity.request_text,
+                &parity.provider_payload,
+                &parity.expected_response,
+            )
+        })
+        .min_by_key(|program| serde_cbor::to_vec(program).unwrap_or_default());
     let mut scalar_programs = version_space
         .programs
         .iter()
@@ -773,6 +793,8 @@ pub fn extract_live_scalar_circuit_sample(
         .find(|program| rich_scalar_program_roles(program).is_some_and(|roles| roles.len() > 1));
     let selected_template = if let Some(program) = &exact_count {
         program.clone()
+    } else if let Some(program) = &exact_status {
+        program.clone()
     } else if let Some(program) = rich_exact {
         program.clone()
     } else if let Some((_, selector, _, _, renderer)) = scalar_programs.first() {
@@ -786,7 +808,8 @@ pub fn extract_live_scalar_circuit_sample(
             .cloned()
             .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?
     };
-    let mut actor_hypotheses = if let Some(program) = &exact_count {
+    let exact_typed = exact_count.as_ref().or(exact_status.as_ref());
+    let mut actor_hypotheses = if let Some(program) = exact_typed {
         vec![
             canonicalize_scalar_program_roles(
                 program,
@@ -803,7 +826,7 @@ pub fn extract_live_scalar_circuit_sample(
             &parity.expected_response,
         )?
     };
-    let clean_actor = exact_count
+    let clean_actor = exact_typed
         .is_none()
         .then(|| {
             derive_clean_ordinal_actor(
@@ -868,6 +891,8 @@ pub fn extract_live_scalar_circuit_sample(
         &parity.provider_payload,
         &roles,
         program_transform_opcode(&canonical_program)
+            .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
+        program_transform_flags(&canonical_program)
             .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
         &transition.before.frame_id_sha256,
         lineage_sha256,
@@ -1276,6 +1301,24 @@ fn structural_scalar_law_shape(
 }
 
 fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
+    if let ResponseOperation::ProjectStatus {
+        mapping,
+        renderer,
+        completion_state,
+        ..
+    } = &program.operation
+    {
+        if completion_state != "completed" {
+            return None;
+        }
+        let mut shape = vec![7, status_mapping_flags(*mapping)? as u8];
+        shape.push(match renderer {
+            CollectionOutputRenderer::Direct => 0,
+            CollectionOutputRenderer::RenderTemplate { .. } => 1,
+            _ => return None,
+        });
+        return Some(shape);
+    }
     if let ResponseOperation::ComposeCollection {
         steps,
         format,
@@ -1376,6 +1419,15 @@ fn synthesis_payload_with_request(
 fn rich_scalar_program_roles(
     program: &ResponseProgram,
 ) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+    if let ResponseOperation::ProjectStatus {
+        selector,
+        completion_state,
+        ..
+    } = &program.operation
+    {
+        return (completion_state == "completed")
+            .then(|| vec![(selector.clone(), ValueProjectionFormat::PlainText)]);
+    }
     if let ResponseOperation::ComposeCollection {
         steps,
         format,
@@ -1426,6 +1478,18 @@ fn canonicalize_scalar_program_roles(
     request_text: &str,
     provider_payload: &Value,
 ) -> Option<ResponseProgram> {
+    if program_transform_opcode(program) == Some(TRANSFORM_OPCODE_PROJECT_STATUS) {
+        let mut canonical = program.clone();
+        let ResponseOperation::ProjectStatus {
+            selector, renderer, ..
+        } = &mut canonical.operation
+        else {
+            return None;
+        };
+        *selector = canonical_role_selector(selector, request_text, provider_payload)?;
+        *renderer = normalized_scalar_renderer(renderer)?;
+        return Some(canonical);
+    }
     if program_transform_opcode(program) == Some(TRANSFORM_OPCODE_COUNT_COLLECTION) {
         let mut canonical = program.clone();
         let ResponseOperation::ComposeCollection { renderer, .. } = &mut canonical.operation else {
@@ -1491,6 +1555,7 @@ fn observed_rich_scalar_surface(
     provider_payload: &Value,
     program_roles: &[(ResponseValueSelector, ValueProjectionFormat)],
     transform_opcode: u8,
+    transform_flags: u16,
     frame_id: &str,
     lineage_sha256: [u8; 32],
     surface_sha256: [u8; 32],
@@ -1549,10 +1614,13 @@ fn observed_rich_scalar_surface(
             source_b_local_role: OPERATOR_ROLE_NONE,
             parameter: transform_parameter(value_type)
                 | (u16::try_from(index).unwrap_or(u16::MAX) << 8),
-            flags: if *format == ValueProjectionFormat::CanonicalJson {
-                TRANSFORM_FLAG_CANONICAL_JSON
-            } else {
-                0
+            flags: match transform_opcode {
+                TRANSFORM_OPCODE_PROJECT_STATUS => transform_flags,
+                TRANSFORM_OPCODE_COUNT_COLLECTION => 0,
+                _ if *format == ValueProjectionFormat::CanonicalJson => {
+                    TRANSFORM_FLAG_CANONICAL_JSON
+                }
+                _ => 0,
             },
         });
         anchors.push(RuntimeRoleAnchor {
@@ -1687,6 +1755,41 @@ fn derive_exact_count_program(
     .then_some(derived)
 }
 
+fn derive_exact_status_program(
+    candidate: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Option<ResponseProgram> {
+    let ResponseOperation::ProjectStatus {
+        selector,
+        mapping,
+        completion_state,
+        ..
+    } = &candidate.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    let direct =
+        ResponseProgram::project_status(selector.clone(), *mapping, completion_state.clone());
+    if !is_source_neutral_response_program(&direct) {
+        return None;
+    }
+    let computed = execute_response(&direct, request_text, provider_payload).response?;
+    let renderer = infer_scalar_renderer(&computed, expected_response)?;
+    let derived = direct.with_status_renderer(renderer);
+    (derived.validate().is_ok()
+        && is_privacy_safe_online_response_program(&derived)
+        && execute_response(&derived, request_text, provider_payload)
+            .response
+            .as_deref()
+            == Some(expected_response))
+    .then_some(derived)
+}
+
 fn infer_scalar_renderer(computed: &str, expected: &str) -> Option<CollectionOutputRenderer> {
     if computed == expected {
         return Some(CollectionOutputRenderer::Direct);
@@ -1810,6 +1913,7 @@ fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
         ResponseOperation::ProjectSelectedValue { .. } => {
             Some(TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR)
         }
+        ResponseOperation::ProjectStatus { .. } => Some(TRANSFORM_OPCODE_PROJECT_STATUS),
         ResponseOperation::ComposeCollection { steps, .. }
             if steps.as_slice()
                 == [
@@ -1821,6 +1925,34 @@ fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
         }
         _ => None,
     }
+}
+
+fn program_transform_flags(program: &ResponseProgram) -> Option<u16> {
+    match &program.operation {
+        ResponseOperation::ProjectSelectedValue { format, .. } => {
+            Some(u16::from(*format == ValueProjectionFormat::CanonicalJson))
+        }
+        ResponseOperation::ProjectStatus { mapping, .. } => status_mapping_flags(*mapping),
+        ResponseOperation::ComposeCollection { steps, .. }
+            if steps.as_slice()
+                == [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::Count,
+                ] =>
+        {
+            Some(0)
+        }
+        _ => None,
+    }
+}
+
+const fn status_mapping_flags(mapping: ProjectStatusMapping) -> Option<u16> {
+    Some(match mapping {
+        ProjectStatusMapping::ZeroIsSuccess => TRANSFORM_STATUS_ZERO_IS_SUCCESS,
+        ProjectStatusMapping::ZeroIsPass => TRANSFORM_STATUS_ZERO_IS_PASS,
+        ProjectStatusMapping::ZeroIsOk => TRANSFORM_STATUS_ZERO_IS_OK,
+        ProjectStatusMapping::ZeroIsTrue => TRANSFORM_STATUS_ZERO_IS_TRUE,
+    })
 }
 
 const fn value_type_tag(value_type: AtomValueType) -> u8 {
@@ -1971,6 +2103,21 @@ mod tests {
         row
     }
 
+    fn status_transition(field: &str, code: u64) -> TeacherTransition {
+        let mut row = transition(field, true);
+        let parity = row.runtime_parity_case.as_mut().expect("parity case");
+        parity.request_text = "Check build status".to_owned();
+        parity.provider_payload = json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": format!("{{\"{field}\":{code}}}")
+            }]
+        });
+        parity.expected_response =
+            format!("Build status: {}.", if code == 0 { "OK" } else { "ERROR" });
+        row
+    }
+
     #[test]
     fn verified_scalar_trace_becomes_source_neutral_circuit_evidence() {
         let first =
@@ -2004,6 +2151,21 @@ mod tests {
         assert_eq!(atom.opcode, TRANSFORM_OPCODE_COUNT_COLLECTION);
         assert_eq!(atom.parameter & 0x00ff, TRANSFORM_VALUE_COLLECTION);
         assert_eq!(first.anchors.len(), 1);
+        assert_eq!(first.law_sha256, renamed.law_sha256);
+    }
+
+    #[test]
+    fn verified_status_trace_becomes_status_circuit_evidence() {
+        let first = extract_live_scalar_circuit_sample(&status_transition("status", 0))
+            .expect("status trace");
+        let renamed = extract_live_scalar_circuit_sample(&status_transition("renamed_code", 9))
+            .expect("renamed status trace");
+
+        let [atom] = first.bundle.program_atoms() else {
+            panic!("one status transform expected");
+        };
+        assert_eq!(atom.opcode, TRANSFORM_OPCODE_PROJECT_STATUS);
+        assert_eq!(atom.flags, TRANSFORM_STATUS_ZERO_IS_OK);
         assert_eq!(first.law_sha256, renamed.law_sha256);
     }
 
@@ -2298,6 +2460,54 @@ mod tests {
         assert_eq!(
             execution.response.as_deref(),
             Some("Total records: 11."),
+            "{execution:#?}"
+        );
+    }
+
+    #[test]
+    fn status_rows_reach_verified_cpu_operator() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 0..64_u8 {
+            let mut row = status_transition(&format!("status_{index}"), u64::from(index % 5));
+            row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
+            row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
+            row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+            state.observe(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
+        assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let candidates = state.admission_candidates();
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &candidates,
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission evaluates status operator")
+        .expect("status operator reaches registry");
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("registry restores status operator");
+        let execution = executor.execute_shadow(
+            "Check build status",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_status_field\":0}"
+                }]
+            }),
+        );
+        assert_eq!(
+            execution.response.as_deref(),
+            Some("Build status: OK."),
             "{execution:#?}"
         );
     }

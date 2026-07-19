@@ -5,11 +5,14 @@ use serde_json::Value;
 
 use crate::crystallized_operator::{
     TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
-    TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_COLLECTION,
+    TRANSFORM_OPCODE_PROJECT_STATUS, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE,
+    TRANSFORM_STATUS_ZERO_IS_OK, TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS,
+    TRANSFORM_STATUS_ZERO_IS_TRUE, TRANSFORM_VALUE_COLLECTION,
 };
 use crate::runtime::selected_value_with_request;
 use crate::{
-    CollectionOutputRenderer, ResponseRenderSegment, ResponseValueSelector, ValueProjectionFormat,
+    CollectionOutputRenderer, MAX_PROJECT_STATUS_CODE, ResponseRenderSegment,
+    ResponseValueSelector, ValueProjectionFormat,
 };
 
 const OPERATOR_VM_MAX_OUTPUT_BYTES: usize = 16_384;
@@ -81,6 +84,24 @@ pub(crate) fn execute_operator_page(
                         count.to_string()
                     }
                     _ => return Err(OperatorVmError::ProjectionFailed),
+                }
+            }
+            TRANSFORM_OPCODE_PROJECT_STATUS => {
+                let code = selected
+                    .value
+                    .as_u64()
+                    .filter(|code| *code <= MAX_PROJECT_STATUS_CODE)
+                    .ok_or(OperatorVmError::ProjectionFailed)?;
+                match (transform.flags, code == 0) {
+                    (TRANSFORM_STATUS_ZERO_IS_SUCCESS, true) => "success".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_SUCCESS, false) => "failure".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_PASS, true) => "PASS".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_PASS, false) => "FAIL".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_OK, true) => "OK".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_OK, false) => "ERROR".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_TRUE, true) => "true".to_owned(),
+                    (TRANSFORM_STATUS_ZERO_IS_TRUE, false) => "false".to_owned(),
+                    _ => return Err(OperatorVmError::InvalidProgram),
                 }
             }
             _ => return Err(OperatorVmError::UnsupportedOpcode),
@@ -365,6 +386,17 @@ mod tests {
         }
     }
 
+    fn status_transform(source: u8, mapping: u16) -> TransformOp8 {
+        TransformOp8 {
+            opcode: TRANSFORM_OPCODE_PROJECT_STATUS,
+            output: 2,
+            source_a: source,
+            source_b: TRANSFORM_ROLE_NONE,
+            parameter: 1,
+            flags: mapping,
+        }
+    }
+
     #[test]
     fn page_transform_order_drives_rich_rendering() {
         let selectors = [
@@ -470,6 +502,43 @@ mod tests {
                 }),
             ),
             Err(OperatorVmError::ProjectionFailed)
+        );
+    }
+
+    #[test]
+    fn page_status_transform_executes_mapping_law() {
+        let selector = ResponseValueSelector::UniqueScalar {
+            value_type: AtomValueType::Integer,
+        };
+        let page = page(
+            &[status_transform(0, TRANSFORM_STATUS_ZERO_IS_OK)],
+            &CollectionOutputRenderer::RenderTemplate {
+                prefix: "Status: ".to_owned(),
+                suffix: ".".to_owned(),
+            },
+        );
+        let payload = |code| {
+            json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": format!("{{\"code\":{code}}}")
+                }]
+            })
+        };
+
+        assert_eq!(
+            execute_operator_page(
+                &page,
+                std::slice::from_ref(&selector),
+                "Check status",
+                &payload(0)
+            )
+            .as_deref(),
+            Ok("Status: OK.")
+        );
+        assert_eq!(
+            execute_operator_page(&page, &[selector], "Check status", &payload(7)).as_deref(),
+            Ok("Status: ERROR.")
         );
     }
 

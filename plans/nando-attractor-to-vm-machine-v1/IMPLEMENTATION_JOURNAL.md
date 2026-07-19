@@ -494,3 +494,61 @@ one-shot indexer peak RSS                               492,696 KB
 remote response-actor all-targets check                 PASS 7.06 s
 remote check peak RSS                                   943,720 KB
 ```
+
+## 2026-07-19 - Stage 8b Generalized VM Law: STATUS
+
+Added a third executable transform opcode for bounded integer status mapping.
+The winner-owned `TransformOp8` stores the mapping in two flag bits:
+
+```text
+0 -> zero is success   success / failure
+1 -> zero is pass      PASS / FAIL
+2 -> zero is ok        OK / ERROR
+3 -> zero is true      true / false
+```
+
+The learned route is:
+
+```text
+completed verified trace
+-> exact ProjectStatus hypothesis outranks accidental text composition
+-> source-neutral Integer role
+-> PROJECT_STATUS(mapping) atom
+-> frozen phase-coherent blueprint
+-> OperatorPage32 VM
+-> independent status verifier
+-> status external evidence schema
+-> admission + restart + CPU execution
+```
+
+Focused verification:
+
+```text
+status foundation all-targets check                    PASS 7.02 s
+Operator VM tests                                      PASS 6/6 13.40 s
+renamed status trace extraction                        PASS 1/1 13.52 s
+status full lifecycle                                  PASS 1/1 7.01 s
+scalar full lifecycle regression                       PASS 1/1 12.83 s
+count full lifecycle regression                        PASS 1/1 28.56 s
+status support / frozen future                         32 / 32
+status verified executions                             32 / 32
+status admission / restart / new-surface CPU           PASS
+wrong accepts / parity failures                        0 / 0
+```
+
+Current VM law boundary:
+
+```text
+PROJECT scalar                                         PASS
+COUNT collection                                       PASS
+STATUS integer mapping                                 PASS
+FILTER / COMPOSE                                       NOT IMPLEMENTED
+organic live ACTIVE coverage                           NOT YET MEASURED
+verified production saving >= 50%                      NOT ACHIEVED
+```
+
+```text
+graphify update .                                      PASS 24.32 s
+graph                                                   22,978 nodes / 51,342 edges
+one-shot indexer peak RSS                               493,248 KB
+```
