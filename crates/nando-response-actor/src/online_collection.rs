@@ -65,6 +65,7 @@ const ONLINE_COLLECTION_POOLING_STRATEGY_V27: u32 = 27;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V28: u32 = 28;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V29: u32 = 29;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V31: u32 = 31;
+const ONLINE_COLLECTION_POOLING_STRATEGY_V32: u32 = 32;
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V2: &[u8; 4] = b"NCO2";
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NCO3";
 const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
@@ -535,7 +536,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V31,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V32,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -843,6 +844,13 @@ impl OnlineCollectionMiner {
             // or silently reclassify retained evidence.
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V31;
         }
+        let durable_phase_adapter_refresh_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V32;
+        if durable_phase_adapter_refresh_migrated {
+            // V32 can reconsider retained support without raw provider data:
+            // routing atoms are recovered from durable pre-action receipts.
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V32;
+        }
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -872,13 +880,27 @@ impl OnlineCollectionMiner {
             || selector_law_quotient_migrated
             || turn_output_adapter_migrated
             || concrete_adapter_law_migrated
-            || canonical_alignment_refresh_migrated;
+            || canonical_alignment_refresh_migrated
+            || durable_phase_adapter_refresh_migrated;
         if checkpoint_migrated {
             if pre_v17_migrated {
                 miner.merge_converged_unfrozen_buckets()?;
             }
             let migration_indices = if pre_v17_migrated {
                 (0..miner.checkpoint.buckets.len()).collect::<Vec<_>>()
+            } else if durable_phase_adapter_refresh_migrated {
+                miner
+                    .checkpoint
+                    .buckets
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, bucket)| {
+                        bucket.frozen_program_sha256.is_none()
+                            && bucket.support.len() >= miner.checkpoint.config.support_rows
+                            && bucket.programs.len() > 1
+                    })
+                    .map(|(index, _)| index)
+                    .collect::<Vec<_>>()
             } else if consensus_policy_reconsidered
                 || structural_resynthesis_migrated
                 || selector_law_quotient_migrated
@@ -4701,7 +4723,7 @@ fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V31
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V32
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -7397,6 +7419,27 @@ mod tests {
             variant.required_request_atom_ids == vec![alpha_atom]
                 || variant.required_request_atom_ids == vec![beta_atom]
         }));
+
+        let root = std::env::temp_dir().join(format!(
+            "nando-durable-phase-migration-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("root");
+        let path = root.join("collection.checkpoint");
+        let config = OnlineCollectionConfig::default();
+        let mut legacy = OnlineCollectionMiner::open(&path, config).expect("legacy shell");
+        legacy.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V31;
+        legacy.checkpoint.buckets = vec![bucket];
+        legacy.persist().expect("persist v31");
+        drop(legacy);
+
+        let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
+        assert_eq!(
+            migrated.checkpoint.pooling_strategy_version,
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
+        );
+        assert_eq!(migrated.status().frozen_buckets_total, 1);
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
@@ -8720,7 +8763,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V31
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
         );
         assert_eq!(status.frozen_buckets_total, 0);
         assert_eq!(status.future_receipts_unique_total, 0);
@@ -8799,7 +8842,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V31
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
         );
         assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
         assert_eq!(status.support_receipts_unique_total, 0);
@@ -8869,7 +8912,7 @@ mod tests {
         let bucket = migrated.checkpoint.buckets.first().expect("bucket");
         assert_eq!(
             migrated.status().pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V31
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
         );
         assert!(bucket.rejected_program_sha256.contains(&historical_digest));
         assert!(bucket.learned_anti_atom_ids.is_empty());
@@ -9140,7 +9183,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V31
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
         );
         assert_eq!(status.observations_total, observations);
         assert_eq!(status.support_receipts_unique_total, support);
@@ -9240,7 +9283,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V31
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
         );
         assert_eq!(status.future_receipts_unique_total, 0);
         assert_eq!(status.wrong_accepts_total, 0);
@@ -9702,7 +9745,7 @@ mod tests {
         let status = miner.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V31
+            ONLINE_COLLECTION_POOLING_STRATEGY_V32
         );
         assert!(
             status
