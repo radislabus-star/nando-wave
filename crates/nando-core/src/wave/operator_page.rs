@@ -1,5 +1,9 @@
 use super::TernaryRelationState;
 
+// Canonical hot Rich Operator page: the phase profile, structural roles,
+// ternary relation cube, and executable programs total 4032 bytes. Evidence,
+// verifier receipts, and learner reservoirs are cold state and never belong
+// to this per-operator execution budget.
 pub const OPERATOR_PAGE32_BYTES: usize = 4_032;
 pub const OPERATOR_PAGE32_HEADER_BYTES: usize = 64;
 pub const OPERATOR_PAGE32_PHASE_BYTES: usize = 1_024;

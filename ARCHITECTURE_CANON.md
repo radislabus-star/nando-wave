@@ -425,6 +425,32 @@ The verifier contract and proof lineage are bound by hashes in the header and
 stored outside the hot page. They remain mandatory authority; moving them cold
 does not let the actor authorize itself.
 
+#### Canonical numeric contract
+
+The fixed core budgets are:
+
+```text
+one hot rich operator                    4032 B
+support evidence required                  32 independent rows
+frozen-future evidence required            32 independent rows
+wrong accepts / parity mismatches            0
+competing alignment / blueprint beam        64
+maximum circuit depth                       12
+maximum bounded-search expansions         4096
+search exhaustion                         ABSTAIN
+```
+
+The streaming learner's runtime-parity reservoir is a separate cold evidence
+budget. It retains at most 64 teacher signatures and at most 32 cases per
+signature: 2048 cases in total. This number is not a per-operator allocation
+and must never be multiplied by an assumed 128 KiB raw payload. Payload storage
+is bounded and compressed independently.
+
+For scale, 2048 admitted hot `OperatorPage32` packages occupy 8,257,536 bytes
+(7.875 MiB) before registry/index overhead. The design target is therefore a
+small cache-resident hot operator set; checkpoints, evidence, receipts, and
+learner arenas remain cold and are not part of the 4032-byte execution page.
+
 For C64, each relation plane uses bitmap-addressed sparse tiles:
 
 ```text
