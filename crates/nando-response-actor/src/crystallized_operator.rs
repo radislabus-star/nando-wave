@@ -25,10 +25,12 @@ use crate::{
 };
 
 pub const TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR: u8 = 1;
+pub const TRANSFORM_OPCODE_COUNT_COLLECTION: u8 = 2;
 pub const TRANSFORM_VALUE_STRING: u16 = 0;
 pub const TRANSFORM_VALUE_INTEGER: u16 = 1;
 pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
 pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
+pub const TRANSFORM_VALUE_COLLECTION: u16 = 5;
 pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
 pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
 const CRYSTALLIZED_REGISTRY_SCHEMA_V3: &str = "nando.crystallized-registry.v3";
@@ -795,8 +797,7 @@ fn bind_raw_pre_action_components(
     if transforms.len() == 1 {
         let expected_type = transform_value_type(transforms[0].parameter & 0x00ff)?;
         let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
-        for selector in crate::collection_synthesis::learned_selector_candidates(provider_payload)
-            .into_iter()
+        for selector in runtime_selector_candidates(provider_payload, expected_type)
             .filter(|selector| selector_value_type(selector) == Some(expected_type))
         {
             let evidence = observed_scalar_runtime_surface(
@@ -1208,8 +1209,7 @@ fn independently_bind_verifier(
             String,
             std::collections::BTreeMap<String, ResponseProgram>,
         >::new();
-        for selector in crate::collection_synthesis::learned_selector_candidates(provider_payload)
-            .into_iter()
+        for selector in runtime_selector_candidates(provider_payload, expected_type)
             .filter(|selector| selector_value_type(selector) == Some(expected_type))
         {
             let program = instantiate_bound_actor(
@@ -1349,7 +1349,8 @@ fn actor_renderer_contract(
     program: &ResponseProgram,
 ) -> Result<crate::CollectionOutputRenderer, CrystallizedOperatorError> {
     match &program.operation {
-        crate::ResponseOperation::ProjectSelectedValue { renderer, .. } => Ok(renderer.clone()),
+        crate::ResponseOperation::ProjectSelectedValue { renderer, .. }
+        | crate::ResponseOperation::ComposeCollection { renderer, .. } => Ok(renderer.clone()),
         crate::ResponseOperation::UniqueConsensus { variants, .. } => {
             let mut renderer = None;
             for variant in variants {
@@ -1372,15 +1373,8 @@ fn scalar_actor_from_transform_program(
     let [transform] = transform_program else {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     };
-    validate_scalar_transform(*transform)?;
-    Ok(ResponseProgram::project_selected_value(
-        ResponseValueSelector::UniqueScalar {
-            value_type: transform_value_type(transform.parameter)?,
-        },
-        transform_format(transform.flags),
-        "completed",
-    )
-    .with_value_renderer(renderer.clone()))
+    validate_typed_transform(*transform)?;
+    actor_from_transform(*transform, renderer)
 }
 
 fn ordered_role_transforms(
@@ -1394,8 +1388,7 @@ fn ordered_role_transforms(
     let output = ordered[0].output;
     let mut sources = BTreeSet::new();
     for (index, transform) in ordered.iter().enumerate() {
-        if transform.opcode != TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR
-            || transform.source_b != TRANSFORM_ROLE_NONE
+        if transform.source_b != TRANSFORM_ROLE_NONE
             || transform.output != output
             || transform.output == transform.source_a
             || transform.flags & !TRANSFORM_FLAG_CANONICAL_JSON != 0
@@ -1404,7 +1397,7 @@ fn ordered_role_transforms(
         {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
         }
-        transform_value_type(transform.parameter & 0x00ff)?;
+        validate_typed_transform(*transform)?;
     }
     Ok(ordered)
 }
@@ -1460,6 +1453,18 @@ fn bind_program_selectors(
                 return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
             }
         }
+        crate::ResponseOperation::ComposeCollection { steps, .. } => {
+            if selectors.len() != 1
+                || selector_value_type(&selectors[0]) != Some(AtomValueType::Collection)
+                || steps.as_slice()
+                    != [
+                        crate::CollectionProgramStep::SelectOnlyArrayField,
+                        crate::CollectionProgramStep::Count,
+                    ]
+            {
+                return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+            }
+        }
         crate::ResponseOperation::UniqueConsensus { variants, .. } => {
             if variants.is_empty() {
                 return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
@@ -1495,6 +1500,20 @@ fn selector_value_type(selector: &ResponseValueSelector) -> Option<AtomValueType
         | ResponseValueSelector::RequestLastToken
         | ResponseValueSelector::RequestUniqueLiteral => Some(AtomValueType::String),
     }
+}
+
+fn runtime_selector_candidates(
+    provider_payload: &Value,
+    expected_type: AtomValueType,
+) -> impl Iterator<Item = ResponseValueSelector> {
+    let candidates = if expected_type == AtomValueType::Collection {
+        vec![ResponseValueSelector::UniqueScalar {
+            value_type: AtomValueType::Collection,
+        }]
+    } else {
+        crate::collection_synthesis::learned_selector_candidates(provider_payload)
+    };
+    candidates.into_iter()
 }
 
 pub(crate) fn runtime_role_signature_for_selector(
@@ -1565,26 +1584,50 @@ pub(crate) fn compile_blueprint_actor(
     if !blueprint.composition_dag().edges().is_empty() {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     }
-    validate_scalar_transform(*transform)?;
-    let value_type = transform_value_type(transform.parameter)?;
-    Ok(ResponseProgram::project_selected_value(
-        ResponseValueSelector::UniqueScalar { value_type },
-        transform_format(transform.flags),
-        "completed",
-    )
-    .with_value_renderer(renderer.clone()))
+    validate_typed_transform(*transform)?;
+    actor_from_transform(*transform, renderer)
 }
 
-fn validate_scalar_transform(transform: TransformOp8) -> Result<(), CrystallizedOperatorError> {
-    if transform.opcode != TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR
-        || transform.source_b != TRANSFORM_ROLE_NONE
+fn validate_typed_transform(transform: TransformOp8) -> Result<(), CrystallizedOperatorError> {
+    if transform.source_b != TRANSFORM_ROLE_NONE
         || transform.output == transform.source_a
         || transform.flags & !TRANSFORM_FLAG_CANONICAL_JSON != 0
     {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     }
-    transform_value_type(transform.parameter)?;
+    let value_type = transform_value_type(transform.parameter & 0x00ff)?;
+    match transform.opcode {
+        TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR if value_type != AtomValueType::Collection => {}
+        TRANSFORM_OPCODE_COUNT_COLLECTION
+            if value_type == AtomValueType::Collection && transform.flags == 0 => {}
+        _ => return Err(CrystallizedOperatorError::UnsupportedTransformProgram),
+    }
     Ok(())
+}
+
+fn actor_from_transform(
+    transform: TransformOp8,
+    renderer: &crate::CollectionOutputRenderer,
+) -> Result<ResponseProgram, CrystallizedOperatorError> {
+    let value_type = transform_value_type(transform.parameter & 0x00ff)?;
+    match transform.opcode {
+        TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR => Ok(ResponseProgram::project_selected_value(
+            ResponseValueSelector::UniqueScalar { value_type },
+            transform_format(transform.flags),
+            "completed",
+        )
+        .with_value_renderer(renderer.clone())),
+        TRANSFORM_OPCODE_COUNT_COLLECTION => Ok(ResponseProgram::compose_collection(
+            vec![
+                crate::CollectionProgramStep::SelectOnlyArrayField,
+                crate::CollectionProgramStep::Count,
+            ],
+            ValueProjectionFormat::PlainText,
+            "completed",
+        )
+        .with_collection_renderer(renderer.clone())),
+        _ => Err(CrystallizedOperatorError::UnsupportedTransformProgram),
+    }
 }
 
 fn transform_value_type(parameter: u16) -> Result<AtomValueType, CrystallizedOperatorError> {
@@ -1593,6 +1636,7 @@ fn transform_value_type(parameter: u16) -> Result<AtomValueType, CrystallizedOpe
         TRANSFORM_VALUE_INTEGER => AtomValueType::Integer,
         TRANSFORM_VALUE_BOOLEAN => AtomValueType::Boolean,
         TRANSFORM_VALUE_IDENTIFIER => AtomValueType::Identifier,
+        TRANSFORM_VALUE_COLLECTION => AtomValueType::Collection,
         _ => return Err(CrystallizedOperatorError::UnsupportedTransformProgram),
     })
 }

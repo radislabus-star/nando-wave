@@ -2528,7 +2528,11 @@ fn independently_select_scalar_with_request(
 ) -> Result<VerifierScalar, ResponseVerificationError> {
     match selector {
         ResponseValueSelector::UniqueScalar { value_type } => {
-            let scalar = independently_unique_scalar(provider_payload)?;
+            let scalar = if *value_type == AtomValueType::Collection {
+                independently_unique_collection(provider_payload)?
+            } else {
+                independently_unique_scalar(provider_payload)?
+            };
             if scalar.value_type == *value_type {
                 Ok(scalar)
             } else {
@@ -3537,6 +3541,20 @@ fn independently_unique_scalar(
     scalars
         .pop()
         .ok_or(ResponseVerificationError("unique_scalar_missing"))
+}
+
+fn independently_unique_collection(
+    provider_payload: &Value,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    let output = independently_latest_tool_output(provider_payload)?;
+    let value = independently_parse_collection_value(output)?;
+    if !matches!(value, Value::Array(_) | Value::Object(_)) {
+        return Err(ResponseVerificationError("selector_collection_unsupported"));
+    }
+    Ok(VerifierScalar {
+        value,
+        value_type: AtomValueType::Collection,
+    })
 }
 
 fn independently_bounded_output_text_parts(

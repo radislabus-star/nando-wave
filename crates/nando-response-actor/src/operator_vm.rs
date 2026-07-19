@@ -4,9 +4,10 @@ use nando_core::wave::{OPERATOR_PAGE32_RENDERER_BYTES, OperatorPage32, Transform
 use serde_json::Value;
 
 use crate::crystallized_operator::{
-    TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE,
+    TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
+    TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_COLLECTION,
 };
-use crate::runtime::project_selected_value_with_request;
+use crate::runtime::selected_value_with_request;
 use crate::{
     CollectionOutputRenderer, ResponseRenderSegment, ResponseValueSelector, ValueProjectionFormat,
 };
@@ -46,20 +47,45 @@ pub(crate) fn execute_operator_page(
 
     let mut values = Vec::with_capacity(transforms.len());
     for (transform, selector) in transforms.iter().zip(selectors) {
-        if transform.opcode != TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR {
-            return Err(OperatorVmError::UnsupportedOpcode);
-        }
-        let format = if transform.flags == 0 {
-            ValueProjectionFormat::PlainText
-        } else if transform.flags == TRANSFORM_FLAG_CANONICAL_JSON {
-            ValueProjectionFormat::CanonicalJson
-        } else {
-            return Err(OperatorVmError::InvalidProgram);
+        let selected = selected_value_with_request(request_text, provider_payload, selector)
+            .map_err(|_| OperatorVmError::ProjectionFailed)?;
+        let rendered = match transform.opcode {
+            TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR => {
+                let format = transform_format(transform.flags)?;
+                match format {
+                    ValueProjectionFormat::PlainText => match selected.value {
+                        Value::String(text) if !text.contains(['\n', '\r']) => text,
+                        Value::Bool(value) => value.to_string(),
+                        Value::Number(value) => value.to_string(),
+                        _ => return Err(OperatorVmError::ProjectionFailed),
+                    },
+                    ValueProjectionFormat::CanonicalJson => serde_json::to_string(&selected.value)
+                        .map_err(|_| OperatorVmError::ProjectionFailed)?,
+                }
+            }
+            TRANSFORM_OPCODE_COUNT_COLLECTION
+                if transform.flags == 0
+                    && transform.parameter & 0x00ff == TRANSFORM_VALUE_COLLECTION =>
+            {
+                match selected.value {
+                    Value::Array(items) => items.len().to_string(),
+                    Value::Object(fields) => {
+                        let mut arrays = fields.values().filter_map(Value::as_array);
+                        let count = arrays
+                            .next()
+                            .ok_or(OperatorVmError::ProjectionFailed)?
+                            .len();
+                        if arrays.next().is_some() {
+                            return Err(OperatorVmError::ProjectionFailed);
+                        }
+                        count.to_string()
+                    }
+                    _ => return Err(OperatorVmError::ProjectionFailed),
+                }
+            }
+            _ => return Err(OperatorVmError::UnsupportedOpcode),
         };
-        values.push(
-            project_selected_value_with_request(request_text, provider_payload, selector, format)
-                .map_err(|_| OperatorVmError::ProjectionFailed)?,
-        );
+        values.push(rendered);
     }
 
     let response = execute_renderer(page, &values)?;
@@ -328,6 +354,17 @@ mod tests {
         }
     }
 
+    fn count_transform(source: u8) -> TransformOp8 {
+        TransformOp8 {
+            opcode: TRANSFORM_OPCODE_COUNT_COLLECTION,
+            output: 2,
+            source_a: source,
+            source_b: TRANSFORM_ROLE_NONE,
+            parameter: TRANSFORM_VALUE_COLLECTION,
+            flags: 0,
+        }
+    }
+
     #[test]
     fn page_transform_order_drives_rich_rendering() {
         let selectors = [
@@ -380,6 +417,59 @@ mod tests {
             )
             .as_deref(),
             Ok("failed=2; total=7")
+        );
+    }
+
+    #[test]
+    fn page_count_transform_executes_collection_law() {
+        let selector = ResponseValueSelector::UniqueScalar {
+            value_type: AtomValueType::Collection,
+        };
+        let page = page(
+            &[count_transform(0)],
+            &CollectionOutputRenderer::RenderTemplate {
+                prefix: "Total records: ".to_owned(),
+                suffix: ".".to_owned(),
+            },
+        );
+
+        assert_eq!(
+            execute_operator_page(
+                &page,
+                &[selector],
+                "Count the records",
+                &json!({
+                    "input": [{
+                        "type": "function_call_output",
+                        "output": "[{\"id\":1},{\"id\":2},{\"id\":3}]"
+                    }]
+                }),
+            )
+            .as_deref(),
+            Ok("Total records: 3.")
+        );
+    }
+
+    #[test]
+    fn page_count_transform_rejects_non_collection_operand() {
+        let selector = ResponseValueSelector::UniqueScalar {
+            value_type: AtomValueType::Collection,
+        };
+        let page = page(&[count_transform(0)], &CollectionOutputRenderer::Direct);
+
+        assert_eq!(
+            execute_operator_page(
+                &page,
+                &[selector],
+                "Count the records",
+                &json!({
+                    "input": [{
+                        "type": "function_call_output",
+                        "output": "3"
+                    }]
+                }),
+            ),
+            Err(OperatorVmError::ProjectionFailed)
         );
     }
 

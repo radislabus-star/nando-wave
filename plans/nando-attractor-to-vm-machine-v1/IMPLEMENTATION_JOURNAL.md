@@ -392,3 +392,105 @@ graphify update .                                     PASS 24.16 s
   graph                                                22,950 nodes / 51,224 edges
   one-shot indexer peak RSS                            492,744 KB
 ```
+
+## 2026-07-19 - Deployment Checkpoint e8aa612
+
+The raw runtime re-extraction generation was built remotely, passed the
+composite gate, and was installed as versioned hot/cold binaries.
+
+```text
+remote release admission build                       PASS 64.03 s
+remote release serving build                         PASS 53.10 s
+serving sha256                                        96d3ae356e8f6f02...
+admission sha256                                      29fcb0eeea133d17...
+post-deploy composite gate                            PASS
+hot serving RSS                                       about 83 MiB
+cold learner RSS                                      about 391 MiB
+cold checkpoint                                       byte-identical
+checkpoint rows / buckets                             14,945 / 34
+warm miner state                                      5.34 MiB
+false accepts / parity failures                       0 / 0
+verified token saving                                 1.0% (M3 WATCH)
+```
+
+This checkpoint is the rollback boundary before the first generalized
+collection opcode. It is not the 50% product result.
+
+## 2026-07-19 - Stage 8 First Generalized VM Law: COUNT
+
+Implemented the first non-projection law in the crystallized Operator VM:
+
+```text
+completed live trace
+-> exact source-neutral collection count
+-> collection structural role
+-> TypedProgramAtom(COUNT_COLLECTION)
+-> phase-coherent blueprint
+-> OperatorPage32 transform + renderer bytecode
+-> raw runtime re-grounding
+-> independent collection verifier
+-> sealed crystallization
+-> external admission
+-> registry restart
+-> CPU VM response
+```
+
+The operation is structurally bounded to a top-level JSON collection with one
+array field. Field names are not part of the law. The learned program is
+canonicalized to:
+
+```text
+SelectOnlyArrayField -> Count -> PlainText -> typed renderer
+```
+
+Important defects found and removed while closing the route:
+
+```text
+root array was canonicalized as {items:[...]}          count the sole array
+unknown opcode rejected at wrong decoder stage         explicit UnsupportedOpcode
+accidental scalar template outranked cardinality law   exact count law first
+single-role support/runtime role signatures differed   source-neutral shared signature
+single-role support/runtime phase atoms differed        type + unique cardinality
+collection candidate polluted scalar enumeration        expected-type-only candidate
+collection proof mislabeled value projection            collection verifier schema
+```
+
+Focused verification and measured wall time:
+
+```text
+initial actor cargo check                               PASS 5.79 s
+VM tests after first cut                                3/5 13.53 s
+VM tests after root-collection correction              PASS 5/5 13.36 s
+crystallizer regressions                               PASS 2/2 0.08 s
+live count extraction after law ranking                PASS 1/1 13.67 s
+scalar runtime regression diagnosis                    15.31 s
+scalar full lifecycle after role/phase alignment       PASS 1/1 25.98 s
+count full lifecycle before admission schema           BLOCK 22.78 s
+count full lifecycle final                             PASS 1/1 42.56 s
+  support / frozen future                              32 / 32
+  verified shadow executions                          32 / 32
+  admission candidate                                 1
+  registry restart                                    PASS
+  new-surface CPU response                            PASS
+  wrong accepts / parity failures                     0 / 0
+```
+
+Current product boundary:
+
+```text
+PROJECT scalar                                        PASS
+COUNT collection                                      PASS in focused lifecycle
+FILTER / STATUS / COMPOSE                              NOT IMPLEMENTED IN VM
+live organic count ACTIVE                              NOT YET OBSERVED
+verified production saving >= 50%                     NOT ACHIEVED
+```
+
+Graph maintenance for this generation:
+
+```text
+graphify update .                                      PASS 24.20 s
+graph                                                   22,968 nodes / 51,302 edges
+one-shot indexer peak RSS                               492,696 KB
+remote response-actor all-targets check                 PASS 7.06 s
+remote check peak RSS                                   943,720 KB
+```

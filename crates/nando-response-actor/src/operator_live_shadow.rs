@@ -12,11 +12,12 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    AtomValueType, CollectionOutputRenderer, CollectionSynthesisExample,
+    AtomValueType, CollectionOutputRenderer, CollectionProgramStep, CollectionSynthesisExample,
     CrystallizationParityReceipt, CrystallizedOperator, ResponseOperation, ResponsePackage,
     ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState, ResponseProgram,
     ResponseRenderSegment, ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
-    TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_IDENTIFIER,
+    TRANSFORM_OPCODE_COUNT_COLLECTION, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+    TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_COLLECTION, TRANSFORM_VALUE_IDENTIFIER,
     TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
     enumerate_source_neutral_response_programs, execute_response,
     is_privacy_safe_online_response_program, is_source_neutral_response_program,
@@ -482,6 +483,8 @@ fn build_competing_blueprint_set(
     for actor in actors {
         let roles = rich_scalar_program_roles(&actor)
             .ok_or_else(|| "actor_hypothesis_roles_missing".to_owned())?;
+        let transform_opcode = program_transform_opcode(&actor)
+            .ok_or_else(|| "actor_hypothesis_opcode_missing".to_owned())?;
         let actor_bundles = support
             .iter()
             .map(|sample| {
@@ -489,6 +492,7 @@ fn build_competing_blueprint_set(
                     &sample.request_text,
                     &sample.provider_payload,
                     &roles,
+                    transform_opcode,
                     &commitment_hex(sample.bundle.surface_sha256()),
                     *sample.bundle.lineage_sha256(),
                     *sample.bundle.surface_sha256(),
@@ -634,6 +638,10 @@ fn live_admission_candidate(
     let verifier = operator
         .routing_verifier()
         .map_err(|_| "admission_routing_verifier_failed".to_owned())?;
+    let verifier_schema = match &program.operation {
+        ResponseOperation::ComposeCollection { .. } => crate::COLLECTION_EXTERNAL_VERIFIER_SCHEMA,
+        _ => crate::VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA,
+    };
     let distinct_sessions = law
         .support
         .iter()
@@ -682,7 +690,7 @@ fn live_admission_candidate(
             runtime_parity_failures: 0,
             exact_cache_overlap: 0,
             wave_causal_pass: true,
-            verifier_schema: crate::VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+            verifier_schema: verifier_schema.to_owned(),
         },
     };
     package
@@ -733,6 +741,18 @@ pub fn extract_live_scalar_circuit_sample(
     if version_space.programs.is_empty() {
         return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
     }
+    let exact_count = version_space
+        .programs
+        .iter()
+        .filter_map(|program| {
+            derive_exact_count_program(
+                program,
+                &parity.request_text,
+                &parity.provider_payload,
+                &parity.expected_response,
+            )
+        })
+        .min_by_key(|program| serde_cbor::to_vec(program).unwrap_or_default());
     let mut scalar_programs = version_space
         .programs
         .iter()
@@ -751,7 +771,9 @@ pub fn extract_live_scalar_circuit_sample(
         .programs
         .iter()
         .find(|program| rich_scalar_program_roles(program).is_some_and(|roles| roles.len() > 1));
-    let selected_template = if let Some(program) = rich_exact {
+    let selected_template = if let Some(program) = &exact_count {
+        program.clone()
+    } else if let Some(program) = rich_exact {
         program.clone()
     } else if let Some((_, selector, _, _, renderer)) = scalar_programs.first() {
         ResponseProgram::project_selected_value(selector.clone(), scalar_programs[0].3, "completed")
@@ -764,17 +786,33 @@ pub fn extract_live_scalar_circuit_sample(
             .cloned()
             .ok_or_else(|| classify_exact_program_blocker(&version_space.programs))?
     };
-    let mut actor_hypotheses = canonical_rich_actor_hypotheses(
-        &version_space.programs,
-        &parity.request_text,
-        &parity.provider_payload,
-        &parity.expected_response,
-    )?;
-    let clean_actor = derive_clean_ordinal_actor(
-        &parity.request_text,
-        &parity.provider_payload,
-        &parity.expected_response,
-    );
+    let mut actor_hypotheses = if let Some(program) = &exact_count {
+        vec![
+            canonicalize_scalar_program_roles(
+                program,
+                &parity.request_text,
+                &parity.provider_payload,
+            )
+            .ok_or(LiveScalarShadowBlocker::UnsupportedRendererProgram)?,
+        ]
+    } else {
+        canonical_rich_actor_hypotheses(
+            &version_space.programs,
+            &parity.request_text,
+            &parity.provider_payload,
+            &parity.expected_response,
+        )?
+    };
+    let clean_actor = exact_count
+        .is_none()
+        .then(|| {
+            derive_clean_ordinal_actor(
+                &parity.request_text,
+                &parity.provider_payload,
+                &parity.expected_response,
+            )
+        })
+        .flatten();
     if let Some(actor) = &clean_actor {
         actor_hypotheses.push(actor.clone());
     }
@@ -829,6 +867,8 @@ pub fn extract_live_scalar_circuit_sample(
         &parity.request_text,
         &parity.provider_payload,
         &roles,
+        program_transform_opcode(&canonical_program)
+            .ok_or(LiveScalarShadowBlocker::UnsupportedScalarProgram)?,
         &transition.before.frame_id_sha256,
         lineage_sha256,
         surface_sha256,
@@ -1236,6 +1276,31 @@ fn structural_scalar_law_shape(
 }
 
 fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> Option<Vec<u8>> {
+    if let ResponseOperation::ComposeCollection {
+        steps,
+        format,
+        renderer,
+        completion_state,
+        ..
+    } = &program.operation
+    {
+        if completion_state != "completed"
+            || steps.as_slice()
+                != [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::Count,
+                ]
+        {
+            return None;
+        }
+        let mut shape = vec![6, u8::from(*format == ValueProjectionFormat::CanonicalJson)];
+        shape.push(match renderer {
+            CollectionOutputRenderer::Direct => 0,
+            CollectionOutputRenderer::RenderTemplate { .. } => 1,
+            _ => return None,
+        });
+        return Some(shape);
+    }
     let ResponseOperation::ProjectSelectedValue {
         selector,
         format,
@@ -1311,6 +1376,28 @@ fn synthesis_payload_with_request(
 fn rich_scalar_program_roles(
     program: &ResponseProgram,
 ) -> Option<Vec<(ResponseValueSelector, ValueProjectionFormat)>> {
+    if let ResponseOperation::ComposeCollection {
+        steps,
+        format,
+        completion_state,
+        ..
+    } = &program.operation
+    {
+        return (completion_state == "completed"
+            && steps.as_slice()
+                == [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::Count,
+                ])
+        .then(|| {
+            vec![(
+                ResponseValueSelector::UniqueScalar {
+                    value_type: AtomValueType::Collection,
+                },
+                *format,
+            )]
+        });
+    }
     let ResponseOperation::ProjectSelectedValue {
         selector,
         format,
@@ -1339,6 +1426,14 @@ fn canonicalize_scalar_program_roles(
     request_text: &str,
     provider_payload: &Value,
 ) -> Option<ResponseProgram> {
+    if program_transform_opcode(program) == Some(TRANSFORM_OPCODE_COUNT_COLLECTION) {
+        let mut canonical = program.clone();
+        let ResponseOperation::ComposeCollection { renderer, .. } = &mut canonical.operation else {
+            return None;
+        };
+        *renderer = normalized_scalar_renderer(renderer)?;
+        return Some(canonical);
+    }
     let mut canonical = program.clone();
     let ResponseOperation::ProjectSelectedValue {
         selector,
@@ -1395,6 +1490,7 @@ fn observed_rich_scalar_surface(
     request_text: &str,
     provider_payload: &Value,
     program_roles: &[(ResponseValueSelector, ValueProjectionFormat)],
+    transform_opcode: u8,
     frame_id: &str,
     lineage_sha256: [u8; 32],
     surface_sha256: [u8; 32],
@@ -1425,10 +1521,20 @@ fn observed_rich_scalar_surface(
         let source = semantic_to_local[index + 1];
         let plane = u8::try_from(index).map_err(|_| LiveScalarShadowBlocker::InvalidBundle)?;
         let value_type = selector_value_type(selector);
-        roles[usize::from(source)] =
-            crate::crystallized_operator::runtime_role_signature_for_selector(selector, plane);
-        let phase_atom = format!("scalar_role:{index}:type:{}", value_type_tag(value_type));
-        let phase = phase_vector_from_atoms([phase_atom.as_str()], 1)[0];
+        let phase = if program_roles.len() == 1 {
+            roles[usize::from(source)] =
+                StructuralRoleSignature::new(value_type_tag(value_type), 1, 1, 2, vec![plane]);
+            let phase_atoms = [
+                format!("scalar_type:{}", value_type_tag(value_type)),
+                "cardinality:unique".to_owned(),
+            ];
+            phase_vector_from_atoms(phase_atoms.iter().map(String::as_str), 1)[0]
+        } else {
+            roles[usize::from(source)] =
+                crate::crystallized_operator::runtime_role_signature_for_selector(selector, plane);
+            let phase_atom = format!("scalar_role:{index}:type:{}", value_type_tag(value_type));
+            phase_vector_from_atoms([phase_atom.as_str()], 1)[0]
+        };
         relations.push(LocalRelationFragment {
             plane,
             source_local_role: context,
@@ -1437,7 +1543,7 @@ fn observed_rich_scalar_surface(
             phase_anchor: phase,
         });
         atoms.push(TypedProgramAtom {
-            opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+            opcode: transform_opcode,
             output_local_role: output,
             source_a_local_role: source,
             source_b_local_role: OPERATOR_ROLE_NONE,
@@ -1532,6 +1638,53 @@ fn derive_exact_scalar_program(
         return None;
     }
     Some(derived)
+}
+
+fn derive_exact_count_program(
+    candidate: &ResponseProgram,
+    request_text: &str,
+    provider_payload: &Value,
+    expected_response: &str,
+) -> Option<ResponseProgram> {
+    let ResponseOperation::ComposeCollection {
+        steps,
+        format: _,
+        completion_state,
+        ..
+    } = &candidate.operation
+    else {
+        return None;
+    };
+    if completion_state != "completed"
+        || steps.as_slice()
+            != [
+                CollectionProgramStep::SelectOnlyArrayField,
+                CollectionProgramStep::Count,
+            ]
+    {
+        return None;
+    }
+    // Count emits a decimal integer, for which PlainText and CanonicalJson are
+    // byte-identical. Freeze one representation so equivalent hypotheses do
+    // not split the operator field or VM contract.
+    let direct = ResponseProgram::compose_collection(
+        steps.clone(),
+        ValueProjectionFormat::PlainText,
+        completion_state.clone(),
+    );
+    if !is_source_neutral_response_program(&direct) {
+        return None;
+    }
+    let computed = execute_response(&direct, request_text, provider_payload).response?;
+    let renderer = infer_scalar_renderer(&computed, expected_response)?;
+    let derived = direct.with_collection_renderer(renderer);
+    (derived.validate().is_ok()
+        && is_privacy_safe_online_response_program(&derived)
+        && execute_response(&derived, request_text, provider_payload)
+            .response
+            .as_deref()
+            == Some(expected_response))
+    .then_some(derived)
 }
 
 fn infer_scalar_renderer(computed: &str, expected: &str) -> Option<CollectionOutputRenderer> {
@@ -1648,7 +1801,25 @@ const fn transform_parameter(value_type: AtomValueType) -> u16 {
         AtomValueType::Integer => TRANSFORM_VALUE_INTEGER,
         AtomValueType::Boolean => TRANSFORM_VALUE_BOOLEAN,
         AtomValueType::Identifier => TRANSFORM_VALUE_IDENTIFIER,
-        AtomValueType::Collection => TRANSFORM_VALUE_STRING,
+        AtomValueType::Collection => TRANSFORM_VALUE_COLLECTION,
+    }
+}
+
+fn program_transform_opcode(program: &ResponseProgram) -> Option<u8> {
+    match &program.operation {
+        ResponseOperation::ProjectSelectedValue { .. } => {
+            Some(TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR)
+        }
+        ResponseOperation::ComposeCollection { steps, .. }
+            if steps.as_slice()
+                == [
+                    CollectionProgramStep::SelectOnlyArrayField,
+                    CollectionProgramStep::Count,
+                ] =>
+        {
+            Some(TRANSFORM_OPCODE_COUNT_COLLECTION)
+        }
+        _ => None,
     }
 }
 
@@ -1775,6 +1946,31 @@ mod tests {
         row
     }
 
+    fn collection_count_transition(request: &str, prefix: &str) -> TeacherTransition {
+        collection_count_transition_n(request, prefix, 3)
+    }
+
+    fn collection_count_transition_n(
+        request: &str,
+        prefix: &str,
+        count: usize,
+    ) -> TeacherTransition {
+        let mut row = transition("unused", true);
+        let parity = row.runtime_parity_case.as_mut().expect("parity case");
+        parity.request_text = request.to_owned();
+        let rows = (0..count)
+            .map(|value| json!({"value": value}))
+            .collect::<Vec<_>>();
+        parity.provider_payload = json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": serde_json::to_string(&rows).expect("rows serialize")
+            }]
+        });
+        parity.expected_response = format!("{prefix}{count}.");
+        row
+    }
+
     #[test]
     fn verified_scalar_trace_becomes_source_neutral_circuit_evidence() {
         let first =
@@ -1790,6 +1986,25 @@ mod tests {
         assert_eq!(first.bundle.program_atoms().len(), 1);
         assert_eq!(first.law_sha256, renamed.law_sha256);
         assert_eq!(first.anchors, renamed.anchors);
+    }
+
+    #[test]
+    fn verified_collection_count_trace_becomes_count_circuit_evidence() {
+        let first_row = collection_count_transition("Count selected values", "Total values: ");
+        let first = extract_live_scalar_circuit_sample(&first_row).expect("collection count trace");
+        let renamed = extract_live_scalar_circuit_sample(&collection_count_transition(
+            "How many records are present?",
+            "Record count: ",
+        ))
+        .expect("renamed collection count trace");
+
+        let [atom] = first.bundle.program_atoms() else {
+            panic!("one count transform expected");
+        };
+        assert_eq!(atom.opcode, TRANSFORM_OPCODE_COUNT_COLLECTION);
+        assert_eq!(atom.parameter & 0x00ff, TRANSFORM_VALUE_COLLECTION);
+        assert_eq!(first.anchors.len(), 1);
+        assert_eq!(first.law_sha256, renamed.law_sha256);
     }
 
     #[test]
@@ -1965,7 +2180,7 @@ mod tests {
         let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
             .expect("registry restores crystallized operator");
         let execution = executor.execute_shadow(
-            "",
+            "Return the count",
             &json!({
                 "input": [{
                     "type": "function_call_output",
@@ -1979,7 +2194,7 @@ mod tests {
             "{execution:#?}"
         );
         let ambiguous = executor.execute_shadow(
-            "",
+            "Return the count",
             &json!({
                 "input": [{
                     "type": "function_call_output",
@@ -2032,6 +2247,59 @@ mod tests {
             ),
             Err("crystallized_admission_resynthesis_mismatch")
         ));
+    }
+
+    #[test]
+    fn count_rows_reach_verified_cpu_operator() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 0..64_u8 {
+            let count = usize::from(index % 7) + 1;
+            let mut row =
+                collection_count_transition_n("Count the records", "Total records: ", count);
+            row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
+            row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
+            row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+            state.observe(&row);
+        }
+
+        let report = state.report();
+        assert_eq!(report.support_rows, 32, "{report:#?}");
+        assert_eq!(report.future_rows, 32, "{report:#?}");
+        assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+        assert_eq!(report.shadow_executions, 32, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+
+        let candidates = state.admission_candidates();
+        let snapshot = crate::build_crystallized_admission_snapshot(
+            &candidates,
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("external admission evaluates count operator")
+        .expect("count operator reaches registry");
+        let executor = crate::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("registry restores count operator");
+        let rows = (0..11)
+            .map(|value| json!({"id": value}))
+            .collect::<Vec<_>>();
+        let execution = executor.execute_shadow(
+            "Count the records",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": serde_json::to_string(&rows).expect("rows serialize")
+                }]
+            }),
+        );
+        assert_eq!(
+            execution.response.as_deref(),
+            Some("Total records: 11."),
+            "{execution:#?}"
+        );
     }
 
     #[test]

@@ -1503,6 +1503,14 @@ pub(crate) fn project_selected_value_with_request(
     format_selected_scalar(selected, format)
 }
 
+pub(crate) fn selected_value_with_request(
+    request_text: &str,
+    provider_payload: &Value,
+    selector: &ResponseValueSelector,
+) -> Result<ExtractedScalar, &'static str> {
+    immediate_selected_scalar_with_request(request_text, provider_payload, selector)
+}
+
 fn format_selected_scalar(
     selected: ExtractedScalar,
     format: ValueProjectionFormat,
@@ -1938,7 +1946,11 @@ fn immediate_selected_scalar_with_request(
 ) -> Result<ExtractedScalar, &'static str> {
     match selector {
         ResponseValueSelector::UniqueScalar { value_type } => {
-            let scalar = immediate_unique_scalar(provider_payload)?;
+            let scalar = if *value_type == AtomValueType::Collection {
+                immediate_unique_collection(provider_payload)?
+            } else {
+                immediate_unique_scalar(provider_payload)?
+            };
             (scalar.value_type == *value_type)
                 .then_some(scalar)
                 .ok_or("selector_type_mismatch")
@@ -2908,7 +2920,14 @@ fn parse_scalar_text(
             .map(Value::from)
             .map_err(|_| "selector_boolean_parse")?,
         AtomValueType::String | AtomValueType::Identifier => Value::String(value.to_owned()),
-        AtomValueType::Collection => return Err("selector_collection_unsupported"),
+        AtomValueType::Collection => {
+            let parsed =
+                serde_json::from_str::<Value>(value).map_err(|_| "selector_collection_parse")?;
+            if !matches!(parsed, Value::Array(_) | Value::Object(_)) {
+                return Err("selector_collection_unsupported");
+            }
+            parsed
+        }
     };
     extracted_scalar(parsed, value_type)
 }
@@ -2922,7 +2941,8 @@ fn extracted_scalar(
         Value::Number(number) if number.is_i64() || number.is_u64() => AtomValueType::Integer,
         Value::String(text) if identifier_like(text) => AtomValueType::Identifier,
         Value::String(_) => AtomValueType::String,
-        _ => return Err("selector_scalar_unsupported"),
+        Value::Array(_) | Value::Object(_) => AtomValueType::Collection,
+        Value::Null | Value::Number(_) => return Err("selector_scalar_unsupported"),
     };
     let compatible = actual == value_type
         || matches!(
@@ -2932,6 +2952,13 @@ fn extracted_scalar(
     compatible
         .then_some(ExtractedScalar { value, value_type })
         .ok_or("selector_type_mismatch")
+}
+
+fn immediate_unique_collection(provider_payload: &Value) -> Result<ExtractedScalar, &'static str> {
+    let output =
+        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let value = collection_json_from_value(output)?;
+    extracted_scalar(value, AtomValueType::Collection)
 }
 
 fn collect_scalar_values(
