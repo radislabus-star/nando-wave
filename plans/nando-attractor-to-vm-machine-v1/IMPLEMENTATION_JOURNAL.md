@@ -903,3 +903,33 @@ completed events after deployment.
 Workspace-wide `cargo fmt --check` still reports pre-existing formatting drift
 in committed modules outside this change. It is not silently reformatted here;
 the changed module itself was formatted with the workspace's Rust 2024 edition.
+
+### 2026-07-19 - Stage 8g: bounded support-only reclassification
+
+The deployed direct-payload adapter cannot retroactively split the 496 opaque
+legacy blocker counters because rejected transitions were never retained in
+`LiveScalarShadowState`. The main self-training checkpoint does retain bounded
+teacher reservoirs with parity cases. Strategy version `69` therefore rebuilds
+the live scalar shadow from those reservoirs exactly once:
+
+```text
+bounded teacher pools + retained parity cases
+-> source-neutral extraction v69
+-> historical support only
+-> no reconstructed frozen future
+-> preserved teacher/student state
+```
+
+This is not a history scan and does not read the multi-gigabyte ledgers. The
+existing migration path caps one parity signature at 32 cases and preserves the
+already learned V2 state after rebuilding bounded Wave buckets.
+
+Focused receipts:
+
+```text
+old migration fixture exposed stale expected bound 40       FAIL 14.06 s
+fixture aligned with current bounded contract 32/32
+support-only migration and parity preservation              PASS 14.24 s
+response-actor all-target compile                           PASS  7.44 s
+changed Rust module rustfmt (edition 2024)                   PASS  0.42 s
+```

@@ -27,7 +27,10 @@ use crate::{
 use crate::online_subcenter::OnlineSubcenterDiscovery;
 
 const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 68;
+// Version 69 replays only bounded teacher reservoirs so direct provider
+// payloads receive the same source-neutral extraction as new live events.
+// Historical rows remain support-only; frozen future is never reconstructed.
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 69;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -4799,7 +4802,9 @@ mod tests {
         let parity_before = parity_before_report
             .runtime_parity_cases_total
             .saturating_add(parity_before_report.replay_support_parity_cases_total);
-        assert_eq!(parity_before, 40);
+        // One signature retains at most 32 bounded parity cases; migration
+        // must preserve that complete retained set without inventing future.
+        assert_eq!(parity_before, 32);
         checkpoint.bucket_strategy_version = 48;
 
         let mut restored =
