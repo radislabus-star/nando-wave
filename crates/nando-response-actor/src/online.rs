@@ -1,16 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::ops::Deref;
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use nando_core::wave::{
     PhaseCenterAtomEncoder, PhaseCenterOnlineMiner, PhaseCenterOnlineMinerConfig,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 
 use crate::teacher_join::action_schema_enriched_frame;
@@ -228,12 +230,12 @@ struct ResponseBucket {
     structural_family_id: u64,
     teacher_signature_sha256: String,
     teacher_action_symbol: String,
-    positives: VecDeque<RelationFrame>,
-    negatives: VecDeque<RelationFrame>,
+    positives: VecDeque<SharedRelationFrame>,
+    negatives: VecDeque<SharedRelationFrame>,
     #[serde(default)]
-    future_positives: VecDeque<RelationFrame>,
+    future_positives: VecDeque<SharedRelationFrame>,
     #[serde(default)]
-    future_negatives: VecDeque<RelationFrame>,
+    future_negatives: VecDeque<SharedRelationFrame>,
     positive_rows: usize,
     negative_rows: usize,
     positive_tokens: u64,
@@ -248,6 +250,51 @@ struct ResponseBucket {
     late_or_missing_time_rows: usize,
     #[serde(default)]
     exact_guard_atom_ids: Vec<u64>,
+}
+
+/// Shares immutable evidence between competing bucket reservoirs while
+/// preserving the existing checkpoint representation of a `RelationFrame`.
+#[derive(Clone, Debug)]
+struct SharedRelationFrame(Arc<RelationFrame>);
+
+impl SharedRelationFrame {
+    fn new(frame: RelationFrame) -> Self {
+        Self(Arc::new(frame))
+    }
+
+    fn materialize(&self) -> RelationFrame {
+        self.0.as_ref().clone()
+    }
+
+    fn as_frame(&self) -> &RelationFrame {
+        self.0.as_ref()
+    }
+}
+
+impl Deref for SharedRelationFrame {
+    type Target = RelationFrame;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl Serialize for SharedRelationFrame {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SharedRelationFrame {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        RelationFrame::deserialize(deserializer).map(Self::new)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1354,7 +1401,7 @@ impl OnlineResponseMiner {
                         .chain(bucket.future_positives.iter())
                         .chain(bucket.negatives.iter())
                         .chain(bucket.future_negatives.iter())
-                        .cloned()
+                        .map(SharedRelationFrame::materialize)
                 })
                 .collect::<Vec<_>>();
             replay.sort_by(|left, right| {
@@ -1408,6 +1455,7 @@ impl OnlineResponseMiner {
             );
             recompute_exact_guard(bucket);
         }
+        intern_bucket_evidence(&mut checkpoint.buckets)?;
         let mut keys = BTreeMap::new();
         for (bucket_id, bucket) in &checkpoint.buckets {
             let key = (
@@ -1645,6 +1693,12 @@ impl OnlineResponseMiner {
         }
         let family_bucket_ids = self.buckets.keys().copied().collect::<Vec<_>>();
 
+        // One immutable event can update hundreds of competing buckets. Keep
+        // at most one positive and one teacher-negative payload allocation.
+        let shared_positive = SharedRelationFrame::new(frame.clone());
+        let mut negative_frame = frame.clone();
+        negative_frame.verifier_label = Some(false);
+        let shared_negative = SharedRelationFrame::new(negative_frame);
         let mut retained_as_frozen_future = false;
         for bucket_id in family_bucket_ids {
             let is_target = target_bucket_ids.contains(&bucket_id);
@@ -1759,33 +1813,31 @@ impl OnlineResponseMiner {
                     .saturating_add(frame.estimated_input_tokens);
                 update_exact_guard(bucket, &frame);
                 if bucket.positives.len() < self.config.reservoir_rows {
-                    bucket.positives.push_back(frame.clone());
+                    bucket.positives.push_back(shared_positive.clone());
                     bucket.support_watermark_event_time_unix_nanos = bucket
                         .support_watermark_event_time_unix_nanos
                         .max(frame.observed_at_unix_nanos);
                 } else if score_for_bucket {
                     push_session_diverse_future(
                         &mut bucket.future_positives,
-                        frame.clone(),
+                        shared_positive.clone(),
                         MAX_FROZEN_FUTURE_ROWS_PER_BUCKET,
                     );
                     retained_as_frozen_future = true;
                 }
                 update_cardinality_bounds(bucket, &frame);
             } else {
-                let mut negative = frame.clone();
-                negative.verifier_label = Some(false);
                 let bucket = self.buckets.get_mut(&bucket_id).expect("bucket exists");
                 bucket.negative_rows = bucket.negative_rows.saturating_add(1);
                 bucket.negative_tokens = bucket
                     .negative_tokens
                     .saturating_add(frame.estimated_input_tokens);
                 if score_for_bucket {
-                    push_bounded(&mut bucket.future_negatives, negative, 8);
+                    push_bounded(&mut bucket.future_negatives, shared_negative.clone(), 8);
                 } else {
                     push_bounded(
                         &mut bucket.negatives,
-                        negative,
+                        shared_negative.clone(),
                         self.config.reservoir_rows.min(8),
                     );
                 }
@@ -1811,7 +1863,7 @@ impl OnlineResponseMiner {
             .buckets
             .values()
             .flat_map(|bucket| bucket.future_positives.iter())
-            .map(canonical_runtime_parity_key)
+            .map(|frame| canonical_runtime_parity_key(frame.as_frame()))
             .collect::<BTreeSet<_>>();
         self.future_runtime_parity_cases
             .retain(|key, _| retained.contains(key));
@@ -1842,7 +1894,11 @@ impl OnlineResponseMiner {
             // synthesized from teacher-positive executions and independently
             // verified; a negative with the same action shape is not evidence
             // that the actor bytecode itself is wrong.
-            let support = bucket.positives.iter().cloned().collect::<Vec<_>>();
+            let support = bucket
+                .positives
+                .iter()
+                .map(SharedRelationFrame::materialize)
+                .collect::<Vec<_>>();
             let synthesis = synthesize_response_operator(&support);
             let wave_bucket = self.wave.bucket(*bucket_id);
             let frozen_future_sessions = bucket
@@ -1855,7 +1911,7 @@ impl OnlineResponseMiner {
                 .positives
                 .iter()
                 .chain(bucket.future_positives.iter())
-                .filter_map(crate::relation_frame_structural_family_id)
+                .filter_map(|frame| crate::relation_frame_structural_family_id(frame.as_frame()))
                 .collect::<BTreeSet<_>>()
                 .len();
             let frozen_future_program_mismatches = synthesis.as_ref().map_or(0, |operator| {
@@ -2211,12 +2267,13 @@ impl OnlineResponseMiner {
                 .negatives
                 .iter()
                 .chain(bucket.future_negatives.iter())
-                .cloned()
+                .map(SharedRelationFrame::materialize)
                 .collect::<Vec<_>>();
             let all_frames = bucket
                 .positives
                 .iter()
                 .chain(bucket.future_positives.iter())
+                .map(SharedRelationFrame::as_frame)
                 .collect::<Vec<_>>();
             let mut parity_cases_by_frame = self
                 .self_training_v2
@@ -2433,9 +2490,21 @@ impl OnlineResponseMiner {
                 structural_family_id,
                 teacher_signature_sha256: cohort.winner.teacher_signature_sha256.clone(),
                 teacher_action_symbol: cohort.winner.action_symbol.clone(),
-                positives: support.iter().cloned().collect(),
-                negatives: admission_negatives.iter().cloned().collect(),
-                future_positives: future.iter().cloned().collect(),
+                positives: support
+                    .iter()
+                    .cloned()
+                    .map(SharedRelationFrame::new)
+                    .collect(),
+                negatives: admission_negatives
+                    .iter()
+                    .cloned()
+                    .map(SharedRelationFrame::new)
+                    .collect(),
+                future_positives: future
+                    .iter()
+                    .cloned()
+                    .map(SharedRelationFrame::new)
+                    .collect(),
                 future_negatives: VecDeque::new(),
                 positive_rows: usize::try_from(cohort.pool.positive_rows).unwrap_or(usize::MAX),
                 negative_rows: admission_negatives.len(),
@@ -3088,6 +3157,33 @@ fn push_bounded<T>(rows: &mut VecDeque<T>, row: T, limit: usize) {
     rows.push_back(row);
 }
 
+fn intern_bucket_evidence(buckets: &mut BTreeMap<u32, ResponseBucket>) -> Result<(), String> {
+    let mut arena = BTreeMap::<String, (String, SharedRelationFrame)>::new();
+    for bucket in buckets.values_mut() {
+        for rows in [
+            &mut bucket.positives,
+            &mut bucket.negatives,
+            &mut bucket.future_positives,
+            &mut bucket.future_negatives,
+        ] {
+            for frame in rows {
+                let frame_id = frame.frame_id_sha256.clone();
+                let digest = crate::relation_frame_learning_digest(frame.as_frame())
+                    .map_err(|error| format!("online_frame_digest:{error}"))?;
+                if let Some((known_digest, shared)) = arena.get(&frame_id) {
+                    if known_digest != &digest {
+                        return Err("online_checkpoint_frame_id_content_conflict".to_owned());
+                    }
+                    *frame = shared.clone();
+                } else {
+                    arena.insert(frame_id, (digest, frame.clone()));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn canonical_runtime_parity_key(frame: &RelationFrame) -> String {
     let digest = Sha256::digest(
         serde_json::to_vec(&(
@@ -3102,8 +3198,8 @@ fn canonical_runtime_parity_key(frame: &RelationFrame) -> String {
 }
 
 fn push_session_diverse_future(
-    rows: &mut VecDeque<RelationFrame>,
-    row: RelationFrame,
+    rows: &mut VecDeque<SharedRelationFrame>,
+    row: SharedRelationFrame,
     limit: usize,
 ) {
     if limit == 0 {
@@ -3132,7 +3228,7 @@ fn push_session_diverse_future(
     rows.push_back(row);
 }
 
-fn trim_session_diverse_future(rows: &mut VecDeque<RelationFrame>, limit: usize) {
+fn trim_session_diverse_future(rows: &mut VecDeque<SharedRelationFrame>, limit: usize) {
     if rows.len() <= limit {
         return;
     }
@@ -3151,7 +3247,7 @@ fn online_admission_precheck(
         .negatives
         .iter()
         .chain(bucket.future_negatives.iter())
-        .cloned()
+        .map(SharedRelationFrame::materialize)
         .collect::<Vec<_>>();
     let (support, mut frozen_future, required_routing_atom_ids) =
         clean_admission_partition(bucket, &negatives);
@@ -3270,7 +3366,7 @@ fn clean_admission_partition_for_ids(
         .filter(|frame| {
             eligible_ids.is_none_or(|eligible| eligible.contains(&frame.frame_id_sha256))
         })
-        .cloned()
+        .map(SharedRelationFrame::materialize)
         .collect::<Vec<_>>();
     positives.sort_by(|left, right| {
         left.observed_at_unix_nanos
@@ -3964,9 +4060,17 @@ mod tests {
             structural_family_id: 1,
             teacher_signature_sha256: "d".repeat(64),
             teacher_action_symbol: "function:write_stdin".to_owned(),
-            positives: support.iter().cloned().collect(),
-            negatives: VecDeque::from([negative.clone()]),
-            future_positives: future.iter().cloned().collect(),
+            positives: support
+                .iter()
+                .cloned()
+                .map(SharedRelationFrame::new)
+                .collect(),
+            negatives: VecDeque::from([SharedRelationFrame::new(negative.clone())]),
+            future_positives: future
+                .iter()
+                .cloned()
+                .map(SharedRelationFrame::new)
+                .collect(),
             future_negatives: VecDeque::new(),
             positive_rows: 64,
             negative_rows: 1,
@@ -4432,12 +4536,12 @@ mod tests {
         for index in 0..32 {
             let mut row = frame(index, "write_stdin", true);
             row.session_id_sha256 = "a".repeat(64);
-            push_session_diverse_future(&mut rows, row, 32);
+            push_session_diverse_future(&mut rows, SharedRelationFrame::new(row), 32);
         }
         for (index, session) in ['b', 'c'].into_iter().enumerate() {
             let mut row = frame(100 + index, "write_stdin", true);
             row.session_id_sha256 = session.to_string().repeat(64);
-            push_session_diverse_future(&mut rows, row, 32);
+            push_session_diverse_future(&mut rows, SharedRelationFrame::new(row), 32);
         }
 
         assert_eq!(rows.len(), 32);
@@ -4956,6 +5060,7 @@ mod tests {
     fn restored_future_reservoir_is_compacted_to_authority_bound() {
         let mut rows = (0..128)
             .map(|index| frame(index, "wait", true))
+            .map(SharedRelationFrame::new)
             .collect::<VecDeque<_>>();
 
         trim_session_diverse_future(&mut rows, MAX_FROZEN_FUTURE_ROWS_PER_BUCKET);
@@ -4967,6 +5072,56 @@ mod tests {
                 .collect::<BTreeSet<_>>()
                 .len(),
             4
+        );
+    }
+
+    #[test]
+    fn restored_bucket_evidence_is_interned_and_conflicts_fail_closed() {
+        fn bucket(id: u64, evidence: RelationFrame) -> ResponseBucket {
+            ResponseBucket {
+                structural_family_id: id,
+                teacher_signature_sha256: format!("{id:064x}"),
+                teacher_action_symbol: "function:wait".to_owned(),
+                positives: VecDeque::from([SharedRelationFrame::new(evidence)]),
+                negatives: VecDeque::new(),
+                future_positives: VecDeque::new(),
+                future_negatives: VecDeque::new(),
+                positive_rows: 1,
+                negative_rows: 0,
+                positive_tokens: 1,
+                negative_tokens: 0,
+                first_false_accept_frame_id: None,
+                cardinality_guard_rejects: 0,
+                positive_cardinality_bounds: BTreeMap::new(),
+                positive_cardinality_signatures: BTreeSet::new(),
+                support_watermark_event_time_unix_nanos: 1,
+                late_or_missing_time_rows: 0,
+                exact_guard_atom_ids: Vec::new(),
+            }
+        }
+
+        let evidence = frame(1, "wait", true);
+        let mut buckets = BTreeMap::from([
+            (1, bucket(1, evidence.clone())),
+            (2, bucket(2, evidence.clone())),
+        ]);
+        intern_bucket_evidence(&mut buckets).expect("equal evidence interns");
+        assert!(Arc::ptr_eq(
+            &buckets[&1].positives[0].0,
+            &buckets[&2].positives[0].0,
+        ));
+
+        let mut conflicting = evidence;
+        conflicting.atoms.push(RelationAtom::ToolKind {
+            value: "conflicting-tool".to_owned(),
+        });
+        let mut conflict_buckets = BTreeMap::from([
+            (1, bucket(1, buckets[&1].positives[0].materialize())),
+            (2, bucket(2, conflicting)),
+        ]);
+        assert_eq!(
+            intern_bucket_evidence(&mut conflict_buckets),
+            Err("online_checkpoint_frame_id_content_conflict".to_owned())
         );
     }
 }

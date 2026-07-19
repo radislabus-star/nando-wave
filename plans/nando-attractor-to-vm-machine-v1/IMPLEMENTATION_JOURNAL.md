@@ -729,3 +729,82 @@ rustfmt --check                                        PASS 2.80 s
 The VM regression exposed an invalid legacy fixture in which two independent
 transforms wrote the same canonical output role. The production invariant was
 kept fail-closed; the fixture now assigns one output role per topological step.
+
+Exact source graph and pre-deployment runtime baseline:
+
+```text
+code commit                                             44f515b
+remote Graphify update                                  PASS 22.83 s
+graph                                                   24,310 nodes / 57,384 edges
+communities                                             1,070
+graph built_at_commit                                   44f515b786...
+hot serving                                             RUNNING
+hot serving RSS                                         79.7 MiB
+cold learner                                            OFF
+previous deployed serving SHA-256                       96d3ae356e8f...
+```
+
+Production wiring inspection confirmed that `OnlineResponseMiner` already
+feeds completed transitions into `LiveScalarShadowState`, checkpoints the
+state, exposes crystallized admission candidates, and that transition serving
+consumes those candidates. The next cut is therefore release/deployment and
+organic live evidence, not another bridge abstraction.
+
+## 2026-07-19 - Stage 8e Plan: Shared Evidence Arena
+
+Post-deployment cold learner measurements:
+
+```text
+checkpoint restore                                       3 s
+rows / buckets                                           15,002 / 34 hot pools
+reported miner warm state                                5.1 MiB
+process RSS after restore                                396.7 MiB
+process RSS after allocator purge                        257.0 MiB
+idle CPU                                                 0.26 CPU-s / 10 s
+checkpoint write                                         2.54 s
+checkpoint bytes                                         80 MiB
+```
+
+The large report-level `negative_rows` value is a cumulative counter, not a
+retained-row count. The actual ownership defect is repeated full
+`RelationFrame` allocation across bounded bucket reservoirs. With 262 restored
+buckets, each bucket may retain 32 support positives, 8 support negatives, 32
+future positives, and 8 future negatives. Checkpoint restore currently creates
+independent allocations for equal frames and performs no interning.
+
+The bounded repair keeps the existing CBOR shape and admission semantics:
+
+```text
+one live RelationFrame
+-> SharedRelationFrame(Arc<RelationFrame>)
+-> cheap clones across bucket reservoirs
+
+checkpoint decode
+-> validate frame_id + learning digest
+-> deterministic interning across all bucket reservoirs
+-> equal evidence shares one allocation
+
+synthesis/admission
+-> materialize owned RelationFrame only for the active cohort
+```
+
+The first gate is behavioral parity plus a measured cold restart RSS reduction.
+Checkpoint arena encoding is a later step; transparent serde deliberately keeps
+the current schema readable during this cut.
+
+Stage 8e code receipts before deployment:
+
+```text
+response-actor library check                            PASS 6.25 s
+response-actor all-targets check                        PASS 7.43 s
+bounded reservoir behavior                              PASS 15.98 s
+checkpoint CBOR roundtrip                               PASS 0.45 s
+future reservoir restore compaction                     PASS 0.41 s
+restore interning + conflict fail-closed                PASS 13.84 s
+final fmt + all-targets                                 PASS 10.96 s
+```
+
+The interning digest intentionally excludes economics-only metadata such as
+estimated token count. A test first exposed this distinction; the final
+conflict proof mutates a structural relation atom under the same frame ID and
+is rejected.
