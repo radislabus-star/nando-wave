@@ -74,6 +74,7 @@ const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
 const MAX_NEW_ADAPTERS_PER_OBSERVATION: usize = 8;
 const MAX_UNFROZEN_ROUTE_BUCKETS: usize = 8;
 const MAX_UNFROZEN_ROUTE_PROGRAMS: usize = 8;
+const MAX_TARGETED_REHYDRATION_HINTS: usize = 128;
 const MAX_ACTIVE_WITNESS_ROUNDS: u8 = 4;
 const MAX_EXACT_RECEIPT_MIGRATION_SEEDS_PER_BUCKET: usize = 8;
 const MAX_STRUCTURAL_RESYNTHESIS_SEEDS_PER_BUCKET: usize = 2;
@@ -6706,7 +6707,7 @@ fn bucket_status(
                                 .is_some_and(|candidate| candidate == law_key)
                         })
                 })
-                .take(16)
+                .take(MAX_TARGETED_REHYDRATION_HINTS)
                 .map(|receipt| OnlineCollectionRehydrationHint {
                     evidence_graph_sha256: receipt.evidence_graph_sha256.clone(),
                     session_id_sha256: receipt.session_id_sha256.clone(),
@@ -6721,7 +6722,7 @@ fn bucket_status(
         .and_then(|law_key| abstract_law_sessions.remove(&law_key))
         .unwrap_or_default()
         .into_iter()
-        .take(16)
+        .take(MAX_TARGETED_REHYDRATION_HINTS)
         .collect();
     // Matched digests are durable exact teacher proofs. Runtime examples are
     // tracked separately because they are optional synthesis working memory.
