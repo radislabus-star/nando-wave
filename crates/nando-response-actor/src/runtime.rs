@@ -240,6 +240,13 @@ fn actor_adapter_wave_margin(
     route: &ResponseAdapterWaveRoute,
 ) -> Option<i64> {
     let atoms = actor_adapter_phase_atom_ids(program, provider_payload);
+    adapter_wave_margin_from_atoms(&atoms, route)
+}
+
+pub(crate) fn adapter_wave_margin_from_atoms(
+    atoms: &[u64],
+    route: &ResponseAdapterWaveRoute,
+) -> Option<i64> {
     if atoms.is_empty() {
         return None;
     }
@@ -257,7 +264,7 @@ fn actor_adapter_wave_margin(
     {
         return None;
     }
-    let query = phase_vector_from_atom_ids(atoms, usize::from(route.cells));
+    let query = phase_vector_from_atom_ids(atoms.iter().copied(), usize::from(route.cells));
     let score = |center: &[i32]| {
         phase_margin_to_micro(
             query

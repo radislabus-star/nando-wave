@@ -15,7 +15,6 @@ use nando_core::wave::{
 use crate::collection_synthesis::{
     canonical_direct_response_program, enumerate_source_neutral_response_programs_with_coverage,
     enumerate_source_neutral_structural_response_programs, response_law_key,
-    response_program_authority_diagnostic,
 };
 use crate::{
     AstProgramKind, CollectionSynthesisExample, DurableRuntimeParityReceipt,
@@ -68,6 +67,7 @@ const ONLINE_COLLECTION_POOLING_STRATEGY_V31: u32 = 31;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V32: u32 = 32;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V33: u32 = 33;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V34: u32 = 34;
+const ONLINE_COLLECTION_POOLING_STRATEGY_V35: u32 = 35;
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V2: &[u8; 4] = b"NCO2";
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NCO3";
 const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
@@ -75,6 +75,7 @@ const MAX_NEW_ADAPTERS_PER_OBSERVATION: usize = 8;
 const MAX_UNFROZEN_ROUTE_BUCKETS: usize = 8;
 const MAX_UNFROZEN_ROUTE_PROGRAMS: usize = 8;
 const MAX_TARGETED_REHYDRATION_HINTS: usize = 128;
+const MAX_DURABLE_ADAPTER_PHASE_ATOMS: usize = 64;
 const MAX_ACTIVE_WITNESS_ROUNDS: u8 = 4;
 const MAX_EXACT_RECEIPT_MIGRATION_SEEDS_PER_BUCKET: usize = 8;
 const MAX_STRUCTURAL_RESYNTHESIS_SEEDS_PER_BUCKET: usize = 2;
@@ -259,6 +260,8 @@ pub struct OnlineCollectionBucketStatus {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OnlineCollectionStatus {
     pub pooling_strategy_version: u32,
+    pub durable_adapter_phase_evidence_rows: usize,
+    pub durable_adapter_phase_pairs: usize,
     pub structural_resynthesis_pending_buckets: usize,
     pub structural_resynthesis_completed_buckets_total: u64,
     pub structural_resynthesis_failed_buckets_total: u64,
@@ -372,6 +375,8 @@ struct OnlineCollectionBucket {
     future: Vec<OnlineCollectionReceipt>,
     #[serde(default)]
     runtime_examples: BTreeMap<String, CollectionSynthesisExample>,
+    #[serde(default)]
+    durable_adapter_phase_atoms: BTreeMap<String, BTreeMap<String, Vec<u64>>>,
     #[serde(default)]
     durable_runtime_parity_receipts: BTreeMap<String, DurableRuntimeParityReceipt>,
     frozen_program_sha256: Option<String>,
@@ -539,7 +544,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V34,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V35,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -866,6 +871,21 @@ impl OnlineCollectionMiner {
         if exact_subcenter_dedup_migrated {
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V34;
         }
+        let durable_adapter_phase_evidence_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V35;
+        if durable_adapter_phase_evidence_migrated {
+            // Hash-only V34 checkpoints cannot manufacture actor phase atoms.
+            // Queue retained support for bounded replay; only matching real
+            // evidence may populate the compact V35 proof field.
+            checkpoint.structural_resynthesis_pending_bucket_ids.extend(
+                checkpoint.buckets.iter().filter_map(|bucket| {
+                    (bucket.frozen_program_sha256.is_none()
+                        && bucket.support.len() >= checkpoint.config.support_rows)
+                        .then_some(bucket.bucket_id.clone())
+                }),
+            );
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V35;
+        }
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -1030,6 +1050,7 @@ impl OnlineCollectionMiner {
                 &observation,
                 self.checkpoint.config.max_receipts_per_bucket,
             );
+            refresh_durable_adapter_phase_atoms(&mut self.checkpoint.buckets[index]);
             self.freeze_or_split(index)?;
         }
         Ok(())
@@ -1660,7 +1681,14 @@ impl OnlineCollectionMiner {
         let mut support_receipts = BTreeMap::new();
         let mut future_receipts = BTreeMap::new();
         let mut runtime_parity_receipts = BTreeSet::new();
+        let mut durable_adapter_phase_evidence = BTreeSet::new();
+        let mut durable_adapter_phase_pairs = 0_usize;
         for bucket in &self.checkpoint.buckets {
+            for (evidence_id, atoms_by_program) in &bucket.durable_adapter_phase_atoms {
+                durable_adapter_phase_evidence.insert(evidence_id.clone());
+                durable_adapter_phase_pairs =
+                    durable_adapter_phase_pairs.saturating_add(atoms_by_program.len());
+            }
             for receipt in &bucket.support {
                 support_receipts
                     .entry(receipt.evidence_graph_sha256.clone())
@@ -1722,6 +1750,8 @@ impl OnlineCollectionMiner {
             .saturating_add(legacy_unclassified_observations_total);
         OnlineCollectionStatus {
             pooling_strategy_version: self.checkpoint.pooling_strategy_version,
+            durable_adapter_phase_evidence_rows: durable_adapter_phase_evidence.len(),
+            durable_adapter_phase_pairs,
             structural_resynthesis_pending_buckets: self
                 .checkpoint
                 .structural_resynthesis_pending_bucket_ids
@@ -2373,6 +2403,7 @@ impl OnlineCollectionMiner {
                 observation.evidence_graph_sha256.clone(),
                 observation.example.clone(),
             )]),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -2381,6 +2412,9 @@ impl OnlineCollectionMiner {
             learned_anti_atom_ids: BTreeSet::new(),
             wrong_accepts: 0,
         });
+        if let Some(bucket) = self.checkpoint.buckets.last_mut() {
+            refresh_durable_adapter_phase_atoms(bucket);
+        }
         Ok(())
     }
 
@@ -2480,6 +2514,7 @@ impl OnlineCollectionMiner {
             observation,
             self.checkpoint.config.max_receipts_per_bucket,
         );
+        refresh_durable_adapter_phase_atoms(bucket);
         self.normalize_bucket_receipts(index);
         let support_rows = self.checkpoint.buckets[index].support.len();
         if refresh_proof && support_rows >= self.checkpoint.config.support_rows {
@@ -2884,6 +2919,7 @@ impl OnlineCollectionMiner {
         let Some(bucket) = self.checkpoint.buckets.get_mut(index) else {
             return Ok(());
         };
+        refresh_durable_adapter_phase_atoms(bucket);
         if bucket.support.len() >= self.checkpoint.config.support_rows
             && bucket.frozen_program_sha256.is_none()
             && bucket.support.iter().all(|receipt| receipt.verifier_pass)
@@ -2925,6 +2961,7 @@ impl OnlineCollectionMiner {
                 .max();
             bucket.support_manifest_sha256 = Some(collection_support_manifest_digest(bucket)?);
             bucket.runtime_examples.clear();
+            bucket.durable_adapter_phase_atoms.clear();
         }
         Ok(())
     }
@@ -3070,6 +3107,18 @@ impl OnlineCollectionMiner {
         let mut durable_checkpoint = self.checkpoint.clone();
         for bucket in &mut durable_checkpoint.buckets {
             bucket.runtime_examples.clear();
+            if bucket.frozen_program_sha256.is_some() {
+                bucket.durable_adapter_phase_atoms.clear();
+            } else {
+                let support_refs = bucket
+                    .support
+                    .iter()
+                    .map(|receipt| receipt.evidence_graph_sha256.as_str())
+                    .collect::<BTreeSet<_>>();
+                bucket
+                    .durable_adapter_phase_atoms
+                    .retain(|evidence, _| support_refs.contains(evidence.as_str()));
+            }
         }
         let payload = serde_cbor::to_vec(&durable_checkpoint)
             .map_err(|error| format!("online_collection_checkpoint_encode:{error}"))?;
@@ -3412,6 +3461,7 @@ fn migrate_collection_renderer_consensus_pools(
             support: Vec::new(),
             future: Vec::new(),
             runtime_examples,
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -3799,6 +3849,63 @@ fn trim_bucket_runtime_examples(bucket: &mut OnlineCollectionBucket, limit: usiz
     }
 }
 
+fn refresh_durable_adapter_phase_atoms(bucket: &mut OnlineCollectionBucket) {
+    let support_refs = bucket
+        .support
+        .iter()
+        .map(|receipt| receipt.evidence_graph_sha256.as_str())
+        .collect::<BTreeSet<_>>();
+    bucket
+        .durable_adapter_phase_atoms
+        .retain(|evidence, _| support_refs.contains(evidence.as_str()));
+    for atoms_by_program in bucket.durable_adapter_phase_atoms.values_mut() {
+        atoms_by_program.retain(|program_sha256, _| bucket.programs.contains_key(program_sha256));
+    }
+    for (evidence, example) in &bucket.runtime_examples {
+        if !support_refs.contains(evidence.as_str()) {
+            continue;
+        }
+        let atoms_by_program = bucket
+            .durable_adapter_phase_atoms
+            .entry(evidence.clone())
+            .or_default();
+        for (program_sha256, program) in &bucket.programs {
+            let mut atoms =
+                crate::runtime::actor_adapter_phase_atom_ids(program, &example.provider_payload);
+            atoms.sort_unstable();
+            atoms.dedup();
+            if atoms.is_empty() || atoms.len() > MAX_DURABLE_ADAPTER_PHASE_ATOMS {
+                atoms_by_program.remove(program_sha256);
+            } else {
+                atoms_by_program.insert(program_sha256.clone(), atoms);
+            }
+        }
+    }
+    bucket
+        .durable_adapter_phase_atoms
+        .retain(|_, atoms_by_program| !atoms_by_program.is_empty());
+}
+
+fn durable_adapter_phase_subset(
+    bucket: &OnlineCollectionBucket,
+    evidence_ids: &BTreeSet<String>,
+    program_ids: &BTreeSet<String>,
+) -> BTreeMap<String, BTreeMap<String, Vec<u64>>> {
+    bucket
+        .durable_adapter_phase_atoms
+        .iter()
+        .filter(|(evidence_id, _)| evidence_ids.contains(*evidence_id))
+        .filter_map(|(evidence_id, atoms_by_program)| {
+            let retained = atoms_by_program
+                .iter()
+                .filter(|(program_sha256, _)| program_ids.contains(*program_sha256))
+                .map(|(program_sha256, atoms)| (program_sha256.clone(), atoms.clone()))
+                .collect::<BTreeMap<_, _>>();
+            (!retained.is_empty()).then(|| (evidence_id.clone(), retained))
+        })
+        .collect()
+}
+
 fn best_bucket_law_key(bucket: &OnlineCollectionBucket) -> Option<Vec<u8>> {
     let digest_law_keys = bucket
         .programs
@@ -4097,6 +4204,11 @@ fn support_program_subcenters(
                     .filter(|(evidence_id, _)| support_ids.contains(*evidence_id))
                     .map(|(evidence_id, example)| (evidence_id.clone(), example.clone()))
                     .collect(),
+                durable_adapter_phase_atoms: durable_adapter_phase_subset(
+                    bucket,
+                    &support_ids,
+                    &BTreeSet::from([program_sha256.clone()]),
+                ),
                 durable_runtime_parity_receipts: BTreeMap::new(),
                 frozen_program_sha256: None,
                 support_watermark_event_time_unix_nanos: None,
@@ -4239,6 +4351,11 @@ fn support_law_subcenters(
                     .filter(|(evidence_id, _)| support_ids.contains(*evidence_id))
                     .map(|(evidence_id, example)| (evidence_id.clone(), example.clone()))
                     .collect(),
+                durable_adapter_phase_atoms: durable_adapter_phase_subset(
+                    bucket,
+                    &support_ids,
+                    &selected_program_ids,
+                ),
                 durable_runtime_parity_receipts: BTreeMap::new(),
                 frozen_program_sha256: None,
                 support_watermark_event_time_unix_nanos: None,
@@ -4379,6 +4496,11 @@ fn support_subset_bucket(
             .filter(|(evidence_id, _)| support_ids.contains(*evidence_id))
             .map(|(evidence_id, example)| (evidence_id.clone(), example.clone()))
             .collect(),
+        durable_adapter_phase_atoms: durable_adapter_phase_subset(
+            bucket,
+            &support_ids,
+            &bucket.programs.keys().cloned().collect(),
+        ),
         durable_runtime_parity_receipts: BTreeMap::new(),
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
@@ -4655,27 +4777,39 @@ fn active_witness_decision(
         &class_commitment_sha256,
     ))
     .map_err(str::to_owned)?;
+    let support_ids = support
+        .iter()
+        .map(|receipt| receipt.evidence_graph_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    let survivor_ids = survivors.keys().cloned().collect::<BTreeSet<_>>();
+    let mut successor = OnlineCollectionBucket {
+        bucket_id: successor_id,
+        archetype_id: successor_archetype_id,
+        programs: survivors,
+        common_request_atom_ids,
+        support,
+        future: Vec::new(),
+        runtime_examples: BTreeMap::from([(
+            observation.evidence_graph_sha256.clone(),
+            observation.example.clone(),
+        )]),
+        durable_adapter_phase_atoms: durable_adapter_phase_subset(
+            bucket,
+            &support_ids,
+            &survivor_ids,
+        ),
+        durable_runtime_parity_receipts: BTreeMap::new(),
+        frozen_program_sha256: None,
+        support_watermark_event_time_unix_nanos: None,
+        support_manifest_sha256: None,
+        rejected_program_sha256: BTreeSet::new(),
+        learned_anti_atom_ids: BTreeSet::new(),
+        wrong_accepts: 0,
+    };
+    refresh_durable_adapter_phase_atoms(&mut successor);
     Ok(ActiveWitnessDecision::Successor {
-        resolved: survivors.len() == 1,
-        bucket: OnlineCollectionBucket {
-            bucket_id: successor_id,
-            archetype_id: successor_archetype_id,
-            programs: survivors,
-            common_request_atom_ids,
-            support,
-            future: Vec::new(),
-            runtime_examples: BTreeMap::from([(
-                observation.evidence_graph_sha256.clone(),
-                observation.example.clone(),
-            )]),
-            durable_runtime_parity_receipts: BTreeMap::new(),
-            frozen_program_sha256: None,
-            support_watermark_event_time_unix_nanos: None,
-            support_manifest_sha256: None,
-            rejected_program_sha256: BTreeSet::new(),
-            learned_anti_atom_ids: BTreeSet::new(),
-            wrong_accepts: 0,
-        },
+        resolved: successor.programs.len() == 1,
+        bucket: successor,
     })
 }
 
@@ -4780,6 +4914,11 @@ fn counterexample_subcenters(
                 .filter(|(id, _)| support_ids.contains(*id))
                 .map(|(id, example)| (id.clone(), example.clone()))
                 .collect(),
+            durable_adapter_phase_atoms: durable_adapter_phase_subset(
+                bucket,
+                &support_ids,
+                &BTreeSet::from([program_sha256.to_owned()]),
+            ),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -4797,7 +4936,7 @@ fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V34
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V35
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -5525,16 +5664,7 @@ fn request_atoms_for_example(example: &CollectionSynthesisExample) -> Option<BTr
 fn phase_ranked_semantic_adapters(bucket: &OnlineCollectionBucket) -> Option<ResponseProgram> {
     const CELLS: usize = 16;
     const MAX_VARIANTS: usize = crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS;
-    let rows = bucket
-        .support
-        .iter()
-        .map(|receipt| {
-            bucket
-                .runtime_examples
-                .get(&receipt.evidence_graph_sha256)
-                .map(|example| (receipt, example))
-        })
-        .collect::<Option<Vec<_>>>()?;
+    let rows = bucket.support.iter().collect::<Vec<_>>();
     if rows.len() < 4 {
         return None;
     }
@@ -5543,7 +5673,7 @@ fn phase_ranked_semantic_adapters(bucket: &OnlineCollectionBucket) -> Option<Res
         return None;
     }
     let globally_proven = programs.iter().filter(|(_, (_, source_digests))| {
-        rows.iter().all(|(receipt, _)| {
+        rows.iter().all(|receipt| {
             receipt
                 .matched_program_sha256
                 .iter()
@@ -5558,22 +5688,24 @@ fn phase_ranked_semantic_adapters(bucket: &OnlineCollectionBucket) -> Option<Res
     let mut variants = Vec::new();
     let mut routes = Vec::new();
     for (_, (program, source_digests)) in programs {
+        let row_atoms = rows
+            .iter()
+            .map(|receipt| durable_adapter_atoms(bucket, receipt, &source_digests))
+            .collect::<Option<Vec<_>>>();
+        let Some(row_atoms) = row_atoms else {
+            continue;
+        };
         let mut positives = Vec::new();
         let mut negatives = Vec::new();
-        for (receipt, example) in &rows {
-            let atoms =
-                crate::runtime::actor_adapter_phase_atom_ids(&program, &example.provider_payload);
-            if atoms.is_empty() {
-                continue;
-            }
+        for (receipt, atoms) in rows.iter().zip(row_atoms) {
             if receipt
                 .matched_program_sha256
                 .iter()
                 .any(|matched| source_digests.contains(matched))
             {
-                positives.push(atoms);
+                positives.push(atoms.to_vec());
             } else {
-                negatives.push(atoms);
+                negatives.push(atoms.to_vec());
             }
         }
         if positives.is_empty() || negatives.is_empty() {
@@ -5617,6 +5749,20 @@ fn concrete_adapter_program_classes(
             .insert(source_digest.clone());
     }
     classes
+}
+
+fn durable_adapter_atoms<'a>(
+    bucket: &'a OnlineCollectionBucket,
+    receipt: &OnlineCollectionReceipt,
+    source_digests: &BTreeSet<String>,
+) -> Option<&'a [u64]> {
+    let atoms_by_program = bucket
+        .durable_adapter_phase_atoms
+        .get(&receipt.evidence_graph_sha256)?;
+    source_digests
+        .iter()
+        .find_map(|digest| atoms_by_program.get(digest))
+        .map(Vec::as_slice)
 }
 
 pub(crate) fn fit_adapter_wave_route(
@@ -5959,20 +6105,7 @@ struct AdapterWaveDiagnostic {
 fn adapter_wave_diagnostic(bucket: &OnlineCollectionBucket) -> AdapterWaveDiagnostic {
     const CELLS: usize = 16;
     let mut diagnostic = AdapterWaveDiagnostic::default();
-    let rows = bucket
-        .support
-        .iter()
-        .filter_map(|receipt| {
-            bucket
-                .runtime_examples
-                .get(&receipt.evidence_graph_sha256)
-                .map(|example| (receipt, example))
-        })
-        .collect::<Vec<_>>();
-    if rows.len() != bucket.support.len() {
-        diagnostic.blocker = "adapter_wave_missing_runtime_examples".to_owned();
-        return diagnostic;
-    }
+    let rows = bucket.support.iter().collect::<Vec<_>>();
     let programs = concrete_adapter_program_classes(bucket);
     diagnostic.programs_considered = programs.len();
     if !(2..=crate::program::MAX_UNIQUE_CONSENSUS_VARIANTS).contains(&programs.len()) {
@@ -5984,20 +6117,19 @@ fn adapter_wave_diagnostic(bucket: &OnlineCollectionBucket) -> AdapterWaveDiagno
     for (_, (program, source_digests)) in programs {
         let mut positives = Vec::new();
         let mut negatives = Vec::new();
-        for (receipt, example) in &rows {
-            let atoms =
-                crate::runtime::actor_adapter_phase_atom_ids(&program, &example.provider_payload);
-            if atoms.is_empty() {
-                continue;
-            }
+        for receipt in &rows {
+            let Some(atoms) = durable_adapter_atoms(bucket, receipt, &source_digests) else {
+                diagnostic.blocker = "adapter_wave_missing_durable_phase_atoms".to_owned();
+                return diagnostic;
+            };
             if receipt
                 .matched_program_sha256
                 .iter()
                 .any(|matched| source_digests.contains(matched))
             {
-                positives.push(atoms);
+                positives.push(atoms.to_vec());
             } else {
-                negatives.push(atoms);
+                negatives.push(atoms.to_vec());
             }
         }
         if positives.is_empty() || negatives.is_empty() {
@@ -6033,13 +6165,10 @@ fn adapter_wave_diagnostic(bucket: &OnlineCollectionBucket) -> AdapterWaveDiagno
         return diagnostic;
     }
     for receipt in &bucket.support {
-        let reason = bucket
-            .runtime_examples
-            .get(&receipt.evidence_graph_sha256)
-            .and_then(|example| candidate_authority_rejection_reason(&candidate, example));
-        let Some(reason) = reason else {
+        if durable_adapter_wave_proves_candidate(bucket, receipt, &candidate) {
             continue;
-        };
+        }
+        let reason = "adapter_wave_durable_authority_unproven".to_owned();
         if diagnostic.first_rejected_evidence_sha256.is_empty() {
             diagnostic.first_rejected_evidence_sha256 = receipt.evidence_graph_sha256.clone();
         }
@@ -6178,32 +6307,6 @@ fn consensus_diagnostic(
         best_law_subcenter_consensus,
         best_law_subcenter_freeze_blocker,
     }
-}
-
-fn candidate_authority_rejection_reason(
-    candidate: &ResponseProgram,
-    example: &CollectionSynthesisExample,
-) -> Option<String> {
-    if !response_program_authority_matches_example(candidate, example) {
-        return Some(format!(
-            "authority_mismatch:{}",
-            response_program_authority_diagnostic(candidate, example)
-        ));
-    }
-    let execution = execute_response(candidate, "", &example.provider_payload);
-    if execution.status != ResponseExecutionStatus::Executed {
-        return Some(format!("actor:{}", execution.reason));
-    }
-    let Some(response) = execution.response else {
-        return Some("actor_response_missing".to_owned());
-    };
-    let verifier = match source_neutral_verifier_for_program(candidate) {
-        Ok(verifier) => verifier,
-        Err(_) => return Some("verifier_build_failed".to_owned()),
-    };
-    verify_response_independently(&verifier, &example.provider_payload, &response)
-        .err()
-        .map(|error| format!("verifier:{}", error.0))
 }
 
 fn unguarded_unique_consensus_candidate(
@@ -6419,8 +6522,65 @@ fn candidate_authority_verified_on_support(
             // frozen CPU package must reproduce the complete teacher response.
             return independently_verified_teacher_match(candidate, example);
         }
-        receipt_proves_candidate_authority(receipt, candidate)
+        durable_adapter_wave_proves_candidate(bucket, receipt, candidate)
+            || receipt_proves_candidate_authority(receipt, candidate)
     })
+}
+
+fn durable_adapter_wave_proves_candidate(
+    bucket: &OnlineCollectionBucket,
+    receipt: &OnlineCollectionReceipt,
+    candidate: &ResponseProgram,
+) -> bool {
+    if !receipt.verifier_pass {
+        return false;
+    }
+    let crate::ResponseOperation::UniqueConsensus {
+        variants,
+        adapter_wave: Some(wave),
+    } = &candidate.operation
+    else {
+        return false;
+    };
+    if variants.len() != wave.routes.len() || variants.is_empty() {
+        return false;
+    }
+
+    // The compact checkpoint can prove a unique phase winner without retaining
+    // raw payload. Equal-margin routes remain unknown because output parity
+    // cannot be reconstructed from phase atoms alone.
+    let classes = concrete_adapter_program_classes(bucket);
+    let mut ranked = Vec::with_capacity(variants.len());
+    for (index, (variant, route)) in variants.iter().zip(&wave.routes).enumerate() {
+        let Ok(class_digest) = canonical_json_sha256(&variant.program) else {
+            return false;
+        };
+        let Some((_, source_digests)) = classes.get(&class_digest) else {
+            return false;
+        };
+        let Some(atoms) = durable_adapter_atoms(bucket, receipt, source_digests) else {
+            return false;
+        };
+        if let Some(margin) = crate::runtime::adapter_wave_margin_from_atoms(atoms, route) {
+            ranked.push((margin, index, source_digests));
+        }
+    }
+    ranked.sort_unstable_by(|left, right| right.0.cmp(&left.0).then_with(|| left.1.cmp(&right.1)));
+    let Some((best_margin, _, winner_digests)) = ranked.first() else {
+        return false;
+    };
+    if ranked
+        .iter()
+        .filter(|entry| entry.0 == *best_margin)
+        .count()
+        != 1
+    {
+        return false;
+    }
+    receipt
+        .matched_program_sha256
+        .iter()
+        .any(|matched| winner_digests.contains(matched))
 }
 
 fn receipt_proves_candidate_authority(
@@ -7121,6 +7281,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7255,6 +7416,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples,
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7372,6 +7534,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7472,6 +7635,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7510,7 +7674,7 @@ mod tests {
         let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
         assert_eq!(
             migrated.checkpoint.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert_eq!(migrated.status().frozen_buckets_total, 1);
         fs::remove_dir_all(root).expect("cleanup");
@@ -7565,6 +7729,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7607,7 +7772,7 @@ mod tests {
         let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v34");
         assert_eq!(
             migrated.checkpoint.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert_eq!(migrated.checkpoint.buckets.len(), 1);
         assert_eq!(migrated.checkpoint.buckets[0].bucket_id, "3".repeat(64));
@@ -7692,6 +7857,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples,
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7765,6 +7931,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7849,6 +8016,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples,
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -7988,6 +8156,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples,
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -8266,7 +8435,7 @@ mod tests {
                 )
             })
             .collect::<BTreeMap<_, _>>();
-        let bucket = OnlineCollectionBucket {
+        let mut bucket = OnlineCollectionBucket {
             bucket_id: "a".repeat(64),
             archetype_id: "project".to_owned(),
             programs,
@@ -8274,6 +8443,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples,
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -8282,6 +8452,9 @@ mod tests {
             learned_anti_atom_ids: BTreeSet::new(),
             wrong_accepts: 0,
         };
+        refresh_durable_adapter_phase_atoms(&mut bucket);
+        assert_eq!(bucket.durable_adapter_phase_atoms.len(), 4);
+        bucket.runtime_examples.clear();
         let candidate = phase_ranked_semantic_adapters(&bucket).expect("wave candidate");
         for future in [
             observation(5, "alpha", 105, 205),
@@ -8935,7 +9108,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert_eq!(status.frozen_buckets_total, 0);
         assert_eq!(status.future_receipts_unique_total, 0);
@@ -8999,6 +9172,7 @@ mod tests {
             support: Vec::new(),
             future: Vec::new(),
             runtime_examples: BTreeMap::from([(evidence_id, example.clone())]),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
@@ -9014,7 +9188,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
         assert_eq!(status.support_receipts_unique_total, 0);
@@ -9069,6 +9243,7 @@ mod tests {
             support: vec![receipt.clone()],
             future: vec![receipt],
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: Some(program_digest),
             support_watermark_event_time_unix_nanos: Some(1),
@@ -9084,7 +9259,7 @@ mod tests {
         let bucket = migrated.checkpoint.buckets.first().expect("bucket");
         assert_eq!(
             migrated.status().pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert!(bucket.rejected_program_sha256.contains(&historical_digest));
         assert!(bucket.learned_anti_atom_ids.is_empty());
@@ -9355,7 +9530,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert_eq!(status.observations_total, observations);
         assert_eq!(status.support_receipts_unique_total, support);
@@ -9455,7 +9630,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert_eq!(status.future_receipts_unique_total, 0);
         assert_eq!(status.wrong_accepts_total, 0);
@@ -9717,6 +9892,7 @@ mod tests {
             support,
             future: Vec::new(),
             runtime_examples: BTreeMap::new(),
+            durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
             frozen_program_sha256: Some(consensus_digest.clone()),
             support_watermark_event_time_unix_nanos: Some(4),
@@ -9917,7 +10093,7 @@ mod tests {
         let status = miner.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+            ONLINE_COLLECTION_POOLING_STRATEGY_V35
         );
         assert!(
             status
