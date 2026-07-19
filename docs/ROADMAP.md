@@ -1,5 +1,10 @@
 # Nando Wave Roadmap
 
+> **Historical roadmap.** Текущая авторитетная программа реализации:
+> [`../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md`](../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md).
+> Всё ниже сохранено как история ранних этапов и не определяет текущий порядок
+> работ или критерий завершения.
+
 Current roadmap overlay:
 
 ```text

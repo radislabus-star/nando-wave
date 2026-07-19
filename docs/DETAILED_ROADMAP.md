@@ -1,12 +1,17 @@
 # Nando Wave Detailed Roadmap
 
-Current detailed roadmap overlay:
+> **Historical detailed roadmap.** Текущий stage/gate-контракт находится в
+> [`../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md`](../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md).
+> Этот файл остаётся доказательной историей и не является authority для новых
+> изменений ядра.
+
+Historical detailed roadmap overlay:
 
 ```text
 docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
 ```
 
-Current P0:
+Historical P0 at the time:
 
 ```text
 automatic streaming process:

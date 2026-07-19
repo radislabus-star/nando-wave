@@ -1,12 +1,17 @@
 # Nando Wave Development Roadmap
 
-## Current Authoritative Contract
+> **Historical development roadmap.** Авторитетный текущий roadmap:
+> [`../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md`](../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md).
+> Старые shadow frontier и очередность ниже нельзя использовать как текущий
+> product status.
+
+## Historical Authoritative Contract At The Time
 
 ```text
 docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
 ```
 
-Current roadmap status:
+Historical roadmap status:
 
 ```text
 CPU10 shadow: crossed earlier.

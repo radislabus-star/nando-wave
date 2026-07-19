@@ -1,98 +1,123 @@
 # Nando Wave Goal
 
-Текущий практический goal синхронизирован здесь:
+Status: canonical project goal.
+
+Архитектурный смысл определяет [`../ARCHITECTURE_CANON.md`](../ARCHITECTURE_CANON.md).
+Порядок реализации определяет
+[`../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md`](../plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md).
+Старое содержимое этого файла относилось к ранней Cell32/Chat-0 лабораторной
+лестнице и больше не является текущей целью продукта.
+
+## Конечная Цель
+
+Построить стабильную потоковую Rust CPU-машину, которая превращает завершённый
+проверенный опыт в новые исполняемые программы без пересборки Rust-ядра:
 
 ```text
-docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
+LLM или реальный опыт обучает
+-> Wave открывает скрытый закон
+-> закон становится circuit-attractor
+-> Crystallizer компилирует его
+-> Operator VM исполняет
+-> independent Verifier устанавливает истину
+-> BackwardWave строит доказуемое поколение g+1
 ```
 
-Short current goal:
+Новый навык должен становиться структурными данными, компактным операторным
+полем и versioned bytecode, а не ручным классом, названием функции, шаблоном
+ответа или новой Rust-веткой.
+
+## Полный Продуктовый Контур
 
 ```text
-Build Nando Wave as a live self-tuning CPU operator layer:
-  stream -> safe atoms -> L4 opportunity selector -> L3 phase centers
-  -> hot runtime shadow/proof -> verifier-bound local accept later.
-
-Current best shadow frontier:
-  22.3177% calls saved
-  72.0541% tokens saved
-  false_accepts: 0
-
-Current boundary:
-  product local_accept is still disabled.
-  market-money claim is still blocked.
+Real traces
+-> relation fragments
+-> partial relation waves
+-> Dynamic Operator Field
+-> competing circuits
+-> cross-plane phase locking
+-> circuit-attractor
+-> grokking
+-> exact-memory cleanup
+-> Operator Crystallizer
+-> versioned VM bytecode
+-> immutable OperatorPackage
+-> Dynamic Registry
+-> Phase Router
+-> Role Grounder
+-> Operator VM
+-> independent Verifier
+-> EMIT | ABSTAIN
+-> VerifiedDeltaReceipt
+-> BackwardWave
+-> candidate generation g+1
 ```
 
-Этот документ - главный goal проекта. Он нужен, чтобы Nando Wave не расползался
-в бесконечные красивые эксперименты и не превращался в обычный набор
-hardcoded-подсказок.
+## Интеллектуальный Критерий
 
-## Конечная цель
+Wave не выбирает готовую программу из ручного списка. Она должна вырастить
+целый устойчивый operator circuit из частичных свидетельств. Грокается circuit,
+а межплоскостная фазовая когерентность является механизмом его рождения.
+`TernaryOperatorCube`, `OperatorPage32` и VM хранят и исполняют уже
+кристаллизованный результат; сами они не являются гроккингом.
 
-Довести Nando Wave до состояния:
+## Продуктовый Критерий
+
+Финальный продуктовый рубеж остаётся строгим:
 
 ```text
-CPU-friendly wave cellular organism evidence package
+verified input-token saving share >= 50%
+в трёх последовательных независимых окнах
+false_accepts = 0
+runtime_parity_mismatches = 0
+verification coverage = 100% для CPU accepts
+economics hard gate = YES
+Product M3 = YES
 ```
 
-Это значит:
+Потенциальное покрытие, shadow, лабораторный proof, candidate и ACTIVE package
+не являются фактической экономией. Если 50% недостижимы для наблюдаемого
+трафика, система обязана построить проверяемую верхнюю границу по полному
+denominator и явно разделить `executable`, `ambiguous`, `irreducible` и
+`censored`.
+
+## Неподлежащие Торгу Ограничения
 
 ```text
-малые Cell32/Expert64 клетки
-под CarrierWave
-через WaveBus
-после нескольких settle ticks
-создают измеримую ансамблевую моду,
-которой нет у одиночной клетки,
-нет у простого voting,
-и нет у монолита той же памяти
-на выбранном классе задач.
+production: Rust only
+learning: streaming, one-pass, event-driven, bounded
+hot runtime: compact, deterministic, no learning
+runtime input: only state_before + current observation
+teacher action/response: training only after completed trace
+ACTIVE generation: immutable
+unknown or ambiguous: ABSTAIN
+authority: external proof-carrying admission only
+new primitive: only for proven uncovered live token volume
 ```
 
-После этого разрешается делать демонстрационный Chat-0:
+## Научная Позиция
 
-```text
-input
--> prompt wave
--> carrier lock
--> settle loop
--> memory imprint
--> wave readout
--> short answer
--> feedback
--> checked local update
--> snapshot
-```
+Аттракторная память, phase-coded associative memory, oscillator phase locking,
+гроккинг как фазовый переход и конкурирующие бассейны являются научными
+основаниями механизма. Они не доказывают Nando Machine.
 
-Chat-0 - не финальная копия GPT. Chat-0 - демонстрация проверенного принципа.
+Проверяемая новая гипотеза Nando:
 
-## Главный результат
+> Межплоскостная фазовая аттракторная динамика может породить целостную
+> исполняемую программу из распределённых relation evidence, после чего
+> найденный аттрактор можно кристаллизовать в детерминированный VM-bytecode.
 
-Финальным полезным результатом считается не один удачный текстовый ответ, а
-пакет проверок:
+Эта формулировка разрешена как гипотеза до прохождения causal gates. Более
+сильное утверждение запрещено.
 
-```text
-1. Есть задача, где cellular organism работает лучше controls.
-2. Есть key modes/key cells/key links, найденные измерением.
-3. Ablation этих modes/cells/links ломает результат.
-4. Snapshot сохраняет состояние и восстанавливает поведение.
-5. Online feedback улучшает систему только после eval gate.
-6. CPU budget на T480 остается приемлемым.
-7. Chat-0 использует этот механизм, а не lexical shortcut.
-```
+---
 
-Если любой из этих пунктов не проходит, проект не провален, но статус честный:
+## Historical Goal Archive Below
 
-```text
-not_found
-candidate
-partial
-passed
-```
-
-Слово `proved` в проекте запрещено, пока нет ablation, controls и seed
-robustness. Даже после этого в отчетах лучше писать `passed` или
-`evidence_package_passed`, а не объявлять философскую победу.
+Всё ниже этой границы сохранено только как история ранней Cell32/Chat-0
+исследовательской лестницы. Оно не задаёт текущую цель, порядок реализации,
+authority или продуктовый PASS. При конфликте действуют только разделы выше,
+`ARCHITECTURE_CANON.md` и Attractor-to-VM roadmap.
 
 ## Уровни победы
 

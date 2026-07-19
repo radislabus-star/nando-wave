@@ -112,6 +112,171 @@ a list of examples. The implementation is more exact than this intuition, but
 a replacement that removes the signed field, phase, interference, or compact
 center has changed the project, not refactored it.
 
+### Nando Attractor-to-VM Machine
+
+The canonical end state is a stable CPU machine that turns verified experience
+into new executable programs without recompiling the Rust core:
+
+```text
+LLM or real experience teaches
+-> Wave discovers a hidden law
+-> the law becomes a circuit-attractor
+-> the Crystallizer compiles it
+-> the Operator VM executes it
+-> an independent Verifier establishes truth
+-> BackwardWave constructs candidate generation g+1
+```
+
+A new skill must become bounded structural data and versioned bytecode, not a
+new Rust branch, a hand-named family, or a remembered answer.
+
+The complete canonical route is:
+
+```text
+Real traces
+-> relation fragments
+-> partial relation waves
+-> Dynamic Operator Field
+-> competing circuits
+-> cross-plane phase locking
+-> circuit-attractor
+-> grokking
+-> exact-memory cleanup
+-> Operator Crystallizer
+-> versioned VM bytecode
+-> immutable OperatorPackage
+-> Dynamic Registry
+-> Phase Router
+-> Role Grounder
+-> Operator VM
+-> independent Verifier
+-> EMIT | ABSTAIN
+-> VerifiedDeltaReceipt
+-> BackwardWave
+-> candidate generation g+1
+```
+
+The boundaries are strict:
+
+```text
+Dynamic Operator Field  learns and forms competing attractors
+OperatorGrokkingConsolidator detects whole-circuit phase locking
+Crystallizer            validates and compiles the proven attractor
+Operator VM             executes bytecode deterministically; it never learns
+Verifier                independently establishes observed truth
+BackwardWave            updates only the next candidate generation
+Admission               grants authority; no earlier component can
+```
+
+The Dynamic Operator Field contains unresolved role, relation, transform,
+composition, renderer, phase, and counter-wave hypotheses. It must synthesize
+new circuit topology from fragments. Selecting one complete program from a
+caller-supplied list is not operator birth.
+
+A `CircuitAttractor` is a stable coupled state containing:
+
+```text
+RoleGraph
+RelationProgram
+ApplicabilityBoundary
+TransformProgram
+CompositionDag
+RendererProgram
+VerifierContract
+```
+
+Compatible evidence reinforces the basin, incompatible evidence cancels or
+splits it, and anti-centers shape its applicability boundary. Crystallization
+is permitted only after the whole connected circuit has a causal coherence
+margin and transfers after exact episodic authority is removed.
+
+The VM is a bounded deterministic target, initially capable of expressing:
+
+```text
+FIND_ROLE       BIND_ROLE       ASSERT_RELATION  ASSERT_GUARD
+LOAD_ROLE       COMPARE         FILTER           MAP
+COUNT           TRANSFORM       BRANCH           CALL_OPERATOR
+FORMAT          EMIT            ABSTAIN
+```
+
+Every program has instruction, stack, call-depth, extension-page, allocation,
+and execution-time budgets. Unknown opcodes, malformed control flow, ambiguous
+role binding, insufficient route margin, relation failure, verifier mismatch,
+or exhausted search always fail closed to `ABSTAIN`. `CALL_OPERATOR` is bounded
+and cannot create unverified recursion or bypass the verifier.
+
+`OperatorPage32` remains the compact hot snapshot of a crystallized attractor.
+If the complete program does not fit one 4032-byte page, bounded digest-linked
+extension pages may carry bytecode or constants. The dynamic field, exact
+episodes, search frontier, and proof corpus remain cold and cannot leak into the
+hot package.
+
+Recursive growth is ordered as follows:
+
+```text
+K0  relation primitives
+K1  transferable actions
+K2  action compositions
+K3  verified strategies
+K4  methods for discovering new strategies
+```
+
+A proven composition may become a higher-level opcode, but the verifier must be
+able to unfold it to already admitted lower-level behavior. Higher levels never
+inherit authority merely because a lower-level component is ACTIVE.
+
+Capacity is not the raw registry count. `2048 * 4032 bytes = 7.875 MiB` is a
+useful hot-page budget, but usable intelligence depends on separable attractors,
+basin volume, cross-operator interference, spurious minima, noise recovery, and
+phase-lock speed. The registry may hold thousands of operators while the Phase
+Router activates only a small bounded local field.
+
+### Scientific Foundation And Claim Boundary
+
+The architecture is informed by, but not proven by, these primary results:
+
+- Hopfield's collective dynamical memory established stable attractors and
+  content-addressable recovery from partial state:
+  <https://doi.org/10.1073/pnas.79.8.2554>.
+- Kunstmann et al. introduced phase variables into associative memory so that
+  correlated phase structure can represent competing classification
+  hypotheses: <https://doi.org/10.1007/BF00205976>.
+- Oscillator associative-memory work demonstrates stable phase-locked memory
+  configurations and explicit basins: <https://arxiv.org/abs/2604.01469>.
+- Higher-order Kuramoto coupling demonstrates dense phase memory with
+  discontinuous and hysteretic retrieval regimes:
+  <https://arxiv.org/abs/2507.21984>.
+- Solvable local-rule models show grokking as a phase transition and connect it
+  to structure formation: <https://arxiv.org/abs/2210.15435>.
+- The basin-selection account studies grokking as movement from memorizing to
+  generalizing solution basins: <https://arxiv.org/abs/2603.01192>.
+- Continuous attractor networks can dynamically exhibit discrete,
+  phase-locked states without assuming a discrete memory beforehand:
+  <https://doi.org/10.1103/PhysRevLett.122.018102>.
+
+These works establish relevant physical and mathematical possibilities:
+
+```text
+collective dynamics
+-> attractor memory
+-> phase synchronization
+-> basins of attraction
+-> phase transitions
+-> recovery of a whole from partial evidence
+```
+
+They do **not** establish that Nando forms executable programs. The canonical
+Nando research hypothesis is narrower and must remain labelled as a hypothesis
+until its causal proof passes:
+
+> Cross-plane phase attractor dynamics can form a whole executable program
+> from distributed relation evidence, after which the attractor can be
+> crystallized into deterministic VM bytecode.
+
+The novelty claim is the tested composition of phase-attractor circuit birth
+with executable program crystallization, not the invention of attractors,
+oscillators, phase locking, or grokking.
+
 ## 2. The L1 -> L2 -> L3 Meaning
 
 ### L1: surface coherence
@@ -1555,6 +1720,8 @@ docs/LEXICON_FOUNDATION_V1.md
 docs/OPERATOR_PRODUCT_LINES_AND_CAPACITY.md
 docs/architecture_lineage/03_role_filler_binding.md
 docs/RISKS.md
+plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md
+plans/nando-attractor-to-vm-machine-v1/PLAN_STRUCTURE_RECEIPT.md
 ```
 
 If a supporting document contradicts this canon, stop and resolve the
