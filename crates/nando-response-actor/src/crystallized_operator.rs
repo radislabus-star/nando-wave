@@ -415,12 +415,10 @@ impl VerifiedCrystallizedOperator {
             if selector_value_type(&selector) != Some(expected_type) {
                 continue;
             }
-            let evidence = observed_scalar_surface(
+            let evidence = observed_scalar_runtime_surface(
                 request_text,
                 provider_payload,
                 selector,
-                *transform,
-                [0, 1, 2],
                 lineage_sha256,
                 surface_sha256,
             )?;
@@ -742,7 +740,6 @@ pub(crate) fn observed_scalar_surface(
     let phase_atoms = [
         format!("scalar_type:{}", runtime_value_type_tag(value_type)),
         "cardinality:unique".to_owned(),
-        format!("format:{}", transform.flags),
     ];
     let phase = phase_vector_from_atoms(phase_atoms.iter().map(String::as_str), 1)[0];
     let bundle = SurfaceFragmentBundle::new(
@@ -764,6 +761,55 @@ pub(crate) fn observed_scalar_surface(
             parameter: transform.parameter,
             flags: transform.flags,
         }],
+    )
+    .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
+    Ok(RuntimeSurfaceEvidence {
+        bundle,
+        request_text: request_text.to_owned(),
+        provider_payload: provider_payload.clone(),
+        anchors: vec![RuntimeRoleAnchor {
+            local_role: source,
+            selector,
+        }]
+        .into_boxed_slice(),
+    })
+}
+
+fn observed_scalar_runtime_surface(
+    request_text: &str,
+    provider_payload: &Value,
+    selector: ResponseValueSelector,
+    lineage_sha256: Commitment256,
+    surface_sha256: Commitment256,
+) -> Result<RuntimeSurfaceEvidence, CrystallizedOperatorError> {
+    let value_type =
+        selector_value_type(&selector).ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
+    let context = 0_u8;
+    let source = 1_u8;
+    let roles = vec![
+        StructuralRoleSignature::new(5, 1, 0, 1, vec![0]),
+        StructuralRoleSignature::new(runtime_value_type_tag(value_type), 1, 1, 2, vec![0]),
+    ];
+    let phase_atoms = [
+        format!("scalar_type:{}", runtime_value_type_tag(value_type)),
+        "cardinality:unique".to_owned(),
+    ];
+    let phase = phase_vector_from_atoms(phase_atoms.iter().map(String::as_str), 1)[0];
+    // Runtime evidence contains only relations observable before the action.
+    // The learned transform and its virtual output role remain in the sealed
+    // operator and cannot be reflected back into its own grounding input.
+    let bundle = SurfaceFragmentBundle::new(
+        lineage_sha256,
+        surface_sha256,
+        roles,
+        vec![LocalRelationFragment {
+            plane: 0,
+            source_local_role: context,
+            target_local_role: source,
+            state: TernaryRelationState::Supported,
+            phase_anchor: phase,
+        }],
+        Vec::new(),
     )
     .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
     Ok(RuntimeSurfaceEvidence {
@@ -1039,12 +1085,10 @@ fn independently_bind_verifier(
         if selector_value_type(&selector) != Some(expected_type) {
             continue;
         }
-        let Ok(observed) = observed_scalar_surface(
+        let Ok(observed) = observed_scalar_runtime_surface(
             request_text,
             provider_payload,
             selector,
-            *transform,
-            [0, 1, 2],
             lineage_sha256,
             surface_sha256,
         ) else {
@@ -1694,7 +1738,7 @@ mod tests {
         surface: u8,
         _phase: PhaseCenterCell,
     ) -> SurfaceFragmentBundle {
-        let phase_atoms = ["scalar_type:2", "cardinality:unique", "format:0"];
+        let phase_atoms = ["scalar_type:2", "cardinality:unique"];
         let phase = phase_vector_from_atoms(phase_atoms, 1)[0];
         SurfaceFragmentBundle::new(
             digest(lineage),
@@ -1847,6 +1891,24 @@ mod tests {
             .expect("restored runtime role binding");
         assert_eq!(restored_bound.execute_verified().as_deref(), Ok("7"));
         assert_eq!(restored_bound.environment(), bound.environment());
+        let runtime_surface = observed_scalar_runtime_surface(
+            "",
+            &payload,
+            ResponseValueSelector::JsonField {
+                field: "total".to_owned(),
+                value_type: AtomValueType::Integer,
+            },
+            digest(70),
+            digest(71),
+        )
+        .expect("pre-action structural extraction");
+        assert_eq!(runtime_surface.bundle.roles().len(), 2);
+        assert_eq!(runtime_surface.bundle.relations().len(), 1);
+        assert!(runtime_surface.bundle.program_atoms().is_empty());
+        let automatically_bound = operator
+            .bind_pre_action("", &payload)
+            .expect("operator binds from pre-action payload");
+        assert_eq!(automatically_bound.execute_verified().as_deref(), Ok("7"));
         let mut corrupted_registry = restart_bundle.registry_cbor().to_vec();
         let last = corrupted_registry.len() - 1;
         corrupted_registry[last] ^= 0x01;
