@@ -2,6 +2,14 @@
 
 Status: canonical implementation sequence.
 
+Implementation status:
+
+```text
+R1 Runtime Role Grounding                         PASS
+R2 Sealed Winner Provenance                       NEXT
+R3-R8                                             PENDING
+```
+
 This plan closes the gap between a phase-selected relation circuit and an
 operator whose circuit actually determines its CPU computation. It does not
 expand the opcode set.

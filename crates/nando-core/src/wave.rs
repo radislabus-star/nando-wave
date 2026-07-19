@@ -154,11 +154,11 @@ pub use operator_blueprint::{
     OPERATOR_BLUEPRINT_MAX_ALIGNMENTS, OPERATOR_BLUEPRINT_MAX_BEAM_DEPTH,
     OPERATOR_BLUEPRINT_MAX_BUNDLES, OPERATOR_BLUEPRINT_MAX_EXPANSIONS,
     OPERATOR_BLUEPRINT_MAX_PROGRAM_ATOMS, OPERATOR_BLUEPRINT_MAX_RELATIONS,
-    OPERATOR_BLUEPRINT_MAX_ROLES, OPERATOR_ROLE_COLOR_ROUNDS, RendererContract,
+    OPERATOR_BLUEPRINT_MAX_ROLES, OPERATOR_ROLE_COLOR_ROUNDS, OPERATOR_ROLE_NONE, RendererContract,
     RoleAlignmentBlocker, RoleAlignmentConfig, RoleAlignmentHypothesis, RoleAlignmentReport,
-    RoleBinding, RoleGraph, SearchCompletion, SearchStage, StructuralRoleCanonicalizer,
-    StructuralRoleSignature, SurfaceFragmentBundle, SurfaceFragmentBundleError, TypedProgramAtom,
-    VerifierContract,
+    RoleBinding, RoleGraph, RuntimeRoleBinder, RuntimeRoleBindingReport, RuntimeRoleMapping,
+    SearchCompletion, SearchStage, StructuralRoleCanonicalizer, StructuralRoleSignature,
+    SurfaceFragmentBundle, SurfaceFragmentBundleError, TypedProgramAtom, VerifierContract,
 };
 pub use operator_circuit::{
     OPERATOR_CIRCUIT_MAX_RELATIONS, OPERATOR_CIRCUIT_MAX_ROLES, OPERATOR_WAVE_MAX_SAMPLES,

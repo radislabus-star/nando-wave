@@ -5,8 +5,9 @@ use nando_core::wave::{
     TernaryRelationState, TypedProgramAtom,
 };
 use nando_response_actor::{
-    CrystallizationParityReceipt, CrystallizedOperator, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-    TRANSFORM_VALUE_INTEGER,
+    AtomValueType, CrystallizationParityReceipt, CrystallizedOperator, ResponseValueSelector,
+    RuntimeRoleAnchor, RuntimeSurfaceEvidence, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+    TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_INTEGER,
 };
 use serde_json::json;
 
@@ -58,7 +59,7 @@ fn partial_surface(
             opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
             output_local_role: local_role(local_to_semantic, 2),
             source_a_local_role: local_role(local_to_semantic, 0),
-            source_b_local_role: local_role(local_to_semantic, 0),
+            source_b_local_role: TRANSFORM_ROLE_NONE,
             parameter: TRANSFORM_VALUE_INTEGER,
             flags: 0,
         }],
@@ -168,10 +169,66 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
 
     assert_eq!(operator.blueprint_sha256(), &winner);
     assert_eq!(operator.verified_future_lineages().len(), 3);
+    let runtime_bundle = complete_future_surface(31, [1, 0, 2]);
+    let bound = operator
+        .bind(RuntimeSurfaceEvidence {
+            bundle: runtime_bundle,
+            request_text: String::new(),
+            provider_payload: receipts[0].provider_payload.clone(),
+            anchors: vec![RuntimeRoleAnchor {
+                local_role: 1,
+                selector: ResponseValueSelector::JsonField {
+                    field: "total".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+            }]
+            .into_boxed_slice(),
+        })
+        .expect("relation circuit binds the runtime source role");
+    assert_eq!(bound.execute_verified().as_deref(), Ok("7"));
+
+    let renamed_surface = operator
+        .bind(RuntimeSurfaceEvidence {
+            bundle: complete_future_surface(33, [1, 0, 2]),
+            request_text: String::new(),
+            provider_payload: json!({
+                "input": [{
+                    "type":"function_call_output",
+                    "output":"{\"renamed_total\":11}"
+                }]
+            }),
+            anchors: vec![RuntimeRoleAnchor {
+                local_role: 1,
+                selector: ResponseValueSelector::JsonField {
+                    field: "renamed_total".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+            }]
+            .into_boxed_slice(),
+        })
+        .expect("renamed surface preserves structural role binding");
+    assert_eq!(renamed_surface.execute_verified().as_deref(), Ok("11"));
+
+    let semantically_swapped = complete_future_surface(32, [1, 0, 2]);
     assert_eq!(
-        operator
-            .execute_verified("", &receipts[0].provider_payload)
-            .as_deref(),
-        Ok("7")
+        operator.bind(RuntimeSurfaceEvidence {
+            bundle: semantically_swapped,
+            request_text: String::new(),
+            provider_payload: json!({
+                "input": [{
+                    "type":"function_call_output",
+                    "output":"{\"total\":7,\"other\":9}"
+                }]
+            }),
+            anchors: vec![RuntimeRoleAnchor {
+                local_role: 0,
+                selector: ResponseValueSelector::JsonField {
+                    field: "other".to_owned(),
+                    value_type: AtomValueType::Integer,
+                },
+            }]
+            .into_boxed_slice(),
+        }),
+        Err(nando_response_actor::CrystallizedOperatorError::MissingRuntimeAnchor)
     );
 }

@@ -4,8 +4,9 @@ use nando_core::wave::{
     BlueprintFutureReport, BlueprintPhaseControl, CandidateCubeField, CandidateCubeFieldError,
     CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow,
     OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES, OPERATOR_PAGE32_RENDERER_BYTES,
-    OperatorCircuit, OperatorGrokkingConfig, OperatorPage32, OperatorPage32Error,
-    OperatorPage32Metadata, StructuralRole16, TernaryOperatorCube32,
+    OPERATOR_ROLE_NONE, OperatorCircuit, OperatorGrokkingConfig, OperatorPage32,
+    OperatorPage32Error, OperatorPage32Metadata, RoleGraph, RuntimeRoleBinder, SearchCompletion,
+    StructuralRole16, SurfaceFragmentBundle, TernaryOperatorCube32, TransformOp8,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -24,6 +25,7 @@ pub const TRANSFORM_VALUE_INTEGER: u16 = 1;
 pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
 pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
 pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
+pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrystallizationParityReceipt {
@@ -33,12 +35,43 @@ pub struct CrystallizationParityReceipt {
     pub expected_response: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeRoleAnchor {
+    pub local_role: u8,
+    pub selector: ResponseValueSelector,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RuntimeSurfaceEvidence {
+    pub bundle: SurfaceFragmentBundle,
+    pub request_text: String,
+    pub provider_payload: Value,
+    pub anchors: Box<[RuntimeRoleAnchor]>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BoundRoleEnvironment {
+    surface_sha256: Commitment256,
+    local_to_canonical: Box<[u8]>,
+    mapping_sha256: Commitment256,
+    action_equivalence_sha256: Commitment256,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoundCrystallizedOperator {
+    environment: BoundRoleEnvironment,
+    actor: ResponseProgram,
+    verifier: VerifierProgram,
+    request_text: String,
+    provider_payload: Value,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrystallizedOperator {
     page: OperatorPage32,
-    actor: ResponseProgram,
-    verifier: VerifierProgram,
     relation_program: OperatorCircuit,
+    role_graph: RoleGraph,
+    transform_program: Box<[TransformOp8]>,
     blueprint_sha256: Commitment256,
     candidate_set_sha256: Commitment256,
     actor_sha256: String,
@@ -69,6 +102,10 @@ pub enum CrystallizedOperatorError {
     DigestFailure,
     InvalidDigest,
     InvalidPage(OperatorPage32Error),
+    RuntimeBindingExhausted,
+    RuntimeRelationMismatch,
+    MissingRuntimeAnchor,
+    AmbiguousRuntimeAction,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,9 +175,9 @@ impl CrystallizedOperator {
 
         Ok(Self {
             page,
-            actor,
-            verifier,
             relation_program: blueprint.relation_program().clone(),
+            role_graph: blueprint.role_graph().clone(),
+            transform_program: blueprint.transform_program().into(),
             blueprint_sha256: winner_sha256,
             candidate_set_sha256: *frozen.candidate_set_sha256(),
             actor_sha256,
@@ -149,21 +186,11 @@ impl CrystallizedOperator {
         })
     }
 
-    pub fn execute_verified(
+    pub fn bind(
         &self,
-        request_text: &str,
-        provider_payload: &Value,
-    ) -> Result<String, CrystallizedOperatorError> {
-        let execution = execute_response(&self.actor, request_text, provider_payload);
-        if execution.status != ResponseExecutionStatus::Executed {
-            return Err(CrystallizedOperatorError::ActorDidNotExecute);
-        }
-        let response = execution
-            .response
-            .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
-        verify_response_independently(&self.verifier, provider_payload, &response)
-            .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
-        Ok(response)
+        evidence: RuntimeSurfaceEvidence,
+    ) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
+        bind_crystallized_operator(self, evidence)
     }
 
     pub fn feedback_field(
@@ -208,16 +235,6 @@ impl CrystallizedOperator {
     }
 
     #[must_use]
-    pub const fn actor(&self) -> &ResponseProgram {
-        &self.actor
-    }
-
-    #[must_use]
-    pub const fn verifier(&self) -> &VerifierProgram {
-        &self.verifier
-    }
-
-    #[must_use]
     pub const fn relation_program(&self) -> &OperatorCircuit {
         &self.relation_program
     }
@@ -248,35 +265,286 @@ impl CrystallizedOperator {
     }
 }
 
-pub fn compile_blueprint_actor(
+impl BoundCrystallizedOperator {
+    pub fn execute_verified(&self) -> Result<String, CrystallizedOperatorError> {
+        let execution = execute_response(&self.actor, &self.request_text, &self.provider_payload);
+        if execution.status != ResponseExecutionStatus::Executed {
+            return Err(CrystallizedOperatorError::ActorDidNotExecute);
+        }
+        let response = execution
+            .response
+            .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+        verify_response_independently(&self.verifier, &self.provider_payload, &response)
+            .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
+        Ok(response)
+    }
+
+    #[must_use]
+    pub const fn environment(&self) -> &BoundRoleEnvironment {
+        &self.environment
+    }
+
+    #[must_use]
+    pub const fn actor(&self) -> &ResponseProgram {
+        &self.actor
+    }
+
+    #[must_use]
+    pub const fn verifier(&self) -> &VerifierProgram {
+        &self.verifier
+    }
+}
+
+impl BoundRoleEnvironment {
+    #[must_use]
+    pub const fn surface_sha256(&self) -> &Commitment256 {
+        &self.surface_sha256
+    }
+
+    #[must_use]
+    pub fn local_to_canonical(&self) -> &[u8] {
+        &self.local_to_canonical
+    }
+
+    #[must_use]
+    pub const fn mapping_sha256(&self) -> &Commitment256 {
+        &self.mapping_sha256
+    }
+
+    #[must_use]
+    pub const fn action_equivalence_sha256(&self) -> &Commitment256 {
+        &self.action_equivalence_sha256
+    }
+}
+
+fn bind_crystallized_operator(
+    operator: &CrystallizedOperator,
+    evidence: RuntimeSurfaceEvidence,
+) -> Result<BoundCrystallizedOperator, CrystallizedOperatorError> {
+    let report = RuntimeRoleBinder::bind(
+        &operator.role_graph,
+        &operator.relation_program,
+        &evidence.bundle,
+        nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
+    );
+    if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
+        return Err(CrystallizedOperatorError::RuntimeBindingExhausted);
+    }
+    if report.mappings().is_empty() {
+        return Err(CrystallizedOperatorError::RuntimeRelationMismatch);
+    }
+    let [transform] = operator.transform_program.as_ref() else {
+        return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+    };
+    let mut actions = std::collections::BTreeMap::<Commitment256, Vec<_>>::new();
+    for mapping in report.mappings() {
+        let source_local_role = mapping
+            .local_role_for(transform.source_a)
+            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
+        let selector = evidence
+            .anchors
+            .iter()
+            .find(|anchor| anchor.local_role == source_local_role)
+            .map(|anchor| anchor.selector.clone())
+            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
+        let actor = compile_bound_actor(*transform, selector)?;
+        let response = execute_response(&actor, &evidence.request_text, &evidence.provider_payload)
+            .response
+            .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+        let action_sha256 = digest_parts(
+            b"nando.bound-action.v1",
+            &[response.as_bytes(), &[transform.output]],
+        );
+        actions
+            .entry(action_sha256)
+            .or_default()
+            .push((mapping, actor));
+    }
+    if actions.len() != 1 {
+        return Err(CrystallizedOperatorError::AmbiguousRuntimeAction);
+    }
+    let (action_equivalence_sha256, mut equivalent) =
+        actions.into_iter().next().expect("one action class");
+    equivalent.sort_by(|left, right| {
+        left.0
+            .local_to_canonical()
+            .cmp(right.0.local_to_canonical())
+    });
+    let (mapping, actor) = equivalent.remove(0);
+    let response = execute_response(&actor, &evidence.request_text, &evidence.provider_payload)
+        .response
+        .ok_or(CrystallizedOperatorError::ActorDidNotExecute)?;
+    let verifier = independently_bind_verifier(operator, &evidence, &response, mapping)?;
+    let mapping_sha256 = digest_parts(
+        b"nando.bound-role-mapping.v1",
+        &[mapping.local_to_canonical()],
+    );
+    Ok(BoundCrystallizedOperator {
+        environment: BoundRoleEnvironment {
+            surface_sha256: *evidence.bundle.surface_sha256(),
+            local_to_canonical: mapping.local_to_canonical().into(),
+            mapping_sha256,
+            action_equivalence_sha256,
+        },
+        actor,
+        verifier,
+        request_text: evidence.request_text,
+        provider_payload: evidence.provider_payload,
+    })
+}
+
+fn independently_bind_verifier(
+    operator: &CrystallizedOperator,
+    evidence: &RuntimeSurfaceEvidence,
+    actor_response: &str,
+    selected_mapping: &nando_core::wave::RuntimeRoleMapping,
+) -> Result<VerifierProgram, CrystallizedOperatorError> {
+    let report = RuntimeRoleBinder::bind(
+        &operator.role_graph,
+        &operator.relation_program,
+        &evidence.bundle,
+        nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
+    );
+    if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
+        return Err(CrystallizedOperatorError::RuntimeBindingExhausted);
+    }
+    let [transform] = operator.transform_program.as_ref() else {
+        return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+    };
+    let mut selected_verifier = None;
+    for mapping in report.mappings() {
+        let source_local_role = mapping
+            .local_role_for(transform.source_a)
+            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
+        let selector = evidence
+            .anchors
+            .iter()
+            .find(|anchor| anchor.local_role == source_local_role)
+            .map(|anchor| anchor.selector.clone())
+            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
+        let verifier = compile_bound_verifier(*transform, selector)?;
+        verify_response_independently(&verifier, &evidence.provider_payload, actor_response)
+            .map_err(|_| CrystallizedOperatorError::AmbiguousRuntimeAction)?;
+        if mapping.local_to_canonical() == selected_mapping.local_to_canonical() {
+            selected_verifier = Some(verifier);
+        }
+    }
+    selected_verifier.ok_or(CrystallizedOperatorError::IndependentVerifierRejected)
+}
+
+fn compile_bound_actor(
+    transform: TransformOp8,
+    selector: ResponseValueSelector,
+) -> Result<ResponseProgram, CrystallizedOperatorError> {
+    validate_scalar_transform(transform)?;
+    let value_type = transform_value_type(transform.parameter)?;
+    if selector_value_type(&selector) != Some(value_type) {
+        return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    }
+    Ok(ResponseProgram::project_selected_value(
+        selector,
+        transform_format(transform.flags),
+        "completed",
+    ))
+}
+
+fn compile_bound_verifier(
+    transform: TransformOp8,
+    selector: ResponseValueSelector,
+) -> Result<VerifierProgram, CrystallizedOperatorError> {
+    validate_scalar_transform(transform)?;
+    let value_type = transform_value_type(transform.parameter)?;
+    if selector_value_type(&selector) != Some(value_type) {
+        return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    }
+    Ok(VerifierProgram::ProjectSelectedValue {
+        selector,
+        format: transform_format(transform.flags),
+        renderer: crate::CollectionOutputRenderer::Direct,
+        completion_state: "completed".to_owned(),
+        require_unique_value: true,
+    })
+}
+
+fn selector_value_type(selector: &ResponseValueSelector) -> Option<AtomValueType> {
+    match selector {
+        ResponseValueSelector::UniqueScalar { value_type }
+        | ResponseValueSelector::UniqueTurnScalar { value_type }
+        | ResponseValueSelector::ContentLinePrefix { value_type, .. }
+        | ResponseValueSelector::JsonField { value_type, .. }
+        | ResponseValueSelector::JsonScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::UniqueTurnJsonField { value_type, .. }
+        | ResponseValueSelector::UniqueActiveTurnJsonField { value_type, .. }
+        | ResponseValueSelector::RequestReferencedJsonField { value_type }
+        | ResponseValueSelector::TurnOutputLine { value_type, .. }
+        | ResponseValueSelector::TurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputLine { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { value_type, .. }
+        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { value_type, .. } => {
+            Some(*value_type)
+        }
+        ResponseValueSelector::CommandOutputBody
+        | ResponseValueSelector::RequestLastToken
+        | ResponseValueSelector::RequestUniqueLiteral => Some(AtomValueType::String),
+    }
+}
+
+fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> Commitment256 {
+    let mut hasher = Sha256::new();
+    hasher.update(domain);
+    for part in parts {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part);
+    }
+    hasher.finalize().into()
+}
+
+pub(crate) fn compile_blueprint_actor(
     blueprint: &CandidateOperatorBlueprint,
 ) -> Result<ResponseProgram, CrystallizedOperatorError> {
     let [transform] = blueprint.transform_program() else {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     };
+    if !blueprint.composition_dag().edges().is_empty() {
+        return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
+    }
+    validate_scalar_transform(*transform)?;
+    let value_type = transform_value_type(transform.parameter)?;
+    Ok(ResponseProgram::project_selected_value(
+        ResponseValueSelector::UniqueScalar { value_type },
+        transform_format(transform.flags),
+        "completed",
+    ))
+}
+
+fn validate_scalar_transform(transform: TransformOp8) -> Result<(), CrystallizedOperatorError> {
     if transform.opcode != TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR
-        || !blueprint.composition_dag().edges().is_empty()
+        || transform.source_b != TRANSFORM_ROLE_NONE
+        || transform.output == transform.source_a
         || transform.flags & !TRANSFORM_FLAG_CANONICAL_JSON != 0
     {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     }
-    let value_type = match transform.parameter {
+    transform_value_type(transform.parameter)?;
+    Ok(())
+}
+
+fn transform_value_type(parameter: u16) -> Result<AtomValueType, CrystallizedOperatorError> {
+    Ok(match parameter {
         TRANSFORM_VALUE_STRING => AtomValueType::String,
         TRANSFORM_VALUE_INTEGER => AtomValueType::Integer,
         TRANSFORM_VALUE_BOOLEAN => AtomValueType::Boolean,
         TRANSFORM_VALUE_IDENTIFIER => AtomValueType::Identifier,
         _ => return Err(CrystallizedOperatorError::UnsupportedTransformProgram),
-    };
-    let format = if transform.flags & TRANSFORM_FLAG_CANONICAL_JSON == 0 {
+    })
+}
+
+fn transform_format(flags: u16) -> ValueProjectionFormat {
+    if flags & TRANSFORM_FLAG_CANONICAL_JSON == 0 {
         ValueProjectionFormat::PlainText
     } else {
         ValueProjectionFormat::CanonicalJson
-    };
-    Ok(ResponseProgram::project_selected_value(
-        ResponseValueSelector::UniqueScalar { value_type },
-        format,
-        "completed",
-    ))
+    }
 }
 
 fn verify_future_receipts(
@@ -533,7 +801,7 @@ mod tests {
                 opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
                 output_local_role: 1,
                 source_a_local_role: 0,
-                source_b_local_role: 0,
+                source_b_local_role: TRANSFORM_ROLE_NONE,
                 parameter: TRANSFORM_VALUE_INTEGER,
                 flags: 0,
             }],
@@ -569,7 +837,7 @@ mod tests {
     }
 
     #[test]
-    fn winner_crystallizes_into_page_and_existing_verified_actor() {
+    fn winner_crystallizes_into_page_and_bound_verified_actor() {
         let (future, synthesis, future_bundle) = frozen_blueprints();
         let winner = *synthesis.blueprints[0].fingerprint_sha256();
         let report = BlueprintFutureReport {
@@ -596,7 +864,22 @@ mod tests {
         assert_eq!(operator.blueprint_sha256(), &winner);
         assert_eq!(operator.verified_future_lineages(), &[digest(3)]);
         assert_eq!(operator.page().as_bytes().len(), 4_032);
-        assert_eq!(operator.execute_verified("", &payload).as_deref(), Ok("7"));
+        let bound = operator
+            .bind(RuntimeSurfaceEvidence {
+                bundle: future_bundle,
+                request_text: String::new(),
+                provider_payload: payload,
+                anchors: vec![RuntimeRoleAnchor {
+                    local_role: 0,
+                    selector: ResponseValueSelector::JsonField {
+                        field: "total".to_owned(),
+                        value_type: AtomValueType::Integer,
+                    },
+                }]
+                .into_boxed_slice(),
+            })
+            .expect("runtime role binding");
+        assert_eq!(bound.execute_verified().as_deref(), Ok("7"));
         let feedback = operator
             .feedback_field(OperatorGrokkingConfig::default())
             .expect("immutable next-generation accumulator");

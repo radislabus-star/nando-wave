@@ -1049,13 +1049,15 @@ The verifier independently reconstructs the structural anchor, checks the
 relation program, computes the expected value, and compares it with the actor
 response. Reusing the actor's selected value as verifier truth is forbidden.
 
-Current implementation boundary at generation `d1ff627`:
+Current implementation boundary after runtime role grounding R1:
 
 ```text
 phase-selected relation-circuit formation       PASS
 fail-closed bounded blueprint search             PASS
 attachment of a generic scalar primitive         PASS
-circuit-driven runtime role grounding            NOT IMPLEMENTED
+circuit-driven runtime role grounding            PASS
+TransformOp8 source/output causally used          PASS
+independent structural verifier derivation        PASS
 sealed winner and executable parity provenance   NOT IMPLEMENTED
 whole executable learned operator                WATCH
 live authority                                   BLOCK

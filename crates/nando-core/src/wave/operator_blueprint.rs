@@ -15,6 +15,7 @@ pub const OPERATOR_BLUEPRINT_MAX_ALIGNMENTS: usize = 64;
 pub const OPERATOR_BLUEPRINT_MAX_BEAM_DEPTH: usize = 12;
 pub const OPERATOR_BLUEPRINT_MAX_EXPANSIONS: usize = 4_096;
 pub const OPERATOR_ROLE_COLOR_ROUNDS: usize = 3;
+pub const OPERATOR_ROLE_NONE: u8 = u8::MAX;
 pub const OPERATOR_BLUEPRINT_CANONICALIZER_VERSION: u32 = 1;
 
 pub type Commitment256 = [u8; 32];
@@ -311,6 +312,18 @@ pub struct BlueprintFutureReport {
     pub blocker: Option<BlueprintFutureBlocker>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeRoleMapping {
+    local_to_canonical: Box<[u8]>,
+    phase_fit_fixed: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeRoleBindingReport {
+    mappings: Box<[RuntimeRoleMapping]>,
+    completion: SearchCompletion,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StructuralRoleCanonicalizer;
 
@@ -322,6 +335,9 @@ pub struct BoundedCircuitBeam;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BlueprintFutureEvaluator;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RuntimeRoleBinder;
 
 #[derive(Clone, Debug)]
 struct AlignmentState {
@@ -499,13 +515,11 @@ impl SurfaceFragmentBundle {
             return Err(SurfaceFragmentBundleError::DuplicateRelation);
         }
         for atom in &program_atoms {
-            if [
-                atom.output_local_role,
-                atom.source_a_local_role,
-                atom.source_b_local_role,
-            ]
-            .into_iter()
-            .any(|role| usize::from(role) >= roles.len())
+            if [atom.output_local_role, atom.source_a_local_role]
+                .into_iter()
+                .any(|role| usize::from(role) >= roles.len())
+                || (atom.source_b_local_role != OPERATOR_ROLE_NONE
+                    && usize::from(atom.source_b_local_role) >= roles.len())
             {
                 return Err(SurfaceFragmentBundleError::InvalidLocalRole);
             }
@@ -792,7 +806,11 @@ impl RoleAlignmentHypothesis {
             opcode: atom.opcode,
             output: self.canonical_role(bundle_index, atom.output_local_role)?,
             source_a: self.canonical_role(bundle_index, atom.source_a_local_role)?,
-            source_b: self.canonical_role(bundle_index, atom.source_b_local_role)?,
+            source_b: if atom.source_b_local_role == OPERATOR_ROLE_NONE {
+                OPERATOR_ROLE_NONE
+            } else {
+                self.canonical_role(bundle_index, atom.source_b_local_role)?
+            },
             parameter: atom.parameter,
             flags: atom.flags,
         })
@@ -1292,6 +1310,127 @@ impl BlueprintFutureEvaluator {
             blocker: None,
         }
     }
+}
+
+impl RuntimeRoleBinder {
+    #[must_use]
+    pub fn bind(
+        role_graph: &RoleGraph,
+        relation_program: &OperatorCircuit,
+        bundle: &SurfaceFragmentBundle,
+        max_mappings: usize,
+    ) -> RuntimeRoleBindingReport {
+        if max_mappings == 0 {
+            return exhausted_runtime_binding(0);
+        }
+        let (mappings, complete) = future_role_mappings(
+            bundle,
+            role_graph,
+            max_mappings.min(OPERATOR_BLUEPRINT_MAX_ALIGNMENTS),
+        );
+        let explored = mappings.len();
+        if !complete {
+            return exhausted_runtime_binding(explored);
+        }
+        let mut valid = mappings
+            .into_iter()
+            .filter_map(|mapping| {
+                exact_runtime_relation_fit(bundle, relation_program, &mapping).map(
+                    |phase_fit_fixed| RuntimeRoleMapping {
+                        local_to_canonical: mapping.into_boxed_slice(),
+                        phase_fit_fixed,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        valid.sort_unstable_by(|left, right| {
+            right
+                .phase_fit_fixed
+                .cmp(&left.phase_fit_fixed)
+                .then_with(|| left.local_to_canonical.cmp(&right.local_to_canonical))
+        });
+        if let Some(best) = valid.first().map(|mapping| mapping.phase_fit_fixed) {
+            valid.retain(|mapping| mapping.phase_fit_fixed == best);
+        }
+        RuntimeRoleBindingReport {
+            mappings: valid.into_boxed_slice(),
+            completion: SearchCompletion::Complete { explored },
+        }
+    }
+}
+
+impl RuntimeRoleBindingReport {
+    #[must_use]
+    pub fn mappings(&self) -> &[RuntimeRoleMapping] {
+        &self.mappings
+    }
+
+    #[must_use]
+    pub const fn completion(&self) -> SearchCompletion {
+        self.completion
+    }
+}
+
+impl RuntimeRoleMapping {
+    #[must_use]
+    pub fn local_to_canonical(&self) -> &[u8] {
+        &self.local_to_canonical
+    }
+
+    #[must_use]
+    pub const fn phase_fit_fixed(&self) -> i64 {
+        self.phase_fit_fixed
+    }
+
+    #[must_use]
+    pub fn local_role_for(&self, canonical_role: u8) -> Option<u8> {
+        self.local_to_canonical
+            .iter()
+            .position(|role| *role == canonical_role)
+            .and_then(|role| u8::try_from(role).ok())
+    }
+}
+
+fn exhausted_runtime_binding(explored: usize) -> RuntimeRoleBindingReport {
+    RuntimeRoleBindingReport {
+        mappings: Box::new([]),
+        completion: SearchCompletion::Exhausted {
+            stage: SearchStage::RoleAlignment,
+            explored,
+            frontier_remaining: 1,
+        },
+    }
+}
+
+fn exact_runtime_relation_fit(
+    bundle: &SurfaceFragmentBundle,
+    relation_program: &OperatorCircuit,
+    mapping: &[u8],
+) -> Option<i64> {
+    if bundle.relations.len() != relation_program.relations().len() {
+        return None;
+    }
+    let mut matched = BTreeSet::new();
+    let mut phase_fit_fixed = 0_i64;
+    for observed in &bundle.relations {
+        let cell = OperatorRelationCell {
+            plane: observed.plane,
+            source_role: *mapping.get(usize::from(observed.source_local_role))?,
+            target_role: *mapping.get(usize::from(observed.target_local_role))?,
+        };
+        let expected_index = relation_program
+            .relations()
+            .iter()
+            .position(|expected| expected.cell == cell && expected.state == observed.state)?;
+        if !matched.insert(expected_index) {
+            return None;
+        }
+        let expected = &relation_program.relations()[expected_index];
+        let aligned = align_phase(observed.phase_anchor, expected.phase_anchor);
+        phase_fit_fixed =
+            phase_fit_fixed.saturating_add((aligned.re * PhaseModeAggregate::SCALE).round() as i64);
+    }
+    (matched.len() == relation_program.relations().len()).then_some(phase_fit_fixed)
 }
 
 fn score_blueprint_future(
