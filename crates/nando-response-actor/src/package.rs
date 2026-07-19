@@ -300,10 +300,23 @@ impl ResponsePackage {
         let verifier_bound = response_program_external_verifier_schema(&self.program)
             .is_some_and(|schema| self.proof.verifier_schema == schema);
         let required_atoms = response_program_required_routing_atom_ids(&self.program);
-        let exact_guard_bound = !required_atoms.is_empty()
-            && required_atoms
-                .iter()
-                .all(|atom| self.required_routing_atom_ids.binary_search(atom).is_ok());
+        let exact_guard_bound = if let Some(bundle) = &self.crystallized_operator {
+            // Crystallized applicability is the sealed RoleGraph/RelationProgram,
+            // not the legacy selector atoms derived from the compiled actor.
+            self.required_routing_atom_ids.is_empty()
+                && VerifiedCrystallizedOperator::restore(
+                    bundle.page_bytes(),
+                    bundle.registry_cbor(),
+                )
+                .is_ok_and(|operator| {
+                    self.phase_centers == [operator.relation_program().fingerprint64()]
+                })
+        } else {
+            !required_atoms.is_empty()
+                && required_atoms
+                    .iter()
+                    .all(|atom| self.required_routing_atom_ids.binary_search(atom).is_ok())
+        };
         if let Err(blocker) = self.validate() {
             Some(blocker)
         } else if !grounded_authority {
@@ -984,6 +997,25 @@ impl ResponseExecutor {
                 continue;
             }
             predicate_matches = predicate_matches.saturating_add(1);
+            if let Some(operator) = self.crystallized_operators.get(&package.package_id) {
+                // A crystallized package is applicable only when its learned
+                // RoleGraph and RelationProgram bind to the observed pre-action
+                // surface. Generic phase atoms must not route around the circuit.
+                let Ok(bound) = operator.bind_pre_action(request_text, provider_payload) else {
+                    continue;
+                };
+                grounded_matches = grounded_matches.saturating_add(1);
+                guard_matches = guard_matches.saturating_add(1);
+                let margin = bound.environment().phase_fit_fixed();
+                if margin > best_margin {
+                    best_margin = margin;
+                    best_threshold = package.wave_margin_micro;
+                }
+                if margin >= package.wave_margin_micro {
+                    insert_top_response_candidate(&mut ranked, (margin, package));
+                }
+                continue;
+            }
             let grounded_atoms = match &package.program.operation {
                 ResponseOperation::AdvancePlan { function_name } => {
                     Some(response_phase_atom_ids_for_advance_plan_payload(

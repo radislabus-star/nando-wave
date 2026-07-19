@@ -1049,6 +1049,18 @@ The verifier independently reconstructs the structural anchor, checks the
 relation program, computes the expected value, and compares it with the actor
 response. Reusing the actor's selected value as verifier truth is forbidden.
 
+`RuntimeSurfaceEvidence` supplied by a caller is a laboratory interface, never
+production authority. Live routing and parity verification must start from the
+raw pre-action request and provider payload, independently enumerate structural
+anchors, rebuild the observed surface, and bind the frozen circuit before the
+package enters top-k routing.
+
+A serialized crystallized candidate is also only an evidence envelope. External
+admission must rebuild the bounded 32-row support and 32-row future state,
+repeat synthesis, causal controls, crystallization, and executable parity, then
+compare the regenerated package and every seal. Caller-provided proof counters
+or a public deserialized package never grant authority.
+
 Current implementation boundary after runtime role grounding R1:
 
 ```text
@@ -1065,6 +1077,8 @@ OperatorPage32 + bounded registry restart          PASS
 whole executable learned operator                 LAB PASS
 streaming scalar trace-to-circuit bridge          CODE PASS
 sealed crystallized external admission             CODE PASS
+raw scalar circuit controls runtime phase margin   CODE PASS
+generic multi-relation raw grounding               BLOCK
 real post-commit scalar shadow evidence            WATCH
 live authority                                   BLOCK
 ```

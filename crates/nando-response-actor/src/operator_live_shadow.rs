@@ -2,9 +2,8 @@ use std::collections::BTreeMap;
 
 use nando_core::wave::{
     BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence, BlueprintPhaseControl,
-    BoundedCircuitBeam, BoundedRoleAligner, FrozenOperatorBlueprintSet, LocalRelationFragment,
-    OPERATOR_ROLE_NONE, PhaseCenterCell, RoleAlignmentConfig, StructuralRoleSignature,
-    SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom, phase_vector_from_atoms,
+    BoundedCircuitBeam, BoundedRoleAligner, FrozenOperatorBlueprintSet, OPERATOR_ROLE_NONE,
+    RoleAlignmentConfig, SurfaceFragmentBundle, TransformOp8,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,14 +16,12 @@ use crate::{
     ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_FLAG_CANONICAL_JSON,
     TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_IDENTIFIER,
     TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING, TeacherTransition, ValueProjectionFormat,
-    enumerate_source_neutral_response_programs, relation_frame_online_routing_atom_ids,
-    response_program_exactly_matches_example, response_program_required_routing_atom_ids,
+    enumerate_source_neutral_response_programs, response_program_exactly_matches_example,
 };
 
 const LIVE_SCALAR_ROLE_COUNT: usize = 3;
 const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
 const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
-const ROLE_CONTEXT: u8 = 0;
 const ROLE_SOURCE: u8 = 1;
 const ROLE_OUTPUT: u8 = 2;
 
@@ -245,11 +242,29 @@ fn evaluate_live_law(
         increment_report_blocker(report, "circuit_synthesis_exhausted");
         return;
     }
-    let Ok(frozen) =
-        FrozenOperatorBlueprintSet::freeze(1, &support_bundles, Default::default(), &synthesis)
-    else {
-        increment_report_blocker(report, "blueprint_freeze_failed");
+    if synthesis.blueprints.is_empty() {
+        for blocker in &synthesis.blockers {
+            increment_report_blocker(
+                report,
+                &format!("circuit_synthesis_{:?}", blocker.blocker).to_lowercase(),
+            );
+        }
         return;
+    }
+    let frozen = match FrozenOperatorBlueprintSet::freeze(
+        1,
+        &support_bundles,
+        Default::default(),
+        &synthesis,
+    ) {
+        Ok(frozen) => frozen,
+        Err(error) => {
+            increment_report_blocker(
+                report,
+                &format!("blueprint_freeze_{error:?}").to_lowercase(),
+            );
+            return;
+        }
     };
     report.frozen_laws = report.frozen_laws.saturating_add(1);
     if law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
@@ -340,7 +355,7 @@ fn evaluate_live_law(
             report.shadow_executions = report.shadow_executions.saturating_add(receipts.len());
             match live_admission_candidate(law, &operator) {
                 Ok(candidate) => candidates.push(candidate),
-                Err(blocker) => increment_report_blocker(report, blocker),
+                Err(blocker) => increment_report_blocker(report, &blocker),
             }
         }
         Err(error) => {
@@ -352,17 +367,16 @@ fn evaluate_live_law(
 fn live_admission_candidate(
     law: &LiveScalarLawState,
     operator: &crate::VerifiedCrystallizedOperator,
-) -> Result<LiveScalarAdmissionCandidate, &'static str> {
+) -> Result<LiveScalarAdmissionCandidate, String> {
     if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS || law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
-        return Err("admission_rows_below_32");
+        return Err("admission_rows_below_32".to_owned());
     }
     let program = operator
         .routing_program()
-        .map_err(|_| "admission_routing_program_failed")?;
+        .map_err(|_| "admission_routing_program_failed".to_owned())?;
     let verifier = operator
         .routing_verifier()
-        .map_err(|_| "admission_routing_verifier_failed")?;
-    let required_routing_atom_ids = response_program_required_routing_atom_ids(&program);
+        .map_err(|_| "admission_routing_verifier_failed".to_owned())?;
     let distinct_sessions = law
         .support
         .iter()
@@ -389,15 +403,18 @@ fn live_admission_candidate(
         program,
         verifier: Some(verifier),
         routing_predicates: Vec::new(),
-        required_routing_atom_ids: required_routing_atom_ids.clone(),
-        phase_centers: required_routing_atom_ids,
+        required_routing_atom_ids: Vec::new(),
+        // The legacy vector is retained for package ABI validation. Runtime
+        // authority comes from the restored circuit binding below, not from a
+        // generic response-program atom masquerading as learned evidence.
+        phase_centers: vec![operator.relation_program().fingerprint64()],
         anti_centers: Vec::new(),
         wave_margin_micro: 1,
         learned_wave_route: None,
         crystallized_operator: Some(
             operator
                 .restart_bundle()
-                .map_err(|_| "admission_restart_bundle_failed")?,
+                .map_err(|_| "admission_restart_bundle_failed".to_owned())?,
         ),
         proof: ResponsePackageProof {
             support_rows: law.support.len(),
@@ -413,7 +430,7 @@ fn live_admission_candidate(
     };
     package
         .validate()
-        .map_err(|_| "admission_package_invalid")?;
+        .map_err(|error| format!("admission_package_{error}"))?;
     Ok(LiveScalarAdmissionCandidate {
         package,
         support: law.support.clone(),
@@ -465,32 +482,14 @@ pub fn extract_live_scalar_circuit_sample(
         return Err(LiveScalarShadowBlocker::NoExactSourceNeutralProgram);
     };
 
-    let frame = transition.before.as_routing_relation_frame();
-    let routing_atoms = relation_frame_online_routing_atom_ids(&frame);
-    let phases = relation_phases(&routing_atoms);
     let local_roles = local_role_permutation(&transition.before.frame_id_sha256);
-    let context = local_roles[usize::from(ROLE_CONTEXT)];
     let source = local_roles[usize::from(ROLE_SOURCE)];
     let output = local_roles[usize::from(ROLE_OUTPUT)];
-    let roles = (0..LIVE_SCALAR_ROLE_COUNT)
-        .map(|local| {
-            let semantic = local_roles
-                .iter()
-                .position(|candidate| usize::from(*candidate) == local)
-                .expect("role permutation is complete") as u8;
-            role_signature(semantic, local as u8, value_type)
-        })
-        .collect::<Vec<_>>();
-    let relations = vec![
-        relation(0, context, source, phases[0]),
-        relation(1, source, output, phases[1]),
-        relation(2, context, output, phases[2]),
-    ];
-    let transform = TypedProgramAtom {
+    let transform = TransformOp8 {
         opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-        output_local_role: output,
-        source_a_local_role: source,
-        source_b_local_role: OPERATOR_ROLE_NONE,
+        output,
+        source_a: source,
+        source_b: OPERATOR_ROLE_NONE,
         parameter: transform_parameter(value_type),
         flags: if format == ValueProjectionFormat::CanonicalJson {
             TRANSFORM_FLAG_CANONICAL_JSON
@@ -502,18 +501,21 @@ pub fn extract_live_scalar_circuit_sample(
         .or_else(|| parse_commitment(&transition.before.client_intent_id_sha256))
         .ok_or(LiveScalarShadowBlocker::InvalidCommitment)?;
     let surface_sha256 = digest_parts(
-        b"nando.live-scalar-surface.v1",
+        b"nando.live-scalar-surface.v2",
         &[
             transition.before.frame_id_sha256.as_bytes(),
             transition.before.extractor_version.as_bytes(),
+            &payload_bytes,
         ],
     );
-    let bundle = SurfaceFragmentBundle::new(
+    let observed = crate::crystallized_operator::observed_scalar_surface(
+        &parity.request_text,
+        &parity.provider_payload,
+        selector.clone(),
+        transform,
+        local_roles,
         lineage_sha256,
         surface_sha256,
-        roles,
-        relations,
-        vec![transform],
     )
     .map_err(|_| LiveScalarShadowBlocker::InvalidBundle)?;
     let raw_input_sha256 = digest_parts(
@@ -528,11 +530,13 @@ pub fn extract_live_scalar_circuit_sample(
         ],
     );
     Ok(LiveScalarCircuitSample {
-        bundle,
-        anchor: RuntimeRoleAnchor {
-            local_role: source,
-            selector,
-        },
+        bundle: observed.bundle,
+        anchor: observed
+            .anchors
+            .into_vec()
+            .into_iter()
+            .next()
+            .ok_or(LiveScalarShadowBlocker::InvalidBundle)?,
         request_text: parity.request_text.clone(),
         provider_payload: parity.provider_payload.clone(),
         expected_response: parity.expected_response.clone(),
@@ -586,55 +590,6 @@ fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
         | ResponseValueSelector::RequestLastToken
         | ResponseValueSelector::RequestUniqueLiteral => AtomValueType::String,
     }
-}
-
-fn role_signature(
-    semantic_role: u8,
-    _local_role: u8,
-    value_type: AtomValueType,
-) -> StructuralRoleSignature {
-    match semantic_role {
-        ROLE_CONTEXT => StructuralRoleSignature::new(5, 2, 0, 1, vec![0, 2]),
-        ROLE_SOURCE => {
-            StructuralRoleSignature::new(value_type_tag(value_type), 1, 1, 2, vec![0, 1])
-        }
-        ROLE_OUTPUT => {
-            StructuralRoleSignature::new(value_type_tag(value_type), 1, 2, 4, vec![1, 2])
-        }
-        _ => unreachable!("three fixed semantic roles"),
-    }
-}
-
-fn relation(
-    plane: u8,
-    source_local_role: u8,
-    target_local_role: u8,
-    phase_anchor: PhaseCenterCell,
-) -> LocalRelationFragment {
-    LocalRelationFragment {
-        plane,
-        source_local_role,
-        target_local_role,
-        state: TernaryRelationState::Supported,
-        phase_anchor,
-    }
-}
-
-fn relation_phases(atom_ids: &[u64]) -> [PhaseCenterCell; 3] {
-    let mut phases = [PhaseCenterCell { re: 1.0, im: 0.0 }; 3];
-    for (plane, phase) in phases.iter_mut().enumerate() {
-        let mut plane_atoms = atom_ids
-            .iter()
-            .map(|atom| format!("{atom:016x}"))
-            .collect::<Vec<_>>();
-        plane_atoms.push(format!("live_scalar_plane:{plane}"));
-        let encoded = phase_vector_from_atoms(plane_atoms.iter().map(String::as_str), 3);
-        *phase = encoded[plane];
-        if phase.re.hypot(phase.im) <= f64::EPSILON {
-            *phase = PhaseCenterCell { re: 1.0, im: 0.0 };
-        }
-    }
-    phases
 }
 
 fn local_role_permutation(frame_id: &str) -> [u8; LIVE_SCALAR_ROLE_COUNT] {
@@ -768,7 +723,10 @@ mod tests {
             .expect("renamed scalar trace");
 
         assert_eq!(first.bundle.roles().len(), 3);
-        assert_eq!(first.bundle.relations().len(), 3);
+        // Only the pre-action context/source relation is observed. The output
+        // role belongs to the learned transform and must not leak backward as
+        // a fabricated support relation.
+        assert_eq!(first.bundle.relations().len(), 1);
         assert_eq!(first.bundle.program_atoms().len(), 1);
         assert_eq!(first.law_sha256, renamed.law_sha256);
         assert_ne!(first.anchor.selector, renamed.anchor.selector);
@@ -842,6 +800,26 @@ mod tests {
             }),
         );
         assert_eq!(execution.response.as_deref(), Some("91"), "{execution:#?}");
+        let ambiguous = executor.execute_shadow(
+            "",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"left\":91,\"right\":92}"
+                }]
+            }),
+        );
+        assert_eq!(ambiguous.status, crate::ResponseExecutionStatus::Abstain);
+        let incompatible = executor.execute_shadow(
+            "",
+            &json!({
+                "input": [{
+                    "type": "function_call_output",
+                    "output": "{\"new_surface_total\":true}"
+                }]
+            }),
+        );
+        assert_eq!(incompatible.status, crate::ResponseExecutionStatus::Abstain);
 
         let mut tampered_support = candidates.clone();
         tampered_support[0].support[0]
@@ -859,7 +837,7 @@ mod tests {
                 &"a".repeat(64),
                 &"b".repeat(64),
             ),
-            Err("crystallized_admission_replay_failed")
+            Err("crystallized_admission_resynthesis_failed")
         ));
 
         let mut tampered_seal = candidates;
@@ -874,7 +852,7 @@ mod tests {
                 &"a".repeat(64),
                 &"b".repeat(64),
             ),
-            Err("crystallized_admission_commitment_mismatch")
+            Err("crystallized_admission_resynthesis_mismatch")
         ));
     }
 }

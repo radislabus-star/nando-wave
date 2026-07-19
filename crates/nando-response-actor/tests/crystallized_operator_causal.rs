@@ -5,8 +5,8 @@ use nando_core::wave::{
     SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom,
 };
 use nando_response_actor::{
-    AtomValueType, CrystallizationParityReceipt, CrystallizedOperator, ResponseValueSelector,
-    RuntimeRoleAnchor, RuntimeSurfaceEvidence, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
+    AtomValueType, CrystallizationParityReceipt, CrystallizedOperator, CrystallizedOperatorError,
+    ResponseValueSelector, RuntimeRoleAnchor, TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
     TRANSFORM_ROLE_NONE, TRANSFORM_VALUE_INTEGER,
 };
 use serde_json::json;
@@ -89,7 +89,7 @@ fn complete_future_surface(lineage: u8, local_to_semantic: [u8; 3]) -> SurfaceFr
 }
 
 #[test]
-fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
+fn symmetric_partial_waves_select_only_with_full_phase_and_require_observed_runtime_relations() {
     let support = vec![
         partial_surface(1, [2, 0, 1], 0, 0, 1, 0.0),
         partial_surface(2, [0, 2, 1], 1, 1, 2, 0.7),
@@ -194,101 +194,16 @@ fn symmetric_partial_waves_crystallize_and_execute_only_with_full_phase() {
             }
         })
         .collect::<Vec<_>>();
-    let operator = CrystallizedOperator::crystallize(
-        &future_window,
-        sealed.winner_receipt().expect("full phase winner seal"),
-        &future_evidence,
-        &receipts,
-    )
-    .expect("causal winner crystallizes");
-
-    assert_eq!(operator.blueprint_sha256(), &winner);
-    assert_eq!(operator.verified_future_lineages().len(), 3);
-    let runtime_bundle = complete_future_surface(31, [1, 0, 2]);
-    let bound = operator
-        .bind(RuntimeSurfaceEvidence {
-            bundle: runtime_bundle,
-            request_text: String::new(),
-            provider_payload: receipts[0].provider_payload.clone(),
-            anchors: vec![RuntimeRoleAnchor {
-                local_role: 1,
-                selector: ResponseValueSelector::JsonField {
-                    field: "total".to_owned(),
-                    value_type: AtomValueType::Integer,
-                },
-            }]
-            .into_boxed_slice(),
-        })
-        .expect("relation circuit binds the runtime source role");
-    assert_eq!(bound.execute_verified().as_deref(), Ok("7"));
-
-    let renamed_surface = operator
-        .bind(RuntimeSurfaceEvidence {
-            bundle: complete_future_surface(33, [1, 0, 2]),
-            request_text: String::new(),
-            provider_payload: json!({
-                "input": [{
-                    "type":"function_call_output",
-                    "output":"{\"renamed_total\":11}"
-                }]
-            }),
-            anchors: vec![RuntimeRoleAnchor {
-                local_role: 1,
-                selector: ResponseValueSelector::JsonField {
-                    field: "renamed_total".to_owned(),
-                    value_type: AtomValueType::Integer,
-                },
-            }]
-            .into_boxed_slice(),
-        })
-        .expect("renamed surface preserves structural role binding");
-    assert_eq!(renamed_surface.execute_verified().as_deref(), Ok("11"));
-
-    let pre_action = operator
-        .bind_pre_action(
-            "",
-            &json!({
-                "input": [{
-                    "type":"function_call_output",
-                    "output":"{\"runtime_total\":13}"
-                }]
-            }),
-        )
-        .expect("restored circuit grounds a renamed pre-action scalar");
-    assert_eq!(pre_action.execute_verified().as_deref(), Ok("13"));
-    assert_eq!(
-        operator.bind_pre_action(
-            "",
-            &json!({
-                "input": [{
-                    "type":"function_call_output",
-                    "output":"{\"left\":13,\"right\":17}"
-                }]
-            }),
+    // The payload exposes one scalar but not the three relations in the
+    // selected circuit. A manual RuntimeSurfaceEvidence used to bridge this
+    // gap; independent raw grounding must fail closed instead.
+    assert!(matches!(
+        CrystallizedOperator::crystallize(
+            &future_window,
+            sealed.winner_receipt().expect("full phase winner seal"),
+            &future_evidence,
+            &receipts,
         ),
-        Err(nando_response_actor::CrystallizedOperatorError::AmbiguousRuntimeAction)
-    );
-
-    let semantically_swapped = complete_future_surface(32, [1, 0, 2]);
-    assert_eq!(
-        operator.bind(RuntimeSurfaceEvidence {
-            bundle: semantically_swapped,
-            request_text: String::new(),
-            provider_payload: json!({
-                "input": [{
-                    "type":"function_call_output",
-                    "output":"{\"total\":7,\"other\":9}"
-                }]
-            }),
-            anchors: vec![RuntimeRoleAnchor {
-                local_role: 0,
-                selector: ResponseValueSelector::JsonField {
-                    field: "other".to_owned(),
-                    value_type: AtomValueType::Integer,
-                },
-            }]
-            .into_boxed_slice(),
-        }),
-        Err(nando_response_actor::CrystallizedOperatorError::MissingRuntimeAnchor)
-    );
+        Err(CrystallizedOperatorError::IndependentVerifierRejected)
+    ));
 }

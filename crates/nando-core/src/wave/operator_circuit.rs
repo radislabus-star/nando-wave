@@ -78,7 +78,15 @@ pub enum OperatorCircuitError {
 impl OperatorCircuit {
     pub fn new(
         role_count: u8,
+        relations: Vec<OperatorCircuitRelation>,
+    ) -> Result<Self, OperatorCircuitError> {
+        Self::new_with_virtual_roles(role_count, relations, &[])
+    }
+
+    pub fn new_with_virtual_roles(
+        role_count: u8,
         mut relations: Vec<OperatorCircuitRelation>,
+        virtual_roles: &[u8],
     ) -> Result<Self, OperatorCircuitError> {
         if role_count == 0 || relations.is_empty() {
             return Err(OperatorCircuitError::EmptyCircuit);
@@ -107,7 +115,7 @@ impl OperatorCircuit {
             }
             previous = Some(relation.cell);
         }
-        if !relations_are_connected(role_count, &relations) {
+        if !relations_are_connected(role_count, &relations, virtual_roles) {
             return Err(OperatorCircuitError::DisconnectedCircuit);
         }
 
@@ -173,7 +181,11 @@ impl VerifiedPartialRelationWave {
     }
 }
 
-fn relations_are_connected(role_count: u8, relations: &[OperatorCircuitRelation]) -> bool {
+fn relations_are_connected(
+    role_count: u8,
+    relations: &[OperatorCircuitRelation],
+    virtual_roles: &[u8],
+) -> bool {
     let mut adjacency = BTreeMap::<u8, BTreeSet<u8>>::new();
     let mut active_roles = BTreeSet::new();
     for relation in relations {
@@ -188,7 +200,12 @@ fn relations_are_connected(role_count: u8, relations: &[OperatorCircuitRelation]
             .or_default()
             .insert(relation.cell.source_role);
     }
-    if active_roles.len() != usize::from(role_count) {
+    let virtual_roles = virtual_roles.iter().copied().collect::<BTreeSet<_>>();
+    if virtual_roles
+        .iter()
+        .any(|role| *role >= role_count || active_roles.contains(role))
+        || active_roles.len().saturating_add(virtual_roles.len()) != usize::from(role_count)
+    {
         return false;
     }
 

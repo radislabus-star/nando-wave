@@ -2,13 +2,14 @@ use std::collections::BTreeSet;
 
 use nando_core::wave::{
     BlueprintFutureEvidence, CandidateCubeField, CandidateCubeFieldError,
-    CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow, OPERATOR_PAGE32_BYTES,
-    OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES, OPERATOR_PAGE32_RENDERER_BYTES,
-    OPERATOR_ROLE_NONE, OperatorCircuit, OperatorCircuitRelation, OperatorGrokkingConfig,
-    OperatorPage32, OperatorPage32Error, OperatorPage32Metadata, OperatorRelationCell,
-    PhaseCenterCell, RoleGraph, RuntimeRoleBinder, SealedBlueprintWinnerReceipt, SearchCompletion,
-    StructuralRole16, SurfaceFragmentBundle, TernaryOperatorCube32, TernaryRelationState,
-    TransformOp8,
+    CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow, LocalRelationFragment,
+    OPERATOR_PAGE32_BYTES, OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES,
+    OPERATOR_PAGE32_RENDERER_BYTES, OPERATOR_ROLE_NONE, OperatorCircuit, OperatorCircuitRelation,
+    OperatorGrokkingConfig, OperatorPage32, OperatorPage32Error, OperatorPage32Metadata,
+    OperatorRelationCell, PhaseCenterCell, RoleGraph, RuntimeRoleBinder,
+    SealedBlueprintWinnerReceipt, SearchCompletion, StructuralRole16, StructuralRoleSignature,
+    SurfaceFragmentBundle, TernaryOperatorCube32, TernaryRelationState, TransformOp8,
+    TypedProgramAtom, phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -65,6 +66,7 @@ pub struct BoundRoleEnvironment {
     local_to_canonical: Box<[u8]>,
     mapping_sha256: Commitment256,
     action_equivalence_sha256: Commitment256,
+    phase_fit_fixed: i64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -380,22 +382,30 @@ impl VerifiedCrystallizedOperator {
             return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
         };
         let expected_type = transform_value_type(transform.parameter)?;
-        let bundle = runtime_bundle_from_operator(&self.operator, request_text, provider_payload)?;
+        let payload = serde_json::to_vec(provider_payload)
+            .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
+        let lineage_sha256 = digest_parts(
+            b"nando.runtime-operator-lineage.v1",
+            &[request_text.as_bytes(), &payload],
+        );
+        let surface_sha256 = digest_parts(
+            b"nando.observed-runtime-surface.v1",
+            &[request_text.as_bytes(), &payload],
+        );
         let mut actions = std::collections::BTreeMap::<String, BoundCrystallizedOperator>::new();
         for selector in crate::collection_synthesis::learned_selector_candidates(provider_payload) {
             if selector_value_type(&selector) != Some(expected_type) {
                 continue;
             }
-            let evidence = RuntimeSurfaceEvidence {
-                bundle: bundle.clone(),
-                request_text: request_text.to_owned(),
-                provider_payload: provider_payload.clone(),
-                anchors: vec![RuntimeRoleAnchor {
-                    local_role: transform.source_a,
-                    selector,
-                }]
-                .into_boxed_slice(),
-            };
+            let evidence = observed_scalar_surface(
+                request_text,
+                provider_payload,
+                selector,
+                *transform,
+                [0, 1, 2],
+                lineage_sha256,
+                surface_sha256,
+            )?;
             let Ok(bound) = bind_operator_components(
                 &self.operator.role_graph,
                 &self.operator.relation_program,
@@ -611,23 +621,9 @@ impl VerifiedCrystallizedOperator {
                 .collect(),
         )
         .ok_or(CrystallizedOperatorError::RestartDecode)?;
-        let relation_program = OperatorCircuit::new(
-            role_graph.role_count(),
-            registry
-                .relations
-                .into_iter()
-                .map(restart_relation)
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-        .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
         let header = page
             .header()
             .map_err(CrystallizedOperatorError::InvalidPage)?;
-        if relation_program.fingerprint64() != header.circuit_fingerprint64
-            || usize::from(header.role_count) != role_graph.canonical_roles().len()
-        {
-            return Err(CrystallizedOperatorError::RestartDigestMismatch);
-        }
         let transform_program = (0..usize::from(header.transform_count))
             .map(|index| {
                 page.transform(index)
@@ -635,6 +631,33 @@ impl VerifiedCrystallizedOperator {
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_boxed_slice();
+        let relations = registry
+            .relations
+            .into_iter()
+            .map(restart_relation)
+            .collect::<Result<Vec<_>, _>>()?;
+        let observed_roles = relations
+            .iter()
+            .flat_map(|relation| [relation.cell.source_role, relation.cell.target_role])
+            .collect::<BTreeSet<_>>();
+        let virtual_roles = transform_program
+            .iter()
+            .map(|transform| transform.output)
+            .filter(|role| !observed_roles.contains(role))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let relation_program = OperatorCircuit::new_with_virtual_roles(
+            role_graph.role_count(),
+            relations,
+            &virtual_roles,
+        )
+        .map_err(|_| CrystallizedOperatorError::RestartDecode)?;
+        if relation_program.fingerprint64() != header.circuit_fingerprint64
+            || usize::from(header.role_count) != role_graph.canonical_roles().len()
+        {
+            return Err(CrystallizedOperatorError::RestartDigestMismatch);
+        }
         let parity_seal = ExecutableParitySeal::try_from(registry.parity_seal)?;
         if parity_seal.winner_seal_sha256 != registry.winner_seal_sha256 {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
@@ -670,41 +693,76 @@ impl VerifiedCrystallizedOperator {
     }
 }
 
-fn runtime_bundle_from_operator(
-    operator: &CrystallizedOperator,
+pub(crate) fn observed_scalar_surface(
     request_text: &str,
     provider_payload: &Value,
-) -> Result<SurfaceFragmentBundle, CrystallizedOperatorError> {
-    let payload = serde_json::to_vec(provider_payload)
-        .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
-    let lineage_sha256 = digest_parts(
-        b"nando.runtime-operator-lineage.v1",
-        &[request_text.as_bytes(), &payload],
-    );
-    let surface_sha256 = digest_parts(
-        b"nando.runtime-operator-surface.v1",
-        &[&operator.blueprint_sha256, &payload],
-    );
-    let relations = operator
-        .relation_program
-        .relations()
-        .iter()
-        .map(|relation| nando_core::wave::LocalRelationFragment {
-            plane: relation.cell.plane,
-            source_local_role: relation.cell.source_role,
-            target_local_role: relation.cell.target_role,
-            state: relation.state,
-            phase_anchor: relation.phase_anchor,
-        })
-        .collect();
-    SurfaceFragmentBundle::new(
+    selector: ResponseValueSelector,
+    transform: TransformOp8,
+    semantic_to_local: [u8; 3],
+    lineage_sha256: Commitment256,
+    surface_sha256: Commitment256,
+) -> Result<RuntimeSurfaceEvidence, CrystallizedOperatorError> {
+    validate_scalar_transform(transform)?;
+    let value_type = transform_value_type(transform.parameter)?;
+    if selector_value_type(&selector) != Some(value_type) {
+        return Err(CrystallizedOperatorError::MissingRuntimeAnchor);
+    }
+    let context = semantic_to_local[0];
+    let source = semantic_to_local[1];
+    let output = semantic_to_local[2];
+    let mut roles = vec![StructuralRoleSignature::new(0, 0, 0, 0, Vec::new()); 3];
+    roles[usize::from(context)] = StructuralRoleSignature::new(5, 1, 0, 1, vec![0]);
+    roles[usize::from(source)] =
+        StructuralRoleSignature::new(runtime_value_type_tag(value_type), 1, 1, 2, vec![0]);
+    roles[usize::from(output)] =
+        StructuralRoleSignature::new(runtime_value_type_tag(value_type), 1, 2, 4, Vec::new());
+    let phase_atoms = [
+        format!("scalar_type:{}", runtime_value_type_tag(value_type)),
+        "cardinality:unique".to_owned(),
+        format!("format:{}", transform.flags),
+    ];
+    let phase = phase_vector_from_atoms(phase_atoms.iter().map(String::as_str), 1)[0];
+    let bundle = SurfaceFragmentBundle::new(
         lineage_sha256,
         surface_sha256,
-        operator.role_graph.canonical_roles().to_vec(),
-        relations,
-        Vec::new(),
+        roles,
+        vec![LocalRelationFragment {
+            plane: 0,
+            source_local_role: context,
+            target_local_role: source,
+            state: TernaryRelationState::Supported,
+            phase_anchor: phase,
+        }],
+        vec![TypedProgramAtom {
+            opcode: transform.opcode,
+            output_local_role: output,
+            source_a_local_role: source,
+            source_b_local_role: OPERATOR_ROLE_NONE,
+            parameter: transform.parameter,
+            flags: transform.flags,
+        }],
     )
-    .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)
+    .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
+    Ok(RuntimeSurfaceEvidence {
+        bundle,
+        request_text: request_text.to_owned(),
+        provider_payload: provider_payload.clone(),
+        anchors: vec![RuntimeRoleAnchor {
+            local_role: source,
+            selector,
+        }]
+        .into_boxed_slice(),
+    })
+}
+
+const fn runtime_value_type_tag(value_type: AtomValueType) -> u8 {
+    match value_type {
+        AtomValueType::String => 1,
+        AtomValueType::Integer => 2,
+        AtomValueType::Boolean => 3,
+        AtomValueType::Identifier => 4,
+        AtomValueType::Collection => 5,
+    }
 }
 
 impl VerifiedOperatorRestartBundle {
@@ -835,6 +893,11 @@ impl BoundRoleEnvironment {
     pub const fn action_equivalence_sha256(&self) -> &Commitment256 {
         &self.action_equivalence_sha256
     }
+
+    #[must_use]
+    pub const fn phase_fit_fixed(&self) -> i64 {
+        self.phase_fit_fixed
+    }
 }
 
 fn bind_operator_components(
@@ -900,9 +963,9 @@ fn bind_operator_components(
         role_graph,
         relation_program,
         transform_program,
-        &evidence,
+        &evidence.request_text,
+        &evidence.provider_payload,
         &response,
-        mapping,
     )?;
     let mapping_sha256 = digest_parts(
         b"nando.bound-role-mapping.v1",
@@ -914,6 +977,7 @@ fn bind_operator_components(
             local_to_canonical: mapping.local_to_canonical().into(),
             mapping_sha256,
             action_equivalence_sha256,
+            phase_fit_fixed: mapping.phase_fit_fixed(),
         },
         actor,
         verifier,
@@ -926,41 +990,73 @@ fn independently_bind_verifier(
     role_graph: &RoleGraph,
     relation_program: &OperatorCircuit,
     transform_program: &[TransformOp8],
-    evidence: &RuntimeSurfaceEvidence,
+    request_text: &str,
+    provider_payload: &Value,
     actor_response: &str,
-    selected_mapping: &nando_core::wave::RuntimeRoleMapping,
 ) -> Result<VerifierProgram, CrystallizedOperatorError> {
-    let report = RuntimeRoleBinder::bind(
-        role_graph,
-        relation_program,
-        &evidence.bundle,
-        nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
-    );
-    if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
-        return Err(CrystallizedOperatorError::RuntimeBindingExhausted);
-    }
     let [transform] = transform_program else {
         return Err(CrystallizedOperatorError::UnsupportedTransformProgram);
     };
-    let mut selected_verifier = None;
-    for mapping in report.mappings() {
-        let source_local_role = mapping
-            .local_role_for(transform.source_a)
-            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
-        let selector = evidence
-            .anchors
-            .iter()
-            .find(|anchor| anchor.local_role == source_local_role)
-            .map(|anchor| anchor.selector.clone())
-            .ok_or(CrystallizedOperatorError::MissingRuntimeAnchor)?;
-        let verifier = compile_bound_verifier(*transform, selector)?;
-        verify_response_independently(&verifier, &evidence.provider_payload, actor_response)
-            .map_err(|_| CrystallizedOperatorError::AmbiguousRuntimeAction)?;
-        if mapping.local_to_canonical() == selected_mapping.local_to_canonical() {
-            selected_verifier = Some(verifier);
+    let expected_type = transform_value_type(transform.parameter)?;
+    let payload = serde_json::to_vec(provider_payload)
+        .map_err(|_| CrystallizedOperatorError::RuntimeRelationMismatch)?;
+    let lineage_sha256 = digest_parts(
+        b"nando.verifier-runtime-lineage.v1",
+        &[request_text.as_bytes(), &payload],
+    );
+    let surface_sha256 = digest_parts(
+        b"nando.verifier-observed-surface.v1",
+        &[request_text.as_bytes(), &payload],
+    );
+    let mut verified = std::collections::BTreeMap::<String, VerifierProgram>::new();
+    for selector in crate::collection_synthesis::learned_selector_candidates(provider_payload) {
+        if selector_value_type(&selector) != Some(expected_type) {
+            continue;
+        }
+        let Ok(observed) = observed_scalar_surface(
+            request_text,
+            provider_payload,
+            selector,
+            *transform,
+            [0, 1, 2],
+            lineage_sha256,
+            surface_sha256,
+        ) else {
+            continue;
+        };
+        let report = RuntimeRoleBinder::bind(
+            role_graph,
+            relation_program,
+            &observed.bundle,
+            nando_core::wave::OPERATOR_BLUEPRINT_MAX_ALIGNMENTS,
+        );
+        if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
+            return Err(CrystallizedOperatorError::RuntimeBindingExhausted);
+        }
+        for mapping in report.mappings() {
+            let Some(source_local_role) = mapping.local_role_for(transform.source_a) else {
+                continue;
+            };
+            let Some(selector) = observed
+                .anchors
+                .iter()
+                .find(|anchor| anchor.local_role == source_local_role)
+                .map(|anchor| anchor.selector.clone())
+            else {
+                continue;
+            };
+            let verifier = compile_bound_verifier(*transform, selector)?;
+            if verify_response_independently(&verifier, provider_payload, actor_response).is_ok() {
+                let digest = response_independent_verifier_program_digest(&verifier)
+                    .map_err(|_| CrystallizedOperatorError::IndependentVerifierRejected)?;
+                verified.entry(digest).or_insert(verifier);
+            }
         }
     }
-    selected_verifier.ok_or(CrystallizedOperatorError::IndependentVerifierRejected)
+    verified
+        .into_values()
+        .next()
+        .ok_or(CrystallizedOperatorError::IndependentVerifierRejected)
 }
 
 fn compile_bound_actor(
@@ -1485,14 +1581,17 @@ mod tests {
     fn bundle_with_surface(
         lineage: u8,
         surface: u8,
-        phase: PhaseCenterCell,
+        _phase: PhaseCenterCell,
     ) -> SurfaceFragmentBundle {
+        let phase_atoms = ["scalar_type:2", "cardinality:unique", "format:0"];
+        let phase = phase_vector_from_atoms(phase_atoms, 1)[0];
         SurfaceFragmentBundle::new(
             digest(lineage),
             digest(surface),
             vec![
-                StructuralRoleSignature::new(1, 1, 0, 0, vec![0]),
-                StructuralRoleSignature::new(2, 1, 1, 0, vec![0]),
+                StructuralRoleSignature::new(5, 1, 0, 1, vec![0]),
+                StructuralRoleSignature::new(2, 1, 1, 2, vec![0]),
+                StructuralRoleSignature::new(2, 1, 2, 4, Vec::new()),
             ],
             vec![LocalRelationFragment {
                 plane: 0,
@@ -1503,8 +1602,8 @@ mod tests {
             }],
             vec![TypedProgramAtom {
                 opcode: TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR,
-                output_local_role: 1,
-                source_a_local_role: 0,
+                output_local_role: 2,
+                source_a_local_role: 1,
                 source_b_local_role: TRANSFORM_ROLE_NONE,
                 parameter: TRANSFORM_VALUE_INTEGER,
                 flags: 0,
@@ -1565,7 +1664,7 @@ mod tests {
             raw_input_sha256: *evidence.raw_input_sha256(),
             extractor_version: evidence.extractor_version(),
             anchors: vec![RuntimeRoleAnchor {
-                local_role: 0,
+                local_role: 1,
                 selector: ResponseValueSelector::JsonField {
                     field: "total".to_owned(),
                     value_type: AtomValueType::Integer,
@@ -1610,7 +1709,7 @@ mod tests {
                 request_text: String::new(),
                 provider_payload: payload.clone(),
                 anchors: vec![RuntimeRoleAnchor {
-                    local_role: 0,
+                    local_role: 1,
                     selector: ResponseValueSelector::JsonField {
                         field: "total".to_owned(),
                         value_type: AtomValueType::Integer,
@@ -1626,7 +1725,7 @@ mod tests {
                 request_text: String::new(),
                 provider_payload: payload.clone(),
                 anchors: vec![RuntimeRoleAnchor {
-                    local_role: 0,
+                    local_role: 1,
                     selector: ResponseValueSelector::JsonField {
                         field: "total".to_owned(),
                         value_type: AtomValueType::Integer,

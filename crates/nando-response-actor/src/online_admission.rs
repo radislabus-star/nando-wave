@@ -27,7 +27,7 @@ use crate::{
     valid_nonzero_sha256, verify_response_independently,
 };
 
-use crate::LiveScalarAdmissionCandidate;
+use crate::{LiveScalarAdmissionCandidate, LiveScalarShadowState};
 
 #[derive(Clone, Debug)]
 pub struct OnlineAdmissionSnapshot {
@@ -46,7 +46,30 @@ pub fn build_crystallized_admission_snapshot(
 ) -> Result<Option<OnlineAdmissionSnapshot>, &'static str> {
     let mut packages = Vec::new();
     let mut receipts = BTreeMap::new();
-    for candidate in candidates {
+    for submitted in candidates {
+        if submitted.support.len() != 32 || submitted.future.len() != 32 {
+            return Err("crystallized_admission_evidence_window_invalid");
+        }
+        // A deserialized candidate is only an evidence envelope. Rebuild the
+        // winner, causal controls, executable seals and package from the 64
+        // bounded rows so caller-provided proof counters never gain authority.
+        let mut replay = LiveScalarShadowState::default();
+        for row in submitted.support.iter().chain(&submitted.future) {
+            replay.observe(row);
+        }
+        let rebuilt = replay.admission_candidates();
+        let [candidate] = rebuilt.as_slice() else {
+            return Err("crystallized_admission_resynthesis_failed");
+        };
+        if submitted.package != candidate.package
+            || submitted.support_root_sha256 != candidate.support_root_sha256
+            || submitted.future_evidence_root_sha256 != candidate.future_evidence_root_sha256
+            || submitted.future_lineage_root_sha256 != candidate.future_lineage_root_sha256
+            || submitted.winner_seal_sha256 != candidate.winner_seal_sha256
+            || submitted.executable_parity_seal_sha256 != candidate.executable_parity_seal_sha256
+        {
+            return Err("crystallized_admission_resynthesis_mismatch");
+        }
         let mut package = candidate.package.clone();
         if candidate.support.len() != package.proof.support_rows
             || candidate.future.len() != package.proof.future_rows

@@ -1106,9 +1106,24 @@ impl BoundedCircuitBeam {
                 continue;
             };
             let composition_dag = composition_dag(&transform_program);
+            let Some(virtual_roles) = virtual_transform_roles(
+                alignment.canonical_role_count,
+                &mapped,
+                &transform_program,
+            ) else {
+                add_blueprint_blocker(
+                    &mut blocker_counts,
+                    BlueprintSynthesisBlocker::TransformCapacityReached,
+                );
+                continue;
+            };
             for mut relations in beam {
                 canonicalize_phase_gauge(&mut relations);
-                match OperatorCircuit::new(alignment.canonical_role_count, relations) {
+                match OperatorCircuit::new_with_virtual_roles(
+                    alignment.canonical_role_count,
+                    relations,
+                    &virtual_roles,
+                ) {
                     Ok(relation_program) => {
                         let role_graph = RoleGraph {
                             role_count: alignment.canonical_role_count,
@@ -2024,6 +2039,38 @@ fn mapped_transform_program(
         }
     }
     Some(encoded.into_values().collect())
+}
+
+fn virtual_transform_roles(
+    role_count: u8,
+    mapped_relations: &BTreeMap<OperatorRelationCell, BTreeMap<PhaseModeKey, PhaseModeAggregate>>,
+    transforms: &[TransformOp8],
+) -> Option<Vec<u8>> {
+    let observed = mapped_relations
+        .keys()
+        .flat_map(|cell| [cell.source_role, cell.target_role])
+        .collect::<BTreeSet<_>>();
+    let produced = transforms
+        .iter()
+        .map(|transform| transform.output)
+        .collect::<BTreeSet<_>>();
+    for transform in transforms {
+        for source in [transform.source_a, transform.source_b] {
+            if source != OPERATOR_ROLE_NONE
+                && !observed.contains(&source)
+                && !produced.contains(&source)
+            {
+                return None;
+            }
+        }
+    }
+    let virtual_roles = (0..role_count)
+        .filter(|role| !observed.contains(role))
+        .collect::<Vec<_>>();
+    virtual_roles
+        .iter()
+        .all(|role| produced.contains(role))
+        .then_some(virtual_roles)
 }
 
 fn composition_dag(transforms: &[TransformOp8]) -> CompositionDag {
