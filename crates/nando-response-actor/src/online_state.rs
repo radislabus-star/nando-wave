@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,7 @@ use crate::{
 const TRANSFER_DISCOVERY_VERSION: u8 = 2;
 const CROSS_POOL_NEGATIVE_REFRESH_INTERVAL: u64 = 64;
 const MAX_PARITY_RESERVOIR_CASES: usize = 1_024;
+const MAX_PARITY_PAYLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
 fn cross_pool_negative_refresh_due(transitions_seen: u64) -> bool {
     transitions_seen > 0 && transitions_seen % CROSS_POOL_NEGATIVE_REFRESH_INTERVAL == 0
@@ -95,8 +97,92 @@ struct DerivedWinnerCohort {
     physical_adapter_count: usize,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct CompactRuntimeParityCase {
+    evidence_ref_sha256: String,
+    #[serde(default)]
+    request_text: String,
+    #[serde(default, with = "serde_bytes", skip_serializing_if = "Vec::is_empty")]
+    provider_payload_zstd: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    provider_payload_json: Option<Box<str>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    provider_payload: Option<serde_json::Value>,
+    expected_response: String,
+}
+
+impl CompactRuntimeParityCase {
+    fn from_runtime(case: crate::RuntimeParityCase) -> Option<Self> {
+        let provider_payload_json = serde_json::to_vec(&case.provider_payload).ok()?;
+        let provider_payload_zstd = Self::compress_payload(&provider_payload_json)?;
+        Some(Self {
+            evidence_ref_sha256: case.evidence_ref_sha256,
+            request_text: case.request_text,
+            provider_payload_zstd,
+            provider_payload_json: None,
+            provider_payload: None,
+            expected_response: case.expected_response,
+        })
+    }
+
+    fn compact_in_place(&mut self) -> bool {
+        if self.provider_payload_zstd.is_empty() {
+            let json = if let Some(json) = self.provider_payload_json.as_deref() {
+                json.as_bytes().to_vec()
+            } else if let Some(payload) = self.provider_payload.as_ref() {
+                let Ok(json) = serde_json::to_vec(payload) else {
+                    return false;
+                };
+                json
+            } else {
+                return false;
+            };
+            let Some(compressed) = Self::compress_payload(&json) else {
+                return false;
+            };
+            self.provider_payload_zstd = compressed;
+        }
+        self.provider_payload_json = None;
+        self.provider_payload = None;
+        true
+    }
+
+    fn materialize(&self) -> Option<crate::RuntimeParityCase> {
+        let provider_payload = if !self.provider_payload_zstd.is_empty() {
+            let decoder =
+                zstd::stream::read::Decoder::new(self.provider_payload_zstd.as_slice()).ok()?;
+            let mut json = Vec::new();
+            decoder
+                .take(MAX_PARITY_PAYLOAD_BYTES.saturating_add(1))
+                .read_to_end(&mut json)
+                .ok()?;
+            if u64::try_from(json.len()).ok()? > MAX_PARITY_PAYLOAD_BYTES {
+                return None;
+            }
+            serde_json::from_slice(&json).ok()?
+        } else if let Some(json) = self.provider_payload_json.as_deref() {
+            serde_json::from_str(json).ok()?
+        } else {
+            self.provider_payload.clone()?
+        };
+        Some(crate::RuntimeParityCase {
+            evidence_ref_sha256: self.evidence_ref_sha256.clone(),
+            request_text: self.request_text.clone(),
+            provider_payload,
+            expected_response: self.expected_response.clone(),
+        })
+    }
+
+    fn compress_payload(json: &[u8]) -> Option<Vec<u8>> {
+        if u64::try_from(json.len()).ok()? > MAX_PARITY_PAYLOAD_BYTES {
+            return None;
+        }
+        zstd::stream::encode_all(json, 1).ok()
+    }
+}
+
 fn rekey_parity_to_canonical_frames(
-    cases: &mut BTreeMap<String, crate::RuntimeParityCase>,
+    cases: &mut BTreeMap<String, CompactRuntimeParityCase>,
     frames: &mut BTreeMap<String, crate::RelationFrame>,
     canonical_frames: &BTreeMap<(String, String, String), crate::RelationFrame>,
 ) {
@@ -190,11 +276,11 @@ pub struct StreamingSelfTrainingState {
     #[serde(default)]
     dirty_derived_signatures: BTreeSet<String>,
     #[serde(default)]
-    runtime_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
+    runtime_parity_cases: BTreeMap<String, CompactRuntimeParityCase>,
     #[serde(default)]
     runtime_parity_frames: BTreeMap<String, crate::RelationFrame>,
     #[serde(default)]
-    replay_support_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
+    replay_support_parity_cases: BTreeMap<String, CompactRuntimeParityCase>,
     #[serde(default)]
     replay_support_parity_frames: BTreeMap<String, crate::RelationFrame>,
 }
@@ -265,13 +351,13 @@ impl StreamingSelfTrainingState {
                 if !seen.insert(canonical_key) {
                     return None;
                 }
-                by_canonical_key.get(&canonical_key).map(|case| {
-                    let mut case = (*case).clone();
+                by_canonical_key.get(&canonical_key).and_then(|case| {
+                    let mut case = case.materialize()?;
                     // Admission binds a receipt to the exact frozen frame
                     // selected by the restored miner, not to an older
                     // equivalent training-frame identifier.
                     case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
-                    case
+                    Some(case)
                 })
             })
             .collect()
@@ -285,15 +371,11 @@ impl StreamingSelfTrainingState {
             let frame = transition.as_training_relation_frame();
             let frame_id = frame.frame_id_sha256.clone();
             parity_case.evidence_ref_sha256 = frame_id.clone();
-            self.replay_support_parity_cases
-                .insert(frame_id.clone(), parity_case);
-            self.replay_support_parity_frames.insert(frame_id, frame);
-            while self.replay_support_parity_cases.len() > 1_024 {
-                let Some(oldest) = self.replay_support_parity_cases.keys().next().cloned() else {
-                    break;
-                };
-                self.replay_support_parity_cases.remove(&oldest);
-                self.replay_support_parity_frames.remove(&oldest);
+            if let Some(parity_case) = CompactRuntimeParityCase::from_runtime(parity_case) {
+                self.replay_support_parity_cases
+                    .insert(frame_id.clone(), parity_case);
+                self.replay_support_parity_frames.insert(frame_id, frame);
+                self.enforce_parity_reservoir_limit();
             }
         }
         if !self.discovery.observe_transition(transition)? {
@@ -337,7 +419,7 @@ impl StreamingSelfTrainingState {
             transition.runtime_parity_case = self
                 .replay_support_parity_cases
                 .get(&frame.frame_id_sha256)
-                .cloned();
+                .and_then(CompactRuntimeParityCase::materialize);
             aliases.observe_transition(&transition);
         }
         *self.discovery.semantic_alias_graph_mut() = aliases;
@@ -446,8 +528,13 @@ impl StreamingSelfTrainingState {
         // support merely because it predates the live parity reservoir.
         self.repair_parity_frames_from_discovery();
         self.enforce_parity_reservoir_limit();
-        let mut parity_cases = self.replay_support_parity_cases.clone();
-        parity_cases.extend(self.runtime_parity_cases.clone());
+        let parity_cases = self
+            .replay_support_parity_cases
+            .values()
+            .chain(self.runtime_parity_cases.values())
+            .filter_map(CompactRuntimeParityCase::materialize)
+            .map(|case| (case.evidence_ref_sha256.clone(), case))
+            .collect::<BTreeMap<_, _>>();
         self.discovery.enrich_action_schemas(&parity_cases);
         self.discovery.recanonicalize_teacher_signatures()?;
         self.repair_parity_frames_from_discovery();
@@ -574,11 +661,13 @@ impl StreamingSelfTrainingState {
             let training_frame = transition.as_training_relation_frame();
             let training_frame_id = training_frame.frame_id_sha256.clone();
             parity_case.evidence_ref_sha256 = training_frame_id.clone();
-            self.runtime_parity_cases
-                .insert(training_frame_id.clone(), parity_case);
-            self.runtime_parity_frames
-                .insert(training_frame_id, training_frame);
-            self.enforce_parity_reservoir_limit();
+            if let Some(parity_case) = CompactRuntimeParityCase::from_runtime(parity_case) {
+                self.runtime_parity_cases
+                    .insert(training_frame_id.clone(), parity_case);
+                self.runtime_parity_frames
+                    .insert(training_frame_id, training_frame);
+                self.enforce_parity_reservoir_limit();
+            }
         }
     }
 
@@ -586,6 +675,10 @@ impl StreamingSelfTrainingState {
     /// Fresh live receipts take precedence; replay exists only to fill the
     /// remaining capacity during schema migrations.
     fn enforce_parity_reservoir_limit(&mut self) {
+        self.runtime_parity_cases
+            .retain(|_, case| case.compact_in_place());
+        self.replay_support_parity_cases
+            .retain(|_, case| case.compact_in_place());
         self.runtime_parity_cases
             .retain(|frame_id, _| self.runtime_parity_frames.contains_key(frame_id));
         self.runtime_parity_frames
@@ -999,7 +1092,7 @@ impl StreamingSelfTrainingState {
                     .runtime_parity_cases
                     .get(&frame.frame_id_sha256)
                     .or_else(|| self.replay_support_parity_cases.get(&frame.frame_id_sha256))
-                    .cloned()
+                    .and_then(CompactRuntimeParityCase::materialize)
                 else {
                     continue;
                 };
@@ -1444,7 +1537,7 @@ impl StreamingSelfTrainingState {
                                 .or_else(|| {
                                     self.replay_support_parity_cases.get(&frame.frame_id_sha256)
                                 })
-                                .cloned()
+                                .and_then(CompactRuntimeParityCase::materialize)
                         })
                         .collect(),
                 })
@@ -1953,6 +2046,7 @@ impl StreamingSelfTrainingState {
                     .runtime_parity_cases
                     .get(&frame.frame_id_sha256)
                     .or_else(|| self.replay_support_parity_cases.get(&frame.frame_id_sha256))
+                    .and_then(CompactRuntimeParityCase::materialize)
                     .is_some_and(|parity| {
                         let execution = crate::execute_response(
                             &winner.program,
@@ -2550,12 +2644,13 @@ mod tests {
             let frame_id = frame.frame_id_sha256.clone();
             state.replay_support_parity_cases.insert(
                 frame_id.clone(),
-                crate::RuntimeParityCase {
+                CompactRuntimeParityCase::from_runtime(crate::RuntimeParityCase {
                     evidence_ref_sha256: frame_id.clone(),
                     request_text: "replay".to_owned(),
                     provider_payload: json!({"index": index}),
                     expected_response: "{}".to_owned(),
-                },
+                })
+                .expect("compact replay parity"),
             );
             state.replay_support_parity_frames.insert(frame_id, frame);
         }
@@ -2564,12 +2659,13 @@ mod tests {
             let frame_id = frame.frame_id_sha256.clone();
             state.runtime_parity_cases.insert(
                 frame_id.clone(),
-                crate::RuntimeParityCase {
+                CompactRuntimeParityCase::from_runtime(crate::RuntimeParityCase {
                     evidence_ref_sha256: frame_id.clone(),
                     request_text: "live".to_owned(),
                     provider_payload: json!({"index": index}),
                     expected_response: "{}".to_owned(),
-                },
+                })
+                .expect("compact live parity"),
             );
             state.runtime_parity_frames.insert(frame_id, frame);
         }
@@ -2586,6 +2682,29 @@ mod tests {
             state.replay_support_parity_cases.len(),
             state.replay_support_parity_frames.len()
         );
+    }
+
+    #[test]
+    fn compact_parity_reads_legacy_payload_and_materializes_exactly() {
+        let original = crate::RuntimeParityCase {
+            evidence_ref_sha256: "a".repeat(64),
+            request_text: "continue".to_owned(),
+            provider_payload: json!({"input": [{"value": 7}], "mode": "test"}),
+            expected_response: "7".to_owned(),
+        };
+        let legacy = serde_json::to_value(&original).expect("legacy parity value");
+        let mut compact: CompactRuntimeParityCase =
+            serde_json::from_value(legacy).expect("legacy compact restore");
+
+        assert!(compact.compact_in_place());
+        assert!(!compact.provider_payload_zstd.is_empty());
+        assert!(compact.provider_payload_json.is_none());
+        assert!(compact.provider_payload.is_none());
+        assert_eq!(compact.materialize(), Some(original));
+        let stored = serde_json::to_value(&compact).expect("compact parity value");
+        assert!(stored.get("provider_payload").is_none());
+        assert!(stored.get("provider_payload_json").is_none());
+        assert!(stored.get("provider_payload_zstd").is_some());
     }
 
     #[test]
@@ -2619,12 +2738,13 @@ mod tests {
         );
         state.runtime_parity_cases.insert(
             canonical_training.frame_id_sha256.clone(),
-            crate::RuntimeParityCase {
+            CompactRuntimeParityCase::from_runtime(crate::RuntimeParityCase {
                 evidence_ref_sha256: canonical_training.frame_id_sha256.clone(),
                 request_text: "continue".to_owned(),
                 provider_payload: json!({"input": []}),
                 expected_response: "{}".to_owned(),
-            },
+            })
+            .expect("compact runtime parity"),
         );
         state
             .runtime_parity_frames
@@ -2667,9 +2787,10 @@ mod tests {
             .take()
             .expect("runtime parity case");
         parity.evidence_ref_sha256.clone_from(&stale_id);
-        state
-            .replay_support_parity_cases
-            .insert(stale_id.clone(), parity);
+        state.replay_support_parity_cases.insert(
+            stale_id.clone(),
+            CompactRuntimeParityCase::from_runtime(parity).expect("compact replay parity"),
+        );
         state
             .replay_support_parity_frames
             .insert(stale_id.clone(), stale_frame);
