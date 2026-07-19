@@ -67,6 +67,7 @@ const ONLINE_COLLECTION_POOLING_STRATEGY_V29: u32 = 29;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V31: u32 = 31;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V32: u32 = 32;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V33: u32 = 33;
+const ONLINE_COLLECTION_POOLING_STRATEGY_V34: u32 = 34;
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V2: &[u8; 4] = b"NCO2";
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NCO3";
 const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
@@ -537,7 +538,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V33,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V34,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -859,6 +860,11 @@ impl OnlineCollectionMiner {
             // recover law subcenters without retaining provider payloads.
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V33;
         }
+        let exact_subcenter_dedup_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V34;
+        if exact_subcenter_dedup_migrated {
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V34;
+        }
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -890,8 +896,12 @@ impl OnlineCollectionMiner {
             || concrete_adapter_law_migrated
             || canonical_alignment_refresh_migrated
             || durable_phase_adapter_refresh_migrated
-            || durable_law_subcenter_refresh_migrated;
+            || durable_law_subcenter_refresh_migrated
+            || exact_subcenter_dedup_migrated;
         if checkpoint_migrated {
+            if exact_subcenter_dedup_migrated {
+                miner.deduplicate_exact_unfrozen_buckets()?;
+            }
             if pre_v17_migrated {
                 miner.merge_converged_unfrozen_buckets()?;
             }
@@ -899,6 +909,7 @@ impl OnlineCollectionMiner {
                 (0..miner.checkpoint.buckets.len()).collect::<Vec<_>>()
             } else if durable_phase_adapter_refresh_migrated
                 || durable_law_subcenter_refresh_migrated
+                || exact_subcenter_dedup_migrated
             {
                 miner
                     .checkpoint
@@ -1964,6 +1975,45 @@ impl OnlineCollectionMiner {
             self.normalize_bucket_receipts(index);
             self.freeze_or_split(index)?;
             index = index.saturating_add(1);
+        }
+        Ok(())
+    }
+
+    fn deduplicate_exact_unfrozen_buckets(&mut self) -> Result<(), String> {
+        let mut keepers = BTreeMap::<String, (usize, String)>::new();
+        let mut remove = BTreeSet::<usize>::new();
+        for (index, bucket) in self.checkpoint.buckets.iter().enumerate() {
+            if bucket.frozen_program_sha256.is_some() {
+                continue;
+            }
+            let fingerprint = canonical_json_sha256(&(
+                "nando.collection-unfrozen-proof-state.v1",
+                &bucket.programs,
+                &bucket.common_request_atom_ids,
+                &bucket.support,
+                &bucket.future,
+                &bucket.runtime_examples,
+                &bucket.durable_runtime_parity_receipts,
+                &bucket.rejected_program_sha256,
+                &bucket.learned_anti_atom_ids,
+                bucket.wrong_accepts,
+            ))
+            .map_err(str::to_owned)?;
+            match keepers.get(&fingerprint) {
+                Some((keeper_index, keeper_id)) if bucket.bucket_id < *keeper_id => {
+                    remove.insert(*keeper_index);
+                    keepers.insert(fingerprint, (index, bucket.bucket_id.clone()));
+                }
+                Some(_) => {
+                    remove.insert(index);
+                }
+                None => {
+                    keepers.insert(fingerprint, (index, bucket.bucket_id.clone()));
+                }
+            }
+        }
+        for index in remove.into_iter().rev() {
+            self.checkpoint.buckets.remove(index);
         }
         Ok(())
     }
@@ -4143,6 +4193,16 @@ fn support_law_subcenters(
             .iter()
             .map(|receipt| receipt.evidence_graph_sha256.clone())
             .collect::<BTreeSet<_>>();
+        let parent_support_ids = bucket
+            .support
+            .iter()
+            .map(|receipt| receipt.evidence_graph_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let selected_program_ids = programs.keys().cloned().collect::<BTreeSet<_>>();
+        let parent_program_ids = bucket.programs.keys().cloned().collect::<BTreeSet<_>>();
+        if support_ids == parent_support_ids && selected_program_ids == parent_program_ids {
+            continue;
+        }
         let law_commitment_sha256 = sha256_bytes(&law_key);
         let bucket_id = canonical_json_sha256(&(
             "nando.collection-support-law-subcenter.v1",
@@ -4736,7 +4796,7 @@ fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V33
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V34
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -7449,7 +7509,7 @@ mod tests {
         let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
         assert_eq!(
             migrated.checkpoint.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert_eq!(migrated.status().frozen_buckets_total, 1);
         fs::remove_dir_all(root).expect("cleanup");
@@ -7518,6 +7578,39 @@ mod tests {
         assert_eq!(subcenters[0].support.len(), 40);
         assert_eq!(subcenters[0].programs.len(), 1);
         assert!(subcenters[0].programs.contains_key(&plain_digest));
+        assert!(
+            support_law_subcenters(&subcenters[0], 32, 128)
+                .expect("no recursive law subcenter")
+                .is_empty()
+        );
+
+        let root = std::env::temp_dir().join(format!(
+            "nando-exact-subcenter-dedup-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("root");
+        let path = root.join("collection.checkpoint");
+        let config = OnlineCollectionConfig::default();
+        let mut left = subcenters[0].clone();
+        left.bucket_id = "3".repeat(64);
+        left.archetype_id = "4".repeat(64);
+        let mut right = left.clone();
+        right.bucket_id = "5".repeat(64);
+        right.archetype_id = "6".repeat(64);
+        let mut legacy = OnlineCollectionMiner::open(&path, config).expect("v33 shell");
+        legacy.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V33;
+        legacy.checkpoint.buckets = vec![right, left];
+        legacy.persist().expect("persist duplicate v33 children");
+        drop(legacy);
+
+        let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v34");
+        assert_eq!(
+            migrated.checkpoint.pooling_strategy_version,
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
+        );
+        assert_eq!(migrated.checkpoint.buckets.len(), 1);
+        assert_eq!(migrated.checkpoint.buckets[0].bucket_id, "3".repeat(64));
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
@@ -8841,7 +8934,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert_eq!(status.frozen_buckets_total, 0);
         assert_eq!(status.future_receipts_unique_total, 0);
@@ -8920,7 +9013,7 @@ mod tests {
         let status = migrated.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
         assert_eq!(status.support_receipts_unique_total, 0);
@@ -8990,7 +9083,7 @@ mod tests {
         let bucket = migrated.checkpoint.buckets.first().expect("bucket");
         assert_eq!(
             migrated.status().pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert!(bucket.rejected_program_sha256.contains(&historical_digest));
         assert!(bucket.learned_anti_atom_ids.is_empty());
@@ -9261,7 +9354,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert_eq!(status.observations_total, observations);
         assert_eq!(status.support_receipts_unique_total, support);
@@ -9361,7 +9454,7 @@ mod tests {
         let status = restored.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert_eq!(status.future_receipts_unique_total, 0);
         assert_eq!(status.wrong_accepts_total, 0);
@@ -9823,7 +9916,7 @@ mod tests {
         let status = miner.status();
         assert_eq!(
             status.pooling_strategy_version,
-            ONLINE_COLLECTION_POOLING_STRATEGY_V33
+            ONLINE_COLLECTION_POOLING_STRATEGY_V34
         );
         assert!(
             status
