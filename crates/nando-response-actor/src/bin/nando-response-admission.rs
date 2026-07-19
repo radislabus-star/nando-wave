@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -345,6 +345,34 @@ fn run(started: Instant) -> Result<(), String> {
             },
         );
     };
+    if active_generation_is_immutable(
+        &registry_path,
+        &controller_admission_path,
+        &authority_candidate_path,
+        &marker_path,
+        &snapshot.registry,
+    ) {
+        let active_packages = snapshot.registry.packages.len();
+        return write_report(
+            &report_path,
+            AdmissionControllerReport {
+                schema: "nando.response-admission-controller-report.v1",
+                verdict: "PASS",
+                blocker: Some("active_generation_immutable".to_owned()),
+                candidate_revision: bundle.revision,
+                relation_candidates: bundle.relation_candidates.len(),
+                collection_candidates: bundle.collection_candidates.len(),
+                crystallized_candidates: bundle.crystallized_candidates.len(),
+                relation_max_future_rows,
+                relation_max_runtime_parity_cases,
+                collection_max_future_rows,
+                collection_max_runtime_parity_cases,
+                active_packages,
+                last_known_good_preserved: true,
+                elapsed_micros: elapsed_micros(started),
+            },
+        );
+    }
     let active_packages = snapshot.registry.packages.len();
     ResponseExecutor::from_registry_with_admission(
         snapshot.registry.clone(),
@@ -473,6 +501,38 @@ fn last_known_good_package_count(
         .and_then(|bytes| serde_json::from_slice::<ResponseRegistry>(&bytes).ok())
         .filter(|registry| registry.validate().is_ok())
         .map_or(0, |registry| registry.packages.len())
+}
+
+fn active_generation_is_immutable(
+    registry_path: &Path,
+    admission_path: &Path,
+    authority_candidate_path: &Path,
+    marker_path: &Path,
+    candidate: &ResponseRegistry,
+) -> bool {
+    if !admission_path.is_file() || !authority_candidate_path.is_file() || !marker_path.is_file() {
+        return false;
+    }
+    let Ok(bytes) = fs::read(registry_path) else {
+        return false;
+    };
+    let Ok(existing) = serde_json::from_slice::<ResponseRegistry>(&bytes) else {
+        return false;
+    };
+    if existing.validate().is_err() || candidate.validate().is_err() {
+        return false;
+    }
+    let existing_ids = existing
+        .packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let candidate_ids = candidate
+        .packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    !existing_ids.is_empty() && existing_ids == candidate_ids
 }
 
 fn sha256_file(path: &Path, label: &str) -> Result<String, String> {
