@@ -1868,59 +1868,77 @@ impl StreamingSelfTrainingState {
                 .generations
                 .get(&winner.cohort_id_sha256)
                 .map_or(0, |generation| generation.generation);
-            let (next, allow_support_repartition) =
-                if let Some(current) = self.generations.get(&winner.cohort_id_sha256) {
-                    let partition_upgrade = current.partition_version < FROZEN_PARTITION_VERSION;
-                    let incomplete_support =
-                        !support_partition_complete(current.support.len(), self.rollover_policy);
-                    let can_repartition = partition_upgrade || incomplete_support;
-                    let refrozen = can_repartition.then(|| {
-                        freeze_generation(
-                            winner,
-                            &pool,
-                            self.rollover_policy,
-                            generation_number,
-                            &support_eligible_ids,
-                            &future_eligible_ids,
-                        )
+            let (next, allow_support_repartition) = if let Some(current) =
+                self.generations.get(&winner.cohort_id_sha256)
+            {
+                let partition_upgrade = current.partition_version < FROZEN_PARTITION_VERSION;
+                let incomplete_support =
+                    !support_partition_complete(current.support.len(), self.rollover_policy);
+                let incomplete_support_evidence = !generation_support_parity_complete(
+                    current,
+                    &support_eligible_ids,
+                    self.rollover_policy,
+                );
+                let can_repartition =
+                    partition_upgrade || incomplete_support || incomplete_support_evidence;
+                let refrozen_generation = if incomplete_support_evidence {
+                    generation_number.saturating_add(1)
+                } else {
+                    generation_number
+                };
+                let refrozen = can_repartition.then(|| {
+                    freeze_generation(
+                        winner,
+                        &pool,
+                        self.rollover_policy,
+                        refrozen_generation,
+                        &support_eligible_ids,
+                        &future_eligible_ids,
+                    )
+                });
+                let proof_repartition_improves = incomplete_support_evidence
+                    && refrozen.as_ref().is_some_and(|candidate| {
+                        support_partition_complete(candidate.support.len(), self.rollover_policy)
+                            && candidate.support != current.support
                     });
-                    let repartition_improves = partition_upgrade
-                        || incomplete_support
-                        || refrozen.as_ref().is_some_and(|candidate| {
-                            candidate.support.len() >= current.support.len()
-                                && candidate.wrong_future_rows <= current.wrong_future_rows
-                                && (candidate.support.len() > current.support.len()
-                                    || candidate.future.len() > current.future.len()
-                                    || candidate.future_sessions > current.future_sessions
-                                    || (current.blocker.is_some() && candidate.blocker.is_none()))
-                        });
-                    if repartition_improves {
-                        (refrozen.expect("checked above"), true)
-                    } else {
-                        (
-                            refresh_frozen_generation(
-                                current,
-                                winner,
-                                &pool,
-                                self.rollover_policy,
-                                &future_eligible_ids,
-                            ),
-                            false,
-                        )
-                    }
+                let repartition_improves = partition_upgrade
+                    || incomplete_support
+                    || proof_repartition_improves
+                    || refrozen.as_ref().is_some_and(|candidate| {
+                        candidate.support.len() >= current.support.len()
+                            && candidate.wrong_future_rows <= current.wrong_future_rows
+                            && (candidate.support.len() > current.support.len()
+                                || candidate.future.len() > current.future.len()
+                                || candidate.future_sessions > current.future_sessions
+                                || (current.blocker.is_some() && candidate.blocker.is_none()))
+                    });
+                if repartition_improves {
+                    (refrozen.expect("checked above"), true)
                 } else {
                     (
-                        freeze_generation(
+                        refresh_frozen_generation(
+                            current,
                             winner,
                             &pool,
                             self.rollover_policy,
-                            generation_number,
-                            &support_eligible_ids,
                             &future_eligible_ids,
                         ),
-                        true,
+                        false,
                     )
-                };
+                }
+            } else {
+                (
+                    freeze_generation(
+                        winner,
+                        &pool,
+                        self.rollover_policy,
+                        generation_number,
+                        &support_eligible_ids,
+                        &future_eligible_ids,
+                    ),
+                    true,
+                )
+            };
             let replace = self
                 .generations
                 .get(&winner.cohort_id_sha256)
@@ -2273,6 +2291,19 @@ fn generation_evidence_improves(current: &FrozenGeneration, next: &FrozenGenerat
             || (current.blocker.is_some() && next.blocker.is_none()))
 }
 
+fn generation_support_parity_complete(
+    generation: &FrozenGeneration,
+    parity_ids: &BTreeSet<String>,
+    policy: RolloverPolicy,
+) -> bool {
+    let receipt_backed = generation
+        .support
+        .iter()
+        .filter(|frame| parity_ids.contains(&frame.frame_id_sha256))
+        .count();
+    support_partition_complete(receipt_backed, policy)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2427,6 +2458,29 @@ mod tests {
             wrong_future_rows: 0,
             blocker: Some("future_rows_below_32".to_owned()),
         }
+    }
+
+    #[test]
+    fn frozen_support_requires_complete_runtime_parity() {
+        let generation = generation();
+        let mut parity_ids = generation
+            .support
+            .iter()
+            .take(31)
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+
+        assert!(!generation_support_parity_complete(
+            &generation,
+            &parity_ids,
+            RolloverPolicy::default()
+        ));
+        parity_ids.insert(generation.support[31].frame_id_sha256.clone());
+        assert!(generation_support_parity_complete(
+            &generation,
+            &parity_ids,
+            RolloverPolicy::default()
+        ));
     }
 
     #[test]
