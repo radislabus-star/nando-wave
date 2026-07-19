@@ -57,7 +57,10 @@ pub enum LiveScalarShadowBlocker {
     // Kept for checkpoints written before support rows were separated from
     // session-diversity evidence. New generations no longer emit this blocker.
     SupportSessionReused,
+    // Legacy checkpoints counted every repeated future session as a blocker.
+    // New generations only reject overlap across the support/future boundary.
     FutureSessionReused,
+    SupportFutureSessionOverlap,
     FutureCapacityReached,
     HistoricalSupportCapacityReached,
 }
@@ -142,21 +145,14 @@ impl LiveScalarShadowState {
             law.support.push(transition.clone());
             return;
         }
-        let support_sessions = law
+        if law
             .support
             .iter()
-            .map(|row| row.before.session_id_sha256.as_str());
-        if support_sessions
-            .chain(
-                law.future
-                    .iter()
-                    .map(|row| row.before.session_id_sha256.as_str()),
-            )
-            .any(|session| session == transition.before.session_id_sha256)
+            .any(|row| row.before.session_id_sha256 == transition.before.session_id_sha256)
         {
             *self
                 .blockers
-                .entry(LiveScalarShadowBlocker::FutureSessionReused)
+                .entry(LiveScalarShadowBlocker::SupportFutureSessionOverlap)
                 .or_default() += 1;
             return;
         }
@@ -1866,6 +1862,33 @@ mod tests {
         assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
         assert_eq!(report.future_rows, 0);
         assert_eq!(report.blockers.get("support_sessions_below_3"), Some(&1));
+    }
+
+    #[test]
+    fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary() {
+        let mut state = LiveScalarShadowState::default();
+        for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {
+            let mut row = transition("total", true);
+            row.before.frame_id_sha256 = format!("{index:064x}");
+            row.before.session_id_sha256 = format!("{:064x}", 1 + index % 3);
+            state.observe(&row);
+        }
+        for index in 1_u64..=LIVE_SCALAR_FUTURE_ROWS as u64 {
+            let mut row = transition("total", true);
+            row.before.frame_id_sha256 = format!("{:064x}", 100 + index);
+            row.before.session_id_sha256 = format!("{:064x}", 101 + index % 3);
+            state.observe(&row);
+        }
+
+        assert_eq!(state.laws.len(), 1);
+        let law = state.laws.values().next().expect("one structural law");
+        assert_eq!(law.support.len(), LIVE_SCALAR_SUPPORT_ROWS);
+        assert_eq!(law.future.len(), LIVE_SCALAR_FUTURE_ROWS);
+        assert!(
+            !state
+                .blockers
+                .contains_key(&LiveScalarShadowBlocker::SupportFutureSessionOverlap)
+        );
     }
 
     #[test]

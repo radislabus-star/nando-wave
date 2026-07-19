@@ -1372,8 +1372,11 @@ core. Never turn discovery into selection among a few pre-named programs.
 8. Every local accept has an independent verifier receipt.
 9. The miner emits evidence-bearing candidates; external admission grants
    authority.
-10. Frozen future is event-time independent from support. Never fabricate or
-   backfill it from support.
+10. Frozen future is event-time independent from support. Support and future
+    session sets must be disjoint, but distinct future frames may share a
+    future-only session. Admission separately requires at least three distinct
+    sessions; it must not silently strengthen 32 future rows into 32 sessions.
+    Never fabricate or backfill future evidence from support.
 11. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
 12. State is bounded and compact. Normal startup must not rescan unbounded
     history, and the hot path must not append unbounded payloads.
