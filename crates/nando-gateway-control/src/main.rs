@@ -488,102 +488,79 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <meta http-equiv="refresh" content="10">
 <title>Nando Gateway</title>
 <style>
-:root {{ color-scheme:light; font-family:Inter,system-ui,sans-serif; background:#f3f5f7; color:#17191c; }}
+:root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
-body {{ margin:0; }}
-header {{ background:#111315; color:#fff; padding:16px 24px; }}
+body {{ margin:0; background:#111315; }}
+header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1px solid #4a5055; }}
 .header-inner {{ width:min(1180px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
 .brand {{ display:flex; align-items:baseline; gap:12px; min-width:0; }}
-h1 {{ margin:0; font-size:20px; letter-spacing:0; }}
-.build {{ color:#aeb6bf; font:600 11px ui-monospace,monospace; overflow-wrap:anywhere; }}
+h1 {{ margin:0; font-size:15px; letter-spacing:0; text-transform:uppercase; }}
+.build {{ color:#7f8991; font-size:10px; overflow-wrap:anywhere; }}
 .mode-wrap {{ display:flex; align-items:center; gap:10px; }}
-.mode-label {{ color:#aeb6bf; font-size:11px; font-weight:700; text-transform:uppercase; }}
-.mode {{ font:800 13px ui-monospace,monospace; color:#76e39d; }}
-main {{ width:min(1180px,100%); margin:0 auto; padding:18px 24px 32px; }}
-.controls {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 18px; }}
-button {{ width:100%; min-height:44px; border:1px solid #aeb4bc; border-radius:6px; background:#fff; color:#17191c; font-weight:750; cursor:pointer; }}
-button:hover {{ border-color:#111315; background:#f9fafb; }}
-.bypass {{ background:#b42318; border-color:#b42318; color:#fff; }}
-.bypass:hover {{ background:#8f1c13; border-color:#8f1c13; }}
-button:disabled {{ opacity:.45; cursor:not-allowed; }}
+.mode-label {{ color:#7f8991; font-size:10px; text-transform:uppercase; }}
+.mode {{ color:#66d98b; font-size:12px; font-weight:700; }}
+main {{ width:min(1180px,100%); margin:0 auto; padding:14px 20px 28px; }}
+.controls {{ display:flex; flex-wrap:wrap; gap:12px; margin:0 0 12px; }}
+.controls form {{ margin:0; }}
+button {{ min-height:0; padding:2px 0; border:0; border-radius:0; background:transparent; color:#aeb7bf; font:700 11px inherit; cursor:pointer; }}
+button::before {{ content:"["; color:#59636b; }}
+button::after {{ content:"]"; color:#59636b; }}
+button:hover {{ color:#fff; background:transparent; }}
+.bypass,.bypass:hover {{ color:#f46d65; background:transparent; }}
+button:disabled {{ color:#535a60; cursor:not-allowed; }}
 .metric-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:32px; }}
-.band {{ border-top:1px solid #d7dbe0; padding:14px 0; min-width:0; }}
-h2 {{ margin:0 0 12px; font-size:15px; letter-spacing:0; }}
-.architecture {{ border-top:3px solid #24272b; padding-top:14px; }}
-.architecture-head {{ display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:14px; }}
-.architecture-title h2 {{ margin-bottom:5px; font-size:17px; }}
-.architecture-title p {{ margin:0; color:#535862; font-size:13px; line-height:1.45; }}
+.band {{ border-top:1px solid #353a3e; padding:12px 0; min-width:0; }}
+h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:12px; letter-spacing:0; text-transform:uppercase; }}
+.architecture {{ padding-top:4px; }}
+.architecture-head {{ display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:8px; }}
+.architecture-title h2 {{ margin-bottom:3px; color:#8ee6a8; font-size:13px; }}
+.architecture-title p {{ margin:0; color:#707a82; font-size:10px; line-height:1.4; }}
 .architecture-state {{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }}
-.state-chip {{ display:inline-flex; align-items:center; justify-content:center; min-width:58px; min-height:24px; padding:3px 8px; border:1px solid currentColor; border-radius:4px; font:800 11px ui-monospace,monospace; }}
-.state-chip.live,.state-chip.pass {{ color:#067647; background:#ecfdf3; }}
-.state-chip.wait {{ color:#8a4b0f; background:#fff7ed; }}
-.state-chip.block {{ color:#b42318; background:#fff1f0; }}
-.state-chip.locked {{ color:#59616b; background:#eef1f4; }}
-.architecture-meta {{ color:#535862; font:700 11px ui-monospace,monospace; }}
-.flow-tree {{ display:grid; grid-template-columns:1fr; }}
-.flow-stage {{ display:grid; grid-template-columns:64px minmax(220px,1.3fr) minmax(240px,1fr) 120px; min-height:104px; border:1px solid #ccd2d8; border-radius:6px; background:#fff; overflow:hidden; }}
-.flow-stage.block {{ border-color:#e3a5a0; box-shadow:inset 4px 0 0 #b42318; }}
-.flow-stage.locked {{ background:#f8f9fa; color:#59616b; }}
-.stage-index {{ display:flex; align-items:center; justify-content:center; border-right:1px solid #e1e4e8; color:#747b84; font:800 12px ui-monospace,monospace; }}
-.stage-copy {{ align-self:center; min-width:0; padding:14px 18px; }}
-.stage-copy h3 {{ margin:0 0 6px; font-size:14px; letter-spacing:0; }}
-.stage-copy p {{ margin:0; color:#535862; font-size:12px; line-height:1.45; }}
-.module-owner {{ align-self:stretch; min-width:0; padding:13px 16px; border-left:1px solid #e1e4e8; display:flex; flex-direction:column; justify-content:center; gap:4px; }}
-.module-name {{ font-size:12px; font-weight:800; }}
-.module-version {{ color:#344054; font:700 11px ui-monospace,monospace; overflow-wrap:anywhere; }}
-.module-owner code {{ color:#667085; font:10px ui-monospace,monospace; overflow-wrap:anywhere; }}
-.stage-result {{ align-self:stretch; padding:12px 14px; border-left:1px solid #e1e4e8; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; gap:5px; text-align:right; }}
-.stage-metric {{ font:850 23px ui-monospace,monospace; color:#17191c; overflow-wrap:anywhere; }}
-.flow-stage.locked .stage-metric {{ color:#59616b; }}
-.stage-metric-label {{ color:#667085; font-size:10px; line-height:1.25; }}
-.flow-edge {{ position:relative; min-height:46px; display:grid; place-items:center; }}
-.flow-edge::before {{ content:""; position:absolute; top:0; bottom:0; left:31px; width:2px; background:#aeb6bf; }}
-.flow-edge::after {{ content:""; position:absolute; bottom:5px; left:27px; width:8px; height:8px; border-right:2px solid #667085; border-bottom:2px solid #667085; transform:rotate(45deg); }}
-.edge-label {{ z-index:1; margin-left:64px; padding:4px 8px; background:#f3f5f7; color:#667085; font:700 10px ui-monospace,monospace; }}
-.flow-edge.failure {{ min-height:88px; margin:8px 0; border:1px solid #e3a5a0; border-radius:6px; background:#fff1f0; grid-template-columns:64px minmax(0,1fr); place-items:stretch; }}
-.flow-edge.failure::before {{ background:#b42318; }}
-.flow-edge.failure::after {{ border-color:#b42318; }}
-.failure-copy {{ grid-column:2; padding:12px 16px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 12px; align-content:center; min-width:0; }}
-.failure-copy strong {{ color:#b42318; font:850 12px ui-monospace,monospace; }}
-.failure-copy span {{ color:#7a271a; font-size:13px; font-weight:750; }}
-.failure-copy code {{ grid-column:2; color:#7a271a; font:11px ui-monospace,monospace; overflow-wrap:anywhere; }}
-.architecture-foot {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin-top:14px; border:1px solid #ccd2d8; background:#ccd2d8; }}
-.invariant {{ background:#fff; padding:11px 12px; }}
-.invariant strong {{ display:block; margin-bottom:3px; font-size:11px; }}
-.invariant span {{ color:#535862; font-size:11px; line-height:1.35; }}
+.state-chip {{ color:#8b949b; font-size:10px; font-weight:700; white-space:nowrap; }}
+.state-chip::before {{ content:"["; }} .state-chip::after {{ content:"]"; }}
+.state-chip.live,.state-chip.pass {{ color:#66d98b; }}
+.state-chip.wait {{ color:#e0b35a; }}
+.state-chip.block {{ color:#ff6b63; }}
+.state-chip.locked {{ color:#70777d; }}
+.architecture-meta {{ color:#707a82; font-size:10px; font-weight:700; }}
+.flow-tree {{ padding:12px 14px; border:1px solid #3f464b; background:#080a0b; font-size:11px; line-height:1.35; overflow-x:auto; }}
+.terminal-stage {{ min-width:620px; }}
+.terminal-line {{ display:grid; grid-template-columns:22px 42px minmax(240px,1fr) minmax(70px,auto) 74px; align-items:baseline; gap:8px; min-height:19px; }}
+.tree-glyph {{ color:#566068; white-space:pre; }}
+.stage-index {{ color:#737e86; }}
+.stage-title {{ color:#dce2e6; font-weight:700; }}
+.stage-metric {{ color:#e5bd63; text-align:right; white-space:nowrap; }}
+.terminal-stage.locked .stage-title,.terminal-stage.locked .stage-metric {{ color:#666e74; }}
+.terminal-detail,.terminal-edge {{ min-width:620px; padding-left:72px; color:#586168; font-size:9px; white-space:nowrap; }}
+.terminal-detail .tree-glyph,.terminal-edge .tree-glyph {{ display:inline-block; width:22px; margin-left:-72px; margin-right:50px; }}
+.terminal-failure {{ min-width:620px; margin:3px 0; grid-template-columns:22px 180px minmax(260px,1fr) auto; color:#ff6b63; }}
+.terminal-failure strong {{ color:#ff6b63; margin-right:8px; }}
+.terminal-failure span {{ color:#ef938e; }}
+.terminal-failure code {{ color:#b87f7b; margin-left:10px; }}
+.terminal-rule {{ padding:7px 2px 0; color:#626c73; font-size:9px; }}
 .compact td {{ padding:5px 0; }}
-details {{ border-top:1px solid #d7dbe0; margin-top:4px; }}
-summary {{ padding:14px 0; cursor:pointer; font-weight:800; font-size:14px; }}
+details {{ border-top:1px solid #353a3e; margin-top:4px; }}
+summary {{ padding:11px 0; color:#9ba4ab; cursor:pointer; font-size:11px; font-weight:700; }}
 .advanced {{ padding-bottom:8px; }}
-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-td {{ padding:6px 0; border-bottom:1px solid #e1e4e8; overflow-wrap:anywhere; vertical-align:top; }}
+table {{ width:100%; border-collapse:collapse; font-size:10px; }}
+td {{ padding:5px 0; border-bottom:1px dotted #3a4044; overflow-wrap:anywhere; vertical-align:top; }}
 td:first-child {{ padding-right:16px; }}
-td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weight:700; }}
-.ok {{ color:#067647; }} .off {{ color:#b42318; }}
-.note {{ margin:0; color:#535862; line-height:1.5; overflow-wrap:anywhere; }}
-@media (max-width:900px) {{
-  .flow-stage {{ grid-template-columns:52px minmax(0,1fr) 110px; }}
-  .module-owner {{ grid-column:2 / 4; border-left:0; border-top:1px solid #e1e4e8; padding:10px 14px; }}
-  .flow-edge::before {{ left:25px; }} .flow-edge::after {{ left:21px; }}
-  .flow-edge.failure {{ grid-template-columns:52px minmax(0,1fr); }}
-  .edge-label {{ margin-left:52px; }}
-}}
+td:last-child {{ text-align:right; font-weight:700; }}
+.ok {{ color:#66d98b; }} .off {{ color:#ff6b63; }}
+.note {{ margin:0; color:#7f8991; font-size:10px; line-height:1.5; overflow-wrap:anywhere; }}
 @media (max-width:680px) {{
   .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
   .header-inner,.brand {{ gap:6px; }}
-  main {{ padding:14px 14px 28px; }}
-  .controls,.metric-grid,.architecture-foot {{ grid-template-columns:1fr; }}
-  .flow-stage {{ grid-template-columns:42px minmax(0,1fr); }}
-  .stage-index {{ grid-row:1 / 3; }}
-  .stage-copy {{ padding:13px 12px; }}
-  .stage-result {{ grid-column:2; align-items:flex-start; border-left:0; border-top:1px solid #e1e4e8; text-align:left; padding:10px 12px; }}
-  .module-owner {{ grid-column:2; padding:10px 12px; }}
-  .flow-edge {{ min-height:42px; }}
-  .flow-edge::before {{ left:20px; }} .flow-edge::after {{ left:16px; }}
-  .flow-edge.failure {{ grid-template-columns:42px minmax(0,1fr); }}
-  .failure-copy {{ grid-template-columns:1fr; padding:11px 12px; }}
-  .failure-copy code {{ grid-column:1; }}
-  .edge-label {{ margin-left:42px; }}
+  main {{ padding:12px 10px 24px; }}
+  .metric-grid {{ grid-template-columns:1fr; }}
+  .flow-tree {{ padding:10px; }}
+  .terminal-stage,.terminal-detail,.terminal-edge,.terminal-failure {{ min-width:0; }}
+  .terminal-stage .terminal-line {{ grid-template-columns:18px 34px minmax(0,1fr) auto; gap:4px; }}
+  .terminal-stage .terminal-line .state-chip {{ grid-column:3 / 5; grid-row:2; justify-self:start; }}
+  .terminal-detail,.terminal-edge {{ padding-left:56px; white-space:normal; overflow-wrap:anywhere; }}
+  .terminal-detail .tree-glyph,.terminal-edge .tree-glyph {{ width:18px; margin-left:-56px; margin-right:38px; }}
+  .terminal-failure {{ grid-template-columns:18px minmax(0,1fr); gap:3px 4px; }}
+  .terminal-failure strong,.terminal-failure span,.terminal-failure code {{ grid-column:2; margin:0; }}
 }}
 </style>
 </head>
@@ -1068,37 +1045,37 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
     ];
     let mut tree = String::new();
     for (index, stage) in stages.iter().enumerate() {
-        tree.push_str(&signal_stage_html(stage, manifest));
+        tree.push_str(&signal_stage_html(
+            stage,
+            manifest,
+            index + 1 == stages.len(),
+        ));
         if index + 1 == stages.len() {
             continue;
         }
         if index == 6 && view.lost > 0 {
             tree.push_str(&format!(
-                "<div class=\"flow-edge failure\" data-edge=\"route-to-future\"><div class=\"failure-copy\"><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>{} routed -> {} записано; потеряно {}</span><code>downstream gate: {}</code></div></div>",
+                "<div class=\"terminal-line terminal-failure\" data-edge=\"route-to-future\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>{} routed -> {} записано; потеряно {}</span><code>{}</code></div>",
                 view.routed,
                 view.future,
                 view.lost,
                 html_escape(view.blocker)
             ));
-        } else {
+        } else if let Some(label) = edge_labels.get(index) {
             tree.push_str(&format!(
-                "<div class=\"flow-edge\"><span class=\"edge-label\">{}</span></div>",
-                html_escape(&edge_labels[index])
+                "<div class=\"terminal-edge\"><span class=\"tree-glyph\">│</span>{}</div>",
+                html_escape(label)
             ));
         }
     }
     format!(
         r#"<section class="architecture" data-signal-status="{}">
 <div class="architecture-head">
-<div class="architecture-title"><h2>Архитектура прохождения живого сигнала</h2><p>Каждый узел показывает владельца, версию контракта, логику фильтра и фактический выход.</p></div>
+<div class="architecture-title"><h2>NANDO SIGNAL PATH</h2><p>live trace -&gt; frozen future -&gt; admission -&gt; CPU</p></div>
 <div class="architecture-state"><span class="state-chip {}">{}</span><span class="architecture-meta">partition v{} · generation {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
-<div class="architecture-foot">
-<div class="invariant"><strong>Support и future раздельны</strong><span>Future не может быть скопирован или восстановлен из support.</span></div>
-<div class="invariant"><strong>Verifier устанавливает истину</strong><span>Actor и Wave не выдают себе authority самостоятельно.</span></div>
-<div class="invariant"><strong>Fail closed</strong><span>Нет durable future proof -> нет admission -> нет ACTIVE package.</span></div>
-</div>
+<div class="terminal-rule">support != future | verifier = authority | missing proof = ABSTAIN</div>
 </section>"#,
         overall_state.class(),
         overall_state.class(),
@@ -1109,28 +1086,29 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
     )
 }
 
-fn signal_stage_html(stage: &SignalStage<'_>, manifest: &Value) -> String {
+fn signal_stage_html(stage: &SignalStage<'_>, manifest: &Value, last: bool) -> String {
+    let branch = if last { "└─" } else { "├─" };
     format!(
-        r#"<article class="flow-stage {}" data-stage="{}">
-<div class="stage-index">{}</div>
-<div class="stage-copy"><h3>{}</h3><p>{}</p></div>
-{}
-<div class="stage-result"><span class="state-chip {}">{}</span><span class="stage-metric">{}</span><span class="stage-metric-label">{}</span></div>
-</article>"#,
+        r#"<div class="terminal-stage {}" data-stage="{}" title="{}">
+<div class="terminal-line"><span class="tree-glyph">{}</span><span class="stage-index">[{}]</span><strong class="stage-title">{}</strong><span class="stage-metric">{}</span><span class="state-chip {}">{}</span></div>
+<div class="terminal-detail"><span class="tree-glyph">│</span>{} · {} · {}</div>
+</div>"#,
         stage.state.class(),
         html_escape(stage.id),
+        html_escape(stage.logic),
+        branch,
         html_escape(stage.step),
         html_escape(stage.title),
-        html_escape(stage.logic),
-        module_identity_html(manifest, stage.module, stage.owner),
+        html_escape(&stage.metric),
         stage.state.class(),
         stage.state.label(),
-        html_escape(&stage.metric),
+        module_identity_text(manifest, stage.module),
+        html_escape(stage.owner),
         html_escape(stage.metric_label)
     )
 }
 
-fn module_identity_html(manifest: &Value, module_name: &str, owner: &str) -> String {
+fn module_identity_text(manifest: &Value, module_name: &str) -> String {
     let module = manifest
         .get("modules")
         .and_then(Value::as_array)
@@ -1145,20 +1123,11 @@ fn module_identity_html(manifest: &Value, module_name: &str, owner: &str) -> Str
         .and_then(|module| module.get("contract"))
         .and_then(Value::as_str)
         .unwrap_or("MISSING");
-    let sha = module
-        .and_then(|module| module.get("sha256"))
-        .and_then(Value::as_str)
-        .unwrap_or("MISSING");
-    let short_contract = compact_identity(contract);
-    let short_sha = compact_identity(sha);
     format!(
-        "<div class=\"module-owner\"><span class=\"module-name\">{}</span><span class=\"module-version\" title=\"{}\">{} | {} | {}</span><code>{}</code></div>",
+        "{} {} {}",
         html_escape(module_name),
-        html_escape(contract),
         html_escape(version),
-        html_escape(&short_contract),
-        html_escape(&short_sha),
-        html_escape(owner)
+        html_escape(&compact_identity(contract))
     )
 }
 
