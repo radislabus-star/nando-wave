@@ -201,10 +201,14 @@ pub fn ground_roles(frame: &RelationFrame) -> Vec<RoleHypothesis> {
     {
         return ground_status_role(frame, &slots).into_iter().collect();
     }
-    let pending = frame
-        .atoms
-        .iter()
-        .any(|atom| matches!(atom, RelationAtom::CompletionState { value } if value == "pending"));
+    let pending = frame.atoms.iter().any(|atom| {
+        matches!(atom, RelationAtom::CompletionState { value } if value == "pending")
+            || matches!(
+                atom,
+                RelationAtom::ObservationSelector { selector, .. }
+                    if crate::contracts::selector_denotes_continuation_handle(selector)
+            )
+    });
     let mut hypotheses = Vec::new();
     for atom in &frame.atoms {
         let RelationAtom::SlotEquality {
@@ -221,15 +225,23 @@ pub fn ground_roles(frame: &RelationFrame) -> Vec<RoleHypothesis> {
         else {
             continue;
         };
+        let (observation_index, observation_type, observation_slot, action_index) =
+            match (*left_source, *right_source) {
+                (AtomSource::Observation, AtomSource::Action) => {
+                    (*left_index, *left_type, *left_slot, *right_index)
+                }
+                (AtomSource::Action, AtomSource::Observation) => {
+                    (*right_index, *right_type, *right_slot, *left_index)
+                }
+                _ => continue,
+            };
         if pending
-            && *left_type != AtomValueType::Collection
+            && observation_type != AtomValueType::Collection
             && left_type == right_type
-            && *left_source == AtomSource::Observation
-            && *right_source == AtomSource::Action
         {
             let bindings = BTreeMap::from([
-                (SemanticRole::ContinuationHandle, *left_index),
-                (SemanticRole::TargetValue, *right_index),
+                (SemanticRole::ContinuationHandle, observation_index),
+                (SemanticRole::TargetValue, action_index),
             ]);
             let material = serde_json::to_vec(&bindings).unwrap_or_default();
             hypotheses.push(RoleHypothesis {
@@ -242,15 +254,13 @@ pub fn ground_roles(frame: &RelationFrame) -> Vec<RoleHypothesis> {
             });
         } else if !pending
             && left_type == right_type
-            && *left_source == AtomSource::Observation
-            && *right_source == AtomSource::Action
             && frame.atoms.iter().any(
-                |atom| matches!(atom, RelationAtom::UniqueSlot { slot_id } if slot_id == left_slot),
+                |atom| matches!(atom, RelationAtom::UniqueSlot { slot_id } if slot_id == &observation_slot),
             )
         {
             let bindings = BTreeMap::from([
-                (SemanticRole::SourceValue, *left_index),
-                (SemanticRole::TargetValue, *right_index),
+                (SemanticRole::SourceValue, observation_index),
+                (SemanticRole::TargetValue, action_index),
             ]);
             let material = serde_json::to_vec(&bindings).unwrap_or_default();
             hypotheses.push(RoleHypothesis {
@@ -363,7 +373,8 @@ fn ground_status_role(
 
 const fn selector_value_type(selector: &crate::ResponseValueSelector) -> AtomValueType {
     match selector {
-        crate::ResponseValueSelector::UniqueScalar { value_type }
+        crate::ResponseValueSelector::ContinuationHandle { value_type }
+        | crate::ResponseValueSelector::UniqueScalar { value_type }
         | crate::ResponseValueSelector::UniqueTurnScalar { value_type }
         | crate::ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | crate::ResponseValueSelector::JsonField { value_type, .. }
@@ -684,5 +695,67 @@ mod tests {
             crate::package::relation_frame_online_routing_atom_ids(&first),
             crate::package::relation_frame_online_routing_atom_ids(&second)
         );
+    }
+
+    #[test]
+    fn continuation_selector_overrides_legacy_completion_state_for_role_grounding() {
+        let mut completed = frame(SOURCE_NEUTRAL_EXTRACTOR_VERSION);
+        completed.atoms = vec![
+            RelationAtom::CompletionState {
+                value: "completed".to_owned(),
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 1,
+                value_type: AtomValueType::Identifier,
+                source: AtomSource::Observation,
+                value_sha256: "1".repeat(64),
+            },
+            RelationAtom::UniqueSlot { slot_id: 1 },
+            RelationAtom::ObservationSelector {
+                slot_id: 1,
+                selector: crate::ResponseValueSelector::ContentLinePrefix {
+                    prefix: "Script running with cell ID ".to_owned(),
+                    value_type: AtomValueType::Identifier,
+                },
+            },
+            RelationAtom::TypedSlot {
+                slot_id: 2,
+                value_type: AtomValueType::Identifier,
+                source: AtomSource::Action,
+                value_sha256: "1".repeat(64),
+            },
+            RelationAtom::SlotEquality {
+                left_slot: 1,
+                right_slot: 2,
+            },
+        ];
+
+        let hypotheses = ground_roles(&completed);
+        assert_eq!(hypotheses.len(), 1);
+        assert!(
+            hypotheses[0]
+                .bindings
+                .contains_key(&SemanticRole::ContinuationHandle)
+        );
+        assert!(
+            !hypotheses[0]
+                .bindings
+                .contains_key(&SemanticRole::SourceValue)
+        );
+
+        let equality = completed
+            .atoms
+            .iter_mut()
+            .find_map(|atom| match atom {
+                RelationAtom::SlotEquality {
+                    left_slot,
+                    right_slot,
+                } => Some((left_slot, right_slot)),
+                _ => None,
+            })
+            .expect("slot equality");
+        std::mem::swap(equality.0, equality.1);
+        let reversed = ground_roles(&completed);
+        assert_eq!(reversed, hypotheses);
     }
 }

@@ -488,6 +488,7 @@ fn program_class(program: &nando_response_actor::ResponseProgram) -> String {
 
 fn selector_class(selector: &ResponseValueSelector) -> &'static str {
     match selector {
+        ResponseValueSelector::ContinuationHandle { .. } => "continuation_handle",
         ResponseValueSelector::UniqueScalar { .. } => "unique_scalar",
         ResponseValueSelector::UniqueTurnScalar { .. } => "unique_turn_scalar",
         ResponseValueSelector::ContentLinePrefix { .. } => "content_line_prefix",

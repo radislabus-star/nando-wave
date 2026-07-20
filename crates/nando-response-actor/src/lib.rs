@@ -162,8 +162,9 @@ pub use online_collection::{
 };
 pub use online_state::{
     MinerSignalStageReport, MinerSignalTreeReport, SELF_TRAINING_STATE_SCHEMA_V2,
-    SELF_TRAINING_STATE_SCHEMA_V3, SELF_TRAINING_STATE_SCHEMA_V4, SelfTrainingAdmissionCohort,
-    SelfTrainingGenerationReport, SelfTrainingStateReport, StreamingSelfTrainingState,
+    SELF_TRAINING_STATE_SCHEMA_V3, SELF_TRAINING_STATE_SCHEMA_V4, SELF_TRAINING_STATE_SCHEMA_V5,
+    SelfTrainingAdmissionCohort, SelfTrainingGenerationReport, SelfTrainingStateReport,
+    StreamingSelfTrainingState,
 };
 pub use operator_generation::{
     AdmissionReadyOperatorGeneration, OperatorGenerationError, OperatorGenerationFirewall,

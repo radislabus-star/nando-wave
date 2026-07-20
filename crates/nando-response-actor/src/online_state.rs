@@ -27,6 +27,7 @@ fn cross_pool_negative_refresh_due(transitions_seen: u64) -> bool {
 pub const SELF_TRAINING_STATE_SCHEMA_V2: &str = "nando.self-training-stream-state.v2";
 pub const SELF_TRAINING_STATE_SCHEMA_V3: &str = "nando.self-training-stream-state.v3";
 pub const SELF_TRAINING_STATE_SCHEMA_V4: &str = "nando.self-training-stream-state.v4";
+pub const SELF_TRAINING_STATE_SCHEMA_V5: &str = "nando.self-training-stream-state.v5";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SelfTrainingAdmissionCohort {
@@ -252,7 +253,7 @@ impl StreamingSelfTrainingState {
     #[must_use]
     pub fn new(now_unix: u64) -> Self {
         Self {
-            schema: SELF_TRAINING_STATE_SCHEMA_V4.to_owned(),
+            schema: SELF_TRAINING_STATE_SCHEMA_V5.to_owned(),
             transfer_discovery_version: TRANSFER_DISCOVERY_VERSION,
             discovery: CrossSurfaceFamilyDiscovery::default(),
             cegis: CegisCoordinator::new(VersionSpaceConfig::default(), 16),
@@ -416,7 +417,7 @@ impl StreamingSelfTrainingState {
             aliases.observe_transition(&transition);
         }
         *self.discovery.semantic_alias_graph_mut() = aliases;
-        self.schema = SELF_TRAINING_STATE_SCHEMA_V4.to_owned();
+        self.schema = SELF_TRAINING_STATE_SCHEMA_V5.to_owned();
         self.transfer_discovery_version = TRANSFER_DISCOVERY_VERSION;
         self.prepare_rebuild(false);
     }
@@ -435,6 +436,22 @@ impl StreamingSelfTrainingState {
         }
         self.enforce_parity_reservoir_limit();
         self.prepare_rebuild(false);
+    }
+
+    /// Re-evaluate learned programs after role-grounding or semantic-adapter changes.
+    /// Immutable support/future generations and parity receipts remain owned by
+    /// their original generation; only the derived CEGIS search is rebuilt.
+    pub fn prepare_derived_program_migration(&mut self) {
+        self.schema = SELF_TRAINING_STATE_SCHEMA_V5.to_owned();
+        self.cegis.prepare_strategy_migration();
+        self.negative_refresh_cursor = None;
+        self.rebuild_queue = self
+            .discovery
+            .pool_snapshots()
+            .into_iter()
+            .map(|pool| pool.teacher_signature_sha256)
+            .collect();
+        self.dirty_derived_signatures = self.rebuild_queue.iter().cloned().collect();
     }
 
     pub fn prepare_replay_seed(&mut self) {
@@ -544,8 +561,11 @@ impl StreamingSelfTrainingState {
     }
 
     pub fn repair_missing_synthesis_state(&mut self) {
-        let cohort_regroup_required = self.schema != SELF_TRAINING_STATE_SCHEMA_V4;
-        self.schema = SELF_TRAINING_STATE_SCHEMA_V4.to_owned();
+        let cohort_regroup_required = !matches!(
+            self.schema.as_str(),
+            SELF_TRAINING_STATE_SCHEMA_V4 | SELF_TRAINING_STATE_SCHEMA_V5
+        );
+        self.schema = SELF_TRAINING_STATE_SCHEMA_V5.to_owned();
         self.repair_parity_frames_from_discovery();
         self.enforce_parity_reservoir_limit();
         self.dirty_generation_signatures.extend(
@@ -1213,13 +1233,14 @@ impl StreamingSelfTrainingState {
         let mut program_classes =
             BTreeMap::<String, (crate::ResponseProgram, Vec<CegisWinner>)>::new();
         for winner in members {
+            let program = winner.program.clone();
             let digest = crate::sha256_bytes(
-                &serde_json::to_vec(&winner.program)
+                &serde_json::to_vec(&program)
                     .map_err(|error| format!("semantic_law_program_encode:{error}"))?,
             );
             program_classes
                 .entry(digest)
-                .or_insert_with(|| (winner.program.clone(), Vec::new()))
+                .or_insert_with(|| (program, Vec::new()))
                 .1
                 .push(winner.clone());
         }
@@ -1246,6 +1267,59 @@ impl StreamingSelfTrainingState {
                 parity_rows.len()
             ));
         }
+        let mut canonical_receipt_support_rows = 0_usize;
+        let mut canonical_grounded_rows = 0_usize;
+        let mut canonical_eligible_programs = 0_usize;
+        let mut canonicalized_programs = 0_usize;
+        for winner in members {
+            let receipt_backed_support = parity_rows
+                .iter()
+                .filter(|(signature, _, _)| signature == &winner.teacher_signature_sha256)
+                .map(|(_, frame, _)| frame.clone())
+                .collect::<Vec<_>>();
+            if receipt_backed_support.len() < self.rollover_policy.support_rows {
+                continue;
+            }
+            canonical_receipt_support_rows =
+                canonical_receipt_support_rows.saturating_add(receipt_backed_support.len());
+            canonical_grounded_rows = canonical_grounded_rows.saturating_add(
+                receipt_backed_support
+                    .iter()
+                    .filter(|frame| {
+                        crate::ground_roles(frame).iter().any(|hypothesis| {
+                            hypothesis
+                                .bindings
+                                .contains_key(&crate::SemanticRole::ContinuationHandle)
+                        })
+                    })
+                    .count(),
+            );
+            canonical_eligible_programs =
+                canonical_eligible_programs.saturating_add(usize::from(matches!(
+                    &winner.program.operation,
+                    crate::ResponseOperation::FunctionCallFromRoles { .. }
+                        | crate::ResponseOperation::CustomToolCallFromRoles { .. }
+                )));
+            // Legacy discovery pools may contain incomplete frames that predate
+            // role extraction. Runtime parity receipts are the bounded, exact
+            // support authority for broadening a physical selector into a role.
+            let Some(program) = crate::synthesis::canonicalize_continuation_role_program(
+                &winner.program,
+                &receipt_backed_support,
+            ) else {
+                continue;
+            };
+            canonicalized_programs = canonicalized_programs.saturating_add(1);
+            let digest = crate::sha256_bytes(
+                &serde_json::to_vec(&program)
+                    .map_err(|error| format!("semantic_law_program_encode:{error}"))?,
+            );
+            program_classes
+                .entry(digest)
+                .or_insert_with(|| (program, Vec::new()))
+                .1
+                .push(winner.clone());
+        }
         let mut variants = Vec::new();
         let mut exact_only_variants = Vec::new();
         let mut adapter_training = Vec::new();
@@ -1258,6 +1332,8 @@ impl StreamingSelfTrainingState {
         for (program, _class_members) in program_classes.values() {
             let mut positives = Vec::new();
             let mut negatives = Vec::new();
+            let mut positive_layouts = BTreeSet::new();
+            let mut wrong_layouts = BTreeSet::new();
             for (_, _, case) in &parity_rows {
                 let atoms =
                     crate::runtime::actor_adapter_phase_atom_ids(program, &case.provider_payload);
@@ -1276,10 +1352,20 @@ impl StreamingSelfTrainingState {
                     });
                 if positive {
                     adapter_exact_rows = adapter_exact_rows.saturating_add(1);
+                    if let Ok(layout) =
+                        crate::runtime::actor_structural_layout_sha256(&case.provider_payload)
+                    {
+                        positive_layouts.insert(layout);
+                    }
                     positives.push(atoms);
                 } else {
                     if execution.status == crate::ResponseExecutionStatus::Executed {
                         adapter_wrong_rows = adapter_wrong_rows.saturating_add(1);
+                        if let Ok(layout) =
+                            crate::runtime::actor_structural_layout_sha256(&case.provider_payload)
+                        {
+                            wrong_layouts.insert(layout);
+                        }
                         if let Some(actual) = execution.response.as_deref()
                             && let (Ok(actual), Ok(expected)) = (
                                 serde_json::from_str::<serde_json::Value>(actual),
@@ -1321,9 +1407,14 @@ impl StreamingSelfTrainingState {
             if clean_positives.is_empty() {
                 return Err("semantic_law_adapter_without_clean_positive_parity".to_owned());
             }
+            let allowed_layout_sha256 = positive_layouts
+                .difference(&wrong_layouts)
+                .take(crate::program::MAX_CONSENSUS_LAYOUTS)
+                .cloned()
+                .collect::<Vec<_>>();
             let variant = crate::ResponseConsensusVariant {
                 program: program.clone(),
-                allowed_layout_sha256: Vec::new(),
+                allowed_layout_sha256,
                 required_request_atom_ids: Vec::new(),
             };
             if negatives.is_empty() {
@@ -1352,15 +1443,12 @@ impl StreamingSelfTrainingState {
         };
         let exact_only_program = exact_only_program.filter(|candidate| {
             let mut accepted = 0_usize;
-            for (exact_signature, frame, parity) in &parity_rows {
-                let covered = members.iter().any(|winner| {
-                    exact_signature == &winner.teacher_signature_sha256
-                        && crate::synthesis::program_is_consistent(&winner.program, frame)
-                        && crate::cegis::winner_routes_frame(winner, frame)
-                });
-                if !covered {
-                    continue;
-                }
+            for (_, _, parity) in &parity_rows {
+                // The semantic program is the proof-carrying union of the physical
+                // adapters. Requiring one old winner to route each row here would
+                // recreate the fragmentation that this cohort is meant to remove.
+                // Every row is already receipt-backed positive evidence for this
+                // semantic law, so the combined program must prove itself on all of it.
                 let execution = crate::execute_response(
                     candidate,
                     &parity.request_text,
@@ -1444,18 +1532,14 @@ impl StreamingSelfTrainingState {
             .validate()
             .map_err(|error| format!("semantic_law_program_invalid:{error}"))?;
         let mut accepted_parity_rows = 0_usize;
-        for (exact_signature, frame, parity) in &parity_rows {
-            let covered = members.iter().any(|winner| {
-                exact_signature == &winner.teacher_signature_sha256
-                    && crate::synthesis::program_is_consistent(&winner.program, frame)
-                    && crate::cegis::winner_routes_frame(winner, frame)
-            });
-            if !covered {
-                continue;
-            }
+        let mut canonical_execution_reasons = BTreeMap::<String, usize>::new();
+        for (_, frame, parity) in &parity_rows {
             let execution =
                 crate::execute_response(&program, &parity.request_text, &parity.provider_payload);
             if execution.status != crate::ResponseExecutionStatus::Executed {
+                *canonical_execution_reasons
+                    .entry(execution.reason.clone())
+                    .or_default() += 1;
                 continue;
             }
             let response_matches = execution.response.as_deref().is_some_and(|actual| {
@@ -1474,9 +1558,20 @@ impl StreamingSelfTrainingState {
             accepted_parity_rows = accepted_parity_rows.saturating_add(1);
         }
         if accepted_parity_rows < self.rollover_policy.support_rows {
+            // Keep this diagnostic structural and bounded: runtime reasons are
+            // static actor/verifier labels, never request or provider payloads.
+            let canonical_execution_reasons = canonical_execution_reasons
+                .into_iter()
+                .take(8)
+                .map(|(reason, rows)| format!("{reason}={rows}"))
+                .collect::<Vec<_>>()
+                .join(",");
             return Err(format!(
-                "semantic_law_clean_parity_rows_below_{}:{}",
-                self.rollover_policy.support_rows, accepted_parity_rows
+                "semantic_law_clean_parity_rows_below_{}:{}:programs={}:variants={}:exact={adapter_exact_rows}:wrong={adapter_wrong_rows}:abstain={adapter_abstain_rows}:same_name={adapter_same_name_rows}:same_arguments={adapter_same_arguments_rows}:same_name_and_arguments={adapter_same_name_and_arguments_rows}:canonical_support={canonical_receipt_support_rows}:canonical_grounded={canonical_grounded_rows}:canonical_eligible={canonical_eligible_programs}:canonicalized={canonicalized_programs}:reasons={canonical_execution_reasons}",
+                self.rollover_policy.support_rows,
+                accepted_parity_rows,
+                program_classes.len(),
+                variants.len(),
             ));
         }
         let mut required_atom_ids = members
@@ -2000,7 +2095,9 @@ impl StreamingSelfTrainingState {
             let Some(signature) = crate::teacher_program_signature(discovery_frame) else {
                 continue;
             };
-            *parity_rows_by_teacher_signature.entry(signature).or_default() += 1;
+            *parity_rows_by_teacher_signature
+                .entry(signature)
+                .or_default() += 1;
         }
         let signal_tree = build_signal_tree(
             self.transitions_seen,
@@ -2010,7 +2107,7 @@ impl StreamingSelfTrainingState {
             admission_ready_cohorts,
         );
         SelfTrainingStateReport {
-            schema: SELF_TRAINING_STATE_SCHEMA_V4.to_owned(),
+            schema: SELF_TRAINING_STATE_SCHEMA_V5.to_owned(),
             transitions_seen: self.transitions_seen,
             work_slices_completed: self.work_slices_completed,
             exact_checks_completed: self.exact_checks_completed,
@@ -2940,7 +3037,7 @@ mod tests {
 
         state.prepare_effect_law_migration();
 
-        assert_eq!(state.schema, SELF_TRAINING_STATE_SCHEMA_V4);
+        assert_eq!(state.schema, SELF_TRAINING_STATE_SCHEMA_V5);
         assert!(state.runtime_parity_cases.is_empty());
         assert_eq!(state.replay_support_parity_cases.len(), 32);
         assert!(state.generations.is_empty());

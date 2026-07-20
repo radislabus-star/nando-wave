@@ -1840,7 +1840,8 @@ fn bind_program_selectors(
 
 fn selector_value_type(selector: &ResponseValueSelector) -> Option<AtomValueType> {
     match selector {
-        ResponseValueSelector::UniqueScalar { value_type }
+        ResponseValueSelector::ContinuationHandle { value_type }
+        | ResponseValueSelector::UniqueScalar { value_type }
         | ResponseValueSelector::UniqueTurnScalar { value_type }
         | ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | ResponseValueSelector::JsonField { value_type, .. }

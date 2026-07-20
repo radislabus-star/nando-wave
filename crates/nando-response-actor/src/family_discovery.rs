@@ -509,16 +509,20 @@ impl CrossSurfaceFamilyDiscovery {
 
     fn snapshot_pool(&self, pool: &TeacherProgramPool) -> TeacherPoolSnapshot {
         let positives = chronological_unique(pool.positives.iter().cloned());
+        let semantic_law = positives
+            .first()
+            .and_then(crate::teacher_semantic_law_signature);
         let negatives = chronological_unique(
             self.global_examples
                 .iter()
                 .filter(|example| {
-                    // Accepted physical adapters of one learned transfer law
-                    // are additional positives, not cross-program negatives.
+                    // A verified physical adapter of the same semantic law is
+                    // transfer evidence, not an applicability counterexample.
+                    // Constants that change the law still remain negatives.
                     !example.accepted
                         || (example.teacher_signature_sha256 != pool.teacher_signature_sha256
-                            && crate::teacher_transfer_family_signature(&example.frame).as_deref()
-                                != Some(pool.transfer_family_sha256.as_str()))
+                            && crate::teacher_semantic_law_signature(&example.frame)
+                                != semantic_law)
                 })
                 .map(|example| {
                     let mut frame = example.frame.clone();

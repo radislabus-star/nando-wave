@@ -129,6 +129,39 @@ pub struct CegisPoolReport {
     pub generated_repair_programs: u64,
     #[serde(default)]
     pub anti_centers: usize,
+    /// Distinct bounded routing representations observed on positive support.
+    #[serde(default)]
+    pub positive_routing_vectors: usize,
+    /// Distinct bounded routing representations observed on negative evidence.
+    #[serde(default)]
+    pub negative_routing_vectors: usize,
+    /// Negative rows that collapse onto a positive routing representation.
+    #[serde(default)]
+    pub indistinguishable_negative_rows: usize,
+    /// Distinct full pre-action structural fingerprints on positive support.
+    #[serde(default)]
+    pub positive_pre_action_fingerprints: usize,
+    /// Distinct full pre-action structural fingerprints on negative evidence.
+    #[serde(default)]
+    pub negative_pre_action_fingerprints: usize,
+    /// Negative rows identical to positive support before bounded routing.
+    #[serde(default)]
+    pub indistinguishable_pre_action_negative_rows: usize,
+    /// Teacher actions observed on structurally indistinguishable negatives.
+    #[serde(default)]
+    pub indistinguishable_negative_actions: BTreeMap<String, usize>,
+    /// Survivor count grouped by same-action collision rows reproduced exactly.
+    #[serde(default)]
+    pub indistinguishable_coverage_histogram: BTreeMap<usize, usize>,
+    /// Whether one current program reproduces every same-action collision row.
+    #[serde(default)]
+    pub survivor_covers_all_indistinguishable: bool,
+    /// Nearest structural mismatch for each same-action collision row.
+    #[serde(default)]
+    pub indistinguishable_nearest_mismatch_reasons: BTreeMap<String, usize>,
+    /// Structurally safe atom sets currently available to reject negatives.
+    #[serde(default)]
+    pub safe_anti_center_candidates: usize,
     pub winner: bool,
     pub repair_watermark_unix_nanos: u64,
     pub blocker: Option<String>,
@@ -522,6 +555,86 @@ impl CegisCoordinator {
                 .winner
                 .as_ref()
                 .map_or(0, |winner| winner.anti_center_atom_sets.len());
+            let positive_routing_vectors = state
+                .positives
+                .iter()
+                .map(relation_frame_online_routing_atom_ids)
+                .collect::<BTreeSet<_>>();
+            let negative_routing_vectors = state
+                .negatives
+                .iter()
+                .map(relation_frame_online_routing_atom_ids)
+                .collect::<BTreeSet<_>>();
+            let indistinguishable_negative_rows = state
+                .negatives
+                .iter()
+                .filter(|frame| {
+                    positive_routing_vectors
+                        .contains(&relation_frame_online_routing_atom_ids(frame))
+                })
+                .count();
+            let positive_pre_action_fingerprints = state
+                .positives
+                .iter()
+                .map(pre_action_structural_fingerprint)
+                .collect::<BTreeSet<_>>();
+            let negative_pre_action_fingerprints = state
+                .negatives
+                .iter()
+                .map(pre_action_structural_fingerprint)
+                .collect::<BTreeSet<_>>();
+            let indistinguishable_pre_action_negative_rows = state
+                .negatives
+                .iter()
+                .filter(|frame| {
+                    positive_pre_action_fingerprints
+                        .contains(&pre_action_structural_fingerprint(frame))
+                })
+                .count();
+            let mut indistinguishable_negative_actions = BTreeMap::new();
+            let mut indistinguishable_same_action = Vec::new();
+            for frame in &state.negatives {
+                if positive_pre_action_fingerprints
+                    .contains(&pre_action_structural_fingerprint(frame))
+                {
+                    *indistinguishable_negative_actions
+                        .entry(crate::teacher_action_symbol(frame))
+                        .or_default() += 1;
+                    if crate::teacher_action_symbol(frame) == state.action_symbol {
+                        indistinguishable_same_action.push(frame);
+                    }
+                }
+            }
+            let survivor_programs = state
+                .arena
+                .survivor_programs()
+                .into_iter()
+                .map(|survivor| survivor.program)
+                .collect::<Vec<_>>();
+            let mut indistinguishable_coverage_histogram = BTreeMap::new();
+            for survivor in &survivor_programs {
+                let covered = indistinguishable_same_action
+                    .iter()
+                    .filter(|frame| crate::synthesis::program_is_consistent(survivor, frame))
+                    .count();
+                *indistinguishable_coverage_histogram
+                    .entry(covered)
+                    .or_default() += 1;
+            }
+            let survivor_covers_all_indistinguishable = !indistinguishable_same_action.is_empty()
+                && indistinguishable_coverage_histogram
+                    .contains_key(&indistinguishable_same_action.len());
+            let mut indistinguishable_nearest_mismatch_reasons = BTreeMap::new();
+            for frame in indistinguishable_same_action {
+                for reason in crate::synthesis::nearest_custom_program_mismatch_reasons(
+                    &survivor_programs,
+                    frame,
+                ) {
+                    *indistinguishable_nearest_mismatch_reasons
+                        .entry(reason)
+                        .or_default() += 1;
+                }
+            }
             report.anti_centers = report.anti_centers.saturating_add(anti_centers);
             report.winners = report
                 .winners
@@ -539,6 +652,17 @@ impl CegisCoordinator {
                 counterexamples: state.counterexamples.len(),
                 generated_repair_programs: state.generated_repair_programs,
                 anti_centers,
+                positive_routing_vectors: positive_routing_vectors.len(),
+                negative_routing_vectors: negative_routing_vectors.len(),
+                indistinguishable_negative_rows,
+                positive_pre_action_fingerprints: positive_pre_action_fingerprints.len(),
+                negative_pre_action_fingerprints: negative_pre_action_fingerprints.len(),
+                indistinguishable_pre_action_negative_rows,
+                indistinguishable_negative_actions,
+                indistinguishable_coverage_histogram,
+                survivor_covers_all_indistinguishable,
+                indistinguishable_nearest_mismatch_reasons,
+                safe_anti_center_candidates: state.safe_anti_center_candidates.len(),
                 winner: state.winner.is_some(),
                 repair_watermark_unix_nanos: state.repair_watermark_unix_nanos,
                 blocker: state.blocker.clone(),
@@ -591,13 +715,20 @@ impl CegisCoordinator {
                     .unwrap_or(0),
             );
             let after = current_repair_watermark.max(support_watermark);
-            for frame in
-                pool.negatives
+            for (frame, cross_pool) in pool.negatives.iter().map(|frame| (frame, true)).chain(
+                pool.positives
                     .iter()
-                    .chain(pool.positives.iter().filter(|frame| {
+                    .filter(|frame| {
                         !crate::synthesis::program_is_consistent(&winner.program, frame)
-                    }))
-            {
+                    })
+                    .map(|frame| (frame, false)),
+            ) {
+                if cross_pool
+                    && frame.verifier_label == Some(true)
+                    && crate::teacher_action_symbol(frame) == winner.action_symbol
+                {
+                    continue;
+                }
                 if frame.verifier_label == Some(true)
                     && crate::synthesis::program_is_consistent(&winner.program, frame)
                 {
@@ -667,6 +798,47 @@ impl CegisCoordinator {
         );
         self.next_state_cursor %= self.states.len().max(1);
     }
+}
+
+fn pre_action_structural_fingerprint(frame: &crate::RelationFrame) -> String {
+    let mut atoms = frame
+        .atoms
+        .iter()
+        .filter_map(|atom| match atom {
+            crate::RelationAtom::TypedSlot {
+                slot_id,
+                value_type,
+                source: crate::AtomSource::Request | crate::AtomSource::Observation,
+                ..
+            } => Some(crate::RelationAtom::TypedSlot {
+                slot_id: *slot_id,
+                value_type: *value_type,
+                source: match atom {
+                    crate::RelationAtom::TypedSlot { source, .. } => *source,
+                    _ => unreachable!(),
+                },
+                value_sha256: String::new(),
+            }),
+            crate::RelationAtom::TypedSlot { .. }
+            | crate::RelationAtom::ActionFunction { .. }
+            | crate::RelationAtom::ActionCustomTool { .. }
+            | crate::RelationAtom::ActionInnerTool { .. }
+            | crate::RelationAtom::ActionRoleArgument { .. }
+            | crate::RelationAtom::ActionIntegerArgument { .. }
+            | crate::RelationAtom::ActionStringArgument { .. }
+            | crate::RelationAtom::ActionBooleanArgument { .. }
+            | crate::RelationAtom::ActionPlanAdvance
+            | crate::RelationAtom::ActionResultProjection { .. }
+            | crate::RelationAtom::ActionOutputProjection { .. }
+            | crate::RelationAtom::ActionJsonResultProjection
+            | crate::RelationAtom::ActionValueProjection { .. }
+            | crate::RelationAtom::ActionStatusProjection { .. }
+            | crate::RelationAtom::ResponseShape { .. } => None,
+            _ => Some(atom.clone()),
+        })
+        .collect::<Vec<_>>();
+    atoms.sort();
+    crate::sha256_bytes(&serde_json::to_vec(&atoms).unwrap_or_default())
 }
 
 impl Default for CegisCoordinator {
@@ -796,6 +968,8 @@ fn discover_program_cohorts(
                 .iter()
                 .filter(|frame| {
                     frame.observed_at_unix_nanos <= discovery_watermark
+                        && !(frame.verifier_label == Some(true)
+                            && crate::teacher_action_symbol(frame) == pool.action_symbol)
                         && (frame.verifier_label != Some(true)
                             || !crate::synthesis::program_is_consistent(selected_program, frame))
                 })
@@ -891,8 +1065,13 @@ fn discover_program_cohorts(
                 pool.negatives
                     .iter()
                     .filter(|frame| {
-                        frame.verifier_label != Some(true)
-                            || !crate::synthesis::program_is_consistent(selected_program, frame)
+                        !(frame.verifier_label == Some(true)
+                            && crate::teacher_action_symbol(frame) == pool.action_symbol)
+                            && (frame.verifier_label != Some(true)
+                                || !crate::synthesis::program_is_consistent(
+                                    selected_program,
+                                    frame,
+                                ))
                     })
                     .cloned()
                     .chain(
@@ -1809,12 +1988,16 @@ mod tests {
             .map(|row| function_frame(row + 1, row + 10, "wait", &[10]))
             .collect::<Vec<_>>();
         let signature = teacher_program_signature(&positives[0]).expect("teacher signature");
-        let transfer = function_frame(1_000, 100, "wait", &[10]);
+        let mut transfer = function_frame(1_000, 100, "wait", &[10]);
+        transfer.atoms.push(RelationAtom::ActionStringArgument {
+            name: "adapter_mode".to_owned(),
+            value: "alternate".to_owned(),
+        });
         let pool = TeacherPoolSnapshot {
             teacher_signature_sha256: signature,
             action_symbol: "function:wait".to_owned(),
             positives,
-            negatives: vec![transfer],
+            negatives: vec![transfer.clone()],
             positive_rows: 32,
             negative_rows: 1,
             positive_tokens: 3_200,
@@ -1827,7 +2010,12 @@ mod tests {
         cegis.refresh_pool(&pool);
         run_to_quiescence(&mut cegis);
 
-        assert_eq!(cegis.winners().len(), 1);
+        let winners = cegis.winners();
+        assert_eq!(winners.len(), 1);
+        assert!(!crate::synthesis::program_is_consistent(
+            &winners[0].program,
+            &transfer
+        ));
         assert_eq!(cegis.report().pools[0].counterexamples, 0);
     }
 

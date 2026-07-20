@@ -159,6 +159,11 @@ pub enum AtomValueType {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ResponseValueSelector {
+    /// A resumable execution handle grounded by the protocol outcome rather
+    /// than by a physical JSON field or scalar ordinal.
+    ContinuationHandle {
+        value_type: AtomValueType,
+    },
     UniqueScalar {
         value_type: AtomValueType,
     },
@@ -221,6 +226,18 @@ pub enum ResponseValueSelector {
 
 pub(crate) fn canonical_response_value_selector(selector: &ResponseValueSelector) -> String {
     serde_json::to_string(selector).expect("response value selector serializes")
+}
+
+/// Protocol-level continuation selectors identify a resumable execution even
+/// when a legacy frame did not canonicalize its completion state to `pending`.
+pub(crate) fn selector_denotes_continuation_handle(selector: &ResponseValueSelector) -> bool {
+    match selector {
+        ResponseValueSelector::ContinuationHandle { .. } => true,
+        ResponseValueSelector::ContentLinePrefix { prefix, .. } => {
+            prefix == "Script running with cell ID " || prefix == "Process running with session ID "
+        }
+        _ => false,
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Ord, PartialOrd, Serialize)]

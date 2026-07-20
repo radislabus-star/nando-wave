@@ -540,6 +540,9 @@ fn actor_selector_adapter_atoms<'a>(
     identifiers: &mut Vec<String>,
 ) {
     let (family, position, value_type) = match selector {
+        ResponseValueSelector::ContinuationHandle { value_type } => {
+            ("continuation_handle", None, Some(value_type))
+        }
         ResponseValueSelector::UniqueScalar { value_type } => {
             ("unique_scalar", None, Some(value_type))
         }
@@ -716,8 +719,11 @@ const fn adapter_value_type_name(value_type: AtomValueType) -> &'static str {
     }
 }
 
-fn actor_structural_layout_sha256(value: &Value) -> Result<String, &'static str> {
-    crate::canonical_json_sha256(&actor_structural_layout(value))
+pub(crate) fn actor_structural_layout_sha256(value: &Value) -> Result<String, &'static str> {
+    // Layout guards describe the current observation, not the entire provider
+    // transcript. History length must not fragment equivalent tool outcomes.
+    let output = immediate_tool_output_value(value).ok_or("immediate_tool_output_missing")?;
+    crate::canonical_json_sha256(&actor_structural_layout(output))
 }
 
 fn actor_structural_layout(value: &Value) -> Value {
@@ -2055,6 +2061,9 @@ fn immediate_selected_scalar_with_request(
     selector: &ResponseValueSelector,
 ) -> Result<ExtractedScalar, &'static str> {
     match selector {
+        ResponseValueSelector::ContinuationHandle { value_type } => {
+            continuation_handle_scalar(provider_payload, *value_type)
+        }
         ResponseValueSelector::UniqueScalar { value_type } => {
             let scalar = if *value_type == AtomValueType::Collection {
                 immediate_unique_collection(provider_payload)?
@@ -2195,6 +2204,49 @@ fn immediate_selected_scalar_with_request(
             })
         }
     }
+}
+
+fn continuation_handle_scalar(
+    provider_payload: &Value,
+    value_type: AtomValueType,
+) -> Result<ExtractedScalar, &'static str> {
+    if !matches!(
+        value_type,
+        AtomValueType::Identifier | AtomValueType::String
+    ) {
+        return Err("continuation_handle_type");
+    }
+    let output =
+        immediate_tool_output_value(provider_payload).ok_or("immediate_tool_output_missing")?;
+    let mut matches = output_text_parts(output)?
+        .into_iter()
+        .flat_map(str::lines)
+        .filter_map(|line| {
+            let line = line.trim();
+            [
+                "Script running with cell ID ",
+                "Process running with session ID ",
+            ]
+            .into_iter()
+            .find_map(|prefix| line.strip_prefix(prefix))
+        })
+        .filter_map(|tail| tail.split_whitespace().next())
+        .filter(|value| {
+            !value.is_empty()
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        })
+        .collect::<Vec<_>>();
+    matches.sort_unstable();
+    matches.dedup();
+    if matches.len() != 1 {
+        return Err("continuation_handle_ambiguous");
+    }
+    Ok(ExtractedScalar {
+        value: Value::String(matches[0].to_owned()),
+        value_type,
+    })
 }
 
 pub(crate) fn structural_output_selectors_for_field_hint(
@@ -3605,6 +3657,64 @@ mod runtime_scalar_budget_tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn continuation_role_ignores_unrelated_scalars() {
+        let payload = json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": "progress 17\nScript running with cell ID handle-42\nremaining 99"
+            }]
+        });
+        let program = ResponseProgram::custom_tool_call_from_roles(
+            "exec",
+            "write_stdin",
+            ResponseValueSelector::ContinuationHandle {
+                value_type: AtomValueType::Identifier,
+            },
+            vec![ResponseArgument::Role {
+                name: "session_id".to_owned(),
+                role: SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::Identifier),
+            }],
+            CustomToolResultProjection::JsonStringifyResult,
+        );
+
+        let execution = execute_response(&program, "", &payload);
+        assert_eq!(execution.status, ResponseExecutionStatus::Executed);
+        let response: Value =
+            serde_json::from_str(execution.response.as_deref().expect("custom tool response"))
+                .expect("response JSON");
+        let source = response["input"].as_str().expect("custom tool source");
+        assert!(source.contains("\"session_id\":\"handle-42\""));
+        assert!(!source.contains("\"session_id\":17"));
+        assert!(!source.contains("\"session_id\":99"));
+    }
+
+    #[test]
+    fn observation_layout_ignores_provider_history() {
+        let short = json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": "Process running with session ID handle-42"
+            }]
+        });
+        let long = json!({
+            "input": [
+                {"type": "message", "content": "unrelated history"},
+                {"type": "function_call", "name": "query", "arguments": "{}"},
+                {
+                    "type": "function_call_output",
+                    "output": "Process running with session ID handle-99"
+                }
+            ]
+        });
+
+        assert_eq!(
+            actor_structural_layout_sha256(&short).expect("short observation layout"),
+            actor_structural_layout_sha256(&long).expect("long observation layout")
+        );
+    }
 
     #[test]
     fn reverse_ordinal_reaches_continuation_after_large_scalar_prefix() {

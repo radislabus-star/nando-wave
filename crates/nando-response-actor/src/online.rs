@@ -31,7 +31,7 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // request-independent rows receive the same source-neutral extraction as new
 // live events.
 // Historical rows remain support-only; frozen future is never reconstructed.
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 78;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 96;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -1366,6 +1366,12 @@ impl OnlineResponseMiner {
                     preserved_self_training.prepare_phase_route_migration();
                 } else if checkpoint.bucket_strategy_version < 66 {
                     preserved_self_training.prepare_teacher_signature_migration()?;
+                } else if checkpoint.bucket_strategy_version < 96 {
+                    // Strategies 86-96 scope layouts to the observation,
+                    // normalize equality orientation, and recover typed roles
+                    // from receipt-backed legacy relations. Immutable evidence
+                    // remains byte-identical while derived programs rebuild.
+                    preserved_self_training.prepare_derived_program_migration();
                 }
                 let support_frames =
                     preserved_self_training.bounded_teacher_frames_for_wave_migration();
@@ -4734,6 +4740,56 @@ mod tests {
         let after = restored.report().live_scalar_shadow;
         assert_eq!(after.support_rows, before.support_rows, "{after:#?}");
         assert_eq!(after.future_rows, 0, "{after:#?}");
+    }
+
+    #[test]
+    fn v95_numeric_handle_migration_preserves_frozen_generations() {
+        let mut miner =
+            OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");
+        for index in 0..40 {
+            let mut transition =
+                crate::teacher_transition_from_completed(&frame(index, "write_stdin", true), None)
+                    .expect("teacher transition");
+            transition.before.session_id_sha256 = format!("{:064x}", index + 2_000);
+            transition.runtime_parity_case = Some(write_stdin_parity_case(
+                index,
+                "Script running with cell ID ",
+            ));
+            miner
+                .observe_teacher_transition(transition)
+                .expect("observe teacher transition");
+        }
+        for _ in 0..2_048 {
+            if !miner.self_training_v2.has_pending_work() {
+                break;
+            }
+            miner.self_training_v2.run_work_slice();
+        }
+        let before = miner.report().self_training_v2.generations;
+        let before = before.first().expect("expected frozen generation");
+        let immutable_before = (
+            before.generation_id_sha256.clone(),
+            before.support_watermark_unix_nanos,
+            before.support_rows,
+            before.future_rows,
+            before.wrong_future_rows,
+        );
+
+        let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+        checkpoint.bucket_strategy_version = 95;
+        let restored = OnlineResponseMiner::from_checkpoint(checkpoint).expect("migrated miner");
+        let after = restored.report().self_training_v2.generations;
+        let after = after.first().expect("preserved frozen generation");
+        let immutable_after = (
+            after.generation_id_sha256.clone(),
+            after.support_watermark_unix_nanos,
+            after.support_rows,
+            after.future_rows,
+            after.wrong_future_rows,
+        );
+
+        assert_eq!(immutable_after, immutable_before);
+        assert!(restored.self_training_v2.has_pending_work());
     }
 
     #[test]

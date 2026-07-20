@@ -791,6 +791,9 @@ fn independently_selector_adapter_atoms(
     identifiers: &mut Vec<String>,
 ) {
     let (family, position, value_type) = match selector {
+        ResponseValueSelector::ContinuationHandle { value_type } => {
+            ("continuation_handle", None, Some(value_type))
+        }
         ResponseValueSelector::UniqueScalar { value_type } => {
             ("unique_scalar", None, Some(value_type))
         }
@@ -1474,7 +1477,10 @@ pub fn verify_response_independently_with_request(
 }
 
 fn verifier_structural_layout_sha256(value: &Value) -> Result<String, ResponseVerificationError> {
-    crate::canonical_json_sha256(&verifier_structural_layout(value))
+    // Re-extract the immediate observation independently. The verifier does
+    // not inherit an actor-selected payload or irrelevant transcript history.
+    let output = independently_latest_tool_output(value)?;
+    crate::canonical_json_sha256(&verifier_structural_layout(output))
         .map_err(ResponseVerificationError)
 }
 
@@ -2543,7 +2549,8 @@ fn independently_project_status(
     mapping: ProjectStatusMapping,
 ) -> Result<&'static str, ResponseVerificationError> {
     let selector_type = match selector {
-        ResponseValueSelector::UniqueScalar { value_type }
+        ResponseValueSelector::ContinuationHandle { value_type }
+        | ResponseValueSelector::UniqueScalar { value_type }
         | ResponseValueSelector::UniqueTurnScalar { value_type }
         | ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | ResponseValueSelector::JsonField { value_type, .. }
@@ -2599,6 +2606,9 @@ fn independently_select_scalar_with_request(
     selector: &ResponseValueSelector,
 ) -> Result<VerifierScalar, ResponseVerificationError> {
     match selector {
+        ResponseValueSelector::ContinuationHandle { value_type } => {
+            independently_continuation_handle(provider_payload, *value_type)
+        }
         ResponseValueSelector::UniqueScalar { value_type } => {
             let scalar = if *value_type == AtomValueType::Collection {
                 independently_unique_collection(provider_payload)?
@@ -2751,6 +2761,50 @@ fn independently_select_scalar_with_request(
             value_type: AtomValueType::String,
         }),
     }
+}
+
+fn independently_continuation_handle(
+    provider_payload: &Value,
+    value_type: AtomValueType,
+) -> Result<VerifierScalar, ResponseVerificationError> {
+    if !matches!(
+        value_type,
+        AtomValueType::Identifier | AtomValueType::String
+    ) {
+        return Err(ResponseVerificationError("continuation_handle_type"));
+    }
+    let output = independently_latest_tool_output(provider_payload)?;
+    let mut matches = Vec::new();
+    for text in independently_bounded_output_text_parts(output)? {
+        for line in text.lines() {
+            let line = line.trim();
+            let tail = [
+                "Script running with cell ID ",
+                "Process running with session ID ",
+            ]
+            .into_iter()
+            .find_map(|prefix| line.strip_prefix(prefix));
+            let Some(value) = tail.and_then(|tail| tail.split_whitespace().next()) else {
+                continue;
+            };
+            if !value.is_empty()
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+            {
+                matches.push(value.to_owned());
+            }
+        }
+    }
+    matches.sort();
+    matches.dedup();
+    if matches.len() != 1 {
+        return Err(ResponseVerificationError("continuation_handle_cardinality"));
+    }
+    Ok(VerifierScalar {
+        value: Value::String(matches.remove(0)),
+        value_type,
+    })
 }
 
 fn independently_unique_turn_scalar(
@@ -3942,6 +3996,42 @@ mod tests {
             completion_state: "pending".to_owned(),
             require_unique_value,
         }
+    }
+
+    #[test]
+    fn continuation_role_is_recomputed_independently() {
+        let payload = serde_json::json!({
+            "input": [{
+                "type": "function_call_output",
+                "output": "noise 17\nProcess running with session ID session-9\nnoise 99"
+            }]
+        });
+        let program = crate::ResponseProgram::custom_tool_call_from_roles(
+            "exec",
+            "write_stdin",
+            ResponseValueSelector::ContinuationHandle {
+                value_type: AtomValueType::Identifier,
+            },
+            vec![crate::ResponseArgument::Role {
+                name: "session_id".to_owned(),
+                role: crate::SemanticRole::ContinuationHandle,
+                value_type: Some(AtomValueType::Identifier),
+            }],
+            crate::CustomToolResultProjection::JsonStringifyResult,
+        );
+        let execution = crate::execute_response(&program, "", &payload);
+        let response = execution.response.expect("actor response");
+        let verifier = crate::source_neutral_verifier_for_program(&program).expect("verifier");
+
+        assert!(verify_response_independently(&verifier, &payload, &response).is_ok());
+        assert!(
+            verify_response_independently(
+                &verifier,
+                &payload,
+                &response.replace("session-9", "session-wrong"),
+            )
+            .is_err()
+        );
     }
 
     #[test]

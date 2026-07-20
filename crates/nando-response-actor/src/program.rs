@@ -4,6 +4,7 @@ use crate::{AtomValueType, ResponseValueSelector, SemanticRole};
 
 pub const MAX_PROJECT_STATUS_CODE: u64 = 1_000_000;
 pub const MAX_UNIQUE_CONSENSUS_VARIANTS: usize = 64;
+pub const MAX_CONSENSUS_LAYOUTS: usize = 16;
 pub const MAX_ADAPTER_WAVE_CELLS: usize = 32;
 pub const MAX_ADAPTER_WAVE_SUBCENTERS: usize = 16;
 pub const MAX_ADAPTER_WAVE_EXACT_BUDGET: usize = 16;
@@ -643,7 +644,7 @@ impl ResponseProgram {
                     if variant.program.max_output_bytes > self.max_output_bytes {
                         return Err("unique_consensus_variant_output_budget");
                     }
-                    if variant.allowed_layout_sha256.len() > 16
+                    if variant.allowed_layout_sha256.len() > MAX_CONSENSUS_LAYOUTS
                         || !variant
                             .allowed_layout_sha256
                             .windows(2)
@@ -888,7 +889,8 @@ const fn collection_selector_type(
     selector: &ResponseValueSelector,
 ) -> Option<CollectionScalarType> {
     let value_type = match selector {
-        ResponseValueSelector::UniqueScalar { value_type }
+        ResponseValueSelector::ContinuationHandle { value_type }
+        | ResponseValueSelector::UniqueScalar { value_type }
         | ResponseValueSelector::UniqueTurnScalar { value_type }
         | ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | ResponseValueSelector::JsonField { value_type, .. }
@@ -1088,7 +1090,8 @@ fn contains_high_entropy_run(value: &str) -> bool {
 
 const fn selector_value_type(selector: &ResponseValueSelector) -> crate::AtomValueType {
     match selector {
-        ResponseValueSelector::UniqueScalar { value_type }
+        ResponseValueSelector::ContinuationHandle { value_type }
+        | ResponseValueSelector::UniqueScalar { value_type }
         | ResponseValueSelector::UniqueTurnScalar { value_type }
         | ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | ResponseValueSelector::JsonField { value_type, .. }
@@ -1143,6 +1146,16 @@ fn validate_arguments(arguments: &[ResponseArgument]) -> Result<(), &'static str
 
 fn validate_selector(selector: &ResponseValueSelector) -> Result<(), &'static str> {
     match selector {
+        ResponseValueSelector::ContinuationHandle { value_type } => {
+            if matches!(
+                value_type,
+                crate::AtomValueType::Identifier | crate::AtomValueType::String
+            ) {
+                Ok(())
+            } else {
+                Err("invalid_continuation_handle_type")
+            }
+        }
         ResponseValueSelector::UniqueScalar { .. }
         | ResponseValueSelector::UniqueTurnScalar { .. }
         | ResponseValueSelector::RequestReferencedJsonField { .. } => Ok(()),

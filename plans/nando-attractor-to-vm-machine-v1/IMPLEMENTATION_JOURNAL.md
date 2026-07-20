@@ -1801,3 +1801,46 @@ This closes the scheduler livelock. It does not manufacture a winner: the next
 blocker is representational. The current negative evidence cannot distinguish
 the twelve surviving programs, so no frozen generation or admission authority
 is created for that cohort.
+
+### Generation-owned future is live and continuation identities canonicalize
+
+Frozen partition v15 now refreshes generation evidence independently of global
+CEGIS quiescence. Runtime parity for an already known frame marks both the
+physical teacher signature and the action signature dirty. Immutable support
+and accumulated future receipts remain owned by `generation_id`; the bounded
+candidate reservoir can no longer evict them or force a support refreeze.
+
+The continuation-role canonicalizer also treats digit-only process/cell handles
+as identifiers. Their physical extractor type may be integer-shaped, but the
+value is an opaque identity and is never an arithmetic operand. Strategy v96
+performs one bounded migration while preserving frozen generations.
+
+Focused and live receipts:
+
+```text
+continuation canonical regression       PASS
+strategy v95 -> v96 migration           PASS
+semantic-law focused regression         PASS
+composite deployment gate               PASS
+deployed learner SHA-256                 cd7ef19b15843a1dacd6776f375e6142c41330120eb575ad8d6496deb7189d94
+production false accepts                 0
+runtime parity mismatches                0
+
+post-watermark rows                      32
+support-session rejects                  14
+support-frame rejects                     7
+new independent routed rows              11
+previous durable future                   7
+generation future                        18 / 32
+wrong future                              0
+```
+
+This is a live proof that future receipts are no longer stranded at zero. The
+remaining `18 / 32` admission blocker is genuine evidence scarcity: fourteen
+additional independent post-watermark receipts are required and must not be
+fabricated or reconstructed from historical support.
+
+Strategy v96 also changed the broad continuation diagnostic from
+`canonicalized=0` to `canonicalized=12`. A bounded structural reason histogram
+is emitted for semantic programs that still abstain; it contains only static
+actor/verifier reason labels and never request or provider payload text.

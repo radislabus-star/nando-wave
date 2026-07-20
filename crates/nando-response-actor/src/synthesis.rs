@@ -77,12 +77,7 @@ pub(crate) fn grounded_program_family_id(
     if completion_states.next().is_some() {
         return None;
     }
-    let completion_state = if matches!(
-        selector,
-        ResponseValueSelector::ContentLinePrefix { prefix, .. }
-            if prefix == "Script running with cell ID "
-                || prefix == "Process running with session ID "
-    ) {
+    let completion_state = if crate::contracts::selector_denotes_continuation_handle(selector) {
         "pending"
     } else {
         observed_completion_state
@@ -1283,6 +1278,51 @@ fn candidate_observation_selectors(
     selectors
 }
 
+fn grounded_continuation_value_type(frame: &RelationFrame) -> Option<crate::AtomValueType> {
+    ground_roles(frame).into_iter().find_map(|hypothesis| {
+        let atom_index = hypothesis.bindings.get(&SemanticRole::ContinuationHandle)?;
+        match frame.atoms.get(*atom_index)? {
+            RelationAtom::TypedSlot {
+                value_type,
+                source: crate::AtomSource::Observation,
+                ..
+            } => Some(*value_type),
+            _ => None,
+        }
+    })
+}
+
+/// Generates a role-level candidate from a typed physical winner. This function
+/// grants no authority: its only production caller immediately replays the
+/// candidate on the complete receipt-backed parity support before it can enter
+/// a semantic cohort. Physical CEGIS never receives the broader selector.
+pub(crate) fn canonicalize_continuation_role_program(
+    program: &ResponseProgram,
+    support: &[RelationFrame],
+) -> Option<ResponseProgram> {
+    if support.is_empty() {
+        return None;
+    }
+    let mut canonical = program.clone();
+    let selector = match &mut canonical.operation {
+        ResponseOperation::FunctionCallFromRoles { selector, .. }
+        | ResponseOperation::CustomToolCallFromRoles { selector, .. } => selector,
+        _ => return None,
+    };
+    let value_type = match selector_value_type(selector) {
+        crate::AtomValueType::Identifier => crate::AtomValueType::Identifier,
+        crate::AtomValueType::String => crate::AtomValueType::String,
+        // Legacy extractors typed digit-only execution handles as integers.
+        // Handles are identities, not arithmetic values, so the canonical role
+        // preserves their text form and lets exact parity decide authority.
+        crate::AtomValueType::Integer => crate::AtomValueType::Identifier,
+        crate::AtomValueType::Boolean | crate::AtomValueType::Collection => return None,
+    };
+    *selector = crate::ResponseValueSelector::ContinuationHandle { value_type };
+    canonical.validate().ok()?;
+    Some(canonical)
+}
+
 fn consistent_observation_selector(
     support: &[RelationFrame],
 ) -> Result<crate::ResponseValueSelector, SynthesisError> {
@@ -1701,7 +1741,8 @@ fn status_projection_frame_matches(
 
 const fn selector_value_type(selector: &crate::ResponseValueSelector) -> crate::AtomValueType {
     match selector {
-        crate::ResponseValueSelector::UniqueScalar { value_type }
+        crate::ResponseValueSelector::ContinuationHandle { value_type }
+        | crate::ResponseValueSelector::UniqueScalar { value_type }
         | crate::ResponseValueSelector::UniqueTurnScalar { value_type }
         | crate::ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | crate::ResponseValueSelector::JsonField { value_type, .. }
@@ -1736,6 +1777,12 @@ fn selector_matches_frame(frame: &RelationFrame, candidate: &crate::ResponseValu
     }
     if observed_selector == candidate {
         return true;
+    }
+    if matches!(
+        candidate,
+        crate::ResponseValueSelector::ContinuationHandle { .. }
+    ) {
+        return grounded_continuation_value_type(frame) == Some(selector_value_type(candidate));
     }
     let crate::ResponseValueSelector::UniqueScalar { value_type } = candidate else {
         return false;
@@ -1857,6 +1904,14 @@ fn value_projection_frame_matches(
 }
 
 fn custom_program_shape_matches(left: &ResponseProgram, right: &ResponseProgram) -> bool {
+    custom_program_shape_mismatch_reasons(left, right).is_empty()
+}
+
+fn custom_program_shape_mismatch_reasons(
+    left: &ResponseProgram,
+    right: &ResponseProgram,
+) -> BTreeSet<&'static str> {
+    let mut reasons = BTreeSet::new();
     let (
         ResponseOperation::CustomToolCallFromRoles {
             custom_tool_name: left_custom,
@@ -1874,7 +1929,8 @@ fn custom_program_shape_matches(left: &ResponseProgram, right: &ResponseProgram)
         },
     ) = (&left.operation, &right.operation)
     else {
-        return false;
+        reasons.insert("operation_kind");
+        return reasons;
     };
     let left_arguments = left_arguments
         .iter()
@@ -1884,57 +1940,109 @@ fn custom_program_shape_matches(left: &ResponseProgram, right: &ResponseProgram)
         .iter()
         .filter(|argument| !is_noop_poll_argument(argument))
         .collect::<Vec<_>>();
-    left_custom == right_custom
-        && left_inner == right_inner
-        && custom_selector_family_matches(left_selector, right_selector)
-        && left_projection == right_projection
-        && left_arguments.len() == right_arguments.len()
-        && left_arguments
-            .into_iter()
-            .zip(right_arguments)
-            .all(|(left, right)| match (left, right) {
-                (
-                    ResponseArgument::Role {
-                        name: left_name,
-                        role: left_role,
-                        value_type: left_value_type,
-                    },
-                    ResponseArgument::Role {
-                        name: right_name,
-                        role: right_role,
-                        value_type: right_value_type,
-                    },
-                ) => {
-                    left_name == right_name
-                        && left_role == right_role
-                        && left_value_type == right_value_type
+    if left_custom != right_custom {
+        reasons.insert("custom_tool");
+    }
+    if left_inner != right_inner {
+        reasons.insert("inner_tool");
+    }
+    if !custom_selector_family_matches(left_selector, right_selector) {
+        reasons.insert("selector_family");
+    }
+    if left_projection != right_projection {
+        reasons.insert("projection");
+    }
+    if left_arguments.len() != right_arguments.len() {
+        reasons.insert("argument_count");
+    }
+    for (left, right) in left_arguments.into_iter().zip(right_arguments) {
+        match (left, right) {
+            (
+                ResponseArgument::Role {
+                    name: left_name,
+                    role: left_role,
+                    value_type: left_value_type,
+                },
+                ResponseArgument::Role {
+                    name: right_name,
+                    role: right_role,
+                    value_type: right_value_type,
+                },
+            ) => {
+                if left_name != right_name {
+                    reasons.insert("argument_name");
                 }
-                (
-                    ResponseArgument::Integer {
-                        name: left_name, ..
-                    },
-                    ResponseArgument::Integer {
-                        name: right_name, ..
-                    },
-                )
-                | (
-                    ResponseArgument::String {
-                        name: left_name, ..
-                    },
-                    ResponseArgument::String {
-                        name: right_name, ..
-                    },
-                )
-                | (
-                    ResponseArgument::Boolean {
-                        name: left_name, ..
-                    },
-                    ResponseArgument::Boolean {
-                        name: right_name, ..
-                    },
-                ) => left_name == right_name,
-                _ => false,
-            })
+                if left_role != right_role {
+                    reasons.insert("argument_role");
+                }
+                if left_value_type != right_value_type {
+                    reasons.insert("argument_type");
+                }
+            }
+            (
+                ResponseArgument::Integer {
+                    name: left_name, ..
+                },
+                ResponseArgument::Integer {
+                    name: right_name, ..
+                },
+            )
+            | (
+                ResponseArgument::String {
+                    name: left_name, ..
+                },
+                ResponseArgument::String {
+                    name: right_name, ..
+                },
+            )
+            | (
+                ResponseArgument::Boolean {
+                    name: left_name, ..
+                },
+                ResponseArgument::Boolean {
+                    name: right_name, ..
+                },
+            ) => {
+                if left_name != right_name {
+                    reasons.insert("argument_name");
+                }
+            }
+            _ => {
+                reasons.insert("argument_kind");
+            }
+        }
+    }
+    reasons
+}
+
+pub(crate) fn nearest_custom_program_mismatch_reasons(
+    programs: &[ResponseProgram],
+    frame: &RelationFrame,
+) -> Vec<String> {
+    let candidates = ground_roles(frame)
+        .into_iter()
+        .next()
+        .and_then(|hypothesis| grounded_source_role(&hypothesis))
+        .map_or_else(Vec::new, |source_role| {
+            enumerate_custom_tool_candidates(std::slice::from_ref(frame), source_role)
+        });
+    if candidates.is_empty() {
+        return vec!["no_custom_candidate".to_owned()];
+    }
+    candidates
+        .iter()
+        .flat_map(|candidate| {
+            programs
+                .iter()
+                .map(move |program| custom_program_shape_mismatch_reasons(candidate, program))
+        })
+        .min_by(|left, right| {
+            left.len()
+                .cmp(&right.len())
+                .then_with(|| left.iter().cmp(right.iter()))
+        })
+        .map(|reasons| reasons.into_iter().map(str::to_owned).collect())
+        .unwrap_or_else(|| vec!["no_survivor".to_owned()])
 }
 
 fn custom_selector_family_matches(
@@ -2178,6 +2286,70 @@ mod tests {
             ],
             evidence_ref_sha256: "6".repeat(64),
         }
+    }
+
+    #[test]
+    fn continuation_surfaces_share_one_semantic_selector() {
+        let mut script = pending_projection_frame();
+        script.extractor_version = "legacy-before-source-neutral".to_owned();
+        script.verifier_label = None;
+        for atom in &mut script.atoms {
+            if let RelationAtom::CompletionState { value } = atom {
+                *value = "completed".to_owned();
+            }
+        }
+        let mut process = script.clone();
+        process.frame_id_sha256 = "7".repeat(64);
+        for (frame, physical_selector) in [
+            (
+                &mut script,
+                ResponseValueSelector::TurnOutputScalarOrdinal {
+                    output_ordinal: 1,
+                    scalar_ordinal: 3,
+                    value_type: AtomValueType::Identifier,
+                },
+            ),
+            (
+                &mut process,
+                ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+                    reverse_ordinal: 0,
+                    value_type: AtomValueType::Identifier,
+                },
+            ),
+        ] {
+            for atom in &mut frame.atoms {
+                if let RelationAtom::ObservationSelector { selector, .. } = atom {
+                    *selector = physical_selector.clone();
+                }
+            }
+        }
+        assert!(ground_roles(&script).is_empty());
+        assert!(ground_roles(&process).is_empty());
+
+        let physical = ResponseProgram::function_call_from_roles(
+            "wait",
+            ResponseValueSelector::TurnOutputScalarOrdinal {
+                output_ordinal: 1,
+                scalar_ordinal: 3,
+                value_type: AtomValueType::Integer,
+            },
+            vec![ResponseArgument::Role {
+                name: "cell_id".to_owned(),
+                role: SemanticRole::SourceValue,
+                value_type: None,
+            }],
+        );
+        let canonical = canonicalize_continuation_role_program(&physical, &[script, process])
+            .expect("shared continuation role");
+        assert!(matches!(
+            canonical.operation,
+            ResponseOperation::FunctionCallFromRoles {
+                selector: ResponseValueSelector::ContinuationHandle {
+                    value_type: AtomValueType::Identifier
+                },
+                ..
+            }
+        ));
     }
 
     #[test]

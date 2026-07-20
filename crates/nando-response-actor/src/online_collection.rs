@@ -5288,7 +5288,8 @@ const fn online_selector_value_type(
     selector: &crate::ResponseValueSelector,
 ) -> crate::AtomValueType {
     match selector {
-        crate::ResponseValueSelector::UniqueScalar { value_type }
+        crate::ResponseValueSelector::ContinuationHandle { value_type }
+        | crate::ResponseValueSelector::UniqueScalar { value_type }
         | crate::ResponseValueSelector::UniqueTurnScalar { value_type }
         | crate::ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | crate::ResponseValueSelector::JsonField { value_type, .. }
@@ -6063,6 +6064,7 @@ fn response_selector_family(program: &ResponseProgram) -> &'static str {
         _ => return "other",
     };
     match selector {
+        crate::ResponseValueSelector::ContinuationHandle { .. } => "continuation_handle",
         crate::ResponseValueSelector::UniqueScalar { .. } => "unique_scalar",
         crate::ResponseValueSelector::UniqueTurnScalar { .. } => "unique_turn_scalar",
         crate::ResponseValueSelector::ContentLinePrefix { .. } => "content_line_prefix",

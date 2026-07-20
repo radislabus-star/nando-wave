@@ -2852,6 +2852,9 @@ fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -> Value {
                         serde_json::to_string(selector).unwrap_or_else(|_| "null".to_owned()),
                     );
                     selector_kinds.insert(match selector {
+                        nando_response_actor::ResponseValueSelector::ContinuationHandle {
+                            ..
+                        } => "continuation_handle",
                         nando_response_actor::ResponseValueSelector::UniqueScalar { .. } => {
                             "unique_scalar"
                         }
@@ -3370,6 +3373,12 @@ fn parity_provider_payload(
 
 fn parity_provider_output(selector: &ResponseValueSelector, value: &Value) -> String {
     match selector {
+        ResponseValueSelector::ContinuationHandle { .. } => {
+            let value = value
+                .as_str()
+                .map_or_else(|| value.to_string(), str::to_owned);
+            format!("Script running with cell ID {value}")
+        }
         ResponseValueSelector::UniqueScalar { .. }
         | ResponseValueSelector::UniqueTurnScalar { .. } => value.to_string(),
         ResponseValueSelector::ContentLinePrefix { prefix, .. } => {
@@ -3436,6 +3445,12 @@ fn parity_projection_output(
     value: &Value,
 ) -> Value {
     match selector {
+        nando_response_actor::ResponseValueSelector::ContinuationHandle { .. } => {
+            let value = value
+                .as_str()
+                .map_or_else(|| value.to_string(), str::to_owned);
+            Value::String(format!("Script running with cell ID {value}"))
+        }
         nando_response_actor::ResponseValueSelector::UniqueScalar { .. }
         | nando_response_actor::ResponseValueSelector::UniqueTurnScalar { .. } => {
             Value::String(serde_json::to_string(value).unwrap_or_else(|_| "null".to_owned()))

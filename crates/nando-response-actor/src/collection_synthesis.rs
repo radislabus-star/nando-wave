@@ -1294,7 +1294,8 @@ const fn learned_selector_priority(selector: &ResponseValueSelector) -> u8 {
         | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
         | ResponseValueSelector::RequestLastToken
         | ResponseValueSelector::RequestUniqueLiteral => 0,
-        ResponseValueSelector::ContentLinePrefix { .. }
+        ResponseValueSelector::ContinuationHandle { .. }
+        | ResponseValueSelector::ContentLinePrefix { .. }
         | ResponseValueSelector::CommandOutputBody
         | ResponseValueSelector::LatestTurnOutputLine { .. }
         | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
@@ -1386,7 +1387,8 @@ fn scalar_text_type(value: &str) -> Option<AtomValueType> {
 
 const fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
     match selector {
-        ResponseValueSelector::UniqueScalar { value_type }
+        ResponseValueSelector::ContinuationHandle { value_type }
+        | ResponseValueSelector::UniqueScalar { value_type }
         | ResponseValueSelector::UniqueTurnScalar { value_type }
         | ResponseValueSelector::ContentLinePrefix { value_type, .. }
         | ResponseValueSelector::JsonField { value_type, .. }
@@ -2040,6 +2042,9 @@ fn renderer_law_shape(
 
 fn selector_law_source(selector: &ResponseValueSelector) -> serde_json::Value {
     match selector {
+        ResponseValueSelector::ContinuationHandle { .. } => {
+            serde_json::json!({"domain":"observation","role":"continuation_handle"})
+        }
         ResponseValueSelector::UniqueScalar { .. } => {
             serde_json::json!({"domain":"observation","role":"unique_scalar"})
         }

@@ -1616,11 +1616,8 @@ pub fn relation_frame_online_routing_atom_ids(frame: &RelationFrame) -> Vec<u64>
     let continuation_pending = frame.atoms.iter().any(|atom| {
         matches!(
             atom,
-            RelationAtom::ObservationSelector {
-                selector: ResponseValueSelector::ContentLinePrefix { prefix, .. },
-                ..
-            } if prefix == "Script running with cell ID "
-                || prefix == "Process running with session ID "
+            RelationAtom::ObservationSelector { selector, .. }
+                if crate::contracts::selector_denotes_continuation_handle(selector)
         )
     });
     if continuation_pending {

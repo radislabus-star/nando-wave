@@ -52,11 +52,25 @@ fn main() -> Result<(), String> {
         checkpoint_path: checkpoint,
         idle_sleep: Duration::from_millis(10),
     };
-    let result = if checkpoint_supplied {
+    let mut result = if checkpoint_supplied {
         OnlineResponseStream::open_streaming(config)
     } else {
         OnlineResponseStream::open(config)
     };
+    if let Ok(miner) = &mut result
+        && std::env::var_os("NANDO_DIAGNOSE_DRAIN_WORK").is_some()
+    {
+        for _ in 0..8_192 {
+            if !miner.has_self_training_work() {
+                break;
+            }
+            miner.run_self_training_work_slice();
+        }
+        if miner.has_self_training_work() {
+            return Err("diagnose_self_training_work_exhausted".to_owned());
+        }
+        miner.persist_now()?;
+    }
     if let Ok(miner) = &result {
         if std::env::var_os("NANDO_DIAGNOSE_ADMISSION").is_some() {
             let candidates = miner.admission_candidates();
