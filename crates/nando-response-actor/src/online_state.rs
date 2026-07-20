@@ -615,6 +615,9 @@ impl StreamingSelfTrainingState {
                     .insert(pool.teacher_signature_sha256);
             }
         }
+        self.discovery
+            .semantic_alias_graph_mut()
+            .reopen_under_evidenced_rejections(self.rollover_policy.support_rows);
         self.opportunity.repair_teacher_aggregates();
         for pool in self.discovery.pool_snapshots() {
             for frame in pool.positives {
@@ -1148,8 +1151,12 @@ impl StreamingSelfTrainingState {
                 }
                 Err(blocker) => {
                     let terminal = blocker.contains("mismatch")
-                        || blocker.contains("unseparable")
-                        || blocker.contains("wrong");
+                        || blocker.contains("wrong")
+                        || (blocker.contains("unseparable")
+                            && !crate::semantic_alias::retryable_adapter_unseparable(
+                                &blocker,
+                                self.rollover_policy.support_rows,
+                            ));
                     if terminal {
                         if self
                             .discovery

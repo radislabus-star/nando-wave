@@ -448,6 +448,30 @@ impl SemanticAliasGraph {
         cleared
     }
 
+    /// Older checkpoints classified every unseparable adapter route as a hard
+    /// contradiction. With fewer than the required positive or negative rows,
+    /// that outcome is censored evidence and must remain retryable.
+    pub fn reopen_under_evidenced_rejections(&mut self, required_rows: usize) -> usize {
+        let mut reopened = 0_usize;
+        for edge in self.edges.values_mut().filter(|edge| {
+            edge.state == SemanticAliasState::Rejected
+                && !edge.counterexamples.is_empty()
+                && edge
+                    .counterexamples
+                    .iter()
+                    .all(|blocker| retryable_adapter_unseparable(blocker, required_rows))
+        }) {
+            edge.state = SemanticAliasState::Candidate;
+            edge.blocker = None;
+            edge.counterexamples.clear();
+            reopened = reopened.saturating_add(1);
+        }
+        if reopened > 0 {
+            self.refresh_report();
+        }
+        reopened
+    }
+
     #[must_use]
     pub fn report(&self) -> SemanticAliasReport {
         self.report.clone()
@@ -592,6 +616,22 @@ impl SemanticAliasGraph {
                     .saturating_add(invalid_rows),
         };
     }
+}
+
+pub(crate) fn retryable_adapter_unseparable(blocker: &str, required_rows: usize) -> bool {
+    let Some(counts) = blocker.strip_prefix("semantic_law_adapter_wave_unseparable:") else {
+        return false;
+    };
+    let mut positives = None;
+    let mut negatives = None;
+    for field in counts.split(':') {
+        if let Some(value) = field.strip_prefix("positives=") {
+            positives = value.parse::<usize>().ok();
+        } else if let Some(value) = field.strip_prefix("negatives=") {
+            negatives = value.parse::<usize>().ok();
+        }
+    }
+    matches!((positives, negatives), (Some(positive), Some(negative)) if positive < required_rows || negative < required_rows)
 }
 
 fn merge_components(components: &mut Vec<BTreeSet<String>>, left: &str, right: &str) {
@@ -785,6 +825,52 @@ mod tests {
         assert!(graph.candidate_edges().any(|edge| {
             edge.left_teacher_signature_sha256 == "a" && edge.right_teacher_signature_sha256 == "c"
         }));
+    }
+
+    #[test]
+    fn under_evidenced_unseparable_blocker_is_retryable() {
+        assert!(retryable_adapter_unseparable(
+            "semantic_law_adapter_wave_unseparable:positives=2:negatives=0",
+            32,
+        ));
+        assert!(!retryable_adapter_unseparable(
+            "semantic_law_adapter_wave_unseparable:positives=32:negatives=32",
+            32,
+        ));
+        assert!(!retryable_adapter_unseparable("parity_mismatch", 32));
+    }
+
+    #[test]
+    fn startup_reopens_only_under_evidenced_rejections() {
+        let mut graph = SemanticAliasGraph::default();
+        graph.observe_transition(&transition("a", "wait", "same"));
+        graph.observe_transition(&transition("b", "write_stdin", "same"));
+        let edge_sha256 = graph
+            .candidate_edges()
+            .next()
+            .expect("candidate edge")
+            .edge_sha256
+            .clone();
+
+        graph
+            .reject(
+                &edge_sha256,
+                "semantic_law_adapter_wave_unseparable:positives=2:negatives=0".to_owned(),
+            )
+            .unwrap();
+        assert_eq!(graph.reopen_under_evidenced_rejections(32), 1);
+        let reopened = graph.edges.get(&edge_sha256).expect("reopened edge");
+        assert_eq!(reopened.state, SemanticAliasState::Candidate);
+        assert!(reopened.counterexamples.is_empty());
+
+        graph
+            .reject(&edge_sha256, "parity_mismatch".to_owned())
+            .unwrap();
+        assert_eq!(graph.reopen_under_evidenced_rejections(32), 0);
+        assert_eq!(
+            graph.edges.get(&edge_sha256).expect("terminal edge").state,
+            SemanticAliasState::Rejected
+        );
     }
 
     #[test]
