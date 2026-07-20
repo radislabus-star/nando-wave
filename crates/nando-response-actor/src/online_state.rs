@@ -2249,14 +2249,25 @@ impl StreamingSelfTrainingState {
 
     fn refresh_generations_filtered(&mut self, signatures: Option<&BTreeSet<String>>) {
         let all_winners = self.derived_winner_cohorts();
-        if signatures.is_none() {
-            let live_ids = all_winners
-                .iter()
-                .map(|cohort| cohort.winner.cohort_id_sha256.as_str())
-                .collect::<std::collections::BTreeSet<_>>();
-            self.generations
-                .retain(|cohort_id, _| live_ids.contains(cohort_id.as_str()));
-        }
+        // Incremental regrouping can replace a semantic cohort ID when its
+        // physical adapter set changes. Prune an orphan only when a live cohort
+        // covers the same teacher/member signature; absence alone may mean a
+        // partially restored CEGIS checkpoint whose proof must be preserved.
+        let live_ids = all_winners
+            .iter()
+            .map(|cohort| cohort.winner.cohort_id_sha256.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let live_signatures = all_winners
+            .iter()
+            .flat_map(|cohort| {
+                std::iter::once(cohort.winner.teacher_signature_sha256.as_str())
+                    .chain(cohort.member_signatures.iter().map(String::as_str))
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        self.generations.retain(|cohort_id, generation| {
+            live_ids.contains(cohort_id.as_str())
+                || !live_signatures.contains(generation.teacher_signature_sha256.as_str())
+        });
         let winners = all_winners
             .into_iter()
             .filter(|cohort| {
@@ -3498,6 +3509,17 @@ mod tests {
             .expect("generation-owned semantic support survives discovery eviction");
         assert_eq!(retained_semantic.member_signatures.len(), 2);
         let frozen_generation_ids = state.generations.keys().cloned().collect::<BTreeSet<_>>();
+        let mut orphan = state
+            .generations
+            .values()
+            .next()
+            .cloned()
+            .expect("frozen generation");
+        orphan.cohort_id_sha256 = "orphan-semantic-cohort".to_owned();
+        orphan.generation_id_sha256 = "orphan-generation".to_owned();
+        state
+            .generations
+            .insert(orphan.cohort_id_sha256.clone(), orphan);
         state
             .dirty_generation_signatures
             .insert("unrelated-evidence-signature".to_owned());
