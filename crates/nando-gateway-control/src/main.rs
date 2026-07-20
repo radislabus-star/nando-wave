@@ -33,6 +33,70 @@ struct ModeForm {
     mode: String,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FlowState {
+    Live,
+    Pass,
+    Wait,
+    Block,
+    Locked,
+}
+
+impl FlowState {
+    fn class(self) -> &'static str {
+        match self {
+            Self::Live => "live",
+            Self::Pass => "pass",
+            Self::Wait => "wait",
+            Self::Block => "block",
+            Self::Locked => "locked",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Live => "LIVE",
+            Self::Pass => "PASS",
+            Self::Wait => "WAIT",
+            Self::Block => "BLOCK",
+            Self::Locked => "LOCKED",
+        }
+    }
+}
+
+struct SignalArchitectureView<'a> {
+    partition: u64,
+    generation: u64,
+    transitions: u64,
+    support: u64,
+    matching: u64,
+    matching_sessions: u64,
+    after_watermark: u64,
+    independent: u64,
+    consistent: u64,
+    routed: u64,
+    future: u64,
+    lost: u64,
+    blocker: &'a str,
+    online_emitted: u64,
+    online_blocked: u64,
+    response_active: u64,
+    cpu_share: &'a str,
+    online_ready: bool,
+}
+
+struct SignalStage<'a> {
+    id: &'a str,
+    step: &'a str,
+    title: &'a str,
+    logic: &'a str,
+    metric: String,
+    metric_label: &'a str,
+    module: &'a str,
+    owner: &'a str,
+    state: FlowState,
+}
+
 #[tokio::main]
 async fn main() {
     let config = match ControlConfig::from_env() {
@@ -258,6 +322,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let signal_generation = metric_u64(strongest_generation, "generation");
     let signal_support = metric_u64(strongest_generation, "support_runtime_parity_rows");
     let signal_matching = metric_u64(strongest_generation, "matching_runtime_parity_rows");
+    let signal_matching_sessions =
+        metric_u64(strongest_generation, "matching_runtime_parity_sessions");
     let signal_after_watermark = metric_u64(strongest_generation, "after_future_watermark_rows");
     let signal_independent = metric_u64(strongest_generation, "independent_future_rows");
     let signal_consistent = metric_u64(strongest_generation, "program_consistent_future_rows");
@@ -265,13 +331,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let signal_future = metric_u64(strongest_generation, "future_rows");
     let signal_lost = signal_routed.saturating_sub(signal_future);
     let signal_blocker = metric_str(strongest_generation, "blocker", "нет");
-    let signal_status = if signal_lost > 0 {
-        "BLOCK"
-    } else if signal_future >= 32 {
-        "PASS"
-    } else {
-        "WAIT"
-    };
+    let online_transitions = metric_u64(self_training, "transitions_seen");
     let online_teacher_programs = teacher_programs_text(online_discovery);
     let online_candidates = metric_u64(response_miner, "candidate_bucket_count");
     let online_admission_ready = metric_u64(response_miner, "admission_ready_cohorts");
@@ -393,7 +453,32 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let parity_mismatches = metric_u64(runtime_admission, "global_runtime_parity_mismatches");
     let policy_version = metric_str(runtime_admission, "policy_version", "MISSING");
     let build_id = metric_str(&build_manifest, "build_id", "MISSING");
+    let build_commit = metric_str(&build_manifest, "git_commit", "MISSING");
+    let build_commit_short = build_commit.get(..12).unwrap_or(build_commit);
     let module_version_rows = module_version_rows(&build_manifest);
+    let signal_architecture = signal_architecture_html(
+        &SignalArchitectureView {
+            partition: signal_partition,
+            generation: signal_generation,
+            transitions: online_transitions,
+            support: signal_support,
+            matching: signal_matching,
+            matching_sessions: signal_matching_sessions,
+            after_watermark: signal_after_watermark,
+            independent: signal_independent,
+            consistent: signal_consistent,
+            routed: signal_routed,
+            future: signal_future,
+            lost: signal_lost,
+            blocker: signal_blocker,
+            online_emitted,
+            online_blocked,
+            response_active,
+            cpu_share: &cpu_share,
+            online_ready: online_status == "READY",
+        },
+        &build_manifest,
+    );
     let body = format!(
         r#"<!doctype html>
 <html lang="ru">
@@ -403,29 +488,69 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <meta http-equiv="refresh" content="10">
 <title>Nando Gateway</title>
 <style>
-:root {{ color-scheme: light; font-family: Inter, system-ui, sans-serif; background:#f4f5f7; color:#17191c; }}
+:root {{ color-scheme:light; font-family:Inter,system-ui,sans-serif; background:#f3f5f7; color:#17191c; }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; }}
-header {{ background:#101214; color:#fff; padding:18px 24px; display:flex; justify-content:space-between; align-items:baseline; gap:16px; }}
+header {{ background:#111315; color:#fff; padding:16px 24px; }}
+.header-inner {{ width:min(1180px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
+.brand {{ display:flex; align-items:baseline; gap:12px; min-width:0; }}
 h1 {{ margin:0; font-size:20px; letter-spacing:0; }}
-.mode {{ font:700 14px ui-monospace,monospace; color:#76e39d; }}
-main {{ width:min(1120px,100%); margin:0 auto; padding:18px 24px; }}
-.controls {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0 0 12px; }}
-button {{ width:100%; min-height:48px; border:1px solid #aeb4bc; border-radius:6px; background:#fff; color:#17191c; font-weight:750; cursor:pointer; }}
-button:hover {{ border-color:#101214; }}
+.build {{ color:#aeb6bf; font:600 11px ui-monospace,monospace; overflow-wrap:anywhere; }}
+.mode-wrap {{ display:flex; align-items:center; gap:10px; }}
+.mode-label {{ color:#aeb6bf; font-size:11px; font-weight:700; text-transform:uppercase; }}
+.mode {{ font:800 13px ui-monospace,monospace; color:#76e39d; }}
+main {{ width:min(1180px,100%); margin:0 auto; padding:18px 24px 32px; }}
+.controls {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 18px; }}
+button {{ width:100%; min-height:44px; border:1px solid #aeb4bc; border-radius:6px; background:#fff; color:#17191c; font-weight:750; cursor:pointer; }}
+button:hover {{ border-color:#111315; background:#f9fafb; }}
 .bypass {{ background:#b42318; border-color:#b42318; color:#fff; }}
+.bypass:hover {{ background:#8f1c13; border-color:#8f1c13; }}
 button:disabled {{ opacity:.45; cursor:not-allowed; }}
 .metric-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:32px; }}
-.band {{ border-top:1px solid #d7dbe0; padding:12px 0; min-width:0; }}
+.band {{ border-top:1px solid #d7dbe0; padding:14px 0; min-width:0; }}
 h2 {{ margin:0 0 12px; font-size:15px; letter-spacing:0; }}
-.signal-head {{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; }}
-.signal-status {{ font:800 13px ui-monospace,monospace; }}
-.signal-route {{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border:1px solid #cfd4da; background:#fff; }}
-.signal-step {{ min-width:0; padding:12px 10px; border-right:1px solid #dfe3e8; }}
-.signal-step:last-child {{ border-right:0; }}
-.signal-label {{ display:block; min-height:30px; color:#535862; font-size:11px; line-height:1.25; }}
-.signal-value {{ display:block; margin-top:6px; font:800 20px ui-monospace,monospace; }}
-.blocker {{ margin:10px 0 0; padding:10px 12px; border-left:4px solid #b42318; background:#fff1f0; color:#7a271a; font:700 13px ui-monospace,monospace; overflow-wrap:anywhere; }}
+.architecture {{ border-top:3px solid #24272b; padding-top:14px; }}
+.architecture-head {{ display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:14px; }}
+.architecture-title h2 {{ margin-bottom:5px; font-size:17px; }}
+.architecture-title p {{ margin:0; color:#535862; font-size:13px; line-height:1.45; }}
+.architecture-state {{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }}
+.state-chip {{ display:inline-flex; align-items:center; justify-content:center; min-width:58px; min-height:24px; padding:3px 8px; border:1px solid currentColor; border-radius:4px; font:800 11px ui-monospace,monospace; }}
+.state-chip.live,.state-chip.pass {{ color:#067647; background:#ecfdf3; }}
+.state-chip.wait {{ color:#8a4b0f; background:#fff7ed; }}
+.state-chip.block {{ color:#b42318; background:#fff1f0; }}
+.state-chip.locked {{ color:#59616b; background:#eef1f4; }}
+.architecture-meta {{ color:#535862; font:700 11px ui-monospace,monospace; }}
+.flow-tree {{ display:grid; grid-template-columns:1fr; }}
+.flow-stage {{ display:grid; grid-template-columns:64px minmax(220px,1.3fr) minmax(240px,1fr) 120px; min-height:104px; border:1px solid #ccd2d8; border-radius:6px; background:#fff; overflow:hidden; }}
+.flow-stage.block {{ border-color:#e3a5a0; box-shadow:inset 4px 0 0 #b42318; }}
+.flow-stage.locked {{ background:#f8f9fa; color:#59616b; }}
+.stage-index {{ display:flex; align-items:center; justify-content:center; border-right:1px solid #e1e4e8; color:#747b84; font:800 12px ui-monospace,monospace; }}
+.stage-copy {{ align-self:center; min-width:0; padding:14px 18px; }}
+.stage-copy h3 {{ margin:0 0 6px; font-size:14px; letter-spacing:0; }}
+.stage-copy p {{ margin:0; color:#535862; font-size:12px; line-height:1.45; }}
+.module-owner {{ align-self:stretch; min-width:0; padding:13px 16px; border-left:1px solid #e1e4e8; display:flex; flex-direction:column; justify-content:center; gap:4px; }}
+.module-name {{ font-size:12px; font-weight:800; }}
+.module-version {{ color:#344054; font:700 11px ui-monospace,monospace; overflow-wrap:anywhere; }}
+.module-owner code {{ color:#667085; font:10px ui-monospace,monospace; overflow-wrap:anywhere; }}
+.stage-result {{ align-self:stretch; padding:12px 14px; border-left:1px solid #e1e4e8; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; gap:5px; text-align:right; }}
+.stage-metric {{ font:850 23px ui-monospace,monospace; color:#17191c; overflow-wrap:anywhere; }}
+.flow-stage.locked .stage-metric {{ color:#59616b; }}
+.stage-metric-label {{ color:#667085; font-size:10px; line-height:1.25; }}
+.flow-edge {{ position:relative; min-height:46px; display:grid; place-items:center; }}
+.flow-edge::before {{ content:""; position:absolute; top:0; bottom:0; left:31px; width:2px; background:#aeb6bf; }}
+.flow-edge::after {{ content:""; position:absolute; bottom:5px; left:27px; width:8px; height:8px; border-right:2px solid #667085; border-bottom:2px solid #667085; transform:rotate(45deg); }}
+.edge-label {{ z-index:1; margin-left:64px; padding:4px 8px; background:#f3f5f7; color:#667085; font:700 10px ui-monospace,monospace; }}
+.flow-edge.failure {{ min-height:88px; margin:8px 0; border:1px solid #e3a5a0; border-radius:6px; background:#fff1f0; grid-template-columns:64px minmax(0,1fr); place-items:stretch; }}
+.flow-edge.failure::before {{ background:#b42318; }}
+.flow-edge.failure::after {{ border-color:#b42318; }}
+.failure-copy {{ grid-column:2; padding:12px 16px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 12px; align-content:center; min-width:0; }}
+.failure-copy strong {{ color:#b42318; font:850 12px ui-monospace,monospace; }}
+.failure-copy span {{ color:#7a271a; font-size:13px; font-weight:750; }}
+.failure-copy code {{ grid-column:2; color:#7a271a; font:11px ui-monospace,monospace; overflow-wrap:anywhere; }}
+.architecture-foot {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin-top:14px; border:1px solid #ccd2d8; background:#ccd2d8; }}
+.invariant {{ background:#fff; padding:11px 12px; }}
+.invariant strong {{ display:block; margin-bottom:3px; font-size:11px; }}
+.invariant span {{ color:#535862; font-size:11px; line-height:1.35; }}
 .compact td {{ padding:5px 0; }}
 details {{ border-top:1px solid #d7dbe0; margin-top:4px; }}
 summary {{ padding:14px 0; cursor:pointer; font-weight:800; font-size:14px; }}
@@ -436,39 +561,52 @@ td:first-child {{ padding-right:16px; }}
 td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weight:700; }}
 .ok {{ color:#067647; }} .off {{ color:#b42318; }}
 .note {{ margin:0; color:#535862; line-height:1.5; overflow-wrap:anywhere; }}
-@media (max-width:900px) {{ .signal-route {{ grid-template-columns:repeat(4,minmax(0,1fr)); }} .signal-step:nth-child(4) {{ border-right:0; }} .signal-step {{ border-bottom:1px solid #dfe3e8; }} }}
-@media (max-width:760px) {{ .controls,.metric-grid {{ grid-template-columns:1fr; }} .signal-route {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .signal-step:nth-child(even) {{ border-right:0; }} header,.signal-head {{ align-items:flex-start; flex-direction:column; }} main {{ padding:14px 18px; }} }}
+@media (max-width:900px) {{
+  .flow-stage {{ grid-template-columns:52px minmax(0,1fr) 110px; }}
+  .module-owner {{ grid-column:2 / 4; border-left:0; border-top:1px solid #e1e4e8; padding:10px 14px; }}
+  .flow-edge::before {{ left:25px; }} .flow-edge::after {{ left:21px; }}
+  .flow-edge.failure {{ grid-template-columns:52px minmax(0,1fr); }}
+  .edge-label {{ margin-left:52px; }}
+}}
+@media (max-width:680px) {{
+  .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
+  .header-inner,.brand {{ gap:6px; }}
+  main {{ padding:14px 14px 28px; }}
+  .controls,.metric-grid,.architecture-foot {{ grid-template-columns:1fr; }}
+  .flow-stage {{ grid-template-columns:42px minmax(0,1fr); }}
+  .stage-index {{ grid-row:1 / 3; }}
+  .stage-copy {{ padding:13px 12px; }}
+  .stage-result {{ grid-column:2; align-items:flex-start; border-left:0; border-top:1px solid #e1e4e8; text-align:left; padding:10px 12px; }}
+  .module-owner {{ grid-column:2; padding:10px 12px; }}
+  .flow-edge {{ min-height:42px; }}
+  .flow-edge::before {{ left:20px; }} .flow-edge::after {{ left:16px; }}
+  .flow-edge.failure {{ grid-template-columns:42px minmax(0,1fr); }}
+  .failure-copy {{ grid-template-columns:1fr; padding:11px 12px; }}
+  .failure-copy code {{ grid-column:1; }}
+  .edge-label {{ margin-left:42px; }}
+}}
 </style>
 </head>
 <body>
-<header><h1>Nando Gateway <small>{build_id}</small></h1><div class="mode">{mode}</div></header>
+<header><div class="header-inner">
+<div class="brand"><h1>Nando Gateway</h1><span class="build">build {build_id} · {build_commit_short}</span></div>
+<div class="mode-wrap"><span class="mode-label">Режим</span><span class="mode">{mode}</span></div>
+</div></header>
 <main>
 <div class="controls">
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="BYPASS"><button class="bypass">ОБХОД NANDO</button></form>
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="SHADOW"><button>SHADOW</button></form>
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="CPU"><button{cpu_disabled}>CPU</button></form>
 </div>
-<section class="band">
-<div class="signal-head"><h2>Маршрут живого сигнала · partition v{signal_partition} · generation {signal_generation}</h2><div class="signal-status {signal_status_class}">{signal_status}</div></div>
-<div class="signal-route">
-<div class="signal-step"><span class="signal-label">Support с receipt</span><span class="signal-value">{signal_support}</span></div>
-<div class="signal-step"><span class="signal-label">Совпало с законом</span><span class="signal-value">{signal_matching}</span></div>
-<div class="signal-step"><span class="signal-label">После watermark</span><span class="signal-value">{signal_after_watermark}</span></div>
-<div class="signal-step"><span class="signal-label">Независимые</span><span class="signal-value">{signal_independent}</span></div>
-<div class="signal-step"><span class="signal-label">Воспроизводимые</span><span class="signal-value">{signal_consistent}</span></div>
-<div class="signal-step"><span class="signal-label">Маршрутизированы</span><span class="signal-value">{signal_routed}</span></div>
-<div class="signal-step"><span class="signal-label">Записаны в future</span><span class="signal-value">{signal_future}</span></div>
-</div>
-<p class="blocker">ЗАТЫК: {signal_lost} событий потеряно между route и frozen future · {signal_blocker}</p>
-</section>
+{signal_architecture}
 <div class="metric-grid compact">
-<section class="band"><h2>Фактический результат</h2><table>
+<section class="band"><h2>Продуктовый результат</h2><table>
 <tr><td>Обычный трафик на CPU</td><td>{cpu_share}</td></tr>
 <tr><td>Экономия входных токенов</td><td>{token_share}</td></tr>
 <tr><td>Предотвращено LLM-вызовов</td><td>{avoided_calls}</td></tr>
 <tr><td>ACTIVE / QUARANTINE</td><td>{response_active} / {response_quarantine}</td></tr>
 </table></section>
-<section class="band"><h2>Безопасность и допуск</h2><table>
+<section class="band"><h2>Независимый допуск</h2><table>
 <tr><td>Composite gate</td><td>{verdict}</td></tr>
 <tr><td>False accepts</td><td>{false_accepts}</td></tr>
 <tr><td>Parity mismatches</td><td>{parity_mismatches}</td></tr>
@@ -566,25 +704,10 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
         mode = current.mode,
         service_rows = service_rows,
         build_id = html_escape(build_id),
+        build_commit_short = html_escape(build_commit_short),
         key = html_escape(&key),
         cpu_disabled = cpu_disabled,
-        signal_partition = signal_partition,
-        signal_generation = signal_generation,
-        signal_support = signal_support,
-        signal_matching = signal_matching,
-        signal_after_watermark = signal_after_watermark,
-        signal_independent = signal_independent,
-        signal_consistent = signal_consistent,
-        signal_routed = signal_routed,
-        signal_future = signal_future,
-        signal_lost = signal_lost,
-        signal_blocker = html_escape(signal_blocker),
-        signal_status = signal_status,
-        signal_status_class = if signal_status == "BLOCK" {
-            "off"
-        } else {
-            "ok"
-        },
+        signal_architecture = signal_architecture,
         module_version_rows = module_version_rows,
         verdict = html_escape(&admission.verdict),
         eligible = yes_no(admission.eligible_for_local_accept),
@@ -622,7 +745,7 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
         shadow_executions = shadow_executions,
         online_status = online_status,
         online_age = online_age,
-        online_transitions = metric_u64(self_training, "transitions_seen"),
+        online_transitions = online_transitions,
         online_teacher_pools = metric_u64(online_discovery, "teacher_pool_count"),
         online_teacher_programs = html_escape(&online_teacher_programs),
         online_cegis_cohorts = metric_u64(online_cegis, "cohorts"),
@@ -762,6 +885,288 @@ fn collection_blockers_text(status: &Value) -> String {
             .map(|(blocker, count)| format!("{blocker} ×{count}"))
             .collect::<Vec<_>>()
             .join("; ")
+    }
+}
+
+fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value) -> String {
+    let future_state = if view.lost > 0 {
+        FlowState::Block
+    } else if view.future >= 32 {
+        FlowState::Pass
+    } else {
+        FlowState::Wait
+    };
+    let admission_state = if view.future < 32 {
+        FlowState::Locked
+    } else if view.online_emitted > 0 {
+        FlowState::Pass
+    } else {
+        FlowState::Wait
+    };
+    let cpu_state = if view.response_active > 0 {
+        FlowState::Live
+    } else {
+        FlowState::Locked
+    };
+    let overall_state = if view.lost > 0 {
+        FlowState::Block
+    } else if view.response_active > 0 {
+        FlowState::Pass
+    } else {
+        FlowState::Wait
+    };
+    let stages = [
+        SignalStage {
+            id: "capture",
+            step: "00",
+            title: "Захват завершённых переходов",
+            logic: "Формирует state_before / action / state_after и receipt для проверенного teacher-перехода.",
+            metric: view.transitions.to_string(),
+            metric_label: "teacher transitions",
+            module: "Streaming worker",
+            owner: "nando-transition-serving::session_stream",
+            state: if view.online_ready {
+                FlowState::Live
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "support",
+            step: "01",
+            title: "Замороженный support",
+            logic: "Закрепляет receipt-backed support и immutable root текущего operator circuit.",
+            metric: format!("{} / 32", view.support),
+            metric_label: "support receipts",
+            module: "Teacher/student miner",
+            owner: "nando-response-actor::online_state",
+            state: if view.support >= 32 {
+                FlowState::Pass
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "law-match",
+            step: "02",
+            title: "Совпадение с relation-law",
+            logic: "Сравнивает новые runtime parity frames с teacher signature и выбранным cohort.",
+            metric: view.matching.to_string(),
+            metric_label: "frames, sessions shown below",
+            module: "Teacher/student miner",
+            owner: "online_state::parity_diagnostics",
+            state: if view.matching > 0 {
+                FlowState::Pass
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "watermark",
+            step: "03",
+            title: "Event-time watermark",
+            logic: "Оставляет только события новее max(support watermark, repair watermark).",
+            metric: view.after_watermark.to_string(),
+            metric_label: "post-watermark frames",
+            module: "Frozen future",
+            owner: "online_state::future_watermark",
+            state: if view.after_watermark > 0 {
+                FlowState::Pass
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "independence",
+            step: "04",
+            title: "Независимость от support",
+            logic: "Исключает повтор frame, session, intent и event из замороженного support.",
+            metric: view.independent.to_string(),
+            metric_label: "independent frames",
+            module: "Frozen future",
+            owner: "online_state::independence_filter",
+            state: if view.independent > 0 {
+                FlowState::Pass
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "typed-parity",
+            step: "05",
+            title: "Typed program parity",
+            logic: "Проверяет, что winner program воспроизводит ожидаемую структуру; mismatch даёт ABSTAIN.",
+            metric: view.consistent.to_string(),
+            metric_label: "program-consistent frames",
+            module: "Typed DSL + verifier",
+            owner: "synthesis::program_is_consistent",
+            state: if view.consistent > 0 {
+                FlowState::Pass
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "future-route",
+            step: "06",
+            title: "Маршрутизация в generation",
+            logic: "Winner должен направить frame в тот же cohort и подтверждённый physical adapter.",
+            metric: view.routed.to_string(),
+            metric_label: "routed frames",
+            module: "Teacher/student miner",
+            owner: "cegis::winner_routes_frame",
+            state: if view.routed > 0 {
+                FlowState::Pass
+            } else {
+                FlowState::Wait
+            },
+        },
+        SignalStage {
+            id: "future-store",
+            step: "07",
+            title: "Generation-owned future storage",
+            logic: "Должен атомарно записать frame и parity receipt в immutable future поколения g+1.",
+            metric: format!("{} / 32", view.future),
+            metric_label: "durable future receipts",
+            module: "Frozen future",
+            owner: "generation.future + parity_receipts.future",
+            state: future_state,
+        },
+        SignalStage {
+            id: "admission",
+            step: "08",
+            title: "External admission",
+            logic: "Пересобирает proof, проверяет 32 future rows, zero wrong/parity и только затем выдаёт package.",
+            metric: format!("{} / {}", view.online_emitted, view.online_blocked),
+            metric_label: "emitted / blocked",
+            module: "Admission",
+            owner: "nando-response-actor::online_admission",
+            state: admission_state,
+        },
+        SignalStage {
+            id: "hot-cpu",
+            step: "09",
+            title: "ACTIVE CPU execution",
+            logic: "Role grounding и actor исполняют package; независимый verifier всё ещё может вернуть ABSTAIN.",
+            metric: view.cpu_share.to_owned(),
+            metric_label: "ordinary traffic on CPU",
+            module: "Rust serving",
+            owner: "runtime::execute_response",
+            state: cpu_state,
+        },
+    ];
+    let edge_labels = [
+        "verified transition receipt".to_owned(),
+        "support root + winner cohort".to_owned(),
+        format!("{} matching sessions", view.matching_sessions),
+        "event-time disjointness".to_owned(),
+        "typed structural replay".to_owned(),
+        "winner route predicate".to_owned(),
+        "generation-owned write".to_owned(),
+        "proof-carrying candidate".to_owned(),
+        "ACTIVE authority lease".to_owned(),
+    ];
+    let mut tree = String::new();
+    for (index, stage) in stages.iter().enumerate() {
+        tree.push_str(&signal_stage_html(stage, manifest));
+        if index + 1 == stages.len() {
+            continue;
+        }
+        if index == 6 && view.lost > 0 {
+            tree.push_str(&format!(
+                "<div class=\"flow-edge failure\" data-edge=\"route-to-future\"><div class=\"failure-copy\"><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>{} routed -> {} записано; потеряно {}</span><code>downstream gate: {}</code></div></div>",
+                view.routed,
+                view.future,
+                view.lost,
+                html_escape(view.blocker)
+            ));
+        } else {
+            tree.push_str(&format!(
+                "<div class=\"flow-edge\"><span class=\"edge-label\">{}</span></div>",
+                html_escape(&edge_labels[index])
+            ));
+        }
+    }
+    format!(
+        r#"<section class="architecture" data-signal-status="{}">
+<div class="architecture-head">
+<div class="architecture-title"><h2>Архитектура прохождения живого сигнала</h2><p>Каждый узел показывает владельца, версию контракта, логику фильтра и фактический выход.</p></div>
+<div class="architecture-state"><span class="state-chip {}">{}</span><span class="architecture-meta">partition v{} · generation {}</span></div>
+</div>
+<div class="flow-tree">{}</div>
+<div class="architecture-foot">
+<div class="invariant"><strong>Support и future раздельны</strong><span>Future не может быть скопирован или восстановлен из support.</span></div>
+<div class="invariant"><strong>Verifier устанавливает истину</strong><span>Actor и Wave не выдают себе authority самостоятельно.</span></div>
+<div class="invariant"><strong>Fail closed</strong><span>Нет durable future proof -> нет admission -> нет ACTIVE package.</span></div>
+</div>
+</section>"#,
+        overall_state.class(),
+        overall_state.class(),
+        overall_state.label(),
+        view.partition,
+        view.generation,
+        tree
+    )
+}
+
+fn signal_stage_html(stage: &SignalStage<'_>, manifest: &Value) -> String {
+    format!(
+        r#"<article class="flow-stage {}" data-stage="{}">
+<div class="stage-index">{}</div>
+<div class="stage-copy"><h3>{}</h3><p>{}</p></div>
+{}
+<div class="stage-result"><span class="state-chip {}">{}</span><span class="stage-metric">{}</span><span class="stage-metric-label">{}</span></div>
+</article>"#,
+        stage.state.class(),
+        html_escape(stage.id),
+        html_escape(stage.step),
+        html_escape(stage.title),
+        html_escape(stage.logic),
+        module_identity_html(manifest, stage.module, stage.owner),
+        stage.state.class(),
+        stage.state.label(),
+        html_escape(&stage.metric),
+        html_escape(stage.metric_label)
+    )
+}
+
+fn module_identity_html(manifest: &Value, module_name: &str, owner: &str) -> String {
+    let module = manifest
+        .get("modules")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|module| module.get("name").and_then(Value::as_str) == Some(module_name));
+    let version = module
+        .and_then(|module| module.get("version"))
+        .and_then(Value::as_str)
+        .unwrap_or("MISSING");
+    let contract = module
+        .and_then(|module| module.get("contract"))
+        .and_then(Value::as_str)
+        .unwrap_or("MISSING");
+    let sha = module
+        .and_then(|module| module.get("sha256"))
+        .and_then(Value::as_str)
+        .unwrap_or("MISSING");
+    let short_contract = compact_identity(contract);
+    let short_sha = compact_identity(sha);
+    format!(
+        "<div class=\"module-owner\"><span class=\"module-name\">{}</span><span class=\"module-version\" title=\"{}\">{} | {} | {}</span><code>{}</code></div>",
+        html_escape(module_name),
+        html_escape(contract),
+        html_escape(version),
+        html_escape(&short_contract),
+        html_escape(&short_sha),
+        html_escape(owner)
+    )
+}
+
+fn compact_identity(value: &str) -> String {
+    if value.len() <= 24 {
+        value.to_owned()
+    } else {
+        format!("{}...", value.chars().take(12).collect::<String>())
     }
 }
 
@@ -1000,6 +1405,87 @@ mod tests {
         let selected = strongest_signal_generation(&generations).expect("generation");
         assert_eq!(metric_u64(selected, "generation"), 4);
         assert_eq!(metric_u64(selected, "routed_future_rows"), 15);
+    }
+
+    #[test]
+    fn architecture_tree_places_storage_gap_on_route_edge() {
+        let manifest = json!({
+            "modules": [
+                {"name":"Streaming worker","version":"event-driven.v2","contract":"0-events-or-60s","sha256":"aaaaaaaaaaaa1111"},
+                {"name":"Teacher/student miner","version":"strategy.v3","contract":"state.v3","sha256":"bbbbbbbbbbbb2222"},
+                {"name":"Frozen future","version":"partition.v14","contract":"event-time-disjoint","sha256":"cccccccccccc3333"},
+                {"name":"Typed DSL + verifier","version":"registry.v6","contract":"typed-v6","sha256":"dddddddddddd4444"},
+                {"name":"Admission","version":"gate.v2","contract":"proof-carrying","sha256":"eeeeeeeeeeee5555"},
+                {"name":"Rust serving","version":"0.1.0","contract":"runtime-v6","sha256":"ffffffffffff6666"}
+            ]
+        });
+        let html = signal_architecture_html(
+            &SignalArchitectureView {
+                partition: 14,
+                generation: 4,
+                transitions: 14_878,
+                support: 32,
+                matching: 55,
+                matching_sessions: 7,
+                after_watermark: 22,
+                independent: 18,
+                consistent: 18,
+                routed: 18,
+                future: 0,
+                lost: 18,
+                blocker: "future_rows_below_32",
+                online_emitted: 0,
+                online_blocked: 10,
+                response_active: 0,
+                cpu_share: "0.7%",
+                online_ready: true,
+            },
+            &manifest,
+        );
+
+        let route = html.find("data-stage=\"future-route\"").expect("route");
+        let failure = html
+            .find("data-edge=\"route-to-future\"")
+            .expect("failure edge");
+        let storage = html.find("data-stage=\"future-store\"").expect("storage");
+        assert!(route < failure && failure < storage);
+        assert!(html.contains("18 routed -> 0 записано; потеряно 18"));
+        assert!(html.contains("future_rows_below_32"));
+        assert!(html.contains("partition.v14"));
+        assert!(html.contains("data-stage=\"admission\""));
+        assert!(html.contains("state-chip locked\">LOCKED"));
+    }
+
+    #[test]
+    fn architecture_tree_does_not_invent_failure_when_route_is_persisted() {
+        let html = signal_architecture_html(
+            &SignalArchitectureView {
+                partition: 14,
+                generation: 5,
+                transitions: 20_000,
+                support: 32,
+                matching: 40,
+                matching_sessions: 8,
+                after_watermark: 32,
+                independent: 32,
+                consistent: 32,
+                routed: 32,
+                future: 32,
+                lost: 0,
+                blocker: "none",
+                online_emitted: 1,
+                online_blocked: 0,
+                response_active: 1,
+                cpu_share: "50.0%",
+                online_ready: true,
+            },
+            &Value::Null,
+        );
+
+        assert!(!html.contains("route-to-future"));
+        assert!(!html.contains("BLOCK НА ЭТОМ РЕБРЕ"));
+        assert!(html.contains("data-signal-status=\"pass\""));
+        assert!(html.contains("MISSING"));
     }
 
     #[test]
