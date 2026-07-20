@@ -1980,12 +1980,10 @@ fn action_frames(
         .copied()
         .filter(|(observation, _)| observation.value_type == AtomValueType::Identifier)
         .collect::<Vec<_>>();
-    let selected = if identifier_matches.len() == 1 {
-        identifier_matches.first().copied()
-    } else if matches.len() == 1 {
-        matches.first().copied()
+    let selected = if !identifier_matches.is_empty() {
+        unique_structural_action_match(&identifier_matches)
     } else {
-        None
+        unique_structural_action_match(&matches)
     };
     let Some((observation, argument)) = selected else {
         return Vec::new();
@@ -2071,6 +2069,27 @@ fn action_frames(
         trim_runtime_parity_outbox(state);
     }
     vec![frame]
+}
+
+/// Collapses only duplicate extraction of the same structural anchor. Equal
+/// values observed through different selectors remain ambiguous: choosing one
+/// would hide a role swap when those values diverge on frozen future traffic.
+fn unique_structural_action_match<'a>(
+    matches: &[(&'a Observation, &'a str)],
+) -> Option<(&'a Observation, &'a str)> {
+    let mut unique = BTreeMap::new();
+    for (observation, argument) in matches {
+        unique
+            .entry((
+                (*argument).to_owned(),
+                observation.value_type,
+                observation.selector.clone(),
+            ))
+            .or_insert((*observation, *argument));
+    }
+    (unique.len() == 1)
+        .then(|| unique.into_values().next())
+        .flatten()
 }
 
 fn direct_call_arguments(
@@ -3497,6 +3516,55 @@ mod tests {
             atom,
             RelationAtom::ActionRoleArgument { name, .. } if name == "session_id"
         )));
+    }
+
+    #[test]
+    fn duplicate_extraction_of_same_structural_selector_is_one_binding() {
+        let first = Observation {
+            value_sha256: hash_value(&json!(2911)),
+            value_type: AtomValueType::Identifier,
+            selector: ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+                scalar_ordinal: 0,
+                value_type: AtomValueType::Identifier,
+            },
+            tool_kind: "exec".to_owned(),
+            call_shape: "custom_tool_call".to_owned(),
+            output_sha256: "a".repeat(64),
+            completion_state: "pending",
+        };
+        let mut duplicate = first.clone();
+        duplicate.output_sha256 = "b".repeat(64);
+
+        let selected =
+            unique_structural_action_match(&[(&first, "session_id"), (&duplicate, "session_id")]);
+
+        assert!(selected.is_some());
+    }
+
+    #[test]
+    fn equal_values_from_different_structural_selectors_remain_ambiguous() {
+        let first = Observation {
+            value_sha256: hash_value(&json!(2911)),
+            value_type: AtomValueType::Identifier,
+            selector: ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+                scalar_ordinal: 0,
+                value_type: AtomValueType::Identifier,
+            },
+            tool_kind: "exec".to_owned(),
+            call_shape: "custom_tool_call".to_owned(),
+            output_sha256: "a".repeat(64),
+            completion_state: "pending",
+        };
+        let mut competing = first.clone();
+        competing.selector = ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+            scalar_ordinal: 1,
+            value_type: AtomValueType::Identifier,
+        };
+
+        let selected =
+            unique_structural_action_match(&[(&first, "session_id"), (&competing, "session_id")]);
+
+        assert!(selected.is_none());
     }
 
     #[test]

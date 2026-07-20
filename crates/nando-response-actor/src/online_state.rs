@@ -599,6 +599,22 @@ impl StreamingSelfTrainingState {
                 }
             }
         }
+        // Reconciliation must be level-triggered. A checkpoint may contain a
+        // healthy CEGIS arena for some teacher signatures while newer discovery
+        // pools have never crossed an edge-triggered refresh boundary. Queue only
+        // those missing signatures; never clear existing generations or receipts.
+        let represented_signatures = self.cegis.teacher_signatures();
+        let mut queued = self.rebuild_queue.iter().cloned().collect::<BTreeSet<_>>();
+        for pool in self.discovery.pool_snapshots() {
+            if !represented_signatures.contains(&pool.teacher_signature_sha256)
+                && queued.insert(pool.teacher_signature_sha256.clone())
+            {
+                self.rebuild_queue
+                    .push_back(pool.teacher_signature_sha256.clone());
+                self.dirty_derived_signatures
+                    .insert(pool.teacher_signature_sha256);
+            }
+        }
         self.opportunity.repair_teacher_aggregates();
         for pool in self.discovery.pool_snapshots() {
             for frame in pool.positives {
@@ -3055,6 +3071,67 @@ mod tests {
         assert_eq!(checks, 0);
         assert!(progressed);
         assert!(!state.has_pending_work());
+    }
+
+    #[test]
+    fn startup_reconciliation_queues_only_discovery_signatures_missing_from_cegis() {
+        let mut state = StreamingSelfTrainingState::new(0);
+        for index in 0..32 {
+            state
+                .observe_migration_transition(&continuation_transition(
+                    index,
+                    "wait",
+                    "cell_id",
+                    "Script running with cell ID ",
+                    "continue",
+                ))
+                .expect("wait transition");
+            state
+                .observe_migration_transition(&continuation_transition(
+                    index + 32,
+                    "write_stdin",
+                    "session_id",
+                    "Script running with session ID ",
+                    "continue",
+                ))
+                .expect("write transition");
+        }
+        let pools = state.discovery.pool_snapshots();
+        let represented = pools
+            .iter()
+            .find(|pool| pool.action_symbol == "function:wait")
+            .expect("represented pool")
+            .teacher_signature_sha256
+            .clone();
+        let missing = pools
+            .iter()
+            .find(|pool| pool.action_symbol == "function:write_stdin")
+            .expect("missing pool")
+            .teacher_signature_sha256
+            .clone();
+        let represented_pool = state
+            .pool_snapshot_with_parity(&represented)
+            .expect("represented snapshot");
+        state.cegis.refresh_pool(&represented_pool);
+        assert!(state.cegis.teacher_signatures().contains(&represented));
+        assert!(!state.cegis.teacher_signatures().contains(&missing));
+
+        let stable_generation = generation();
+        let stable_generation_id = stable_generation.generation_id_sha256.clone();
+        state.generations.insert(
+            stable_generation.cohort_id_sha256.clone(),
+            stable_generation,
+        );
+        state.repair_missing_synthesis_state();
+
+        assert!(state.rebuild_queue.contains(&missing));
+        assert!(!state.rebuild_queue.contains(&represented));
+        assert!(
+            state
+                .generations
+                .values()
+                .any(|generation| generation.generation_id_sha256 == stable_generation_id)
+        );
     }
 
     #[test]

@@ -262,6 +262,14 @@ impl CegisCoordinator {
         self.states.is_empty()
     }
 
+    #[must_use]
+    pub fn teacher_signatures(&self) -> BTreeSet<String> {
+        self.states
+            .values()
+            .map(|state| state.teacher_signature_sha256.clone())
+            .collect()
+    }
+
     pub fn refresh_pool(&mut self, pool: &TeacherPoolSnapshot) {
         self.refresh_pool_with_preferred_support(pool, &BTreeSet::new());
     }
