@@ -644,6 +644,10 @@ impl OnlineResponseStream {
         self.miner.self_training_v2.run_work_slice()
     }
 
+    pub fn run_self_training_work_slice_with_progress(&mut self) -> (usize, bool) {
+        self.miner.self_training_v2.run_work_slice_with_progress()
+    }
+
     pub fn run_self_training_work_slice_for_signatures(
         &mut self,
         signatures: &BTreeSet<String>,

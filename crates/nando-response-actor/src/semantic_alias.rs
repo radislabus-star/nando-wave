@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use crate::{EffectGraphBuilder, EffectGraphCompleteness, TeacherTransition};
 
 pub const SEMANTIC_ALIAS_GRAPH_SCHEMA_V1: &str = "nando.semantic-alias-graph.v1";
+const MAX_SEMANTIC_ALIAS_EDGES: usize = 4_096;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -72,6 +73,8 @@ pub struct SemanticAliasReport {
     pub blocked_candidate_edges: usize,
     #[serde(default)]
     pub candidate_blockers: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub terminal_blockers: BTreeMap<String, usize>,
     pub support_proven_edges: usize,
     pub future_proven_edges: usize,
     pub rejected_edges: usize,
@@ -168,6 +171,95 @@ impl SemanticAliasGraph {
         self.edges
             .values()
             .filter(|edge| edge.state == SemanticAliasState::Candidate && edge.blocker.is_none())
+    }
+
+    /// Connects exact-winner components without retrying terminally rejected
+    /// pairs. Candidate storage stays bounded even when several alternative
+    /// bridges must be disproved before a transferable law is found.
+    pub fn ensure_ready_candidate_forest(&mut self, ready: &BTreeSet<String>) -> usize {
+        let mut classes = BTreeMap::<String, Vec<String>>::new();
+        for (signature, evidence) in &self.pools {
+            if ready.contains(signature)
+                && let Some(digest) = evidence.unique_complete_digest()
+            {
+                classes
+                    .entry(digest.to_owned())
+                    .or_default()
+                    .push(signature.clone());
+            }
+        }
+
+        let mut updates = 0_usize;
+        for (digest, mut signatures) in classes {
+            signatures.sort();
+            let signature_set = signatures.iter().cloned().collect::<BTreeSet<_>>();
+            for edge in self.edges.values_mut().filter(|edge| {
+                edge.effect_graph_sha256 == digest
+                    && signature_set.contains(&edge.left_teacher_signature_sha256)
+                    && signature_set.contains(&edge.right_teacher_signature_sha256)
+            }) {
+                if edge.state == SemanticAliasState::Candidate
+                    && edge.blocker.as_deref().is_some_and(|blocker| {
+                        matches!(
+                            blocker,
+                            "left_exact_winner_missing" | "right_exact_winner_missing"
+                        )
+                    })
+                {
+                    edge.blocker = None;
+                    updates = updates.saturating_add(1);
+                }
+            }
+
+            let mut components = signatures
+                .iter()
+                .cloned()
+                .map(|signature| BTreeSet::from([signature]))
+                .collect::<Vec<_>>();
+            for edge in self.edges.values().filter(|edge| {
+                edge.effect_graph_sha256 == digest
+                    && !matches!(
+                        edge.state,
+                        SemanticAliasState::Rejected | SemanticAliasState::Revoked
+                    )
+                    && signature_set.contains(&edge.left_teacher_signature_sha256)
+                    && signature_set.contains(&edge.right_teacher_signature_sha256)
+            }) {
+                merge_components(
+                    &mut components,
+                    &edge.left_teacher_signature_sha256,
+                    &edge.right_teacher_signature_sha256,
+                );
+            }
+
+            while components.len() > 1 && self.edges.len() < MAX_SEMANTIC_ALIAS_EDGES {
+                let mut bridge = None;
+                'pairs: for left_index in 0..components.len() {
+                    for right_index in (left_index + 1)..components.len() {
+                        for left in &components[left_index] {
+                            for right in &components[right_index] {
+                                let candidate = candidate_edge(left, right, &digest);
+                                if !self.edges.contains_key(&candidate.edge_sha256) {
+                                    bridge = Some((left_index, right_index, candidate));
+                                    break 'pairs;
+                                }
+                            }
+                        }
+                    }
+                }
+                let Some((left_index, right_index, candidate)) = bridge else {
+                    break;
+                };
+                self.edges.insert(candidate.edge_sha256.clone(), candidate);
+                let right = components.remove(right_index);
+                components[left_index].extend(right);
+                updates = updates.saturating_add(1);
+            }
+        }
+        if updates > 0 {
+            self.refresh_report();
+        }
+        updates
     }
 
     #[must_use]
@@ -459,6 +551,20 @@ impl SemanticAliasGraph {
                 counts
             });
         let blocked_candidate_edges = candidate_blockers.values().sum();
+        let terminal_blockers = self
+            .edges
+            .values()
+            .filter(|edge| {
+                matches!(
+                    edge.state,
+                    SemanticAliasState::Rejected | SemanticAliasState::Revoked
+                )
+            })
+            .filter_map(|edge| edge.blocker.as_deref())
+            .fold(BTreeMap::<String, usize>::new(), |mut counts, blocker| {
+                *counts.entry(blocker.to_owned()).or_default() += 1;
+                counts
+            });
         let candidate_edges = count(SemanticAliasState::Candidate);
         self.report = SemanticAliasReport {
             rows_seen,
@@ -473,6 +579,7 @@ impl SemanticAliasGraph {
             actionable_candidate_edges: candidate_edges.saturating_sub(blocked_candidate_edges),
             blocked_candidate_edges,
             candidate_blockers,
+            terminal_blockers,
             support_proven_edges: count(SemanticAliasState::SupportProven),
             future_proven_edges: count(SemanticAliasState::FutureProven),
             rejected_edges: count(SemanticAliasState::Rejected),
@@ -485,6 +592,26 @@ impl SemanticAliasGraph {
                     .saturating_add(invalid_rows),
         };
     }
+}
+
+fn merge_components(components: &mut Vec<BTreeSet<String>>, left: &str, right: &str) {
+    let left_index = components.iter().position(|members| members.contains(left));
+    let right_index = components
+        .iter()
+        .position(|members| members.contains(right));
+    let (Some(left_index), Some(right_index)) = (left_index, right_index) else {
+        return;
+    };
+    if left_index == right_index {
+        return;
+    }
+    let (keep, remove) = if left_index < right_index {
+        (left_index, right_index)
+    } else {
+        (right_index, left_index)
+    };
+    let removed = components.remove(remove);
+    components[keep].extend(removed);
 }
 
 fn candidate_edge(left: &str, right: &str, effect_graph_sha256: &str) -> SemanticAliasEdge {
@@ -618,6 +745,46 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].state, SemanticAliasState::Candidate);
         assert!(graph.report().accounting_complete);
+    }
+
+    #[test]
+    fn ready_forest_bridges_a_missing_lexical_winner() {
+        let mut graph = SemanticAliasGraph::default();
+        graph.observe_transition(&transition("a", "wait", "same"));
+        graph.observe_transition(&transition("b", "unready", "same"));
+        graph.observe_transition(&transition("c", "write_stdin", "same"));
+
+        let ready = BTreeSet::from(["a".to_owned(), "c".to_owned()]);
+        assert_eq!(graph.ensure_ready_candidate_forest(&ready), 1);
+        assert!(graph.candidate_edges().any(|edge| {
+            edge.left_teacher_signature_sha256 == "a" && edge.right_teacher_signature_sha256 == "c"
+        }));
+    }
+
+    #[test]
+    fn ready_forest_routes_around_a_terminal_edge() {
+        let mut graph = SemanticAliasGraph::default();
+        graph.observe_transition(&transition("a", "wait", "same"));
+        graph.observe_transition(&transition("b", "write_stdin", "same"));
+        graph.observe_transition(&transition("c", "exec", "same"));
+        let rejected = graph
+            .candidate_edges()
+            .find(|edge| {
+                edge.left_teacher_signature_sha256 == "a"
+                    && edge.right_teacher_signature_sha256 == "b"
+            })
+            .expect("lexical edge")
+            .edge_sha256
+            .clone();
+        graph
+            .reject(&rejected, "parity_mismatch".to_owned())
+            .unwrap();
+
+        let ready = BTreeSet::from(["a".to_owned(), "b".to_owned(), "c".to_owned()]);
+        assert_eq!(graph.ensure_ready_candidate_forest(&ready), 1);
+        assert!(graph.candidate_edges().any(|edge| {
+            edge.left_teacher_signature_sha256 == "a" && edge.right_teacher_signature_sha256 == "c"
+        }));
     }
 
     #[test]

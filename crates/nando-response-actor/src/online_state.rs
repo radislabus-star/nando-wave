@@ -848,29 +848,44 @@ impl StreamingSelfTrainingState {
     /// Continues cold synthesis without requiring another event. The worker
     /// calls this only while queued work exists and always in bounded slices.
     pub fn run_work_slice(&mut self) -> usize {
+        self.run_work_slice_with_progress().0
+    }
+
+    /// Separates exact-check work from metadata progress so the event-driven
+    /// worker can drain finite rebuild/alias queues without mistaking a
+    /// zero-check consolidation slice for an idle miner.
+    pub fn run_work_slice_with_progress(&mut self) -> (usize, bool) {
+        let mut progressed = false;
         let preferred_support_ids = self.parity_support_ids();
-        if let Some(signature) = self.rebuild_queue.pop_front()
-            && let Some(pool) = self.pool_snapshot_with_parity(&signature)
-        {
-            self.cegis
-                .refresh_pool_with_preferred_support(&pool, &preferred_support_ids);
+        if let Some(signature) = self.rebuild_queue.pop_front() {
+            progressed = true;
+            if let Some(pool) = self.pool_snapshot_with_parity(&signature) {
+                self.cegis
+                    .refresh_pool_with_preferred_support(&pool, &preferred_support_ids);
+            }
         }
         let checks = self.cegis.run_next_slice();
         if checks > 0 {
+            progressed = true;
             self.work_slices_completed = self.work_slices_completed.saturating_add(1);
             self.exact_checks_completed = self
                 .exact_checks_completed
                 .saturating_add(u64::try_from(checks).unwrap_or(u64::MAX));
         }
+        let dirty_generation_count = self.dirty_generation_signatures.len();
         self.refresh_dirty_generation_evidence(None);
+        progressed |= self.dirty_generation_signatures.len() != dirty_generation_count;
         if self.rebuild_queue.is_empty() {
             let synthesis_quiescent = !self.cegis.has_pending_work();
             let alias_updates = self.prove_candidate_alias_support(synthesis_quiescent);
+            progressed |= alias_updates > 0;
             if alias_updates > 0 || synthesis_quiescent {
+                let dirty_derived_count = self.dirty_derived_signatures.len();
                 self.refresh_dirty_derived_state(None);
+                progressed |= self.dirty_derived_signatures.len() != dirty_derived_count;
             }
         }
-        checks
+        (checks, progressed)
     }
 
     pub fn run_work_slice_for_signatures(&mut self, signatures: &BTreeSet<String>) -> usize {
@@ -977,15 +992,6 @@ impl StreamingSelfTrainingState {
     }
 
     fn prove_candidate_alias_support(&mut self, finalize_missing_winners: bool) -> usize {
-        let candidates = self
-            .discovery
-            .semantic_alias_graph()
-            .candidate_edges()
-            .cloned()
-            .collect::<Vec<_>>();
-        if candidates.is_empty() {
-            return 0;
-        }
         let mut updates = 0_usize;
         let mut winners_by_signature = BTreeMap::<String, Vec<CegisWinner>>::new();
         for winner in self.cegis.winners() {
@@ -1002,6 +1008,24 @@ impl StreamingSelfTrainingState {
                     .then_with(|| left.phase_rank.cmp(&right.phase_rank))
                     .then_with(|| left.cohort_id_sha256.cmp(&right.cohort_id_sha256))
             });
+        }
+        let ready_signatures = winners_by_signature
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        updates = updates.saturating_add(
+            self.discovery
+                .semantic_alias_graph_mut()
+                .ensure_ready_candidate_forest(&ready_signatures),
+        );
+        let candidates = self
+            .discovery
+            .semantic_alias_graph()
+            .candidate_edges()
+            .cloned()
+            .collect::<Vec<_>>();
+        if candidates.is_empty() {
+            return updates;
         }
 
         for edge in candidates {
@@ -1246,7 +1270,10 @@ impl StreamingSelfTrainingState {
         }
         let mut parity_rows_by_id = BTreeMap::new();
         for signature in &member_signatures {
-            let Some(pool) = self.discovery.pool_snapshot(signature) else {
+            // Semantic regrouping must see immutable generation-owned support;
+            // the bounded discovery reservoir may already have evicted those
+            // frames. They remain support-only and never become fresh future.
+            let Some(pool) = self.pool_snapshot_with_parity(signature) else {
                 continue;
             };
             for frame in pool.positives {
@@ -3017,6 +3044,20 @@ mod tests {
     }
 
     #[test]
+    fn metadata_only_rebuild_slice_reports_progress() {
+        let mut state = StreamingSelfTrainingState::new(0);
+        state
+            .rebuild_queue
+            .push_back("retired-signature".to_owned());
+
+        let (checks, progressed) = state.run_work_slice_with_progress();
+
+        assert_eq!(checks, 0);
+        assert!(progressed);
+        assert!(!state.has_pending_work());
+    }
+
+    #[test]
     fn effect_law_migration_moves_old_live_parity_to_support_only() {
         let mut state = StreamingSelfTrainingState::new(0);
         for index in 0..32 {
@@ -3363,6 +3404,15 @@ mod tests {
                 && generation.support_rows == 32
                 && generation.future_rows == 0
         }));
+        let mut constrained_discovery = crate::FamilyDiscoveryConfig::default();
+        constrained_discovery.positive_reservoir_rows = 1;
+        state
+            .discovery
+            .enforce_runtime_limits(constrained_discovery);
+        let retained_semantic = state
+            .build_semantic_law_cohort(&law, &exact)
+            .expect("generation-owned semantic support survives discovery eviction");
+        assert_eq!(retained_semantic.member_signatures.len(), 2);
         let frozen_generation_ids = state.generations.keys().cloned().collect::<BTreeSet<_>>();
         state
             .dirty_generation_signatures

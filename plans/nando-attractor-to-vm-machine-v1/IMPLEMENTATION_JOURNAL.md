@@ -1844,3 +1844,48 @@ Strategy v96 also changed the broad continuation diagnostic from
 `canonicalized=0` to `canonicalized=12`. A bounded structural reason histogram
 is emitted for semantic programs that still abstain; it contains only static
 actor/verifier reason labels and never request or provider payload text.
+
+### Ready semantic forest and generation support reuse
+
+The original semantic alias graph used a lexical spanning chain. An exact
+winner separated from another exact winner by an unready pool could never meet
+it, even when both programs belonged to the same complete effect class. The
+alias graph now builds an additional bounded forest over signatures that have
+real CEGIS winners. Terminally rejected pairs are excluded and the next
+deterministic cross-component bridge is tried. The graph is capped at 4096
+edges; every bridge still passes exact parity construction and can only become
+authority through support/future proof.
+
+The cold worker now distinguishes exact checks from metadata progress. Popping
+a finite rebuild signature, proving/rejecting an alias edge, or refreshing a
+dirty generation keeps the bounded worker burst alive even when that slice
+performed zero exact checks. A slice that makes no progress still puts the
+worker to sleep, preventing idle spin.
+
+Semantic regrouping now reads `pool_snapshot_with_parity()`. Immutable
+generation-owned receipts remain available as support after the bounded
+discovery reservoir evicts their frames. They never cross the watermark and do
+not become future evidence.
+
+Focused and live receipts:
+
+```text
+semantic alias tests                    5 / 5 PASS
+online state tests                     12 / 12 PASS
+serving cargo check                    PASS
+composite deployment gate              PASS
+deployed learner SHA-256               8d3699ed0f2b6536d20caf46fc484c24604d9bd5034bc56f0be431d3240f677f
+
+metadata worker queue                  298 -> 200 -> 93 -> 25 -> 0
+support-proven semantic edges            0 -> 1
+semantic law cohorts                     0 -> 1
+semantic support                        32
+semantic frozen future                  12
+semantic future sessions                 4
+semantic wrong future                    0
+production false accepts                 0
+```
+
+The next blocker is genuine future scarcity for the new semantic continuation
+generation: `12 / 32`. Twenty additional independent post-freeze receipts are
+required. Existing historical or generation-owned rows remain support-only.

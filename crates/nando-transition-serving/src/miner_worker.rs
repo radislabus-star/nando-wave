@@ -681,13 +681,14 @@ pub fn spawn_miner_worker(
                     while burst_slices < MAX_SYNTHESIS_SLICES_PER_BURST
                         && started.elapsed() < MAX_SYNTHESIS_BURST
                     {
-                        let (slice_checks, pending) =
-                            miner.lock().ok().map_or((0, false), |mut stream| {
-                                let slice_checks = stream.run_self_training_work_slice();
+                        let (slice_checks, progressed, pending) =
+                            miner.lock().ok().map_or((0, false, false), |mut stream| {
+                                let (slice_checks, progressed) =
+                                    stream.run_self_training_work_slice_with_progress();
                                 let pending = stream.has_self_training_work();
-                                (slice_checks, pending)
+                                (slice_checks, progressed, pending)
                             });
-                        if slice_checks == 0 {
+                        if !progressed {
                             break;
                         }
                         burst_slices = burst_slices.saturating_add(1);
