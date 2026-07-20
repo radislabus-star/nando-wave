@@ -76,8 +76,13 @@ struct SignalArchitectureView<'a> {
     consistent: u64,
     routed: u64,
     future: u64,
-    lost: u64,
     blocker: &'a str,
+    admission_verdict: &'a str,
+    admission_blocker: &'a str,
+    admission_relation_candidates: u64,
+    admission_future_rows: u64,
+    admission_runtime_parity_cases: u64,
+    active_packages: u64,
     online_ready: bool,
 }
 
@@ -159,6 +164,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     };
     let economics = read_json(&state.config.economics_path);
     let response_registry = read_json(&state.config.response_registry_path);
+    let response_admission_controller =
+        read_json(&state.config.response_admission_controller_report_path);
     let online_miner = read_json(&state.config.response_online_miner_report_path);
     let live_miner = read_live_miner_report().await;
     let build_manifest = read_json(&state.config.build_manifest_path);
@@ -325,8 +332,13 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let signal_consistent = metric_u64(strongest_generation, "program_consistent_future_rows");
     let signal_routed = metric_u64(strongest_generation, "routed_future_rows");
     let signal_future = metric_u64(strongest_generation, "future_rows");
-    let signal_lost = signal_routed.saturating_sub(signal_future);
     let signal_blocker = metric_str(strongest_generation, "blocker", "нет");
+    let signal_admission_verdict = metric_str(&response_admission_controller, "verdict", "MISSING");
+    let signal_admission_blocker = metric_str(
+        &response_admission_controller,
+        "blocker",
+        "controller_report_missing",
+    );
     let online_transitions = metric_u64(self_training, "transitions_seen");
     let online_teacher_programs = teacher_programs_text(online_discovery);
     let online_candidates = metric_u64(response_miner, "candidate_bucket_count");
@@ -465,8 +477,22 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             consistent: signal_consistent,
             routed: signal_routed,
             future: signal_future,
-            lost: signal_lost,
             blocker: signal_blocker,
+            admission_verdict: signal_admission_verdict,
+            admission_blocker: signal_admission_blocker,
+            admission_relation_candidates: metric_u64(
+                &response_admission_controller,
+                "relation_candidates",
+            ),
+            admission_future_rows: metric_u64(
+                &response_admission_controller,
+                "relation_max_future_rows",
+            ),
+            admission_runtime_parity_cases: metric_u64(
+                &response_admission_controller,
+                "relation_max_runtime_parity_cases",
+            ),
+            active_packages: response_active,
             online_ready: online_status == "READY",
         },
         &build_manifest,
@@ -826,6 +852,7 @@ async fn control_state(Path(key): Path<String>, State(state): State<AppState>) -
         "metrics": read_json(&state.config.metrics_path),
         "economics": read_json(&state.config.economics_path)
         ,"response_registry": read_json(&state.config.response_registry_path)
+        ,"response_admission_controller": read_json(&state.config.response_admission_controller_report_path)
         ,"response_miner_status": read_json(&state.config.response_miner_status_path)
         ,"response_online_miner": read_json(&state.config.response_online_miner_report_path)
         ,"build_manifest": read_json(&state.config.build_manifest_path)
@@ -908,23 +935,29 @@ fn collection_blockers_text(status: &Value) -> String {
 }
 
 fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value) -> String {
-    let future_state = if view.lost > 0 {
-        FlowState::Block
-    } else if view.future >= 32 {
+    let future_state = if view.future >= 32 {
         FlowState::Pass
     } else {
         FlowState::Wait
     };
-    // This tree follows one selected generation. Global admission totals and CPU share
-    // belong to other cohorts too, so showing them here would splice unrelated signals.
     let admission_state = if view.future < 32 {
         FlowState::Locked
+    } else if view.admission_verdict == "PASS" {
+        FlowState::Pass
+    } else if view.admission_verdict == "BLOCK" {
+        FlowState::Block
     } else {
         FlowState::Wait
     };
-    let cpu_state = FlowState::Locked;
-    let overall_state = if view.lost > 0 {
+    let cpu_state = if view.active_packages > 0 {
+        FlowState::Live
+    } else {
+        FlowState::Locked
+    };
+    let overall_state = if admission_state == FlowState::Block {
         FlowState::Block
+    } else if cpu_state == FlowState::Live {
+        FlowState::Live
     } else {
         FlowState::Wait
     };
@@ -965,7 +998,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             title: "Совпадение с relation-law",
             logic: "Сравнивает новые runtime parity frames с teacher signature и выбранным cohort.",
             metric: view.matching.to_string(),
-            metric_label: "frames, sessions shown below",
+            metric_label: "current diagnostic window; sessions shown below",
             module: "Teacher/student miner",
             owner: "online_state::parity_diagnostics",
             state: if view.matching > 0 {
@@ -980,7 +1013,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             title: "Event-time watermark",
             logic: "Оставляет только события новее max(support watermark, repair watermark).",
             metric: view.after_watermark.to_string(),
-            metric_label: "post-watermark frames",
+            metric_label: "current diagnostic window; not cumulative",
             module: "Frozen future",
             owner: "online_state::future_watermark",
             state: if view.after_watermark > 0 {
@@ -995,7 +1028,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             title: "Независимость от support",
             logic: "Исключает повтор frame, session, intent и event из замороженного support.",
             metric: view.independent.to_string(),
-            metric_label: "independent frames",
+            metric_label: "current diagnostic window; not cumulative",
             module: "Frozen future",
             owner: "online_state::independence_filter",
             state: if view.independent > 0 {
@@ -1010,7 +1043,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             title: "Typed program parity",
             logic: "Проверяет, что winner program воспроизводит ожидаемую структуру; mismatch даёт ABSTAIN.",
             metric: view.consistent.to_string(),
-            metric_label: "program-consistent frames",
+            metric_label: "current diagnostic window; not cumulative",
             module: "Typed DSL + verifier",
             owner: "synthesis::program_is_consistent",
             state: if view.consistent > 0 {
@@ -1025,7 +1058,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             title: "Маршрутизация в generation",
             logic: "Winner должен направить frame в тот же cohort и подтверждённый physical adapter.",
             metric: view.routed.to_string(),
-            metric_label: "routed frames",
+            metric_label: "current diagnostic window; not cumulative",
             module: "Teacher/student miner",
             owner: "cegis::winner_routes_frame",
             state: if view.routed > 0 {
@@ -1040,7 +1073,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             title: "Generation-owned future storage",
             logic: "Должен атомарно записать frame и parity receipt в immutable future поколения g+1.",
             metric: format!("{} / 32", view.future),
-            metric_label: "durable future receipts",
+            metric_label: "cumulative generation-owned receipts",
             module: "Frozen future",
             owner: "generation.future + parity_receipts.future",
             state: future_state,
@@ -1053,12 +1086,15 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             metric: if view.future < 32 {
                 format!("proof {} / 32", view.future)
             } else {
-                "ожидает cohort receipt".to_owned()
+                format!(
+                    "{} · candidates {}",
+                    view.admission_verdict, view.admission_relation_candidates
+                )
             },
             metric_label: if view.future < 32 {
                 "не запускался"
             } else {
-                "cohort-specific outcome"
+                view.admission_blocker
             },
             module: "Admission",
             owner: "nando-response-actor::online_admission",
@@ -1069,8 +1105,8 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             step: "09",
             title: "ACTIVE CPU execution",
             logic: "Role grounding и actor исполняют package; независимый verifier всё ещё может вернуть ABSTAIN.",
-            metric: "0 accepts".to_owned(),
-            metric_label: "этот generation",
+            metric: format!("{} ACTIVE packages", view.active_packages),
+            metric_label: "registry authority; global",
             module: "Rust serving",
             owner: "runtime::execute_response",
             state: cpu_state,
@@ -1083,7 +1119,7 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
         "event-time disjointness".to_owned(),
         "typed structural replay".to_owned(),
         "winner route predicate".to_owned(),
-        "generation-owned write".to_owned(),
+        "durable accumulator; diagnostic-window counts are not 1:1".to_owned(),
         "proof-carrying candidate".to_owned(),
         "ACTIVE authority lease".to_owned(),
     ];
@@ -1092,25 +1128,26 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
         tree.push_str(&signal_stage_html(
             stage,
             manifest,
+            view.partition,
             index + 1 == stages.len(),
         ));
         if index + 1 == stages.len() {
             continue;
         }
-        if index == 6 && view.lost > 0 {
-            tree.push_str(&format!(
-                "<div class=\"terminal-line terminal-failure\" data-edge=\"route-to-future\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>{} routed -> {} записано; потеряно {}</span><code>{}</code></div>",
-                view.routed,
-                view.future,
-                view.lost,
-                html_escape(view.blocker)
-            ));
-        } else if index == 7 && view.lost == 0 && view.support >= 32 && view.future < 32 {
+        if index == 7 && view.support >= 32 && view.future < 32 {
             tree.push_str(&format!(
                 "<div class=\"terminal-line terminal-failure\" data-edge=\"future-to-admission\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>future {} / 32; не хватает {}</span><code>{}</code></div>",
                 view.future,
                 32_u64.saturating_sub(view.future),
                 html_escape(view.blocker)
+            ));
+        } else if index == 7 && admission_state == FlowState::Block {
+            tree.push_str(&format!(
+                "<div class=\"terminal-line terminal-failure\" data-edge=\"admission-controller\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>controller BLOCK; candidates {}; future {}; parity cases {}</span><code>{}</code></div>",
+                view.admission_relation_candidates,
+                view.admission_future_rows,
+                view.admission_runtime_parity_cases,
+                html_escape(view.admission_blocker)
             ));
         } else if let Some(label) = edge_labels.get(index) {
             tree.push_str(&format!(
@@ -1137,7 +1174,12 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
     )
 }
 
-fn signal_stage_html(stage: &SignalStage<'_>, manifest: &Value, last: bool) -> String {
+fn signal_stage_html(
+    stage: &SignalStage<'_>,
+    manifest: &Value,
+    runtime_partition: u64,
+    last: bool,
+) -> String {
     let branch = if last { "└─" } else { "├─" };
     format!(
         r#"<div class="terminal-stage {}" data-stage="{}" title="{}">
@@ -1153,23 +1195,28 @@ fn signal_stage_html(stage: &SignalStage<'_>, manifest: &Value, last: bool) -> S
         html_escape(&stage.metric),
         stage.state.class(),
         stage.state.label(),
-        module_identity_text(manifest, stage.module),
+        module_identity_text(manifest, stage.module, runtime_partition),
         html_escape(stage.owner),
         html_escape(stage.metric_label)
     )
 }
 
-fn module_identity_text(manifest: &Value, module_name: &str) -> String {
+fn module_identity_text(manifest: &Value, module_name: &str, runtime_partition: u64) -> String {
     let module = manifest
         .get("modules")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .find(|module| module.get("name").and_then(Value::as_str) == Some(module_name));
-    let version = module
+    let manifest_version = module
         .and_then(|module| module.get("version"))
         .and_then(Value::as_str)
         .unwrap_or("MISSING");
+    let version = if module_name == "Frozen future" && runtime_partition > 0 {
+        format!("partition.v{runtime_partition}")
+    } else {
+        manifest_version.to_owned()
+    };
     let contract = module
         .and_then(|module| module.get("contract"))
         .and_then(Value::as_str)
@@ -1177,7 +1224,7 @@ fn module_identity_text(manifest: &Value, module_name: &str) -> String {
     format!(
         "{} {} {}",
         html_escape(module_name),
-        html_escape(version),
+        html_escape(&version),
         html_escape(&compact_identity(contract))
     )
 }
@@ -1434,7 +1481,7 @@ mod tests {
     }
 
     #[test]
-    fn architecture_tree_places_storage_gap_on_route_edge() {
+    fn architecture_tree_places_threshold_gap_after_durable_storage() {
         let manifest = json!({
             "modules": [
                 {"name":"Streaming worker","version":"event-driven.v2","contract":"0-events-or-60s","sha256":"aaaaaaaaaaaa1111"},
@@ -1458,20 +1505,25 @@ mod tests {
                 consistent: 18,
                 routed: 18,
                 future: 0,
-                lost: 18,
                 blocker: "future_rows_below_32",
+                admission_verdict: "MISSING",
+                admission_blocker: "controller_report_missing",
+                admission_relation_candidates: 0,
+                admission_future_rows: 0,
+                admission_runtime_parity_cases: 0,
+                active_packages: 0,
                 online_ready: true,
             },
             &manifest,
         );
 
         let route = html.find("data-stage=\"future-route\"").expect("route");
-        let failure = html
-            .find("data-edge=\"route-to-future\"")
-            .expect("failure edge");
         let storage = html.find("data-stage=\"future-store\"").expect("storage");
-        assert!(route < failure && failure < storage);
-        assert!(html.contains("18 routed -> 0 записано; потеряно 18"));
+        let failure = html
+            .find("data-edge=\"future-to-admission\"")
+            .expect("failure edge");
+        assert!(route < storage && storage < failure);
+        assert!(html.contains("diagnostic-window counts are not 1:1"));
         assert!(html.contains("future_rows_below_32"));
         assert!(html.contains("partition.v14"));
         assert!(html.contains("data-stage=\"admission\""));
@@ -1493,8 +1545,13 @@ mod tests {
                 consistent: 32,
                 routed: 32,
                 future: 32,
-                lost: 0,
                 blocker: "none",
+                admission_verdict: "MISSING",
+                admission_blocker: "controller_report_missing",
+                admission_relation_candidates: 0,
+                admission_future_rows: 0,
+                admission_runtime_parity_cases: 0,
+                active_packages: 0,
                 online_ready: true,
             },
             &Value::Null,
@@ -1502,8 +1559,9 @@ mod tests {
 
         assert!(!html.contains("route-to-future"));
         assert!(!html.contains("BLOCK НА ЭТОМ РЕБРЕ"));
-        assert!(html.contains("ожидает cohort receipt"));
-        assert!(html.contains("0 accepts"));
+        assert!(html.contains("MISSING · candidates 0"));
+        assert!(html.contains("controller_report_missing"));
+        assert!(html.contains("0 ACTIVE packages"));
         assert!(html.contains("MISSING"));
     }
 
@@ -1522,8 +1580,13 @@ mod tests {
                 consistent: 17,
                 routed: 17,
                 future: 17,
-                lost: 0,
                 blocker: "future_rows_below_32",
+                admission_verdict: "MISSING",
+                admission_blocker: "controller_report_missing",
+                admission_relation_candidates: 0,
+                admission_future_rows: 0,
+                admission_runtime_parity_cases: 0,
+                active_packages: 0,
                 online_ready: true,
             },
             &Value::Null,
@@ -1542,6 +1605,46 @@ mod tests {
         assert!(html.contains("не запускался"));
         assert!(!html.contains("0 / 10"));
         assert!(!html.contains("0.7%"));
+    }
+
+    #[test]
+    fn architecture_tree_shows_independent_controller_blocker() {
+        let html = signal_architecture_html(
+            &SignalArchitectureView {
+                partition: 16,
+                generation: 2,
+                transitions: 16_240,
+                support: 32,
+                matching: 86,
+                matching_sessions: 8,
+                after_watermark: 32,
+                independent: 19,
+                consistent: 19,
+                routed: 19,
+                future: 32,
+                blocker: "none",
+                admission_verdict: "BLOCK",
+                admission_blocker: "no_candidate_with_complete_runtime_parity",
+                admission_relation_candidates: 1,
+                admission_future_rows: 32,
+                admission_runtime_parity_cases: 64,
+                active_packages: 0,
+                online_ready: true,
+            },
+            &Value::Null,
+        );
+
+        let storage = html.find("data-stage=\"future-store\"").expect("storage");
+        let failure = html
+            .find("data-edge=\"admission-controller\"")
+            .expect("controller blocker");
+        let admission = html.find("data-stage=\"admission\"").expect("admission");
+        assert!(storage < failure && failure < admission);
+        assert!(html.contains("controller BLOCK; candidates 1; future 32; parity cases 64"));
+        assert!(html.contains("no_candidate_with_complete_runtime_parity"));
+        assert!(html.contains("BLOCK · candidates 1"));
+        assert!(html.contains("partition.v16"));
+        assert!(html.contains("0 ACTIVE packages"));
     }
 
     #[test]

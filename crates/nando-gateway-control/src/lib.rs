@@ -61,6 +61,7 @@ pub struct ControlConfig {
     pub metrics_path: PathBuf,
     pub economics_path: PathBuf,
     pub response_registry_path: PathBuf,
+    pub response_admission_controller_report_path: PathBuf,
     pub response_miner_status_path: PathBuf,
     pub response_online_miner_report_path: PathBuf,
     pub build_manifest_path: PathBuf,
@@ -113,6 +114,12 @@ impl ControlConfig {
             response_registry_path: PathBuf::from(
                 env::var("NANDO_RESPONSE_REGISTRY").unwrap_or_else(|_| {
                     "/var/lib/nando-wave/transition/response-registry.json".into()
+                }),
+            ),
+            response_admission_controller_report_path: PathBuf::from(
+                env::var("NANDO_RESPONSE_ADMISSION_CONTROLLER_REPORT").unwrap_or_else(|_| {
+                    "/var/lib/nando-wave/transition/response-admission-controller-report.json"
+                        .into()
                 }),
             ),
             response_miner_status_path: PathBuf::from(
@@ -496,6 +503,8 @@ mod tests {
             metrics_path: root.join("metrics.json"),
             economics_path: root.join("economics.json"),
             response_registry_path: root.join("response-registry.json"),
+            response_admission_controller_report_path: root
+                .join("response-admission-controller-report.json"),
             response_miner_status_path: root.join("response-miner-status.json"),
             response_online_miner_report_path: root.join("response-online-miner-report.json"),
             build_manifest_path: root.join("build-manifest.json"),
