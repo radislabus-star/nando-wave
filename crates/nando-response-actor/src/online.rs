@@ -93,6 +93,10 @@ pub struct OnlineResponseAdmissionCandidate {
     pub runtime_parity_cases: Vec<crate::RuntimeParityCase>,
     #[serde(default)]
     pub semantic_alias_edges: Vec<crate::SemanticAliasEdge>,
+    #[serde(default)]
+    pub semantic_evidence_receipts: Vec<crate::SemanticEvidenceReceipt>,
+    #[serde(default)]
+    pub semantic_evidence_root_sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -2484,13 +2488,48 @@ impl OnlineResponseMiner {
         let mut blockers = Vec::new();
         for cohort in self.self_training_v2.admission_cohorts() {
             let cohort_id_sha256 = cohort.winner.cohort_id_sha256.clone();
+            let hard_contradiction_reasons = cohort
+                .semantic_evidence_receipts
+                .iter()
+                .filter(|receipt| {
+                    receipt.outcome == crate::SemanticEvidenceOutcome::HardContradiction
+                })
+                .fold(BTreeMap::<&str, usize>::new(), |mut reasons, receipt| {
+                    *reasons.entry(receipt.reason.as_str()).or_default() += 1;
+                    reasons
+                });
+            let hard_contradictions = hard_contradiction_reasons.values().sum::<usize>();
+            if hard_contradictions > 0 {
+                let reasons = hard_contradiction_reasons
+                    .into_iter()
+                    .map(|(reason, count)| format!("{reason}={count}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: format!(
+                        "semantic_hard_contradictions_present:{hard_contradictions}:{reasons}"
+                    ),
+                });
+                continue;
+            }
+            let evidence_by_frame = cohort
+                .semantic_evidence_receipts
+                .iter()
+                .map(|receipt| (receipt.frame_id_sha256.as_str(), receipt))
+                .collect::<BTreeMap<_, _>>();
             let admission_negatives = cohort
-                .generation
+                .pool
                 .negatives
                 .iter()
                 .filter(|frame| {
                     frame.observed_at_unix_nanos > cohort.winner.repair_watermark_unix_nanos
-                        && teacher_action_symbol(frame) != cohort.winner.action_symbol
+                        && evidence_by_frame
+                            .get(frame.frame_id_sha256.as_str())
+                            .is_some_and(|receipt| {
+                                receipt.outcome
+                                    == crate::SemanticEvidenceOutcome::ApplicabilityNegative
+                            })
                 })
                 .cloned()
                 .collect::<Vec<_>>();
@@ -2600,9 +2639,42 @@ impl OnlineResponseMiner {
                 continue;
             }
             candidate.runtime_parity_cases = self.self_training_v2.runtime_parity_cases_for_frames(
-                candidate.support.iter().chain(candidate.future.iter()),
+                candidate
+                    .support
+                    .iter()
+                    .chain(&candidate.future)
+                    .chain(&candidate.negatives),
             );
             candidate.semantic_alias_edges = cohort.semantic_alias_edges;
+            let candidate_frame_ids = candidate
+                .support
+                .iter()
+                .chain(&candidate.future)
+                .chain(&candidate.negatives)
+                .map(|frame| frame.frame_id_sha256.as_str())
+                .collect::<BTreeSet<_>>();
+            candidate.semantic_evidence_receipts = cohort
+                .semantic_evidence_receipts
+                .into_iter()
+                .filter(|receipt| candidate_frame_ids.contains(receipt.frame_id_sha256.as_str()))
+                .collect();
+            if candidate.semantic_evidence_receipts.len() != candidate_frame_ids.len() {
+                blockers.push(OnlineResponseAdmissionBlockerReport {
+                    cohort_id_sha256,
+                    blocker: "semantic_evidence_receipt_coverage_incomplete".to_owned(),
+                });
+                continue;
+            }
+            candidate.semantic_evidence_root_sha256 = format!(
+                "{:x}",
+                Sha256::digest(
+                    serde_json::to_vec(&(
+                        "nando.semantic-evidence-set.v1",
+                        &candidate.semantic_evidence_receipts,
+                    ))
+                    .unwrap_or_default()
+                )
+            );
             candidates.push(candidate);
         }
         candidates.sort_by(|left, right| {
@@ -3052,6 +3124,8 @@ fn build_subcenter_admission_candidate(
         required_routing_atom_ids: required_atom_ids.to_vec(),
         runtime_parity_cases: Vec::new(),
         semantic_alias_edges: Vec::new(),
+        semantic_evidence_receipts: Vec::new(),
+        semantic_evidence_root_sha256: String::new(),
     })
 }
 

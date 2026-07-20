@@ -28,14 +28,58 @@ pub const SELF_TRAINING_STATE_SCHEMA_V2: &str = "nando.self-training-stream-stat
 pub const SELF_TRAINING_STATE_SCHEMA_V3: &str = "nando.self-training-stream-state.v3";
 pub const SELF_TRAINING_STATE_SCHEMA_V4: &str = "nando.self-training-stream-state.v4";
 pub const SELF_TRAINING_STATE_SCHEMA_V5: &str = "nando.self-training-stream-state.v5";
+pub const SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1: &str = "nando.semantic-evidence-receipt.v1";
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticEvidenceOutcome {
+    VerifiedEquivalent,
+    ApplicabilityNegative,
+    HardContradiction,
+    CensoredUnknown,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SemanticEvidenceReceipt {
+    pub schema: String,
+    pub generation_id_sha256: String,
+    pub cohort_id_sha256: String,
+    pub winner_program_sha256: String,
+    pub frame_id_sha256: String,
+    pub evidence_ref_sha256: String,
+    pub outcome: SemanticEvidenceOutcome,
+    pub reason: String,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SelfTrainingAdmissionCohort {
     pub winner: CegisWinner,
+    pub physical_members: Vec<CegisWinner>,
     pub generation: FrozenGeneration,
     pub pool: TeacherPoolSnapshot,
+    pub semantic_evidence_receipts: Vec<SemanticEvidenceReceipt>,
     pub runtime_parity_cases: Vec<crate::RuntimeParityCase>,
     pub semantic_alias_edges: Vec<crate::SemanticAliasEdge>,
+}
+
+struct ClassifiedSemanticEvidence {
+    frame: crate::RelationFrame,
+    outcome: SemanticEvidenceOutcome,
+    reason: &'static str,
+}
+
+struct ClassifiedCohortPool {
+    pool: TeacherPoolSnapshot,
+    evidence: Vec<ClassifiedSemanticEvidence>,
+}
+
+fn semantic_outcome_precedence(outcome: SemanticEvidenceOutcome) -> u8 {
+    match outcome {
+        SemanticEvidenceOutcome::CensoredUnknown => 0,
+        SemanticEvidenceOutcome::ApplicabilityNegative => 1,
+        SemanticEvidenceOutcome::VerifiedEquivalent => 2,
+        SemanticEvidenceOutcome::HardContradiction => 3,
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -1816,14 +1860,39 @@ impl StreamingSelfTrainingState {
             .filter_map(|(cohort_id, generation)| {
                 let derived = winners.get(cohort_id)?;
                 let winner = derived.winner.clone();
-                let pool = self.cohort_pool_snapshot(derived)?;
+                let generation_frames = generation
+                    .support
+                    .iter()
+                    .chain(&generation.future)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let classified = self.classified_cohort_pool(derived, &generation_frames)?;
+                let winner_program_sha256 = crate::canonical_json_sha256(&winner.program).ok()?;
+                let mut semantic_evidence_receipts = classified
+                    .evidence
+                    .iter()
+                    .map(|row| SemanticEvidenceReceipt {
+                        schema: SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1.to_owned(),
+                        generation_id_sha256: generation.generation_id_sha256.clone(),
+                        cohort_id_sha256: winner.cohort_id_sha256.clone(),
+                        winner_program_sha256: winner_program_sha256.clone(),
+                        frame_id_sha256: row.frame.frame_id_sha256.clone(),
+                        evidence_ref_sha256: row.frame.evidence_ref_sha256.clone(),
+                        outcome: row.outcome,
+                        reason: row.reason.to_owned(),
+                    })
+                    .collect::<Vec<_>>();
+                semantic_evidence_receipts
+                    .sort_by(|left, right| left.frame_id_sha256.cmp(&right.frame_id_sha256));
                 let receipts = self
                     .generation_parity_receipts
                     .get(&generation.generation_id_sha256)?;
                 Some(SelfTrainingAdmissionCohort {
                     winner,
-                    pool,
+                    physical_members: derived.members.clone(),
+                    pool: classified.pool,
                     generation: generation.clone(),
+                    semantic_evidence_receipts,
                     semantic_alias_edges: self
                         .discovery
                         .semantic_alias_graph()
@@ -2424,81 +2493,141 @@ impl StreamingSelfTrainingState {
             .retain(|generation_id, _| live_generation_ids.contains(generation_id.as_str()));
     }
 
-    fn cohort_pool_snapshot(&self, cohort: &DerivedWinnerCohort) -> Option<TeacherPoolSnapshot> {
+    fn classify_semantic_frame(
+        &self,
+        cohort: &DerivedWinnerCohort,
+        frame: &crate::RelationFrame,
+        claimed_positive: bool,
+    ) -> (SemanticEvidenceOutcome, &'static str) {
+        let frame_signature = crate::teacher_program_signature(frame);
+        let member_action_matches = cohort.members.iter().any(|member| {
+            (frame_signature.as_deref() == Some(member.teacher_signature_sha256.as_str())
+                && crate::synthesis::program_is_consistent(&member.program, frame)
+                && crate::cegis::winner_routes_frame(member, frame))
+                || crate::frame_matches_program_action_contract(&member.program, frame)
+        });
+        let Some(parity) = self.support_parity_case(&frame.frame_id_sha256) else {
+            return (
+                SemanticEvidenceOutcome::CensoredUnknown,
+                "runtime_parity_receipt_missing",
+            );
+        };
+        let execution = crate::execute_response(
+            &cohort.winner.program,
+            &parity.request_text,
+            &parity.provider_payload,
+        );
+        let parity_matches = execution.status == crate::ResponseExecutionStatus::Executed
+            && execution.response.as_deref().is_some_and(|actual| {
+                actual == parity.expected_response
+                    || crate::online_admission::responses_match_after_execution_budget_normalization(
+                        actual,
+                        &parity.expected_response,
+                    )
+            });
+        if member_action_matches && parity_matches {
+            return (
+                SemanticEvidenceOutcome::VerifiedEquivalent,
+                "member_law_runtime_parity_pass",
+            );
+        }
+        if member_action_matches {
+            return (
+                SemanticEvidenceOutcome::HardContradiction,
+                "member_law_runtime_parity_mismatch",
+            );
+        }
+        if claimed_positive {
+            return (
+                SemanticEvidenceOutcome::HardContradiction,
+                "claimed_positive_outside_member_law",
+            );
+        }
+        if parity_matches {
+            return (
+                SemanticEvidenceOutcome::HardContradiction,
+                "runtime_parity_pass_without_member_law",
+            );
+        }
+        (
+            SemanticEvidenceOutcome::ApplicabilityNegative,
+            "verified_cross_law_action",
+        )
+    }
+
+    fn classified_cohort_pool(
+        &self,
+        cohort: &DerivedWinnerCohort,
+        extra_positive_frames: &[crate::RelationFrame],
+    ) -> Option<ClassifiedCohortPool> {
         let winner = &cohort.winner;
-        let mut positives = BTreeMap::<String, crate::RelationFrame>::new();
-        let mut negative_frames = BTreeMap::<String, crate::RelationFrame>::new();
+        let mut evidence = BTreeMap::<String, ClassifiedSemanticEvidence>::new();
         let mut invariants = Vec::new();
+        let mut record = |frame: crate::RelationFrame, claimed_positive: bool| {
+            let (outcome, reason) = self.classify_semantic_frame(cohort, &frame, claimed_positive);
+            let frame_id = frame.frame_id_sha256.clone();
+            let next = ClassifiedSemanticEvidence {
+                frame,
+                outcome,
+                reason,
+            };
+            evidence
+                .entry(frame_id)
+                .and_modify(|current| {
+                    if semantic_outcome_precedence(next.outcome)
+                        > semantic_outcome_precedence(current.outcome)
+                    {
+                        current.outcome = next.outcome;
+                        current.reason = next.reason;
+                    }
+                })
+                .or_insert(next);
+        };
         for signature in &cohort.member_signatures {
             let pool = self.pool_snapshot_with_parity(signature)?;
             invariants.extend(pool.invariants);
             for frame in pool.positives {
-                let signature = crate::teacher_program_signature(&frame);
-                let routed = cohort.members.iter().any(|member| {
-                    signature.as_deref() == Some(&member.teacher_signature_sha256)
-                        && crate::synthesis::program_is_consistent(&member.program, &frame)
-                        && crate::cegis::winner_routes_frame(member, &frame)
-                });
-                let parity_matches = self
-                    .support_parity_case(&frame.frame_id_sha256)
-                    .is_some_and(|parity| {
-                        let execution = crate::execute_response(
-                            &winner.program,
-                            &parity.request_text,
-                            &parity.provider_payload,
-                        );
-                        execution.status == crate::ResponseExecutionStatus::Executed
-                            && execution.response.as_deref().is_some_and(|actual| {
-                                actual == parity.expected_response
-                                    || crate::online_admission::responses_match_after_execution_budget_normalization(
-                                        actual,
-                                        &parity.expected_response,
-                                    )
-                            })
-                    });
-                if routed && parity_matches {
-                    positives
-                        .entry(frame.frame_id_sha256.clone())
-                        .or_insert(frame);
-                } else {
-                    let mut frame = frame;
-                    frame.verifier_label = Some(false);
-                    negative_frames
-                        .entry(frame.frame_id_sha256.clone())
-                        .or_insert(frame);
-                }
+                record(frame, true);
             }
-            for mut frame in pool.negatives {
-                frame.verifier_label = Some(false);
-                negative_frames
-                    .entry(frame.frame_id_sha256.clone())
-                    .or_insert(frame);
+            for frame in pool.negatives {
+                record(frame, false);
             }
         }
-        let training_negatives = cohort
+        for frame in cohort
             .members
             .iter()
             .filter_map(|member| self.cegis.cohort_evidence(&member.cohort_id_sha256))
-            .flat_map(|(_, negatives)| negatives);
-        let mut negatives = BTreeMap::<String, crate::RelationFrame>::new();
-        for mut frame in negative_frames.into_values().chain(training_negatives) {
-            if frame.verifier_label == Some(true)
-                && crate::synthesis::program_is_consistent(&winner.program, &frame)
-            {
-                continue;
-            }
-            frame.verifier_label = Some(false);
-            negatives
-                .entry(frame.frame_id_sha256.clone())
-                .or_insert(frame);
+            .flat_map(|(_, negatives)| negatives)
+        {
+            record(frame, false);
         }
-        let mut positives = positives.into_values().collect::<Vec<_>>();
+        for frame in extra_positive_frames {
+            record(frame.clone(), true);
+        }
+        let mut positives = evidence
+            .values()
+            .filter(|row| row.outcome == SemanticEvidenceOutcome::VerifiedEquivalent)
+            .map(|row| row.frame.clone())
+            .collect::<Vec<_>>();
+        let mut negatives = evidence
+            .values()
+            .filter(|row| row.outcome == SemanticEvidenceOutcome::ApplicabilityNegative)
+            .map(|row| {
+                let mut frame = row.frame.clone();
+                frame.verifier_label = Some(false);
+                frame
+            })
+            .collect::<Vec<_>>();
         positives.sort_by(|left, right| {
             left.observed_at_unix_nanos
                 .cmp(&right.observed_at_unix_nanos)
                 .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
         });
-        let negatives = negatives.into_values().collect::<Vec<_>>();
+        negatives.sort_by(|left, right| {
+            left.observed_at_unix_nanos
+                .cmp(&right.observed_at_unix_nanos)
+                .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
+        });
         let distinct_sessions = positives
             .iter()
             .map(|frame| frame.session_id_sha256.as_str())
@@ -2509,7 +2638,7 @@ impl StreamingSelfTrainingState {
             .filter_map(crate::relation_frame_structural_family_id)
             .collect::<BTreeSet<_>>()
             .len();
-        Some(TeacherPoolSnapshot {
+        let pool = TeacherPoolSnapshot {
             teacher_signature_sha256: winner.teacher_signature_sha256.clone(),
             action_symbol: winner.action_symbol.clone(),
             positive_rows: u64::try_from(positives.len()).unwrap_or(u64::MAX),
@@ -2527,7 +2656,16 @@ impl StreamingSelfTrainingState {
             positives,
             negatives,
             invariants,
+        };
+        Some(ClassifiedCohortPool {
+            pool,
+            evidence: evidence.into_values().collect(),
         })
+    }
+
+    fn cohort_pool_snapshot(&self, cohort: &DerivedWinnerCohort) -> Option<TeacherPoolSnapshot> {
+        self.classified_cohort_pool(cohort, &[])
+            .map(|classified| classified.pool)
     }
 
     fn refresh_opportunity_search_for_signatures(&mut self, signatures: &BTreeSet<String>) {
@@ -3426,8 +3564,16 @@ mod tests {
                 "negative",
                 false,
             );
-            let transition = crate::teacher_transition_from_completed(&negative, None)
+            let mut transition = crate::teacher_transition_from_completed(&negative, None)
                 .expect("negative teacher transition");
+            transition.runtime_parity_case = continuation_transition(
+                index,
+                "cancel",
+                "handle",
+                "Cancelled handle ",
+                "cancel handle",
+            )
+            .runtime_parity_case;
             state
                 .observe_transition(&transition)
                 .expect("observe negative");
@@ -3512,11 +3658,94 @@ mod tests {
                 ..
             }
         ));
-        let pool = state
-            .cohort_pool_snapshot(&semantic)
-            .expect("combined law pool");
+        let same_law_frame = state
+            .pool_snapshot_with_parity(&exact[0].teacher_signature_sha256)
+            .expect("physical member pool")
+            .positives
+            .into_iter()
+            .next()
+            .expect("same-law frame");
+        let parity = state
+            .runtime_parity_cases
+            .get_mut(&same_law_frame.frame_id_sha256)
+            .expect("same-law runtime parity");
+        let mut budget_variant: serde_json::Value =
+            serde_json::from_str(&parity.expected_response).expect("response json");
+        budget_variant["arguments"]["yield_time_ms"] = serde_json::json!(30_000);
+        parity.expected_response = serde_json::to_string(&budget_variant).expect("response encode");
+        assert_eq!(
+            state
+                .classify_semantic_frame(&semantic, &same_law_frame, false)
+                .0,
+            SemanticEvidenceOutcome::VerifiedEquivalent,
+            "a same-law execution-budget variant cannot become an anti-center"
+        );
+        let saved_parity = state
+            .runtime_parity_cases
+            .remove(&same_law_frame.frame_id_sha256)
+            .expect("saved parity");
+        assert_eq!(
+            state
+                .classify_semantic_frame(&semantic, &same_law_frame, false)
+                .0,
+            SemanticEvidenceOutcome::CensoredUnknown,
+            "missing parity cannot update either phase"
+        );
+        state
+            .runtime_parity_cases
+            .insert(same_law_frame.frame_id_sha256.clone(), saved_parity);
+        let parity = state
+            .runtime_parity_cases
+            .get_mut(&same_law_frame.frame_id_sha256)
+            .expect("restored parity");
+        let verified_equivalent_response = parity.expected_response.clone();
+        parity.expected_response = r#"{"name":"different_action","arguments":{}}"#.to_owned();
+        assert_eq!(
+            state
+                .classify_semantic_frame(&semantic, &same_law_frame, false)
+                .0,
+            SemanticEvidenceOutcome::HardContradiction,
+            "same-law parity mismatch must remain visible"
+        );
+        state
+            .runtime_parity_cases
+            .get_mut(&same_law_frame.frame_id_sha256)
+            .expect("parity restore target")
+            .expected_response = verified_equivalent_response;
+        let classified = state
+            .classified_cohort_pool(&semantic, &[])
+            .expect("combined classified law pool");
+        let outcome_counts = classified.evidence.iter().fold(
+            BTreeMap::<SemanticEvidenceOutcome, usize>::new(),
+            |mut counts, receipt| {
+                *counts.entry(receipt.outcome).or_default() += 1;
+                counts
+            },
+        );
+        assert_eq!(
+            outcome_counts
+                .get(&SemanticEvidenceOutcome::HardContradiction)
+                .copied()
+                .unwrap_or(0),
+            0
+        );
+        let pool = classified.pool;
         assert!(pool.positives.len() >= 64);
-        assert!(pool.negatives.len() >= 16);
+        assert!(
+            pool.negatives.len() >= 16,
+            "cross-law negatives missing: outcomes={outcome_counts:?}"
+        );
+        let positive_ids = pool
+            .positives
+            .iter()
+            .map(|frame| frame.frame_id_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(
+            pool.negatives
+                .iter()
+                .all(|frame| !positive_ids.contains(frame.frame_id_sha256.as_str())),
+            "typed semantic evidence cannot train the same frame in both phases"
+        );
 
         state.refresh_generations_filtered(None);
         let frozen = state.report(0);
@@ -3671,5 +3900,21 @@ mod tests {
                 && generation.blocker.is_none()
         }));
         assert_eq!(report.admission_ready_cohorts, 1);
+        let admission = state.admission_cohorts();
+        assert_eq!(admission.len(), 1);
+        let positive_ids = admission[0]
+            .pool
+            .positives
+            .iter()
+            .map(|frame| frame.frame_id_sha256.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(
+            admission[0]
+                .pool
+                .negatives
+                .iter()
+                .all(|frame| !positive_ids.contains(frame.frame_id_sha256.as_str())),
+            "semantic evidence cannot be both positive and negative"
+        );
     }
 }

@@ -35,6 +35,19 @@ pub struct OnlineAdmissionSnapshot {
     pub admission: CompositeResponseAdmissionV2,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct OnlineAdmissionCandidateRejection {
+    pub bucket_id: u32,
+    pub stage: &'static str,
+    pub blocker: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct OnlineAdmissionEvaluation {
+    pub snapshot: Option<OnlineAdmissionSnapshot>,
+    pub candidate_rejections: Vec<OnlineAdmissionCandidateRejection>,
+}
+
 pub fn build_crystallized_admission_snapshot(
     candidates: &[LiveScalarAdmissionCandidate],
     project_id: &str,
@@ -292,6 +305,27 @@ pub fn build_crystallized_admission_snapshot(
         registry,
         admission,
     }))
+}
+
+pub fn build_online_admission_snapshot(
+    candidates: &[OnlineResponseAdmissionCandidate],
+    project_id: &str,
+    revision: u64,
+    now_unix: u64,
+    max_age_seconds: u64,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+) -> Result<Option<OnlineAdmissionSnapshot>, &'static str> {
+    build_online_admission_evaluation(
+        candidates,
+        project_id,
+        revision,
+        now_unix,
+        max_age_seconds,
+        gate_build_sha256,
+        runtime_build_sha256,
+    )
+    .map(|evaluation| evaluation.snapshot)
 }
 
 fn commitment_hex(value: &[u8; 32]) -> String {
@@ -825,7 +859,119 @@ fn bind_proven_semantic_law_program(
     Ok(())
 }
 
-pub fn build_online_admission_snapshot(
+fn validate_semantic_evidence(candidate: &OnlineResponseAdmissionCandidate) -> Result<(), String> {
+    if candidate.semantic_evidence_receipts.is_empty()
+        && candidate.semantic_evidence_root_sha256.is_empty()
+    {
+        return Ok(());
+    }
+    if candidate.semantic_evidence_receipts.is_empty()
+        || !valid_nonzero_sha256(&candidate.semantic_evidence_root_sha256)
+    {
+        return Err("semantic_evidence_commitment_missing".to_owned());
+    }
+    let expected_root = sha256_bytes(
+        &serde_json::to_vec(&(
+            "nando.semantic-evidence-set.v1",
+            &candidate.semantic_evidence_receipts,
+        ))
+        .map_err(|_| "semantic_evidence_encode_failed".to_owned())?,
+    );
+    if expected_root != candidate.semantic_evidence_root_sha256 {
+        return Err("semantic_evidence_commitment_mismatch".to_owned());
+    }
+    let expected_program_sha256 =
+        canonical_json_sha256(&candidate.candidate.program).map_err(str::to_owned)?;
+    let mut receipts_by_frame = BTreeMap::new();
+    let mut generation_ids = BTreeSet::new();
+    let mut cohort_ids = BTreeSet::new();
+    for receipt in &candidate.semantic_evidence_receipts {
+        if receipt.schema != crate::SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1
+            || receipt.winner_program_sha256 != expected_program_sha256
+            || !valid_nonzero_sha256(&receipt.generation_id_sha256)
+            || !valid_nonzero_sha256(&receipt.cohort_id_sha256)
+            || receipts_by_frame
+                .insert(receipt.frame_id_sha256.as_str(), receipt)
+                .is_some()
+        {
+            return Err("semantic_evidence_receipt_invalid".to_owned());
+        }
+        generation_ids.insert(receipt.generation_id_sha256.as_str());
+        cohort_ids.insert(receipt.cohort_id_sha256.as_str());
+    }
+    if generation_ids.len() != 1 || cohort_ids.len() != 1 {
+        return Err("semantic_evidence_provenance_mixed".to_owned());
+    }
+    for frame in candidate.support.iter().chain(&candidate.future) {
+        if receipts_by_frame
+            .get(frame.frame_id_sha256.as_str())
+            .is_none_or(|receipt| {
+                receipt.outcome != crate::SemanticEvidenceOutcome::VerifiedEquivalent
+            })
+        {
+            return Err("semantic_positive_without_verified_equivalence".to_owned());
+        }
+    }
+    let parity_by_ref = candidate
+        .runtime_parity_cases
+        .iter()
+        .map(|case| (case.evidence_ref_sha256.as_str(), case))
+        .collect::<BTreeMap<_, _>>();
+    for frame in &candidate.negatives {
+        if receipts_by_frame
+            .get(frame.frame_id_sha256.as_str())
+            .is_none_or(|receipt| {
+                receipt.outcome != crate::SemanticEvidenceOutcome::ApplicabilityNegative
+            })
+        {
+            return Err("semantic_negative_outcome_invalid".to_owned());
+        }
+        let Some(parity) = parity_by_ref
+            .get(frame.frame_id_sha256.as_str())
+            .or_else(|| parity_by_ref.get(frame.evidence_ref_sha256.as_str()))
+            .copied()
+        else {
+            return Err("semantic_negative_runtime_parity_missing".to_owned());
+        };
+        let enriched = action_schema_enriched_frame(frame, Some(parity));
+        let execution = execute_response(
+            &candidate.candidate.program,
+            &parity.request_text,
+            &parity.provider_payload,
+        );
+        let parity_matches = execution.response.as_deref().is_some_and(|actual| {
+            actual == parity.expected_response
+                || responses_match_after_execution_budget_normalization(
+                    actual,
+                    &parity.expected_response,
+                )
+        });
+        if parity_matches {
+            return Err("semantic_negative_is_verified_equivalent".to_owned());
+        }
+        if frame_matches_program_action_contract(&candidate.candidate.program, &enriched) {
+            return Err("semantic_negative_is_hard_contradiction".to_owned());
+        }
+    }
+    Ok(())
+}
+
+fn record_candidate_rejection(
+    rejections: &mut Vec<OnlineAdmissionCandidateRejection>,
+    candidate: &OnlineResponseAdmissionCandidate,
+    stage: &'static str,
+    blocker: impl Into<String>,
+) {
+    let blocker = blocker.into();
+    trace_online_admission(candidate, &blocker);
+    rejections.push(OnlineAdmissionCandidateRejection {
+        bucket_id: candidate.candidate.bucket_id,
+        stage,
+        blocker,
+    });
+}
+
+pub fn build_online_admission_evaluation(
     candidates: &[OnlineResponseAdmissionCandidate],
     project_id: &str,
     revision: u64,
@@ -833,14 +979,26 @@ pub fn build_online_admission_snapshot(
     max_age_seconds: u64,
     gate_build_sha256: &str,
     runtime_build_sha256: &str,
-) -> Result<Option<OnlineAdmissionSnapshot>, &'static str> {
+) -> Result<OnlineAdmissionEvaluation, &'static str> {
     let mut packages = Vec::new();
     let mut receipt_digests = BTreeMap::new();
+    let mut candidate_rejections = Vec::new();
     for candidate in candidates {
-        if candidate.support.len() < 32 || candidate.future.len() < 32 {
-            trace_online_admission(
+        if let Err(blocker) = validate_semantic_evidence(candidate) {
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!(
+                "semantic_evidence_classification",
+                blocker,
+            );
+            continue;
+        }
+        if candidate.support.len() < 32 || candidate.future.len() < 32 {
+            record_candidate_rejection(
+                &mut candidate_rejections,
+                candidate,
+                "candidate_envelope",
+                format!(
                     "rows_below_32 support={} future={}",
                     candidate.support.len(),
                     candidate.future.len()
@@ -862,7 +1020,12 @@ pub fn build_online_admission_snapshot(
             support_frame_ids.contains(frame.frame_id_sha256.as_str())
                 || support_event_ids.contains(frame.event_id_sha256.as_str())
         }) {
-            trace_online_admission(candidate, "support_future_overlap");
+            record_candidate_rejection(
+                &mut candidate_rejections,
+                candidate,
+                "candidate_envelope",
+                "support_future_overlap",
+            );
             continue;
         }
         let parity_by_ref = candidate
@@ -884,13 +1047,23 @@ pub fn build_online_admission_snapshot(
             .into_iter()
             .next()
         else {
-            trace_online_admission(candidate, "package_compile_empty");
+            record_candidate_rejection(
+                &mut candidate_rejections,
+                candidate,
+                "package_compilation",
+                "package_compile_empty",
+            );
             continue;
         };
         if let Err(blocker) =
             bind_proven_semantic_law_program(&mut package, &candidate.candidate.program, &training)
         {
-            trace_online_admission(candidate, blocker);
+            record_candidate_rejection(
+                &mut candidate_rejections,
+                candidate,
+                "package_compilation",
+                blocker,
+            );
             continue;
         }
         // The streaming subcenter already supplies an action-neutral exact
@@ -909,7 +1082,12 @@ pub fn build_online_admission_snapshot(
             &candidate.wave_runtime_package,
             candidate.candidate.wave_threshold_micro,
         ) else {
-            trace_online_admission(candidate, "learned_wave_route_invalid");
+            record_candidate_rejection(
+                &mut candidate_rejections,
+                candidate,
+                "wave_route_decode",
+                "learned_wave_route_invalid",
+            );
             continue;
         };
         package.wave_margin_micro = learned_wave_route.threshold_micro;
@@ -936,9 +1114,11 @@ pub fn build_online_admission_snapshot(
             .cloned()
             .collect::<Vec<_>>();
         if refined_support.len() < 32 {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!("refined_support_below_32 rows={}", refined_support.len()),
+                "package_guard",
+                format!("refined_support_below_32 rows={}", refined_support.len()),
             );
             continue;
         }
@@ -953,9 +1133,11 @@ pub fn build_online_admission_snapshot(
             &refined_support,
             &guard_relevant_negatives,
         ) {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!(
+                "wave_route_separability",
+                format!(
                     "route_threshold_overlap guard_relevant_negatives={}",
                     guard_relevant_negatives.len()
                 ),
@@ -1108,9 +1290,11 @@ pub fn build_online_admission_snapshot(
         );
         refined_support = phase_support;
         if refined_support.len() < 32 || phase_future.len() < 32 {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!(
+                "phase_cleaning",
+                format!(
                     "phase_clean_rows_below_32 support={} future={}",
                     refined_support.len(),
                     phase_future.len()
@@ -1124,9 +1308,11 @@ pub fn build_online_admission_snapshot(
             .cloned()
             .collect::<Vec<_>>();
         if routed_future.len() < 32 {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!("routed_future_below_32 rows={}", routed_future.len()),
+                "future_routing",
+                format!("routed_future_below_32 rows={}", routed_future.len()),
             );
             continue;
         }
@@ -1147,9 +1333,11 @@ pub fn build_online_admission_snapshot(
             .filter_map(relation_frame_structural_family_id)
             .collect::<BTreeSet<_>>();
         if future_sessions.len() < 3 || surfaces.len() < 2 {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!(
+                "future_diversity",
+                format!(
                     "diversity_below_gate sessions={} surfaces={}",
                     future_sessions.len(),
                     surfaces.len()
@@ -1169,9 +1357,11 @@ pub fn build_online_admission_snapshot(
             &candidate.negatives,
         );
         if future_wrong != 0 || negative_accepts != 0 || causal.verdict != "PASS" {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
-                &format!(
+                "causal_proof",
+                format!(
                     "proof_failed future_wrong={future_wrong} negative_accepts={negative_accepts} causal={} full={}/{} shuffled={} random={} ablation_negative_accepts={}/{} margins={}/{}/{}",
                     causal.verdict,
                     causal.full_phase_correct,
@@ -1209,15 +1399,22 @@ pub fn build_online_admission_snapshot(
             &routed_future_refs,
         )?
         else {
-            trace_online_admission(candidate, "runtime_parity_cases_below_gate_or_failed");
+            record_candidate_rejection(
+                &mut candidate_rejections,
+                candidate,
+                "runtime_parity_replay",
+                "runtime_parity_cases_below_gate_or_failed",
+            );
             continue;
         };
         package.proof.runtime_parity_failures = 0;
         package.proof.exact_cache_overlap = 0;
         package.proof.wave_causal_pass = true;
         if !package.eligible_for_admission_candidate() {
-            trace_online_admission(
+            record_candidate_rejection(
+                &mut candidate_rejections,
                 candidate,
+                "package_eligibility",
                 package
                     .admission_candidate_blocker()
                     .unwrap_or("package_not_eligible"),
@@ -1262,7 +1459,10 @@ pub fn build_online_admission_snapshot(
         packages.push(package);
     }
     if packages.is_empty() {
-        return Ok(None);
+        return Ok(OnlineAdmissionEvaluation {
+            snapshot: None,
+            candidate_rejections,
+        });
     }
     packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
     packages.dedup_by(|left, right| left.package_id == right.package_id);
@@ -1327,10 +1527,13 @@ pub fn build_online_admission_snapshot(
             packages: bindings,
         },
     };
-    Ok(Some(OnlineAdmissionSnapshot {
-        registry,
-        admission,
-    }))
+    Ok(OnlineAdmissionEvaluation {
+        snapshot: Some(OnlineAdmissionSnapshot {
+            registry,
+            admission,
+        }),
+        candidate_rejections,
+    })
 }
 
 fn semantic_alias_future_proof_digest(
@@ -2465,7 +2668,70 @@ mod tests {
             required_routing_atom_ids: Vec::new(),
             runtime_parity_cases,
             semantic_alias_edges: Vec::new(),
+            semantic_evidence_receipts: Vec::new(),
+            semantic_evidence_root_sha256: String::new(),
         }
+    }
+
+    fn seal_semantic_evidence(candidate: &mut OnlineResponseAdmissionCandidate) {
+        let program_sha256 = canonical_json_sha256(&candidate.candidate.program).expect("program");
+        candidate.semantic_evidence_receipts = candidate
+            .support
+            .iter()
+            .chain(&candidate.future)
+            .map(|frame| crate::SemanticEvidenceReceipt {
+                schema: crate::SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1.to_owned(),
+                generation_id_sha256: "a".repeat(64),
+                cohort_id_sha256: "b".repeat(64),
+                winner_program_sha256: program_sha256.clone(),
+                frame_id_sha256: frame.frame_id_sha256.clone(),
+                evidence_ref_sha256: frame.evidence_ref_sha256.clone(),
+                outcome: crate::SemanticEvidenceOutcome::VerifiedEquivalent,
+                reason: "test_verified_equivalent".to_owned(),
+            })
+            .chain(
+                candidate
+                    .negatives
+                    .iter()
+                    .map(|frame| crate::SemanticEvidenceReceipt {
+                        schema: crate::SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1.to_owned(),
+                        generation_id_sha256: "a".repeat(64),
+                        cohort_id_sha256: "b".repeat(64),
+                        winner_program_sha256: program_sha256.clone(),
+                        frame_id_sha256: frame.frame_id_sha256.clone(),
+                        evidence_ref_sha256: frame.evidence_ref_sha256.clone(),
+                        outcome: crate::SemanticEvidenceOutcome::ApplicabilityNegative,
+                        reason: "test_applicability_negative".to_owned(),
+                    }),
+            )
+            .collect();
+        candidate.semantic_evidence_root_sha256 = sha256_bytes(
+            &serde_json::to_vec(&(
+                "nando.semantic-evidence-set.v1",
+                &candidate.semantic_evidence_receipts,
+            ))
+            .expect("evidence encode"),
+        );
+    }
+
+    #[test]
+    fn semantic_negative_is_independently_rejected_when_parity_proves_equivalence() {
+        let support = (0..32).map(frame).collect::<Vec<_>>();
+        let future = (32..64).map(frame).collect::<Vec<_>>();
+        let mut candidate = candidate(support, future);
+        let mut negative = candidate.future[0].clone();
+        negative.frame_id_sha256 = "f".repeat(64);
+        negative.evidence_ref_sha256 = "e".repeat(64);
+        let mut parity = candidate.runtime_parity_cases[0].clone();
+        parity.evidence_ref_sha256 = negative.frame_id_sha256.clone();
+        candidate.runtime_parity_cases.push(parity);
+        candidate.negatives.push(negative);
+        seal_semantic_evidence(&mut candidate);
+
+        assert_eq!(
+            validate_semantic_evidence(&candidate),
+            Err("semantic_negative_is_verified_equivalent".to_owned())
+        );
     }
 
     #[test]

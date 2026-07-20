@@ -1889,3 +1889,61 @@ production false accepts                 0
 The next blocker is genuine future scarcity for the new semantic continuation
 generation: `12 / 32`. Twenty additional independent post-freeze receipts are
 required. Existing historical or generation-owned rows remain support-only.
+
+### Level-triggered admission reporting and semantic evidence split
+
+The terminal signal tree was refreshing its HTML every 15 seconds while its
+admission source remained stale. The miner report advanced continuously, but
+`nando-response-admission.path` only reran the oneshot controller when the
+candidate bundle changed. A 60-second reconciliation timer now complements the
+fast path trigger. Controller report v2 carries `generated_at_unix`, an exact
+rejection stage, and per-candidate rejection details; the tree displays the
+snapshot age and never collapses an early route failure into runtime parity.
+
+Semantic evidence is generation-bound and classified before Wave training:
+
+```text
+same law + parity PASS       -> VerifiedEquivalent
+different law + parity FAIL  -> ApplicabilityNegative
+same law + parity mismatch   -> HardContradiction
+missing parity               -> CensoredUnknown
+```
+
+Only verified equivalents train positive phase and only applicability
+negatives become anti-centers. Hard contradictions block admission; censored
+rows do not update Wave. Admission independently replays the classification
+commitment and rejects caller relabeling.
+
+Exact copied-production shadow results:
+
+```text
+deployed candidate bundle                  1 candidate
+deployed guard-relevant negatives          229
+deployed rejection stage                   wave_route_separability
+deployed blocker                           route_threshold_overlap
+
+new semantic regrouping candidates         0
+new hard contradictions                    33
+hard contradiction reason                  member_law_runtime_parity_mismatch
+authority                                  OFF
+```
+
+The 33 rows are not discarded or demoted to negatives. They belong to a
+physical member law, but the selected winner program does not reproduce their
+independent runtime parity. This is the next Rich Operator boundary: compile a
+winner-owned actor that grounds and executes every admitted physical adapter,
+or split the semantic cohort. Threshold changes and receipt deletion are not
+valid fixes.
+
+Verification:
+
+```text
+gateway tests                              13 / 13 PASS
+online admission tests                     13 / 13 PASS
+semantic law cohort                         1 / 1 PASS
+actor full suite, changed                  345 / 371 PASS
+actor full suite, clean baseline           344 / 370 PASS
+new regressions                              0
+copied-production diagnostic RSS           430.5 MiB
+copied-production diagnostic time          10.31 s
+```

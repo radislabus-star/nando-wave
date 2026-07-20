@@ -79,6 +79,8 @@ struct SignalArchitectureView<'a> {
     blocker: &'a str,
     admission_verdict: &'a str,
     admission_blocker: &'a str,
+    admission_blocker_stage: &'a str,
+    admission_age_seconds: u64,
     admission_relation_candidates: u64,
     admission_future_rows: u64,
     admission_runtime_parity_cases: u64,
@@ -339,6 +341,15 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         "blocker",
         "controller_report_missing",
     );
+    let signal_admission_blocker_stage = metric_str(
+        &response_admission_controller,
+        "blocker_stage",
+        "controller_report",
+    );
+    let signal_admission_age_seconds = unix_now().saturating_sub(metric_u64(
+        &response_admission_controller,
+        "generated_at_unix",
+    ));
     let online_transitions = metric_u64(self_training, "transitions_seen");
     let online_teacher_programs = teacher_programs_text(online_discovery);
     let online_candidates = metric_u64(response_miner, "candidate_bucket_count");
@@ -480,6 +491,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             blocker: signal_blocker,
             admission_verdict: signal_admission_verdict,
             admission_blocker: signal_admission_blocker,
+            admission_blocker_stage: signal_admission_blocker_stage,
+            admission_age_seconds: signal_admission_age_seconds,
             admission_relation_candidates: metric_u64(
                 &response_admission_controller,
                 "relation_candidates",
@@ -1143,7 +1156,9 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             ));
         } else if index == 7 && admission_state == FlowState::Block {
             tree.push_str(&format!(
-                "<div class=\"terminal-line terminal-failure\" data-edge=\"admission-controller\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>controller BLOCK; candidates {}; future {}; parity cases {}</span><code>{}</code></div>",
+                "<div class=\"terminal-line terminal-failure\" data-edge=\"admission-controller\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>controller BLOCK at {}; snapshot age {} s; candidates {}; future {}; parity cases {}</span><code>{}</code></div>",
+                html_escape(view.admission_blocker_stage),
+                view.admission_age_seconds,
                 view.admission_relation_candidates,
                 view.admission_future_rows,
                 view.admission_runtime_parity_cases,
@@ -1508,6 +1523,8 @@ mod tests {
                 blocker: "future_rows_below_32",
                 admission_verdict: "MISSING",
                 admission_blocker: "controller_report_missing",
+                admission_blocker_stage: "controller_report",
+                admission_age_seconds: 0,
                 admission_relation_candidates: 0,
                 admission_future_rows: 0,
                 admission_runtime_parity_cases: 0,
@@ -1548,6 +1565,8 @@ mod tests {
                 blocker: "none",
                 admission_verdict: "MISSING",
                 admission_blocker: "controller_report_missing",
+                admission_blocker_stage: "controller_report",
+                admission_age_seconds: 0,
                 admission_relation_candidates: 0,
                 admission_future_rows: 0,
                 admission_runtime_parity_cases: 0,
@@ -1583,6 +1602,8 @@ mod tests {
                 blocker: "future_rows_below_32",
                 admission_verdict: "MISSING",
                 admission_blocker: "controller_report_missing",
+                admission_blocker_stage: "controller_report",
+                admission_age_seconds: 0,
                 admission_relation_candidates: 0,
                 admission_future_rows: 0,
                 admission_runtime_parity_cases: 0,
@@ -1625,6 +1646,8 @@ mod tests {
                 blocker: "none",
                 admission_verdict: "BLOCK",
                 admission_blocker: "no_candidate_with_complete_runtime_parity",
+                admission_blocker_stage: "wave_route_separability",
+                admission_age_seconds: 7,
                 admission_relation_candidates: 1,
                 admission_future_rows: 32,
                 admission_runtime_parity_cases: 64,
@@ -1640,7 +1663,9 @@ mod tests {
             .expect("controller blocker");
         let admission = html.find("data-stage=\"admission\"").expect("admission");
         assert!(storage < failure && failure < admission);
-        assert!(html.contains("controller BLOCK; candidates 1; future 32; parity cases 64"));
+        assert!(html.contains(
+            "controller BLOCK at wave_route_separability; snapshot age 7 s; candidates 1; future 32; parity cases 64"
+        ));
         assert!(html.contains("no_candidate_with_complete_runtime_parity"));
         assert!(html.contains("BLOCK · candidates 1"));
         assert!(html.contains("partition.v16"));

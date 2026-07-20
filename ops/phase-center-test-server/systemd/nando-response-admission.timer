@@ -1,0 +1,12 @@
+[Unit]
+Description=Reconcile Nando response admission controller report
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=nando-response-admission.service
+
+[Install]
+WantedBy=timers.target

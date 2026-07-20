@@ -6,18 +6,22 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use nando_response_actor::{
-    CaptureCommitmentIndex, OnlineAdmissionCandidateBundle, ResponseExecutor, ResponseRegistry,
-    build_crystallized_admission_snapshot, build_online_admission_snapshot,
-    build_online_collection_admission_snapshot, merge_online_admission_snapshots,
-    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance,
+    CaptureCommitmentIndex, OnlineAdmissionCandidateBundle, OnlineAdmissionCandidateRejection,
+    ResponseExecutor, ResponseRegistry, build_crystallized_admission_snapshot,
+    build_online_admission_evaluation, build_online_collection_admission_snapshot,
+    merge_online_admission_snapshots, response_runtime_contract_sha256, sha256_bytes,
+    verify_crystallized_capture_provenance,
 };
 use serde::Serialize;
 
 #[derive(Serialize)]
 struct AdmissionControllerReport {
     schema: &'static str,
+    generated_at_unix: u64,
     verdict: &'static str,
     blocker: Option<String>,
+    blocker_stage: Option<String>,
+    candidate_rejections: Vec<OnlineAdmissionCandidateRejection>,
     candidate_revision: u64,
     relation_candidates: usize,
     collection_candidates: usize,
@@ -300,7 +304,7 @@ fn run(started: Instant) -> Result<(), String> {
     let gate_sha256 = sha256_file(&gate_path, "gate_build")?;
     let runtime_sha256 = response_runtime_contract_sha256();
     let now_unix = unix_now();
-    let relation = build_online_admission_snapshot(
+    let relation_evaluation = build_online_admission_evaluation(
         &bundle.relation_candidates,
         &bundle.project_id,
         bundle.revision,
@@ -310,6 +314,8 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
     )
     .map_err(str::to_owned)?;
+    let relation_rejections = relation_evaluation.candidate_rejections;
+    let relation = relation_evaluation.snapshot;
     let collection = build_online_collection_admission_snapshot(
         &bundle.collection_candidates,
         &bundle.project_id,
@@ -338,6 +344,7 @@ fn run(started: Instant) -> Result<(), String> {
     )
     .map_err(str::to_owned)?;
     let Some(snapshot) = snapshot else {
+        let primary_rejection = relation_rejections.first();
         let preserved_active_packages = last_known_good_package_count(
             &registry_path,
             &controller_admission_path,
@@ -347,9 +354,15 @@ fn run(started: Instant) -> Result<(), String> {
         return write_report(
             &report_path,
             AdmissionControllerReport {
-                schema: "nando.response-admission-controller-report.v1",
+                schema: "nando.response-admission-controller-report.v2",
+                generated_at_unix: unix_now(),
                 verdict: "BLOCK",
-                blocker: Some("no_candidate_with_complete_runtime_parity".to_owned()),
+                blocker: Some(primary_rejection.map_or_else(
+                    || "no_candidate_with_complete_runtime_parity".to_owned(),
+                    |rejection| rejection.blocker.clone(),
+                )),
+                blocker_stage: primary_rejection.map(|rejection| rejection.stage.to_owned()),
+                candidate_rejections: relation_rejections,
                 candidate_revision: bundle.revision,
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
@@ -375,9 +388,12 @@ fn run(started: Instant) -> Result<(), String> {
         return write_report(
             &report_path,
             AdmissionControllerReport {
-                schema: "nando.response-admission-controller-report.v1",
+                schema: "nando.response-admission-controller-report.v2",
+                generated_at_unix: unix_now(),
                 verdict: "PASS",
                 blocker: Some("active_generation_immutable".to_owned()),
+                blocker_stage: Some("authority_registry".to_owned()),
+                candidate_rejections: relation_rejections,
                 candidate_revision: bundle.revision,
                 relation_candidates: bundle.relation_candidates.len(),
                 collection_candidates: bundle.collection_candidates.len(),
@@ -444,9 +460,12 @@ fn run(started: Instant) -> Result<(), String> {
     write_report(
         &report_path,
         AdmissionControllerReport {
-            schema: "nando.response-admission-controller-report.v1",
+            schema: "nando.response-admission-controller-report.v2",
+            generated_at_unix: unix_now(),
             verdict: "PASS",
             blocker: None,
+            blocker_stage: None,
+            candidate_rejections: relation_rejections,
             candidate_revision: bundle.revision,
             relation_candidates: bundle.relation_candidates.len(),
             collection_candidates: bundle.collection_candidates.len(),

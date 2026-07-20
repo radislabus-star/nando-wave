@@ -146,8 +146,9 @@ pub use online::{
     OnlineResponseStreamStatus, OnlineResponseTailConfig, run_online_response_tail,
 };
 pub use online_admission::{
-    OnlineAdmissionSnapshot, build_crystallized_admission_snapshot,
-    build_durable_runtime_parity_receipt, build_online_admission_snapshot,
+    OnlineAdmissionCandidateRejection, OnlineAdmissionEvaluation, OnlineAdmissionSnapshot,
+    build_crystallized_admission_snapshot, build_durable_runtime_parity_receipt,
+    build_online_admission_evaluation, build_online_admission_snapshot,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
 };
 pub use online_checkpoint::{
@@ -163,7 +164,8 @@ pub use online_collection::{
 pub use online_state::{
     MinerSignalStageReport, MinerSignalTreeReport, SELF_TRAINING_STATE_SCHEMA_V2,
     SELF_TRAINING_STATE_SCHEMA_V3, SELF_TRAINING_STATE_SCHEMA_V4, SELF_TRAINING_STATE_SCHEMA_V5,
-    SelfTrainingAdmissionCohort, SelfTrainingGenerationReport, SelfTrainingStateReport,
+    SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1, SelfTrainingAdmissionCohort, SelfTrainingGenerationReport,
+    SelfTrainingStateReport, SemanticEvidenceOutcome, SemanticEvidenceReceipt,
     StreamingSelfTrainingState,
 };
 pub use operator_generation::{
