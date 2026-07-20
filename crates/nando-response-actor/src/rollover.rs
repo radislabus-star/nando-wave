@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CegisWinner, RelationFrame, TeacherPoolSnapshot};
 
-pub const FROZEN_PARTITION_VERSION: u32 = 14;
+pub const FROZEN_PARTITION_VERSION: u32 = 15;
 const MAX_EXACT_PARTITION_SESSIONS: usize = 16;
 
 #[must_use]
@@ -478,7 +478,18 @@ fn initial_session_partition(
             )
         })
         .max_by(|left, right| compare_partitions(left, right, policy, preferred_support_ids))
-        .unwrap_or_default()
+        .unwrap_or_else(|| {
+            // Incomplete verified support is still generation-owned evidence.
+            // Returning an empty partition here strands 1..31 valid receipts in
+            // the bounded signature reservoir, where later traffic may evict
+            // them before the generation can ever reach the admission threshold.
+            // Historical rows remain support-only; frozen future still starts
+            // strictly after the completed support watermark.
+            (
+                select_diverse_support_rows(&parity_eligible, policy.support_rows),
+                Vec::new(),
+            )
+        })
 }
 
 fn partition_for_support_sessions(
@@ -745,6 +756,39 @@ mod tests {
         let policy = RolloverPolicy::default();
         assert!(!support_partition_complete(31, policy));
         assert!(support_partition_complete(32, policy));
+    }
+
+    #[test]
+    fn incomplete_verified_support_remains_generation_owned() {
+        let matching = (0..13)
+            .map(|index| RelationFrame {
+                schema: crate::RELATION_FRAME_SCHEMA.to_owned(),
+                frame_id_sha256: format!("{index:064x}"),
+                event_id_sha256: format!("{:064x}", index + 1_000),
+                client_intent_id_sha256: format!("{:064x}", index + 2_000),
+                session_id_sha256: format!("{:064x}", index + 3_000),
+                observed_at_unix_nanos: u64::try_from(index + 1).unwrap_or(u64::MAX),
+                estimated_input_tokens: 1,
+                extractor_version: "partial-support-test".to_owned(),
+                verifier_label: Some(true),
+                atoms: Vec::new(),
+                evidence_ref_sha256: format!("{:064x}", index + 4_000),
+            })
+            .collect::<Vec<_>>();
+        let eligible = matching
+            .iter()
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let (support, future) = initial_session_partition(
+            &matching,
+            RolloverPolicy::default(),
+            &eligible,
+            &eligible,
+            0,
+            &BTreeSet::new(),
+        );
+        assert_eq!(support.len(), 13);
+        assert!(future.is_empty());
     }
 
     #[test]

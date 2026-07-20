@@ -1740,3 +1740,34 @@ The former generation-four future receipts were already removed by the faulty
 selected refresh before this deployment and are not reconstructed or counted
 as new evidence. New independent post-watermark receipts must accumulate
 naturally; the durable invariant remains `routed_future_rows == future_rows`.
+
+### Partial verified support is generation-owned
+
+Live diagnostics exposed a second reservoir livelock for ordinary operators.
+`write_stdin` had hundreds of positive rows, 27 sessions and 32 linked parity
+receipts, but `initial_session_partition` returned an empty partition whenever
+fewer than 32 receipts could satisfy one winner route. The generation therefore
+owned zero receipts and repeated traffic could evict all partial progress.
+
+Frozen partition v15 keeps every verified partial support row, up to the normal
+32-row threshold. These rows remain support-only; no historical row becomes
+frozen future and admission thresholds are unchanged. Generation refresh can
+now advance monotonically `1 .. 32`, after which only post-watermark evidence
+may enter future.
+
+The v4 self-training schema also performs one bounded regroup of checkpointed
+CEGIS winners. Multiple structural winners of one teacher signature are passed
+through the same exact parity-checked consensus as cross-signature semantic
+aliases. Incompatible programs remain separate and report an explicit blocker.
+
+Live deployment receipt:
+
+```text
+self-training schema             v4
+frozen partition                 v15
+function:write_stdin support      0 -> 23
+support sessions                 1
+future                           0
+wrong / parity mismatch          0 / 0
+remaining genuine support rows   9
+```

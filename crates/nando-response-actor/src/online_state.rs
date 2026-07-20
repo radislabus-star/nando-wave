@@ -26,6 +26,7 @@ fn cross_pool_negative_refresh_due(transitions_seen: u64) -> bool {
 
 pub const SELF_TRAINING_STATE_SCHEMA_V2: &str = "nando.self-training-stream-state.v2";
 pub const SELF_TRAINING_STATE_SCHEMA_V3: &str = "nando.self-training-stream-state.v3";
+pub const SELF_TRAINING_STATE_SCHEMA_V4: &str = "nando.self-training-stream-state.v4";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SelfTrainingAdmissionCohort {
@@ -39,6 +40,8 @@ pub struct SelfTrainingAdmissionCohort {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SelfTrainingGenerationReport {
     pub partition_version: u32,
+    #[serde(default)]
+    pub generation_id_sha256: String,
     pub cohort_id_sha256: String,
     pub teacher_signature_sha256: String,
     #[serde(default)]
@@ -46,7 +49,11 @@ pub struct SelfTrainingGenerationReport {
     #[serde(default)]
     pub physical_adapter_signatures: Vec<String>,
     pub generation: u64,
+    #[serde(default)]
+    pub support_watermark_unix_nanos: u64,
     pub support_rows: usize,
+    #[serde(default)]
+    pub support_sessions: usize,
     pub support_tokens: u64,
     pub future_rows: usize,
     pub future_tokens: u64,
@@ -70,9 +77,21 @@ pub struct SelfTrainingGenerationReport {
     #[serde(default)]
     pub after_future_watermark_rows: usize,
     #[serde(default)]
+    pub support_frame_rejects: usize,
+    #[serde(default)]
+    pub support_session_rejects: usize,
+    #[serde(default)]
+    pub support_intent_rejects: usize,
+    #[serde(default)]
+    pub support_event_rejects: usize,
+    #[serde(default)]
     pub independent_future_rows: usize,
     #[serde(default)]
+    pub program_mismatch_rejects: usize,
+    #[serde(default)]
     pub program_consistent_future_rows: usize,
+    #[serde(default)]
+    pub route_mismatch_rejects: usize,
     #[serde(default)]
     pub routed_future_rows: usize,
     pub runtime_parity_rows: usize,
@@ -88,8 +107,14 @@ struct FutureFilterDiagnostic {
     post_repair_sessions: usize,
     live_rows: usize,
     after_watermark_rows: usize,
+    support_frame_rejects: usize,
+    support_session_rejects: usize,
+    support_intent_rejects: usize,
+    support_event_rejects: usize,
     independent_rows: usize,
+    program_mismatch_rejects: usize,
     consistent_rows: usize,
+    route_mismatch_rejects: usize,
     routed_rows: usize,
 }
 
@@ -169,6 +194,8 @@ pub struct SelfTrainingStateReport {
     #[serde(default)]
     pub parity_signature_match_rows: usize,
     #[serde(default)]
+    pub parity_rows_by_teacher_signature: BTreeMap<String, usize>,
+    #[serde(default)]
     pub semantic_law_cohorts: usize,
     #[serde(default)]
     pub semantic_law_physical_adapters: usize,
@@ -225,7 +252,7 @@ impl StreamingSelfTrainingState {
     #[must_use]
     pub fn new(now_unix: u64) -> Self {
         Self {
-            schema: SELF_TRAINING_STATE_SCHEMA_V3.to_owned(),
+            schema: SELF_TRAINING_STATE_SCHEMA_V4.to_owned(),
             transfer_discovery_version: TRANSFER_DISCOVERY_VERSION,
             discovery: CrossSurfaceFamilyDiscovery::default(),
             cegis: CegisCoordinator::new(VersionSpaceConfig::default(), 16),
@@ -389,7 +416,7 @@ impl StreamingSelfTrainingState {
             aliases.observe_transition(&transition);
         }
         *self.discovery.semantic_alias_graph_mut() = aliases;
-        self.schema = SELF_TRAINING_STATE_SCHEMA_V3.to_owned();
+        self.schema = SELF_TRAINING_STATE_SCHEMA_V4.to_owned();
         self.transfer_discovery_version = TRANSFER_DISCOVERY_VERSION;
         self.prepare_rebuild(false);
     }
@@ -517,6 +544,8 @@ impl StreamingSelfTrainingState {
     }
 
     pub fn repair_missing_synthesis_state(&mut self) {
+        let cohort_regroup_required = self.schema != SELF_TRAINING_STATE_SCHEMA_V4;
+        self.schema = SELF_TRAINING_STATE_SCHEMA_V4.to_owned();
         self.repair_parity_frames_from_discovery();
         self.enforce_parity_reservoir_limit();
         self.dirty_generation_signatures.extend(
@@ -525,6 +554,18 @@ impl StreamingSelfTrainingState {
                 .map(|generation| generation.teacher_signature_sha256.clone()),
         );
         self.refresh_dirty_generation_evidence(None);
+        if cohort_regroup_required {
+            // Cohort grouping is derived from already verified winners and bounded
+            // parity receipts. Recompute it once on schema upgrade so a checkpoint
+            // does not wait for a future edge-trigger from every existing signature.
+            let winner_signatures = self
+                .cegis
+                .winners()
+                .into_iter()
+                .map(|winner| winner.teacher_signature_sha256)
+                .collect::<BTreeSet<_>>();
+            self.refresh_generations_for_signatures(&winner_signatures);
+        }
         if self.transfer_discovery_version < TRANSFER_DISCOVERY_VERSION {
             self.discovery.rebuild_transfer_subcenters();
             self.transfer_discovery_version = TRANSFER_DISCOVERY_VERSION;
@@ -1116,13 +1157,14 @@ impl StreamingSelfTrainingState {
                     .cmp(&right.teacher_signature_sha256)
                     .then_with(|| left.cohort_id_sha256.cmp(&right.cohort_id_sha256))
             });
-            let distinct_signatures = members
-                .iter()
-                .map(|winner| winner.teacher_signature_sha256.as_str())
-                .collect::<BTreeSet<_>>()
-                .len();
+            // A single teacher signature may still contain several structural
+            // CEGIS cohorts. Keeping those winners separate fragments the same
+            // bounded parity reservoir and can prevent every cohort from ever
+            // owning complete support. Pool them through the same exact parity
+            // proof used for cross-signature semantic aliases; incompatible
+            // programs fail closed inside build_semantic_law_cohort.
             let derived =
-                (distinct_signatures >= 2).then(|| self.build_semantic_law_cohort(&law, &members));
+                (members.len() >= 2).then(|| self.build_semantic_law_cohort(&law, &members));
             match derived {
                 Some(Ok(derived)) => cohorts.push(derived),
                 Some(Err(blocker)) => {
@@ -1165,8 +1207,8 @@ impl StreamingSelfTrainingState {
             .iter()
             .map(|winner| winner.teacher_signature_sha256.clone())
             .collect::<BTreeSet<_>>();
-        if member_signatures.len() < 2 {
-            return Err("semantic_law_exact_signatures_below_two".to_owned());
+        if members.len() < 2 {
+            return Err("semantic_law_members_below_two".to_owned());
         }
         let mut program_classes =
             BTreeMap::<String, (crate::ResponseProgram, Vec<CegisWinner>)>::new();
@@ -1748,40 +1790,44 @@ impl StreamingSelfTrainingState {
                     .filter(|frame| frame.observed_at_unix_nanos > future_watermark)
                     .copied()
                     .collect::<Vec<_>>();
-                let independent = after_watermark
-                    .iter()
-                    .filter(|frame| {
-                        !support_ids.contains(frame.frame_id_sha256.as_str())
-                            && !winner.support_frame_ids.contains(&frame.frame_id_sha256)
-                            && !support_sessions.contains(frame.session_id_sha256.as_str())
-                            && !support_intents.contains(frame.client_intent_id_sha256.as_str())
-                            && !support_events.contains(frame.event_id_sha256.as_str())
-                    })
-                    .copied()
-                    .collect::<Vec<_>>();
-                let consistent = independent
-                    .iter()
-                    .filter(|frame| crate::synthesis::program_is_consistent(&winner.program, frame))
-                    .copied()
-                    .collect::<Vec<_>>();
-                let routed_rows = consistent
-                    .iter()
-                    .filter(|frame| crate::cegis::winner_routes_frame(winner, frame))
-                    .count();
-                Some((
-                    cohort_id.clone(),
-                    FutureFilterDiagnostic {
-                        matching_rows: matching.len(),
-                        matching_sessions,
-                        post_repair_rows: post_repair.len(),
-                        post_repair_sessions,
-                        live_rows: live.len(),
-                        after_watermark_rows: after_watermark.len(),
-                        independent_rows: independent.len(),
-                        consistent_rows: consistent.len(),
-                        routed_rows,
-                    },
-                ))
+                let mut diagnostic = FutureFilterDiagnostic {
+                    matching_rows: matching.len(),
+                    matching_sessions,
+                    post_repair_rows: post_repair.len(),
+                    post_repair_sessions,
+                    live_rows: live.len(),
+                    after_watermark_rows: after_watermark.len(),
+                    ..FutureFilterDiagnostic::default()
+                };
+                // Keep these outcomes mutually exclusive. The accounting identity makes
+                // an overly broad session/intent identity visible instead of silently
+                // presenting it as a generic lack of frozen-future evidence.
+                for frame in after_watermark {
+                    if support_ids.contains(frame.frame_id_sha256.as_str())
+                        || winner.support_frame_ids.contains(&frame.frame_id_sha256)
+                    {
+                        diagnostic.support_frame_rejects += 1;
+                    } else if support_sessions.contains(frame.session_id_sha256.as_str()) {
+                        diagnostic.support_session_rejects += 1;
+                    } else if support_intents.contains(frame.client_intent_id_sha256.as_str()) {
+                        diagnostic.support_intent_rejects += 1;
+                    } else if support_events.contains(frame.event_id_sha256.as_str()) {
+                        diagnostic.support_event_rejects += 1;
+                    } else {
+                        diagnostic.independent_rows += 1;
+                        if !crate::synthesis::program_is_consistent(&winner.program, frame) {
+                            diagnostic.program_mismatch_rejects += 1;
+                        } else {
+                            diagnostic.consistent_rows += 1;
+                            if crate::cegis::winner_routes_frame(winner, frame) {
+                                diagnostic.routed_rows += 1;
+                            } else {
+                                diagnostic.route_mismatch_rejects += 1;
+                            }
+                        }
+                    }
+                }
+                Some((cohort_id.clone(), diagnostic))
             })
             .collect::<BTreeMap<_, _>>();
         let mut generations = self
@@ -1797,6 +1843,7 @@ impl StreamingSelfTrainingState {
                     .unwrap_or_default();
                 SelfTrainingGenerationReport {
                     partition_version: generation.partition_version,
+                    generation_id_sha256: generation.generation_id_sha256.clone(),
                     cohort_id_sha256: generation.cohort_id_sha256.clone(),
                     teacher_signature_sha256: generation.teacher_signature_sha256.clone(),
                     physical_adapter_count: winners
@@ -1807,7 +1854,14 @@ impl StreamingSelfTrainingState {
                         .map(|cohort| cohort.member_signatures.iter().cloned().collect())
                         .unwrap_or_default(),
                     generation: generation.generation,
+                    support_watermark_unix_nanos: generation.support_watermark_unix_nanos,
                     support_rows: generation.support.len(),
+                    support_sessions: generation
+                        .support
+                        .iter()
+                        .map(|frame| frame.session_id_sha256.as_str())
+                        .collect::<BTreeSet<_>>()
+                        .len(),
                     support_tokens: generation
                         .support
                         .iter()
@@ -1847,8 +1901,14 @@ impl StreamingSelfTrainingState {
                     post_repair_runtime_parity_sessions: parity.post_repair_sessions,
                     live_runtime_parity_rows: parity.live_rows,
                     after_future_watermark_rows: parity.after_watermark_rows,
+                    support_frame_rejects: parity.support_frame_rejects,
+                    support_session_rejects: parity.support_session_rejects,
+                    support_intent_rejects: parity.support_intent_rejects,
+                    support_event_rejects: parity.support_event_rejects,
                     independent_future_rows: parity.independent_rows,
+                    program_mismatch_rejects: parity.program_mismatch_rejects,
                     program_consistent_future_rows: parity.consistent_rows,
+                    route_mismatch_rejects: parity.route_mismatch_rejects,
                     routed_future_rows: parity.routed_rows,
                     runtime_parity_rows: generation
                         .future
@@ -1927,6 +1987,21 @@ impl StreamingSelfTrainingState {
                 })
             })
             .count();
+        let mut parity_rows_by_teacher_signature = BTreeMap::new();
+        for (frame_id, frame) in &parity_frames {
+            let Some(discovery_frame) = discovery_frames.get(*frame_id) else {
+                continue;
+            };
+            if crate::teacher_program_signature(frame)
+                != crate::teacher_program_signature(discovery_frame)
+            {
+                continue;
+            }
+            let Some(signature) = crate::teacher_program_signature(discovery_frame) else {
+                continue;
+            };
+            *parity_rows_by_teacher_signature.entry(signature).or_default() += 1;
+        }
         let signal_tree = build_signal_tree(
             self.transitions_seen,
             &discovery,
@@ -1935,7 +2010,7 @@ impl StreamingSelfTrainingState {
             admission_ready_cohorts,
         );
         SelfTrainingStateReport {
-            schema: SELF_TRAINING_STATE_SCHEMA_V3.to_owned(),
+            schema: SELF_TRAINING_STATE_SCHEMA_V4.to_owned(),
             transitions_seen: self.transitions_seen,
             work_slices_completed: self.work_slices_completed,
             exact_checks_completed: self.exact_checks_completed,
@@ -1946,6 +2021,7 @@ impl StreamingSelfTrainingState {
             parity_discovery_key_overlap,
             parity_accepted_frame_rows,
             parity_signature_match_rows,
+            parity_rows_by_teacher_signature,
             semantic_law_cohorts,
             semantic_law_physical_adapters,
             semantic_law_blockers,
@@ -2864,7 +2940,7 @@ mod tests {
 
         state.prepare_effect_law_migration();
 
-        assert_eq!(state.schema, SELF_TRAINING_STATE_SCHEMA_V3);
+        assert_eq!(state.schema, SELF_TRAINING_STATE_SCHEMA_V4);
         assert!(state.runtime_parity_cases.is_empty());
         assert_eq!(state.replay_support_parity_cases.len(), 32);
         assert!(state.generations.is_empty());
@@ -3145,6 +3221,16 @@ mod tests {
 
         let exact = state.cegis.winners();
         assert_eq!(exact.len(), 2);
+        let mut same_signature_peer = exact[0].clone();
+        same_signature_peer.cohort_id_sha256 = "same-signature-peer".to_owned();
+        let same_signature = state
+            .build_semantic_law_cohort(
+                &exact[0].teacher_signature_sha256,
+                &[exact[0].clone(), same_signature_peer],
+            )
+            .expect("same-signature structural cohort");
+        assert_eq!(same_signature.members.len(), 2);
+        assert_eq!(same_signature.member_signatures.len(), 1);
         let law = state
             .discovery
             .semantic_law_signature(&exact[0].teacher_signature_sha256)
@@ -3188,6 +3274,80 @@ mod tests {
         assert_eq!(
             state.generations.keys().cloned().collect::<BTreeSet<_>>(),
             frozen_generation_ids
+        );
+
+        let frozen_cohort_id = state
+            .generations
+            .keys()
+            .next()
+            .cloned()
+            .expect("frozen cohort");
+        let support_session = state.generations[&frozen_cohort_id].support[0]
+            .session_id_sha256
+            .clone();
+        let baseline_pending = state
+            .report(0)
+            .generations
+            .into_iter()
+            .find(|generation| generation.cohort_id_sha256 == frozen_cohort_id)
+            .expect("baseline pending generation report");
+        for index in 0..5 {
+            let mut transition = continuation_transition(
+                2_500 + index,
+                "wait",
+                "cell_id",
+                "Script running with cell ID ",
+                "wait in support session",
+            );
+            transition.before.session_id_sha256 = support_session.clone();
+            state
+                .observe_transition(&transition)
+                .expect("observe same-session pending future");
+        }
+        let pending = state
+            .report(0)
+            .generations
+            .into_iter()
+            .find(|generation| generation.cohort_id_sha256 == frozen_cohort_id)
+            .expect("pending generation report");
+        assert_eq!(
+            pending.after_future_watermark_rows,
+            baseline_pending.after_future_watermark_rows + 5
+        );
+        assert_eq!(
+            pending.support_session_rejects,
+            baseline_pending.support_session_rejects + 5
+        );
+
+        let encoded = serde_json::to_vec(&state).expect("encode pending future state");
+        let mut restored: StreamingSelfTrainingState =
+            serde_json::from_slice(&encoded).expect("restore pending future state");
+        restored.repair_missing_synthesis_state();
+        let restored_pending = restored
+            .report(0)
+            .generations
+            .into_iter()
+            .find(|generation| generation.cohort_id_sha256 == frozen_cohort_id)
+            .expect("restored pending generation report");
+        assert_eq!(
+            restored_pending.generation_id_sha256,
+            pending.generation_id_sha256
+        );
+        assert_eq!(
+            restored_pending.support_watermark_unix_nanos,
+            pending.support_watermark_unix_nanos
+        );
+        assert_eq!(
+            restored_pending.after_future_watermark_rows,
+            pending.after_future_watermark_rows
+        );
+        assert_eq!(
+            restored_pending.support_session_rejects,
+            pending.support_session_rejects
+        );
+        assert_eq!(
+            restored_pending.independent_future_rows,
+            pending.independent_future_rows
         );
 
         for index in 0..16 {
