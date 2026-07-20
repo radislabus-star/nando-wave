@@ -1771,3 +1771,33 @@ future                           0
 wrong / parity mismatch          0 / 0
 remaining genuine support rows   9
 ```
+
+### Pending CEGIS work drains independently of new ingress
+
+The event-driven worker previously executed one CEGIS slice per transition
+burst and then cleared its pending flag. A cohort that needed several bounded
+slices could therefore remain unresolved indefinitely when live ingress became
+quiet, even though the checkpoint already contained a finite pending queue.
+
+The worker now restores the pending bit from checkpoint state and drains that
+finite queue in small bursts. Each burst is limited to eight slices and a
+five-millisecond scheduling budget, then yields back to the worker loop. The
+queue itself remains bounded; waiting for future evidence is not pending work,
+so an idle learner does not spin merely because a generation is incomplete.
+
+Live deployment receipt:
+
+```text
+synthesis slices                 2261
+exact checks                     72141
+worker processed / failed        294 / 0
+queue backlog                    0
+custom exec/write_stdin slices   173
+remaining competing programs     12
+explicit blocker                 negative_unseparable_at_current_representation
+```
+
+This closes the scheduler livelock. It does not manufacture a winner: the next
+blocker is representational. The current negative evidence cannot distinguish
+the twelve surviving programs, so no frozen generation or admission authority
+is created for that cohort.

@@ -16,6 +16,8 @@ use nando_response_actor::{
 
 const QUEUE_CAPACITY: usize = 4_096;
 const INPUTS_PER_SYNTHESIS_SLICE: u64 = 64;
+const MAX_SYNTHESIS_SLICES_PER_BURST: u64 = 8;
+const MAX_SYNTHESIS_BURST: Duration = Duration::from_millis(5);
 const CHECKPOINT_EVENTS: u64 = 4_096;
 const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(60);
 const EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED: bool = true;
@@ -390,7 +392,10 @@ pub fn spawn_miner_worker(
     // A restored checkpoint is already the materialized state. Permit one
     // bounded migration slice at startup; further work is paced by real
     // transition bursts below, so restart cannot become an unbounded batch.
-    let initial_synthesis_pending = false;
+    let initial_synthesis_pending = miner
+        .lock()
+        .map_err(|_| "miner_worker_initial_synthesis_lock_poisoned".to_owned())?
+        .has_self_training_work();
     let initial_collection_maintenance_pending = collection_miner
         .lock()
         .map_err(|_| "miner_worker_initial_collection_lock_poisoned".to_owned())?
@@ -671,10 +676,26 @@ pub fn spawn_miner_worker(
                     && !run_collection_maintenance;
                 if run_synthesis {
                     let started = Instant::now();
-                    let checks = miner
-                        .lock()
-                        .ok()
-                        .map_or(0, |mut stream| stream.run_self_training_work_slice());
+                    let mut burst_slices = 0_u64;
+                    let mut checks = 0_usize;
+                    while burst_slices < MAX_SYNTHESIS_SLICES_PER_BURST
+                        && started.elapsed() < MAX_SYNTHESIS_BURST
+                    {
+                        let (slice_checks, pending) =
+                            miner.lock().ok().map_or((0, false), |mut stream| {
+                                let slice_checks = stream.run_self_training_work_slice();
+                                let pending = stream.has_self_training_work();
+                                (slice_checks, pending)
+                            });
+                        if slice_checks == 0 {
+                            break;
+                        }
+                        burst_slices = burst_slices.saturating_add(1);
+                        checks = checks.saturating_add(slice_checks);
+                        if !pending {
+                            break;
+                        }
+                    }
                     record_timing(
                         &thread_counters.synthesis_last_micros,
                         &thread_counters.synthesis_max_micros,
@@ -682,14 +703,18 @@ pub fn spawn_miner_worker(
                         elapsed_micros(started),
                     );
                     inputs_since_synthesis = 0;
-                    // One event burst buys one bounded search slice. Remaining
-                    // version-space work waits for the next real observation.
-                    synthesis_pending = false;
+                    // A real event burst buys a small time-bounded search batch.
+                    // This converges cheap pending cohorts without turning idle
+                    // periods into background CPU work.
+                    let still_pending = miner
+                        .lock()
+                        .is_ok_and(|stream| stream.has_self_training_work());
+                    synthesis_pending = burst_slices > 0 && still_pending;
                     prefer_collection_maintenance = collection_maintenance_pending;
                     if checks > 0 {
                         thread_counters
                             .synthesis_slices
-                            .fetch_add(1, Ordering::Relaxed);
+                            .fetch_add(burst_slices, Ordering::Relaxed);
                         thread_counters.exact_checks.fetch_add(
                             u64::try_from(checks).unwrap_or(u64::MAX),
                             Ordering::Relaxed,
