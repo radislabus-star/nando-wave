@@ -657,6 +657,8 @@ impl StreamingSelfTrainingState {
                 .insert(training_frame_id, training_frame);
             self.enforce_parity_reservoir_limit();
             self.dirty_generation_signatures.insert(teacher_signature);
+            self.dirty_generation_signatures
+                .insert(transition.outcome.action.signature_sha256.clone());
         }
     }
 
@@ -2023,8 +2025,16 @@ impl StreamingSelfTrainingState {
     }
 
     fn refresh_generations_filtered(&mut self, signatures: Option<&BTreeSet<String>>) {
-        let winners = self
-            .derived_winner_cohorts()
+        let all_winners = self.derived_winner_cohorts();
+        if signatures.is_none() {
+            let live_ids = all_winners
+                .iter()
+                .map(|cohort| cohort.winner.cohort_id_sha256.as_str())
+                .collect::<std::collections::BTreeSet<_>>();
+            self.generations
+                .retain(|cohort_id, _| live_ids.contains(cohort_id.as_str()));
+        }
+        let winners = all_winners
             .into_iter()
             .filter(|cohort| {
                 signatures.is_none_or(|selected| {
@@ -2041,12 +2051,6 @@ impl StreamingSelfTrainingState {
             .keys()
             .cloned()
             .collect::<std::collections::BTreeSet<_>>();
-        let live_ids = winners
-            .iter()
-            .map(|cohort| cohort.winner.cohort_id_sha256.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        self.generations
-            .retain(|cohort_id, _| live_ids.contains(cohort_id.as_str()));
         for derived in winners {
             let winner = &derived.winner;
             let Some(pool) = self.cohort_pool_snapshot(&derived) else {
@@ -3176,6 +3180,15 @@ mod tests {
                 && generation.support_rows == 32
                 && generation.future_rows == 0
         }));
+        let frozen_generation_ids = state.generations.keys().cloned().collect::<BTreeSet<_>>();
+        state
+            .dirty_generation_signatures
+            .insert("unrelated-evidence-signature".to_owned());
+        state.refresh_dirty_generation_evidence(None);
+        assert_eq!(
+            state.generations.keys().cloned().collect::<BTreeSet<_>>(),
+            frozen_generation_ids
+        );
 
         for index in 0..16 {
             let transition = continuation_transition(

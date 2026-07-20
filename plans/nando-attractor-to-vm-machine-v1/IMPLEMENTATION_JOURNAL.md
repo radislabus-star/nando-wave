@@ -1698,3 +1698,45 @@ future` snapshot use different bounded-reservoir moments. The repaired invariant
 is the important result: every currently routed independent receipt has one
 durable generation-owned future row and one parity receipt. Admission still
 requires 15 additional genuine independent future rows.
+
+### Selected evidence refresh must not prune unrelated generations
+
+The first live repair exposed a second ownership defect. A refresh filtered to
+one dirty teacher signature built its `live_ids` from that filtered subset and
+then applied `retain` to the complete generation registry. An unrelated or
+legacy signature could therefore delete an immutable generation; the same
+cohort was later reconstructed as generation zero with an empty future.
+
+Generation pruning is now restricted to an unfiltered global derived-state
+refresh. A selected evidence refresh may update only its matching generations
+and may never remove any other generation. Runtime parity insertion dirties
+both the canonical parity signature and the observed action signature so that
+legacy signature aliases cannot strand evidence. The regression test performs
+an unrelated selected refresh and requires the frozen generation set to remain
+stable before future accumulation continues.
+
+This is a storage ownership invariant, not a coverage relaxation:
+
+```text
+selected evidence refresh -> update matching generation only
+global derived refresh     -> reconcile and prune generation registry
+unknown dirty signature    -> no generation deletion
+```
+
+Focused verification and the first deployed worker cycles after this repair:
+
+```text
+online_state focused tests       11 / 11 PASS
+cargo check --lib                PASS
+production serving SHA-256       763cddacaff82e9c9b0821e137118b62e7b6eadd4fd4b07aebc66f2c4250386a
+generation across cycles         0 -> 0
+support / support parity         32 / 32
+post-watermark observations      3 -> 5
+independent / routed / future    0 / 0 / 0
+wrong / parity mismatch          0 / 0
+```
+
+The former generation-four future receipts were already removed by the faulty
+selected refresh before this deployment and are not reconstructed or counted
+as new evidence. New independent post-watermark receipts must accumulate
+naturally; the durable invariant remains `routed_future_rows == future_rows`.
