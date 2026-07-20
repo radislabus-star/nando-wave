@@ -9,6 +9,7 @@ mod contracts;
 mod crystallized_operator;
 mod decidability;
 mod effect_graph;
+mod effect_law;
 mod evidence;
 mod evidence_graph;
 mod family_discovery;
@@ -107,6 +108,12 @@ pub use effect_graph::{
     EFFECT_GRAPH_SCHEMA_V1, EffectEdge, EffectEdgeKind, EffectGraph, EffectGraphBuilder,
     EffectGraphCompleteness, EffectGraphPolicy, EffectNode, EffectNodeKind, EffectOperationKind,
     EffectSource,
+};
+pub use effect_law::{
+    CANONICAL_EFFECT_LAW_SCHEMA_V2, CanonicalEffectLawV2, CanonicalEffectTopologyV2, EffectKindV2,
+    EffectLawError, EffectLawId, EffectPostconditionKindV2, EffectPostconditionV2,
+    EffectPredicateKindV2, EffectPredicateV2, EffectRoleKindV2, EffectRoleV2,
+    PreservedFrameContractV2, SemanticConstantV2, VerifiedSemanticFacetsV2,
 };
 pub use evidence::{
     CanonicalEventGraph, CanonicalEventNode, DeterministicEvidenceLedger,
