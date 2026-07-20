@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CegisWinner, RelationFrame, TeacherPoolSnapshot};
 
-pub const FROZEN_PARTITION_VERSION: u32 = 15;
+// v16 separates historical generation support preference from live future
+// eligibility so semantic regrouping cannot advance the frozen watermark.
+pub const FROZEN_PARTITION_VERSION: u32 = 16;
 const MAX_EXACT_PARTITION_SESSIONS: usize = 16;
 
 #[must_use]
