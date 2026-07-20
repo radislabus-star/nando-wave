@@ -712,14 +712,20 @@ pub fn spawn_miner_worker(
                         .is_ok_and(|stream| stream.has_self_training_work());
                     synthesis_pending = burst_slices > 0 && still_pending;
                     prefer_collection_maintenance = collection_maintenance_pending;
-                    if checks > 0 {
+                    if burst_slices > 0 {
+                        // Generation refresh and admission accounting can make
+                        // proof progress without running an exact check. Wake
+                        // the publisher for every progressed slice so a 32/32
+                        // window is sealed before later evidence can regroup it.
                         thread_counters
                             .synthesis_slices
                             .fetch_add(burst_slices, Ordering::Relaxed);
-                        thread_counters.exact_checks.fetch_add(
-                            u64::try_from(checks).unwrap_or(u64::MAX),
-                            Ordering::Relaxed,
-                        );
+                        if checks > 0 {
+                            thread_counters.exact_checks.fetch_add(
+                                u64::try_from(checks).unwrap_or(u64::MAX),
+                                Ordering::Relaxed,
+                            );
+                        }
                         events_since_checkpoint = events_since_checkpoint.saturating_add(1);
                         if let Some(trigger) = &authority_trigger {
                             let _ = trigger.try_send(());

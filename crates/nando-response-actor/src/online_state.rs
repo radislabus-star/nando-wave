@@ -1640,18 +1640,13 @@ impl StreamingSelfTrainingState {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let member_ids = members
-            .iter()
-            .map(|winner| winner.cohort_id_sha256.as_str())
-            .collect::<Vec<_>>();
+        // Physical CEGIS cohorts are evidence for a semantic law, not part of
+        // its identity. Including their IDs here made an unchanged program
+        // acquire a new cohort ID whenever another surface was discovered,
+        // stranding its immutable frozen-future window before admission.
         let cohort_id_sha256 = crate::sha256_bytes(
-            &serde_json::to_vec(&(
-                "nando.semantic-law-cohort.v1",
-                law_signature,
-                member_ids,
-                &program,
-            ))
-            .map_err(|error| format!("semantic_law_cohort_encode:{error}"))?,
+            &serde_json::to_vec(&("nando.semantic-law-cohort.v2", law_signature, &program))
+                .map_err(|error| format!("semantic_law_cohort_encode:{error}"))?,
         );
         let action_symbols = members
             .iter()
@@ -3464,6 +3459,22 @@ mod tests {
             .expect("same-signature structural cohort");
         assert_eq!(same_signature.members.len(), 2);
         assert_eq!(same_signature.member_signatures.len(), 1);
+        let mut additional_same_program = exact[0].clone();
+        additional_same_program.cohort_id_sha256 = "additional-same-program-peer".to_owned();
+        let expanded_same_signature = state
+            .build_semantic_law_cohort(
+                &exact[0].teacher_signature_sha256,
+                &[
+                    exact[0].clone(),
+                    same_signature.members[1].clone(),
+                    additional_same_program,
+                ],
+            )
+            .expect("expanded same-signature structural cohort");
+        assert_eq!(
+            same_signature.winner.cohort_id_sha256, expanded_same_signature.winner.cohort_id_sha256,
+            "physical evidence membership must not change semantic-law identity"
+        );
         let law = state
             .discovery
             .semantic_law_signature(&exact[0].teacher_signature_sha256)
