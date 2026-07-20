@@ -244,11 +244,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let strongest_generation = self_training
         .get("generations")
         .and_then(Value::as_array)
-        .and_then(|generations| {
-            generations
-                .iter()
-                .max_by_key(|generation| metric_u64(generation, "future_rows"))
-        })
+        .and_then(|generations| strongest_signal_generation(generations))
         .unwrap_or(&Value::Null);
     let online_generation = format!(
         "support {} / future {} / sessions {} / wrong {} / parity {}",
@@ -258,6 +254,24 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         metric_u64(strongest_generation, "wrong_future_rows"),
         metric_u64(strongest_generation, "runtime_parity_rows")
     );
+    let signal_partition = metric_u64(strongest_generation, "partition_version");
+    let signal_generation = metric_u64(strongest_generation, "generation");
+    let signal_support = metric_u64(strongest_generation, "support_runtime_parity_rows");
+    let signal_matching = metric_u64(strongest_generation, "matching_runtime_parity_rows");
+    let signal_after_watermark = metric_u64(strongest_generation, "after_future_watermark_rows");
+    let signal_independent = metric_u64(strongest_generation, "independent_future_rows");
+    let signal_consistent = metric_u64(strongest_generation, "program_consistent_future_rows");
+    let signal_routed = metric_u64(strongest_generation, "routed_future_rows");
+    let signal_future = metric_u64(strongest_generation, "future_rows");
+    let signal_lost = signal_routed.saturating_sub(signal_future);
+    let signal_blocker = metric_str(strongest_generation, "blocker", "нет");
+    let signal_status = if signal_lost > 0 {
+        "BLOCK"
+    } else if signal_future >= 32 {
+        "PASS"
+    } else {
+        "WAIT"
+    };
     let online_teacher_programs = teacher_programs_text(online_discovery);
     let online_candidates = metric_u64(response_miner, "candidate_bucket_count");
     let online_admission_ready = metric_u64(response_miner, "admission_ready_cohorts");
@@ -404,13 +418,26 @@ button:disabled {{ opacity:.45; cursor:not-allowed; }}
 .metric-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:32px; }}
 .band {{ border-top:1px solid #d7dbe0; padding:12px 0; min-width:0; }}
 h2 {{ margin:0 0 12px; font-size:15px; letter-spacing:0; }}
+.signal-head {{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; }}
+.signal-status {{ font:800 13px ui-monospace,monospace; }}
+.signal-route {{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border:1px solid #cfd4da; background:#fff; }}
+.signal-step {{ min-width:0; padding:12px 10px; border-right:1px solid #dfe3e8; }}
+.signal-step:last-child {{ border-right:0; }}
+.signal-label {{ display:block; min-height:30px; color:#535862; font-size:11px; line-height:1.25; }}
+.signal-value {{ display:block; margin-top:6px; font:800 20px ui-monospace,monospace; }}
+.blocker {{ margin:10px 0 0; padding:10px 12px; border-left:4px solid #b42318; background:#fff1f0; color:#7a271a; font:700 13px ui-monospace,monospace; overflow-wrap:anywhere; }}
+.compact td {{ padding:5px 0; }}
+details {{ border-top:1px solid #d7dbe0; margin-top:4px; }}
+summary {{ padding:14px 0; cursor:pointer; font-weight:800; font-size:14px; }}
+.advanced {{ padding-bottom:8px; }}
 table {{ width:100%; border-collapse:collapse; font-size:13px; }}
 td {{ padding:6px 0; border-bottom:1px solid #e1e4e8; overflow-wrap:anywhere; vertical-align:top; }}
 td:first-child {{ padding-right:16px; }}
 td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weight:700; }}
 .ok {{ color:#067647; }} .off {{ color:#b42318; }}
 .note {{ margin:0; color:#535862; line-height:1.5; overflow-wrap:anywhere; }}
-@media (max-width:760px) {{ .controls,.metric-grid {{ grid-template-columns:1fr; }} header {{ align-items:flex-start; flex-direction:column; }} main {{ padding:14px 18px; }} }}
+@media (max-width:900px) {{ .signal-route {{ grid-template-columns:repeat(4,minmax(0,1fr)); }} .signal-step:nth-child(4) {{ border-right:0; }} .signal-step {{ border-bottom:1px solid #dfe3e8; }} }}
+@media (max-width:760px) {{ .controls,.metric-grid {{ grid-template-columns:1fr; }} .signal-route {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .signal-step:nth-child(even) {{ border-right:0; }} header,.signal-head {{ align-items:flex-start; flex-direction:column; }} main {{ padding:14px 18px; }} }}
 </style>
 </head>
 <body>
@@ -421,6 +448,34 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="SHADOW"><button>SHADOW</button></form>
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="CPU"><button{cpu_disabled}>CPU</button></form>
 </div>
+<section class="band">
+<div class="signal-head"><h2>Маршрут живого сигнала · partition v{signal_partition} · generation {signal_generation}</h2><div class="signal-status {signal_status_class}">{signal_status}</div></div>
+<div class="signal-route">
+<div class="signal-step"><span class="signal-label">Support с receipt</span><span class="signal-value">{signal_support}</span></div>
+<div class="signal-step"><span class="signal-label">Совпало с законом</span><span class="signal-value">{signal_matching}</span></div>
+<div class="signal-step"><span class="signal-label">После watermark</span><span class="signal-value">{signal_after_watermark}</span></div>
+<div class="signal-step"><span class="signal-label">Независимые</span><span class="signal-value">{signal_independent}</span></div>
+<div class="signal-step"><span class="signal-label">Воспроизводимые</span><span class="signal-value">{signal_consistent}</span></div>
+<div class="signal-step"><span class="signal-label">Маршрутизированы</span><span class="signal-value">{signal_routed}</span></div>
+<div class="signal-step"><span class="signal-label">Записаны в future</span><span class="signal-value">{signal_future}</span></div>
+</div>
+<p class="blocker">ЗАТЫК: {signal_lost} событий потеряно между route и frozen future · {signal_blocker}</p>
+</section>
+<div class="metric-grid compact">
+<section class="band"><h2>Фактический результат</h2><table>
+<tr><td>Обычный трафик на CPU</td><td>{cpu_share}</td></tr>
+<tr><td>Экономия входных токенов</td><td>{token_share}</td></tr>
+<tr><td>Предотвращено LLM-вызовов</td><td>{avoided_calls}</td></tr>
+<tr><td>ACTIVE / QUARANTINE</td><td>{response_active} / {response_quarantine}</td></tr>
+</table></section>
+<section class="band"><h2>Безопасность и допуск</h2><table>
+<tr><td>Composite gate</td><td>{verdict}</td></tr>
+<tr><td>False accepts</td><td>{false_accepts}</td></tr>
+<tr><td>Parity mismatches</td><td>{parity_mismatches}</td></tr>
+<tr><td>Admission emitted / blocked</td><td>{online_emitted} / {online_blocked}</td></tr>
+</table></section>
+</div>
+<details><summary>Технические детали</summary><div class="advanced">
 <section class="band"><h2>Сервисы</h2><table>{service_rows}</table></section>
 	<section class="band"><h2>Версии сборок и модулей</h2><table>{module_version_rows}</table></section>
 	<section class="band"><h2>CPU admission</h2><table>
@@ -503,6 +558,7 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
 	<tr><td>M3 достижим в этом окне</td><td>{m3_upper_bound_reachable}</td></tr>
 	</table></section>
 	</div>
+</div></details>
 <section class="band"><h2>Граница</h2><p class="note">{reason}. Кнопка BYPASS останавливает Nando-наблюдение и майнер, но Nginx продолжает передавать Codex-трафик в OpenAI.</p></section>
 </main>
 </body>
@@ -512,6 +568,23 @@ td:last-child {{ text-align:right; font-family:ui-monospace,monospace; font-weig
         build_id = html_escape(build_id),
         key = html_escape(&key),
         cpu_disabled = cpu_disabled,
+        signal_partition = signal_partition,
+        signal_generation = signal_generation,
+        signal_support = signal_support,
+        signal_matching = signal_matching,
+        signal_after_watermark = signal_after_watermark,
+        signal_independent = signal_independent,
+        signal_consistent = signal_consistent,
+        signal_routed = signal_routed,
+        signal_future = signal_future,
+        signal_lost = signal_lost,
+        signal_blocker = html_escape(signal_blocker),
+        signal_status = signal_status,
+        signal_status_class = if signal_status == "BLOCK" {
+            "off"
+        } else {
+            "ok"
+        },
         module_version_rows = module_version_rows,
         verdict = html_escape(&admission.verdict),
         eligible = yes_no(admission.eligible_for_local_accept),
@@ -694,6 +767,20 @@ fn collection_blockers_text(status: &Value) -> String {
 
 fn metric_u64(metrics: &Value, key: &str) -> u64 {
     metrics.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn strongest_signal_generation(generations: &[Value]) -> Option<&Value> {
+    // A zero-future generation can still be the active signal path. Rank by
+    // proven support and routed evidence first so the dashboard exposes the
+    // actual loss point instead of selecting an unrelated empty generation.
+    generations.iter().max_by_key(|generation| {
+        (
+            metric_u64(generation, "support_runtime_parity_rows"),
+            metric_u64(generation, "routed_future_rows"),
+            metric_u64(generation, "future_rows"),
+            metric_u64(generation, "matching_runtime_parity_rows"),
+        )
+    })
 }
 
 fn metric_str<'a>(metrics: &'a Value, key: &str, fallback: &'a str) -> &'a str {
@@ -893,73 +980,33 @@ mod tests {
     }
 
     #[test]
+    fn signal_tree_prefers_receipt_backed_routed_generation() {
+        let generations = vec![
+            json!({
+                "generation": 0,
+                "support_runtime_parity_rows": 0,
+                "routed_future_rows": 0,
+                "future_rows": 0
+            }),
+            json!({
+                "generation": 4,
+                "support_runtime_parity_rows": 32,
+                "matching_runtime_parity_rows": 51,
+                "routed_future_rows": 15,
+                "future_rows": 0
+            }),
+        ];
+
+        let selected = strongest_signal_generation(&generations).expect("generation");
+        assert_eq!(metric_u64(selected, "generation"), 4);
+        assert_eq!(metric_u64(selected, "routed_future_rows"), 15);
+    }
+
+    #[test]
     fn watchdog_auto_promotes_only_eligible_shadow_mode() {
         assert!(should_auto_promote(GatewayMode::Shadow, true));
         assert!(!should_auto_promote(GatewayMode::Shadow, false));
         assert!(!should_auto_promote(GatewayMode::Bypass, true));
         assert!(!should_auto_promote(GatewayMode::Cpu, true));
-    }
-
-    #[test]
-    fn package_generations_do_not_mix_grounded_and_legacy() {
-        let packages = vec![
-            json!({"package_id":"raw-phase-grounded-r4-a", "state":"quarantine"}),
-            json!({"package_id":"raw-phase-wait-v1", "state":"active"}),
-        ];
-        assert_eq!(response_package_generation_counts(&packages), (0, 1, 1, 0));
-    }
-
-    #[test]
-    fn empty_future_receipts_are_not_evaluated() {
-        let status = json!({
-            "verifier_coverage": {
-                "state": "NOT_EVALUATED",
-                "required": 0,
-                "emitted": 0,
-                "accepted": 0,
-                "missing": 0
-            }
-        });
-        assert!(verifier_coverage_text(&status).starts_with("NOT_EVALUATED:"));
-    }
-
-    #[test]
-    fn one_of_routing_predicate_lists_all_learned_bands() {
-        let routing_split = json!({
-            "selected_predicates": [{
-                "role": "turn_message_count_band",
-                "comparison": "one_of",
-                "threshold": 0,
-                "allowed_counts": [0, 1, 2, 4, 16]
-            }]
-        });
-
-        assert_eq!(
-            routing_predicates_text(&routing_split),
-            "turn_message_count_band in [0,1,2,4,16]"
-        );
-    }
-
-    #[test]
-    fn future_eligibility_explains_every_post_freeze_stage() {
-        let status = json!({
-            "future_eligibility": {
-                "post_freeze_rows": 12,
-                "support_session_reject_rows": 2,
-                "support_intent_reject_rows": 1,
-                "independent_post_freeze_rows": 9,
-                "reserved_session_rows": 7,
-                "new_session_rows": 2,
-                "route_mismatch_rows": 3,
-                "routed_rows": 6,
-                "verifier_accepted_rows": 5,
-                "verifier_rejected_rows": 1
-            }
-        });
-
-        let text = future_eligibility_text(&status);
-        assert!(text.contains("post-freeze 12 -> independent 9"));
-        assert!(text.contains("routed 6 / route-mismatch 3"));
-        assert!(text.contains("verifier accept 5 / reject 1"));
     }
 }

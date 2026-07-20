@@ -8,6 +8,7 @@ GATEWAY_BIN="${NANDO_GATEWAY_BIN:-/opt/nando-wave/bin/nando-gateway-control}"
 GATE_BIN="${NANDO_GATE_BIN:-/opt/nando-wave/bin/nando-live-transition-gate}"
 MANIFEST="${STATE_DIR}/build-manifest.json"
 HISTORY="${STATE_DIR}/build-history.jsonl"
+ONLINE_REPORT="${STATE_DIR}/response-online-miner-report.json"
 GIT=(git -c "safe.directory=${ROOT_DIR}" -C "${ROOT_DIR}")
 
 today="$(date +%Y.%m.%d)"
@@ -42,8 +43,9 @@ economics="$(cat "${STATE_DIR}/economics-live.json")"
 registry="$(cat "${STATE_DIR}/response-registry.json")"
 
 runtime_contract="$(jq -r '.response_runtime_contract_sha256 // "MISSING"' <<<"${health}")"
-relation_schema="$(jq -r '.response.self_training_v2.schema // "MISSING"' <<<"${online_report}")"
-opportunity_schema="$(jq -r '.response.self_training_v2.opportunity.schema // "MISSING"' <<<"${online_report}")"
+relation_schema="$(jq -r --slurpfile fallback "${ONLINE_REPORT}" '.response.self_training_v2.schema // $fallback[0].miner.self_training_v2.schema // "MISSING"' <<<"${online_report}")"
+opportunity_schema="$(jq -r --slurpfile fallback "${ONLINE_REPORT}" '.response.self_training_v2.opportunity.schema // $fallback[0].miner.self_training_v2.opportunity.schema // "MISSING"' <<<"${online_report}")"
+frozen_partition="$(jq -r --slurpfile fallback "${ONLINE_REPORT}" '[((.response.self_training_v2.generations // $fallback[0].miner.self_training_v2.generations // [])[]?.partition_version // 0)] | max // 0' <<<"${online_report}")"
 collection_strategy="$(jq -r '.collection.status.pooling_strategy_version // 0' <<<"${online_report}")"
 checkpoint_events="$(jq -r '.worker.checkpoint_events // 0' <<<"${online_report}")"
 checkpoint_interval="$(jq -r '.worker.checkpoint_interval_seconds // 60' <<<"${online_report}")"
@@ -64,6 +66,7 @@ jq -n \
   --arg runtime_contract "${runtime_contract}" \
   --arg relation_schema "${relation_schema}" \
   --arg opportunity_schema "${opportunity_schema}" \
+  --argjson frozen_partition "${frozen_partition}" \
   --argjson collection_strategy "${collection_strategy}" \
   --argjson checkpoint_events "${checkpoint_events}" \
   --argjson checkpoint_interval "${checkpoint_interval}" \
@@ -81,7 +84,7 @@ jq -n \
       {name:"Gateway control", version:"0.1.0", contract:"control-plane.v2", sha256:$gateway_sha256},
       {name:"Streaming worker", version:"event-driven.v2", contract:(($checkpoint_events|tostring) + "-events-or-" + ($checkpoint_interval|tostring) + "s"), sha256:$serving_sha256},
       {name:"Teacher/student miner", version:"strategy.v3", contract:$relation_schema, sha256:$serving_sha256},
-      {name:"Frozen future", version:"partition.v9", contract:"event-time-disjoint", sha256:$serving_sha256},
+      {name:"Frozen future", version:("partition.v" + ($frozen_partition|tostring)), contract:"event-time-disjoint", sha256:$serving_sha256},
       {name:"Collection miner", version:("pooling.v" + ($collection_strategy|tostring)), contract:"NCO3", sha256:$serving_sha256},
       {name:"Typed DSL + verifier", version:$registry_schema, contract:$runtime_contract, sha256:$serving_sha256},
       {name:"Admission", version:$admission_schema, contract:"proof-carrying", sha256:$gate_sha256},

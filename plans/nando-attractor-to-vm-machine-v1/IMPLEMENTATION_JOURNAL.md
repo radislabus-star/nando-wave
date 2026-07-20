@@ -1636,3 +1636,28 @@ installed serving SHA-256               1a29532d1bff2176f3be86f0bf55ff4b28aae604
 This closes the receipt-eviction livelock, not the frozen-future requirement.
 The next matching live event can now enter generation-owned future without
 moving the support root or watermark. No historical row was counted as future.
+
+### Live signal-route dashboard and the next storage blocker
+
+The first continuous observation after the v14 deployment proved that traffic
+was no longer the blocker. The active generation advanced through every
+semantic filter but still failed to persist future evidence:
+
+```text
+matching law       52
+after watermark    19
+independent        16
+program consistent 16
+routed             16
+stored future       0
+```
+
+The gateway control page now renders this route before aggregate economics and
+selects the active generation by receipt-backed support and routed evidence,
+not by `future_rows` alone. Technical tables are collapsed by default. The
+build manifest derives the frozen partition from the same Rust report, with a
+bounded local-report fallback when the live worker endpoint has `response=null`.
+
+This is diagnostic progress, not a CPU-coverage claim. The current code blocker
+is precisely the transition from routed evidence into generation-owned frozen
+future storage.
