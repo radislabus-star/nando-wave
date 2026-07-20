@@ -78,10 +78,6 @@ struct SignalArchitectureView<'a> {
     future: u64,
     lost: u64,
     blocker: &'a str,
-    online_emitted: u64,
-    online_blocked: u64,
-    response_active: u64,
-    cpu_share: &'a str,
     online_ready: bool,
 }
 
@@ -471,10 +467,6 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             future: signal_future,
             lost: signal_lost,
             blocker: signal_blocker,
-            online_emitted,
-            online_blocked,
-            response_active,
-            cpu_share: &cpu_share,
             online_ready: online_status == "READY",
         },
         &build_manifest,
@@ -485,24 +477,24 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="10">
+<meta http-equiv="refresh" content="15">
 <title>Nando Gateway</title>
 <style>
 :root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
-body {{ margin:0; background:#111315; }}
+body {{ margin:0; background:#111315; font-size:15px; line-height:1.5; }}
 header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1px solid #4a5055; }}
 .header-inner {{ width:min(1180px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
 .brand {{ display:flex; align-items:baseline; gap:12px; min-width:0; }}
-h1 {{ margin:0; font-size:15px; letter-spacing:0; text-transform:uppercase; }}
-.build {{ color:#7f8991; font-size:10px; overflow-wrap:anywhere; }}
+h1 {{ margin:0; font-size:18px; letter-spacing:0; text-transform:uppercase; }}
+.build {{ color:#7f8991; font-size:12px; overflow-wrap:anywhere; }}
 .mode-wrap {{ display:flex; align-items:center; gap:10px; }}
-.mode-label {{ color:#7f8991; font-size:10px; text-transform:uppercase; }}
-.mode {{ color:#66d98b; font-size:12px; font-weight:700; }}
+.mode-label {{ color:#7f8991; font-size:12px; text-transform:uppercase; }}
+.mode {{ color:#66d98b; font-size:14px; font-weight:700; }}
 main {{ width:min(1180px,100%); margin:0 auto; padding:14px 20px 28px; }}
 .controls {{ display:flex; flex-wrap:wrap; gap:12px; margin:0 0 12px; }}
 .controls form {{ margin:0; }}
-button {{ min-height:0; padding:2px 0; border:0; border-radius:0; background:transparent; color:#aeb7bf; font:700 11px inherit; cursor:pointer; }}
+button {{ min-height:0; padding:2px 0; border:0; border-radius:0; background:transparent; color:#aeb7bf; font:700 13px inherit; cursor:pointer; }}
 button::before {{ content:"["; color:#59636b; }}
 button::after {{ content:"]"; color:#59636b; }}
 button:hover {{ color:#fff; background:transparent; }}
@@ -510,20 +502,20 @@ button:hover {{ color:#fff; background:transparent; }}
 button:disabled {{ color:#535a60; cursor:not-allowed; }}
 .metric-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:32px; }}
 .band {{ border-top:1px solid #353a3e; padding:12px 0; min-width:0; }}
-h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:12px; letter-spacing:0; text-transform:uppercase; }}
+h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-transform:uppercase; }}
 .architecture {{ padding-top:4px; }}
 .architecture-head {{ display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:8px; }}
-.architecture-title h2 {{ margin-bottom:3px; color:#8ee6a8; font-size:13px; }}
-.architecture-title p {{ margin:0; color:#707a82; font-size:10px; line-height:1.4; }}
+.architecture-title h2 {{ margin-bottom:3px; color:#8ee6a8; font-size:15px; }}
+.architecture-title p {{ margin:0; color:#707a82; font-size:12px; line-height:1.4; }}
 .architecture-state {{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }}
-.state-chip {{ color:#8b949b; font-size:10px; font-weight:700; white-space:nowrap; }}
+.state-chip {{ color:#8b949b; font-size:12px; font-weight:700; white-space:nowrap; }}
 .state-chip::before {{ content:"["; }} .state-chip::after {{ content:"]"; }}
 .state-chip.live,.state-chip.pass {{ color:#66d98b; }}
 .state-chip.wait {{ color:#e0b35a; }}
 .state-chip.block {{ color:#ff6b63; }}
 .state-chip.locked {{ color:#70777d; }}
-.architecture-meta {{ color:#707a82; font-size:10px; font-weight:700; }}
-.flow-tree {{ padding:12px 14px; border:1px solid #3f464b; background:#080a0b; font-size:11px; line-height:1.35; overflow-x:auto; }}
+.architecture-meta {{ color:#707a82; font-size:12px; font-weight:700; }}
+.flow-tree {{ padding:14px 16px; border:1px solid #3f464b; background:#080a0b; font-size:14px; line-height:1.45; overflow-x:auto; }}
 .terminal-stage {{ min-width:620px; }}
 .terminal-line {{ display:grid; grid-template-columns:22px 42px minmax(240px,1fr) minmax(70px,auto) 74px; align-items:baseline; gap:8px; min-height:19px; }}
 .tree-glyph {{ color:#566068; white-space:pre; }}
@@ -531,23 +523,44 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:12px; letter-spacing:0; text-tra
 .stage-title {{ color:#dce2e6; font-weight:700; }}
 .stage-metric {{ color:#e5bd63; text-align:right; white-space:nowrap; }}
 .terminal-stage.locked .stage-title,.terminal-stage.locked .stage-metric {{ color:#666e74; }}
-.terminal-detail,.terminal-edge {{ min-width:620px; padding-left:72px; color:#586168; font-size:9px; white-space:nowrap; }}
+.terminal-detail,.terminal-edge {{ min-width:620px; padding-left:72px; color:#647079; font-size:12px; white-space:nowrap; }}
 .terminal-detail .tree-glyph,.terminal-edge .tree-glyph {{ display:inline-block; width:22px; margin-left:-72px; margin-right:50px; }}
 .terminal-failure {{ min-width:620px; margin:3px 0; grid-template-columns:22px 180px minmax(260px,1fr) auto; color:#ff6b63; }}
 .terminal-failure strong {{ color:#ff6b63; margin-right:8px; }}
 .terminal-failure span {{ color:#ef938e; }}
 .terminal-failure code {{ color:#b87f7b; margin-left:10px; }}
-.terminal-rule {{ padding:7px 2px 0; color:#626c73; font-size:9px; }}
+.terminal-rule {{ padding:8px 2px 0; color:#6f7980; font-size:12px; }}
 .compact td {{ padding:5px 0; }}
-details {{ border-top:1px solid #353a3e; margin-top:4px; }}
-summary {{ padding:11px 0; color:#9ba4ab; cursor:pointer; font-size:11px; font-weight:700; }}
-.advanced {{ padding-bottom:8px; }}
-table {{ width:100%; border-collapse:collapse; font-size:10px; }}
+table {{ width:100%; border-collapse:collapse; font-size:13px; }}
 td {{ padding:5px 0; border-bottom:1px dotted #3a4044; overflow-wrap:anywhere; vertical-align:top; }}
 td:first-child {{ padding-right:16px; }}
 td:last-child {{ text-align:right; font-weight:700; }}
 .ok {{ color:#66d98b; }} .off {{ color:#ff6b63; }}
-.note {{ margin:0; color:#7f8991; font-size:10px; line-height:1.5; overflow-wrap:anywhere; }}
+.note {{ margin:0; color:#89939a; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }}
+.technical-console {{ margin-top:14px; border:1px solid #3f464b; background:#080a0b; }}
+.technical-console summary {{ display:flex; align-items:center; gap:9px; min-height:44px; padding:11px 14px; color:#c9d0d5; cursor:pointer; font-size:14px; font-weight:700; list-style:none; user-select:none; }}
+.technical-console summary::-webkit-details-marker {{ display:none; }}
+.technical-console summary:hover {{ background:#0d1012; color:#fff; }}
+.technical-toggle {{ width:13px; color:#66d98b; text-align:center; }}
+.technical-toggle::before {{ content:"+"; }}
+.technical-console[open] .technical-toggle::before {{ content:"-"; }}
+.technical-summary-title {{ color:#dfe5e9; }}
+.technical-summary-meta {{ margin-left:auto; color:#707a82; font-size:11px; font-weight:400; white-space:nowrap; }}
+.advanced {{ padding:0 13px 13px; border-top:1px solid #353a3e; }}
+.console-toolbar {{ display:flex; justify-content:space-between; gap:16px; padding:9px 0; border-bottom:1px solid #24292d; color:#667078; font-size:11px; }}
+.console-path {{ color:#78c990; }}
+.technical-layout {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:30px; }}
+.console-panel {{ min-width:0; padding:12px 0 14px; border-bottom:1px solid #24292d; }}
+.console-panel.wide {{ grid-column:1 / -1; }}
+.console-command {{ display:flex; align-items:baseline; gap:8px; margin:0 0 8px; color:#d5dce0; font-size:14px; font-weight:700; }}
+.console-prompt {{ color:#66d98b; }}
+.console-arg {{ color:#8a949b; font-size:11px; font-weight:400; }}
+.console-table {{ table-layout:fixed; font-size:13px; }}
+.console-table td {{ padding:5px 0; border-bottom:1px dotted #30363a; }}
+.console-table tr:last-child td {{ border-bottom:0; }}
+.console-table td:first-child {{ width:46%; color:#89939a; }}
+.console-table td:last-child {{ color:#d8dde2; }}
+.console-panel.wide .console-table td:last-child {{ text-align:left; }}
 @media (max-width:680px) {{
   .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
   .header-inner,.brand {{ gap:6px; }}
@@ -561,6 +574,14 @@ td:last-child {{ text-align:right; font-weight:700; }}
   .terminal-detail .tree-glyph,.terminal-edge .tree-glyph {{ width:18px; margin-left:-56px; margin-right:38px; }}
   .terminal-failure {{ grid-template-columns:18px minmax(0,1fr); gap:3px 4px; }}
   .terminal-failure strong,.terminal-failure span,.terminal-failure code {{ grid-column:2; margin:0; }}
+  .technical-console summary {{ align-items:flex-start; flex-wrap:wrap; }}
+  .technical-summary-meta {{ width:100%; margin-left:22px; }}
+  .technical-layout {{ grid-template-columns:1fr; }}
+  .console-panel.wide {{ grid-column:auto; }}
+  .console-panel.wide .console-table tr {{ display:grid; grid-template-columns:minmax(0,1fr); padding:5px 0; border-bottom:1px dotted #30363a; }}
+  .console-panel.wide .console-table td {{ width:100%; padding:0; border:0; text-align:left; }}
+  .console-panel.wide .console-table td:first-child {{ padding-bottom:2px; }}
+  .console-toolbar {{ align-items:flex-start; flex-direction:column; gap:2px; }}
 }}
 </style>
 </head>
@@ -590,52 +611,17 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <tr><td>Admission emitted / blocked</td><td>{online_emitted} / {online_blocked}</td></tr>
 </table></section>
 </div>
-<details><summary>Технические детали</summary><div class="advanced">
-<section class="band"><h2>Сервисы</h2><table>{service_rows}</table></section>
-	<section class="band"><h2>Версии сборок и модулей</h2><table>{module_version_rows}</table></section>
-	<section class="band"><h2>CPU admission</h2><table>
+<details id="technical-details" class="technical-console"><summary><span class="technical-toggle" aria-hidden="true"></span><span class="technical-summary-title">ТЕХНИЧЕСКИЕ ДЕТАЛИ</span><span class="technical-summary-meta">LIVE SNAPSHOT · AUTO 15S</span></summary><div class="advanced">
+<div class="console-toolbar"><span class="console-path">nando://control/diagnostics</span><span>build {build_id} · {build_commit_short}</span></div>
+<div class="technical-layout">
+<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> systemctl <span class="console-arg">--scope nando</span></h2><table class="console-table">{service_rows}</table></section>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> admission inspect <span class="console-arg">--strict</span></h2><table class="console-table">
 <tr><td>Composite gate</td><td>{verdict}</td></tr>
 <tr><td>Future eligibility</td><td>{eligible}</td></tr>
 <tr><td>Evidence fresh</td><td>{fresh}</td></tr>
 <tr><td>Runtime route ready</td><td>{route_ready}</td></tr>
 	</table></section>
-	<div class="metric-grid">
-	<section class="band"><h2>CPU факты</h2><table>
-	<tr><td>Активные transition-профили</td><td>{active_profiles}</td></tr>
-	<tr><td>LLM-вызовов предотвращено</td><td>{avoided_calls}</td></tr>
-	<tr><td>Входных токенов сэкономлено</td><td>{tokens_saved}</td></tr>
-	<tr><td>Наблюдаемых provider-запросов</td><td>{total_requests}</td></tr>
-	<tr><td>Доля обычного трафика на CPU</td><td>{cpu_share}</td></tr>
-	<tr><td>Экономия входных токенов</td><td>{token_share}</td></tr>
-	<tr><td>Покрытие независимой проверкой</td><td>{verification_coverage}</td></tr>
-	<tr><td>Economics snapshot</td><td>{economics_status}</td></tr>
-	<tr><td>False accepts</td><td>{false_accepts}</td></tr>
-	<tr><td>Runtime parity mismatches</td><td>{parity_mismatches}</td></tr>
-	<tr><td>Promotion policy</td><td>{policy_version}</td></tr>
-	</table></section>
-	<section class="band"><h2>Коммерческий denominator</h2><table>
-	<tr><td>Учитываемые / исключённые intents</td><td>{eligible_intents} / {excluded_intents}</td></tr>
-	<tr><td>Входные токены denominator</td><td>{global_input_tokens}</td></tr>
-	<tr><td>Local / independently verified</td><td>{actual_local_accepts} / {verified_local_accepts}</td></tr>
-	<tr><td>Неразрешённые исходы / отсутствующие receipts</td><td>{unresolved_local} / {missing_receipts}</td></tr>
-	<tr><td>Economics hard gate</td><td>{hard_gate}</td></tr>
-	<tr><td>Product M1</td><td>{product_m1}</td></tr>
-	<tr><td>До M1: intents / avoided calls</td><td>{m1_intent_gap} / {m1_avoided_gap}</td></tr>
-	<tr><td>Возраст economics snapshot</td><td>{economics_age_text}</td></tr>
-	</table></section>
-	</div>
-	<div class="metric-grid">
-	<section class="band"><h2>Response actors</h2><table>
-	<tr><td>ACTIVE / QUARANTINE</td><td>{response_active} / {response_quarantine}</td></tr>
-	<tr><td>ACTIVE package</td><td>{active_response_id}</td></tr>
-	<tr><td>ACTIVE program</td><td>{active_response_program}</td></tr>
-	<tr><td>Доказательство ACTIVE</td><td>{active_response_progress}</td></tr>
-	<tr><td>Execution p99</td><td>{execution_p99}</td></tr>
-	<tr><td>Размер transition packages</td><td>{package_bytes} Б</td></tr>
-	<tr><td>Чистые active future rows</td><td>{active_future_rows}</td></tr>
-	<tr><td>Shadow executions</td><td>{shadow_executions}</td></tr>
-	</table></section>
-	<section class="band"><h2>Поточный Rust-майнер</h2><table>
+	<section class="console-panel wide"><h2 class="console-command"><span class="console-prompt">$</span> miner status <span class="console-arg">--live --proof</span></h2><table class="console-table">
 	<tr><td>Состояние / возраст snapshot</td><td>{online_status} / {online_age} с</td></tr>
 	<tr><td>Очередь / ёмкость</td><td>{worker_queue}</td></tr>
 	<tr><td>Обработано / ошибок worker</td><td>{worker_processed}</td></tr>
@@ -653,9 +639,17 @@ td:last-child {{ text-align:right; font-weight:700; }}
 	<tr><td>False accepts / parity failures</td><td>{online_false_accepts} / {online_parity_failures}</td></tr>
 	<tr><td>Текущее verified-окно</td><td>{online_product_window}</td></tr>
 	</table></section>
-	</div>
-	<div class="metric-grid">
-	<section class="band"><h2>Collection synthesis</h2><table>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> registry status <span class="console-arg">--actors</span></h2><table class="console-table">
+	<tr><td>ACTIVE / QUARANTINE</td><td>{response_active} / {response_quarantine}</td></tr>
+	<tr><td>ACTIVE package</td><td>{active_response_id}</td></tr>
+	<tr><td>ACTIVE program</td><td>{active_response_program}</td></tr>
+	<tr><td>Доказательство ACTIVE</td><td>{active_response_progress}</td></tr>
+	<tr><td>Execution p99</td><td>{execution_p99}</td></tr>
+	<tr><td>Размер transition packages</td><td>{package_bytes} Б</td></tr>
+	<tr><td>Чистые active future rows</td><td>{active_future_rows}</td></tr>
+	<tr><td>Shadow executions</td><td>{shadow_executions}</td></tr>
+	</table></section>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> collection status <span class="console-arg">--synthesis</span></h2><table class="console-table">
 	<tr><td>Наблюдения</td><td>{collection_observations}</td></tr>
 	<tr><td>Exact / semantic / accounted executable</td><td>{collection_exact} / {collection_semantic} / {collection_executable}</td></tr>
 	<tr><td>Ambiguous / irreducible</td><td>{collection_ambiguous} / {collection_irreducible}</td></tr>
@@ -665,17 +659,65 @@ td:last-child {{ text-align:right; font-weight:700; }}
 	<tr><td>Точные blockers</td><td>{collection_blockers}</td></tr>
 	<tr><td>Отозванные / ошибочные гипотезы</td><td>{collection_revoked} / {collection_rejected_wrong_candidates}</td></tr>
 	</table></section>
-	<section class="band"><h2>Верхняя граница CPU</h2><table>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> economics status <span class="console-arg">--verified</span></h2><table class="console-table">
+	<tr><td>Активные transition-профили</td><td>{active_profiles}</td></tr>
+	<tr><td>LLM-вызовов предотвращено</td><td>{avoided_calls}</td></tr>
+	<tr><td>Входных токенов сэкономлено</td><td>{tokens_saved}</td></tr>
+	<tr><td>Наблюдаемых provider-запросов</td><td>{total_requests}</td></tr>
+	<tr><td>Доля обычного трафика на CPU</td><td>{cpu_share}</td></tr>
+	<tr><td>Экономия входных токенов</td><td>{token_share}</td></tr>
+	<tr><td>Покрытие независимой проверкой</td><td>{verification_coverage}</td></tr>
+	<tr><td>Economics snapshot</td><td>{economics_status}</td></tr>
+	<tr><td>False accepts</td><td>{false_accepts}</td></tr>
+	<tr><td>Runtime parity mismatches</td><td>{parity_mismatches}</td></tr>
+	<tr><td>Promotion policy</td><td>{policy_version}</td></tr>
+	</table></section>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> economics denominator <span class="console-arg">--m1</span></h2><table class="console-table">
+	<tr><td>Учитываемые / исключённые intents</td><td>{eligible_intents} / {excluded_intents}</td></tr>
+	<tr><td>Входные токены denominator</td><td>{global_input_tokens}</td></tr>
+	<tr><td>Local / independently verified</td><td>{actual_local_accepts} / {verified_local_accepts}</td></tr>
+	<tr><td>Неразрешённые исходы / отсутствующие receipts</td><td>{unresolved_local} / {missing_receipts}</td></tr>
+	<tr><td>Economics hard gate</td><td>{hard_gate}</td></tr>
+	<tr><td>Product M1</td><td>{product_m1}</td></tr>
+	<tr><td>До M1: intents / avoided calls</td><td>{m1_intent_gap} / {m1_avoided_gap}</td></tr>
+	<tr><td>Возраст economics snapshot</td><td>{economics_age_text}</td></tr>
+	</table></section>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> opportunity upper-bound <span class="console-arg">--m3</span></h2><table class="console-table">
 	<tr><td>Authoritative окно</td><td>{opportunity_intents} intents / {opportunity_tokens} tokens</td></tr>
 	<tr><td>Optimistic executable upper bound</td><td>{upper_bound_tokens} tokens / {upper_bound_share}</td></tr>
 	<tr><td>Irreducible / unresolved tokens</td><td>{irreducible_tokens} / {unresolved_tokens}</td></tr>
 	<tr><td>Upper-bound accounting</td><td>{upper_bound_accounting}</td></tr>
 	<tr><td>M3 достижим в этом окне</td><td>{m3_upper_bound_reachable}</td></tr>
 	</table></section>
-	</div>
+	<section class="console-panel wide manifest"><h2 class="console-command"><span class="console-prompt">$</span> build manifest <span class="console-arg">--modules</span></h2><table class="console-table">{module_version_rows}</table></section>
+</div>
 </div></details>
 <section class="band"><h2>Граница</h2><p class="note">{reason}. Кнопка BYPASS останавливает Nando-наблюдение и майнер, но Nginx продолжает передавать Codex-трафик в OpenAI.</p></section>
 </main>
+<script>
+(() => {{
+  const details = document.getElementById("technical-details");
+  if (!details) return;
+  const stateKey = "nando-control-view-v1";
+  let saved = {{}};
+  try {{ saved = JSON.parse(sessionStorage.getItem(stateKey) || "{{}}"); }} catch (_) {{}}
+  if (typeof saved.technicalOpen === "boolean") details.open = saved.technicalOpen;
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  const persist = () => {{
+    try {{
+      sessionStorage.setItem(stateKey, JSON.stringify({{
+        technicalOpen: details.open,
+        scrollY: window.scrollY
+      }}));
+    }} catch (_) {{}}
+  }};
+  details.addEventListener("toggle", persist);
+  window.addEventListener("pagehide", persist);
+  if (Number.isFinite(saved.scrollY)) {{
+    requestAnimationFrame(() => window.scrollTo(0, saved.scrollY));
+  }}
+}})();
+</script>
 </body>
 </html>"#,
         mode = current.mode,
@@ -873,22 +915,16 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
     } else {
         FlowState::Wait
     };
+    // This tree follows one selected generation. Global admission totals and CPU share
+    // belong to other cohorts too, so showing them here would splice unrelated signals.
     let admission_state = if view.future < 32 {
         FlowState::Locked
-    } else if view.online_emitted > 0 {
-        FlowState::Pass
     } else {
         FlowState::Wait
     };
-    let cpu_state = if view.response_active > 0 {
-        FlowState::Live
-    } else {
-        FlowState::Locked
-    };
+    let cpu_state = FlowState::Locked;
     let overall_state = if view.lost > 0 {
         FlowState::Block
-    } else if view.response_active > 0 {
-        FlowState::Pass
     } else {
         FlowState::Wait
     };
@@ -1014,8 +1050,16 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             step: "08",
             title: "External admission",
             logic: "Пересобирает proof, проверяет 32 future rows, zero wrong/parity и только затем выдаёт package.",
-            metric: format!("{} / {}", view.online_emitted, view.online_blocked),
-            metric_label: "emitted / blocked",
+            metric: if view.future < 32 {
+                format!("proof {} / 32", view.future)
+            } else {
+                "ожидает cohort receipt".to_owned()
+            },
+            metric_label: if view.future < 32 {
+                "не запускался"
+            } else {
+                "cohort-specific outcome"
+            },
             module: "Admission",
             owner: "nando-response-actor::online_admission",
             state: admission_state,
@@ -1025,8 +1069,8 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
             step: "09",
             title: "ACTIVE CPU execution",
             logic: "Role grounding и actor исполняют package; независимый verifier всё ещё может вернуть ABSTAIN.",
-            metric: view.cpu_share.to_owned(),
-            metric_label: "ordinary traffic on CPU",
+            metric: "0 accepts".to_owned(),
+            metric_label: "этот generation",
             module: "Rust serving",
             owner: "runtime::execute_response",
             state: cpu_state,
@@ -1059,6 +1103,13 @@ fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value)
                 view.routed,
                 view.future,
                 view.lost,
+                html_escape(view.blocker)
+            ));
+        } else if index == 7 && view.lost == 0 && view.support >= 32 && view.future < 32 {
+            tree.push_str(&format!(
+                "<div class=\"terminal-line terminal-failure\" data-edge=\"future-to-admission\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>future {} / 32; не хватает {}</span><code>{}</code></div>",
+                view.future,
+                32_u64.saturating_sub(view.future),
                 html_escape(view.blocker)
             ));
         } else if let Some(label) = edge_labels.get(index) {
@@ -1144,14 +1195,13 @@ fn metric_u64(metrics: &Value, key: &str) -> u64 {
 }
 
 fn strongest_signal_generation(generations: &[Value]) -> Option<&Value> {
-    // A zero-future generation can still be the active signal path. Rank by
-    // proven support and routed evidence first so the dashboard exposes the
-    // actual loss point instead of selecting an unrelated empty generation.
+    // Follow the generation closest to admission. Routed diagnostics break
+    // ties, but must not hide a cohort that already owns more durable future.
     generations.iter().max_by_key(|generation| {
         (
             metric_u64(generation, "support_runtime_parity_rows"),
-            metric_u64(generation, "routed_future_rows"),
             metric_u64(generation, "future_rows"),
+            metric_u64(generation, "routed_future_rows"),
             metric_u64(generation, "matching_runtime_parity_rows"),
         )
     })
@@ -1369,11 +1419,18 @@ mod tests {
                 "routed_future_rows": 15,
                 "future_rows": 0
             }),
+            json!({
+                "generation": 5,
+                "support_runtime_parity_rows": 32,
+                "matching_runtime_parity_rows": 40,
+                "routed_future_rows": 10,
+                "future_rows": 18
+            }),
         ];
 
         let selected = strongest_signal_generation(&generations).expect("generation");
-        assert_eq!(metric_u64(selected, "generation"), 4);
-        assert_eq!(metric_u64(selected, "routed_future_rows"), 15);
+        assert_eq!(metric_u64(selected, "generation"), 5);
+        assert_eq!(metric_u64(selected, "future_rows"), 18);
     }
 
     #[test]
@@ -1403,10 +1460,6 @@ mod tests {
                 future: 0,
                 lost: 18,
                 blocker: "future_rows_below_32",
-                online_emitted: 0,
-                online_blocked: 10,
-                response_active: 0,
-                cpu_share: "0.7%",
                 online_ready: true,
             },
             &manifest,
@@ -1442,10 +1495,6 @@ mod tests {
                 future: 32,
                 lost: 0,
                 blocker: "none",
-                online_emitted: 1,
-                online_blocked: 0,
-                response_active: 1,
-                cpu_share: "50.0%",
                 online_ready: true,
             },
             &Value::Null,
@@ -1453,8 +1502,46 @@ mod tests {
 
         assert!(!html.contains("route-to-future"));
         assert!(!html.contains("BLOCK НА ЭТОМ РЕБРЕ"));
-        assert!(html.contains("data-signal-status=\"pass\""));
+        assert!(html.contains("ожидает cohort receipt"));
+        assert!(html.contains("0 accepts"));
         assert!(html.contains("MISSING"));
+    }
+
+    #[test]
+    fn architecture_tree_moves_threshold_blocker_below_persisted_future() {
+        let html = signal_architecture_html(
+            &SignalArchitectureView {
+                partition: 14,
+                generation: 5,
+                transitions: 20_000,
+                support: 32,
+                matching: 40,
+                matching_sessions: 8,
+                after_watermark: 17,
+                independent: 17,
+                consistent: 17,
+                routed: 17,
+                future: 17,
+                lost: 0,
+                blocker: "future_rows_below_32",
+                online_ready: true,
+            },
+            &Value::Null,
+        );
+
+        let storage = html.find("data-stage=\"future-store\"").expect("storage");
+        let failure = html
+            .find("data-edge=\"future-to-admission\"")
+            .expect("threshold blocker");
+        let admission = html.find("data-stage=\"admission\"").expect("admission");
+        assert!(storage < failure && failure < admission);
+        assert!(!html.contains("data-edge=\"route-to-future\""));
+        assert!(html.contains("future 17 / 32; не хватает 15"));
+        assert!(html.contains("future_rows_below_32"));
+        assert!(html.contains("proof 17 / 32"));
+        assert!(html.contains("не запускался"));
+        assert!(!html.contains("0 / 10"));
+        assert!(!html.contains("0.7%"));
     }
 
     #[test]
