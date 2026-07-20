@@ -2082,6 +2082,7 @@ mod tests {
             0,
             &future_eligible_ids,
             &future_eligible_ids,
+            &std::collections::BTreeSet::new(),
         );
         assert_eq!(generation.support.len(), 32);
         assert!(generation.future.len() >= 32);

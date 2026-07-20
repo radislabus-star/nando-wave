@@ -85,6 +85,7 @@ pub fn freeze_generation(
     generation: u64,
     support_eligible_ids: &BTreeSet<String>,
     future_eligible_ids: &BTreeSet<String>,
+    preferred_generation_support_ids: &BTreeSet<String>,
 ) -> FrozenGeneration {
     let mut matching = pool
         .positives
@@ -97,11 +98,15 @@ pub fn freeze_generation(
         .collect::<Vec<_>>();
     matching.sort_by(frame_event_order);
     matching.dedup_by(|left, right| left.frame_id_sha256 == right.frame_id_sha256);
-    let synthesis_support_ids = winner
+    let mut synthesis_support_ids = winner
         .support_frame_ids
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+    // Immutable replay/generation support is older and has stronger partition
+    // provenance than a newly selected CEGIS support row. Prefer it so a
+    // regroup does not move the watermark forward and consume live future.
+    synthesis_support_ids.extend(preferred_generation_support_ids.iter().cloned());
 
     let (support, mut future) = initial_session_partition(
         &matching,

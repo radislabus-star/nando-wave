@@ -1010,6 +1010,18 @@ impl StreamingSelfTrainingState {
             .collect()
     }
 
+    fn preferred_generation_support_ids(&self) -> BTreeSet<String> {
+        self.replay_support_parity_cases
+            .keys()
+            .chain(
+                self.generation_parity_receipts
+                    .values()
+                    .flat_map(|receipts| receipts.support.keys()),
+            )
+            .cloned()
+            .collect()
+    }
+
     fn prove_candidate_alias_support(&mut self, finalize_missing_winners: bool) -> usize {
         let mut updates = 0_usize;
         let mut winners_by_signature = BTreeMap::<String, Vec<CegisWinner>>::new();
@@ -2275,6 +2287,7 @@ impl StreamingSelfTrainingState {
             })
             .collect::<Vec<_>>();
         let support_eligible_ids = self.parity_support_ids();
+        let preferred_generation_support_ids = self.preferred_generation_support_ids();
         let live_future_eligible_ids = self
             .runtime_parity_cases
             .keys()
@@ -2316,6 +2329,7 @@ impl StreamingSelfTrainingState {
                         refrozen_generation,
                         &support_eligible_ids,
                         &live_future_eligible_ids,
+                        &preferred_generation_support_ids,
                     )
                 });
                 let proof_repartition_improves = incomplete_support_evidence
@@ -2372,6 +2386,7 @@ impl StreamingSelfTrainingState {
                         generation_number,
                         &support_eligible_ids,
                         &live_future_eligible_ids,
+                        &preferred_generation_support_ids,
                     ),
                     true,
                 )
