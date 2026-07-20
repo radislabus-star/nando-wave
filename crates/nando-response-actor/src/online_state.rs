@@ -201,6 +201,11 @@ pub struct StreamingSelfTrainingState {
     rebuild_queue: VecDeque<String>,
     #[serde(default)]
     dirty_derived_signatures: BTreeSet<String>,
+    /// Receipt-backed generation evidence is level-triggered independently of
+    /// CEGIS. A busy unrelated version space must never strand already routed
+    /// live receipts outside generation-owned frozen future storage.
+    #[serde(default)]
+    dirty_generation_signatures: BTreeSet<String>,
     #[serde(default)]
     runtime_parity_cases: BTreeMap<String, crate::RuntimeParityCase>,
     #[serde(default)]
@@ -233,6 +238,7 @@ impl StreamingSelfTrainingState {
             negative_refresh_cursor: None,
             rebuild_queue: VecDeque::new(),
             dirty_derived_signatures: BTreeSet::new(),
+            dirty_generation_signatures: BTreeSet::new(),
             runtime_parity_cases: BTreeMap::new(),
             runtime_parity_frames: BTreeMap::new(),
             replay_support_parity_cases: BTreeMap::new(),
@@ -437,6 +443,7 @@ impl StreamingSelfTrainingState {
         self.cegis.prepare_strategy_migration();
         self.generations.clear();
         self.generation_parity_receipts.clear();
+        self.dirty_generation_signatures.clear();
         if clear_runtime_parity {
             self.runtime_parity_cases.clear();
             self.runtime_parity_frames.clear();
@@ -497,6 +504,7 @@ impl StreamingSelfTrainingState {
         self.cegis.prepare_strategy_migration();
         self.generations.clear();
         self.generation_parity_receipts.clear();
+        self.dirty_generation_signatures.clear();
         self.negative_refresh_cursor = None;
         self.rebuild_queue = self
             .discovery
@@ -511,6 +519,12 @@ impl StreamingSelfTrainingState {
     pub fn repair_missing_synthesis_state(&mut self) {
         self.repair_parity_frames_from_discovery();
         self.enforce_parity_reservoir_limit();
+        self.dirty_generation_signatures.extend(
+            self.generations
+                .values()
+                .map(|generation| generation.teacher_signature_sha256.clone()),
+        );
+        self.refresh_dirty_generation_evidence(None);
         if self.transfer_discovery_version < TRANSFER_DISCOVERY_VERSION {
             self.discovery.rebuild_transfer_subcenters();
             self.transfer_discovery_version = TRANSFER_DISCOVERY_VERSION;
@@ -571,6 +585,7 @@ impl StreamingSelfTrainingState {
         self.cegis.prepare_strategy_migration();
         self.generations.clear();
         self.generation_parity_receipts.clear();
+        self.dirty_generation_signatures.clear();
         self.negative_refresh_cursor = None;
         self.rebuild_queue = self
             .discovery
@@ -634,12 +649,14 @@ impl StreamingSelfTrainingState {
         if let Some(mut parity_case) = transition.runtime_parity_case.clone() {
             let training_frame = transition.as_training_relation_frame();
             let training_frame_id = training_frame.frame_id_sha256.clone();
+            let teacher_signature = parity_teacher_signature(&training_frame);
             parity_case.evidence_ref_sha256 = training_frame_id.clone();
             self.runtime_parity_cases
                 .insert(training_frame_id.clone(), parity_case);
             self.runtime_parity_frames
                 .insert(training_frame_id, training_frame);
             self.enforce_parity_reservoir_limit();
+            self.dirty_generation_signatures.insert(teacher_signature);
         }
     }
 
@@ -782,6 +799,7 @@ impl StreamingSelfTrainingState {
                 .exact_checks_completed
                 .saturating_add(u64::try_from(checks).unwrap_or(u64::MAX));
         }
+        self.refresh_dirty_generation_evidence(None);
         if self.rebuild_queue.is_empty() {
             let synthesis_quiescent = !self.cegis.has_pending_work();
             let alias_updates = self.prove_candidate_alias_support(synthesis_quiescent);
@@ -814,6 +832,7 @@ impl StreamingSelfTrainingState {
                 .exact_checks_completed
                 .saturating_add(u64::try_from(checks).unwrap_or(u64::MAX));
         }
+        self.refresh_dirty_generation_evidence(Some(signatures));
         let selected_synthesis_pending = self
             .rebuild_queue
             .iter()
@@ -830,6 +849,22 @@ impl StreamingSelfTrainingState {
             }
         }
         checks
+    }
+
+    fn refresh_dirty_generation_evidence(&mut self, selected: Option<&BTreeSet<String>>) {
+        let signatures = self
+            .dirty_generation_signatures
+            .iter()
+            .filter(|signature| selected.is_none_or(|selected| selected.contains(*signature)))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if signatures.is_empty() {
+            return;
+        }
+        self.refresh_generations_for_signatures(&signatures);
+        for signature in signatures {
+            self.dirty_generation_signatures.remove(&signature);
+        }
     }
 
     fn refresh_dirty_derived_state(&mut self, selected: Option<&BTreeSet<String>>) {
@@ -1539,6 +1574,7 @@ impl StreamingSelfTrainingState {
         !self.rebuild_queue.is_empty()
             || self.cegis.has_pending_work()
             || !self.dirty_derived_signatures.is_empty()
+            || !self.dirty_generation_signatures.is_empty()
             || self
                 .generations
                 .values()
@@ -1555,6 +1591,10 @@ impl StreamingSelfTrainingState {
                 .has_pending_work_for_teacher_signatures(signatures)
             || self
                 .dirty_derived_signatures
+                .iter()
+                .any(|signature| signatures.contains(signature))
+            || self
+                .dirty_generation_signatures
                 .iter()
                 .any(|signature| signatures.contains(signature))
             || self.generations.values().any(|generation| {
@@ -2868,6 +2908,7 @@ mod tests {
             }),
         };
         let training_frame_id = transition.as_training_relation_frame().frame_id_sha256;
+        let teacher_signature = parity_teacher_signature(&transition.as_training_relation_frame());
         let mut state = StreamingSelfTrainingState::default();
         state.observe_runtime_parity_case(&transition);
 
@@ -2880,6 +2921,11 @@ mod tests {
             !state
                 .runtime_parity_cases
                 .contains_key(&transition.before.frame_id_sha256)
+        );
+        assert!(
+            state
+                .dirty_generation_signatures
+                .contains(&teacher_signature)
         );
     }
 
@@ -3155,12 +3201,13 @@ mod tests {
                 .observe_transition(&transition)
                 .expect("observe process future");
         }
-        for _ in 0..2_048 {
-            if state.run_work_slice() == 0 && !state.has_pending_work() {
-                break;
-            }
-        }
-        state.refresh_generations_filtered(None);
+        assert!(!state.dirty_generation_signatures.is_empty());
+        state.rebuild_queue.extend([
+            "unrelated-pending-a".to_owned(),
+            "unrelated-pending-b".to_owned(),
+        ]);
+        state.run_work_slice();
+        assert!(!state.rebuild_queue.is_empty());
         let report = state.report(0);
         assert_eq!(report.semantic_law_cohorts, 1);
         assert_eq!(report.semantic_law_physical_adapters, 2);

@@ -1661,3 +1661,40 @@ bounded local-report fallback when the live worker endpoint has `response=null`.
 This is diagnostic progress, not a CPU-coverage claim. The current code blocker
 is precisely the transition from routed evidence into generation-owned frozen
 future storage.
+
+### Generation evidence refresh no longer waits for global CEGIS quiescence
+
+The storage gap was caused by two coupled scheduler defects. Duplicate frames
+could add a runtime parity receipt without invalidating generation evidence,
+and derived refresh was gated by an empty global CEGIS/rebuild queue. A busy
+unrelated version space therefore stranded verified receipts in the bounded
+runtime reservoir while level-triggered diagnostics continued to report them
+as routed.
+
+`StreamingSelfTrainingState` now keeps a separate checkpointed
+`dirty_generation_signatures` set. Runtime parity insertion marks the matching
+signature dirty. Every bounded work slice refreshes dirty generation evidence
+regardless of unrelated CEGIS work, while law/synthesis invalidation remains in
+`dirty_derived_signatures`. Checkpoint repair marks existing generations dirty
+once and immediately consolidates any already verified post-watermark evidence.
+
+Live deployment receipt:
+
+```text
+partition / generation       v14 / 4
+support / support parity      32 / 32
+after watermark              32
+independent / consistent     17 / 17
+routed / durable future      17 / 17
+future parity receipts       17
+wrong / parity mismatch       0 / 0
+cold restart                  17 / 17 retained
+composite gate                PASS
+current blocker               future_rows_below_32
+```
+
+The prior `23 routed / 0 future` snapshot and the post-build `17 routed / 17
+future` snapshot use different bounded-reservoir moments. The repaired invariant
+is the important result: every currently routed independent receipt has one
+durable generation-owned future row and one parity receipt. Admission still
+requires 15 additional genuine independent future rows.
