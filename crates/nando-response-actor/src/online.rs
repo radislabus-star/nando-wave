@@ -673,6 +673,16 @@ impl OnlineResponseStream {
             .has_pending_work_for_signatures(signatures)
     }
 
+    #[must_use]
+    pub fn semantic_law_evidence_audit(
+        &self,
+        signatures: &BTreeSet<String>,
+    ) -> crate::SemanticLawEvidenceAudit {
+        self.miner
+            .self_training_v2
+            .semantic_law_evidence_audit(signatures)
+    }
+
     pub fn persist_now(&mut self) -> Result<(), String> {
         self.persist()
     }

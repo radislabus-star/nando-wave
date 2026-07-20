@@ -57,21 +57,67 @@ fn main() -> Result<(), String> {
     } else {
         OnlineResponseStream::open(config)
     };
+    let diagnostic_signatures = std::env::var("NANDO_DIAGNOSE_SIGNATURES")
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|signature| !signature.is_empty())
+                .map(ToOwned::to_owned)
+                .collect::<BTreeSet<_>>()
+        })
+        .filter(|signatures| !signatures.is_empty());
     if let Ok(miner) = &mut result
         && std::env::var_os("NANDO_DIAGNOSE_DRAIN_WORK").is_some()
     {
-        for _ in 0..8_192 {
-            if !miner.has_self_training_work() {
+        // Targeted mode audits one semantic law without replaying an unrelated
+        // global synthesis backlog from the copied production checkpoint.
+        for slice in 0..8_192 {
+            let pending = diagnostic_signatures.as_ref().map_or_else(
+                || miner.has_self_training_work(),
+                |signatures| miner.has_self_training_work_for_signatures(signatures),
+            );
+            if !pending {
                 break;
             }
-            miner.run_self_training_work_slice();
+            let checks = match &diagnostic_signatures {
+                Some(signatures) => miner.run_self_training_work_slice_for_signatures(signatures),
+                None => miner.run_self_training_work_slice(),
+            };
+            if slice == 0 || (slice + 1) % 128 == 0 {
+                eprintln!(
+                    "diagnose_work slices={} checks={} targeted_signatures={}",
+                    slice + 1,
+                    checks,
+                    diagnostic_signatures.as_ref().map_or(0, BTreeSet::len),
+                );
+            }
         }
-        if miner.has_self_training_work() {
-            return Err("diagnose_self_training_work_exhausted".to_owned());
+        let pending = diagnostic_signatures.as_ref().map_or_else(
+            || miner.has_self_training_work(),
+            |signatures| miner.has_self_training_work_for_signatures(signatures),
+        );
+        if pending {
+            return Err(format!(
+                "diagnose_self_training_work_exhausted:targeted_signatures={}",
+                diagnostic_signatures.as_ref().map_or(0, BTreeSet::len),
+            ));
         }
         miner.persist_now()?;
     }
     if let Ok(miner) = &result {
+        if let Some(output_path) = std::env::var_os("NANDO_DIAGNOSE_EVIDENCE_AUDIT") {
+            let signatures = diagnostic_signatures.as_ref().ok_or_else(|| {
+                "NANDO_DIAGNOSE_EVIDENCE_AUDIT requires NANDO_DIAGNOSE_SIGNATURES".to_owned()
+            })?;
+            let audit = miner.semantic_law_evidence_audit(signatures);
+            std::fs::write(
+                output_path,
+                serde_json::to_vec_pretty(&audit).map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+        }
         if std::env::var_os("NANDO_DIAGNOSE_ADMISSION").is_some() {
             let candidates = miner.admission_candidates();
             for candidate in &candidates {

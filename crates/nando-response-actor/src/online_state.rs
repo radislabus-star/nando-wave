@@ -10,6 +10,15 @@ use crate::{
     TeacherTransition, VersionSpaceConfig, freeze_generation, refresh_frozen_generation,
 };
 
+#[path = "online_diagnostics.rs"]
+mod diagnostics;
+
+pub use diagnostics::{
+    SEMANTIC_LAW_EVIDENCE_AUDIT_SCHEMA_V1, SemanticLawActorAudit, SemanticLawActorReplayOutcome,
+    SemanticLawEvidenceAudit, SemanticLawEvidenceAuditRow, SemanticLawSelectorCandidate,
+    SemanticLawValueOccurrence,
+};
+
 const TRANSFER_DISCOVERY_VERSION: u8 = 2;
 const CROSS_POOL_NEGATIVE_REFRESH_INTERVAL: u64 = 64;
 const MAX_PARITY_SIGNATURES: usize = 64;
@@ -169,6 +178,47 @@ struct DerivedWinnerCohort {
     members: Vec<CegisWinner>,
     member_signatures: BTreeSet<String>,
     physical_adapter_count: usize,
+}
+
+fn semantic_member_action_matches(
+    members: &[CegisWinner],
+    frame_signature: Option<&str>,
+    frame: &crate::RelationFrame,
+) -> bool {
+    members.iter().any(|member| {
+        (frame_signature == Some(member.teacher_signature_sha256.as_str())
+            && crate::synthesis::program_is_consistent(&member.program, frame)
+            && crate::cegis::winner_routes_frame(member, frame))
+            || crate::frame_matches_program_action_contract(&member.program, frame)
+    })
+}
+
+fn semantic_program_matches_runtime_parity(
+    program: &crate::ResponseProgram,
+    parity: &crate::RuntimeParityCase,
+) -> bool {
+    let execution =
+        crate::execute_response(program, &parity.request_text, &parity.provider_payload);
+    execution.status == crate::ResponseExecutionStatus::Executed
+        && execution.response.as_deref().is_some_and(|actual| {
+            actual == parity.expected_response
+                || crate::online_admission::responses_match_after_execution_budget_normalization(
+                    actual,
+                    &parity.expected_response,
+                )
+        })
+}
+
+fn semantic_program_covers_all_runtime_parity(
+    program: &crate::ResponseProgram,
+    parity_cases: &[&crate::RuntimeParityCase],
+) -> bool {
+    // A semantic winner owns every member receipt; a support threshold cannot
+    // authorize a partial union that silently drops one physical adapter.
+    !parity_cases.is_empty()
+        && parity_cases
+            .iter()
+            .all(|parity| semantic_program_matches_runtime_parity(program, parity))
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -1373,6 +1423,23 @@ impl StreamingSelfTrainingState {
                 parity_rows.len()
             ));
         }
+        let member_parity_rows = parity_rows
+            .iter()
+            .filter(|(signature, frame, _)| {
+                semantic_member_action_matches(members, Some(signature.as_str()), frame)
+            })
+            .collect::<Vec<_>>();
+        if member_parity_rows.len() != parity_rows.len() {
+            return Err(format!(
+                "semantic_law_unowned_parity_rows:{}:{}",
+                member_parity_rows.len(),
+                parity_rows.len()
+            ));
+        }
+        let member_parity_cases = member_parity_rows
+            .iter()
+            .map(|(_, _, parity)| parity)
+            .collect::<Vec<_>>();
         let mut canonical_receipt_support_rows = 0_usize;
         let mut canonical_grounded_rows = 0_usize;
         let mut canonical_eligible_programs = 0_usize;
@@ -1548,38 +1615,10 @@ impl StreamingSelfTrainingState {
             ))
         };
         let exact_only_program = exact_only_program.filter(|candidate| {
-            let mut accepted = 0_usize;
-            for (_, _, parity) in &parity_rows {
-                // The semantic program is the proof-carrying union of the physical
-                // adapters. Requiring one old winner to route each row here would
-                // recreate the fragmentation that this cohort is meant to remove.
-                // Every row is already receipt-backed positive evidence for this
-                // semantic law, so the combined program must prove itself on all of it.
-                let execution = crate::execute_response(
-                    candidate,
-                    &parity.request_text,
-                    &parity.provider_payload,
-                );
-                if execution.status != crate::ResponseExecutionStatus::Executed {
-                    continue;
-                }
-                let matches = execution.response.as_deref().is_some_and(|actual| {
-                    actual == parity.expected_response
-                        || crate::online_admission::responses_match_after_execution_budget_normalization(
-                            actual,
-                            &parity.expected_response,
-                        )
-                });
-                if !matches {
-                    return false;
-                }
-                accepted = accepted.saturating_add(1);
-            }
-            accepted >= self.rollover_policy.support_rows
+            semantic_program_covers_all_runtime_parity(candidate, &member_parity_cases)
         });
-        let mut physical_adapter_count = variants.len();
+        let physical_adapter_count = member_signatures.len();
         let program = if let Some(program) = exact_only_program {
-            physical_adapter_count = exact_only_variants.len();
             program
         } else if variants.len() == 1 {
             variants
@@ -1588,29 +1627,8 @@ impl StreamingSelfTrainingState {
                 .program
         } else {
             let exact_consensus = crate::ResponseProgram::unique_consensus(variants.clone());
-            let exact_resolves_all = parity_rows.iter().all(|(exact_signature, frame, parity)| {
-                let covered = members.iter().any(|winner| {
-                    exact_signature == &winner.teacher_signature_sha256
-                        && crate::synthesis::program_is_consistent(&winner.program, frame)
-                        && crate::cegis::winner_routes_frame(winner, frame)
-                });
-                if !covered {
-                    return true;
-                }
-                let execution = crate::execute_response(
-                    &exact_consensus,
-                    &parity.request_text,
-                    &parity.provider_payload,
-                );
-                execution.status == crate::ResponseExecutionStatus::Executed
-                    && execution.response.as_deref().is_some_and(|actual| {
-                        actual == parity.expected_response
-                            || crate::online_admission::responses_match_after_execution_budget_normalization(
-                                actual,
-                                &parity.expected_response,
-                            )
-                    })
-            });
+            let exact_resolves_all =
+                semantic_program_covers_all_runtime_parity(&exact_consensus, &member_parity_cases);
             if exact_resolves_all {
                 exact_consensus
             } else {
@@ -1663,7 +1681,7 @@ impl StreamingSelfTrainingState {
             }
             accepted_parity_rows = accepted_parity_rows.saturating_add(1);
         }
-        if accepted_parity_rows < self.rollover_policy.support_rows {
+        if accepted_parity_rows != member_parity_cases.len() {
             // Keep this diagnostic structural and bounded: runtime reasons are
             // static actor/verifier labels, never request or provider payloads.
             let canonical_execution_reasons = canonical_execution_reasons
@@ -1674,7 +1692,7 @@ impl StreamingSelfTrainingState {
                 .join(",");
             return Err(format!(
                 "semantic_law_clean_parity_rows_below_{}:{}:programs={}:variants={}:exact={adapter_exact_rows}:wrong={adapter_wrong_rows}:abstain={adapter_abstain_rows}:same_name={adapter_same_name_rows}:same_arguments={adapter_same_arguments_rows}:same_name_and_arguments={adapter_same_name_and_arguments_rows}:canonical_support={canonical_receipt_support_rows}:canonical_grounded={canonical_grounded_rows}:canonical_eligible={canonical_eligible_programs}:canonicalized={canonicalized_programs}:reasons={canonical_execution_reasons}",
-                self.rollover_policy.support_rows,
+                member_parity_cases.len(),
                 accepted_parity_rows,
                 program_classes.len(),
                 variants.len(),
@@ -2500,12 +2518,8 @@ impl StreamingSelfTrainingState {
         claimed_positive: bool,
     ) -> (SemanticEvidenceOutcome, &'static str) {
         let frame_signature = crate::teacher_program_signature(frame);
-        let member_action_matches = cohort.members.iter().any(|member| {
-            (frame_signature.as_deref() == Some(member.teacher_signature_sha256.as_str())
-                && crate::synthesis::program_is_consistent(&member.program, frame)
-                && crate::cegis::winner_routes_frame(member, frame))
-                || crate::frame_matches_program_action_contract(&member.program, frame)
-        });
+        let member_action_matches =
+            semantic_member_action_matches(&cohort.members, frame_signature.as_deref(), frame);
         let Some(parity) = self.support_parity_case(&frame.frame_id_sha256) else {
             return (
                 SemanticEvidenceOutcome::CensoredUnknown,
@@ -3915,6 +3929,161 @@ mod tests {
                 .iter()
                 .all(|frame| !positive_ids.contains(frame.frame_id_sha256.as_str())),
             "semantic evidence cannot be both positive and negative"
+        );
+    }
+
+    #[test]
+    fn semantic_law_winner_owns_every_verified_physical_adapter() {
+        let mut state = StreamingSelfTrainingState::new(0);
+        for index in 0..16 {
+            let negative = continuation_frame(
+                index,
+                "cancel",
+                "handle",
+                "Cancelled handle ",
+                "negative",
+                false,
+            );
+            let mut transition = crate::teacher_transition_from_completed(&negative, None)
+                .expect("negative teacher transition");
+            transition.runtime_parity_case = continuation_transition(
+                index,
+                "cancel",
+                "handle",
+                "Cancelled handle ",
+                "cancel handle",
+            )
+            .runtime_parity_case;
+            state
+                .observe_transition(&transition)
+                .expect("observe negative");
+        }
+        for index in 0..32 {
+            state
+                .observe_transition(&continuation_transition(
+                    10_000 + index,
+                    "wait",
+                    "cell_id",
+                    "Script running with cell ID ",
+                    "wait for script",
+                ))
+                .expect("observe wait adapter");
+        }
+        for index in 0..33 {
+            state
+                .observe_transition(&continuation_transition(
+                    20_000 + index,
+                    "write_stdin",
+                    "session_id",
+                    "Script running with session ID ",
+                    "continue session",
+                ))
+                .expect("observe write_stdin adapter");
+        }
+        for _ in 0..2_048 {
+            if state.run_work_slice() == 0 && !state.has_pending_work() {
+                break;
+            }
+        }
+
+        let exact = state
+            .cegis
+            .winners()
+            .into_iter()
+            .filter(|winner| {
+                matches!(
+                    winner.action_symbol.as_str(),
+                    "function:wait" | "function:write_stdin"
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(exact.len() >= 2, "missing physical adapters: {exact:?}");
+        let law = state
+            .discovery
+            .semantic_law_signature(&exact[0].teacher_signature_sha256)
+            .expect("shared semantic law");
+        assert!(
+            exact.iter().all(|winner| {
+                state
+                    .discovery
+                    .semantic_law_signature(&winner.teacher_signature_sha256)
+                    .as_deref()
+                    == Some(law.as_str())
+            }),
+            "physical adapters did not join one semantic law"
+        );
+        let semantic = state
+            .build_semantic_law_cohort(&law, &exact)
+            .unwrap_or_else(|blocker| panic!("semantic law cohort: {blocker}"));
+        let classified = state
+            .classified_cohort_pool(&semantic, &[])
+            .expect("classified semantic law");
+        let contradictions = classified
+            .evidence
+            .iter()
+            .filter(|row| row.outcome == SemanticEvidenceOutcome::HardContradiction)
+            .count();
+
+        assert_eq!(contradictions, 0, "winner dropped a physical adapter");
+        assert_eq!(
+            semantic.physical_adapter_count,
+            semantic.member_signatures.len(),
+            "reported adapters must be the member-law signatures"
+        );
+        assert!(semantic.physical_adapter_count >= 2);
+        assert!(matches!(
+            semantic.winner.program.operation,
+            crate::ResponseOperation::UniqueConsensus { .. }
+        ));
+    }
+
+    #[test]
+    fn semantic_actor_rejects_threshold_only_partial_member_coverage() {
+        let wait = continuation_transition(
+            30_000,
+            "wait",
+            "cell_id",
+            "Script running with cell ID ",
+            "wait for script",
+        );
+        let write_stdin = continuation_transition(
+            40_000,
+            "write_stdin",
+            "session_id",
+            "Script running with session ID ",
+            "continue session",
+        );
+        let wait_program = crate::ResponseProgram::function_call_from_roles(
+            "wait",
+            crate::ResponseValueSelector::ContentLinePrefix {
+                prefix: "Script running with cell ID ".to_owned(),
+                value_type: crate::AtomValueType::Identifier,
+            },
+            vec![crate::ResponseArgument::Role {
+                name: "cell_id".to_owned(),
+                role: crate::SemanticRole::ContinuationHandle,
+                value_type: Some(crate::AtomValueType::Identifier),
+            }],
+        );
+        let wait_parity = wait.runtime_parity_case.as_ref().expect("wait parity");
+        let write_stdin_parity = write_stdin
+            .runtime_parity_case
+            .as_ref()
+            .expect("write_stdin parity");
+        let mut member_parity = vec![wait_parity; 32];
+        member_parity.push(write_stdin_parity);
+
+        assert!(semantic_program_matches_runtime_parity(
+            &wait_program,
+            wait_parity
+        ));
+        assert!(!semantic_program_matches_runtime_parity(
+            &wait_program,
+            write_stdin_parity
+        ));
+        assert!(
+            !semantic_program_covers_all_runtime_parity(&wait_program, &member_parity),
+            "32 passing rows cannot hide one dropped member adapter"
         );
     }
 }

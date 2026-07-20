@@ -164,9 +164,11 @@ pub use online_collection::{
 pub use online_state::{
     MinerSignalStageReport, MinerSignalTreeReport, SELF_TRAINING_STATE_SCHEMA_V2,
     SELF_TRAINING_STATE_SCHEMA_V3, SELF_TRAINING_STATE_SCHEMA_V4, SELF_TRAINING_STATE_SCHEMA_V5,
-    SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1, SelfTrainingAdmissionCohort, SelfTrainingGenerationReport,
-    SelfTrainingStateReport, SemanticEvidenceOutcome, SemanticEvidenceReceipt,
-    StreamingSelfTrainingState,
+    SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1, SEMANTIC_LAW_EVIDENCE_AUDIT_SCHEMA_V1,
+    SelfTrainingAdmissionCohort, SelfTrainingGenerationReport, SelfTrainingStateReport,
+    SemanticEvidenceOutcome, SemanticEvidenceReceipt, SemanticLawActorAudit,
+    SemanticLawActorReplayOutcome, SemanticLawEvidenceAudit, SemanticLawEvidenceAuditRow,
+    SemanticLawSelectorCandidate, SemanticLawValueOccurrence, StreamingSelfTrainingState,
 };
 pub use operator_generation::{
     AdmissionReadyOperatorGeneration, OperatorGenerationError, OperatorGenerationFirewall,

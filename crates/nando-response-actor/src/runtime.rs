@@ -3217,7 +3217,9 @@ fn unique_active_turn_json_field(
     active.pop().ok_or("selector_active_turn_field_missing")
 }
 
-fn immediate_tool_output_value(payload: &Value) -> Option<&Value> {
+/// Bounded structural parser shared with read-only diagnostics. It does not
+/// rank candidates or grant selector, execution, or admission authority.
+pub(crate) fn immediate_tool_output_value(payload: &Value) -> Option<&Value> {
     let item = payload.get("input")?.as_array()?.last()?;
     matches!(
         item.get("type").and_then(Value::as_str),
@@ -3226,7 +3228,7 @@ fn immediate_tool_output_value(payload: &Value) -> Option<&Value> {
     .then(|| item.get("output"))?
 }
 
-fn output_text_parts(output: &Value) -> Result<Vec<&str>, &'static str> {
+pub(crate) fn output_text_parts(output: &Value) -> Result<Vec<&str>, &'static str> {
     if let Some(text) = output.as_str() {
         return if text.is_empty() || text.len() > 16_384 {
             Err("scalar_output_budget")
@@ -3262,7 +3264,7 @@ fn output_text_parts(output: &Value) -> Result<Vec<&str>, &'static str> {
     Ok(texts)
 }
 
-fn parse_scalar_text(
+pub(crate) fn parse_scalar_text(
     value: &str,
     value_type: AtomValueType,
 ) -> Result<ExtractedScalar, &'static str> {
