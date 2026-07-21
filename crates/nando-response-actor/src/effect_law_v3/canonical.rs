@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use super::*;
@@ -14,6 +15,20 @@ struct CanonicalizationCandidate {
     typed_constants_root_sha256: String,
     completion_status_renderer_root_sha256: String,
     temporal_cardinality_root_sha256: String,
+}
+
+#[derive(Serialize)]
+struct CanonicalEffectLawWireV3<'a> {
+    schema: &'a str,
+    ir_version: u16,
+    dictionary_root_sha256: &'a str,
+    quotient_hypothesis_root_sha256: &'a str,
+    topology_nodes: &'a [CanonicalEffectNodeV3],
+    topology_edges: &'a [CanonicalEffectEdgeV3],
+    relation_program: &'a [CanonicalRelationClauseV3],
+    effect_invariant_root_sha256: &'a str,
+    preserved_frame_root_sha256: &'a str,
+    action_equivalence_root_sha256: &'a str,
 }
 
 pub(super) struct ObservationClassificationFacetsV3 {
@@ -253,7 +268,7 @@ fn canonicalize_observation(
     let action_classes = candidates
         .iter()
         .filter(|candidate| candidate.topology_bytes == selected.topology_bytes)
-        .map(|candidate| candidate.law.action_equivalence_root_sha256.as_str())
+        .map(|candidate| candidate.law.action_equivalence_root_sha256())
         .collect::<BTreeSet<_>>();
     let binding_classes = candidates
         .iter()
@@ -472,19 +487,20 @@ fn build_candidate(
         &effect_invariant_root_sha256,
         &preserved_frame_root_sha256,
     ))?;
-    let law = CanonicalEffectLawV3 {
-        schema: CANONICAL_EFFECT_LAW_SCHEMA_V3.to_owned(),
+    let law_wire = CanonicalEffectLawWireV3 {
+        schema: CANONICAL_EFFECT_LAW_SCHEMA_V3,
         ir_version: EFFECT_LAW_IR_VERSION_V3,
-        dictionary_root_sha256: dictionary.root_sha256.clone(),
-        quotient_hypothesis_root_sha256: hypothesis.root_sha256.clone(),
-        topology_nodes,
-        topology_edges,
-        relation_program,
-        effect_invariant_root_sha256,
-        preserved_frame_root_sha256,
-        action_equivalence_root_sha256,
+        dictionary_root_sha256: &dictionary.root_sha256,
+        quotient_hypothesis_root_sha256: &hypothesis.root_sha256,
+        topology_nodes: &topology_nodes,
+        topology_edges: &topology_edges,
+        relation_program: &relation_program,
+        effect_invariant_root_sha256: &effect_invariant_root_sha256,
+        preserved_frame_root_sha256: &preserved_frame_root_sha256,
+        action_equivalence_root_sha256: &action_equivalence_root_sha256,
     };
-    let law_bytes = law.canonical_bytes()?;
+    let law_bytes = canonical_json_bytes(&law_wire).map_err(|_| EffectLawV3Error::Serialization)?;
+    let law = CanonicalEffectLawV3::from_canonical_bytes(&law_bytes)?;
     let mapping = physical_to_canonical
         .into_iter()
         .map(|(physical_node, canonical_node)| CanonicalNodeMappingV3 {
@@ -755,13 +771,13 @@ pub(super) fn restart_bundle_from_bytes(
     let wire: EffectLawRestartBundleWireV3 =
         serde_json::from_slice(bytes).map_err(|_| EffectLawV3Error::InvalidRestartBundle)?;
     if wire.schema != EFFECT_LAW_RESTART_BUNDLE_SCHEMA_V3
-        || wire.law.schema != CANONICAL_EFFECT_LAW_SCHEMA_V3
-        || wire.law.ir_version != EFFECT_LAW_IR_VERSION_V3
-        || !valid_nonzero_sha256(&wire.law.dictionary_root_sha256)
-        || !valid_nonzero_sha256(&wire.law.quotient_hypothesis_root_sha256)
-        || !valid_nonzero_sha256(&wire.law.effect_invariant_root_sha256)
-        || !valid_nonzero_sha256(&wire.law.preserved_frame_root_sha256)
-        || !valid_nonzero_sha256(&wire.law.action_equivalence_root_sha256)
+        || wire.law.schema() != CANONICAL_EFFECT_LAW_SCHEMA_V3
+        || wire.law.ir_version() != EFFECT_LAW_IR_VERSION_V3
+        || !valid_nonzero_sha256(wire.law.dictionary_root_sha256())
+        || !valid_nonzero_sha256(wire.law.quotient_hypothesis_root_sha256())
+        || !valid_nonzero_sha256(wire.law.effect_invariant_root_sha256())
+        || !valid_nonzero_sha256(wire.law.preserved_frame_root_sha256())
+        || !valid_nonzero_sha256(wire.law.action_equivalence_root_sha256())
         || wire.proofs.is_empty()
     {
         return Err(EffectLawV3Error::InvalidRestartBundle);
@@ -789,7 +805,7 @@ pub(super) fn restart_bundle_from_bytes(
                 || !valid_nonzero_sha256(&proof.observed_state_root_sha256)
                 || !valid_nonzero_sha256(&proof.verified_delta_receipt_root_sha256)
                 || !valid_nonzero_sha256(&proof.delta_verifier_root_sha256)
-                || !valid_restart_mapping(&proof.node_mapping, wire.law.topology_nodes.len())
+                || !valid_restart_mapping(&proof.node_mapping, wire.law.topology_nodes().len())
         })
     {
         return Err(EffectLawV3Error::InvalidRestartBundle);
@@ -815,49 +831,7 @@ pub(super) fn restart_bundle_from_bytes(
 }
 
 fn validate_restart_law(law: &CanonicalEffectLawV3) -> Result<(), EffectLawV3Error> {
-    if law.topology_nodes.is_empty()
-        || law.topology_nodes.len() > MAX_EFFECT_NODES_V3
-        || law.topology_edges.len() > MAX_EFFECT_EDGES_V3
-        || law.relation_program.len() > MAX_EFFECT_EDGES_V3 + MAX_EFFECT_NODES_V3 * 2
-        || law
-            .topology_nodes
-            .iter()
-            .enumerate()
-            .any(|(index, node)| usize::from(node.canonical_node) != index)
-        || law.topology_edges.windows(2).any(|pair| pair[0] >= pair[1])
-        || law
-            .relation_program
-            .windows(2)
-            .any(|pair| pair[0] >= pair[1])
-    {
-        return Err(EffectLawV3Error::InvalidRestartBundle);
-    }
-    let node_count = law.topology_nodes.len();
-    if law.topology_edges.iter().any(|edge| {
-        usize::from(edge.from) >= node_count
-            || usize::from(edge.to) >= node_count
-            || edge.relation_code == 0
-    }) || law.relation_program.iter().any(|clause| {
-        usize::from(clause.lhs) >= node_count
-            || clause.rhs.is_some_and(|rhs| usize::from(rhs) >= node_count)
-            || clause.relation_code == 0
-            || clause
-                .constant_sha256
-                .as_ref()
-                .is_some_and(|digest| !valid_nonzero_sha256(digest))
-            || clause.constant_sha256.is_some() && clause.constant_type_code.is_none()
-    }) {
-        return Err(EffectLawV3Error::InvalidRestartBundle);
-    }
-    let expected_action_root = evidence::sha256_serialized(&(
-        &law.relation_program,
-        &law.effect_invariant_root_sha256,
-        &law.preserved_frame_root_sha256,
-    ))?;
-    if expected_action_root != law.action_equivalence_root_sha256 {
-        return Err(EffectLawV3Error::InvalidRestartBundle);
-    }
-    Ok(())
+    validate_canonical_effect_law_v3(law)
 }
 
 fn valid_restart_mapping(mapping: &[CanonicalNodeMappingV3], node_count: usize) -> bool {

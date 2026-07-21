@@ -32,7 +32,7 @@ kernel ProtocolMode owner                               721 lines
 kernel ProtocolMode tests                              2 / 2 PASS
 F4/F5-A focused tests                                21 / 21 PASS
 kernel Clippy -D warnings                                  PASS
-response full baseline                  502 PASS / 26 known FAIL
+response full baseline                  494 PASS / 26 known FAIL
 test failure fingerprint                                  PASS
 Clippy fingerprint                               12 + 8 / PASS
 new background build processes                              0
@@ -40,7 +40,9 @@ kernel forbidden side-effect imports                         0
 authority                                                  false
 ```
 
-The focused suite includes canonical restart, tamper rejection, F4R2 mode-set,
+The response denominator is 520 after eight owner tests moved into the kernel;
+the previous 528-test baseline is therefore `494 PASS / 26 known FAIL` in this
+crate. The focused suite includes canonical restart, tamper rejection, F4R2 mode-set,
 and F5-A executable-payload parity. The STOP runner result is recorded in
 `R2_PROTOCOL_MODE_REMOTE_STOP.json`; exit code 101 is the frozen known-debt
 baseline, while `fingerprint_verdict=PASS` proves no failure-set drift.

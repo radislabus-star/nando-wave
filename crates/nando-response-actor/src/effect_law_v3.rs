@@ -8,9 +8,23 @@ mod dual_classifier;
 mod evidence;
 mod trust;
 
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
+
+pub use nando_operator_kernel::{
+    CANONICAL_EFFECT_LAW_SCHEMA_V3, CanonicalEffectEdgeV3, CanonicalEffectLawV3,
+    CanonicalEffectNodeV3, CanonicalNodeMappingV3, CanonicalRelationClauseV3,
+    EFFECT_ATOM_ACTION_RELATION, EFFECT_ATOM_CARDINALITY, EFFECT_ATOM_PHYSICAL_SURFACE,
+    EFFECT_ATOM_POSTCONDITION, EFFECT_ATOM_PRECONDITION, EFFECT_ATOM_RENDERER,
+    EFFECT_ATOM_TEMPORAL, EFFECT_REL_CONSTANT, EFFECT_REL_CONSUME, EFFECT_REL_COPY,
+    EFFECT_REL_EQUAL, EFFECT_REL_REQUIRE, EffectLawIdV3, EffectLawV3Error,
+};
+use nando_operator_kernel::{
+    EFFECT_LAW_IR_VERSION_V3, EFFECT_OPERATION_CALL_V3, EFFECT_OPERATION_PLAN_ADVANCE_V3,
+    EFFECT_OPERATION_PROJECT_V3, EFFECT_OPERATION_STATUS_V3, EFFECT_VALUE_BOOLEAN_V3,
+    EFFECT_VALUE_COLLECTION_V3, EFFECT_VALUE_IDENTIFIER_V3, EFFECT_VALUE_INTEGER_V3,
+    EFFECT_VALUE_OPERATION_V3, EFFECT_VALUE_STRING_V3, MAX_EFFECT_EDGES_V3, MAX_EFFECT_NODES_V3,
+    validate_canonical_effect_law_v3,
+};
 
 use crate::{
     AtomValueType, CaptureCommitmentIndex, DurableRuntimeParityReceipt, EffectSource, RelationAtom,
@@ -20,7 +34,6 @@ use crate::{
 pub const EFFECT_OBSERVATION_CANDIDATE_SCHEMA_V3: &str = "nando.effect-observation-candidate.v3";
 pub const SEALED_EFFECT_OBSERVATION_SCHEMA_V3: &str = "nando.sealed-effect-observation.v3";
 pub const EFFECT_DELTA_CONTRACT_SCHEMA_V3: &str = "nando.effect-delta-contract.v3";
-pub const CANONICAL_EFFECT_LAW_SCHEMA_V3: &str = "nando.canonical-effect-law.v3";
 pub const EFFECT_LAW_RESTART_BUNDLE_SCHEMA_V3: &str = "nando.effect-law-restart-bundle.v3";
 pub const EFFECT_QUOTIENT_HYPOTHESIS_SCHEMA_V3: &str = "nando.effect-quotient-hypothesis.v3";
 pub const TRUSTED_GENERATION_MANIFEST_SCHEMA_V3: &str =
@@ -34,40 +47,11 @@ pub const PROTOCOL_FACET_SCHEMA_V3: &str = "nando.effect-protocol-facet.v3";
 pub const EFFECT_LAW_DUAL_CLASSIFICATION_REPORT_SCHEMA_V3: &str =
     "nando.effect-law-dual-classification-report.v1-v3.r1";
 
-pub const EFFECT_REL_EQUAL: u16 = 0x1001;
-pub const EFFECT_REL_COPY: u16 = 0x1002;
-pub const EFFECT_REL_CONSUME: u16 = 0x1003;
-pub const EFFECT_REL_REQUIRE: u16 = 0x1004;
-pub const EFFECT_REL_CONSTANT: u16 = 0x1005;
-
-pub const EFFECT_OPERATION_CALL_V3: u16 = 0x2001;
-pub const EFFECT_OPERATION_PROJECT_V3: u16 = 0x2002;
-pub const EFFECT_OPERATION_STATUS_V3: u16 = 0x2003;
-pub const EFFECT_OPERATION_PLAN_ADVANCE_V3: u16 = 0x2004;
-
-pub const EFFECT_ATOM_PRECONDITION: u16 = 0x3001;
-pub const EFFECT_ATOM_ACTION_RELATION: u16 = 0x3002;
-pub const EFFECT_ATOM_POSTCONDITION: u16 = 0x3003;
-pub const EFFECT_ATOM_RENDERER: u16 = 0x3004;
-pub const EFFECT_ATOM_TEMPORAL: u16 = 0x3005;
-pub const EFFECT_ATOM_CARDINALITY: u16 = 0x3006;
-pub const EFFECT_ATOM_PHYSICAL_SURFACE: u16 = 0x3007;
-
-const EFFECT_VALUE_STRING_V3: u16 = 0x4001;
-const EFFECT_VALUE_INTEGER_V3: u16 = 0x4002;
-const EFFECT_VALUE_BOOLEAN_V3: u16 = 0x4003;
-const EFFECT_VALUE_IDENTIFIER_V3: u16 = 0x4004;
-const EFFECT_VALUE_COLLECTION_V3: u16 = 0x4005;
-const EFFECT_VALUE_OPERATION_V3: u16 = 0x4006;
-
-const EFFECT_LAW_IR_VERSION_V3: u16 = 3;
 const MAX_DICTIONARY_ENTRIES_V3: usize = 256;
 const MAX_OBSERVATIONS_V3: usize = 256;
 const MAX_EFFECT_ATOMS_V3: usize = 512;
 pub(crate) const EFFECT_LAW_ACTION_PHASE_V3: u16 = 2;
 pub(crate) const EFFECT_LAW_MAX_PROTOCOL_FACET_ATOMS_V3: usize = MAX_EFFECT_ATOMS_V3;
-const MAX_EFFECT_NODES_V3: usize = 32;
-const MAX_EFFECT_EDGES_V3: usize = 256;
 const MAX_CANONICAL_PERMUTATIONS_V3: usize = 16_384;
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -271,57 +255,6 @@ pub struct EffectQuotientHypothesisV3 {
     root_sha256: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct CanonicalEffectNodeV3 {
-    pub canonical_node: u16,
-    pub source: EffectSource,
-    pub node_kind_code: u16,
-    pub value_type_code: u16,
-    pub unique: bool,
-    pub operation_code: Option<u16>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct CanonicalEffectEdgeV3 {
-    pub from: u16,
-    pub to: u16,
-    pub relation_code: u16,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct CanonicalRelationClauseV3 {
-    pub relation_code: u16,
-    pub lhs: u16,
-    pub rhs: Option<u16>,
-    pub argument_ordinal: Option<u16>,
-    pub constant_type_code: Option<u16>,
-    pub constant_sha256: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct CanonicalNodeMappingV3 {
-    pub physical_node: u16,
-    pub canonical_node: u16,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CanonicalEffectLawV3 {
-    schema: String,
-    ir_version: u16,
-    dictionary_root_sha256: String,
-    quotient_hypothesis_root_sha256: String,
-    topology_nodes: Vec<CanonicalEffectNodeV3>,
-    topology_edges: Vec<CanonicalEffectEdgeV3>,
-    relation_program: Vec<CanonicalRelationClauseV3>,
-    effect_invariant_root_sha256: String,
-    preserved_frame_root_sha256: String,
-    action_equivalence_root_sha256: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct EffectLawIdV3(String);
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ObservationCanonicalProofV3 {
     pub observation_sha256: String,
@@ -381,53 +314,6 @@ pub struct EffectLawQuotientReportV3 {
     pub candidate: Option<CanonicalEffectLawCandidateV3>,
     pub blocker: Option<String>,
 }
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum EffectLawV3Error {
-    InvalidCandidate,
-    InvalidCaptureReceipt,
-    InvalidParityReceipt,
-    InvalidVerifierReceipt,
-    InvalidTrustRoot,
-    EffectDeltaDisagreement,
-    IncompleteEffectDelta,
-    InvalidDictionary,
-    InsufficientIndependentEvidence,
-    NoInvariantQuotient,
-    AmbiguousActionEquivalence,
-    OverBudget,
-    InvalidRestartBundle,
-    Serialization,
-}
-
-impl fmt::Display for EffectLawV3Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::InvalidCandidate => "effect observation candidate is invalid",
-            Self::InvalidCaptureReceipt => "capture receipt is missing or unresolved",
-            Self::InvalidParityReceipt => "runtime parity receipt is missing or invalid",
-            Self::InvalidVerifierReceipt => "independent verifier receipt is invalid",
-            Self::InvalidTrustRoot => "effect evidence is not bound to the external trust root",
-            Self::EffectDeltaDisagreement => {
-                "independently observed effect delta disagrees with the teacher claim"
-            }
-            Self::IncompleteEffectDelta => "effect delta lacks required proof-bearing relations",
-            Self::InvalidDictionary => "effect dictionary is invalid",
-            Self::InsufficientIndependentEvidence => {
-                "effect quotient lacks multidimensional independent evidence"
-            }
-            Self::NoInvariantQuotient => "observations do not share one invariant effect law",
-            Self::AmbiguousActionEquivalence => {
-                "symmetric role mappings produce multiple action classes"
-            }
-            Self::OverBudget => "effect law v3 exceeds a bounded search limit",
-            Self::InvalidRestartBundle => "effect law restart bundle is invalid",
-            Self::Serialization => "effect law v3 serialization failed",
-        })
-    }
-}
-
-impl std::error::Error for EffectLawV3Error {}
 
 impl EffectLawDictionaryV3 {
     pub fn new(
@@ -522,62 +408,37 @@ impl EffectQuotientHypothesisV3 {
     }
 }
 
-impl CanonicalEffectLawV3 {
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, EffectLawV3Error> {
-        evidence::canonical_bytes(self)
-    }
-
-    pub fn effect_law_id(&self) -> Result<EffectLawIdV3, EffectLawV3Error> {
-        Ok(EffectLawIdV3(evidence::sha256_serialized(self)?))
-    }
-
-    #[must_use]
-    pub fn action_equivalence_root_sha256(&self) -> &str {
-        &self.action_equivalence_root_sha256
-    }
-
-    #[must_use]
-    pub fn effect_invariant_root_sha256(&self) -> &str {
-        &self.effect_invariant_root_sha256
-    }
-}
-
 #[cfg(test)]
 pub(crate) fn test_only_canonical_effect_law_v3(seed: &str) -> CanonicalEffectLawV3 {
     let root = |suffix: &str| crate::sha256_bytes(format!("{seed}:{suffix}").as_bytes());
-    CanonicalEffectLawV3 {
-        schema: CANONICAL_EFFECT_LAW_SCHEMA_V3.to_owned(),
-        ir_version: EFFECT_LAW_IR_VERSION_V3,
-        dictionary_root_sha256: root("dictionary"),
-        quotient_hypothesis_root_sha256: root("quotient"),
-        topology_nodes: vec![CanonicalEffectNodeV3 {
-            canonical_node: 1,
-            source: EffectSource::Action,
-            node_kind_code: EFFECT_OPERATION_CALL_V3,
-            value_type_code: EFFECT_VALUE_OPERATION_V3,
-            unique: true,
-            operation_code: Some(EFFECT_OPERATION_CALL_V3),
+    let wire = serde_json::json!({
+        "schema": CANONICAL_EFFECT_LAW_SCHEMA_V3,
+        "ir_version": EFFECT_LAW_IR_VERSION_V3,
+        "dictionary_root_sha256": root("dictionary"),
+        "quotient_hypothesis_root_sha256": root("quotient"),
+        "topology_nodes": [{
+            "canonical_node": 1,
+            "source": EffectSource::Action,
+            "node_kind_code": EFFECT_OPERATION_CALL_V3,
+            "value_type_code": EFFECT_VALUE_OPERATION_V3,
+            "unique": true,
+            "operation_code": EFFECT_OPERATION_CALL_V3,
         }],
-        topology_edges: Vec::new(),
-        relation_program: vec![CanonicalRelationClauseV3 {
-            relation_code: EFFECT_REL_REQUIRE,
-            lhs: 1,
-            rhs: None,
-            argument_ordinal: Some(0),
-            constant_type_code: None,
-            constant_sha256: None,
+        "topology_edges": [],
+        "relation_program": [{
+            "relation_code": EFFECT_REL_REQUIRE,
+            "lhs": 1,
+            "rhs": null,
+            "argument_ordinal": 0,
+            "constant_type_code": null,
+            "constant_sha256": null,
         }],
-        effect_invariant_root_sha256: root("effect-invariant"),
-        preserved_frame_root_sha256: root("preserved-frame"),
-        action_equivalence_root_sha256: root("action-equivalence"),
-    }
-}
-
-impl EffectLawIdV3 {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+        "effect_invariant_root_sha256": root("effect-invariant"),
+        "preserved_frame_root_sha256": root("preserved-frame"),
+        "action_equivalence_root_sha256": root("action-equivalence"),
+    });
+    let bytes = crate::canonical_json_bytes(&wire).expect("test law bytes");
+    CanonicalEffectLawV3::from_canonical_bytes(&bytes).expect("test law")
 }
 
 impl EffectLawRestartBundleV3 {

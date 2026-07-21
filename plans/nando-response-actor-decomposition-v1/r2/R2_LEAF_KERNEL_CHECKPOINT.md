@@ -34,7 +34,7 @@ verification, admission, and authority did not move.
 kernel tests                               9 / 9 PASS
 kernel Clippy -D warnings                      PASS
 scoped rustfmt                                  PASS
-response full baseline               502 PASS / 26 known FAIL
+response full baseline               494 PASS / 26 known FAIL
 test failure fingerprint                       PASS
 Clippy fingerprint                    12 + 8 / PASS
 new background processes                         0

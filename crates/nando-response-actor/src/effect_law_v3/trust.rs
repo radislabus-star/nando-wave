@@ -187,9 +187,9 @@ pub(super) fn validate_effect_law_bundle_identity(
     law: &CanonicalEffectLawV3,
     expected: &TrustedEffectLawBundleRootV3,
 ) -> Result<(), EffectLawV3Error> {
-    if law.ir_version != expected.canonicalizer_version
-        || law.dictionary_root_sha256 != expected.dictionary_root_sha256
-        || law.quotient_hypothesis_root_sha256 != expected.quotient_hypothesis_root_sha256
+    if law.ir_version() != expected.canonicalizer_version
+        || law.dictionary_root_sha256() != expected.dictionary_root_sha256
+        || law.quotient_hypothesis_root_sha256() != expected.quotient_hypothesis_root_sha256
     {
         return Err(EffectLawV3Error::InvalidTrustRoot);
     }
@@ -204,9 +204,9 @@ pub(super) fn pin_trusted_effect_law_bundle_root(
     trusted: &TrustedEffectEvidenceSetV3,
 ) -> Result<TrustedEffectLawBundleRootV3, EffectLawV3Error> {
     let bytes = bundle.canonical_bytes()?;
-    let dictionary_root_sha256 = bundle.law.dictionary_root_sha256.clone();
-    let quotient_hypothesis_root_sha256 = bundle.law.quotient_hypothesis_root_sha256.clone();
-    let canonicalizer_version = bundle.law.ir_version;
+    let dictionary_root_sha256 = bundle.law.dictionary_root_sha256().to_owned();
+    let quotient_hypothesis_root_sha256 = bundle.law.quotient_hypothesis_root_sha256().to_owned();
+    let canonicalizer_version = bundle.law.ir_version();
     let bundle_root_sha256 = effect_law_bundle_root_digest(
         &bytes,
         &trusted.trust_manifest_root_sha256,

@@ -566,9 +566,10 @@ canonical JSON/SHA utilities        moved
 relation/program contracts          moved
 binding predicate vocabulary        moved
 ProtocolMode IR/validation           moved
+canonical EffectLaw IR/validation    moved
 kernel tests / Clippy                PASS
 full failure fingerprint             PASS
-EffectLaw / executable artifact      pending
+executable artifact / VM contracts   pending
 STOP-R2                              NOT REACHED
 ```
 

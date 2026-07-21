@@ -710,7 +710,7 @@ fn renamed_arguments_fields_selectors_and_role_labels_preserve_law_id() {
     assert!(
         candidate
             .law()
-            .relation_program
+            .relation_program()
             .iter()
             .all(|clause| clause.argument_ordinal.is_none_or(|ordinal| ordinal < 16))
     );
@@ -984,13 +984,27 @@ fn fully_recomputed_restart_forgery_is_rejected_by_external_bundle_root() {
     );
 
     let mut law_tamper = original.clone();
-    law_tamper.law.effect_invariant_root_sha256 = digest("forged-effect-invariant");
-    law_tamper.law.action_equivalence_root_sha256 = evidence::sha256_serialized(&(
-        &law_tamper.law.relation_program,
-        &law_tamper.law.effect_invariant_root_sha256,
-        &law_tamper.law.preserved_frame_root_sha256,
+    let mut law_value: Value =
+        serde_json::from_slice(&law_tamper.law.canonical_bytes().expect("law bytes"))
+            .expect("law value");
+    let law_object = law_value.as_object_mut().expect("law object");
+    let forged_effect_root = digest("forged-effect-invariant");
+    law_object.insert(
+        "effect_invariant_root_sha256".to_owned(),
+        Value::String(forged_effect_root.clone()),
+    );
+    let action_root = evidence::sha256_serialized(&(
+        law_object["relation_program"].clone(),
+        forged_effect_root,
+        law_object["preserved_frame_root_sha256"].clone(),
     ))
     .expect("recomputed action equivalence root");
+    law_object.insert(
+        "action_equivalence_root_sha256".to_owned(),
+        Value::String(action_root),
+    );
+    let law_bytes = canonical_json_bytes(&law_value).expect("forged law payload");
+    law_tamper.law = CanonicalEffectLawV3::from_canonical_bytes(&law_bytes).expect("forged law");
     recompute_restart_bundle_digests(&mut law_tamper);
     let bytes = law_tamper.canonical_bytes().expect("forged law bytes");
     assert_eq!(
@@ -1060,7 +1074,7 @@ fn unknown_dictionary_opcode_is_data_not_an_executable_clause() {
     assert!(
         candidate
             .law()
-            .relation_program
+            .relation_program()
             .iter()
             .all(|clause| clause.relation_code != UNKNOWN)
     );

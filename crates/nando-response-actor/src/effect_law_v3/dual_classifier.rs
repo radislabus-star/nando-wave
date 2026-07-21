@@ -251,16 +251,16 @@ impl<'a> EffectLawDualClassifierV3<'a> {
             ) {
                 Ok(canonical) => {
                     let effect_invariant_root_sha256 = evidence::sha256_serialized(&(
-                        &canonical.law.topology_nodes,
-                        &canonical.law.topology_edges,
-                        canonical.law.effect_invariant_root_sha256.as_str(),
+                        canonical.law.topology_nodes(),
+                        canonical.law.topology_edges(),
+                        canonical.law.effect_invariant_root_sha256(),
                     ))?;
                     let effect_facet_root_sha256 = evidence::sha256_serialized(&(
                         effect_invariant_root_sha256.as_str(),
                         canonical.typed_constants_root_sha256.as_str(),
                         canonical.completion_status_renderer_root_sha256.as_str(),
                         canonical.temporal_cardinality_root_sha256.as_str(),
-                        canonical.law.preserved_frame_root_sha256.as_str(),
+                        canonical.law.preserved_frame_root_sha256(),
                     ))?;
                     (
                         Some(LawFacets {
@@ -282,7 +282,10 @@ impl<'a> EffectLawDualClassifierV3<'a> {
                                 .completion_status_renderer_root_sha256,
                             temporal_cardinality_root_sha256: canonical
                                 .temporal_cardinality_root_sha256,
-                            preserved_frame_root_sha256: canonical.law.preserved_frame_root_sha256,
+                            preserved_frame_root_sha256: canonical
+                                .law
+                                .preserved_frame_root_sha256()
+                                .to_owned(),
                             effect_facet_root_sha256,
                         }),
                         None,
@@ -319,7 +322,7 @@ impl<'a> EffectLawDualClassifierV3<'a> {
             match canonical::search_quotient(&observations, self.dictionary, self.hypothesis) {
                 Ok(report) => {
                     if let Some(candidate) = report.candidate {
-                        let law_id = candidate.law.effect_law_id()?.0;
+                        let law_id = candidate.law.effect_law_id()?.as_str().to_owned();
                         for index in pending_indices {
                             pending[index].effect_law_id_v3 = Some(law_id.clone());
                         }
@@ -638,16 +641,16 @@ fn classified_law_facets_by_id(
             classifier.hypothesis,
         )?;
         let effect_invariant_root_sha256 = evidence::sha256_serialized(&(
-            &canonical.law.topology_nodes,
-            &canonical.law.topology_edges,
-            canonical.law.effect_invariant_root_sha256.as_str(),
+            canonical.law.topology_nodes(),
+            canonical.law.topology_edges(),
+            canonical.law.effect_invariant_root_sha256(),
         ))?;
         let effect_facet_root_sha256 = evidence::sha256_serialized(&(
             effect_invariant_root_sha256.as_str(),
             canonical.typed_constants_root_sha256.as_str(),
             canonical.completion_status_renderer_root_sha256.as_str(),
             canonical.temporal_cardinality_root_sha256.as_str(),
-            canonical.law.preserved_frame_root_sha256.as_str(),
+            canonical.law.preserved_frame_root_sha256(),
         ))?;
         output
             .entry(law_id.clone())
@@ -665,7 +668,10 @@ fn classified_law_facets_by_id(
                     completion_status_renderer_root_sha256: canonical
                         .completion_status_renderer_root_sha256,
                     temporal_cardinality_root_sha256: canonical.temporal_cardinality_root_sha256,
-                    preserved_frame_root_sha256: canonical.law.preserved_frame_root_sha256,
+                    preserved_frame_root_sha256: canonical
+                        .law
+                        .preserved_frame_root_sha256()
+                        .to_owned(),
                     effect_facet_root_sha256,
                 },
             });

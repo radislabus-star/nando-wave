@@ -3,7 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::{AtomSource, AtomValueType, RelationAtom, TeacherTransition};
+pub use nando_operator_kernel::EffectSource;
+
+#[cfg(test)]
+use crate::AtomSource;
+use crate::{AtomValueType, RelationAtom, TeacherTransition};
 
 pub const EFFECT_GRAPH_SCHEMA_V1: &str = "nando.effect-graph.v1";
 
@@ -22,27 +26,6 @@ impl Default for EffectGraphPolicy {
             max_edges: 256,
             max_alignments: 4_096,
             max_canonical_permutations: 16_384,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EffectSource {
-    Request,
-    Observation,
-    Action,
-    Outcome,
-    Derived,
-}
-
-impl From<AtomSource> for EffectSource {
-    fn from(value: AtomSource) -> Self {
-        match value {
-            AtomSource::Request => Self::Request,
-            AtomSource::Observation => Self::Observation,
-            AtomSource::Action => Self::Action,
-            AtomSource::Outcome => Self::Outcome,
         }
     }
 }
