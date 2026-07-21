@@ -555,6 +555,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nando-operator-admission"
+version = "0.1.0"
+dependencies = [
+ "nando-operator-kernel",
+ "nando-operator-proof",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "nando-operator-kernel"
 version = "0.1.0"
 dependencies = [
@@ -580,6 +591,8 @@ version = "0.1.0"
 dependencies = [
  "nando-core",
  "nando-operator-kernel",
+ "serde",
+ "serde_cbor",
  "serde_json",
  "sha2",
 ]
@@ -589,6 +602,7 @@ name = "nando-response-actor"
 version = "0.1.0"
 dependencies = [
  "nando-core",
+ "nando-operator-admission",
  "nando-operator-kernel",
  "nando-operator-proof",
  "nando-operator-runtime",
