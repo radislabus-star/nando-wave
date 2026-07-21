@@ -1,0 +1,57 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r1.v1",
+  "head": "79de889a4d68c62ff7b10b0bb2e7dd87db2b92f3",
+  "verdict": "PASS",
+  "authority": false,
+  "f5_b_started": false,
+  "remote": {
+    "host": "e@192.168.3.94",
+    "source": "/home/e/projects/nando-wave-dev",
+    "dev_target": "/home/e/projects/nando-wave-build/target-dev",
+    "proof_target": "/home/e/projects/nando-wave-build/target-proof",
+    "release_target": "/home/e/projects/nando-wave-build/target-release"
+  },
+  "performance": {
+    "cold_fast_compile_seconds": 26.297367579,
+    "warm_unchanged_compile_seconds": 0.049432185,
+    "warm_owner_edit_compile_seconds": 5.023910073,
+    "owner_test_seconds": 0.368035772,
+    "clean_stop_compile_seconds": 22.79637803,
+    "full_test_seconds": 21.626912341,
+    "release_compile_seconds": 64.28009979
+  },
+  "budgets": {
+    "warm_owner_edit_target_seconds": 8,
+    "warm_owner_edit_pass": true,
+    "target_hard_ceiling_bytes": 12884901888,
+    "dev_target_observed_bytes": 1114889513,
+    "proof_target_observed_bytes": 208158058,
+    "release_target_observed_bytes": 119848220
+  },
+  "proof": {
+    "full_lib_passed": 502,
+    "known_test_failures": 26,
+    "test_failure_fingerprint": "PASS",
+    "clippy_library_diagnostics": 12,
+    "clippy_test_only_diagnostics": 8,
+    "clippy_fingerprint": "PASS",
+    "graphify_exact_commit": "PASS",
+    "graphify_seconds": 23.418612465
+  },
+  "isolation": {
+    "explicit_scope_overlay": true,
+    "whole_dirty_worktree_sync": false,
+    "warm_github_fetch": false,
+    "new_background_build_processes": 0,
+    "local_live_services_touched": 0,
+    "service_restarts": 0
+  },
+  "stop_contract": {
+    "stable_remote_source_path": true,
+    "fast_profile_background_processes": 0,
+    "proof_profile_clean_target": true,
+    "baseline_fingerprint_comparison": true,
+    "local_live_services_touched": 0,
+    "warm_owner_edit_loop_under_8_seconds": true
+  }
+}

@@ -1,6 +1,6 @@
 # R1 Remote Development Runner
 
-Status: `IMPLEMENTED_AWAITING_EXACT_COMMIT_STOP`
+Status: `STOP_R1_PASS`
 
 Base HEAD: `2fdfa3a19bdb14b6254b6fab3683cc5c9acbd92c`
 
@@ -73,7 +73,17 @@ authority                              false
 deployment                             not touched
 ```
 
-## Remaining STOP Action
+## Exact Commit STOP
 
-Commit the tooling, then run the `stop --graphify` profile from that exact
-commit. Only that second receipt may mark STOP-R1 complete.
+The final clean run used exact commit
+`79de889a4d68c62ff7b10b0bb2e7dd87db2b92f3` with no overlay:
+
+```text
+clean proof compile                      22.80 s
+full test runtime                        21.63 s
+test and Clippy fingerprints             PASS
+Graphify exact-commit update              PASS / 23.42 s
+new background build processes               0
+local service restarts                       0
+STOP-R1                                  PASS
+```
