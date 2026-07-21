@@ -209,6 +209,9 @@ This is F5, not another reason to modify F4 search. Real independent binding
 evidence is also still absent, so controlled F4R2 success is not a natural-law
 or production-authority claim.
 
+The detailed hot/cold traffic, budget, failure, and STOP contract is
+`plans/effect-law-unification-v1/F5_RUNTIME_CONVERGENCE_V1.md`.
+
 ## 7. Completed Ownership Repair
 
 The former mixed proof owner has been split and preserves the four historical

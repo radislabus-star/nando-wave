@@ -782,6 +782,9 @@ all admissible covers canonically action-equivalent, otherwise BLOCK
 
 ### F5: Converge On Crystallized Runtime
 
+Detailed preregistered implementation contract:
+`F5_RUNTIME_CONVERGENCE_V1.md`.
+
 Work:
 
 1. Compile V3 mode sets into the existing crystallized-operator route.
