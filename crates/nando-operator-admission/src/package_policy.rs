@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use nando_operator_kernel::stable_atom_id;
 
+pub use nando_operator_kernel::{LearnedWaveRoute, LearnedWaveSubcenter};
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponsePackageOrigin {
@@ -80,23 +82,6 @@ pub struct ResponsePackageProof {
     pub exact_cache_overlap: usize,
     pub wave_causal_pass: bool,
     pub verifier_schema: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct LearnedWaveSubcenter {
-    pub center_delta_micro: Vec<i32>,
-    pub threshold_micro: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct LearnedWaveRoute {
-    pub cells: u16,
-    pub center_delta_micro: Vec<i32>,
-    pub threshold_micro: i64,
-    #[serde(default)]
-    pub query_atom_ids: Vec<u64>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub subcenters: Vec<LearnedWaveSubcenter>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

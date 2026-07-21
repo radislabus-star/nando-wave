@@ -24,6 +24,7 @@ pub mod opportunity;
 pub mod protocol_mode;
 pub mod runtime_parity;
 pub mod semantic_alias;
+pub mod synthesis;
 pub mod teacher_join;
 pub mod training_types;
 pub mod version_space;
@@ -53,18 +54,21 @@ pub use teacher_join::*;
 pub use training_types::*;
 pub use version_space::*;
 
+pub use nando_operator_kernel::contracts;
 pub use nando_operator_kernel::{
-    AtomValueType, CanonicalEffectLawV3, EFFECT_LAW_ACTION_PHASE_V3,
-    EFFECT_LAW_MAX_PROTOCOL_FACET_ATOMS_V3, PROTOCOL_FACET_SCHEMA_V3, RelationAtom, RelationFrame,
-    ResponseOperation, ResponseProgram, ResponseValueSelector, canonical_json_bytes,
-    canonical_json_sha256, relation_frame_hidden_wave_atom_ids,
-    relation_frame_online_routing_atom_ids, relation_frame_phase_atom_ids,
-    relation_frame_routing_atom_ids, response_program_required_routing_atom_ids, sha256_bytes,
-    valid_nonzero_sha256,
+    AtomValueType, CanonicalEffectLawV3, CustomToolResultProjection, EFFECT_LAW_ACTION_PHASE_V3,
+    EFFECT_LAW_MAX_PROTOCOL_FACET_ATOMS_V3, GuardCandidate, LearnedWaveRoute, LearnedWaveSubcenter,
+    PROGRAM_CANDIDATE_SCHEMA, PROTOCOL_FACET_SCHEMA_V3, ProjectStatusMapping, RelationAtom,
+    RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseProgramCandidate,
+    ResponseValueSelector, RoleHypothesis, SemanticRole, ValueProjectionFormat,
+    VerifierConsensusVariant, VerifierProgram, canonical_json_bytes, canonical_json_sha256,
+    relation_frame_hidden_wave_atom_ids, relation_frame_online_routing_atom_ids,
+    relation_frame_phase_atom_ids, relation_frame_routing_atom_ids,
+    response_program_required_routing_atom_ids, sha256_bytes, valid_nonzero_sha256,
 };
 pub use nando_operator_proof::verified_delta::*;
 
 pub(crate) use nando_operator_kernel::{AtomSource, CollectionOutputRenderer};
 
 #[cfg(test)]
-pub(crate) use nando_operator_kernel::{ProjectStatusMapping, RELATION_FRAME_SCHEMA};
+pub(crate) use nando_operator_kernel::RELATION_FRAME_SCHEMA;

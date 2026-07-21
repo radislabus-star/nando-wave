@@ -1,9 +1,28 @@
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     AtomSource, AtomValueType, RelationAtom, RelationFrame, ResponseArgument, ResponseOperation,
     ResponseProgram, SemanticRole, selector_phase_atom_id, stable_atom_id, stable_atom_id_parts,
 };
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LearnedWaveSubcenter {
+    pub center_delta_micro: Vec<i32>,
+    pub threshold_micro: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LearnedWaveRoute {
+    pub cells: u16,
+    pub center_delta_micro: Vec<i32>,
+    pub threshold_micro: i64,
+    #[serde(default)]
+    pub query_atom_ids: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subcenters: Vec<LearnedWaveSubcenter>,
+}
 
 pub fn relation_frame_phase_atom_ids(frame: &RelationFrame) -> Vec<u64> {
     let mut ids = frame
