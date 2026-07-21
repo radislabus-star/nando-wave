@@ -2,11 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::canonical::{is_sha256, pretty_json_bytes, sha256_json};
+use super::canonical::{BindingProofCanonicalError, is_sha256, pretty_json_bytes, sha256_json};
 use super::physical_trial_v2::{
     PhysicalTrialOutcomeV2, PhysicalTrialReceiptV2, validate_physical_trial_receipt_v2,
 };
-use super::wire::BindingAdjudicationErrorV1;
 
 pub const TRUSTED_RESOLVED_BINDING_ROWS_SCHEMA_V2: &str = "nando.trusted-resolved-binding-rows.v2";
 
@@ -108,12 +107,10 @@ pub enum TrustedResolverV2Error {
     Serialization,
 }
 
-impl From<BindingAdjudicationErrorV1> for TrustedResolverV2Error {
-    fn from(value: BindingAdjudicationErrorV1) -> Self {
+impl From<BindingProofCanonicalError> for TrustedResolverV2Error {
+    fn from(value: BindingProofCanonicalError) -> Self {
         match value {
-            BindingAdjudicationErrorV1::Serialization => Self::Serialization,
-            BindingAdjudicationErrorV1::InvalidDigest => Self::InvalidDigest,
-            _ => Self::InvalidResolvedRows,
+            BindingProofCanonicalError::Serialization => Self::Serialization,
         }
     }
 }

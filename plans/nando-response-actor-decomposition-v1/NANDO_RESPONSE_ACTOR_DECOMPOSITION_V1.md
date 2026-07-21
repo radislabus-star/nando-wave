@@ -611,6 +611,19 @@ authority                                           false
 
 ### R3: Extract nando-operator-proof
 
+Current status `MOVE_ONLY_PASS_PRECOMMIT`:
+
+```text
+independent verifier implementation              moved
+proof-owned raw surface reconstruction           moved
+source-neutral verifier compiler                 moved
+decidability and verified-delta contracts         moved
+trusted V2 binding proof route                    moved
+compatibility public paths                        preserved
+proof and facade remote fingerprints              PASS
+exact-HEAD STOP-R3                                pending
+```
+
 Work:
 
 1. Move pure verifier and proof reconstruction.

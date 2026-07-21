@@ -248,9 +248,9 @@ fn physical_trial_json_roundtrip_is_byte_identical() {
 #[test]
 fn v2_sources_do_not_depend_on_v1_fixture_truth() {
     let sources = [
-        include_str!("binding_evidence_adjudication/physical_actor_observation_v2.rs"),
-        include_str!("binding_evidence_adjudication/independent_trial_verifier_v2.rs"),
-        include_str!("binding_evidence_adjudication/physical_trial_v2.rs"),
+        include_str!("../../nando-operator-proof/src/binding/physical_actor_observation_v2.rs"),
+        include_str!("../../nando-operator-proof/src/binding/independent_trial_verifier_v2.rs"),
+        include_str!("../../nando-operator-proof/src/binding/physical_trial_v2.rs"),
     ]
     .join("\n");
     for forbidden in [
@@ -437,7 +437,7 @@ fn capability_is_opaque_and_report_does_not_become_authority() {
     assert!(!evidence.execution_authority());
     assert!(evidence.capability_root_sha256().len() == 64);
     assert!(!evidence.report().execution_authority);
-    let source = include_str!("binding_evidence_adjudication/binding_law_evidence_v2.rs");
+    let source = include_str!("../../nando-operator-proof/src/binding/binding_law_evidence_v2.rs");
     assert!(
         !source.contains("Deserialize, Eq, PartialEq)]\npub struct AcceptedBindingLawEvidenceV2")
     );

@@ -2,13 +2,12 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use super::canonical::{is_sha256, pretty_json_bytes, sha256_json};
+use super::canonical::{BindingProofCanonicalError, is_sha256, pretty_json_bytes, sha256_json};
 use super::physical_trial_v2::PhysicalTrialOutcomeV2;
 use super::trusted_resolver_v2::{
     BindingEvidencePartitionV2, BindingTrialEvidenceLabelV2, TrustedBindingResolverReceiptSourceV2,
     TrustedResolvedBindingRowV2, TrustedResolvedBindingRowsV2,
 };
-use super::wire::BindingAdjudicationErrorV1;
 
 pub const BINDING_ADJUDICATION_REPORT_SCHEMA_V2: &str =
     "nando.binding-law-evidence-adjudication.v2";
@@ -62,12 +61,10 @@ pub enum BindingLawEvidenceV2Error {
     Serialization,
 }
 
-impl From<BindingAdjudicationErrorV1> for BindingLawEvidenceV2Error {
-    fn from(value: BindingAdjudicationErrorV1) -> Self {
+impl From<BindingProofCanonicalError> for BindingLawEvidenceV2Error {
+    fn from(value: BindingProofCanonicalError) -> Self {
         match value {
-            BindingAdjudicationErrorV1::Serialization => Self::Serialization,
-            BindingAdjudicationErrorV1::InvalidDigest => Self::InvalidDigest,
-            _ => Self::InvalidResolvedRows,
+            BindingProofCanonicalError::Serialization => Self::Serialization,
         }
     }
 }

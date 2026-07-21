@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::canonical::{is_sha256, pretty_json_bytes, sha256_json};
+use super::canonical::{BindingProofCanonicalError, is_sha256, pretty_json_bytes, sha256_json};
 use super::independent_trial_verifier_v2::{
     IndependentTrialVerifierOutcomeV2, IndependentTrialVerifierReceiptV2,
     validate_independent_trial_verifier_receipt_v2,
@@ -8,7 +8,6 @@ use super::independent_trial_verifier_v2::{
 use super::physical_actor_observation_v2::{
     PhysicalActorObservationV2, PhysicalActorOutcomeV2, validate_physical_actor_observation_v2,
 };
-use super::wire::BindingAdjudicationErrorV1;
 
 pub const PHYSICAL_TRIAL_RECEIPT_SCHEMA_V2: &str = "nando.binding-physical-trial-receipt.v2";
 
@@ -61,12 +60,10 @@ pub enum PhysicalTrialV2Error {
     Serialization,
 }
 
-impl From<BindingAdjudicationErrorV1> for PhysicalTrialV2Error {
-    fn from(value: BindingAdjudicationErrorV1) -> Self {
+impl From<BindingProofCanonicalError> for PhysicalTrialV2Error {
+    fn from(value: BindingProofCanonicalError) -> Self {
         match value {
-            BindingAdjudicationErrorV1::Serialization => Self::Serialization,
-            BindingAdjudicationErrorV1::InvalidDigest => Self::InvalidDigest,
-            _ => Self::InvalidReceipt,
+            BindingProofCanonicalError::Serialization => Self::Serialization,
         }
     }
 }
