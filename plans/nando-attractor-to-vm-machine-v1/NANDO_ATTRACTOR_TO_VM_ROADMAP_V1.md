@@ -3,6 +3,7 @@
 Status: canonical implementation roadmap.
 
 Architecture authority: [`../../ARCHITECTURE_CANON.md`](../../ARCHITECTURE_CANON.md).
+Current core map: [`../../docs/CORE.md`](../../docs/CORE.md).
 Product goal: [`../../docs/GOAL.md`](../../docs/GOAL.md).
 Implementation journal: [`IMPLEMENTATION_JOURNAL.md`](IMPLEMENTATION_JOURNAL.md).
 
@@ -84,10 +85,16 @@ relation fragment and blueprint types                 IMPLEMENTED
 bounded competing-circuit synthesis                   IMPLEMENTED
 phase-dependent blueprint selection                   IMPLEMENTED
 OperatorPage32 fixed 4032-byte format                  IMPLEMENTED
-typed transform fragments and crystallization         PARTIAL
-sealed future/provenance chain                         PARTIAL
-runtime role grounding from raw surface               BLOCK
-whole winner-owned rich actor                          BLOCK
+typed scalar crystallization                           LAB PASS
+sealed winner/future provenance                        LAB PASS
+runtime role grounding from raw surface                LAB PASS / LIVE WATCH
+winner-owned scalar actor                              PASS
+whole winner-owned rich actor                          WATCH
+CanonicalEffectLawV3                                   COMPLETE
+B1B causal relation                                    CONTROLLED_FIXTURE_PASS
+independent physical-truth ownership                   BLOCK
+AcceptedBindingLawEvidence                             BLOCK
+F4 Protocol Compiler                                   BLOCKED
 general versioned Operator VM                          BLOCK
 live attractor-to-VM package                           BLOCK
 50% verified token saving                              BLOCK

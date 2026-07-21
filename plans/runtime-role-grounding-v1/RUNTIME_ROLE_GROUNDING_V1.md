@@ -19,6 +19,28 @@ This plan closes the gap between a phase-selected relation circuit and an
 operator whose circuit actually determines its CPU computation. It does not
 expand the opcode set.
 
+Current core status: [`../../docs/CORE.md`](../../docs/CORE.md).
+
+## Upstream Compiler Boundary
+
+This runtime plan starts only after a binding law has independent proof and F4
+has compiled it:
+
+```text
+physical trials
+-> trusted label resolver
+-> AcceptedBindingLawEvidence
+-> F4 Protocol Compiler
+-> ProtocolModeSet
+-> runtime role grounding
+```
+
+The laboratory R1-R7 results prove properties of the grounding and sealing
+machinery. They do not authorize the controlled B1B fixture, manufacture
+`AcceptedBindingLawEvidence`, or unlock F4. Current status is therefore
+`LAB PASS / LIVE WATCH` while the upstream proof-owner boundary remains
+blocked.
+
 ## Invariant
 
 ```text

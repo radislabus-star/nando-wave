@@ -4,6 +4,10 @@ Status: canonical architectural contract.
 
 Audience: every human or AI agent changing this repository.
 
+Current status, owner boundaries, and the exact active blocker are maintained
+in [`docs/CORE.md`](docs/CORE.md). This canon defines meaning and invariants;
+it is not a live progress ledger.
+
 This file exists to prevent a locally reasonable refactor from destroying the
 project's actual mechanism. Read it before editing discovery, learning, Wave,
 actor, verifier, admission, serving, storage, or economics code.
@@ -1557,13 +1561,15 @@ core. Never turn discovery into selection among a few pre-named programs.
     Future capture ends at an immutable, label-blind graph freeze. Expected
     actions may be joined only by the later trusted resolver; a future freeze
     alone cannot prove a binding relation or unlock protocol compilation.
-    STOP-B1B closes that join through three separate proof owners: a physical
-    observer executes candidate actions and emits verifier-bound hashed
-    receipts, an external owner pins exact manifest bytes, and an adjudicator
-    compares the preregistered H0/H1 predictions. The accepted controlled
-    relation is `parent_action_to_capability_instance`; candidate order is not
-    authority. This unlocks a later F4 compiler but does not itself create a
-    selector, `ProtocolMode`, ACTIVE package, or execution authority.
+    STOP-B1B demonstrated the intended join inside a bounded controlled
+    fixture. Its post-review status is `CONTROLLED_FIXTURE_PASS`: the relation
+    `parent_action_to_capability_instance` survived the registered
+    interventions, and candidate order was not authority. It does not unlock
+    F4. The proof observer, physical trial model, label production, trust
+    orchestration, and adjudication still share one proof module and one
+    synthetic scene model. F4 remains blocked until independent physical trial
+    receipts and a separate trusted resolver produce a privately validated
+    `AcceptedBindingLawEvidence` capability.
 11. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
 12. State is bounded and compact. Normal startup must not rescan unbounded
     history, and the hot path must not append unbounded payloads.
@@ -1581,6 +1587,9 @@ core. Never turn discovery into selection among a few pre-named programs.
     be reported as grokking. Grokking requires coherent whole-circuit formation.
 19. A grokked operator must preserve heldout transfer after exact episodic
     runtime authority is removed.
+20. A controlled proof fixture cannot manufacture compiler authority. Physical
+    truth, trusted label resolution, causal adjudication, protocol compilation,
+    runtime grounding, verification, and admission have separate owners.
 
 Accounting identities must have no silent loss:
 

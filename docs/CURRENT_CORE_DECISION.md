@@ -1,141 +1,98 @@
 # Current Core Decision
 
-Date: 2026-07-06 docs-sync
+Date: 2026-07-21 Europe/Tallinn.
 
-Current active decision:
-
-```text
-Use phase-center / streaming operator memory as the active product core.
-Keep older Cell/Organ language as research lineage unless a current gate
-explicitly depends on it.
-```
-
-Authoritative contract:
-
-```text
-docs/NANDO_WAVE_STREAMING_ARCHITECTURE_CONTRACT.md
-```
-
-Current proof snapshot:
-
-```text
-best shadow frontier:
-  calls_saved: 22.3177%
-  tokens_saved: 72.0541%
-  false_accepts: 0
-
-hot runtime:
-  hot_bytes_estimate: 592
-  PhaseCenterHotRuntime benchmark PASS
-```
-
-## 2026-07-05 Correction
-
-The `.nwrb role-binding profiles -> payload builder -> verifier -> catalog`
-line is forbidden and removed from the active CLI/SDK/test path.
-
-Current operator-runtime work must use the phase-center / phase-action path:
-
-```text
-relation/action waves
--> phase / Fourier center of mass
--> compact operator center
--> margin-gated flat CPU runtime
--> verifier-backed real-traffic shadow
-```
-
-See:
-
-```text
-docs/FORBIDDEN_LEGACY_NWRB_COMMERCIAL_BACKEND.md
-```
+Canonical current-core map: [`CORE.md`](CORE.md).
 
 ## Decision
 
-Nando Wave now has two generations of core code in the repository:
+The active product core remains:
 
 ```text
-legacy/control: Stage2 Cell32 / Organ128
-current direction: SymbolCell8 / SymbolWaveCluster / SymbolL3Organism
+phase-center / streaming operator memory
 ```
 
-The project must not treat the legacy Stage2 status as the main NANDA core.
-Stage2 remains useful as a control baseline, benchmark, and historical
-evidence path. The active research direction is the SymbolL3/Cell8 wave
-organism.
+Stage2 Cell/Organ and Organ128 remain legacy/control lineages. They may be used
+as baselines and historical evidence, but they do not define current Nando
+architecture.
 
-## Why
-
-The SymbolL3 path is closer to the intended NANDA architecture:
+The target architecture is:
 
 ```text
-symbol projection
--> local modes
--> transition memory
--> interference slots
--> compact wave advice
--> cluster center
--> L3 center
+Attractor-to-VM Machine
 ```
 
-This is structurally different from a phrase cache or lookup wrapper. A valid
-NANDA integration must use the wave field and stable peaks, not only store
-text continuations behind keys.
-
-## Current evidence
-
-Recent local checks:
+These statements are not contradictory:
 
 ```text
-nando-cli status
-  still reports: stage-2-fixed-wave-tick
-
-nando-cli eval-symbol-l3
-  mode_status: symbol-l3-eval-pass
-
-nando-cli eval-symbol-understanding
-  mode_status: symbol-understanding0-eval-watch
-
-nando-cli eval-symbol-retrieval
-  mode_status: symbol-retrieval0-eval-pass
+active core   what currently learns and serves in bounded shadow/live paths
+target core   what new operator intelligence must become
 ```
 
-Important nuance:
+## Active Product Route
 
 ```text
-retrieval0 currently passes mainly through turbo-256
-default-512 is not yet the strongest profile
+completed trace
+-> phase-center / streaming evidence
+-> candidate operator memory
+-> verifier-bound shadow
+-> external admission
+-> provider fallback when not admitted
 ```
 
-So the new core is real, but the project has not yet promoted it cleanly to the
-main route.
+The active route remains fail-closed. It does not have permission to call a
+laboratory fixture, diagnostic report, phase score, or candidate package an
+ACTIVE operator.
 
-## Next architectural move
-
-Do not delete Stage2 blindly.
-
-Instead:
+## Target Core Route
 
 ```text
-1. Mark Stage2 / Organ128 as legacy controls.
-2. Make SymbolL3 / Cell8 the explicit current NANDA core.
-3. Update status/help/docs/checks to show this split.
-4. Keep old evals as controls, not as the default identity of the project.
-5. Only then port the native SymbolL3 mechanism into lay.
+verified relation fragments
+-> Dynamic Operator Field
+-> circuit-attractor through cross-plane phase coherence
+-> causal grokking and exact-memory cleanup
+-> Operator Compiler
+-> versioned VM bytecode
+-> runtime role grounding
+-> deterministic VM execution
+-> independent verification
+-> external admission
 ```
 
-## Rule for lay integration
+New learned skills must become data and bytecode. A new Rust branch per skill
+is not the target architecture.
 
-Do not integrate a text-cache wrapper as "NANDA".
-
-For lay, the useful future route is:
+## Current Boundary
 
 ```text
-lay candidates / typing context
--> SymbolL3/Cell8 wave organism
--> stable peak / reflection / veto signal
--> safe replacement pipeline
+CanonicalEffectLawV3                    COMPLETE
+controlled B1B causal fixture           PASS
+independent physical label ownership    BLOCK
+AcceptedBindingLawEvidence              BLOCK
+F4 Protocol Compiler                    BLOCKED
+production authority                    false
+M3                                      WATCH
 ```
 
-If the integration cannot expose wave evidence, stable peak state, or
-reflection/veto behavior, it is not the NANDA core. It is only a helper layer.
+The controlled B1B fixture is retained as useful laboratory evidence. It does
+not authorize F4 because the physical scene reconstruction, proof actor,
+proof verifier, label production, and adjudication still share one proof
+module. The next accepted change is an ownership split ending in a private,
+validated `AcceptedBindingLawEvidence` capability.
+
+## Non-Negotiable Boundaries
+
+- Wave discovers and consolidates; it does not grant authority.
+- Grokking applies to a whole connected circuit, not a cell threshold.
+- The cube/page stores a crystallized result; it is not the learning process.
+- Structural role binding selects runtime operands.
+- The actor cannot verify itself.
+- A proof fixture cannot become runtime authority.
+- Only external admission can create an ACTIVE generation.
+- Unknown, ambiguous, exhausted, or censored evidence means `ABSTAIN` or BLOCK.
+
+## Next Decision Point
+
+After the proof-owner split passes, decide the exact `AcceptedBindingLawEvidence`
+schema and begin F4. Do not expand opcodes, add a predictor, or change Wave
+thresholds before this boundary is closed.

@@ -18,15 +18,38 @@ Nando Wave строится как **Attractor-to-VM Machine**: поток оп�
 ARCHITECTURE_CANON.md
   архитектурное ядро, терминология и запрещённые shortcut-ы
 
+docs/CORE.md
+  единая текущая карта ядра, владельцев истины, статуса и блокера
+
+docs/CURRENT_CORE_DECISION.md
+  действующее product-core решение и граница target architecture
+
 docs/GOAL.md
   конечная цель и продуктовые критерии
 
 plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md
   текущая поэтапная программа реализации и gates
+
+docs/README.md
+  порядок авторитетности и навигация по доказательствам
 ```
 
-Любой старый roadmap, эксперимент или отчёт, противоречащий этой тройке,
+Любой старый roadmap, эксперимент или отчёт, противоречащий этому маршруту,
 является историческим материалом, а не текущим разрешением менять ядро.
+
+Текущая граница:
+
+```text
+B1B controlled causal fixture        PASS
+independent physical truth           BLOCK
+AcceptedBindingLawEvidence           BLOCK
+F4 Protocol Compiler                 BLOCKED
+production authority                 false
+```
+
+Историческое поле `f4_status=UNLOCKED_NOT_STARTED` в машинном receipt
+STOP-B1B сохраняется как часть того checkpoint, но не является текущим
+разрешением начинать F4.
 
 Исторические и поддерживающие документы:
 
@@ -45,7 +68,7 @@ docs/PARKING_LOT.md  - идеи на потом, чтобы не располз�
 ## Исторический журнал реализации
 
 Всё ниже этого заголовка сохраняет эволюцию экспериментов и команд, но не
-определяет текущую цель или roadmap. Текущий маршрут задан тремя авторитетными
+определяет текущую цель или roadmap. Текущий маршрут задан авторитетными
 документами выше.
 
 Этап 1 из `docs/DETAILED_ROADMAP.md` завершен: Rust workspace.

@@ -3,7 +3,7 @@
 Status: canonical architecture and migration plan. No runtime or admission
 authority is granted by this document.
 
-Date: 2026-07-20 Europe/Tallinn
+Date: 2026-07-21 Europe/Tallinn
 
 ```text
 R1 evidence decomposition       COMPLETE / STOP-A
@@ -16,8 +16,10 @@ B1B0 scientific preregistration COMPLETE / STOP-B1B0R
 B1B-S support acquisition       COMPLETE / SUPPORT FROZEN
 B1B-F0 future protocol          COMPLETE / PROTOCOL FROZEN
 B1B-F future acquisition        COMPLETE / FUTURE FROZEN
-B1B adjudication                COMPLETE / STOP-B1B
-F4 protocol mode compiler       UNLOCKED / NOT STARTED
+B1B adjudication                CONTROLLED_FIXTURE_PASS / REVIEWED
+B1B proof-owner split           REQUIRED / NOT STARTED
+AcceptedBindingLawEvidence      BLOCK
+F4 protocol mode compiler       BLOCKED
 production authority            false
 service deployment              out of scope
 ```
@@ -676,12 +678,12 @@ applicability-negative denominator present in support and future
 no selector / ProtocolMode / execution authority
 ```
 
-STOP-B1B completed the closed adjudication route over the immutable B1B-S and
-B1B-F artifacts. A separate physical observer reproduced all 24 capture records
-and candidate graphs byte-for-byte, executed every candidate against the
-pre-action capability state, and emitted independent verifier receipts. A
-separate trust owner pinned the exact label manifest before the adjudicator
-resolved it.
+STOP-B1B executed the registered controlled adjudication route over the
+immutable B1B-S and B1B-F artifacts. Inside that fixture, a bounded synthetic
+physical observer reproduced all 24 capture records and candidate graphs
+byte-for-byte, executed every candidate against its reconstructed pre-action
+scene, and emitted verifier receipts. A trust-owner path pinned the exact label
+manifest before the adjudicator resolved it.
 
 ```text
 support / future                 12 / 12
@@ -692,12 +694,14 @@ wrong bindings                     0
 negative accepts                   0
 parity failures                    0
 H0 relation_not_observable         REJECTED
-H1 parent_action_to_capability_instance SUPPORTED
-F4                                 UNLOCKED_NOT_STARTED
+H1 parent_action_to_capability_instance CONTROLLED_SUPPORTED
+independent physical truth         BLOCK
+AcceptedBindingLawEvidence         BLOCK
+F4                                 BLOCKED
 authority                          false
 ```
 
-Canonical receipt:
+Controlled receipt:
 
 ```text
 plans/effect-law-unification-v1/STOP_B1B_CAUSAL_ADJUDICATION.md
@@ -707,8 +711,26 @@ plans/effect-law-unification-v1/STOP_B1B_EXTERNAL_LABEL_TRUST.json
 plans/effect-law-unification-v1/STOP_B1B_ADJUDICATION.json
 ```
 
-This controlled result identifies the missing relation but compiles no runtime
-mode. F4 remains a separate mechanism and change set.
+This controlled result identifies a plausible missing relation but compiles no
+runtime mode. The checked-in machine receipt retains its historical
+`f4_status=UNLOCKED_NOT_STARTED` field byte-for-byte. Post-review, that field is
+not compiler authority.
+
+Required repair before F4:
+
+```text
+frozen graphs
+-> independently observed PhysicalTrialReceipts
+-> separate TrustedLabelResolver
+-> CausalAdjudicator
+-> private AcceptedBindingLawEvidence constructor
+-> F4
+```
+
+The physical-trial owner cannot infer labels from intervention metadata or the
+expected law. The resolver cannot rebuild frozen graphs. The adjudicator cannot
+construct a selector or `ProtocolMode`. Until these ownership gates pass, F4 is
+blocked.
 
 ### F4: Compile Bounded Protocol Modes
 

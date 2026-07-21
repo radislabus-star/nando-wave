@@ -2,7 +2,8 @@
 
 Status: implementation plan, not a completed-proof claim.
 
-Canonical source: `ARCHITECTURE_CANON.md`.
+Canonical source: [`../../ARCHITECTURE_CANON.md`](../../ARCHITECTURE_CANON.md).
+Current status and ownership boundary: [`../../docs/CORE.md`](../../docs/CORE.md).
 
 ## 1. Objective
 
@@ -48,6 +49,25 @@ This plan does not:
 - count shadow or potential coverage as CPU savings;
 - add source-specific function or field-name rules;
 - claim M3 before real verified token savings reach 50%.
+
+## 2.1 Binding-Law Truth Boundary
+
+Circuit coherence can discover and rank a structural law. It cannot manufacture
+the physical labels or runtime operands needed to execute that law.
+
+```text
+phase-coherent circuit
+-> causal transfer proof
+-> independently owned binding-law evidence
+-> F4 Protocol Compiler
+-> runtime role grounding
+```
+
+The current B1B result is a controlled fixture pass, not independent physical
+truth. `AcceptedBindingLawEvidence` and F4 remain blocked until the physical
+trial owner, trusted resolver, and causal adjudicator are separated. Raising
+coherence, changing Wave thresholds, or selecting the fixture winner cannot
+cross this boundary.
 
 ## 3. Dependency And Ownership Map
 

@@ -2,7 +2,28 @@
 
 Date: 2026-07-21 Europe/Tallinn
 
-## Verdict
+## Post-Review Status
+
+```text
+B1B controlled fixture                CONTROLLED_FIXTURE_PASS
+independent physical truth            BLOCK
+AcceptedBindingLawEvidence            BLOCK
+F4 ProtocolMode compiler              BLOCKED
+execution authority                   false
+```
+
+This addendum changes no frozen evidence. The machine JSON remains an immutable
+receipt of the original controlled run, including its historical
+`f4_status=UNLOCKED_NOT_STARTED` field. Architectural review found that the
+physical scene reconstruction, proof actor, proof verifier, label production,
+trust orchestration, and adjudication still share one proof module. Therefore
+that field is not current compiler authorization. Current status is owned by
+[`../../docs/CORE.md`](../../docs/CORE.md).
+
+## Original Controlled-Run Verdict
+
+The following block is preserved as the verdict emitted at execution time. Its
+F4 line is superseded by the post-review status above.
 
 ```text
 B1B-S label-blind support              12 / 12 FROZEN
@@ -27,8 +48,9 @@ pre-action relation. It does not yet prove a production selector, a compiled
 The current physical observer is a bounded controlled proof fixture. Its
 reconstructed scenes, candidate executor, and proof verifier are not production
 runtime components and must not become a second `RuntimeRoleBinder`. Splitting
-those proof owners before F4 is an architectural follow-up, not additional
-authority carried by this receipt.
+those proof owners and deriving privately validated
+`AcceptedBindingLawEvidence` is a prerequisite for F4, not additional authority
+carried by this receipt.
 
 ## Signal Route
 
@@ -110,11 +132,18 @@ STOP_B1B_ADJUDICATION.json
   relation    8230edf11ece28d5b4e4fdf22e47c985323c8a9e995eecefbdd1dc4618c212b6
 ```
 
-## Boundary
+## Post-Review Boundary
 
-F4 may now begin as a separate change. It must compile competing bounded
-structural modes from this relation evidence, run complete search, and retain
-only modes with `WRONG=0`, `VERIFY_FAILED=0`, and negative accepts `=0`.
+F4 may not begin from this receipt. First split physical trial ownership,
+trusted label resolution, causal adjudication, and report serialization. The
+physical trial owner must consume observed execution plus independently
+committed verifier results and must not reconstruct truth from intervention
+metadata. Only the adjudicator may create a private, validated
+`AcceptedBindingLawEvidence` capability.
+
+After that capability exists, F4 may compile competing bounded structural
+modes, run complete search, and retain only modes with `WRONG=0`,
+`VERIFY_FAILED=0`, and negative accepts `=0`.
 
 No service was restarted or deployed. `execution_authority=false` remains
 mandatory.
