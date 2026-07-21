@@ -559,7 +559,7 @@ movement touching the same crate facade.
 
 ### R2: Extract nando-operator-kernel
 
-Progress checkpoint `R2-LEAF`:
+Final status `STOP-R2`:
 
 ```text
 canonical JSON/SHA utilities        moved
@@ -569,8 +569,10 @@ ProtocolMode IR/validation           moved
 canonical EffectLaw IR/validation    moved
 kernel tests / Clippy                PASS
 full failure fingerprint             PASS
-executable artifact / VM contracts   pending
-STOP-R2                              NOT REACHED
+executable artifact IR/validation    moved
+VM immutable contracts               moved or canonical owner retained
+compatibility public paths           preserved
+STOP-R2                              PASS at 4dd22e0
 ```
 
 Work units:

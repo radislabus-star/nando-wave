@@ -1,0 +1,40 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r2.v1",
+  "generated_at": "2026-07-21T19:30:09Z",
+  "code_head": "4dd22e0cc338a4636acf728a4252f65fa1029757",
+  "verdict": "PASS",
+  "owner": "nando-operator-kernel",
+  "kernel": {
+    "rust_lines": 3935,
+    "forbidden_dependencies": 0,
+    "side_effects": 0,
+    "duplicate_key_definitions": 0,
+    "test_verdict": "PASS",
+    "clippy_verdict": "PASS"
+  },
+  "compatibility": {
+    "response_actor_rust_lines": 99982,
+    "public_path_removals": 0,
+    "schema_string_drift": 0,
+    "f4r2_byte_root_drift": 0,
+    "f5a_byte_root_drift": 0,
+    "known_test_failure_delta": 0,
+    "known_clippy_diagnostic_delta": 0
+  },
+  "exact_head": {
+    "kernel_fingerprint": "PASS",
+    "facade_fingerprint": "PASS",
+    "graphify": "PASS",
+    "new_background_build_processes": 0
+  },
+  "live": {
+    "composite_gate": "PASS",
+    "structural_routes_pass": 3,
+    "structural_routes_total": 3,
+    "eligible_for_local_accept": false,
+    "response_m3": "WATCH",
+    "execution_authority": false,
+    "service_restarts": 0
+  },
+  "f5b": "PAUSED"
+}
