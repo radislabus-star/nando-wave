@@ -1,0 +1,32 @@
+{
+  "worker_verdict": "PASS",
+  "compile_exit": 0,
+  "test_exit": 0,
+  "clippy_exit": 125,
+  "compile_seconds": 0.049432185,
+  "test_seconds": 0.392225951,
+  "test_binary": "/home/e/projects/nando-wave-build/target-dev/debug/deps/nando_response_actor-5507bb8179fa030b",
+  "target": {
+    "path": "/home/e/projects/nando-wave-build/target-dev",
+    "bytes_before_prune": 777219075,
+    "bytes_after_prune": 777219075,
+    "prune": "none"
+  },
+  "schema": "nando.remote-gate.v1",
+  "head": "2fdfa3a19bdb14b6254b6fab3683cc5c9acbd92c",
+  "remote_host": "e@192.168.3.94",
+  "remote_source": "/home/e/projects/nando-wave-dev",
+  "profile": "fast",
+  "package": "nando-response-actor",
+  "overlay": {
+    "scope_count": 0,
+    "untracked_files": 0,
+    "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "fingerprint_verdict": "NOT_RUN",
+  "graphify": {
+    "verdict": "NOT_RUN",
+    "seconds": null
+  },
+  "new_background_build_processes": 0
+}

@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+remote_host=${NANDO_REMOTE_HOST:-e@192.168.3.94}
+remote_source=${NANDO_REMOTE_SOURCE:-/home/e/projects/nando-wave-dev}
+remote_build_root=${NANDO_REMOTE_BUILD_ROOT:-/home/e/projects/nando-wave-build}
+remote_origin=${NANDO_REMOTE_ORIGIN:-https://github.com/radislabus-star/nando-wave.git}
+target_budget_bytes=${NANDO_REMOTE_TARGET_BUDGET_BYTES:-12884901888}
+package=nando-response-actor
+json_out=
+run_graphify=false
+filters=()
+scopes=()
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  ops/dev/nando-remote-gate <fast|stop|release> [options]
+
+Options:
+  --package NAME       Cargo package (default: nando-response-actor)
+  --filter TEXT        Direct test-binary filter; repeatable for fast mode
+  --scope PATH         Overlay one local dirty path on remote HEAD; repeatable
+  --json-out PATH      Copy the final machine summary to PATH
+  --graphify           Run Graphify in a clean local worktree at exact HEAD
+  -h, --help           Show this help
+
+The remote source is a disposable dedicated clone. Local dirty files are never
+copied unless their paths are explicitly named with --scope.
+USAGE
+}
+
+test $# -gt 0 || {
+    usage >&2
+    exit 2
+}
+profile=$1
+shift
+case "$profile" in
+    fast | stop | release) ;;
+    -h | --help)
+        usage
+        exit 0
+        ;;
+    *)
+        printf 'unknown profile: %s\n' "$profile" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
+
+while test $# -gt 0; do
+    case "$1" in
+        --package)
+            package=${2:?missing package name}
+            shift 2
+            ;;
+        --filter)
+            filters+=("${2:?missing test filter}")
+            shift 2
+            ;;
+        --scope)
+            scopes+=("${2:?missing scope path}")
+            shift 2
+            ;;
+        --json-out)
+            json_out=${2:?missing JSON output path}
+            shift 2
+            ;;
+        --graphify)
+            run_graphify=true
+            shift
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            printf 'unknown option: %s\n' "$1" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if test "$profile" = fast && test ${#filters[@]} -eq 0; then
+    printf 'fast profile requires at least one --filter\n' >&2
+    exit 2
+fi
+if $run_graphify && test ${#scopes[@]} -ne 0; then
+    printf -- '--graphify requires exact HEAD and forbids --scope overlays\n' >&2
+    exit 2
+fi
+
+for command in git ssh scp rsync jq sha256sum tar sed sort comm; do
+    command -v "$command" >/dev/null || {
+        printf 'missing required command: %s\n' "$command" >&2
+        exit 1
+    }
+done
+
+for scope in "${scopes[@]}"; do
+    case "$scope" in
+        /* | *..*)
+            printf 'scope must be a safe repository-relative path: %s\n' "$scope" >&2
+            exit 2
+            ;;
+    esac
+done
+
+head_sha=$(git rev-parse HEAD)
+run_id="$(date -u +%Y%m%dT%H%M%SZ)-${head_sha:0:12}-$$"
+remote_result_dir="$remote_build_root/results/$run_id"
+tmp_dir=$(mktemp -d)
+control_path="/tmp/nando-remote-gate-${UID}-%C"
+ssh_opts=(-o BatchMode=yes -o ControlMaster=auto -o ControlPersist=60 -o ControlPath="$control_path")
+graph_worktree=
+
+cleanup() {
+    if test -n "$graph_worktree"; then
+        git worktree remove --force "$graph_worktree" >/dev/null 2>&1 || true
+    fi
+    ssh "${ssh_opts[@]}" "$remote_host" bash -s -- "$remote_result_dir" \
+        >/dev/null 2>&1 <<'REMOTE_CLEANUP' || true
+set -euo pipefail
+result_dir=$1
+case "$result_dir" in
+    /home/e/projects/nando-wave-build/results/*)
+        rm -rf "$result_dir" "$result_dir.overlay.patch" "$result_dir.untracked.tar"
+        ;;
+esac
+REMOTE_CLEANUP
+    ssh "${ssh_opts[@]}" -O exit "$remote_host" >/dev/null 2>&1 || true
+    rm -rf "$tmp_dir"
+}
+trap cleanup EXIT
+
+remote_cargo_processes() {
+    ssh "${ssh_opts[@]}" "$remote_host" \
+        "ps -u \$(id -u) -o comm= | awk '\$1 == \"cargo\" || \$1 == \"rustc\" { count++ } END { print count + 0 }'"
+}
+
+before_build_processes=$(remote_cargo_processes)
+
+ssh "${ssh_opts[@]}" "$remote_host" bash -s -- \
+    "$remote_source" "$remote_build_root" "$remote_origin" "$head_sha" <<'REMOTE_SETUP'
+set -euo pipefail
+source_path=$1
+build_root=$2
+origin=$3
+head_sha=$4
+
+mkdir -p "$(dirname -- "$source_path")" "$build_root/results"
+if ! test -d "$source_path/.git"; then
+    rm -rf "$source_path"
+    git clone --quiet --filter=blob:none --no-checkout "$origin" "$source_path"
+fi
+if ! git -C "$source_path" cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+    fetched=false
+    for delay in 1 2 4 8 16; do
+        if git -C "$source_path" fetch --quiet origin "$head_sha"; then
+            fetched=true
+            break
+        fi
+        sleep "$delay"
+    done
+    "$fetched"
+fi
+git -C "$source_path" reset --quiet --hard "$head_sha"
+git -C "$source_path" clean -ffdq
+REMOTE_SETUP
+
+patch_sha256=$(printf '' | sha256sum | awk '{print $1}')
+untracked_files=0
+if test ${#scopes[@]} -gt 0; then
+    git diff --binary HEAD -- "${scopes[@]}" >"$tmp_dir/overlay.patch"
+    patch_sha256=$(sha256sum "$tmp_dir/overlay.patch" | awk '{print $1}')
+    git ls-files --others --exclude-standard -z -- "${scopes[@]}" \
+        >"$tmp_dir/untracked-files.zlist"
+    untracked_files=$(tr -cd '\0' <"$tmp_dir/untracked-files.zlist" | wc -c)
+
+    if test -s "$tmp_dir/overlay.patch"; then
+        scp "${ssh_opts[@]}" -q "$tmp_dir/overlay.patch" \
+            "$remote_host:$remote_result_dir.overlay.patch"
+        ssh "${ssh_opts[@]}" "$remote_host" bash -s -- \
+            "$remote_source" "$remote_result_dir.overlay.patch" <<'REMOTE_PATCH'
+set -euo pipefail
+source_path=$1
+patch_path=$2
+cd "$source_path"
+git apply --binary "$patch_path"
+rm -f "$patch_path"
+REMOTE_PATCH
+    fi
+    if test "$untracked_files" -gt 0; then
+        tar --null --files-from="$tmp_dir/untracked-files.zlist" -cf "$tmp_dir/untracked.tar"
+        scp "${ssh_opts[@]}" -q "$tmp_dir/untracked.tar" \
+            "$remote_host:$remote_result_dir.untracked.tar"
+        ssh "${ssh_opts[@]}" "$remote_host" bash -s -- \
+            "$remote_source" "$remote_result_dir.untracked.tar" <<'REMOTE_UNTRACKED'
+set -euo pipefail
+source_path=$1
+archive_path=$2
+tar -C "$source_path" -xf "$archive_path"
+rm -f "$archive_path"
+REMOTE_UNTRACKED
+    fi
+fi
+
+case "$profile" in
+    fast) target_dir="$remote_build_root/target-dev" ;;
+    stop) target_dir="$remote_build_root/target-proof" ;;
+    release) target_dir="$remote_build_root/target-release" ;;
+esac
+
+worker_args=(
+    "$profile"
+    "$remote_source"
+    "$target_dir"
+    "$package"
+    "$remote_result_dir"
+    "$target_budget_bytes"
+)
+worker_args+=("${filters[@]}")
+
+ssh "${ssh_opts[@]}" "$remote_host" bash -s -- "${worker_args[@]}" \
+    <ops/dev/lib/nando-remote-worker.sh
+
+mkdir -p "$tmp_dir/result"
+rsync -a -e "ssh -o BatchMode=yes -o ControlMaster=auto -o ControlPersist=60 -o ControlPath=$control_path" \
+    "$remote_host:$remote_result_dir/" "$tmp_dir/result/"
+
+fingerprint_verdict=NOT_RUN
+if test "$profile" = stop; then
+    last_failures_line=$(grep -n '^failures:$' "$tmp_dir/result/test.log" | tail -n 1 | cut -d: -f1)
+    tail -n "+$((last_failures_line + 1))" "$tmp_dir/result/test.log" \
+        | sed -n '/^test result:/q; s/^    \([A-Za-z0-9_][A-Za-z0-9_:]*\)$/\1/p' \
+        | sort -u >"$tmp_dir/result/actual-test-failures.txt"
+
+    awk '
+        /^error: / && $0 !~ /could not compile/ {
+            message = substr($0, 8)
+            next
+        }
+        message != "" && /^[[:space:]]*--> crates\/nando-response-actor\/src\// {
+            location = $0
+            sub(/^[[:space:]]*--> /, "", location)
+            print location "\t" message
+            message = ""
+        }
+    ' "$tmp_dir/result/clippy.log" | sort -u \
+        >"$tmp_dir/result/actual-clippy-diagnostics.tsv"
+
+    expected_dir=plans/nando-response-actor-decomposition-v1/r0
+    cmp "$expected_dir/KNOWN_TEST_FAILURES.txt" "$tmp_dir/result/actual-test-failures.txt"
+    cmp "$expected_dir/KNOWN_CLIPPY_DIAGNOSTICS.tsv" \
+        "$tmp_dir/result/actual-clippy-diagnostics.tsv"
+    fingerprint_verdict=PASS
+fi
+
+graphify_verdict=NOT_RUN
+graphify_seconds=null
+if $run_graphify; then
+    graph_worktree="$tmp_dir/graphify-worktree"
+    git worktree add --quiet --detach "$graph_worktree" "$head_sha"
+    graph_start=$(date +%s%N)
+    (
+        cd "$graph_worktree"
+        graphify update . >"$tmp_dir/result/graphify.log"
+    )
+    graph_end=$(date +%s%N)
+    graphify_seconds=$(jq -n --argjson ns "$((graph_end - graph_start))" '$ns / 1000000000')
+    git worktree remove --force "$graph_worktree"
+    graph_worktree=
+    graphify_verdict=PASS
+fi
+
+after_build_processes=$(remote_cargo_processes)
+new_background_processes=$((after_build_processes > before_build_processes ? after_build_processes - before_build_processes : 0))
+test "$new_background_processes" -eq 0
+
+jq \
+    --arg schema "nando.remote-gate.v1" \
+    --arg head "$head_sha" \
+    --arg remote_host "$remote_host" \
+    --arg remote_source "$remote_source" \
+    --arg profile "$profile" \
+    --arg package "$package" \
+    --arg patch_sha256 "$patch_sha256" \
+    --argjson scope_count "${#scopes[@]}" \
+    --argjson untracked_files "$untracked_files" \
+    --arg fingerprint_verdict "$fingerprint_verdict" \
+    --arg graphify_verdict "$graphify_verdict" \
+    --argjson graphify_seconds "$graphify_seconds" \
+    --argjson background_processes "$new_background_processes" \
+    '. + {
+        schema: $schema,
+        head: $head,
+        remote_host: $remote_host,
+        remote_source: $remote_source,
+        profile: $profile,
+        package: $package,
+        overlay: {
+            scope_count: $scope_count,
+            untracked_files: $untracked_files,
+            patch_sha256: $patch_sha256
+        },
+        fingerprint_verdict: $fingerprint_verdict,
+        graphify: {
+            verdict: $graphify_verdict,
+            seconds: $graphify_seconds
+        },
+        new_background_build_processes: $background_processes
+    }' "$tmp_dir/result/worker-summary.json" >"$tmp_dir/result/final-summary.json"
+
+worker_verdict=$(jq -r '.worker_verdict' "$tmp_dir/result/final-summary.json")
+test "$worker_verdict" = PASS
+
+if test -n "$json_out"; then
+    mkdir -p "$(dirname -- "$json_out")"
+    cp "$tmp_dir/result/final-summary.json" "$json_out"
+fi
+cat "$tmp_dir/result/final-summary.json"
