@@ -1,0 +1,52 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r3.v1",
+  "status": "PASS",
+  "date": "2026-07-21",
+  "code_head": "4138a15ffdbb90ab8f8bf38b2551be9c5eb0b9e7",
+  "authority": false,
+  "active_response_packages": 0,
+  "m3": "WATCH",
+  "false_accepts": 0,
+  "runtime_parity_mismatches": 0,
+  "proof_dependency_vetoes": {
+    "response_facade": 0,
+    "runtime": 0,
+    "learning": 0,
+    "admission": 0
+  },
+  "proof_side_effects": {
+    "mutable_globals": 0,
+    "checkpoint_state": 0,
+    "filesystem_network_process_io": 0,
+    "authority_constructors": 0
+  },
+  "source_lines": {
+    "response_actor_r0": 103389,
+    "response_actor_r2": 99982,
+    "response_actor_r3": 94271,
+    "operator_proof_r3": 6309
+  },
+  "checks": {
+    "proof_exact_head": "PASS",
+    "facade_historical_fingerprint": "PASS",
+    "mutation_parity": "PASS",
+    "graphify_exact_head": "PASS",
+    "nanda_owner_route": "PASS",
+    "nanda_authority_ready": false,
+    "live_transition_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "new_background_build_processes": 0
+  },
+  "services": {
+    "nando_transition_serving": {
+      "invocation_id": "74ac3080f80b4fe387de2a94380e3657",
+      "restarts": 0
+    },
+    "nando_response_learning": {
+      "invocation_id": "8e59505eb1b943778601c9b3bacbd607",
+      "restarts": 0
+    }
+  },
+  "next": "R4_NANDO_OPERATOR_RUNTIME",
+  "f5_b": "PAUSED_NOT_STARTED"
+}

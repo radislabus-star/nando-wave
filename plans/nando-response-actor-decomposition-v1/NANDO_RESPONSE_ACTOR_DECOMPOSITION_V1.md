@@ -611,7 +611,7 @@ authority                                           false
 
 ### R3: Extract nando-operator-proof
 
-Current status `MOVE_ONLY_PASS_PRECOMMIT`:
+Final status `STOP-R3`:
 
 ```text
 independent verifier implementation              moved
@@ -621,7 +621,10 @@ decidability and verified-delta contracts         moved
 trusted V2 binding proof route                    moved
 compatibility public paths                        preserved
 proof and facade remote fingerprints              PASS
-exact-HEAD STOP-R3                                pending
+exact-HEAD Graphify                               PASS
+owner-local structural route                      PASS
+live/service parity                               PASS
+STOP-R3                                           PASS at 4138a15
 ```
 
 Work:
