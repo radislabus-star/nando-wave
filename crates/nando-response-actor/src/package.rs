@@ -34,6 +34,7 @@ pub use nando_operator_admission::{
 pub use nando_operator_kernel::{
     relation_frame_hidden_wave_atom_ids, relation_frame_online_routing_atom_ids,
     relation_frame_phase_atom_ids, relation_frame_routing_atom_ids,
+    response_program_required_routing_atom_ids,
 };
 
 pub const CONTINUATION_EXTERNAL_VERIFIER_SCHEMA: &str = "continue_handle_external_evidence.v1";
@@ -260,92 +261,6 @@ impl ResponsePackage {
     pub const fn eligible_for_local_accept(&self) -> bool {
         false
     }
-}
-
-#[must_use]
-pub fn response_program_required_routing_atom_ids(program: &ResponseProgram) -> Vec<u64> {
-    let mut atoms = match &program.operation {
-        ResponseOperation::UniqueConsensus { variants, .. } => {
-            let mut variants = variants.iter();
-            let Some(first) = variants.next() else {
-                return Vec::new();
-            };
-            let mut common = response_program_required_routing_atom_ids(&first.program)
-                .into_iter()
-                .collect::<BTreeSet<_>>();
-            for variant in variants {
-                let atoms = response_program_required_routing_atom_ids(&variant.program)
-                    .into_iter()
-                    .collect::<BTreeSet<_>>();
-                common.retain(|atom| atoms.contains(atom));
-            }
-            common.into_iter().collect()
-        }
-        ResponseOperation::AdvancePlan { function_name } => vec![
-            stable_atom_id("relation:plan_state"),
-            stable_atom_id("status:success"),
-            stable_atom_id(&format!("client_capability:function:{function_name}")),
-        ],
-        ResponseOperation::FunctionCallFromRoles {
-            selector,
-            arguments,
-            ..
-        } => {
-            let completion = if arguments.iter().any(|argument| {
-                matches!(
-                    argument,
-                    ResponseArgument::Role {
-                        role: SemanticRole::ContinuationHandle,
-                        ..
-                    }
-                )
-            }) {
-                "pending"
-            } else {
-                "completed"
-            };
-            vec![
-                stable_atom_id(&format!("completion:{completion}")),
-                stable_atom_id("relation:unique_slot"),
-                selector_phase_atom_id(selector),
-            ]
-        }
-        ResponseOperation::CustomToolCallFromRoles {
-            custom_tool_name, ..
-        } => vec![
-            stable_atom_id("completion:pending"),
-            stable_atom_id("relation:unique_slot"),
-            stable_atom_id(&format!("client_capability:custom:{custom_tool_name}")),
-        ],
-        ResponseOperation::ProjectSelectedValue {
-            selector,
-            completion_state,
-            ..
-        } => vec![
-            stable_atom_id(&format!("completion:{completion_state}")),
-            stable_atom_id("relation:unique_slot"),
-            selector_phase_atom_id(selector),
-        ],
-        ResponseOperation::ProjectStatus {
-            selector,
-            completion_state,
-            ..
-        } => vec![
-            stable_atom_id(&format!("completion:{completion_state}")),
-            stable_atom_id("relation:unique_slot"),
-            selector_phase_atom_id(selector),
-        ],
-        ResponseOperation::ComposeCollection {
-            completion_state, ..
-        } => vec![
-            stable_atom_id(&format!("completion:{completion_state}")),
-            stable_atom_id("observation:json_collection"),
-        ],
-        _ => Vec::new(),
-    };
-    atoms.sort_unstable();
-    atoms.dedup();
-    atoms
 }
 
 #[must_use]
