@@ -31,6 +31,7 @@ mod online_subcenter;
 mod operator_generation;
 mod operator_live_shadow;
 mod operator_vm;
+mod operator_vm_compiler;
 mod opportunity;
 mod outcome_example;
 mod output_graph;
@@ -319,6 +320,8 @@ pub use outcome_example::{
 pub use output_graph::{
     OutputGraph, OutputGraphSegment, OutputValueCandidate, OutputValueSource, build_output_graph,
 };
+#[cfg(test)]
+pub(crate) use package::stable_atom_id;
 pub use package::{
     COLLECTION_EXTERNAL_VERIFIER_SCHEMA, CONTINUATION_EXTERNAL_VERIFIER_SCHEMA,
     CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA, LearnedWaveRoute, LearnedWaveSubcenter, ResponseExecutor,
@@ -331,7 +334,6 @@ pub use package::{
     relation_frame_routes_to_package, relation_frame_routing_atom_ids, request_phase_atom_ids,
     response_program_external_verifier_schema, response_program_required_routing_atom_ids,
 };
-pub(crate) use package::{response_pre_action_context_atom_ids, stable_atom_id};
 pub use program::{
     CollectionAggregateOperation, CollectionOutputRenderer, CollectionProgramStep,
     CollectionScalarType, CustomToolResultProjection, MAX_PROJECT_STATUS_CODE,

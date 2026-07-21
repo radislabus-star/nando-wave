@@ -4,11 +4,11 @@ use nando_core::wave::{
     BlueprintFutureEvidence, CandidateCubeField, CandidateCubeFieldError,
     CandidateOperatorBlueprint, Commitment256, FrozenBlueprintFutureWindow, LocalRelationFragment,
     OPERATOR_PAGE32_BYTES, OPERATOR_PAGE32_COMPOSITION_BYTES, OPERATOR_PAGE32_PHASE_BYTES,
-    OPERATOR_ROLE_NONE, OperatorCircuit, OperatorCircuitRelation, OperatorGrokkingConfig,
-    OperatorPage32, OperatorPage32Error, OperatorPage32Metadata, OperatorRelationCell,
-    PhaseCenterCell, RoleGraph, RuntimeRoleBinder, SealedBlueprintWinnerReceipt, SearchCompletion,
-    StructuralRole16, StructuralRoleSignature, SurfaceFragmentBundle, TernaryOperatorCube32,
-    TernaryRelationState, TransformOp8, phase_vector_from_atoms,
+    OperatorCircuit, OperatorCircuitRelation, OperatorGrokkingConfig, OperatorPage32,
+    OperatorPage32Error, OperatorPage32Metadata, OperatorRelationCell, PhaseCenterCell, RoleGraph,
+    RuntimeRoleBinder, SealedBlueprintWinnerReceipt, SearchCompletion, StructuralRole16,
+    StructuralRoleSignature, SurfaceFragmentBundle, TernaryOperatorCube32, TernaryRelationState,
+    TransformOp8, phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,21 +24,14 @@ use crate::{
     source_neutral_verifier_for_program, verify_response_independently_with_request,
 };
 
-pub const TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR: u8 = 1;
-pub const TRANSFORM_OPCODE_COUNT_COLLECTION: u8 = 2;
-pub const TRANSFORM_OPCODE_PROJECT_STATUS: u8 = 3;
-pub const TRANSFORM_OPCODE_FILTER_REQUEST_VALUE: u8 = 4;
-pub const TRANSFORM_VALUE_STRING: u16 = 0;
-pub const TRANSFORM_VALUE_INTEGER: u16 = 1;
-pub const TRANSFORM_VALUE_BOOLEAN: u16 = 2;
-pub const TRANSFORM_VALUE_IDENTIFIER: u16 = 3;
-pub const TRANSFORM_VALUE_COLLECTION: u16 = 5;
-pub const TRANSFORM_FLAG_CANONICAL_JSON: u16 = 1;
-pub const TRANSFORM_STATUS_ZERO_IS_SUCCESS: u16 = 0;
-pub const TRANSFORM_STATUS_ZERO_IS_PASS: u16 = 1;
-pub const TRANSFORM_STATUS_ZERO_IS_OK: u16 = 2;
-pub const TRANSFORM_STATUS_ZERO_IS_TRUE: u16 = 3;
-pub const TRANSFORM_ROLE_NONE: u8 = OPERATOR_ROLE_NONE;
+pub use nando_operator_kernel::{
+    TRANSFORM_FLAG_CANONICAL_JSON, TRANSFORM_OPCODE_COUNT_COLLECTION,
+    TRANSFORM_OPCODE_FILTER_REQUEST_VALUE, TRANSFORM_OPCODE_PROJECT_STATUS,
+    TRANSFORM_OPCODE_PROJECT_UNIQUE_SCALAR, TRANSFORM_ROLE_NONE, TRANSFORM_STATUS_ZERO_IS_OK,
+    TRANSFORM_STATUS_ZERO_IS_PASS, TRANSFORM_STATUS_ZERO_IS_SUCCESS, TRANSFORM_STATUS_ZERO_IS_TRUE,
+    TRANSFORM_VALUE_BOOLEAN, TRANSFORM_VALUE_COLLECTION, TRANSFORM_VALUE_IDENTIFIER,
+    TRANSFORM_VALUE_INTEGER, TRANSFORM_VALUE_STRING,
+};
 const CRYSTALLIZED_REGISTRY_SCHEMA_V3: &str = "nando.crystallized-registry.v3";
 const CRYSTALLIZED_REGISTRY_MAX_BYTES: usize = 64 * 1024;
 

@@ -12,6 +12,8 @@ target_budget_bytes=${NANDO_REMOTE_TARGET_BUDGET_BYTES:-12884901888}
 package=nando-response-actor
 json_out=
 run_graphify=false
+retired_test_failures=
+retired_clippy_diagnostics=
 filters=()
 scopes=()
 
@@ -25,6 +27,12 @@ Options:
   --filter TEXT        Direct test-binary filter; repeatable for fast mode
   --scope PATH         Overlay one local dirty path on remote HEAD; repeatable
   --json-out PATH      Copy the final machine summary to PATH
+  --retired-test-failures PATH
+                       Remove an explicitly documented subset from the frozen
+                       response-actor test-failure fingerprint
+  --retired-clippy-diagnostics PATH
+                       Remove an explicitly documented subset from the frozen
+                       response-actor Clippy fingerprint
   --graphify           Run Graphify in a clean local worktree at exact HEAD
   -h, --help           Show this help
 
@@ -70,6 +78,14 @@ while test $# -gt 0; do
             json_out=${2:?missing JSON output path}
             shift 2
             ;;
+        --retired-test-failures)
+            retired_test_failures=${2:?missing retired test-failure path}
+            shift 2
+            ;;
+        --retired-clippy-diagnostics)
+            retired_clippy_diagnostics=${2:?missing retired Clippy path}
+            shift 2
+            ;;
         --graphify)
             run_graphify=true
             shift
@@ -93,6 +109,16 @@ if $run_graphify && test ${#scopes[@]} -ne 0; then
     printf -- '--graphify requires exact HEAD and forbids --scope overlays\n' >&2
     exit 2
 fi
+if test -n "$retired_test_failures$retired_clippy_diagnostics"; then
+    test "$profile" = stop || {
+        printf 'fingerprint retirements are valid only for the stop profile\n' >&2
+        exit 2
+    }
+    test "$package" = nando-response-actor || {
+        printf 'fingerprint retirements are valid only for nando-response-actor\n' >&2
+        exit 2
+    }
+fi
 
 for command in git ssh scp rsync jq sha256sum tar sed sort comm; do
     command -v "$command" >/dev/null || {
@@ -108,6 +134,20 @@ for scope in "${scopes[@]}"; do
             exit 2
             ;;
     esac
+done
+for retirement in "$retired_test_failures" "$retired_clippy_diagnostics"; do
+    test -z "$retirement" && continue
+    case "$retirement" in
+        /* | *..*)
+            printf 'retirement path must be repository-relative: %s\n' "$retirement" >&2
+            exit 2
+            ;;
+    esac
+    test -f "$retirement" || {
+        printf 'retirement file does not exist: %s\n' "$retirement" >&2
+        exit 2
+    }
+    LC_ALL=C sort -c -u "$retirement"
 done
 
 head_sha=$(git rev-parse HEAD)
@@ -233,6 +273,11 @@ rsync -a -e "ssh -o BatchMode=yes -o ControlMaster=auto -o ControlPersist=60 -o 
     "$remote_host:$remote_result_dir/" "$tmp_dir/result/"
 
 fingerprint_verdict=NOT_RUN
+retired_test_failure_count=0
+retired_clippy_diagnostic_count=0
+empty_sha256=$(printf '' | sha256sum | awk '{print $1}')
+retired_test_failures_sha256=$empty_sha256
+retired_clippy_diagnostics_sha256=$empty_sha256
 if test "$profile" = stop; then
     if grep -q '^failures:$' "$tmp_dir/result/test.log"; then
         last_failures_line=$(grep -n '^failures:$' "$tmp_dir/result/test.log" | tail -n 1 | cut -d: -f1)
@@ -259,8 +304,39 @@ if test "$profile" = stop; then
 
     if test "$package" = nando-response-actor; then
         expected_dir=plans/nando-response-actor-decomposition-v1/r0
-        cmp "$expected_dir/KNOWN_TEST_FAILURES.txt" "$tmp_dir/result/actual-test-failures.txt"
-        cmp "$expected_dir/KNOWN_CLIPPY_DIAGNOSTICS.tsv" \
+        : >"$tmp_dir/result/retired-test-failures.txt"
+        : >"$tmp_dir/result/retired-clippy-diagnostics.tsv"
+        if test -n "$retired_test_failures"; then
+            cp "$retired_test_failures" "$tmp_dir/result/retired-test-failures.txt"
+            retired_test_failure_count=$(wc -l <"$retired_test_failures")
+            retired_test_failures_sha256=$(sha256sum "$retired_test_failures" | awk '{print $1}')
+        fi
+        if test -n "$retired_clippy_diagnostics"; then
+            cp "$retired_clippy_diagnostics" "$tmp_dir/result/retired-clippy-diagnostics.tsv"
+            retired_clippy_diagnostic_count=$(wc -l <"$retired_clippy_diagnostics")
+            retired_clippy_diagnostics_sha256=$(sha256sum "$retired_clippy_diagnostics" | awk '{print $1}')
+        fi
+        comm -13 \
+            "$expected_dir/KNOWN_TEST_FAILURES.txt" \
+            "$tmp_dir/result/retired-test-failures.txt" \
+            >"$tmp_dir/result/unknown-retired-test-failures.txt"
+        comm -13 \
+            "$expected_dir/KNOWN_CLIPPY_DIAGNOSTICS.tsv" \
+            "$tmp_dir/result/retired-clippy-diagnostics.tsv" \
+            >"$tmp_dir/result/unknown-retired-clippy-diagnostics.tsv"
+        test ! -s "$tmp_dir/result/unknown-retired-test-failures.txt"
+        test ! -s "$tmp_dir/result/unknown-retired-clippy-diagnostics.tsv"
+        comm -23 \
+            "$expected_dir/KNOWN_TEST_FAILURES.txt" \
+            "$tmp_dir/result/retired-test-failures.txt" \
+            >"$tmp_dir/result/effective-test-failures.txt"
+        comm -23 \
+            "$expected_dir/KNOWN_CLIPPY_DIAGNOSTICS.tsv" \
+            "$tmp_dir/result/retired-clippy-diagnostics.tsv" \
+            >"$tmp_dir/result/effective-clippy-diagnostics.tsv"
+        cmp "$tmp_dir/result/effective-test-failures.txt" \
+            "$tmp_dir/result/actual-test-failures.txt"
+        cmp "$tmp_dir/result/effective-clippy-diagnostics.tsv" \
             "$tmp_dir/result/actual-clippy-diagnostics.tsv"
     else
         test ! -s "$tmp_dir/result/actual-test-failures.txt"
@@ -301,6 +377,10 @@ jq \
     --argjson scope_count "${#scopes[@]}" \
     --argjson untracked_files "$untracked_files" \
     --arg fingerprint_verdict "$fingerprint_verdict" \
+    --argjson retired_test_failure_count "$retired_test_failure_count" \
+    --argjson retired_clippy_diagnostic_count "$retired_clippy_diagnostic_count" \
+    --arg retired_test_failures_sha256 "$retired_test_failures_sha256" \
+    --arg retired_clippy_diagnostics_sha256 "$retired_clippy_diagnostics_sha256" \
     --arg graphify_verdict "$graphify_verdict" \
     --argjson graphify_seconds "$graphify_seconds" \
     --argjson background_processes "$new_background_processes" \
@@ -317,6 +397,16 @@ jq \
             patch_sha256: $patch_sha256
         },
         fingerprint_verdict: $fingerprint_verdict,
+        fingerprint_retirements: {
+            test_failures: {
+                count: $retired_test_failure_count,
+                sha256: $retired_test_failures_sha256
+            },
+            clippy_diagnostics: {
+                count: $retired_clippy_diagnostic_count,
+                sha256: $retired_clippy_diagnostics_sha256
+            }
+        },
         graphify: {
             verdict: $graphify_verdict,
             seconds: $graphify_seconds
