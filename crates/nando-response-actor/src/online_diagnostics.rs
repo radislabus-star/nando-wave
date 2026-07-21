@@ -837,4 +837,233 @@ impl StreamingSelfTrainingState {
             missing_parity_frame_ids,
         }
     }
+
+    /// Builds label-blind candidate graphs from the same frozen parity rows,
+    /// freezes every graph, and only then joins expected binding receipts.
+    pub fn semantic_law_binding_evidence_report(
+        &self,
+        requested_signatures: &BTreeSet<String>,
+    ) -> Result<crate::BindingVersionSpaceReportV1, String> {
+        let members = self
+            .cegis
+            .winners()
+            .into_iter()
+            .filter(|winner| requested_signatures.contains(&winner.teacher_signature_sha256))
+            .collect::<Vec<_>>();
+        let member_signatures = members
+            .iter()
+            .map(|winner| winner.teacher_signature_sha256.clone())
+            .collect::<BTreeSet<_>>();
+        let mut frames = BTreeMap::<String, crate::RelationFrame>::new();
+        for signature in &member_signatures {
+            if let Some(pool) = self.pool_snapshot_with_parity(signature) {
+                for frame in pool.positives {
+                    frames.insert(frame.frame_id_sha256.clone(), frame);
+                }
+            }
+        }
+
+        let budget = crate::BindingEvidenceBudgetV1::default();
+        let mut frozen_graphs = Vec::new();
+        for frame in frames.values() {
+            let Some(parity) = self.support_parity_case(&frame.frame_id_sha256) else {
+                continue;
+            };
+            let context = pre_action_binding_context(frame);
+            let surface = crate::PreActionBindingSurfaceV1::capture(
+                frame.frame_id_sha256.clone(),
+                frame.evidence_ref_sha256.clone(),
+                &parity.request_text,
+                &parity.provider_payload,
+                context,
+                budget,
+            )
+            .map_err(|error| format!("binding_surface_capture:{error:?}"))?;
+            let graph = surface
+                .candidate_relation_graph(budget)
+                .map_err(|error| format!("binding_candidate_graph:{error:?}"))?
+                .freeze()
+                .map_err(|error| format!("binding_candidate_graph_freeze:{error:?}"))?;
+            frozen_graphs.push(graph);
+        }
+        frozen_graphs
+            .sort_by(|left, right| left.graph.row_id_sha256.cmp(&right.graph.row_id_sha256));
+
+        // Expected action data is deliberately unavailable until every
+        // pre-action candidate graph above has become immutable.
+        let audit = self.semantic_law_evidence_audit(requested_signatures);
+        let rows = audit
+            .rows
+            .iter()
+            .map(|row| (row.frame_id_sha256.as_str(), row))
+            .collect::<BTreeMap<_, _>>();
+        let protocol_rows = audit
+            .rows
+            .iter()
+            .map(|row| (row.frame_id_sha256.as_str(), row.protocol_class.as_str()))
+            .collect::<BTreeMap<_, _>>();
+        let protocols = audit
+            .rows
+            .iter()
+            .map(|row| row.protocol_class.clone())
+            .collect::<BTreeSet<_>>();
+        let target_actors = protocols
+            .into_iter()
+            .filter_map(|protocol| {
+                audit
+                    .actors
+                    .iter()
+                    .filter(|actor| {
+                        actor.origin.contains("physical_winner")
+                            && actor.action_symbols.iter().any(|value| value == &protocol)
+                    })
+                    .max_by(|left, right| {
+                        scoped_exact_rows(left, &protocol, &protocol_rows)
+                            .cmp(&scoped_exact_rows(right, &protocol, &protocol_rows))
+                            .then_with(|| {
+                                right.actor_program_sha256.cmp(&left.actor_program_sha256)
+                            })
+                    })
+                    .map(|actor| (protocol, actor))
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let mut expected_receipts = Vec::with_capacity(frozen_graphs.len());
+        for graph in &frozen_graphs {
+            let row = rows
+                .get(graph.graph.row_id_sha256.as_str())
+                .ok_or_else(|| "binding_audit_row_missing".to_owned())?;
+            let actor = target_actors
+                .get(&row.protocol_class)
+                .ok_or_else(|| "binding_target_actor_missing".to_owned())?;
+            let outcome = actor
+                .outcomes
+                .iter()
+                .find(|outcome| outcome.frame_id_sha256 == row.frame_id_sha256)
+                .ok_or_else(|| "binding_target_actor_outcome_missing".to_owned())?;
+            let expected = outcome
+                .expected_role_value_sha256
+                .as_deref()
+                .ok_or_else(|| "binding_expected_role_value_missing".to_owned())?;
+            let baseline_outcome = match outcome.outcome.as_str() {
+                "exact" => crate::BindingBaselineOutcomeV1::Exact,
+                "wrong" => crate::BindingBaselineOutcomeV1::Wrong,
+                "abstain" => crate::BindingBaselineOutcomeV1::Abstain,
+                "verify_failed" => crate::BindingBaselineOutcomeV1::VerifyFailed,
+                _ => return Err("binding_unknown_baseline_outcome".to_owned()),
+            };
+            expected_receipts.push(
+                crate::ExpectedBindingReceiptV1::positive(graph, expected, baseline_outcome)
+                    .map_err(|error| format!("binding_expected_receipt:{error:?}"))?,
+            );
+        }
+        crate::evaluate_binding_version_space_v1(
+            frozen_graphs,
+            expected_receipts,
+            audit.missing_parity_frame_ids,
+            budget,
+        )
+        .map_err(|error| format!("binding_version_space:{error:?}"))
+    }
+}
+
+fn scoped_exact_rows(
+    actor: &SemanticLawActorAudit,
+    protocol: &str,
+    protocol_rows: &BTreeMap<&str, &str>,
+) -> usize {
+    actor
+        .outcomes
+        .iter()
+        .filter(|outcome| {
+            outcome.outcome == "exact"
+                && protocol_rows
+                    .get(outcome.frame_id_sha256.as_str())
+                    .is_some_and(|value| *value == protocol)
+        })
+        .count()
+}
+
+fn pre_action_binding_context(frame: &crate::RelationFrame) -> crate::PreActionBindingContextV1 {
+    let mut call_shape_count = 0_u16;
+    let mut capability_count = 0_u16;
+    let mut temporal_relation_count = 0_u16;
+    let mut cardinality_relation_count = 0_u16;
+    let mut completion_state = crate::BindingCompletionStateV1::Unknown;
+    let mut topology = Vec::new();
+    for atom in &frame.atoms {
+        match atom {
+            crate::RelationAtom::ObservationCallShape { .. } => {
+                call_shape_count = call_shape_count.saturating_add(1);
+                topology.push(serde_json::json!(["observation_call_shape"]));
+            }
+            crate::RelationAtom::ClientCapabilityAtom { .. } => {
+                capability_count = capability_count.saturating_add(1);
+                topology.push(serde_json::json!(["client_capability"]));
+            }
+            crate::RelationAtom::ToolKind { .. } => {
+                capability_count = capability_count.saturating_add(1);
+                topology.push(serde_json::json!(["tool_kind"]));
+            }
+            crate::RelationAtom::TemporalEdge { .. } => {
+                temporal_relation_count = temporal_relation_count.saturating_add(1);
+                topology.push(serde_json::json!(["temporal_edge"]));
+            }
+            crate::RelationAtom::Cardinality { count, .. } => {
+                cardinality_relation_count = cardinality_relation_count.saturating_add(1);
+                topology.push(serde_json::json!(["cardinality", count]));
+            }
+            crate::RelationAtom::CompletionState { value } => {
+                completion_state = canonical_binding_completion_state(value);
+                topology.push(serde_json::json!(["completion_state", completion_state]));
+            }
+            crate::RelationAtom::TypedSlot {
+                source: crate::AtomSource::Request | crate::AtomSource::Observation,
+                value_type,
+                ..
+            } => topology.push(serde_json::json!(["typed_slot", value_type])),
+            crate::RelationAtom::SlotEquality { .. } => {
+                topology.push(serde_json::json!(["slot_equality"]));
+            }
+            crate::RelationAtom::UniqueSlot { .. } => {
+                topology.push(serde_json::json!(["unique_slot"]));
+            }
+            crate::RelationAtom::RequestPhaseAtom { .. } => {
+                topology.push(serde_json::json!(["request_relation"]));
+            }
+            crate::RelationAtom::OutputStatus { .. } => {
+                topology.push(serde_json::json!(["output_status"]));
+            }
+            crate::RelationAtom::ObservationSelector { .. } => {}
+            atom if crate::relation_atom_is_teacher_only(atom) => {}
+            _ => {}
+        }
+    }
+    topology.sort_by(|left, right| {
+        serde_json::to_string(left)
+            .unwrap_or_default()
+            .cmp(&serde_json::to_string(right).unwrap_or_default())
+    });
+    crate::PreActionBindingContextV1 {
+        call_shape_count,
+        capability_count,
+        completion_state,
+        temporal_relation_count,
+        cardinality_relation_count,
+        topology_neighborhood_root_sha256: crate::sha256_bytes(
+            &serde_json::to_vec(&topology).unwrap_or_default(),
+        ),
+    }
+}
+
+fn canonical_binding_completion_state(value: &str) -> crate::BindingCompletionStateV1 {
+    match value.to_ascii_lowercase().as_str() {
+        "active" | "in_progress" | "pending" | "running" | "yielded" => {
+            crate::BindingCompletionStateV1::Unresolved
+        }
+        "cancelled" | "completed" | "failed" | "success" | "terminated" => {
+            crate::BindingCompletionStateV1::Completed
+        }
+        _ => crate::BindingCompletionStateV1::Unknown,
+    }
 }

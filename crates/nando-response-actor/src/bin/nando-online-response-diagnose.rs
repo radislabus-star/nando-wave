@@ -118,6 +118,17 @@ fn main() -> Result<(), String> {
             )
             .map_err(|error| error.to_string())?;
         }
+        if let Some(output_path) = std::env::var_os("NANDO_DIAGNOSE_BINDING_EVIDENCE") {
+            let signatures = diagnostic_signatures.as_ref().ok_or_else(|| {
+                "NANDO_DIAGNOSE_BINDING_EVIDENCE requires NANDO_DIAGNOSE_SIGNATURES".to_owned()
+            })?;
+            let report = miner.semantic_law_binding_evidence_report(signatures)?;
+            std::fs::write(
+                output_path,
+                serde_json::to_vec_pretty(&report).map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+        }
         if std::env::var_os("NANDO_DIAGNOSE_ADMISSION").is_some() {
             let candidates = miner.admission_candidates();
             for candidate in &candidates {

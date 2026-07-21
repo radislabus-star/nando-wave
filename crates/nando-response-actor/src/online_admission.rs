@@ -450,39 +450,6 @@ struct RuntimeParityReceiptSet<'a> {
     failures: usize,
 }
 
-#[derive(Serialize)]
-struct DurableRuntimeParityReceiptMaterial<'a> {
-    schema: &'a str,
-    evidence_ref_sha256: &'a str,
-    program_sha256: &'a str,
-    verifier_sha256: &'a str,
-    input_sha256: &'a str,
-    teacher_response_sha256: &'a str,
-    actor_response_sha256: &'a str,
-    actor_executed: bool,
-    teacher_authority_match: bool,
-    independent_verifier_pass: bool,
-    exact_teacher_match: bool,
-}
-
-fn durable_runtime_parity_receipt_digest(
-    receipt: &DurableRuntimeParityReceipt,
-) -> Result<String, &'static str> {
-    canonical_json_sha256(&DurableRuntimeParityReceiptMaterial {
-        schema: &receipt.schema,
-        evidence_ref_sha256: &receipt.evidence_ref_sha256,
-        program_sha256: &receipt.program_sha256,
-        verifier_sha256: &receipt.verifier_sha256,
-        input_sha256: &receipt.input_sha256,
-        teacher_response_sha256: &receipt.teacher_response_sha256,
-        actor_response_sha256: &receipt.actor_response_sha256,
-        actor_executed: receipt.actor_executed,
-        teacher_authority_match: receipt.teacher_authority_match,
-        independent_verifier_pass: receipt.independent_verifier_pass,
-        exact_teacher_match: receipt.exact_teacher_match,
-    })
-}
-
 pub fn build_durable_runtime_parity_receipt(
     program: &ResponseProgram,
     evidence_ref_sha256: &str,
@@ -518,7 +485,7 @@ pub fn build_durable_runtime_parity_receipt(
         independent_verifier_pass,
         exact_teacher_match: actor_response == example.expected_response,
     };
-    receipt.receipt_sha256 = durable_runtime_parity_receipt_digest(&receipt)?;
+    receipt.seal_digest()?;
     Ok(receipt)
 }
 
@@ -539,8 +506,7 @@ fn validate_durable_runtime_parity_receipt(
         && receipt.teacher_authority_match
         && receipt.independent_verifier_pass
         && receipt.exact_teacher_match
-        && durable_runtime_parity_receipt_digest(receipt)
-            .is_ok_and(|digest| digest == receipt.receipt_sha256)
+        && receipt.validate_sealed().is_ok()
 }
 
 fn validate_durable_runtime_parity(
@@ -2892,8 +2858,7 @@ mod tests {
             independent_verifier_pass: true,
             exact_teacher_match: false,
         };
-        receipt.receipt_sha256 =
-            durable_runtime_parity_receipt_digest(&receipt).expect("receipt digest");
+        receipt.seal_digest().expect("receipt digest");
 
         assert!(!validate_durable_runtime_parity_receipt(
             &receipt,

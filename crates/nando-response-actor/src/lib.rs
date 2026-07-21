@@ -1,6 +1,7 @@
 mod admission_bundle;
 mod authority;
 mod backward_wave;
+mod binding_evidence;
 mod capture_provenance;
 mod causal;
 mod cegis;
@@ -10,6 +11,7 @@ mod crystallized_operator;
 mod decidability;
 mod effect_graph;
 mod effect_law;
+mod effect_law_v3;
 mod evidence;
 mod evidence_graph;
 mod family_discovery;
@@ -61,6 +63,22 @@ pub use authority::{
     response_runtime_contract_sha256, sha256_bytes, valid_nonzero_sha256,
 };
 pub use backward_wave::{BackwardWave, BackwardWaveError, BackwardWaveUpdate};
+pub use binding_evidence::{
+    BINDING_VERSION_SPACE_REPORT_SCHEMA_V1, BindingBaselineOutcomeV1, BindingCallLineageV1,
+    BindingCandidateFeaturesV1, BindingCandidateNodeV1, BindingCandidateRelationEdgeV1,
+    BindingCandidateRelationKindV1, BindingCapabilityClassV1, BindingCompletionStateV1,
+    BindingDistinguishingProbeV1, BindingEvaluationLabelV1, BindingEvidenceBudgetV1,
+    BindingEvidenceErrorV1, BindingHypothesisScoreV1, BindingPredicateV1, BindingRequestRelationV1,
+    BindingRowAccountingV1, BindingSourceEventClassV1, BindingTieV1, BindingValueTypeV1,
+    BindingVersionSpaceReportV1, BindingVersionSpaceVerdictV1, CANDIDATE_RELATION_GRAPH_SCHEMA_V1,
+    CandidateRelationGraphV1, EXPECTED_BINDING_RECEIPT_SCHEMA_V1, ExpectedBindingReceiptV1,
+    FROZEN_CANDIDATE_RELATION_GRAPH_SCHEMA_V1, FrozenCandidateRelationGraphV1,
+    MAX_BINDING_CANDIDATES_PER_ROW_V1, MAX_BINDING_HYPOTHESES_V1, MAX_BINDING_JSON_NODES_V1,
+    MAX_BINDING_PREDICATES_PER_HYPOTHESIS_V1, MAX_BINDING_RECENT_EVENTS_V1,
+    MAX_BINDING_RELATION_EDGES_PER_ROW_V1, MAX_BINDING_REPORT_HYPOTHESES_V1,
+    MAX_BINDING_REPORT_TIES_V1, MAX_BINDING_TEXT_BYTES_V1, PRE_ACTION_BINDING_SURFACE_SCHEMA_V1,
+    PreActionBindingContextV1, PreActionBindingSurfaceV1, evaluate_binding_version_space_v1,
+};
 pub use capture_provenance::{
     CAPTURE_COMMITMENT_INDEX_SCHEMA_V1, CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1, CaptureCommitmentIndex,
     CaptureEvidenceReceipt, CaptureRecordCommitment, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
@@ -110,10 +128,48 @@ pub use effect_graph::{
     EffectSource,
 };
 pub use effect_law::{
-    CANONICAL_EFFECT_LAW_SCHEMA_V2, CanonicalEffectLawV2, CanonicalEffectTopologyV2, EffectKindV2,
-    EffectLawError, EffectLawId, EffectPostconditionKindV2, EffectPostconditionV2,
-    EffectPredicateKindV2, EffectPredicateV2, EffectRoleKindV2, EffectRoleV2,
-    PreservedFrameContractV2, SemanticConstantV2, VerifiedSemanticFacetsV2,
+    CANONICAL_EFFECT_LAW_SCHEMA_V2, CanonicalEffectLawV2, CanonicalEffectTopologyV2,
+    CanonicalNodeMappingEntryV2, CanonicalizedEffectLawV2, EFFECT_NODE_COLLECTION,
+    EFFECT_NODE_OPERATION, EFFECT_NODE_SCALAR, EFFECT_OBSERVATION_SCHEMA_V2,
+    EFFECT_OPCODE_ASSERT_CONSTANT, EFFECT_OPCODE_COMPOSE, EFFECT_OPCODE_CONSUME,
+    EFFECT_OPCODE_COPY, EFFECT_OPCODE_EQUAL, EFFECT_OPCODE_PRESERVE, EFFECT_OPCODE_PRODUCE,
+    EFFECT_OPCODE_REQUIRE, EFFECT_OPERATION_CALL, EFFECT_OPERATION_PLAN_ADVANCE,
+    EFFECT_OPERATION_PROJECT, EFFECT_OPERATION_STATUS, EFFECT_QUOTIENT_REPORT_SCHEMA_V2,
+    EFFECT_VALUE_BOOLEAN, EFFECT_VALUE_COLLECTION, EFFECT_VALUE_IDENTIFIER, EFFECT_VALUE_INTEGER,
+    EFFECT_VALUE_OPAQUE_SCALAR, EFFECT_VALUE_OPERATION, EFFECT_VALUE_STRING, EffectClauseV2,
+    EffectLawDictionaryRootsV2, EffectLawError, EffectLawId, EffectLawProgramV2,
+    EffectLawQuotientReportV2, EffectOpcodeV2, EffectRoleV2, EffectTopologyEdgeV2,
+    EffectTopologyNodeV2, EffectValueTypeV2, EvidenceBoundEffectObservationV2,
+    ObservationNodeMappingV2, PhysicalEffectArgumentV2, PreservedFrameContractV2,
+    ProtocolModeDifferenceV2, RoleCardinalityV2, RoleRefV2, TypedConstantCommitmentV2,
+    observe_effect_transition_v2, search_effect_law_quotient_v2,
+};
+pub use effect_law_v3::{
+    CANONICAL_EFFECT_LAW_SCHEMA_V3, CanonicalEffectEdgeV3, CanonicalEffectLawCandidateV3,
+    CanonicalEffectLawV3, CanonicalEffectNodeV3, CanonicalNodeMappingV3, CanonicalRelationClauseV3,
+    EFFECT_ATOM_ACTION_RELATION, EFFECT_ATOM_CARDINALITY, EFFECT_ATOM_PHYSICAL_SURFACE,
+    EFFECT_ATOM_POSTCONDITION, EFFECT_ATOM_PRECONDITION, EFFECT_ATOM_RENDERER,
+    EFFECT_ATOM_TEMPORAL, EFFECT_DELTA_CONTRACT_SCHEMA_V3,
+    EFFECT_LAW_DUAL_CLASSIFICATION_REPORT_SCHEMA_V3, EFFECT_LAW_RESTART_BUNDLE_SCHEMA_V3,
+    EFFECT_OBSERVATION_CANDIDATE_SCHEMA_V3, EFFECT_QUOTIENT_HYPOTHESIS_SCHEMA_V3,
+    EFFECT_REL_CONSTANT, EFFECT_REL_CONSUME, EFFECT_REL_COPY, EFFECT_REL_EQUAL, EFFECT_REL_REQUIRE,
+    EffectDeltaContractV3, EffectDictionaryEntryV3, EffectLawDictionaryV3,
+    EffectLawDualClassificationDiscrepancyDirectionV3, EffectLawDualClassificationDiscrepancyV3,
+    EffectLawDualClassificationDiscrepancyWitnessV3, EffectLawDualClassificationMapV3,
+    EffectLawDualClassificationReasonV3, EffectLawDualClassificationReportV3,
+    EffectLawDualClassificationRowReportV3, EffectLawDualClassificationRowStatusV3,
+    EffectLawDualClassificationRowV3, EffectLawDualClassificationVerdictV3,
+    EffectLawDualClassifierV3, EffectLawDualIndependenceReportV3, EffectLawIdV3,
+    EffectLawIndependenceV3, EffectLawQuotientReportV3, EffectLawRestartBundleV3, EffectLawV3Error,
+    EffectObservationCandidateV3, EffectQuotientHypothesisV3, ExactEffectAtomV3,
+    INDEPENDENT_EFFECT_STATE_SCHEMA_V3, ObservationCanonicalProofV3, PROTOCOL_FACET_SCHEMA_V3,
+    SEALED_EFFECT_OBSERVATION_SCHEMA_V3, SealedEffectObservationV3,
+    TRUSTED_EFFECT_EVIDENCE_SET_SCHEMA_V3, TRUSTED_EFFECT_LAW_BUNDLE_ROOT_SCHEMA_V3,
+    TRUSTED_GENERATION_MANIFEST_SCHEMA_V3, TrustedEffectEvidenceSetV3,
+    TrustedEffectLawBundleRootV3, TrustedGenerationManifestRootV3,
+    VERIFIED_EFFECT_DELTA_RECEIPT_SCHEMA_V3, VerifiedEffectDeltaReceiptV3,
+    observe_effect_transition_v3, resolve_trusted_effect_evidence_set_v3,
+    seal_effect_observation_v3, search_effect_law_quotient_v3,
 };
 pub use evidence::{
     CanonicalEventGraph, CanonicalEventNode, DeterministicEvidenceLedger,

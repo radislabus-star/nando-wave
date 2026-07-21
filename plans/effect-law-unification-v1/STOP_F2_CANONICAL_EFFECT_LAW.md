@@ -1,4 +1,11 @@
-# Effect Law Unification: STOP-F2
+# Effect Law Unification: STOP-F2 (REJECTED)
+
+> **Historical receipt only. F2 was rejected by architecture review on
+> 2026-07-21 and must not be treated as canonical.** The closed `EffectKindV2`
+> and unique `EffectRoleKindV2` ontology could not represent Rich Operators
+> without Rust changes. F2R was also rejected; the current uncommitted repair
+> candidate is documented in `STOP_F2R2_EVIDENCE_BOUND_QUOTIENT_CANDIDATE.md`.
+> F3 remains forbidden.
 
 Date: 2026-07-21 Europe/Tallinn
 

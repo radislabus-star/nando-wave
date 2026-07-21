@@ -9,8 +9,11 @@ Date: 2026-07-20 Europe/Tallinn
 R1 evidence decomposition       COMPLETE / STOP-A
 F0 evidence completion          COMPLETE / STOP-F0
 F1 diagnostic ownership        COMPLETE / STOP-F1
-F2 canonical effect law         PLANNED / NOT STARTED
-F4 protocol mode compiler       BLOCKED pending B1 evidence
+F2 canonical effect law         COMPLETE / STOP-F2 V3
+F3 dual classification          COMPLETE / STOP-F3R
+B1A binding version space       COMPLETE / INSUFFICIENT at STOP-B1A
+B1B binding acquisition         NEXT / NOT STARTED
+F4 protocol mode compiler       BLOCKED pending B1B causal evidence
 production authority            false
 service deployment              out of scope
 ```
@@ -22,7 +25,7 @@ with one canonical, versioned path:
 
 ```text
 verified transition
--> CanonicalEffectLawV2
+-> CanonicalEffectLawV3
 -> EffectLawId
 -> bounded ProtocolMode set
 -> runtime role grounding
@@ -163,7 +166,7 @@ or deterministic ordering.
 
 The semantic path executes `UniqueConsensus`, while the crystallized-operator
 path already owns bounded role search and canonical action equivalence. Adding
-another executor would preserve the defect. New V2 packages must converge on
+another executor would preserve the defect. New V3 packages must converge on
 the existing crystallized path.
 
 ### 3.5 Diagnostic ownership drift
@@ -188,7 +191,7 @@ TransferFamilyId
 
 EffectLawId
   The only authority for semantic-law equality. Derived only from canonical
-  CanonicalEffectLawV2 bytes.
+  CanonicalEffectLawV3 bytes.
 
 OperatorPackageId
   Identity of the complete executable artifact: law, modes, role program,
@@ -207,7 +210,7 @@ It must not remain an independent grouping authority.
 Proposed source-neutral contract:
 
 ```rust
-struct CanonicalEffectLawV2 {
+struct CanonicalEffectLawV3 {
     schema: EffectLawSchema,
     topology: CanonicalEffectGraph,
     role_schema: Box<[EffectRole]>,
@@ -225,7 +228,7 @@ incomplete, or over-budget canonicalization returns no `EffectLawId`.
 `EffectLawId` is computed as:
 
 ```text
-sha256(domain_separator || canonical_versioned_bytes(CanonicalEffectLawV2))
+sha256(domain_separator || canonical_versioned_bytes(CanonicalEffectLawV3))
 ```
 
 Canonical bytes must not contain:
@@ -466,7 +469,13 @@ Completed receipt:
 plans/effect-law-unification-v1/STOP_F1_DIAGNOSTIC_OWNERSHIP.md
 ```
 
-### F2: Implement CanonicalEffectLawV2
+### F2: Implement CanonicalEffectLawV3
+
+Completed receipt:
+
+```text
+plans/effect-law-unification-v1/STOP_F2_CANONICAL_EFFECT_LAW_V3.md
+```
 
 Work:
 
@@ -500,24 +509,83 @@ authority false
 
 Work:
 
-1. Compute legacy semantic signature and V2 `EffectLawId` for the same verified
+1. Compute legacy semantic signature and V3 `EffectLawId` for the same verified
    rows.
-2. Produce explicit legacy-to-V2 merge/split maps.
+2. Produce explicit legacy-to-V3 merge/split maps.
 3. Explain every disagreement using retained structural facets.
 4. Keep `SemanticAliasGraph` authority on V1 during this phase.
 
 Required report:
 
 ```text
-legacy cohort -> V2 cohorts
-V2 cohort -> physical programs
+legacy cohort -> V3 cohorts
+V3 cohort -> physical programs
 false legacy merges
-unexpected V2 splits
+unexpected V3 splits
 unknown/censored rows
 ```
 
 STOP-F3 receipt: no unexplained merge or split. If disagreement cannot be
-resolved from verified evidence, V2 remains shadow.
+resolved from verified evidence, V3 remains shadow.
+
+Completed receipts:
+
+```text
+plans/effect-law-unification-v1/STOP_F3_DUAL_CLASSIFICATION_V1_V3.md
+plans/effect-law-unification-v1/STOP_F3R_PAIRWISE_DISCREPANCY_REPAIR.md
+```
+
+### B1A: Freeze Binding Version Space
+
+Work:
+
+1. Build `PreActionBindingSurfaceV1` without expected response, teacher action,
+   post-state, or expected value digest.
+2. Enumerate bounded label-blind candidates and structural relations.
+3. Freeze every candidate graph before joining expected binding receipts.
+4. Evaluate the exact bounded hypothesis space without Wave or thresholds.
+5. Emit an identifiable action-equivalence class or explicit
+   `INSUFFICIENT_BINDING_EVIDENCE` with all ties and distinguishing probes.
+
+Completed receipt:
+
+```text
+plans/effect-law-unification-v1/STOP_B1A_BINDING_EVIDENCE.md
+plans/effect-law-unification-v1/STOP_B1A_BINDING_EVIDENCE.json
+```
+
+STOP-B1A result:
+
+```text
+frozen denominator                    129 / 129
+exceptional rows                       10 / 10
+complete hypotheses                     0
+unresolved ties                        86 / 86
+distinguishing probes                  86 / 86
+verdict                                INSUFFICIENT_BINDING_EVIDENCE
+required missing relation              parent_action_to_capability_instance
+selector / ProtocolMode / authority    NOT CREATED
+```
+
+### B1B: Acquire Causal Binding Evidence
+
+B1B is the next permitted stage and is not started by STOP-B1A. New traces
+must preserve the label-free relation from the active parent action to the
+specific capability instance while holding names, values, order, prefixes,
+and layout constant or adversarially varying them.
+
+Teacher or expected action data remains evaluation-only and must not enter
+candidate extraction. B1B may produce a new trusted evidence package; it may
+not compile a selector or `ProtocolMode`.
+
+STOP-B1B receipt:
+
+```text
+all B1A ties evaluated against newly captured causal evidence
+parent_action_to_capability_instance observed or explicitly absent
+one action-equivalence class with wrong bindings = 0, or renewed INSUFFICIENT
+no selector / ProtocolMode / execution authority
+```
 
 ### F4: Compile Bounded Protocol Modes
 
@@ -547,14 +615,14 @@ all admissible covers canonically action-equivalent, otherwise BLOCK
 
 Work:
 
-1. Compile V2 mode sets into the existing crystallized-operator route.
+1. Compile V3 mode sets into the existing crystallized-operator route.
 2. Use `RuntimeRoleBinder` for all runtime operand selection.
 3. Require complete search and one action-equivalence class.
 4. Bind physical capability symbols only from the advertised capability
    surface.
 5. Keep Wave after structural validity as a bounded applicability/ranking
    mechanism.
-6. Make `execute_unique_consensus` a V1 compatibility decoder; no new V2
+6. Make `execute_unique_consensus` a V1 compatibility decoder; no new V3
    package may be emitted through it.
 
 STOP-F5 receipt:
@@ -596,7 +664,7 @@ parity mismatches             0
 
 ### F7: New Generation And Persistence
 
-V2 uses a new schema and checkpoint namespace. Existing ACTIVE or frozen
+V3 uses a new schema and checkpoint namespace. Existing ACTIVE or frozen
 packages are never reinterpreted in place.
 
 Any change to these values creates a new generation:
@@ -729,10 +797,10 @@ Migration is dual-run, not big-bang:
 
 ```text
 V1 runtime remains available
-V2 starts with effect_law_v2_shadow = false/disabled authority
-V1 and V2 state use separate schema namespaces
+V3 starts with effect_law_v3_shadow = false/disabled authority
+V1 and V3 state use separate schema namespaces
 no ACTIVE generation is mutated
-disable V2 to roll back
+disable V3 to roll back
 fallback path remains intact
 ```
 
@@ -792,9 +860,9 @@ Do not narrate ordinary assignments, iteration, or serialization.
 The refactor is complete only when:
 
 ```text
-one CanonicalEffectLawV2 owns semantic equality
+one CanonicalEffectLawV3 owns semantic equality
 EffectGraph is topology, not a competing semantic authority
-legacy signatures no longer group V2 authority
+legacy signatures no longer group V3 authority
 structural protocol modes cover verified surfaces without WRONG
 RuntimeRoleBinder owns runtime operands
 all mappings collapse to one action class or ABSTAIN

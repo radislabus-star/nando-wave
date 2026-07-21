@@ -683,6 +683,15 @@ impl OnlineResponseStream {
             .semantic_law_evidence_audit(signatures)
     }
 
+    pub fn semantic_law_binding_evidence_report(
+        &self,
+        signatures: &BTreeSet<String>,
+    ) -> Result<crate::BindingVersionSpaceReportV1, String> {
+        self.miner
+            .self_training_v2
+            .semantic_law_binding_evidence_report(signatures)
+    }
+
     pub fn persist_now(&mut self) -> Result<(), String> {
         self.persist()
     }
