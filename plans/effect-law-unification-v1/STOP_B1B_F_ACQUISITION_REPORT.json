@@ -1,0 +1,27 @@
+{
+  "execution_authority": false,
+  "expected_labels_joined": false,
+  "extended_capture_index_file_sha256": "8e7fbe63f8fc6e92da2737a72117ef207afc6d7403f933ce900c8f617f3f53f4",
+  "extended_capture_index_sha256": "c42869dd7839a00ef48f1083aa370769493a371ff69ca6c4f5e45bd3535fabc8",
+  "future_batch_sha256": "b81fb4add33e22c6fe074bab89682fb6655fc257b08881884893d9a9368f0b3c",
+  "future_batch_transport": "stdout_pipe_only",
+  "future_rows": 12,
+  "future_session_slots": 4,
+  "h0_status": "UNPROVEN",
+  "h1_status": "UNPROVEN",
+  "intervention_rows": {
+    "I1": 2,
+    "I2": 2,
+    "I3": 2,
+    "I4": 2,
+    "I5": 2,
+    "I6": 2
+  },
+  "protocol_receipt_sha256": "9b167a72feefe5a80d619f345a69995ccf4a045fa09c7cc69425dc02e33dbd51",
+  "raw_payload_persisted": false,
+  "schema": "nando.binding-future-acquisition-report.v1",
+  "source": "controlled_label_blind_post_freeze_interventions_v1",
+  "stage": "B1B-F",
+  "support_capture_index_sha256": "6767c53f13fd42f74c55c154610ec69f534a874efee68f2eaf722b46bc5055ea",
+  "support_freeze_file_sha256": "8a856f4abc9f56b3c618c78acb0d38e9a93b3b10a0f0a7cf1dc0248f38bb2a5f"
+}

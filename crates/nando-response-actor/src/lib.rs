@@ -3,6 +3,7 @@ mod authority;
 mod backward_wave;
 mod binding_evidence;
 mod binding_evidence_capture_owner;
+mod binding_evidence_future_capture;
 mod binding_evidence_preregistration;
 mod capture_provenance;
 mod causal;
@@ -87,6 +88,14 @@ pub use binding_evidence_capture_owner::{
     BindingSupportCaptureBatchV1, BindingSupportCaptureErrorV1, BindingSupportCaptureOwnerV1,
     BindingSupportCaptureRowV1, BindingSupportFreezeReportV1, BindingSupportFreezeV1,
     MAX_BINDING_SUPPORT_CAPTURE_ROWS_V1, MIN_BINDING_SUPPORT_CAPTURE_ROWS_V1,
+};
+pub use binding_evidence_future_capture::{
+    BINDING_FUTURE_ACQUISITION_PROTOCOL_SCHEMA_V1, BINDING_FUTURE_CAPTURE_BATCH_SCHEMA_V1,
+    BINDING_FUTURE_CAPTURE_FREEZE_SCHEMA_V1, BINDING_FUTURE_CAPTURE_ROW_SCHEMA_V1,
+    BindingFutureAcquisitionProtocolV1, BindingFutureCaptureBatchV1, BindingFutureCaptureErrorV1,
+    BindingFutureCaptureFreezeV1, BindingFutureCaptureInputV1, BindingFutureCaptureOwnerV1,
+    BindingFutureCaptureReportV1, BindingFutureCaptureSlotV1, BindingFutureChallengeContractV1,
+    BindingFutureSourceContractV1, binding_future_acquisition_protocol_v1,
 };
 pub use binding_evidence_preregistration::{
     BINDING_CAPTURE_WATERMARK_SCHEMA_V1, BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1,

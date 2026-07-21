@@ -14,7 +14,8 @@ F3 dual classification          COMPLETE / STOP-F3R
 B1A binding version space       COMPLETE / INSUFFICIENT at STOP-B1A
 B1B0 scientific preregistration COMPLETE / STOP-B1B0R
 B1B-S support acquisition       COMPLETE / SUPPORT FROZEN
-B1B-F future acquisition        NOT OPENED
+B1B-F0 future protocol          COMPLETE / PROTOCOL FROZEN
+B1B-F future acquisition        COMPLETE / FUTURE FROZEN
 B1B adjudication                NOT STARTED
 F4 protocol mode compiler       BLOCKED pending B1B causal evidence
 production authority            false
@@ -591,6 +592,7 @@ The mandatory acquisition order is:
 B1B-S controlled label-blind support capture
 -> independent capture owner seals exact index prefix
 -> STOP-B1B-S checkpoint
+-> B1B-F0 freezes source, slots, sessions, challenges, and budgets
 -> B1B-F new post-freeze future capture
 -> trusted label resolver and H0/H1 adjudication
 -> STOP-B1B
@@ -603,6 +605,25 @@ frozen candidate graph, and exact watermark. Expected labels are deliberately
 not joined at this stage, so positive/negative denominators remain pending the
 trusted resolver; H0 and H1 remain unproven. Future is not open.
 
+STOP-B1B-F0 binds the future-only owner to the exact committed B1B-S freeze,
+watermark, receipt, capture-index root, and sequence 12 boundary. It freezes 12
+label-blind slots over four new session partitions, two rows for each I1-I6,
+at least three unseen wire shapes, field-name disjointness from support, and an
+ordinal/layout trap with the same candidate action set. No future row was
+captured while defining or testing this protocol; test fixtures are proof-only.
+Restart reconstruction requires the exact pinned support-freeze and watermark
+artifacts plus a future receipt persisted outside the bundle, then repeats the
+full prefix and structural-challenge checks.
+
+STOP-B1B-F executed that protocol through two separate processes. The producer
+published an exact capture-index extension before sending the bounded raw batch
+through a pipe; the capture owner consumed the pipe, independently rebuilt all
+candidate graphs, and persisted only commitments and privacy-safe structural
+state. The result contains 12/12 post-watermark rows, four future-only session
+lineages, two rows for each I1-I6 intervention, 12 distinct unseen shape roots,
+and six ordinal/layout trap pairs. No expected label was joined, so H0 and H1
+remain unproven and B1B adjudication is still a separate closed stage.
+
 Preregistration receipt:
 
 ```text
@@ -614,6 +635,13 @@ plans/effect-law-unification-v1/STOP_B1B_S_SUPPORT_FREEZE.md
 plans/effect-law-unification-v1/STOP_B1B_S_SUPPORT_FREEZE.json
 plans/effect-law-unification-v1/STOP_B1B_S_FREEZE.json
 plans/effect-law-unification-v1/STOP_B1B_S_WATERMARK.json
+plans/effect-law-unification-v1/STOP_B1B_F0_FUTURE_ACQUISITION_PROTOCOL.json
+plans/effect-law-unification-v1/STOP_B1B_F0_FUTURE_ACQUISITION_FREEZE.md
+plans/effect-law-unification-v1/STOP_B1B_F_ACQUISITION_REPORT.json
+plans/effect-law-unification-v1/STOP_B1B_F_CAPTURE_REPORT.json
+plans/effect-law-unification-v1/STOP_B1B_F_EXTERNAL_RECEIPT.json
+plans/effect-law-unification-v1/STOP_B1B_F_FREEZE.json
+plans/effect-law-unification-v1/STOP_B1B_F_FUTURE_FREEZE.md
 ```
 
 `STOP-B1B0R` preserves the original no-run freeze and repairs its acquisition
@@ -628,6 +656,15 @@ the same `(label, intervention)` vote.
 that B1B-F must extend. Reclassifying these support rows as future, replacing the
 watermark, joining labels before all future graphs freeze, or opening F4 from
 this receipt is forbidden.
+
+`STOP-B1B-F0` is protocol-only. Its Rust causal fixtures exercise chronology,
+lineage, topology, and leakage attacks but are not admissible rows. B1B-F must
+run the frozen schedule without changing F0 after observing a future outcome.
+
+`STOP-B1B-F` is future-only. Its checked-in external receipt and frozen bundle
+bind the exact 12-row extension; they contain no expected action or adjudicated
+hypothesis. Reopening acquisition, regenerating support, joining labels inside
+the capture owner, or starting F4 from this receipt is forbidden.
 
 STOP-B1B receipt:
 

@@ -1,0 +1,18 @@
+{
+  "schema": "nando.binding-future-external-receipt.v1",
+  "stop_id": "STOP-B1B-F",
+  "protocol_file_sha256": "bbc47739bcdac663b8bde8e3340608c9408b43ec18849956d76be3dd035491f8",
+  "protocol_receipt_sha256": "9b167a72feefe5a80d619f345a69995ccf4a045fa09c7cc69425dc02e33dbd51",
+  "support_freeze_file_sha256": "8a856f4abc9f56b3c618c78acb0d38e9a93b3b10a0f0a7cf1dc0248f38bb2a5f",
+  "support_watermark_file_sha256": "4eb5160744dfdf0ffd3717fbe91a918cadab797532b3bfa733172b3926dcbaa5",
+  "extended_capture_index_file_sha256": "8e7fbe63f8fc6e92da2737a72117ef207afc6d7403f933ce900c8f617f3f53f4",
+  "extended_capture_index_sha256": "c42869dd7839a00ef48f1083aa370769493a371ff69ca6c4f5e45bd3535fabc8",
+  "future_batch_sha256": "b81fb4add33e22c6fe074bab89682fb6655fc257b08881884893d9a9368f0b3c",
+  "future_freeze_file_sha256": "b0ae6f325ff9a5f910d9875d5430f95d5092228e371045db5d49eb365fe88717",
+  "trusted_future_receipt_sha256": "790390253e2e830fe0afdf408a4c5acdeb0d60533ce01fbbf7b5d5a1843575d7",
+  "future_rows": 12,
+  "expected_labels_joined": false,
+  "h0_status": "UNPROVEN",
+  "h1_status": "UNPROVEN",
+  "execution_authority": false
+}

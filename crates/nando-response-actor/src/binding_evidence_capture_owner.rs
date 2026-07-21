@@ -337,6 +337,25 @@ impl BindingSupportFreezeV1 {
     pub fn receipt_sha256(&self) -> &str {
         &self.receipt_sha256
     }
+
+    #[must_use]
+    pub fn capture_index(&self) -> &CaptureCommitmentIndex {
+        &self.capture_index
+    }
+
+    pub(crate) fn support_capture_records(&self) -> Vec<&EvidenceLedgerRecord> {
+        self.support_rows
+            .iter()
+            .map(|row| &row.capture_record)
+            .collect()
+    }
+
+    pub(crate) fn support_session_lineage_sha256s(&self) -> BTreeSet<String> {
+        self.support_rows
+            .iter()
+            .map(|row| row.session_lineage_sha256.clone())
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -1549,6 +1549,14 @@ core. Never turn discovery into selection among a few pre-named programs.
     B1B acquisition must therefore stop after a support-only capture owner seals
     that prefix. Future collection is a separate process and cannot begin in the
     support-freeze change.
+    Before the first future event, a separate F0 receipt must freeze the exact
+    support roots, future slot schedule, lineage partition, structural challenge,
+    and acquisition budgets. Restart must revalidate the pinned support artifact
+    and an externally persisted future receipt, not trust a locally recomputed
+    bundle digest. Proof-only future fixtures are never evidence.
+    Future capture ends at an immutable, label-blind graph freeze. Expected
+    actions may be joined only by the later trusted resolver; a future freeze
+    alone cannot prove a binding relation or unlock protocol compilation.
 11. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
 12. State is bounded and compact. Normal startup must not rescan unbounded
     history, and the hot path must not append unbounded payloads.

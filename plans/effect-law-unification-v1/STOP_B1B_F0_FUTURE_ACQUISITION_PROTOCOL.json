@@ -1,0 +1,106 @@
+{
+  "schema": "nando.binding-future-acquisition-protocol.v1",
+  "receipt_sha256": "9b167a72feefe5a80d619f345a69995ccf4a045fa09c7cc69425dc02e33dbd51",
+  "stop_id": "STOP-B1B-F0",
+  "pinned_support_commit_id": "a3f8f05f5b8d8928c1044ed38eb107fb8be27e5b",
+  "support_freeze_file_sha256": "8a856f4abc9f56b3c618c78acb0d38e9a93b3b10a0f0a7cf1dc0248f38bb2a5f",
+  "support_freeze_receipt_sha256": "c614e71c8856eb8c5787df694be4a79474caf5206a03739b7eec29e3a018241f",
+  "support_watermark_file_sha256": "4eb5160744dfdf0ffd3717fbe91a918cadab797532b3bfa733172b3926dcbaa5",
+  "support_capture_index_sha256": "6767c53f13fd42f74c55c154610ec69f534a874efee68f2eaf722b46bc5055ea",
+  "support_watermark_next_sequence": 12,
+  "source": {
+    "source_kind": "controlled_label_blind_post_freeze_interventions_v1",
+    "observation_source": "pre_action_wire",
+    "request_contract": "fixed_continue_active_execution",
+    "planned_future_rows": 12,
+    "planned_session_slots": 4,
+    "rows_per_intervention": {
+      "I1": 2,
+      "I2": 2,
+      "I3": 2,
+      "I4": 2,
+      "I5": 2,
+      "I6": 2
+    },
+    "slots": [
+      {
+        "slot_id": "F00",
+        "intervention_id": "I1",
+        "session_slot": "S0"
+      },
+      {
+        "slot_id": "F01",
+        "intervention_id": "I2",
+        "session_slot": "S0"
+      },
+      {
+        "slot_id": "F02",
+        "intervention_id": "I3",
+        "session_slot": "S0"
+      },
+      {
+        "slot_id": "F03",
+        "intervention_id": "I4",
+        "session_slot": "S1"
+      },
+      {
+        "slot_id": "F04",
+        "intervention_id": "I5",
+        "session_slot": "S1"
+      },
+      {
+        "slot_id": "F05",
+        "intervention_id": "I6",
+        "session_slot": "S1"
+      },
+      {
+        "slot_id": "F06",
+        "intervention_id": "I1",
+        "session_slot": "S2"
+      },
+      {
+        "slot_id": "F07",
+        "intervention_id": "I2",
+        "session_slot": "S2"
+      },
+      {
+        "slot_id": "F08",
+        "intervention_id": "I3",
+        "session_slot": "S2"
+      },
+      {
+        "slot_id": "F09",
+        "intervention_id": "I4",
+        "session_slot": "S3"
+      },
+      {
+        "slot_id": "F10",
+        "intervention_id": "I5",
+        "session_slot": "S3"
+      },
+      {
+        "slot_id": "F11",
+        "intervention_id": "I6",
+        "session_slot": "S3"
+      }
+    ],
+    "challenge": {
+      "minimum_distinct_future_shape_roots": 3,
+      "future_shape_must_be_absent_from_support": true,
+      "future_field_names_must_be_disjoint_from_support": true,
+      "minimum_ordinal_layout_trap_pairs": 1,
+      "trap_requires_equal_candidate_action_set": true,
+      "candidate_order_is_authority": false
+    },
+    "raw_payload_persisted": false,
+    "expected_labels_available": false,
+    "teacher_or_post_action_available": false
+  },
+  "future_rows_captured": 0,
+  "expected_labels_joined": false,
+  "h0_adjudicated": false,
+  "h1_adjudicated": false,
+  "protocol_mode_compiled": false,
+  "f4_started": false,
+  "execution_authority": false
+}
