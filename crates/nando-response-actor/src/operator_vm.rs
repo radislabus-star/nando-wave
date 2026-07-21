@@ -19,6 +19,7 @@ use crate::{
 pub(crate) use crate::operator_vm_compiler::{
     encode_renderer_program, encode_typed_actor_renderer_program,
 };
+#[cfg(test)]
 pub(crate) use nando_operator_runtime::execute_operator_page_with_actor;
 #[cfg(test)]
 pub(crate) use nando_operator_runtime::{OperatorVmError, execute_operator_page};
