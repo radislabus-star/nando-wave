@@ -15,9 +15,13 @@ pub mod effect_law;
 pub mod evidence;
 pub mod evidence_graph;
 pub mod executable_protocol_mode;
+pub mod online_checkpoint;
+pub mod online_subcenter;
 pub mod operator_generation;
+pub mod opportunity;
 pub mod protocol_mode;
 pub mod runtime_parity;
+pub mod semantic_alias;
 pub mod teacher_join;
 pub mod training_types;
 
@@ -33,9 +37,13 @@ pub use effect_law::*;
 pub use evidence::*;
 pub use evidence_graph::*;
 pub use executable_protocol_mode::*;
+pub use online_checkpoint::*;
+pub use online_subcenter::*;
 pub use operator_generation::*;
+pub use opportunity::*;
 pub use protocol_mode::*;
 pub use runtime_parity::*;
+pub use semantic_alias::*;
 pub use teacher_join::*;
 pub use training_types::*;
 
