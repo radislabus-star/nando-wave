@@ -695,7 +695,7 @@ pub fn evaluate_binding_version_space_v1(
             .iter()
             .filter(|node| node.action_equivalence_sha256 == expected)
         {
-            let atoms = feature_predicates(&node.features);
+            let atoms = binding_feature_predicates_v1(&node.features);
             add_predicate_subsets(
                 &atoms,
                 budget.max_predicates_per_hypothesis,
@@ -1267,7 +1267,9 @@ fn edge(
     }
 }
 
-fn feature_predicates(features: &BindingCandidateFeaturesV1) -> Vec<BindingPredicateV1> {
+pub(crate) fn binding_feature_predicates_v1(
+    features: &BindingCandidateFeaturesV1,
+) -> Vec<BindingPredicateV1> {
     vec![
         BindingPredicateV1::SourceEventClass {
             value: features.source_event_class,
@@ -1369,7 +1371,7 @@ fn score_hypothesis(
             .filter(|node| {
                 predicates
                     .iter()
-                    .all(|predicate| predicate_matches(predicate, node))
+                    .all(|predicate| binding_predicate_matches_v1(predicate, node))
             })
             .map(|node| node.action_equivalence_sha256.clone())
             .collect::<BTreeSet<_>>();
@@ -1411,7 +1413,10 @@ fn score_hypothesis(
     })
 }
 
-fn predicate_matches(predicate: &BindingPredicateV1, node: &BindingCandidateNodeV1) -> bool {
+pub(crate) fn binding_predicate_matches_v1(
+    predicate: &BindingPredicateV1,
+    node: &BindingCandidateNodeV1,
+) -> bool {
     match predicate {
         BindingPredicateV1::SourceEventClass { value } => {
             &node.features.source_event_class == value

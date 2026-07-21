@@ -1,9 +1,17 @@
 use super::*;
 use crate::protocol_mode::{BoundedProtocolModeCandidateV2, compile_protocol_modes_v2};
 use crate::{
-    BindingProtocolCompileVerdictV2, ProtocolModeCompilerBudgetV2, TrustedResolvedBindingRowV2,
-    compile_protocol_modes_for_effect_law_v3,
+    BindingCompletionStateV1, BindingEvidenceBudgetV1, BindingPredicateV1,
+    BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2, BindingRequestRelationV1,
+    BindingValueTypeV1, CanonicalEffectLawV3, FrozenCandidateRelationGraphV1,
+    PreActionBindingContextV1, PreActionBindingSurfaceV1, ProtocolArgumentRoleSchemaV2,
+    ProtocolArgumentRoleV2, ProtocolCapabilityContractV2, ProtocolConstantContractV2,
+    ProtocolModeCompilerBudgetV2, ProtocolModeProgramV2, ProtocolModeSetV2,
+    ProtocolRoleCardinalityV2, ProtocolSelectorProgramV2, ProtocolSourceRoleSchemaV2,
+    ProtocolSourceRoleV2, ProtocolStructuralGuardV2, ProtocolTemporalCardinalityContractV2,
+    ProtocolValueContractV2, TrustedResolvedBindingRowV2, compile_protocol_modes_for_effect_law_v3,
 };
+use serde_json::json;
 
 fn root(seed: &str) -> String {
     sha256_bytes(seed.as_bytes())
@@ -450,27 +458,366 @@ fn mode_candidate(
     effect_invariant_root: &str,
     claimed_positive_rows: Vec<String>,
 ) -> BoundedProtocolModeCandidateV2 {
+    let selector_program = ProtocolSelectorProgramV2 {
+        predicates: Vec::new(),
+        max_action_classes: 1,
+    };
+    let selector_program_root_sha256 =
+        protocol_component_root("selector-program", &selector_program);
+    let program = ProtocolModeProgramV2 {
+        source_role_schema: ProtocolSourceRoleSchemaV2 {
+            roles: vec![ProtocolSourceRoleV2 {
+                role_id: 0,
+                value_type: BindingValueTypeV1::Integer,
+                cardinality: ProtocolRoleCardinalityV2::OneActionClass,
+            }],
+        },
+        selector_program,
+        value_contract: ProtocolValueContractV2 {
+            observed: BindingValueTypeV1::Integer,
+            emitted: BindingValueTypeV1::Integer,
+        },
+        capability_contract: ProtocolCapabilityContractV2 {
+            protocol_facet_root_sha256: protocol_facet_root.to_owned(),
+            physical_program_ids_sha256: vec![root(&format!("{id}:physical-program"))],
+        },
+        argument_role_schema: ProtocolArgumentRoleSchemaV2 {
+            roles: vec![ProtocolArgumentRoleV2 {
+                argument_ordinal: 0,
+                source_role_id: 0,
+            }],
+        },
+        constant_contract: ProtocolConstantContractV2 {
+            semantic_constants_sha256: Vec::new(),
+            protocol_noop_constants_sha256: Vec::new(),
+            execution_budget_roots_sha256: Vec::new(),
+            transport_default_roots_sha256: Vec::new(),
+        },
+        structural_guard: ProtocolStructuralGuardV2 {
+            relation_identity_sha256: relation.to_owned(),
+            effect_invariant_root_sha256: effect_invariant_root.to_owned(),
+            selector_program_root_sha256,
+        },
+        temporal_cardinality_contract: ProtocolTemporalCardinalityContractV2 {
+            completion_states: Vec::new(),
+            temporal_distances: Vec::new(),
+            event_candidate_cardinalities: Vec::new(),
+            require_unique_action_class: true,
+        },
+    };
     BoundedProtocolModeCandidateV2 {
         candidate_id_sha256: root(id),
         effect_law_id_sha256: effect_law_id.to_owned(),
         relation_identity_sha256: relation.to_owned(),
         protocol_facet_root_sha256: protocol_facet_root.to_owned(),
         effect_invariant_root_sha256: effect_invariant_root.to_owned(),
-        source_role_schema_root_sha256: root("source-role-schema"),
-        selector_program_root_sha256: root(&format!("{id}:selector")),
-        observed_emitted_types_root_sha256: root("observed-emitted-types"),
-        capability_protocol_root_sha256: root("capability-protocol"),
-        argument_role_schema_root_sha256: root("argument-role-schema"),
-        constant_contract_root_sha256: root("constant-contract"),
-        structural_guard_root_sha256: root("structural-guard"),
-        temporal_cardinality_contract_root_sha256: root("temporal-cardinality"),
+        source_role_schema_root_sha256: protocol_component_root(
+            "source-role-schema",
+            &program.source_role_schema,
+        ),
+        selector_program_root_sha256: protocol_component_root(
+            "selector-program",
+            &program.selector_program,
+        ),
+        observed_emitted_types_root_sha256: protocol_component_root(
+            "observed-emitted-types",
+            &program.value_contract,
+        ),
+        capability_protocol_root_sha256: protocol_component_root(
+            "capability-protocol",
+            &program.capability_contract,
+        ),
+        argument_role_schema_root_sha256: protocol_component_root(
+            "argument-role-schema",
+            &program.argument_role_schema,
+        ),
+        constant_contract_root_sha256: protocol_component_root(
+            "constant-contract",
+            &program.constant_contract,
+        ),
+        structural_guard_root_sha256: protocol_component_root(
+            "structural-guard",
+            &program.structural_guard,
+        ),
+        temporal_cardinality_contract_root_sha256: protocol_component_root(
+            "temporal-cardinality",
+            &program.temporal_cardinality_contract,
+        ),
         action_class_root_sha256: action_class.to_owned(),
+        program,
         covers_positive_rows_sha256: claimed_positive_rows,
         accepts_negative_rows_sha256: Vec::new(),
         wrong_action_rows_sha256: Vec::new(),
         verify_failed_rows_sha256: Vec::new(),
         search_exhausted: false,
     }
+}
+
+fn protocol_component_root<T: serde::Serialize>(label: &str, value: &T) -> String {
+    crate::canonical_json_sha256(&(crate::PROTOCOL_MODE_SET_SCHEMA_V2, label, value))
+        .expect("protocol component digest")
+}
+
+fn scalar_binding_graph(
+    seed: &str,
+    target: u64,
+    request_mentions_target: bool,
+    wrapped: bool,
+    ambiguous: bool,
+) -> FrozenCandidateRelationGraphV1 {
+    let previous = target.saturating_sub(1);
+    let request = if ambiguous {
+        format!("continue with {previous} and {target}")
+    } else if request_mentions_target {
+        format!("continue with {target}")
+    } else {
+        "continue with another value".to_owned()
+    };
+    let payload = if ambiguous {
+        json!({
+            "first_surface": previous,
+            "second_surface": target
+        })
+    } else if wrapped {
+        json!({
+            "renamed_envelope": {
+                "renamed_events": [
+                    {"renamed_value": previous},
+                    {"renamed_value": target}
+                ]
+            }
+        })
+    } else {
+        json!({
+            "events": [
+                {"value": previous},
+                {"value": target}
+            ]
+        })
+    };
+    PreActionBindingSurfaceV1::capture(
+        root(&format!("{seed}:graph-row")),
+        root(&format!("{seed}:graph-evidence")),
+        &request,
+        &payload,
+        PreActionBindingContextV1 {
+            call_shape_count: 1,
+            capability_count: 1,
+            completion_state: BindingCompletionStateV1::Unresolved,
+            temporal_relation_count: 1,
+            cardinality_relation_count: 1,
+            topology_neighborhood_root_sha256: root("f4r2-context-topology"),
+        },
+        BindingEvidenceBudgetV1::default(),
+    )
+    .expect("structural pre-action surface")
+    .candidate_relation_graph(BindingEvidenceBudgetV1::default())
+    .expect("structural candidate graph")
+    .freeze()
+    .expect("frozen structural graph")
+}
+
+fn scalar_trial_for_graph(
+    seed: &str,
+    graph: &FrozenCandidateRelationGraphV1,
+    target: u64,
+    positive: bool,
+) -> PhysicalTrialReceiptV2 {
+    let mut input = actor_input(
+        seed,
+        if positive {
+            PhysicalActorOutcomeV2::Applied
+        } else {
+            PhysicalActorOutcomeV2::Abstained
+        },
+    );
+    input.frozen_graph_root_sha256 = graph.graph_root_sha256.clone();
+    input.candidate_action_digest_sha256 =
+        crate::canonical_json_sha256(&target).expect("target action digest");
+    let actor = observe_physical_actor_v2(input).expect("structural actor observation");
+    let verifier = verifier_for(
+        &actor,
+        if positive {
+            IndependentTrialVerifierOutcomeV2::Pass
+        } else {
+            IndependentTrialVerifierOutcomeV2::Abstain
+        },
+    );
+    seal_physical_trial_receipt_v2(joined_roots(&actor, &verifier), actor, verifier)
+        .expect("structural physical trial")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_structural_case(
+    graphs: &mut Vec<FrozenCandidateRelationGraphV1>,
+    trials: &mut Vec<PhysicalTrialReceiptV2>,
+    rows: &mut Vec<FrozenBindingTrialRowV2>,
+    seed: &str,
+    target: u64,
+    request_mentions_target: bool,
+    wrapped: bool,
+    ambiguous: bool,
+    partition: BindingEvidencePartitionV2,
+    label: BindingTrialEvidenceLabelV2,
+    relation: &str,
+    effect_invariant: &str,
+    facet: &str,
+    physical_program: &str,
+) {
+    let positive = label == BindingTrialEvidenceLabelV2::Positive;
+    let graph = scalar_binding_graph(seed, target, request_mentions_target, wrapped, ambiguous);
+    let trial = scalar_trial_for_graph(seed, &graph, target, positive);
+    rows.push(FrozenBindingTrialRowV2 {
+        frozen_row_root_sha256: trial.joined_roots.frozen_row_root_sha256.clone(),
+        frozen_graph_root_sha256: graph.graph_root_sha256.clone(),
+        capture_root_sha256: trial.joined_roots.capture_root_sha256.clone(),
+        partition,
+        evidence_label: label,
+        relation_identity_sha256: relation.to_owned(),
+        protocol_facet_root_sha256: facet.to_owned(),
+        effect_invariant_root_sha256: effect_invariant.to_owned(),
+        physical_program_id_sha256: physical_program.to_owned(),
+        surface_root_sha256: graph.graph_root_sha256.clone(),
+        receipt_source: TrustedBindingResolverReceiptSourceV2::ControlledFixture,
+    });
+    trials.push(trial);
+    graphs.push(graph);
+}
+
+fn structural_f4r2_fixture(
+    effect_law: &CanonicalEffectLawV3,
+    ambiguous_positive: bool,
+) -> (
+    AcceptedBindingLawEvidenceV2,
+    Vec<FrozenCandidateRelationGraphV1>,
+) {
+    let relation = root("parent-action-to-capability-instance-f4r2");
+    let facet_a = root("protocol-facet-wait");
+    let facet_b = root("protocol-facet-write-stdin");
+    let program_a = root("physical-program-wait");
+    let program_b = root("physical-program-write-stdin");
+    let mut graphs = Vec::new();
+    let mut trials = Vec::new();
+    let mut rows = Vec::new();
+    for (seed, target, wrapped, partition, facet, program) in [
+        (
+            "a-support-positive",
+            41,
+            false,
+            BindingEvidencePartitionV2::Support,
+            &facet_a,
+            &program_a,
+        ),
+        (
+            "a-future-positive",
+            42,
+            true,
+            BindingEvidencePartitionV2::Future,
+            &facet_a,
+            &program_a,
+        ),
+        (
+            "b-support-positive",
+            51,
+            true,
+            BindingEvidencePartitionV2::Support,
+            &facet_b,
+            &program_b,
+        ),
+        (
+            "b-future-positive",
+            52,
+            false,
+            BindingEvidencePartitionV2::Future,
+            &facet_b,
+            &program_b,
+        ),
+    ] {
+        push_structural_case(
+            &mut graphs,
+            &mut trials,
+            &mut rows,
+            seed,
+            target,
+            true,
+            wrapped,
+            ambiguous_positive,
+            partition,
+            BindingTrialEvidenceLabelV2::Positive,
+            &relation,
+            effect_law.effect_invariant_root_sha256(),
+            facet,
+            program,
+        );
+    }
+    for (seed, target, wrapped, partition, facet, program) in [
+        (
+            "a-support-negative",
+            43,
+            false,
+            BindingEvidencePartitionV2::Support,
+            &facet_a,
+            &program_a,
+        ),
+        (
+            "a-future-negative",
+            44,
+            true,
+            BindingEvidencePartitionV2::Future,
+            &facet_a,
+            &program_a,
+        ),
+        (
+            "b-support-negative",
+            53,
+            true,
+            BindingEvidencePartitionV2::Support,
+            &facet_b,
+            &program_b,
+        ),
+        (
+            "b-future-negative",
+            54,
+            false,
+            BindingEvidencePartitionV2::Future,
+            &facet_b,
+            &program_b,
+        ),
+    ] {
+        push_structural_case(
+            &mut graphs,
+            &mut trials,
+            &mut rows,
+            seed,
+            target,
+            false,
+            wrapped,
+            false,
+            partition,
+            BindingTrialEvidenceLabelV2::ApplicabilityNegative,
+            &relation,
+            effect_law.effect_invariant_root_sha256(),
+            facet,
+            program,
+        );
+    }
+    let resolver_program = root("trusted-structural-resolver-f4r2");
+    let external_manifest_root =
+        trusted_binding_resolver_manifest_root_v2(&rows, &trials, &resolver_program)
+            .expect("structural resolver manifest");
+    let resolved = resolve_trusted_binding_rows_v2(TrustedBindingResolverInputV2 {
+        frozen_rows: rows,
+        physical_trials: trials,
+        resolver_program_digest_sha256: resolver_program,
+        external_manifest_root_sha256: external_manifest_root,
+    })
+    .expect("trusted structural rows");
+    let outcome =
+        adjudicate_binding_law_evidence_v2(&resolved, &relation).expect("structural adjudication");
+    let BindingAdjudicationOutcomeV2::Accepted(evidence) = outcome else {
+        panic!("structural evidence should be accepted");
+    };
+    (evidence, graphs)
 }
 
 fn rows_with_label(
@@ -556,17 +903,11 @@ fn end_to_end_controlled_evidence_reaches_unique_safe_protocol_mode_set() {
 #[test]
 fn typed_effect_law_entrypoint_binds_action_equivalence() {
     let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-typed-law");
-    let (resolved, relation, _, _) = controlled_resolved_fixture_with_effect_invariant(
-        effect_law.effect_invariant_root_sha256(),
-    );
-    let outcome =
-        adjudicate_binding_law_evidence_v2(&resolved, &relation).expect("adjudication outcome");
-    let BindingAdjudicationOutcomeV2::Accepted(evidence) = outcome else {
-        panic!("controlled evidence should produce capability");
-    };
+    let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, false);
     let mode_set = compile_protocol_modes_for_effect_law_v3(
         &evidence,
         &effect_law,
+        &graph_views,
         ProtocolModeCompilerBudgetV2::default(),
     )
     .expect("typed compile");
@@ -576,22 +917,119 @@ fn typed_effect_law_entrypoint_binds_action_equivalence() {
     );
     assert_eq!(mode_set.modes.len(), 2);
     assert!(
+        mode_set
+            .modes
+            .iter()
+            .all(|mode| mode.covered_positive_rows_sha256.len() == 2)
+    );
+    assert!(
         mode_set.modes.iter().all(
             |mode| mode.action_class_root_sha256 == effect_law.action_equivalence_root_sha256()
         )
     );
+    assert!(mode_set.modes.iter().all(|mode| {
+        mode.program.selector_program.predicates
+            == vec![BindingPredicateV1::RequestRelation {
+                value: BindingRequestRelationV1::Mentioned,
+            }]
+    }));
+    let bytes = mode_set.canonical_bytes().expect("canonical mode set");
+    let restored = ProtocolModeSetV2::from_canonical_bytes(&bytes).expect("restart mode set");
+    assert_eq!(restored, mode_set);
+    assert_eq!(restored.canonical_bytes().expect("restart bytes"), bytes);
 
     let incompatible_law =
         crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-incompatible-law");
     let rejected = compile_protocol_modes_for_effect_law_v3(
         &evidence,
         &incompatible_law,
+        &graph_views,
         ProtocolModeCompilerBudgetV2::default(),
     )
     .expect("typed incompatible compile");
     assert_eq!(rejected.verdict, BindingProtocolCompileVerdictV2::Abstain);
     assert_eq!(rejected.wrong_actions, 0);
     assert_eq!(rejected.positive_rows_covered, 0);
+}
+
+#[test]
+fn canonical_f4_rejects_missing_or_tampered_graph_payload() {
+    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-graph-seal");
+    let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, false);
+    assert_eq!(
+        compile_protocol_modes_for_effect_law_v3(
+            &evidence,
+            &effect_law,
+            &graph_views[..graph_views.len() - 1],
+            ProtocolModeCompilerBudgetV2::default(),
+        ),
+        Err(BindingProtocolCompilerErrorV2::InvalidGraphView)
+    );
+    let mut extra = graph_views.clone();
+    extra.push(scalar_binding_graph(
+        "f4r-extra-graph",
+        99,
+        true,
+        false,
+        false,
+    ));
+    assert_eq!(
+        compile_protocol_modes_for_effect_law_v3(
+            &evidence,
+            &effect_law,
+            &extra,
+            ProtocolModeCompilerBudgetV2::default(),
+        ),
+        Err(BindingProtocolCompilerErrorV2::InvalidGraphView)
+    );
+    let mut tampered = graph_views;
+    tampered[0].graph.context.capability_count = 2;
+    assert_eq!(
+        compile_protocol_modes_for_effect_law_v3(
+            &evidence,
+            &effect_law,
+            &tampered,
+            ProtocolModeCompilerBudgetV2::default(),
+        ),
+        Err(BindingProtocolCompilerErrorV2::InvalidGraphView)
+    );
+}
+
+#[test]
+fn canonical_f4_abstains_when_structural_roles_remain_symmetric() {
+    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-symmetric");
+    let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, true);
+    let mode_set = compile_protocol_modes_for_effect_law_v3(
+        &evidence,
+        &effect_law,
+        &graph_views,
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("symmetric compile");
+    assert_eq!(mode_set.verdict, BindingProtocolCompileVerdictV2::Abstain);
+    assert!(mode_set.modes.is_empty());
+    assert_eq!(mode_set.positive_rows, 4);
+    assert_eq!(mode_set.positive_rows_covered, 0);
+    assert!(mode_set.wrong_actions > 0);
+    assert!(!mode_set.execution_authority);
+}
+
+#[test]
+fn canonical_f4_restart_rejects_tampered_selector_program() {
+    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-restart-tamper");
+    let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, false);
+    let mode_set = compile_protocol_modes_for_effect_law_v3(
+        &evidence,
+        &effect_law,
+        &graph_views,
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("typed compile");
+    let mut value = serde_json::to_value(mode_set).expect("mode set value");
+    value["modes"][0]["program"]["selector_program"]["max_action_classes"] = json!(2);
+    let mut bytes = serde_json::to_vec_pretty(&value).expect("tampered canonical bytes");
+    bytes.push(b'\n');
+    assert!(ProtocolModeSetV2::from_canonical_bytes(&bytes).is_err());
 }
 
 #[test]

@@ -1,17 +1,60 @@
 {
-  "schema": "nando.stop-f4-protocol-compiler.v1",
-  "revision": "F4R",
+  "schema": "nando.stop-f4-protocol-compiler.v2",
+  "revision": "F4R2",
   "date": "2026-07-21",
-  "base_head": "093c63c09e1df2f035cfe97478af21411a82b4ff",
-  "verdict": "F4R_CODE_COMPLETE_CONTROLLED_PASS_REAL_ADMISSION_BLOCKED",
+  "base_head": "f87dc6018995b00eb0880966130d0ad36b7d1f54",
+  "verdict": "F4R2_CONTROLLED_STRUCTURAL_PASS_REAL_ADMISSION_BLOCKED",
   "authority": false,
-  "f4": {
-    "proof_boundary_skeleton": "PASS",
-    "canonical_compiler": "PASS_ON_CONTROLLED_EVIDENCE",
-    "controlled_compiler_tests": "PASS",
-    "real_evidence_admission": "BLOCK",
-    "production_authority": false,
-    "f5_runtime_grounding": "NOT_STARTED"
+  "compiler": {
+    "canonical_entrypoint": "compile_protocol_modes_for_effect_law_v3",
+    "manual_candidate_entrypoint": "cfg_test_only",
+    "sealed_graph_payload_required": true,
+    "internal_structural_candidate_generation": true,
+    "selector_executed_over_every_graph": true,
+    "labels_score_after_execution": true,
+    "caller_supplied_coverage_authority": false,
+    "bounded_exact_cover": true,
+    "all_complete_covers_action_equivalent_required": true,
+    "execution_authority": false
+  },
+  "program": {
+    "typed_executable_payload": true,
+    "reuses_binding_predicate_v1": true,
+    "reuses_frozen_candidate_relation_graph_v1": true,
+    "second_graph_language_added": false,
+    "current_role_cardinality": "ONE_ACTION_CLASS",
+    "field_names_or_target_values_serialized": false
+  },
+  "controlled_result": {
+    "protocol_facets": 2,
+    "positive_rows": 4,
+    "applicability_negative_rows": 4,
+    "support_future_per_facet": "1/1 positive and 1/1 negative",
+    "renamed_wrapped_transfer": "PASS",
+    "selected_modes": 2,
+    "selected_selector": "request_relation=mentioned",
+    "positive_rows_covered": 4,
+    "wrong_actions": 0,
+    "verify_failed": 0,
+    "negative_accepts": 0,
+    "search_exhausted": false,
+    "action_equivalence_classes": 1,
+    "production_admissible": false,
+    "execution_authority": false
+  },
+  "fail_closed": {
+    "missing_graph_payload": "InvalidGraphView",
+    "extra_graph_payload": "InvalidGraphView",
+    "tampered_graph_payload": "InvalidGraphView",
+    "symmetric_roles": "ABSTAIN",
+    "incompatible_effect_law": "ABSTAIN",
+    "search_exhaustion": "ABSTAIN",
+    "wrong_action": "REJECT_BEFORE_COVER",
+    "verify_failed": "REJECT_BEFORE_COVER",
+    "negative_accept": "REJECT_BEFORE_COVER",
+    "non_equivalent_covers": "ABSTAIN",
+    "tampered_restart_program": "REJECT",
+    "restart": "BYTE_IDENTICAL"
   },
   "v1_compatibility": {
     "golden_json_unchanged": true,
@@ -22,92 +65,22 @@
       "STOP_B1B_PHYSICAL_LABEL_RECEIPTS.json": "91993bfff1296e741e314a5150ff6aabd68c1842417b53a73b92d84bd8985314"
     }
   },
-  "v2_receipt_security": {
-    "matching_actor_verifier_roots": "PASS",
-    "different_actor_program_digest_rejects": "PASS",
-    "different_verifier_program_digest_rejects": "PASS",
-    "same_actor_verifier_program_rejects": "PASS",
-    "changed_candidate_action_rejects": "PASS",
-    "changed_pre_post_delta_root_rejects": "PASS",
-    "changed_graph_capture_root_rejects": "PASS",
-    "actor_or_verifier_receipt_mutation_rejects": "PASS",
-    "verifier_disagrees": "FAIL_RECEIPT_NO_AUTHORITY",
-    "timeout_or_environment_unavailable": "CENSORED_NO_SEMANTIC_EVIDENCE",
-    "v1_fixture_conversion": "IMPOSSIBLE_BY_SOURCE_BOUNDARY",
-    "json_roundtrip": "BYTE_IDENTICAL"
-  },
-  "resolver_integrity": {
-    "opaque_rows": true,
-    "requires_external_manifest_root": true,
-    "does_not_build_scenes": true,
-    "does_not_execute_actor": true,
-    "tampered_manifest_root_rejects": true,
-    "execution_authority": false
-  },
-  "capability": {
-    "accepted_binding_law_evidence_opaque": true,
-    "created_only_by_adjudicator": true,
-    "deserializable_from_json": false,
-    "public_constructor": false,
-    "report_can_become_capability": false,
-    "contains_selector": false,
-    "contains_protocol_mode": false,
-    "execution_authority": false
-  },
-  "compiler": {
-    "canonical_entrypoint": "compile_protocol_modes_for_effect_law_v3",
-    "manual_candidate_entrypoint": "cfg_test_only",
-    "input_effect_law": "CanonicalEffectLawV3",
-    "internal_candidate_generation": true,
-    "caller_supplied_coverage_authority": false,
-    "matrix_derived_from_trusted_rows": true,
-    "exact_cover_search": true,
-    "positive_coverage_complete_required": true,
-    "wrong_actions_zero_required": true,
-    "verify_failed_zero_required": true,
-    "negative_accepts_zero_required": true,
-    "search_not_exhausted_required": true,
-    "all_complete_covers_action_equivalent_required": true,
-    "abstain_clears_selected_modes": true,
-    "execution_authority": false
-  },
-  "exact_cover_control": {
-    "mode_a_alone": "ABSTAIN",
-    "mode_a_union_mode_b": "ProtocolModeSet",
-    "non_equivalent_full_covers": "ABSTAIN",
-    "claimed_positive_rows_are_non_authoritative": true,
-    "known_negative_match_abstains": true,
-    "unknown_claimed_negative_is_not_counted_as_evidence": true
-  },
-  "controlled_protocol_mode_output": {
-    "verdict": "ProtocolModeSet",
-    "selected_modes": 2,
-    "action_equivalence_classes": 1,
-    "positive_rows": 2,
-    "positive_rows_covered": 2,
-    "wrong_actions": 0,
-    "verify_failed": 0,
-    "negative_accepts": 0,
-    "search_exhausted": false,
-    "production_admissible": false,
-    "execution_authority": false
-  },
   "checks": {
-    "physical_trial_v2_tests": "15/15 PASS",
-    "binding_evidence_adjudication_tests": "24/24 PASS",
+    "remote_build_root": "e@192.168.3.94:/home/e/projects/nando-wave-f4r2-build",
+    "physical_trial_v2_tests": "18/18 PASS",
+    "binding_evidence_suite": "97/97 PASS",
     "effect_law_v3_tests": "40/40 PASS",
     "historical_effect_law_tests": "15/15 PASS",
-    "binding_evidence_suite": "94/94 PASS",
     "cargo_check_all_targets": "PASS",
     "rustfmt_check": "PASS",
     "git_diff_check": "PASS",
-    "full_lib_baseline": "496 PASS / 26 known FAIL",
-    "clippy": "BLOCKED_BY_EXISTING_SEMANTIC_ALIAS_UNWRAP_ERRORS_17_LEGACY_WARNINGS_NO_F4R_FILE_DIAGNOSTICS"
+    "full_lib_baseline": "499 PASS / 26 known FAIL",
+    "clippy": "BLOCKED_BY_12_EXISTING_LIBRARY_AND_8_TEST_ONLY_DIAGNOSTICS_NO_F4R2_FILE_DIAGNOSTICS"
   },
   "nanda_owner_routes": {
-    "f4r_compiler_owner": "PASS",
-    "f4r_proof_boundary_owner": "PASS",
-    "f4r_authority_boundary": "PASS",
+    "compiler_owner": "PASS",
+    "matrix_proof_owner": "PASS",
+    "admission_boundary": "PASS",
     "authority_ready": false
   },
   "live_transition_gate": {
@@ -120,20 +93,18 @@
     "runtime_parity_mismatches": 0
   },
   "graphify": {
-    "updated": true,
-    "nodes": 24667,
-    "edges": 56605,
-    "communities": 1066
+    "status": "PENDING_FINAL_COMMIT"
   },
   "production_boundary": {
-    "production_callers_of_canonical_f4_api": 0,
+    "production_callers_of_canonical_f4r2_api": 0,
+    "real_independent_b1b_receipts": "0 / NOT_EVALUATED",
+    "f5_runtime_grounding": "NOT_STARTED",
+    "actor_verifier_connected_from_f4r2": false,
+    "admission_connected_from_f4r2": false,
     "runtime_changed": false,
-    "admission_changed": false,
-    "generation_changed": false,
-    "checkpoint_changed": false,
+    "generation_or_checkpoint_changed": false,
     "deploy": false,
     "restart": false,
-    "push": false,
-    "real_independent_b1b_receipts": "0 / NOT_EVALUATED"
+    "execution_authority": false
   }
 }

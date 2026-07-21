@@ -150,13 +150,15 @@ V1/V3 dual classification                    COMPLETE / STOP-F3R
 B1A bounded binding version space             COMPLETE / INSUFFICIENT
 B1B label-blind support and future             FROZEN
 B1B controlled causal fixture                  CONTROLLED_FIXTURE_PASS
-independent physical-truth ownership            BLOCK
-AcceptedBindingLawEvidence                      BLOCK
-F4 Protocol Compiler                            BLOCKED
+physical trial / trust / adjudication owners    COMPLETE
+AcceptedBindingLawEvidence capability            CONTROLLED_ONLY
+F4R2 executable ProtocolMode compiler            CONTROLLED_STRUCTURAL_PASS
+real independent binding evidence                0 / NOT_EVALUATED
+F5 runtime convergence                           NOT_STARTED
 runtime role grounding                          LAB PASS / LIVE WATCH
 general Operator VM                             BLOCK
 response ACTIVE packages                        0
-verified input-token saving share               0.8%
+verified input-token saving share               0.7%
 false accepts                                    0
 runtime parity failures                          0
 M3                                               WATCH
@@ -169,68 +171,63 @@ or economics statement.
 
 ## 6. Exact Current Blocker
 
-The controlled B1B experiment found a plausible relation:
+The proof-owner repair and F4R2 compiler are now complete on controlled,
+sealed evidence:
 
 ```text
-parent_action_to_capability_instance
+PhysicalTrialReceiptV2
+-> TrustedResolvedBindingRowsV2
+-> AcceptedBindingLawEvidenceV2
+-> CanonicalEffectLawV3
++ FrozenCandidateRelationGraphV1 payloads
+-> induced ProtocolSelectorProgramV2 candidates
+-> selector execution over every frozen graph
+-> label-scored mode/row matrix
+-> bounded exact cover of safe modes
+-> ProtocolModeSetV2 | ABSTAIN
 ```
 
-It passed its bounded synthetic interventions with zero wrong bindings,
-negative accepts, or parity failures. That is useful controlled evidence, but
-the post-implementation review found an ownership leak:
+The compiler emits typed executable selector payloads, not only digest
+commitments. Direct and renamed/wrapped surfaces compile to the same
+label-free relation selector. Missing or tampered graph payloads are rejected;
+unresolved symmetric roles produce `ABSTAIN`; canonical restart is
+byte-identical and rejects selector mutation.
+
+The exact blocker has moved one boundary downstream:
 
 ```text
-binding_evidence_adjudication.rs
-  contains synthetic scene reconstruction
-  + physical candidate execution
-  + proof verification
-  + label-manifest production
-  + trust orchestration
-  + H0/H1 adjudication
-  + report hashing
+ProtocolModeSetV2                         CONTROLLED PASS
+-> production caller                     0
+-> existing RuntimeRoleBinder            NOT CONNECTED
+-> winner-owned actor                     NOT CONNECTED FROM F4R2
+-> independent verifier                  NOT CONNECTED FROM F4R2
+-> external admission                    BLOCK
+-> ACTIVE response package               0
 ```
 
-In particular, the proof observer reconstructs a scene from frozen
-intervention metadata, while the local proof actor and proof verifier inspect
-the same synthetic scene model. Therefore the existing receipt supports H1
-inside the controlled fixture. It does not yet create independently owned
-physical truth for F4.
+This is F5, not another reason to modify F4 search. Real independent binding
+evidence is also still absent, so controlled F4R2 success is not a natural-law
+or production-authority claim.
 
-The machine artifact `STOP_B1B_ADJUDICATION.json` is retained as an immutable
-controlled receipt. Its historical `f4_status=UNLOCKED_NOT_STARTED` field is
-not current compiler authorization after this review.
+## 7. Completed Ownership Repair
 
-## 7. Required Repair Before F4
-
-Do one ownership refactor, not another learning experiment:
+The former mixed proof owner has been split and preserves the four historical
+B1B golden hashes:
 
 ```text
-frozen support/future graphs
--> PhysicalTrialReceipt owner
-     consumes observed execution and independent verifier receipts
-     cannot infer a label from intervention id
--> TrustedLabelResolver
-     validates roots and joins immutable rows
--> CausalAdjudicator
-     emits AcceptedBindingLawEvidence or INSUFFICIENT
--> deterministic report serializer
+binding_evidence_adjudication/
+├─ controlled_replay.rs   proof fixture only
+├─ physical_trial.rs      observed actor/verifier receipts
+├─ label_manifest.rs      immutable row labels
+├─ external_trust.rs      externally pinned trust root
+├─ causal_adjudicator.rs  H0/H1 decision
+├─ report.rs              report only
+└─ canonical.rs           deterministic bytes
 ```
 
-Required gates:
-
-```text
-move-only module split preserves current golden bytes
-synthetic scene renderer remains proof-fixture-only
-physical actor and verifier have separate inputs/program commitments
-intervention metadata cannot produce or alter a label
-forged trial, label, graph, or trust root is rejected
-adjudicator has no selector/ProtocolMode constructor
-AcceptedBindingLawEvidence has one private validated constructor
-F4 accepts that capability, never a report or raw JSON
-execution_authority remains false
-```
-
-Only after these gates may F4 start.
+`AcceptedBindingLawEvidenceV2` remains opaque and authority-free. The
+adjudicator cannot construct a selector; the compiler cannot construct runtime
+authority; the runtime and admission routes are unchanged.
 
 ## 8. F4 Definition
 
@@ -240,9 +237,10 @@ proven relation law into bounded structural programs:
 ```text
 AcceptedBindingLawEvidence
 + EffectLawIdV3
++ sealed FrozenCandidateRelationGraphV1 payloads
 -> competing structural ProtocolModes
 -> complete bounded search
--> guard/execution matrix
+-> selector execution and guard/execution matrix
 -> exact cover over already safe modes
 -> action-equivalence check across all admissible covers
 -> ProtocolModeSet | ABSTAIN
@@ -262,13 +260,15 @@ all surviving covers action-equivalent
 
 Allowed now:
 
-> Nando has a controlled causal B1B fixture that supports one binding relation
-> and preserves zero-error fail-closed behavior.
+> Nando has a controlled causal B1B fixture and an executable F4R2 structural
+> compiler. It induces selector programs from sealed graph evidence, executes
+> them across support/future and negatives, emits a bounded mode set only for a
+> complete safe cover, and otherwise abstains.
 
 Not allowed now:
 
 - independently proven natural binding law;
-- completed F4 compiler;
+- F5 runtime convergence from ProtocolMode to the live role binder;
 - general learned VM program;
 - live Rich Operator authority;
 - broad autonomous execution;

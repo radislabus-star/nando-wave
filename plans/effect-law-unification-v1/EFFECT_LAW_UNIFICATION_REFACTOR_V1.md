@@ -17,9 +17,10 @@ B1B-S support acquisition       COMPLETE / SUPPORT FROZEN
 B1B-F0 future protocol          COMPLETE / PROTOCOL FROZEN
 B1B-F future acquisition        COMPLETE / FUTURE FROZEN
 B1B adjudication                CONTROLLED_FIXTURE_PASS / REVIEWED
-B1B proof-owner split           REQUIRED / NOT STARTED
-AcceptedBindingLawEvidence      BLOCK
-F4 protocol mode compiler       BLOCKED
+B1B proof-owner split           COMPLETE
+AcceptedBindingLawEvidence      CONTROLLED_ONLY
+F4R2 protocol mode compiler     CONTROLLED_STRUCTURAL_PASS
+F5 runtime convergence          NOT_STARTED
 production authority            false
 service deployment              out of scope
 ```
@@ -678,8 +679,9 @@ applicability-negative denominator present in support and future
 no selector / ProtocolMode / execution authority
 ```
 
-STOP-B1B executed the registered controlled adjudication route over the
-immutable B1B-S and B1B-F artifacts. Inside that fixture, a bounded synthetic
+Historical STOP-B1B status at that checkpoint: the registered controlled
+adjudication route ran over the immutable B1B-S and B1B-F artifacts. Inside
+that fixture, a bounded synthetic
 physical observer reproduced all 24 capture records and candidate graphs
 byte-for-byte, executed every candidate against its reconstructed pre-action
 scene, and emitted verifier receipts. A trust-owner path pinned the exact label
@@ -729,10 +731,13 @@ frozen graphs
 
 The physical-trial owner cannot infer labels from intervention metadata or the
 expected law. The resolver cannot rebuild frozen graphs. The adjudicator cannot
-construct a selector or `ProtocolMode`. Until these ownership gates pass, F4 is
-blocked.
+construct a selector or `ProtocolMode`. These ownership gates are now complete;
+the block above is retained as the historical condition that F4R2 had to clear.
 
 ### F4: Compile Bounded Protocol Modes
+
+Status: `COMPLETE / STOP-F4R2` on controlled structural evidence. Real
+independent evidence and production admission remain blocked.
 
 Work:
 
@@ -744,6 +749,25 @@ Work:
 4. Build the two-dimensional guard/execution matrix.
 5. Apply exact cover only to already safe structural modes.
 6. Compare all minimal covers by normalized action equivalence.
+
+F4R2 closes the earlier digest-only and circular-matrix defects:
+
+```text
+AcceptedBindingLawEvidenceV2
++ CanonicalEffectLawV3
++ exact frozen graph payload set
+-> bounded structural selector hypotheses
+-> execute every selector over every graph
+-> use trusted labels only to score the executed result
+-> retain individually safe modes
+-> bounded exact cover
+-> executable ProtocolModeProgramV2 payloads
+```
+
+The compiler does not accept a caller-supplied candidate matrix. The old
+manual candidate route is test-only. Missing/tampered graph payload,
+unresolved role symmetry, search exhaustion, wrong action, verifier failure,
+or applicability-negative acceptance all fail closed.
 
 STOP-F4 receipt:
 

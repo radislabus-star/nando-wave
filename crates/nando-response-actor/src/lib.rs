@@ -334,7 +334,11 @@ pub use program::{
 };
 pub use protocol_mode::{
     BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2, PROTOCOL_MODE_SET_SCHEMA_V2,
-    ProtocolModeCompilerBudgetV2, ProtocolModeSetV2, ProtocolModeV2,
+    ProtocolArgumentRoleSchemaV2, ProtocolArgumentRoleV2, ProtocolCapabilityContractV2,
+    ProtocolConstantContractV2, ProtocolModeCompilerBudgetV2, ProtocolModeProgramV2,
+    ProtocolModeSetV2, ProtocolModeV2, ProtocolRoleCardinalityV2, ProtocolSelectorProgramV2,
+    ProtocolSourceRoleSchemaV2, ProtocolSourceRoleV2, ProtocolStructuralGuardV2,
+    ProtocolTemporalCardinalityContractV2, ProtocolValueContractV2,
     compile_protocol_modes_for_effect_law_v3,
 };
 pub use rollover::{
