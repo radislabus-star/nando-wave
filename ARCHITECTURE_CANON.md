@@ -1541,7 +1541,11 @@ core. Never turn discovery into selection among a few pre-named programs.
     session sets must be disjoint, but distinct future frames may share a
     future-only session. Admission separately requires at least three distinct
     sessions; it must not silently strengthen 32 future rows into 32 sessions.
-    Never fabricate or backfill future evidence from support.
+    Never fabricate or backfill future evidence from support. A self-declared
+    `post_freeze` flag is not evidence: the later capture index must extend an
+    externally pinned freeze prefix, with support sequences before and future
+    sequences after its watermark. Within a causal intervention, one session
+    contributes at most one vote for the same evaluation label.
 11. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
 12. State is bounded and compact. Normal startup must not rescan unbounded
     history, and the hot path must not append unbounded payloads.

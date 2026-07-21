@@ -81,13 +81,16 @@ pub use binding_evidence::{
     PreActionBindingContextV1, PreActionBindingSurfaceV1, evaluate_binding_version_space_v1,
 };
 pub use binding_evidence_preregistration::{
-    BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1, BINDING_LABEL_ENVELOPE_SCHEMA_V1,
-    BINDING_LABEL_MANIFEST_SCHEMA_V1, BindingCausalHypothesisKindV1,
-    BindingCausalHypothesisStatusV1, BindingCausalHypothesisV1, BindingCausalInterventionV1,
-    BindingEvidencePartitionV1, BindingEvidencePreregistrationV1, BindingInterventionPredictionV1,
+    BINDING_CAPTURE_WATERMARK_SCHEMA_V1, BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1,
+    BINDING_LABEL_ENVELOPE_SCHEMA_V1, BINDING_LABEL_MANIFEST_SCHEMA_V1,
+    BindingCaptureReceiptEntryV1, BindingCausalHypothesisKindV1, BindingCausalHypothesisStatusV1,
+    BindingCausalHypothesisV1, BindingCausalInterventionV1, BindingEvidencePartitionV1,
+    BindingEvidencePreregistrationV1, BindingInterventionPredictionV1,
     BindingLabelObservationSourceV1, BindingLineageSplitContractV1, BindingPreregistrationErrorV1,
     BindingTrustedLabelContractV1, MAX_BINDING_LABEL_ENVELOPES_V1,
-    TrustedBindingLabelManifestRootV1, TrustedBindingLabelSetV1, UntrustedBindingLabelEnvelopeV1,
+    MIN_BINDING_SESSION_LINEAGES_PER_PARTITION_V1, TrustedBindingCaptureWatermarkRootV1,
+    TrustedBindingLabelManifestRootV1, TrustedBindingLabelSetV1,
+    UntrustedBindingCaptureWatermarkV1, UntrustedBindingLabelEnvelopeV1,
     UntrustedBindingLabelManifestV1, binding_evidence_preregistration_v1,
     resolve_trusted_binding_label_set_v1,
 };

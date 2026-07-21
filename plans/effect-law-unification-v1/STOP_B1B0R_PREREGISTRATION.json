@@ -1,0 +1,123 @@
+{
+  "schema": "nando.binding-evidence-preregistration.v1.r1",
+  "stop_id": "STOP-B1B0R",
+  "missing_discriminator_exists": true,
+  "resolving_relation_known": false,
+  "candidate_hypotheses": [
+    {
+      "hypothesis_id": "H0",
+      "kind": "relation_not_observable",
+      "candidate_relation": null,
+      "status": "unproven",
+      "observation_source": "pre_action_wire",
+      "teacher_action_allowed": false
+    },
+    {
+      "hypothesis_id": "H1",
+      "kind": "candidate_relation",
+      "candidate_relation": "parent_action_to_capability_instance",
+      "status": "unproven",
+      "observation_source": "pre_action_wire",
+      "teacher_action_allowed": false
+    }
+  ],
+  "trusted_label_contract": {
+    "capture_receipt_root_required": true,
+    "capture_index_membership_required": true,
+    "parity_receipt_root_required": true,
+    "verifier_root_required": true,
+    "external_manifest_root_required": true,
+    "external_watermark_root_required": true,
+    "capture_index_prefix_extension_required": true,
+    "event_time_partition_required": true,
+    "expected_digest_integrity_is_not_trust": true,
+    "forged_recomputed_digest_rejected_by_external_root": true,
+    "observation_source": "pre_action_wire",
+    "teacher_action_allowed": false
+  },
+  "interventions": [
+    {
+      "intervention_id": "I1",
+      "manipulated_factor": "candidate_order",
+      "held_constant": [
+        "parent_linkage",
+        "candidate_values",
+        "layout"
+      ],
+      "h1_prediction": "preserves_binding",
+      "null_prediction": "insufficient_evidence"
+    },
+    {
+      "intervention_id": "I2",
+      "manipulated_factor": "parent_linkage",
+      "held_constant": [
+        "candidate_order",
+        "candidate_values",
+        "layout"
+      ],
+      "h1_prediction": "changes_binding",
+      "null_prediction": "insufficient_evidence"
+    },
+    {
+      "intervention_id": "I3",
+      "manipulated_factor": "same_type_decoy_presence",
+      "held_constant": [
+        "parent_linkage",
+        "candidate_order",
+        "layout"
+      ],
+      "h1_prediction": "preserves_binding",
+      "null_prediction": "insufficient_evidence"
+    },
+    {
+      "intervention_id": "I4",
+      "manipulated_factor": "parent_completion_state",
+      "held_constant": [
+        "candidate_order",
+        "candidate_values",
+        "layout"
+      ],
+      "h1_prediction": "not_applicable",
+      "null_prediction": "insufficient_evidence"
+    },
+    {
+      "intervention_id": "I5",
+      "manipulated_factor": "active_parent_cardinality",
+      "held_constant": [
+        "candidate_order",
+        "candidate_values",
+        "layout"
+      ],
+      "h1_prediction": "ambiguous_binding",
+      "null_prediction": "insufficient_evidence"
+    },
+    {
+      "intervention_id": "I6",
+      "manipulated_factor": "matching_parent_presence",
+      "held_constant": [
+        "candidate_order",
+        "candidate_values",
+        "layout"
+      ],
+      "h1_prediction": "not_applicable",
+      "null_prediction": "insufficient_evidence"
+    }
+  ],
+  "lineage_split": {
+    "lineage_unit": "session",
+    "support_future_overlap_max": 0,
+    "historical_to_future_rows": 0,
+    "future_must_be_post_freeze": true,
+    "minimum_positive_rows_per_partition": 6,
+    "minimum_applicability_negative_rows_per_partition": 6,
+    "minimum_rows_per_intervention_per_partition": 1,
+    "minimum_session_lineages_per_partition": 3,
+    "duplicate_lineage_votes_allowed": false,
+    "censored_rows_may_be_negative": false,
+    "status": "SEALED"
+  },
+  "acquisition_run": false,
+  "protocol_mode_compiled": false,
+  "f4_started": false,
+  "execution_authority": false
+}

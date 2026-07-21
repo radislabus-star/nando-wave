@@ -5,21 +5,24 @@
 //! integrity checksums; trust exists only after an external owner pins exact
 //! canonical manifest bytes.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::binding_evidence::{BindingBaselineOutcomeV1, BindingEvaluationLabelV1};
+use crate::capture_provenance::{CaptureCommitmentIndex, CaptureEvidenceReceipt};
 
-pub const BINDING_LABEL_ENVELOPE_SCHEMA_V1: &str = "nando.binding-label-envelope.v1";
-pub const BINDING_LABEL_MANIFEST_SCHEMA_V1: &str = "nando.binding-label-manifest.v1";
+pub const BINDING_LABEL_ENVELOPE_SCHEMA_V1: &str = "nando.binding-label-envelope.v1.r1";
+pub const BINDING_LABEL_MANIFEST_SCHEMA_V1: &str = "nando.binding-label-manifest.v1.r1";
+pub const BINDING_CAPTURE_WATERMARK_SCHEMA_V1: &str = "nando.binding-capture-watermark.v1";
 pub const BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1: &str =
-    "nando.binding-evidence-preregistration.v1";
+    "nando.binding-evidence-preregistration.v1.r1";
 pub const MAX_BINDING_LABEL_ENVELOPES_V1: usize = 16_384;
 pub const MIN_BINDING_POSITIVE_ROWS_PER_PARTITION_V1: usize = 6;
 pub const MIN_BINDING_APPLICABILITY_NEGATIVE_ROWS_PER_PARTITION_V1: usize = 6;
 pub const MIN_BINDING_ROWS_PER_INTERVENTION_PER_PARTITION_V1: usize = 1;
+pub const MIN_BINDING_SESSION_LINEAGES_PER_PARTITION_V1: usize = 3;
 
 const BINDING_CAUSAL_INTERVENTION_IDS_V1: [&str; 6] = ["I1", "I2", "I3", "I4", "I5", "I6"];
 
@@ -46,6 +49,8 @@ pub struct UntrustedBindingLabelEnvelopeV1 {
     pub evidence_ref_sha256: String,
     pub frozen_graph_root_sha256: String,
     pub capture_receipt_root_sha256: String,
+    pub capture_sequence: u64,
+    pub capture_record_sha256: String,
     pub parity_receipt_root_sha256: String,
     pub verifier_root_sha256: String,
     pub external_manifest_root_sha256: String,
@@ -59,6 +64,45 @@ pub struct UntrustedBindingLabelEnvelopeV1 {
     pub label: BindingEvaluationLabelV1,
     pub expected_action_equivalence_sha256: Option<String>,
     pub baseline_outcome: BindingBaselineOutcomeV1,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingCaptureReceiptEntryV1 {
+    pub evidence_ref_sha256: String,
+    pub receipt: CaptureEvidenceReceipt,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct UntrustedBindingCaptureWatermarkV1 {
+    pub schema: String,
+    pub capture_index: CaptureCommitmentIndex,
+    pub next_sequence: u64,
+}
+
+impl UntrustedBindingCaptureWatermarkV1 {
+    pub fn new(
+        capture_index: CaptureCommitmentIndex,
+    ) -> Result<Self, BindingPreregistrationErrorV1> {
+        capture_index
+            .validate()
+            .map_err(|_| BindingPreregistrationErrorV1::InvalidCaptureIndex)?;
+        let next_sequence = match capture_index.records.last() {
+            Some(record) => record
+                .sequence
+                .checked_add(1)
+                .ok_or(BindingPreregistrationErrorV1::InvalidWatermark)?,
+            None => 0,
+        };
+        Ok(Self {
+            schema: BINDING_CAPTURE_WATERMARK_SCHEMA_V1.to_owned(),
+            capture_index,
+            next_sequence,
+        })
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, BindingPreregistrationErrorV1> {
+        serde_json::to_vec(self).map_err(|_| BindingPreregistrationErrorV1::Serialization)
+    }
 }
 
 impl UntrustedBindingLabelEnvelopeV1 {
@@ -75,6 +119,8 @@ pub struct UntrustedBindingLabelManifestV1 {
     pub freeze_watermark_root_sha256: String,
     pub support_lineage_root_sha256: String,
     pub future_lineage_root_sha256: String,
+    pub capture_index: CaptureCommitmentIndex,
+    pub capture_receipts: Vec<BindingCaptureReceiptEntryV1>,
     pub envelopes: Vec<UntrustedBindingLabelEnvelopeV1>,
 }
 
@@ -82,8 +128,15 @@ impl UntrustedBindingLabelManifestV1 {
     pub fn new(
         external_manifest_root_sha256: impl Into<String>,
         freeze_watermark_root_sha256: impl Into<String>,
+        capture_index: CaptureCommitmentIndex,
+        mut capture_receipts: Vec<BindingCaptureReceiptEntryV1>,
         mut envelopes: Vec<UntrustedBindingLabelEnvelopeV1>,
     ) -> Result<Self, BindingPreregistrationErrorV1> {
+        capture_index
+            .validate()
+            .map_err(|_| BindingPreregistrationErrorV1::InvalidCaptureIndex)?;
+        capture_receipts
+            .sort_by(|left, right| left.evidence_ref_sha256.cmp(&right.evidence_ref_sha256));
         envelopes.sort_by(|left, right| left.row_id_sha256.cmp(&right.row_id_sha256));
         let support_lineages = lineage_set(&envelopes, BindingEvidencePartitionV1::Support);
         let future_lineages = lineage_set(&envelopes, BindingEvidencePartitionV1::Future);
@@ -93,6 +146,8 @@ impl UntrustedBindingLabelManifestV1 {
             freeze_watermark_root_sha256: freeze_watermark_root_sha256.into(),
             support_lineage_root_sha256: sha256_json(&support_lineages)?,
             future_lineage_root_sha256: sha256_json(&future_lineages)?,
+            capture_index,
+            capture_receipts,
             envelopes,
         })
     }
@@ -109,12 +164,21 @@ pub struct TrustedBindingLabelManifestRootV1 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrustedBindingCaptureWatermarkRootV1 {
+    watermark_bytes_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrustedBindingLabelSetV1 {
     manifest_bytes_sha256: String,
     external_manifest_root_sha256: String,
     freeze_watermark_root_sha256: String,
     support_lineage_root_sha256: String,
     future_lineage_root_sha256: String,
+    capture_index_sha256: String,
+    capture_watermark_sha256: String,
+    support_session_lineages: usize,
+    future_session_lineages: usize,
     positive_rows: usize,
     applicability_negative_rows: usize,
 }
@@ -154,11 +218,33 @@ impl TrustedBindingLabelSetV1 {
     pub fn future_lineage_root_sha256(&self) -> &str {
         &self.future_lineage_root_sha256
     }
+
+    #[must_use]
+    pub fn capture_index_sha256(&self) -> &str {
+        &self.capture_index_sha256
+    }
+
+    #[must_use]
+    pub fn capture_watermark_sha256(&self) -> &str {
+        &self.capture_watermark_sha256
+    }
+
+    #[must_use]
+    pub fn support_session_lineages(&self) -> usize {
+        self.support_session_lineages
+    }
+
+    #[must_use]
+    pub fn future_session_lineages(&self) -> usize {
+        self.future_session_lineages
+    }
 }
 
 pub fn resolve_trusted_binding_label_set_v1(
     manifest_bytes: &[u8],
     expected_root: &TrustedBindingLabelManifestRootV1,
+    watermark_bytes: &[u8],
+    expected_watermark_root: &TrustedBindingCaptureWatermarkRootV1,
 ) -> Result<TrustedBindingLabelSetV1, BindingPreregistrationErrorV1> {
     if !is_sha256(&expected_root.manifest_bytes_sha256)
         || !is_sha256(&expected_root.external_manifest_root_sha256)
@@ -166,28 +252,91 @@ pub fn resolve_trusted_binding_label_set_v1(
     {
         return Err(BindingPreregistrationErrorV1::InvalidTrustRoot);
     }
+    let watermark = resolve_trusted_capture_watermark(watermark_bytes, expected_watermark_root)?;
     let manifest: UntrustedBindingLabelManifestV1 = serde_json::from_slice(manifest_bytes)
         .map_err(|_| BindingPreregistrationErrorV1::InvalidTrustRoot)?;
     if manifest.canonical_bytes()? != manifest_bytes
         || manifest.schema != BINDING_LABEL_MANIFEST_SCHEMA_V1
         || manifest.external_manifest_root_sha256 != expected_root.external_manifest_root_sha256
-        || !is_sha256(&manifest.freeze_watermark_root_sha256)
+        || manifest.freeze_watermark_root_sha256 != expected_watermark_root.watermark_bytes_sha256
         || manifest.envelopes.is_empty()
         || manifest.envelopes.len() > MAX_BINDING_LABEL_ENVELOPES_V1
+        || manifest.capture_receipts.len() != manifest.envelopes.len()
         || manifest
             .envelopes
             .windows(2)
             .any(|pair| pair[0].row_id_sha256 >= pair[1].row_id_sha256)
+        || manifest
+            .capture_receipts
+            .windows(2)
+            .any(|pair| pair[0].evidence_ref_sha256 >= pair[1].evidence_ref_sha256)
     {
         return Err(BindingPreregistrationErrorV1::InvalidTrustRoot);
     }
+    manifest
+        .capture_index
+        .validate()
+        .map_err(|_| BindingPreregistrationErrorV1::InvalidCaptureIndex)?;
+    if !capture_index_extends_watermark(&manifest.capture_index, &watermark.capture_index) {
+        return Err(BindingPreregistrationErrorV1::CaptureIndexNotExtension);
+    }
+
+    let mut capture_receipts = BTreeMap::new();
+    for entry in &manifest.capture_receipts {
+        if !is_sha256(&entry.evidence_ref_sha256)
+            || capture_receipts
+                .insert(entry.evidence_ref_sha256.clone(), &entry.receipt)
+                .is_some()
+        {
+            return Err(BindingPreregistrationErrorV1::InvalidCaptureReceipt);
+        }
+        manifest
+            .capture_index
+            .verify_receipt(&entry.receipt)
+            .map_err(|_| BindingPreregistrationErrorV1::InvalidCaptureReceipt)?;
+    }
 
     let mut evidence_refs = BTreeSet::new();
+    let mut lineage_votes = BTreeSet::new();
     for envelope in &manifest.envelopes {
         validate_binding_label_envelope(envelope, &manifest.external_manifest_root_sha256)?;
         if !evidence_refs.insert(envelope.evidence_ref_sha256.clone()) {
             return Err(BindingPreregistrationErrorV1::DuplicateRow);
         }
+        let receipt = capture_receipts
+            .get(&envelope.evidence_ref_sha256)
+            .ok_or(BindingPreregistrationErrorV1::MissingCaptureReceipt)?;
+        if receipt.records_root_sha256 != envelope.capture_receipt_root_sha256
+            || !receipt.records.iter().any(|record| {
+                record.sequence == envelope.capture_sequence
+                    && record.record_sha256 == envelope.capture_record_sha256
+            })
+        {
+            return Err(BindingPreregistrationErrorV1::InvalidCaptureReceipt);
+        }
+        let chronology_valid = match envelope.partition {
+            BindingEvidencePartitionV1::Support => {
+                envelope.capture_sequence < watermark.next_sequence
+            }
+            BindingEvidencePartitionV1::Future => {
+                envelope.capture_sequence >= watermark.next_sequence
+            }
+        };
+        if !chronology_valid {
+            return Err(BindingPreregistrationErrorV1::InvalidCaptureChronology);
+        }
+        let lineage_vote = (
+            envelope.partition,
+            envelope.label == BindingEvaluationLabelV1::Positive,
+            envelope.intervention_id.as_str(),
+            envelope.session_lineage_sha256.as_str(),
+        );
+        if !lineage_votes.insert(lineage_vote) {
+            return Err(BindingPreregistrationErrorV1::DuplicateLineageVote);
+        }
+    }
+    if capture_receipts.len() != evidence_refs.len() {
+        return Err(BindingPreregistrationErrorV1::InvalidManifest);
     }
 
     let support_lineages = lineage_set(&manifest.envelopes, BindingEvidencePartitionV1::Support);
@@ -199,6 +348,11 @@ pub fn resolve_trusted_binding_label_set_v1(
         || sha256_json(&future_lineages)? != manifest.future_lineage_root_sha256
     {
         return Err(BindingPreregistrationErrorV1::InvalidManifest);
+    }
+    if support_lineages.len() < MIN_BINDING_SESSION_LINEAGES_PER_PARTITION_V1
+        || future_lineages.len() < MIN_BINDING_SESSION_LINEAGES_PER_PARTITION_V1
+    {
+        return Err(BindingPreregistrationErrorV1::MissingSessionLineageDenominator);
     }
 
     let support_positive = count_labels(
@@ -255,6 +409,10 @@ pub fn resolve_trusted_binding_label_set_v1(
         freeze_watermark_root_sha256: manifest.freeze_watermark_root_sha256,
         support_lineage_root_sha256: manifest.support_lineage_root_sha256,
         future_lineage_root_sha256: manifest.future_lineage_root_sha256,
+        capture_index_sha256: manifest.capture_index.index_sha256,
+        capture_watermark_sha256: expected_watermark_root.watermark_bytes_sha256.clone(),
+        support_session_lineages: support_lineages.len(),
+        future_session_lineages: future_lineages.len(),
         positive_rows: support_positive + future_positive,
         applicability_negative_rows: support_negative + future_negative,
     })
@@ -305,9 +463,13 @@ pub struct BindingCausalInterventionV1 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingTrustedLabelContractV1 {
     pub capture_receipt_root_required: bool,
+    pub capture_index_membership_required: bool,
     pub parity_receipt_root_required: bool,
     pub verifier_root_required: bool,
     pub external_manifest_root_required: bool,
+    pub external_watermark_root_required: bool,
+    pub capture_index_prefix_extension_required: bool,
+    pub event_time_partition_required: bool,
     pub expected_digest_integrity_is_not_trust: bool,
     pub forged_recomputed_digest_rejected_by_external_root: bool,
     pub observation_source: BindingLabelObservationSourceV1,
@@ -323,6 +485,8 @@ pub struct BindingLineageSplitContractV1 {
     pub minimum_positive_rows_per_partition: usize,
     pub minimum_applicability_negative_rows_per_partition: usize,
     pub minimum_rows_per_intervention_per_partition: usize,
+    pub minimum_session_lineages_per_partition: usize,
+    pub duplicate_lineage_votes_allowed: bool,
     pub censored_rows_may_be_negative: bool,
     pub status: String,
 }
@@ -403,15 +567,19 @@ pub fn binding_evidence_preregistration_v1() -> BindingEvidencePreregistrationV1
     ];
     BindingEvidencePreregistrationV1 {
         schema: BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1.to_owned(),
-        stop_id: "STOP-B1B0".to_owned(),
+        stop_id: "STOP-B1B0R".to_owned(),
         missing_discriminator_exists: true,
         resolving_relation_known: false,
         candidate_hypotheses,
         trusted_label_contract: BindingTrustedLabelContractV1 {
             capture_receipt_root_required: true,
+            capture_index_membership_required: true,
             parity_receipt_root_required: true,
             verifier_root_required: true,
             external_manifest_root_required: true,
+            external_watermark_root_required: true,
+            capture_index_prefix_extension_required: true,
+            event_time_partition_required: true,
             expected_digest_integrity_is_not_trust: true,
             forged_recomputed_digest_rejected_by_external_root: true,
             observation_source: BindingLabelObservationSourceV1::PreActionWire,
@@ -428,6 +596,8 @@ pub fn binding_evidence_preregistration_v1() -> BindingEvidencePreregistrationV1
                 MIN_BINDING_APPLICABILITY_NEGATIVE_ROWS_PER_PARTITION_V1,
             minimum_rows_per_intervention_per_partition:
                 MIN_BINDING_ROWS_PER_INTERVENTION_PER_PARTITION_V1,
+            minimum_session_lineages_per_partition: MIN_BINDING_SESSION_LINEAGES_PER_PARTITION_V1,
+            duplicate_lineage_votes_allowed: false,
             censored_rows_may_be_negative: false,
             status: "SEALED".to_owned(),
         },
@@ -444,8 +614,16 @@ pub enum BindingPreregistrationErrorV1 {
     InvalidEnvelope,
     InvalidManifest,
     InvalidTrustRoot,
+    InvalidWatermark,
+    InvalidCaptureIndex,
+    InvalidCaptureReceipt,
+    MissingCaptureReceipt,
+    CaptureIndexNotExtension,
+    InvalidCaptureChronology,
     DuplicateRow,
+    DuplicateLineageVote,
     LineageOverlap,
+    MissingSessionLineageDenominator,
     MissingPositiveDenominator,
     MissingApplicabilityNegativeDenominator,
     MissingInterventionDenominator,
@@ -479,6 +657,7 @@ fn validate_binding_label_envelope(
         envelope.evidence_ref_sha256.as_str(),
         envelope.frozen_graph_root_sha256.as_str(),
         envelope.capture_receipt_root_sha256.as_str(),
+        envelope.capture_record_sha256.as_str(),
         envelope.parity_receipt_root_sha256.as_str(),
         envelope.verifier_root_sha256.as_str(),
         envelope.external_manifest_root_sha256.as_str(),
@@ -520,6 +699,8 @@ fn binding_label_envelope_digest(
         evidence_ref_sha256: &'a str,
         frozen_graph_root_sha256: &'a str,
         capture_receipt_root_sha256: &'a str,
+        capture_sequence: u64,
+        capture_record_sha256: &'a str,
         parity_receipt_root_sha256: &'a str,
         verifier_root_sha256: &'a str,
         external_manifest_root_sha256: &'a str,
@@ -541,6 +722,8 @@ fn binding_label_envelope_digest(
         evidence_ref_sha256: &envelope.evidence_ref_sha256,
         frozen_graph_root_sha256: &envelope.frozen_graph_root_sha256,
         capture_receipt_root_sha256: &envelope.capture_receipt_root_sha256,
+        capture_sequence: envelope.capture_sequence,
+        capture_record_sha256: &envelope.capture_record_sha256,
         parity_receipt_root_sha256: &envelope.parity_receipt_root_sha256,
         verifier_root_sha256: &envelope.verifier_root_sha256,
         external_manifest_root_sha256: &envelope.external_manifest_root_sha256,
@@ -555,6 +738,45 @@ fn binding_label_envelope_digest(
         expected_action_equivalence_sha256: envelope.expected_action_equivalence_sha256.as_deref(),
         baseline_outcome: envelope.baseline_outcome,
     })
+}
+
+fn resolve_trusted_capture_watermark(
+    watermark_bytes: &[u8],
+    expected_root: &TrustedBindingCaptureWatermarkRootV1,
+) -> Result<UntrustedBindingCaptureWatermarkV1, BindingPreregistrationErrorV1> {
+    if !is_sha256(&expected_root.watermark_bytes_sha256)
+        || sha256_bytes(watermark_bytes) != expected_root.watermark_bytes_sha256
+    {
+        return Err(BindingPreregistrationErrorV1::InvalidWatermark);
+    }
+    let watermark: UntrustedBindingCaptureWatermarkV1 = serde_json::from_slice(watermark_bytes)
+        .map_err(|_| BindingPreregistrationErrorV1::InvalidWatermark)?;
+    watermark
+        .capture_index
+        .validate()
+        .map_err(|_| BindingPreregistrationErrorV1::InvalidCaptureIndex)?;
+    let expected_next_sequence = match watermark.capture_index.records.last() {
+        Some(record) => record
+            .sequence
+            .checked_add(1)
+            .ok_or(BindingPreregistrationErrorV1::InvalidWatermark)?,
+        None => 0,
+    };
+    if watermark.schema != BINDING_CAPTURE_WATERMARK_SCHEMA_V1
+        || watermark.canonical_bytes()? != watermark_bytes
+        || watermark.next_sequence != expected_next_sequence
+    {
+        return Err(BindingPreregistrationErrorV1::InvalidWatermark);
+    }
+    Ok(watermark)
+}
+
+fn capture_index_extends_watermark(
+    capture_index: &CaptureCommitmentIndex,
+    watermark_index: &CaptureCommitmentIndex,
+) -> bool {
+    capture_index.records.len() >= watermark_index.records.len()
+        && capture_index.records[..watermark_index.records.len()] == watermark_index.records
 }
 
 fn count_labels(
@@ -606,6 +828,22 @@ fn pin_trusted_binding_label_manifest_root(
     Ok(TrustedBindingLabelManifestRootV1 {
         manifest_bytes_sha256: sha256_bytes(manifest_bytes),
         external_manifest_root_sha256: external_manifest_root_sha256.to_owned(),
+    })
+}
+
+// The capture owner freezes this capability before any future row exists.
+// Acquisition code receives the capability but cannot construct or rewrite it.
+#[cfg(test)]
+fn pin_trusted_binding_capture_watermark_root(
+    watermark_bytes: &[u8],
+) -> Result<TrustedBindingCaptureWatermarkRootV1, BindingPreregistrationErrorV1> {
+    let watermark: UntrustedBindingCaptureWatermarkV1 = serde_json::from_slice(watermark_bytes)
+        .map_err(|_| BindingPreregistrationErrorV1::InvalidWatermark)?;
+    if watermark.canonical_bytes()? != watermark_bytes {
+        return Err(BindingPreregistrationErrorV1::InvalidWatermark);
+    }
+    Ok(TrustedBindingCaptureWatermarkRootV1 {
+        watermark_bytes_sha256: sha256_bytes(watermark_bytes),
     })
 }
 

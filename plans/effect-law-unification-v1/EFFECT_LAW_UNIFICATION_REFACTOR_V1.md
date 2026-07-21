@@ -12,7 +12,7 @@ F1 diagnostic ownership        COMPLETE / STOP-F1
 F2 canonical effect law         COMPLETE / STOP-F2 V3
 F3 dual classification          COMPLETE / STOP-F3R
 B1A binding version space       COMPLETE / INSUFFICIENT at STOP-B1A
-B1B0 scientific preregistration COMPLETE / STOP-B1B0
+B1B0 scientific preregistration COMPLETE / STOP-B1B0R
 B1B binding acquisition         NOT STARTED
 F4 protocol mode compiler       BLOCKED pending B1B causal evidence
 production authority            false
@@ -572,7 +572,7 @@ selector / ProtocolMode / authority    NOT CREATED
 
 ### B1B: Acquire Causal Binding Evidence
 
-B1B acquisition is not started. STOP-B1B0 preregisters H0
+B1B acquisition is not started. STOP-B1B0R preregisters H0
 `relation_not_observable`, H1 `parent_action_to_capability_instance`, and six
 causal interventions without choosing either hypothesis. New traces must
 determine which, if any, pre-action relation separates the expected action
@@ -588,7 +588,17 @@ Preregistration receipt:
 ```text
 plans/effect-law-unification-v1/STOP_B1B0_PREREGISTRATION.md
 plans/effect-law-unification-v1/STOP_B1B0_PREREGISTRATION.json
+plans/effect-law-unification-v1/STOP_B1B0R_TRUSTED_ACQUISITION_BOUNDARY.md
+plans/effect-law-unification-v1/STOP_B1B0R_PREREGISTRATION.json
 ```
+
+`STOP-B1B0R` preserves the original no-run freeze and repairs its acquisition
+boundary before any evidence is opened. A separately pinned capture watermark
+must be an exact prefix of the later capture index. Support records must precede
+that watermark and future records must follow it. Every label joins a concrete
+capture receipt and indexed record. Support and future remain session-disjoint,
+each partition requires at least three sessions, and one session cannot repeat
+the same `(label, intervention)` vote.
 
 STOP-B1B receipt:
 
