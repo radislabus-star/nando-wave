@@ -1,8 +1,10 @@
-# STOP-F4 Protocol Compiler
+# STOP-F4R Protocol Compiler
 
 Date: 2026-07-21
 
-Verdict: F4_CODE_COMPLETE_CONTROLLED_PASS_REAL_ADMISSION_BLOCKED
+Base HEAD: 093c63c09e1df2f035cfe97478af21411a82b4ff
+
+Verdict: F4R_CODE_COMPLETE_CONTROLLED_PASS_REAL_ADMISSION_BLOCKED
 
 Authority: false
 
@@ -14,12 +16,20 @@ PhysicalActorObservationV2
 -> PhysicalTrialReceiptV2
 -> TrustedResolvedBindingRowsV2
 -> AcceptedBindingLawEvidenceV2
--> ProtocolModeCompilerV2
+-> CanonicalEffectLawV3
+-> protocol_mode::compile_protocol_modes_for_effect_law_v3()
+-> internally generated mode candidates
+-> derived mode x row matrix
+-> bounded exact-cover search
 -> ProtocolModeSetV2 | ABSTAIN
 ```
 
-F4 is code complete as a bounded compiler. It is not connected to runtime,
-generation, checkpoint, admission, ACTIVE packages, deploy, or restart.
+F4R closes the STOP-F4 review findings in controlled code. It does not connect
+ProtocolModes to runtime, generation, checkpoint, admission, ACTIVE packages,
+deploy, or restart.
+
+Real independent evidence admission remains BLOCK because current physical
+receipts are still controlled envelopes, not production physical truth.
 
 ## V1 Compatibility
 
@@ -34,20 +44,9 @@ ebb4d19258cb61c50c4fa70c67107d648fae998e857d8e5a0f9c78f6e8ea15f7  STOP_B1B_LABEL
 
 Public V1 facade names and JSON fields are preserved.
 
-## V2 Receipt Security
+## V2 Receipt Boundary
 
-New owners:
-
-```text
-physical_actor_observation_v2.rs
-independent_trial_verifier_v2.rs
-physical_trial_v2.rs
-```
-
-The V2 trial path separates actor observation from verifier receipt and seals
-only exact joined roots. Actor and verifier program digests must differ.
-
-Covered attacks:
+The V2 trial path remains tamper-evident and authority-free:
 
 ```text
 actor program digest swap        -> REJECT
@@ -66,30 +65,7 @@ JSON restart                     -> byte-identical
 No V2 physical trial code calls `support_scene()`, `future_scene()`,
 `intervention_id`, teacher labels, row ordinal truth, or expected law.
 
-## Resolver Integrity
-
-New owner:
-
-```text
-trusted_resolver_v2.rs
-```
-
-The resolver consumes frozen rows, sealed physical trials, resolver program
-digest, and an externally supplied manifest root. It does not build scenes,
-does not execute the actor, and does not call V1 label-manifest construction.
-
-The resolved row set is opaque: its wire form is private, has no `Default`, and
-keeps `execution_authority=false`.
-
-Tampered graph/row/trial/trust roots are blocked by the resolver manifest root.
-
 ## Capability
-
-New owner:
-
-```text
-binding_law_evidence_v2.rs
-```
 
 Only `adjudicate_binding_law_evidence_v2()` can create
 `AcceptedBindingLawEvidenceV2`. The capability:
@@ -105,29 +81,40 @@ keeps execution_authority=false
 ```
 
 `BindingAdjudicationReportV2` is a report only and cannot be converted into the
-capability.
+capability. Controlled fixture evidence can create a scoped capability for
+compiler tests, but `production_admissible=false`.
 
-Controlled fixture evidence can create a scoped capability for compiler tests,
-but `production_admissible=false`. Real independent admission is still BLOCK.
+## Compiler Repair
 
-## Compiler
-
-New owner:
+Owner:
 
 ```text
-protocol_mode_compiler_v2.rs
+crates/nando-response-actor/src/protocol_mode.rs
 ```
 
-The F4 compiler consumes only:
+Canonical F4R consumes only:
 
 ```text
 AcceptedBindingLawEvidenceV2
-EffectLawIdV3 root
-bounded ProtocolMode candidates
+typed CanonicalEffectLawV3
+frozen graph views already present in trusted rows
 compiler budget
 ```
 
-It emits `ProtocolModeSetV2` only when all gates pass:
+The canonical entrypoint no longer accepts caller-supplied mode candidates or a
+caller-supplied coverage matrix. It internally groups positive PASS rows by:
+
+```text
+relation_identity_sha256
+protocol_facet_root_sha256
+effect_invariant_root_sha256
+```
+
+It then derives the mode x row matrix from trusted row facets and physical
+trial outcomes. The old manual candidate verifier is `#[cfg(test)]` only and is
+used for adversarial controls.
+
+Compile gates:
 
 ```text
 positive coverage complete
@@ -135,22 +122,42 @@ wrong_actions = 0
 verify_failed = 0
 negative_accepts = 0
 search not exhausted
-surviving covers share one action-equivalence class
+all complete exact covers action-equivalent
 ```
 
-Otherwise it emits `ABSTAIN` and clears surviving modes.
+Otherwise the compiler emits `ABSTAIN` and clears selected modes.
 
-Additional fail-closed repair in this slice: any reported negative accept now
-blocks the candidate, even if the row root is not part of the known negative
-denominator.
+## Exact Cover
 
-## ProtocolMode Output
+The compiler now searches bounded exact covers instead of requiring one mode to
+cover every positive row.
+
+Required control:
+
+```text
+mode A covers only positive A
+mode B covers only positive B
+A alone                         -> ABSTAIN
+A union B                       -> ProtocolModeSet
+two non-equivalent full covers  -> ABSTAIN
+```
+
+Caller claims are not authority:
+
+```text
+candidate claims both positives but matches only one row  -> coverage = 1
+candidate claims zero positives but matches one row       -> coverage = 1
+unknown claimed negative row                              -> ignored as claim, still ABSTAIN on incomplete coverage
+known matched applicability-negative row                  -> negative_accepts = 1, ABSTAIN
+```
+
+## Controlled Output
 
 Controlled end-to-end fixture result:
 
 ```text
 verdict                         ProtocolModeSet
-surviving modes                 2
+selected modes                  2
 action_equivalence_classes      1
 positive_rows                   2
 positive_rows_covered           2
@@ -162,29 +169,23 @@ production_admissible           false
 execution_authority             false
 ```
 
-Adversarial compiler controls:
-
-```text
-known negative accept           -> ABSTAIN
-unknown negative accept         -> ABSTAIN
-competing action class          -> ABSTAIN
-exhausted search                -> ABSTAIN
-```
-
 ## Checks
 
 ```text
-CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor physical_trial_v2 --lib
-  13/13 PASS
+CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor physical_trial_v2_tests --lib
+  15/15 PASS
 
 CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor binding_evidence_adjudication --lib
-  22/22 PASS
+  24/24 PASS
 
 CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor effect_law_v3 --lib
   40/40 PASS
 
-CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor effect_law:: --lib
+CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor effect_law::tests:: --lib
   15/15 PASS
+
+CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor binding_evidence --lib
+  94/94 PASS
 
 CARGO_INCREMENTAL=0 cargo +1.97.0 check -p nando-response-actor --all-targets
   PASS
@@ -196,25 +197,22 @@ git diff --check
   PASS
 
 CARGO_INCREMENTAL=0 cargo +1.97.0 test -p nando-response-actor --lib
-  494 PASS / 26 known FAIL
+  496 PASS / 26 known FAIL
 
 CARGO_INCREMENTAL=0 cargo +1.97.0 clippy -p nando-response-actor --all-targets --message-format short
-  BLOCKED by existing legacy semantic_alias.rs unwrap errors; no new V2/F4 diagnostics observed
+  BLOCKED by existing semantic_alias.rs unwrap errors; 17 legacy warnings; no new F4R-file diagnostics observed
 ```
 
-Known full-baseline failures are unchanged and remain outside this slice.
+Known full-baseline failures remain outside this slice.
 
 ## Structural Gates
 
 Owner-local NANDA structural routes:
 
 ```text
-actor_observation_owner      PASS authority=false
-verifier_owner               PASS authority=false
-trial_join_owner             PASS authority=false
-resolver_owner               PASS authority=false
-capability_owner             PASS authority=false
-compiler_owner               PASS authority=false
+f4r-compiler-owner          PASS authority_ready=false
+f4r-proof-boundary-owner    PASS authority_ready=false
+f4r-authority-boundary      PASS authority_ready=false
 ```
 
 `nando-live-transition-gate --project-root /home/ubu/projects/nando-wave`:
@@ -231,27 +229,32 @@ runtime parity mismatches    0
 
 This is a safety gate only. It does not enable local accept.
 
+Graphify was updated after the code changes:
+
+```text
+24667 nodes / 56605 edges / 1066 communities
+```
+
 ## Production Boundary
 
 ```text
-production callers of V2/F4 API    0
-runtime changed                    no
-admission changed                  no
-generation changed                 no
-checkpoint changed                 no
-deploy/restart/push                no
-graphify update                    skipped to preserve dirty graphify-out/
-execution_authority                false
-real independent B1B receipts      0 / NOT_EVALUATED
-real evidence admission            BLOCK
-F5/runtime grounding               NOT_STARTED
+production callers of canonical F4 API    0
+runtime changed                           no
+admission changed                         no
+generation changed                        no
+checkpoint changed                        no
+deploy/restart/push                       no
+execution_authority                       false
+real independent B1B receipts             0 / NOT_EVALUATED
+real evidence admission                   BLOCK
+F5/runtime grounding                      NOT_STARTED
 ```
 
-Final STOP-F4 status:
+Final STOP-F4R status:
 
 ```text
-F4 compiler code              PASS
-controlled compiler tests     PASS
-real evidence admission       BLOCK
-production authority          false
+F4R proof boundary / skeleton     PASS
+Canonical F4 compiler             PASS on controlled evidence
+real evidence admission           BLOCK
+production authority              false
 ```

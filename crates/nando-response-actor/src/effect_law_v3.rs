@@ -533,6 +533,42 @@ impl CanonicalEffectLawV3 {
     pub fn action_equivalence_root_sha256(&self) -> &str {
         &self.action_equivalence_root_sha256
     }
+
+    #[must_use]
+    pub fn effect_invariant_root_sha256(&self) -> &str {
+        &self.effect_invariant_root_sha256
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_only_canonical_effect_law_v3(seed: &str) -> CanonicalEffectLawV3 {
+    let root = |suffix: &str| crate::sha256_bytes(format!("{seed}:{suffix}").as_bytes());
+    CanonicalEffectLawV3 {
+        schema: CANONICAL_EFFECT_LAW_SCHEMA_V3.to_owned(),
+        ir_version: EFFECT_LAW_IR_VERSION_V3,
+        dictionary_root_sha256: root("dictionary"),
+        quotient_hypothesis_root_sha256: root("quotient"),
+        topology_nodes: vec![CanonicalEffectNodeV3 {
+            canonical_node: 1,
+            source: EffectSource::Action,
+            node_kind_code: EFFECT_OPERATION_CALL_V3,
+            value_type_code: EFFECT_VALUE_OPERATION_V3,
+            unique: true,
+            operation_code: Some(EFFECT_OPERATION_CALL_V3),
+        }],
+        topology_edges: Vec::new(),
+        relation_program: vec![CanonicalRelationClauseV3 {
+            relation_code: EFFECT_REL_REQUIRE,
+            lhs: 1,
+            rhs: None,
+            argument_ordinal: Some(0),
+            constant_type_code: None,
+            constant_sha256: None,
+        }],
+        effect_invariant_root_sha256: root("effect-invariant"),
+        preserved_frame_root_sha256: root("preserved-frame"),
+        action_equivalence_root_sha256: root("action-equivalence"),
+    }
 }
 
 impl EffectLawIdV3 {

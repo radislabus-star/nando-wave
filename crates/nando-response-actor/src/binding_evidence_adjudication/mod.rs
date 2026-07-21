@@ -15,7 +15,6 @@ mod label_manifest;
 mod physical_actor_observation_v2;
 mod physical_trial;
 mod physical_trial_v2;
-mod protocol_mode_compiler_v2;
 mod report;
 mod trusted_resolver_v2;
 mod wire;
@@ -41,11 +40,6 @@ pub use physical_trial::observe_frozen_binding_labels_v1;
 pub use physical_trial_v2::{
     PHYSICAL_TRIAL_RECEIPT_SCHEMA_V2, PhysicalTrialJoinedRootsV2, PhysicalTrialOutcomeV2,
     PhysicalTrialReceiptV2, PhysicalTrialV2Error, seal_physical_trial_receipt_v2,
-};
-pub use protocol_mode_compiler_v2::{
-    BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2,
-    BoundedProtocolModeCandidateV2, PROTOCOL_MODE_SET_SCHEMA_V2, ProtocolModeCompilerBudgetV2,
-    ProtocolModeSetV2, ProtocolModeV2, compile_protocol_modes_v2,
 };
 pub use trusted_resolver_v2::{
     BindingEvidencePartitionV2, BindingTrialEvidenceLabelV2, FrozenBindingTrialRowV2,

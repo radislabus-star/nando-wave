@@ -1,4 +1,9 @@
 use super::*;
+use crate::protocol_mode::{BoundedProtocolModeCandidateV2, compile_protocol_modes_v2};
+use crate::{
+    BindingProtocolCompileVerdictV2, ProtocolModeCompilerBudgetV2, TrustedResolvedBindingRowV2,
+    compile_protocol_modes_for_effect_law_v3,
+};
 
 fn root(seed: &str) -> String {
     sha256_bytes(seed.as_bytes())
@@ -256,6 +261,7 @@ fn frozen_row(
     partition: BindingEvidencePartitionV2,
     evidence_label: BindingTrialEvidenceLabelV2,
     relation: &str,
+    effect_invariant_root_sha256: &str,
     source: TrustedBindingResolverReceiptSourceV2,
 ) -> FrozenBindingTrialRowV2 {
     FrozenBindingTrialRowV2 {
@@ -269,7 +275,7 @@ fn frozen_row(
             "protocol-facet:{}",
             trial.joined_roots.frozen_row_root_sha256
         )),
-        effect_invariant_root_sha256: root("same-effect-invariant"),
+        effect_invariant_root_sha256: effect_invariant_root_sha256.to_owned(),
         physical_program_id_sha256: root("physical-program-family"),
         surface_root_sha256: root(&format!(
             "surface:{}",
@@ -293,6 +299,17 @@ fn controlled_resolved_fixture() -> (
     Vec<String>,
     Vec<String>,
 ) {
+    controlled_resolved_fixture_with_effect_invariant(&root("same-effect-invariant"))
+}
+
+fn controlled_resolved_fixture_with_effect_invariant(
+    effect_invariant_root_sha256: &str,
+) -> (
+    TrustedResolvedBindingRowsV2,
+    String,
+    Vec<String>,
+    Vec<String>,
+) {
     let relation = root("parent-action-to-capability-instance-v2");
     let support_positive = pass_trial("support-positive");
     let future_positive = pass_trial("future-positive");
@@ -310,6 +327,7 @@ fn controlled_resolved_fixture() -> (
             BindingEvidencePartitionV2::Support,
             BindingTrialEvidenceLabelV2::Positive,
             &relation,
+            effect_invariant_root_sha256,
             TrustedBindingResolverReceiptSourceV2::ControlledFixture,
         ),
         frozen_row(
@@ -317,6 +335,7 @@ fn controlled_resolved_fixture() -> (
             BindingEvidencePartitionV2::Future,
             BindingTrialEvidenceLabelV2::Positive,
             &relation,
+            effect_invariant_root_sha256,
             TrustedBindingResolverReceiptSourceV2::ControlledFixture,
         ),
         frozen_row(
@@ -324,6 +343,7 @@ fn controlled_resolved_fixture() -> (
             BindingEvidencePartitionV2::Support,
             BindingTrialEvidenceLabelV2::ApplicabilityNegative,
             &relation,
+            effect_invariant_root_sha256,
             TrustedBindingResolverReceiptSourceV2::ControlledFixture,
         ),
         frozen_row(
@@ -331,6 +351,7 @@ fn controlled_resolved_fixture() -> (
             BindingEvidencePartitionV2::Future,
             BindingTrialEvidenceLabelV2::ApplicabilityNegative,
             &relation,
+            effect_invariant_root_sha256,
             TrustedBindingResolverReceiptSourceV2::ControlledFixture,
         ),
     ];
@@ -368,6 +389,7 @@ fn trusted_resolver_rejects_tampered_manifest_root() {
         BindingEvidencePartitionV2::Support,
         BindingTrialEvidenceLabelV2::Positive,
         &relation,
+        &root("resolver-tamper-invariant"),
         TrustedBindingResolverReceiptSourceV2::ControlledFixture,
     )];
     let resolver_program = root("trusted-resolver-v2");
@@ -410,17 +432,30 @@ fn capability_is_opaque_and_report_does_not_become_authority() {
     assert!(!source.contains("pub fn new("));
 }
 
+#[test]
+fn protocol_mode_compiler_has_separate_owner() {
+    let proof_module = include_str!("binding_evidence_adjudication/mod.rs");
+    let compiler_module = include_str!("protocol_mode.rs");
+    assert!(!proof_module.contains("protocol_mode_compiler"));
+    assert!(!proof_module.contains("compile_protocol_modes_v2"));
+    assert!(compiler_module.contains("fn exact_cover_protocol_modes_v2"));
+}
+
 fn mode_candidate(
     id: &str,
     effect_law_id: &str,
     relation: &str,
     action_class: &str,
-    positive_rows: Vec<String>,
+    protocol_facet_root: &str,
+    effect_invariant_root: &str,
+    claimed_positive_rows: Vec<String>,
 ) -> BoundedProtocolModeCandidateV2 {
     BoundedProtocolModeCandidateV2 {
         candidate_id_sha256: root(id),
         effect_law_id_sha256: effect_law_id.to_owned(),
         relation_identity_sha256: relation.to_owned(),
+        protocol_facet_root_sha256: protocol_facet_root.to_owned(),
+        effect_invariant_root_sha256: effect_invariant_root.to_owned(),
         source_role_schema_root_sha256: root("source-role-schema"),
         selector_program_root_sha256: root(&format!("{id}:selector")),
         observed_emitted_types_root_sha256: root("observed-emitted-types"),
@@ -430,12 +465,23 @@ fn mode_candidate(
         structural_guard_root_sha256: root("structural-guard"),
         temporal_cardinality_contract_root_sha256: root("temporal-cardinality"),
         action_class_root_sha256: action_class.to_owned(),
-        covers_positive_rows_sha256: positive_rows,
+        covers_positive_rows_sha256: claimed_positive_rows,
         accepts_negative_rows_sha256: Vec::new(),
         wrong_action_rows_sha256: Vec::new(),
         verify_failed_rows_sha256: Vec::new(),
         search_exhausted: false,
     }
+}
+
+fn rows_with_label(
+    evidence: &AcceptedBindingLawEvidenceV2,
+    label: BindingTrialEvidenceLabelV2,
+) -> Vec<&TrustedResolvedBindingRowV2> {
+    evidence
+        .rows()
+        .iter()
+        .filter(|row| row.evidence_label == label)
+        .collect::<Vec<_>>()
 }
 
 #[test]
@@ -448,25 +494,43 @@ fn end_to_end_controlled_evidence_reaches_unique_safe_protocol_mode_set() {
     };
     let effect_law_id = root("effect-law-v3");
     let action_class = root("unique-action-class");
+    let positive_views = rows_with_label(&evidence, BindingTrialEvidenceLabelV2::Positive);
+    assert_eq!(positive_views.len(), 2);
+    let mode_a = mode_candidate(
+        "direct-mode",
+        &effect_law_id,
+        &relation,
+        &action_class,
+        &positive_views[0].protocol_facet_root_sha256,
+        &positive_views[0].effect_invariant_root_sha256,
+        positive_rows.clone(),
+    );
+    let mode_b = mode_candidate(
+        "wrapped-mode",
+        &effect_law_id,
+        &relation,
+        &action_class,
+        &positive_views[1].protocol_facet_root_sha256,
+        &positive_views[1].effect_invariant_root_sha256,
+        Vec::new(),
+    );
+    let single_mode_set = compile_protocol_modes_v2(
+        &evidence,
+        &effect_law_id,
+        vec![mode_a.clone()],
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("compile single mode");
+    assert_eq!(
+        single_mode_set.verdict,
+        BindingProtocolCompileVerdictV2::Abstain
+    );
+    assert_eq!(single_mode_set.positive_rows_covered, 1);
+
     let mode_set = compile_protocol_modes_v2(
         &evidence,
         &effect_law_id,
-        vec![
-            mode_candidate(
-                "direct-mode",
-                &effect_law_id,
-                &relation,
-                &action_class,
-                positive_rows.clone(),
-            ),
-            mode_candidate(
-                "wrapped-mode",
-                &effect_law_id,
-                &relation,
-                &action_class,
-                positive_rows.clone(),
-            ),
-        ],
+        vec![mode_a, mode_b],
         ProtocolModeCompilerBudgetV2::default(),
     )
     .expect("compile protocol modes");
@@ -490,6 +554,47 @@ fn end_to_end_controlled_evidence_reaches_unique_safe_protocol_mode_set() {
 }
 
 #[test]
+fn typed_effect_law_entrypoint_binds_action_equivalence() {
+    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-typed-law");
+    let (resolved, relation, _, _) = controlled_resolved_fixture_with_effect_invariant(
+        effect_law.effect_invariant_root_sha256(),
+    );
+    let outcome =
+        adjudicate_binding_law_evidence_v2(&resolved, &relation).expect("adjudication outcome");
+    let BindingAdjudicationOutcomeV2::Accepted(evidence) = outcome else {
+        panic!("controlled evidence should produce capability");
+    };
+    let mode_set = compile_protocol_modes_for_effect_law_v3(
+        &evidence,
+        &effect_law,
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("typed compile");
+    assert_eq!(
+        mode_set.verdict,
+        BindingProtocolCompileVerdictV2::ProtocolModeSet
+    );
+    assert_eq!(mode_set.modes.len(), 2);
+    assert!(
+        mode_set.modes.iter().all(
+            |mode| mode.action_class_root_sha256 == effect_law.action_equivalence_root_sha256()
+        )
+    );
+
+    let incompatible_law =
+        crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-incompatible-law");
+    let rejected = compile_protocol_modes_for_effect_law_v3(
+        &evidence,
+        &incompatible_law,
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("typed incompatible compile");
+    assert_eq!(rejected.verdict, BindingProtocolCompileVerdictV2::Abstain);
+    assert_eq!(rejected.wrong_actions, 0);
+    assert_eq!(rejected.positive_rows_covered, 0);
+}
+
+#[test]
 fn f4_abstains_on_negative_accept_or_competing_action_or_exhausted_search() {
     let (resolved, relation, positive_rows, negative_rows) = controlled_resolved_fixture();
     let outcome =
@@ -500,13 +605,20 @@ fn f4_abstains_on_negative_accept_or_competing_action_or_exhausted_search() {
     let effect_law_id = root("effect-law-v3");
     let action_a = root("action-a");
     let action_b = root("action-b");
+    let positive_views = rows_with_label(&evidence, BindingTrialEvidenceLabelV2::Positive);
+    let negative_views = rows_with_label(
+        &evidence,
+        BindingTrialEvidenceLabelV2::ApplicabilityNegative,
+    );
 
     let mut accepts_negative = mode_candidate(
         "accepts-negative",
         &effect_law_id,
         &relation,
         &action_a,
-        positive_rows.clone(),
+        &negative_views[0].protocol_facet_root_sha256,
+        &negative_views[0].effect_invariant_root_sha256,
+        Vec::new(),
     );
     accepts_negative.accepts_negative_rows_sha256 = vec![negative_rows[0].clone()];
     let set = compile_protocol_modes_v2(
@@ -524,6 +636,8 @@ fn f4_abstains_on_negative_accept_or_competing_action_or_exhausted_search() {
         &effect_law_id,
         &relation,
         &action_a,
+        &positive_views[0].protocol_facet_root_sha256,
+        &positive_views[0].effect_invariant_root_sha256,
         positive_rows.clone(),
     );
     accepts_unknown_negative.accepts_negative_rows_sha256 = vec![root("unknown-negative-row")];
@@ -535,7 +649,8 @@ fn f4_abstains_on_negative_accept_or_competing_action_or_exhausted_search() {
     )
     .expect("compile unknown negative accept");
     assert_eq!(set.verdict, BindingProtocolCompileVerdictV2::Abstain);
-    assert_eq!(set.negative_accepts, 1);
+    assert_eq!(set.negative_accepts, 0);
+    assert_eq!(set.positive_rows_covered, 1);
 
     let set = compile_protocol_modes_v2(
         &evidence,
@@ -546,14 +661,36 @@ fn f4_abstains_on_negative_accept_or_competing_action_or_exhausted_search() {
                 &effect_law_id,
                 &relation,
                 &action_a,
-                positive_rows.clone(),
+                &positive_views[0].protocol_facet_root_sha256,
+                &positive_views[0].effect_invariant_root_sha256,
+                Vec::new(),
+            ),
+            mode_candidate(
+                "action-a-2",
+                &effect_law_id,
+                &relation,
+                &action_a,
+                &positive_views[1].protocol_facet_root_sha256,
+                &positive_views[1].effect_invariant_root_sha256,
+                Vec::new(),
             ),
             mode_candidate(
                 "action-b",
                 &effect_law_id,
                 &relation,
                 &action_b,
-                positive_rows.clone(),
+                &positive_views[0].protocol_facet_root_sha256,
+                &positive_views[0].effect_invariant_root_sha256,
+                Vec::new(),
+            ),
+            mode_candidate(
+                "action-b-2",
+                &effect_law_id,
+                &relation,
+                &action_b,
+                &positive_views[1].protocol_facet_root_sha256,
+                &positive_views[1].effect_invariant_root_sha256,
+                Vec::new(),
             ),
         ],
         ProtocolModeCompilerBudgetV2::default(),
@@ -567,6 +704,8 @@ fn f4_abstains_on_negative_accept_or_competing_action_or_exhausted_search() {
         &effect_law_id,
         &relation,
         &action_a,
+        &positive_views[0].protocol_facet_root_sha256,
+        &positive_views[0].effect_invariant_root_sha256,
         positive_rows,
     );
     exhausted.search_exhausted = true;

@@ -35,6 +35,7 @@ mod outcome_example;
 mod output_graph;
 mod package;
 mod program;
+mod protocol_mode;
 mod rollover;
 mod runtime;
 mod semantic_alias;
@@ -93,22 +94,20 @@ pub use binding_evidence_adjudication::{
     BindingInterventionAdjudicationV1, BindingLawEvidenceV2Error, BindingObservedCandidateV1,
     BindingObservedParentV1, BindingObservedRelationV1, BindingPhysicalActorOutcomeV1,
     BindingPhysicalCandidateTrialV1, BindingPhysicalLabelReceiptSetV1,
-    BindingPhysicalLabelReceiptV1, BindingPhysicalRelationStateV1, BindingProtocolCompileVerdictV2,
-    BindingProtocolCompilerErrorV2, BindingTrialEvidenceLabelV2, BoundedProtocolModeCandidateV2,
+    BindingPhysicalLabelReceiptV1, BindingPhysicalRelationStateV1, BindingTrialEvidenceLabelV2,
     FrozenBindingTrialRowV2, INDEPENDENT_TRIAL_VERIFIER_RECEIPT_SCHEMA_V2,
     IndependentTrialVerifierInputV2, IndependentTrialVerifierOutcomeV2,
     IndependentTrialVerifierReceiptV2, PHYSICAL_ACTOR_OBSERVATION_SCHEMA_V2,
-    PHYSICAL_TRIAL_RECEIPT_SCHEMA_V2, PROTOCOL_MODE_SET_SCHEMA_V2, PhysicalActorObservationInputV2,
-    PhysicalActorObservationV2, PhysicalActorOutcomeV2, PhysicalTrialJoinedRootsV2,
-    PhysicalTrialOutcomeV2, PhysicalTrialReceiptV2, PhysicalTrialV2Error,
-    ProtocolModeCompilerBudgetV2, ProtocolModeSetV2, ProtocolModeV2,
-    TRUSTED_RESOLVED_BINDING_ROWS_SCHEMA_V2, TrustedBindingResolverInputV2,
-    TrustedBindingResolverReceiptSourceV2, TrustedResolvedBindingRowV2,
-    TrustedResolvedBindingRowsV2, TrustedResolverV2Error, adjudicate_binding_hypotheses_v1,
-    adjudicate_binding_law_evidence_v2, build_binding_label_manifest_v1, compile_protocol_modes_v2,
-    observe_frozen_binding_labels_v1, observe_physical_actor_v2, resolve_trusted_binding_rows_v2,
-    seal_binding_external_label_trust_v1, seal_physical_trial_receipt_v2,
-    trusted_binding_resolver_manifest_root_v2, verify_independent_physical_trial_v2,
+    PHYSICAL_TRIAL_RECEIPT_SCHEMA_V2, PhysicalActorObservationInputV2, PhysicalActorObservationV2,
+    PhysicalActorOutcomeV2, PhysicalTrialJoinedRootsV2, PhysicalTrialOutcomeV2,
+    PhysicalTrialReceiptV2, PhysicalTrialV2Error, TRUSTED_RESOLVED_BINDING_ROWS_SCHEMA_V2,
+    TrustedBindingResolverInputV2, TrustedBindingResolverReceiptSourceV2,
+    TrustedResolvedBindingRowV2, TrustedResolvedBindingRowsV2, TrustedResolverV2Error,
+    adjudicate_binding_hypotheses_v1, adjudicate_binding_law_evidence_v2,
+    build_binding_label_manifest_v1, observe_frozen_binding_labels_v1, observe_physical_actor_v2,
+    resolve_trusted_binding_rows_v2, seal_binding_external_label_trust_v1,
+    seal_physical_trial_receipt_v2, trusted_binding_resolver_manifest_root_v2,
+    verify_independent_physical_trial_v2,
 };
 pub use binding_evidence_capture_owner::{
     BINDING_SUPPORT_CAPTURE_BATCH_SCHEMA_V1, BINDING_SUPPORT_CAPTURE_ROW_SCHEMA_V1,
@@ -332,6 +331,11 @@ pub use program::{
     ResponseAdapterWaveRoute, ResponseAdapterWaveSubcenter, ResponseArgument,
     ResponseConsensusVariant, ResponseOperation, ResponseProgram, ResponseRenderSegment,
     ResponseScalarLiteral, ValueProjectionFormat,
+};
+pub use protocol_mode::{
+    BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2, PROTOCOL_MODE_SET_SCHEMA_V2,
+    ProtocolModeCompilerBudgetV2, ProtocolModeSetV2, ProtocolModeV2,
+    compile_protocol_modes_for_effect_law_v3,
 };
 pub use rollover::{
     FROZEN_PARTITION_VERSION, FrozenGeneration, RolloverPolicy, freeze_generation,

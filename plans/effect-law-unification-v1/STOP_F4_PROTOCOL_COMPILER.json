@@ -1,11 +1,13 @@
 {
   "schema": "nando.stop-f4-protocol-compiler.v1",
+  "revision": "F4R",
   "date": "2026-07-21",
-  "source_head": "4ad9ce83df7a4736a1193e2ff68b61fdc97cc095",
-  "verdict": "F4_CODE_COMPLETE_CONTROLLED_PASS_REAL_ADMISSION_BLOCKED",
+  "base_head": "093c63c09e1df2f035cfe97478af21411a82b4ff",
+  "verdict": "F4R_CODE_COMPLETE_CONTROLLED_PASS_REAL_ADMISSION_BLOCKED",
   "authority": false,
   "f4": {
-    "compiler_code": "PASS",
+    "proof_boundary_skeleton": "PASS",
+    "canonical_compiler": "PASS_ON_CONTROLLED_EVIDENCE",
     "controlled_compiler_tests": "PASS",
     "real_evidence_admission": "BLOCK",
     "production_authority": false,
@@ -53,19 +55,33 @@
     "execution_authority": false
   },
   "compiler": {
+    "canonical_entrypoint": "compile_protocol_modes_for_effect_law_v3",
+    "manual_candidate_entrypoint": "cfg_test_only",
+    "input_effect_law": "CanonicalEffectLawV3",
+    "internal_candidate_generation": true,
+    "caller_supplied_coverage_authority": false,
+    "matrix_derived_from_trusted_rows": true,
+    "exact_cover_search": true,
     "positive_coverage_complete_required": true,
     "wrong_actions_zero_required": true,
     "verify_failed_zero_required": true,
     "negative_accepts_zero_required": true,
-    "unknown_negative_accept_abstains": true,
     "search_not_exhausted_required": true,
-    "one_action_equivalence_class_required": true,
-    "abstain_clears_survivors": true,
+    "all_complete_covers_action_equivalent_required": true,
+    "abstain_clears_selected_modes": true,
     "execution_authority": false
+  },
+  "exact_cover_control": {
+    "mode_a_alone": "ABSTAIN",
+    "mode_a_union_mode_b": "ProtocolModeSet",
+    "non_equivalent_full_covers": "ABSTAIN",
+    "claimed_positive_rows_are_non_authoritative": true,
+    "known_negative_match_abstains": true,
+    "unknown_claimed_negative_is_not_counted_as_evidence": true
   },
   "controlled_protocol_mode_output": {
     "verdict": "ProtocolModeSet",
-    "surviving_modes": 2,
+    "selected_modes": 2,
     "action_equivalence_classes": 1,
     "positive_rows": 2,
     "positive_rows_covered": 2,
@@ -77,23 +93,21 @@
     "execution_authority": false
   },
   "checks": {
-    "physical_trial_v2_tests": "13/13 PASS",
-    "binding_evidence_adjudication_tests": "22/22 PASS",
+    "physical_trial_v2_tests": "15/15 PASS",
+    "binding_evidence_adjudication_tests": "24/24 PASS",
     "effect_law_v3_tests": "40/40 PASS",
     "historical_effect_law_tests": "15/15 PASS",
+    "binding_evidence_suite": "94/94 PASS",
     "cargo_check_all_targets": "PASS",
     "rustfmt_check": "PASS",
     "git_diff_check": "PASS",
-    "full_lib_baseline": "494 PASS / 26 known FAIL",
-    "clippy": "BLOCKED_BY_EXISTING_LEGACY_SEMANTIC_ALIAS_UNWRAP_ERRORS_NO_NEW_V2_F4_DIAGNOSTICS"
+    "full_lib_baseline": "496 PASS / 26 known FAIL",
+    "clippy": "BLOCKED_BY_EXISTING_SEMANTIC_ALIAS_UNWRAP_ERRORS_17_LEGACY_WARNINGS_NO_F4R_FILE_DIAGNOSTICS"
   },
   "nanda_owner_routes": {
-    "actor_observation_owner": "PASS",
-    "verifier_owner": "PASS",
-    "trial_join_owner": "PASS",
-    "resolver_owner": "PASS",
-    "capability_owner": "PASS",
-    "compiler_owner": "PASS",
+    "f4r_compiler_owner": "PASS",
+    "f4r_proof_boundary_owner": "PASS",
+    "f4r_authority_boundary": "PASS",
     "authority_ready": false
   },
   "live_transition_gate": {
@@ -105,8 +119,14 @@
     "runtime_false_accepts": 0,
     "runtime_parity_mismatches": 0
   },
+  "graphify": {
+    "updated": true,
+    "nodes": 24667,
+    "edges": 56605,
+    "communities": 1066
+  },
   "production_boundary": {
-    "production_callers_of_v2_f4_api": 0,
+    "production_callers_of_canonical_f4_api": 0,
     "runtime_changed": false,
     "admission_changed": false,
     "generation_changed": false,
@@ -114,7 +134,6 @@
     "deploy": false,
     "restart": false,
     "push": false,
-    "graphify_update": "SKIPPED_TO_PRESERVE_DIRTY_GRAPHIFY_OUT",
     "real_independent_b1b_receipts": "0 / NOT_EVALUATED"
   }
 }
