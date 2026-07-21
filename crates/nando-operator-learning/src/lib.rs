@@ -15,6 +15,7 @@ pub mod effect_law;
 pub mod evidence;
 pub mod evidence_graph;
 pub mod executable_protocol_mode;
+pub mod family_discovery;
 pub mod grounding;
 pub mod online_checkpoint;
 pub mod online_subcenter;
@@ -38,6 +39,7 @@ pub use effect_law::*;
 pub use evidence::*;
 pub use evidence_graph::*;
 pub use executable_protocol_mode::*;
+pub use family_discovery::*;
 pub use grounding::*;
 pub use online_checkpoint::*;
 pub use online_subcenter::*;
@@ -52,7 +54,9 @@ pub use training_types::*;
 pub use nando_operator_kernel::{
     AtomValueType, CanonicalEffectLawV3, EFFECT_LAW_ACTION_PHASE_V3,
     EFFECT_LAW_MAX_PROTOCOL_FACET_ATOMS_V3, PROTOCOL_FACET_SCHEMA_V3, RelationAtom, RelationFrame,
-    ResponseValueSelector, canonical_json_bytes, canonical_json_sha256, valid_nonzero_sha256,
+    ResponseValueSelector, canonical_json_bytes, canonical_json_sha256,
+    relation_frame_hidden_wave_atom_ids, relation_frame_online_routing_atom_ids,
+    relation_frame_phase_atom_ids, relation_frame_routing_atom_ids, valid_nonzero_sha256,
 };
 pub use nando_operator_proof::verified_delta::*;
 
