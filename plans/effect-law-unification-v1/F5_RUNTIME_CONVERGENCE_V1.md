@@ -1,10 +1,22 @@
 # F5 Runtime Convergence V1
 
-Status: `PREREGISTERED_NOT_IMPLEMENTED`
+Status: `F5_A_COMPLETE_F5_B_NOT_STARTED`
 
 Base implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
 
 Authority: `false`
+
+Completed implementation boundary:
+
+```text
+F5-A executable completeness     PASS for no-constant F4R2 modes
+constant-bearing V2 modes        fail closed until ordinal-bound bytes exist
+F5-B runtime context             NOT_STARTED
+runtime callers                  0
+authority                        false
+```
+
+Receipt: `STOP_F5_A_EXECUTABLE_COMPLETENESS.md`.
 
 This plan closes exactly one boundary:
 
@@ -603,6 +615,17 @@ authority                                           false
 If this STOP fails, revise the F5 bridge contract. Do not reopen F4 thresholds
 or inject a name dictionary.
 
+F5-A completed on 2026-07-21 with a distinct
+`ExecutableProtocolModeArtifactV3`. The legacy protocol-facet root is
+revalidated against its canonical physical-evidence bytes but remains
+proof/provenance at runtime. A separate payload root commits the source-neutral
+capability class and typed argument topology. The physical symbol is explicitly
+owned by the future current-request capability binder. V2 constant roots do not
+carry executable ordinal bindings, so any non-empty constant contract or raw
+physical constant rejects artifact compilation instead of becoming a hash
+lookup. F4R2 mode-set bytes remain unchanged, production callers remain zero,
+and authority remains false.
+
 ### F5-B: Canonical Runtime Context
 
 Work:
@@ -829,6 +852,9 @@ Expected code ownership, subject to STOP-F5-A:
 ```text
 protocol_mode.rs / protocol_mode/*
   immutable F4 artifact validation only
+
+executable_protocol_mode/*
+  F5-A cold artifact compiler, executable payload, and restart validation only
 
 new runtime_context_v3.rs
   bounded pre-action extraction and dispatch keys

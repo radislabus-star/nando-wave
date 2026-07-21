@@ -1,17 +1,21 @@
 use super::*;
 use crate::protocol_mode::{BoundedProtocolModeCandidateV2, compile_protocol_modes_v2};
 use crate::{
-    BindingCompletionStateV1, BindingEvidenceBudgetV1, BindingPredicateV1,
+    AtomValueType, BindingCompletionStateV1, BindingEvidenceBudgetV1, BindingPredicateV1,
     BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2, BindingRequestRelationV1,
-    BindingValueTypeV1, CanonicalEffectLawV3, FrozenCandidateRelationGraphV1,
+    BindingValueTypeV1, CanonicalEffectLawV3, ExecutableProtocolModeArtifactV3,
+    ExecutableProtocolModeErrorV3, FrozenCandidateRelationGraphV1, PROTOCOL_FACET_SCHEMA_V3,
     PreActionBindingContextV1, PreActionBindingSurfaceV1, ProtocolArgumentRoleSchemaV2,
-    ProtocolArgumentRoleV2, ProtocolCapabilityContractV2, ProtocolConstantContractV2,
-    ProtocolModeCompilerBudgetV2, ProtocolModeProgramV2, ProtocolModeSetV2,
+    ProtocolArgumentRoleV2, ProtocolCapabilityContractV2, ProtocolCapabilityKindV3,
+    ProtocolConstantContractV2, ProtocolFacetEvidenceInputV3, ProtocolModeCompilerBudgetV2,
+    ProtocolModeProgramV2, ProtocolModeSetV2, ProtocolPhysicalSymbolSourceV3,
     ProtocolRoleCardinalityV2, ProtocolSelectorProgramV2, ProtocolSourceRoleSchemaV2,
     ProtocolSourceRoleV2, ProtocolStructuralGuardV2, ProtocolTemporalCardinalityContractV2,
-    ProtocolValueContractV2, TrustedResolvedBindingRowV2, compile_protocol_modes_for_effect_law_v3,
+    ProtocolValueContractV2, RelationAtom, TrustedResolvedBindingRowV2,
+    compile_executable_protocol_mode_artifact_v3, compile_protocol_modes_for_effect_law_v3,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
 
 fn root(seed: &str) -> String {
     sha256_bytes(seed.as_bytes())
@@ -684,16 +688,99 @@ fn push_structural_case(
     graphs.push(graph);
 }
 
-fn structural_f4r2_fixture(
+#[derive(serde::Serialize)]
+struct ProtocolFacetFixtureWireV3 {
+    schema: String,
+    physical_atoms: Vec<serde_json::Value>,
+    root_sha256: String,
+}
+
+fn f5a_protocol_facet_fixture(
+    capability_kind: ProtocolCapabilityKindV3,
+    physical_name: &str,
+    role_name: &str,
+    with_uncommitted_constant: bool,
+) -> (String, Vec<u8>) {
+    let mut surfaces = vec![RelationAtom::ActionRoleArgument {
+        name: role_name.to_owned(),
+        slot_id: 0,
+        value_type: Some(AtomValueType::Integer),
+    }];
+    match capability_kind {
+        ProtocolCapabilityKindV3::Function => {
+            surfaces.push(RelationAtom::ActionFunction {
+                value: physical_name.to_owned(),
+            });
+            surfaces.push(RelationAtom::ToolKind {
+                value: "function".to_owned(),
+            });
+        }
+        ProtocolCapabilityKindV3::CustomTool => {
+            surfaces.push(RelationAtom::ActionCustomTool {
+                value: "custom_tool_router".to_owned(),
+            });
+            surfaces.push(RelationAtom::ActionInnerTool {
+                value: physical_name.to_owned(),
+            });
+            surfaces.push(RelationAtom::ToolKind {
+                value: "custom_tool".to_owned(),
+            });
+        }
+    }
+    if with_uncommitted_constant {
+        surfaces.push(RelationAtom::ActionStringArgument {
+            name: "protocol_default".to_owned(),
+            value: String::new(),
+        });
+    }
+    let mut physical_atoms = surfaces
+        .into_iter()
+        .map(|surface| {
+            json!({
+                "phase": 2,
+                "surface": surface,
+            })
+        })
+        .collect::<Vec<_>>();
+    physical_atoms.sort_by_cached_key(|atom| {
+        crate::canonical_json_bytes(atom).expect("canonical protocol facet atom")
+    });
+    physical_atoms.dedup();
+    let root_sha256 = crate::canonical_json_sha256(&(PROTOCOL_FACET_SCHEMA_V3, &physical_atoms))
+        .expect("protocol facet root");
+    let wire = ProtocolFacetFixtureWireV3 {
+        schema: PROTOCOL_FACET_SCHEMA_V3.to_owned(),
+        physical_atoms,
+        root_sha256: root_sha256.clone(),
+    };
+    (
+        root_sha256,
+        crate::canonical_json_bytes(&wire).expect("canonical protocol facet bytes"),
+    )
+}
+
+fn structural_f4r2_fixture_with_facets(
     effect_law: &CanonicalEffectLawV3,
     ambiguous_positive: bool,
+    with_uncommitted_constant: bool,
 ) -> (
     AcceptedBindingLawEvidenceV2,
     Vec<FrozenCandidateRelationGraphV1>,
+    BTreeMap<String, Vec<u8>>,
 ) {
     let relation = root("parent-action-to-capability-instance-f4r2");
-    let facet_a = root("protocol-facet-wait");
-    let facet_b = root("protocol-facet-write-stdin");
+    let (facet_a, facet_a_bytes) = f5a_protocol_facet_fixture(
+        ProtocolCapabilityKindV3::Function,
+        "wait",
+        "cell_id",
+        with_uncommitted_constant,
+    );
+    let (facet_b, facet_b_bytes) = f5a_protocol_facet_fixture(
+        ProtocolCapabilityKindV3::CustomTool,
+        "write_stdin",
+        "session_id",
+        with_uncommitted_constant,
+    );
     let program_a = root("physical-program-wait");
     let program_b = root("physical-program-write-stdin");
     let mut graphs = Vec::new();
@@ -817,6 +904,22 @@ fn structural_f4r2_fixture(
     let BindingAdjudicationOutcomeV2::Accepted(evidence) = outcome else {
         panic!("structural evidence should be accepted");
     };
+    (
+        evidence,
+        graphs,
+        BTreeMap::from([(facet_a, facet_a_bytes), (facet_b, facet_b_bytes)]),
+    )
+}
+
+fn structural_f4r2_fixture(
+    effect_law: &CanonicalEffectLawV3,
+    ambiguous_positive: bool,
+) -> (
+    AcceptedBindingLawEvidenceV2,
+    Vec<FrozenCandidateRelationGraphV1>,
+) {
+    let (evidence, graphs, _) =
+        structural_f4r2_fixture_with_facets(effect_law, ambiguous_positive, false);
     (evidence, graphs)
 }
 
@@ -950,6 +1053,173 @@ fn typed_effect_law_entrypoint_binds_action_equivalence() {
     assert_eq!(rejected.verdict, BindingProtocolCompileVerdictV2::Abstain);
     assert_eq!(rejected.wrong_actions, 0);
     assert_eq!(rejected.positive_rows_covered, 0);
+}
+
+fn f5a_facet_inputs(
+    mode_set: &ProtocolModeSetV2,
+    facets: &BTreeMap<String, Vec<u8>>,
+) -> Vec<ProtocolFacetEvidenceInputV3> {
+    mode_set
+        .modes
+        .iter()
+        .map(|mode| ProtocolFacetEvidenceInputV3 {
+            mode_id_sha256: mode.mode_id_sha256.clone(),
+            canonical_facet_bytes: facets
+                .get(&mode.protocol_facet_root_sha256)
+                .expect("facet bytes for selected mode")
+                .clone(),
+        })
+        .collect()
+}
+
+fn f5a_artifact_fixture() -> (
+    ProtocolModeSetV2,
+    ExecutableProtocolModeArtifactV3,
+    CanonicalEffectLawV3,
+    BTreeMap<String, Vec<u8>>,
+) {
+    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f5a-law");
+    let (evidence, graph_views, facets) =
+        structural_f4r2_fixture_with_facets(&effect_law, false, false);
+    let mode_set = compile_protocol_modes_for_effect_law_v3(
+        &evidence,
+        &effect_law,
+        &graph_views,
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("F4R2 source mode set");
+    let artifact = compile_executable_protocol_mode_artifact_v3(
+        &mode_set,
+        &effect_law,
+        f5a_facet_inputs(&mode_set, &facets),
+    )
+    .expect("F5-A executable artifact");
+    (mode_set, artifact, effect_law, facets)
+}
+
+#[test]
+fn f5a_preserves_f4r2_and_emits_source_neutral_executable_payloads() {
+    let (mode_set, artifact, _, _) = f5a_artifact_fixture();
+    assert_eq!(artifact.source_mode_set(), &mode_set);
+    assert_eq!(artifact.modes().len(), mode_set.modes.len());
+    assert!(!artifact.production_admissible());
+    assert!(!artifact.execution_authority());
+    assert_eq!(
+        artifact
+            .modes()
+            .iter()
+            .map(|mode| mode.payload().capability_kind())
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([
+            ProtocolCapabilityKindV3::Function,
+            ProtocolCapabilityKindV3::CustomTool,
+        ])
+    );
+    assert!(artifact.modes().iter().all(|mode| {
+        mode.payload().physical_symbol_source()
+            == ProtocolPhysicalSymbolSourceV3::CurrentAdvertisedCapabilitySurface
+            && mode.payload().arguments().len() == 1
+            && mode.payload().arguments()[0].argument_ordinal() == 0
+            && mode.payload().arguments()[0].source_role_id() == 0
+            && mode.payload().arguments()[0].value_type() == BindingValueTypeV1::Integer
+    }));
+    let source_bytes = mode_set.canonical_bytes().expect("source F4R2 bytes");
+    let migrated_source_bytes = artifact
+        .source_mode_set()
+        .canonical_bytes()
+        .expect("embedded F4R2 bytes");
+    assert_eq!(migrated_source_bytes, source_bytes);
+
+    let artifact_bytes = artifact.canonical_bytes().expect("F5-A bytes");
+    let artifact_text = String::from_utf8(artifact_bytes.clone()).expect("artifact UTF-8");
+    assert!(!artifact_text.contains("wait"));
+    assert!(!artifact_text.contains("write_stdin"));
+    assert!(!artifact_text.contains("cell_id"));
+    assert!(!artifact_text.contains("session_id"));
+    let restored = ExecutableProtocolModeArtifactV3::from_canonical_bytes(
+        &artifact_bytes,
+        artifact.artifact_sha256(),
+    )
+    .expect("F5-A restart");
+    assert_eq!(restored, artifact);
+    assert_eq!(
+        restored.canonical_bytes().expect("restored F5-A bytes"),
+        artifact_bytes
+    );
+    assert_eq!(
+        ExecutableProtocolModeArtifactV3::from_canonical_bytes(
+            &artifact_bytes,
+            &root("foreign-F5-A-artifact"),
+        ),
+        Err(ExecutableProtocolModeErrorV3::InvalidArtifact)
+    );
+}
+
+#[test]
+fn f5a_rejects_missing_extra_or_tampered_facet_evidence() {
+    let (mode_set, artifact, effect_law, facets) = f5a_artifact_fixture();
+    let mut missing = f5a_facet_inputs(&mode_set, &facets);
+    missing.pop();
+    assert_eq!(
+        compile_executable_protocol_mode_artifact_v3(&mode_set, &effect_law, missing),
+        Err(ExecutableProtocolModeErrorV3::MissingFacetEvidence)
+    );
+
+    let mut extra = f5a_facet_inputs(&mode_set, &facets);
+    extra.push(ProtocolFacetEvidenceInputV3 {
+        mode_id_sha256: root("unknown-F5-A-mode"),
+        canonical_facet_bytes: facets.values().next().expect("fixture facet").clone(),
+    });
+    assert_eq!(
+        compile_executable_protocol_mode_artifact_v3(&mode_set, &effect_law, extra),
+        Err(ExecutableProtocolModeErrorV3::UnexpectedFacetEvidence)
+    );
+
+    let mut tampered_source = f5a_facet_inputs(&mode_set, &facets);
+    let index = tampered_source[0].canonical_facet_bytes.len() / 2;
+    tampered_source[0].canonical_facet_bytes[index] ^= 1;
+    assert_eq!(
+        compile_executable_protocol_mode_artifact_v3(&mode_set, &effect_law, tampered_source,),
+        Err(ExecutableProtocolModeErrorV3::InvalidFacetEvidence)
+    );
+
+    let mut value = serde_json::to_value(&artifact).expect("artifact value");
+    let tampered_kind = match value["modes"][0]["payload"]["capability_kind"].as_str() {
+        Some("function") => "custom_tool",
+        Some("custom_tool") => "function",
+        other => panic!("unexpected capability kind: {other:?}"),
+    };
+    value["modes"][0]["payload"]["capability_kind"] = json!(tampered_kind);
+    let tampered_artifact = crate::canonical_json_bytes(&value).expect("tampered bytes");
+    assert_eq!(
+        ExecutableProtocolModeArtifactV3::from_canonical_bytes(
+            &tampered_artifact,
+            artifact.artifact_sha256(),
+        ),
+        Err(ExecutableProtocolModeErrorV3::InvalidArtifact)
+    );
+}
+
+#[test]
+fn f5a_rejects_constants_that_v2_kept_only_as_surface_atoms() {
+    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f5a-constant-gap");
+    let (evidence, graph_views, facets) =
+        structural_f4r2_fixture_with_facets(&effect_law, false, true);
+    let mode_set = compile_protocol_modes_for_effect_law_v3(
+        &evidence,
+        &effect_law,
+        &graph_views,
+        ProtocolModeCompilerBudgetV2::default(),
+    )
+    .expect("F4R2 still treats facet as an opaque root");
+    assert_eq!(
+        compile_executable_protocol_mode_artifact_v3(
+            &mode_set,
+            &effect_law,
+            f5a_facet_inputs(&mode_set, &facets),
+        ),
+        Err(ExecutableProtocolModeErrorV3::UncommittedPhysicalConstant)
+    );
 }
 
 #[test]

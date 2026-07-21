@@ -14,7 +14,6 @@ use crate::{
 };
 
 const PHASE_BEFORE: u16 = 1;
-const PHASE_ACTION: u16 = 2;
 const NODE_SCALAR: u16 = 1;
 const NODE_COLLECTION: u16 = 2;
 const NODE_OPERATION: u16 = 3;
@@ -282,8 +281,8 @@ fn build_delta_contract(
             atom: atom.clone(),
         })
         .chain(effect_atoms.iter().map(|atom| ExactEffectAtomV3 {
-            phase: PHASE_ACTION,
-            class_code: atom_class(PHASE_ACTION, atom),
+            phase: EFFECT_LAW_ACTION_PHASE_V3,
+            class_code: atom_class(EFFECT_LAW_ACTION_PHASE_V3, atom),
             atom: atom.clone(),
         }))
         .collect::<Vec<_>>();
@@ -508,7 +507,7 @@ pub(super) fn build_protocol_facet(
                 .action
                 .atoms
                 .iter()
-                .map(|atom| (PHASE_ACTION, atom)),
+                .map(|atom| (EFFECT_LAW_ACTION_PHASE_V3, atom)),
         )
         .filter_map(|(phase, atom)| {
             protocol_surface_atom(atom).map(|surface| {

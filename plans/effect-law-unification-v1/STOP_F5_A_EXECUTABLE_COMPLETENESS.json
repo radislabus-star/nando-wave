@@ -1,0 +1,88 @@
+{
+  "schema": "nando.stop-f5-a-executable-completeness.v1",
+  "date": "2026-07-21",
+  "base_head": "5f678fd5f0bc87877c081c715b4cee75089bf201",
+  "verdict": "F5A_EXECUTABLE_DOMAIN_PASS_CONSTANT_MODES_FAIL_CLOSED",
+  "authority": false,
+  "artifact": {
+    "schema": "nando.executable-protocol-mode-artifact.v3.f5a",
+    "facet_payload_schema": "nando.protocol-facet-payload.v3.f5a",
+    "source_mode_set_embedded": true,
+    "source_mode_set_byte_identical": true,
+    "effect_law_payload_embedded": true,
+    "distinct_executable_payload_root": true,
+    "physical_symbol_source": "current_advertised_capability_surface",
+    "production_admissible": false,
+    "execution_authority": false
+  },
+  "inventory": {
+    "source_role_schema": "EXECUTABLE_V2_BYTES",
+    "selector_program": "EXECUTABLE_V2_BYTES",
+    "value_contract": "EXECUTABLE_V2_BYTES",
+    "protocol_facet_root": "PHYSICAL_EVIDENCE_COMMITMENT_PROOF_ONLY_AT_RUNTIME",
+    "physical_program_ids": "PROOF_ONLY",
+    "capability_class": "EXECUTABLE_V3_BYTES",
+    "physical_capability_symbol": "LIVE_CURRENT_ADVERTISED_SURFACE",
+    "argument_role_schema": "EXECUTABLE_V2_BYTES",
+    "constant_contract": "EMPTY_ONLY_OTHERWISE_REJECT",
+    "structural_guard": "V2_SELECTOR_PLUS_EMBEDDED_EFFECT_LAW",
+    "temporal_cardinality_contract": "EXECUTABLE_V2_BYTES",
+    "coverage": "PROOF_ONLY"
+  },
+  "fail_closed": {
+    "missing_facet_evidence": "REJECT",
+    "extra_facet_evidence": "REJECT",
+    "tampered_facet_evidence": "REJECT",
+    "unsupported_facet_shape": "REJECT",
+    "uncommitted_physical_constant": "REJECT",
+    "hash_only_constant_commitment": "REJECT",
+    "tampered_artifact": "REJECT",
+    "foreign_expected_artifact_root": "REJECT",
+    "restart": "BYTE_IDENTICAL"
+  },
+  "f4_parity": {
+    "selector_matrix_drift": 0,
+    "exact_cover_drift": 0,
+    "source_mode_set_byte_drift": 0,
+    "physical_names_in_semantic_law": 0
+  },
+  "checks": {
+    "remote_build_root": "e@192.168.3.94:/home/e/projects/nando-wave-f5a-build",
+    "physical_trial_v2_tests": "21/21 PASS",
+    "binding_evidence_suite": "100/100 PASS",
+    "effect_law_v3": "40/40 PASS",
+    "historical_effect_law": "15/15 PASS",
+    "cargo_check_all_targets": "PASS",
+    "rustfmt_check": "PASS",
+    "git_diff_check": "PASS",
+    "full_lib_baseline": "502 PASS / 26 known FAIL",
+    "clippy": "BLOCKED_BY_12_EXISTING_LIBRARY_AND_8_TEST_ONLY_DIAGNOSTICS_NO_F5A_DIAGNOSTICS"
+  },
+  "nanda_owner_routes": {
+    "artifact_owner": "PASS",
+    "payload_provenance_owner": "PASS",
+    "authority_boundary_owner": "PASS",
+    "authority_ready": false
+  },
+  "live_gate": {
+    "verdict": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_m3": "WATCH",
+    "response_false_accepts": 0,
+    "response_runtime_parity_failures": 0,
+    "transition_false_accepts": 0,
+    "transition_parity_mismatches": 0
+  },
+  "production_boundary": {
+    "production_callers": 0,
+    "f5b_runtime_context": "NOT_STARTED",
+    "runtime_grounding_connected": false,
+    "actor_vm_connected": false,
+    "independent_verifier": "F6_NOT_STARTED",
+    "admission_connected": false,
+    "deploy": false,
+    "restart": false,
+    "execution_authority": false
+  }
+}

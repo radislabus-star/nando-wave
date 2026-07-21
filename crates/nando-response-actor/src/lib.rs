@@ -18,6 +18,7 @@ mod effect_law;
 mod effect_law_v3;
 mod evidence;
 mod evidence_graph;
+mod executable_protocol_mode;
 mod family_discovery;
 mod grounding;
 mod lifecycle;
@@ -241,6 +242,13 @@ pub use evidence_graph::{
     DeterministicEvidenceGraphStore, EvidenceGraph, EvidenceGraphAtom, EvidenceGraphBuilder,
     EvidenceGraphPolicy, EvidenceGraphRecord, EvidenceGraphStoreStatus, EvidenceNodeRef,
     EvidenceNodeType,
+};
+pub use executable_protocol_mode::{
+    EXECUTABLE_PROTOCOL_MODE_ARTIFACT_SCHEMA_V3, ExecutableProtocolModeArtifactV3,
+    ExecutableProtocolModeErrorV3, ExecutableProtocolModeV3, PROTOCOL_FACET_PAYLOAD_SCHEMA_V3,
+    ProtocolCapabilityArgumentV3, ProtocolCapabilityKindV3, ProtocolDefaultSemanticsV3,
+    ProtocolFacetEvidenceInputV3, ProtocolFacetPayloadV3, ProtocolPhysicalSymbolSourceV3,
+    compile_executable_protocol_mode_artifact_v3,
 };
 pub use family_discovery::{
     CrossSurfaceFamilyDiscovery, FamilyDiscoveryConfig, FamilyDiscoveryReport, RuntimeInvariant,
