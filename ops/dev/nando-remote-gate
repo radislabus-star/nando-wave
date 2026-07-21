@@ -234,17 +234,21 @@ rsync -a -e "ssh -o BatchMode=yes -o ControlMaster=auto -o ControlPersist=60 -o 
 
 fingerprint_verdict=NOT_RUN
 if test "$profile" = stop; then
-    last_failures_line=$(grep -n '^failures:$' "$tmp_dir/result/test.log" | tail -n 1 | cut -d: -f1)
-    tail -n "+$((last_failures_line + 1))" "$tmp_dir/result/test.log" \
-        | sed -n '/^test result:/q; s/^    \([A-Za-z0-9_][A-Za-z0-9_:]*\)$/\1/p' \
-        | sort -u >"$tmp_dir/result/actual-test-failures.txt"
+    if grep -q '^failures:$' "$tmp_dir/result/test.log"; then
+        last_failures_line=$(grep -n '^failures:$' "$tmp_dir/result/test.log" | tail -n 1 | cut -d: -f1)
+        tail -n "+$((last_failures_line + 1))" "$tmp_dir/result/test.log" \
+            | sed -n '/^test result:/q; s/^    \([A-Za-z0-9_][A-Za-z0-9_:]*\)$/\1/p' \
+            | sort -u >"$tmp_dir/result/actual-test-failures.txt"
+    else
+        : >"$tmp_dir/result/actual-test-failures.txt"
+    fi
 
     awk '
         /^error: / && $0 !~ /could not compile/ {
             message = substr($0, 8)
             next
         }
-        message != "" && /^[[:space:]]*--> crates\/nando-response-actor\/src\// {
+        message != "" && /^[[:space:]]*--> crates\/[^/]+\/src\// {
             location = $0
             sub(/^[[:space:]]*--> /, "", location)
             print location "\t" message
@@ -253,10 +257,15 @@ if test "$profile" = stop; then
     ' "$tmp_dir/result/clippy.log" | sort -u \
         >"$tmp_dir/result/actual-clippy-diagnostics.tsv"
 
-    expected_dir=plans/nando-response-actor-decomposition-v1/r0
-    cmp "$expected_dir/KNOWN_TEST_FAILURES.txt" "$tmp_dir/result/actual-test-failures.txt"
-    cmp "$expected_dir/KNOWN_CLIPPY_DIAGNOSTICS.tsv" \
-        "$tmp_dir/result/actual-clippy-diagnostics.tsv"
+    if test "$package" = nando-response-actor; then
+        expected_dir=plans/nando-response-actor-decomposition-v1/r0
+        cmp "$expected_dir/KNOWN_TEST_FAILURES.txt" "$tmp_dir/result/actual-test-failures.txt"
+        cmp "$expected_dir/KNOWN_CLIPPY_DIAGNOSTICS.tsv" \
+            "$tmp_dir/result/actual-clippy-diagnostics.tsv"
+    else
+        test ! -s "$tmp_dir/result/actual-test-failures.txt"
+        test ! -s "$tmp_dir/result/actual-clippy-diagnostics.tsv"
+    fi
     fingerprint_verdict=PASS
 fi
 
