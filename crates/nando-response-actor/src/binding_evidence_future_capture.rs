@@ -222,7 +222,7 @@ impl BindingFutureCaptureBatchV1 {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct BindingFutureCaptureRowV1 {
+pub(crate) struct BindingFutureCaptureRowV1 {
     schema: String,
     row_sha256: String,
     protocol_receipt_sha256: String,
@@ -517,6 +517,44 @@ impl BindingFutureCaptureFreezeV1 {
             f4_status: "BLOCKED".to_owned(),
             execution_authority: self.execution_authority,
         }
+    }
+
+    pub(crate) fn capture_index(&self) -> &CaptureCommitmentIndex {
+        &self.capture_index
+    }
+
+    pub(crate) fn future_label_rows(&self) -> &[BindingFutureCaptureRowV1] {
+        &self.future_rows
+    }
+
+    pub(crate) fn protocol(&self) -> &BindingFutureAcquisitionProtocolV1 {
+        &self.protocol
+    }
+}
+
+impl BindingFutureCaptureRowV1 {
+    pub(crate) fn slot_id(&self) -> &str {
+        &self.slot_id
+    }
+
+    pub(crate) fn frozen_graph(&self) -> &FrozenCandidateRelationGraphV1 {
+        &self.frozen_graph
+    }
+
+    pub(crate) fn capture_receipt(&self) -> &CaptureEvidenceReceipt {
+        &self.capture_receipt
+    }
+
+    pub(crate) fn capture_record(&self) -> &EvidenceLedgerRecord {
+        &self.capture_record
+    }
+
+    pub(crate) fn pre_action_wire_root_sha256(&self) -> &str {
+        &self.pre_action_wire_root_sha256
+    }
+
+    pub(crate) fn session_lineage_sha256(&self) -> &str {
+        &self.session_lineage_sha256
     }
 }
 

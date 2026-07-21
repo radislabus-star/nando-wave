@@ -2,6 +2,7 @@ mod admission_bundle;
 mod authority;
 mod backward_wave;
 mod binding_evidence;
+mod binding_evidence_adjudication;
 mod binding_evidence_capture_owner;
 mod binding_evidence_future_capture;
 mod binding_evidence_preregistration;
@@ -81,6 +82,18 @@ pub use binding_evidence::{
     MAX_BINDING_RELATION_EDGES_PER_ROW_V1, MAX_BINDING_REPORT_HYPOTHESES_V1,
     MAX_BINDING_REPORT_TIES_V1, MAX_BINDING_TEXT_BYTES_V1, PRE_ACTION_BINDING_SURFACE_SCHEMA_V1,
     PreActionBindingContextV1, PreActionBindingSurfaceV1, evaluate_binding_version_space_v1,
+};
+pub use binding_evidence_adjudication::{
+    BINDING_ADJUDICATION_REPORT_SCHEMA_V1, BINDING_EXTERNAL_LABEL_TRUST_SCHEMA_V1,
+    BINDING_PHYSICAL_LABEL_RECEIPT_SCHEMA_V1, BINDING_PHYSICAL_LABEL_SET_SCHEMA_V1,
+    BindingAdjudicationErrorV1, BindingCausalAdjudicationReportV1,
+    BindingExternalLabelTrustReceiptV1, BindingHypothesisAdjudicationStatusV1,
+    BindingInterventionAdjudicationV1, BindingObservedCandidateV1, BindingObservedParentV1,
+    BindingObservedRelationV1, BindingPhysicalActorOutcomeV1, BindingPhysicalCandidateTrialV1,
+    BindingPhysicalLabelReceiptSetV1, BindingPhysicalLabelReceiptV1,
+    BindingPhysicalRelationStateV1, adjudicate_binding_hypotheses_v1,
+    build_binding_label_manifest_v1, observe_frozen_binding_labels_v1,
+    seal_binding_external_label_trust_v1,
 };
 pub use binding_evidence_capture_owner::{
     BINDING_SUPPORT_CAPTURE_BATCH_SCHEMA_V1, BINDING_SUPPORT_CAPTURE_ROW_SCHEMA_V1,

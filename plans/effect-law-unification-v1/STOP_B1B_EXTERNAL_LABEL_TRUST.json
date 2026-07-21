@@ -1,0 +1,19 @@
+{
+  "schema": "nando.binding-external-label-trust.v1",
+  "receipt_sha256": "d895a1581971178758c5fa923351ef2d8c737ff5c697bfc09c1ac9e383c6e5a6",
+  "stop_id": "STOP-B1B-LABEL-TRUST",
+  "owner_challenge_root_sha256": "b1d340c8ecac6191c25f21b656bea021d4752cb7f4e7efd4279325e394fd4219",
+  "preregistration_file_sha256": "c7e8346406f4131679de8c4a88d6fb14f7557399551139d70b8f1b86916dded8",
+  "b1a_report_file_sha256": "e2b887fbb8569afc1e702b9132b6b45c6e77c0d60353c1586d1fd8ef09783b73",
+  "support_freeze_file_sha256": "8a856f4abc9f56b3c618c78acb0d38e9a93b3b10a0f0a7cf1dc0248f38bb2a5f",
+  "support_watermark_file_sha256": "4eb5160744dfdf0ffd3717fbe91a918cadab797532b3bfa733172b3926dcbaa5",
+  "future_freeze_file_sha256": "b0ae6f325ff9a5f910d9875d5430f95d5092228e371045db5d49eb365fe88717",
+  "future_external_receipt_file_sha256": "3534a8227439f7db0b6611f369a3d97ca59abe5eb2cc7beb98e6c05335e4b1d1",
+  "physical_receipts_file_sha256": "91993bfff1296e741e314a5150ff6aabd68c1842417b53a73b92d84bd8985314",
+  "physical_receipts_root_sha256": "aa323d3fb44ba68c3a0bcdf2571d6359e66dcfd83e67cba837c911168cddae21",
+  "label_manifest_file_sha256": "ebb4d19258cb61c50c4fa70c67107d648fae998e857d8e5a0f9c78f6e8ea15f7",
+  "external_manifest_root_sha256": "aa323d3fb44ba68c3a0bcdf2571d6359e66dcfd83e67cba837c911168cddae21",
+  "expected_labels_joined": true,
+  "protocol_mode_compiled": false,
+  "execution_authority": false
+}

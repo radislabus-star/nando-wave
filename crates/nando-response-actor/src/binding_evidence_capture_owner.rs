@@ -356,6 +356,36 @@ impl BindingSupportFreezeV1 {
             .map(|row| row.session_lineage_sha256.clone())
             .collect()
     }
+
+    pub(crate) fn support_label_rows(&self) -> &[BindingSupportCaptureRowV1] {
+        &self.support_rows
+    }
+}
+
+impl BindingSupportCaptureRowV1 {
+    pub(crate) fn frozen_graph(&self) -> &FrozenCandidateRelationGraphV1 {
+        &self.frozen_graph
+    }
+
+    pub(crate) fn capture_receipt(&self) -> &CaptureEvidenceReceipt {
+        &self.capture_receipt
+    }
+
+    pub(crate) fn capture_record(&self) -> &EvidenceLedgerRecord {
+        &self.capture_record
+    }
+
+    pub(crate) fn pre_action_wire_root_sha256(&self) -> &str {
+        &self.pre_action_wire_root_sha256
+    }
+
+    pub(crate) fn intervention_id(&self) -> &str {
+        &self.intervention_id
+    }
+
+    pub(crate) fn session_lineage_sha256(&self) -> &str {
+        &self.session_lineage_sha256
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

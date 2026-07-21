@@ -1557,6 +1557,13 @@ core. Never turn discovery into selection among a few pre-named programs.
     Future capture ends at an immutable, label-blind graph freeze. Expected
     actions may be joined only by the later trusted resolver; a future freeze
     alone cannot prove a binding relation or unlock protocol compilation.
+    STOP-B1B closes that join through three separate proof owners: a physical
+    observer executes candidate actions and emits verifier-bound hashed
+    receipts, an external owner pins exact manifest bytes, and an adjudicator
+    compares the preregistered H0/H1 predictions. The accepted controlled
+    relation is `parent_action_to_capability_instance`; candidate order is not
+    authority. This unlocks a later F4 compiler but does not itself create a
+    selector, `ProtocolMode`, ACTIVE package, or execution authority.
 11. Potential, shadow, ACTIVE, and real CPU coverage are different numbers.
 12. State is bounded and compact. Normal startup must not rescan unbounded
     history, and the hot path must not append unbounded payloads.

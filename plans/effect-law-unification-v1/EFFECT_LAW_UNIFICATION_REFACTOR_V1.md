@@ -16,8 +16,8 @@ B1B0 scientific preregistration COMPLETE / STOP-B1B0R
 B1B-S support acquisition       COMPLETE / SUPPORT FROZEN
 B1B-F0 future protocol          COMPLETE / PROTOCOL FROZEN
 B1B-F future acquisition        COMPLETE / FUTURE FROZEN
-B1B adjudication                NOT STARTED
-F4 protocol mode compiler       BLOCKED pending B1B causal evidence
+B1B adjudication                COMPLETE / STOP-B1B
+F4 protocol mode compiler       UNLOCKED / NOT STARTED
 production authority            false
 service deployment              out of scope
 ```
@@ -675,6 +675,40 @@ one action-equivalence class with wrong bindings = 0, or renewed INSUFFICIENT
 applicability-negative denominator present in support and future
 no selector / ProtocolMode / execution authority
 ```
+
+STOP-B1B completed the closed adjudication route over the immutable B1B-S and
+B1B-F artifacts. A separate physical observer reproduced all 24 capture records
+and candidate graphs byte-for-byte, executed every candidate against the
+pre-action capability state, and emitted independent verifier receipts. A
+separate trust owner pinned the exact label manifest before the adjudicator
+resolved it.
+
+```text
+support / future                 12 / 12
+positive per partition            6 / 6
+applicability-negative             6 / 6
+I1-I6 predictions                  6 / 6 PASS
+wrong bindings                     0
+negative accepts                   0
+parity failures                    0
+H0 relation_not_observable         REJECTED
+H1 parent_action_to_capability_instance SUPPORTED
+F4                                 UNLOCKED_NOT_STARTED
+authority                          false
+```
+
+Canonical receipt:
+
+```text
+plans/effect-law-unification-v1/STOP_B1B_CAUSAL_ADJUDICATION.md
+plans/effect-law-unification-v1/STOP_B1B_PHYSICAL_LABEL_RECEIPTS.json
+plans/effect-law-unification-v1/STOP_B1B_LABEL_MANIFEST.json
+plans/effect-law-unification-v1/STOP_B1B_EXTERNAL_LABEL_TRUST.json
+plans/effect-law-unification-v1/STOP_B1B_ADJUDICATION.json
+```
+
+This controlled result identifies the missing relation but compiles no runtime
+mode. F4 remains a separate mechanism and change set.
 
 ### F4: Compile Bounded Protocol Modes
 

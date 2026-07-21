@@ -815,6 +815,34 @@ fn sha256_json<T: Serialize>(value: &T) -> Result<String, BindingPreregistration
         .map_err(|_| BindingPreregistrationErrorV1::Serialization)
 }
 
+pub(crate) fn binding_trust_roots_from_external_commitment_v1(
+    manifest_bytes_sha256: &str,
+    external_manifest_root_sha256: &str,
+    watermark_bytes_sha256: &str,
+) -> Result<
+    (
+        TrustedBindingLabelManifestRootV1,
+        TrustedBindingCaptureWatermarkRootV1,
+    ),
+    BindingPreregistrationErrorV1,
+> {
+    if !is_sha256(manifest_bytes_sha256)
+        || !is_sha256(external_manifest_root_sha256)
+        || !is_sha256(watermark_bytes_sha256)
+    {
+        return Err(BindingPreregistrationErrorV1::InvalidTrustRoot);
+    }
+    Ok((
+        TrustedBindingLabelManifestRootV1 {
+            manifest_bytes_sha256: manifest_bytes_sha256.to_owned(),
+            external_manifest_root_sha256: external_manifest_root_sha256.to_owned(),
+        },
+        TrustedBindingCaptureWatermarkRootV1 {
+            watermark_bytes_sha256: watermark_bytes_sha256.to_owned(),
+        },
+    ))
+}
+
 // The production manifest owner deliberately has no constructor in B1B0.
 // Tests pin immutable bytes before exercising recomputed-label forgeries.
 #[cfg(test)]

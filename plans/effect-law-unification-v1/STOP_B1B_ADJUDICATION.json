@@ -1,0 +1,122 @@
+{
+  "schema": "nando.binding-causal-adjudication.v1",
+  "report_sha256": "1e68a3aa066a3cc94a4f3653a3d8d39ac0da493c617a8e4c6e7d0f574e5cbdb0",
+  "stop_id": "STOP-B1B",
+  "trusted_label_manifest_sha256": "ebb4d19258cb61c50c4fa70c67107d648fae998e857d8e5a0f9c78f6e8ea15f7",
+  "trusted_label_root_sha256": "aa323d3fb44ba68c3a0bcdf2571d6359e66dcfd83e67cba837c911168cddae21",
+  "physical_receipts_root_sha256": "aa323d3fb44ba68c3a0bcdf2571d6359e66dcfd83e67cba837c911168cddae21",
+  "support_rows": 12,
+  "future_rows": 12,
+  "support_positive_rows": 6,
+  "support_applicability_negative_rows": 6,
+  "future_positive_rows": 6,
+  "future_applicability_negative_rows": 6,
+  "b1a_ties_total": 86,
+  "b1a_ties_evaluated_against_relation": 86,
+  "causal_relation": "parent_action_to_capability_instance",
+  "causal_relation_id_sha256": "8230edf11ece28d5b4e4fdf22e47c985323c8a9e995eecefbdd1dc4618c212b6",
+  "h0_status": "rejected",
+  "h1_status": "supported",
+  "wrong_bindings": 0,
+  "applicability_negative_accepts": 0,
+  "parity_failures": 0,
+  "interventions": [
+    {
+      "intervention_id": "I1",
+      "support_rows": 2,
+      "future_rows": 2,
+      "positive_rows": 4,
+      "applicability_negative_rows": 0,
+      "observed_relation_states": [
+        "unique"
+      ],
+      "selected_parent_ordinals": [
+        0
+      ],
+      "selected_candidate_ordinals": [
+        0,
+        1
+      ],
+      "prediction_matched": true
+    },
+    {
+      "intervention_id": "I2",
+      "support_rows": 2,
+      "future_rows": 2,
+      "positive_rows": 4,
+      "applicability_negative_rows": 0,
+      "observed_relation_states": [
+        "unique"
+      ],
+      "selected_parent_ordinals": [
+        0,
+        1
+      ],
+      "selected_candidate_ordinals": [
+        0,
+        1
+      ],
+      "prediction_matched": true
+    },
+    {
+      "intervention_id": "I3",
+      "support_rows": 2,
+      "future_rows": 2,
+      "positive_rows": 4,
+      "applicability_negative_rows": 0,
+      "observed_relation_states": [
+        "unique"
+      ],
+      "selected_parent_ordinals": [
+        0
+      ],
+      "selected_candidate_ordinals": [
+        0
+      ],
+      "prediction_matched": true
+    },
+    {
+      "intervention_id": "I4",
+      "support_rows": 2,
+      "future_rows": 2,
+      "positive_rows": 0,
+      "applicability_negative_rows": 4,
+      "observed_relation_states": [
+        "not_applicable"
+      ],
+      "selected_parent_ordinals": [],
+      "selected_candidate_ordinals": [],
+      "prediction_matched": true
+    },
+    {
+      "intervention_id": "I5",
+      "support_rows": 2,
+      "future_rows": 2,
+      "positive_rows": 0,
+      "applicability_negative_rows": 4,
+      "observed_relation_states": [
+        "ambiguous"
+      ],
+      "selected_parent_ordinals": [],
+      "selected_candidate_ordinals": [],
+      "prediction_matched": true
+    },
+    {
+      "intervention_id": "I6",
+      "support_rows": 2,
+      "future_rows": 2,
+      "positive_rows": 0,
+      "applicability_negative_rows": 4,
+      "observed_relation_states": [
+        "not_applicable"
+      ],
+      "selected_parent_ordinals": [],
+      "selected_candidate_ordinals": [],
+      "prediction_matched": true
+    }
+  ],
+  "selector_compiled": false,
+  "protocol_mode_compiled": false,
+  "f4_status": "UNLOCKED_NOT_STARTED",
+  "execution_authority": false
+}
