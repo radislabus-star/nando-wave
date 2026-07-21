@@ -1,0 +1,32 @@
+{
+  "worker_verdict": "PASS",
+  "compile_exit": 0,
+  "test_exit": 0,
+  "clippy_exit": 125,
+  "compile_seconds": 1.290199271,
+  "test_seconds": 0.003702148,
+  "test_binary": "/home/e/projects/nando-wave-build/target-dev/debug/deps/nando_operator_kernel-b41dfae320c3bfe1",
+  "target": {
+    "path": "/home/e/projects/nando-wave-build/target-dev",
+    "bytes_before_prune": 1130021074,
+    "bytes_after_prune": 1130021074,
+    "prune": "none"
+  },
+  "schema": "nando.remote-gate.v1",
+  "head": "8a3d58c703a376c7ce6ae9412914f136c75f05d2",
+  "remote_host": "e@192.168.3.94",
+  "remote_source": "/home/e/projects/nando-wave-dev",
+  "profile": "fast",
+  "package": "nando-operator-kernel",
+  "overlay": {
+    "scope_count": 5,
+    "untracked_files": 4,
+    "patch_sha256": "78988bc5a4f84f75d1736730677d06f1f67708c4a851d00f5ec8aad6bcc078a7"
+  },
+  "fingerprint_verdict": "NOT_RUN",
+  "graphify": {
+    "verdict": "NOT_RUN",
+    "seconds": null
+  },
+  "new_background_build_processes": 0
+}

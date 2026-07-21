@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/nando-core",
+    "crates/nando-operator-kernel",
     "crates/nando-cli",
     "crates/nando-eval",
     "crates/nando-transition-actor",

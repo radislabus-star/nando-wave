@@ -559,6 +559,18 @@ movement touching the same crate facade.
 
 ### R2: Extract nando-operator-kernel
 
+Progress checkpoint `R2-LEAF`:
+
+```text
+canonical JSON/SHA utilities        moved
+relation/program contracts          moved
+binding predicate vocabulary        moved
+kernel tests / Clippy                PASS
+full failure fingerprint             PASS
+ProtocolMode / EffectLaw / artifact pending
+STOP-R2                              NOT REACHED
+```
+
 Work units:
 
 ```text

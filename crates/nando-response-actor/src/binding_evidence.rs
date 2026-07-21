@@ -10,6 +10,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+pub use nando_operator_kernel::binding::{
+    BindingCallLineageV1, BindingCapabilityClassV1, BindingCompletionStateV1, BindingPredicateV1,
+    BindingRequestRelationV1, BindingSourceEventClassV1, BindingValueTypeV1,
+};
+
 pub const PRE_ACTION_BINDING_SURFACE_SCHEMA_V1: &str = "nando.pre-action-binding-surface.v1";
 pub const CANDIDATE_RELATION_GRAPH_SCHEMA_V1: &str = "nando.candidate-relation-graph.v1";
 pub const FROZEN_CANDIDATE_RELATION_GRAPH_SCHEMA_V1: &str =
@@ -83,22 +88,6 @@ impl BindingEvidenceBudgetV1 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingCompletionStateV1 {
-    Unresolved,
-    Completed,
-    Unknown,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingCapabilityClassV1 {
-    None,
-    Single,
-    Multiple,
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PreActionBindingContextV1 {
     pub call_shape_count: u16,
@@ -124,42 +113,6 @@ impl PreActionBindingContextV1 {
         }
         Ok(())
     }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingValueTypeV1 {
-    String,
-    Integer,
-    Boolean,
-    Identifier,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingSourceEventClassV1 {
-    Textual,
-    Structured,
-    Mixed,
-    Scalar,
-    Unknown,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingCallLineageV1 {
-    SameValueAcrossEvents,
-    SharedOpaqueAnchor,
-    Unlinked,
-    Unknown,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingRequestRelationV1 {
-    Mentioned,
-    NotMentioned,
-    RequestAbsent,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -258,20 +211,6 @@ pub struct ExpectedBindingReceiptV1 {
     pub label: BindingEvaluationLabelV1,
     pub expected_action_equivalence_sha256: Option<String>,
     pub baseline_outcome: BindingBaselineOutcomeV1,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum BindingPredicateV1 {
-    SourceEventClass { value: BindingSourceEventClassV1 },
-    CallLineage { value: BindingCallLineageV1 },
-    CapabilityClass { value: BindingCapabilityClassV1 },
-    TemporalDistance { value: u16 },
-    CompletionState { value: BindingCompletionStateV1 },
-    EventCandidateCardinality { value: u16 },
-    ValueType { value: BindingValueTypeV1 },
-    RequestRelation { value: BindingRequestRelationV1 },
-    TopologyNeighborhood { root_sha256: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

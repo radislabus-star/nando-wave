@@ -316,7 +316,16 @@ jq \
     }' "$tmp_dir/result/worker-summary.json" >"$tmp_dir/result/final-summary.json"
 
 worker_verdict=$(jq -r '.worker_verdict' "$tmp_dir/result/final-summary.json")
-test "$worker_verdict" = PASS
+if test "$worker_verdict" != PASS; then
+    printf '%s\n' '--- remote compile diagnostics ---' >&2
+    cat "$tmp_dir/result/compile.log" >&2
+    jq -r 'select(.reason == "compiler-message") | .message.rendered // empty' \
+        "$tmp_dir/result/cargo-events.jsonl" >&2
+    printf '%s\n' '--- remote test diagnostics ---' >&2
+    cat "$tmp_dir/result/test.log" >&2
+    cat "$tmp_dir/result/final-summary.json" >&2
+    exit 1
+fi
 
 if test -n "$json_out"; then
     mkdir -p "$(dirname -- "$json_out")"

@@ -555,10 +555,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "nando-operator-kernel"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "nando-response-actor"
 version = "0.1.0"
 dependencies = [
  "nando-core",
+ "nando-operator-kernel",
  "serde",
  "serde_bytes",
  "serde_cbor",
