@@ -1,12 +1,28 @@
 # Nando Response Actor Spectral Decomposition V1
 
-Status: `PREREGISTERED_REFACTOR_PLAN_F5_B_PAUSED`
+Status: `IN_PROGRESS / STOP_R4_PASS / F5_B_PAUSED`
 
 Date: 2026-07-21
 
 Base HEAD: `3d7fbefe070d66e64870b4387870a843de697804`
 
 Authority: `false`
+
+## 0. Execution Status
+
+```text
+R0  ownership/API/baseline inventory       COMPLETE
+R1  bounded remote runner                  COMPLETE
+R2  nando-operator-kernel                  COMPLETE
+R3  nando-operator-proof                   COMPLETE
+R4  nando-operator-runtime                 COMPLETE
+R5  nando-operator-admission               NEXT
+R6  nando-operator-learning                PENDING
+R7  thin facade and consumer migration     PENDING
+R8  remaining monolith split               PENDING
+R9  STOP-DECOMPOSITION                     PENDING
+F5-B canonical runtime context             PAUSED
+```
 
 ## 1. Pause Contract
 
