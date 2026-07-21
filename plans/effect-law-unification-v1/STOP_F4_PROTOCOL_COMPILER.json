@@ -84,13 +84,24 @@
     "authority_ready": false
   },
   "live_transition_gate": {
-    "verdict": "PASS",
+    "verdict": "VETO",
+    "structural": "PASS",
+    "wave_causal": "PASS",
+    "runtime_admission": "PASS",
+    "deployment": "PASS",
+    "response_runtime": "VETO",
     "eligible_for_local_accept": false,
     "response_active_packages": 0,
     "response_m3": "WATCH",
     "response_false_accepts": 0,
     "runtime_false_accepts": 0,
-    "runtime_parity_mismatches": 0
+    "runtime_parity_mismatches": 0,
+    "blockers": [
+      "no_active_response_package",
+      "m3_windows_below_required",
+      "m3_window_coverage_below_threshold",
+      "response_baseline_safety_veto"
+    ]
   },
   "graphify": {
     "status": "EXACT_COMMIT_GRAPH_STORED_UNTRACKED",

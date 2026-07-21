@@ -182,7 +182,12 @@ removed the conflict without granting authority.
 `nando-live-transition-gate`:
 
 ```text
-composite verdict             PASS
+composite verdict             VETO
+structural                    PASS
+wave causal                   PASS
+runtime admission             PASS
+deployment                    PASS
+response runtime              VETO
 eligible_for_local_accept     false
 response ACTIVE packages      0
 response M3                   WATCH
@@ -191,7 +196,11 @@ runtime false accepts         0
 runtime parity mismatches     0
 ```
 
-This read-only safety gate does not promote F4R2.
+The response-runtime veto is caused by `no_active_response_package`,
+`m3_windows_below_required`, `m3_window_coverage_below_threshold`, and
+`response_baseline_safety_veto`. It does not invalidate the controlled F4R2
+compiler proof, but it blocks live authority exactly as intended. This
+read-only safety gate does not promote F4R2.
 
 ## Graphify
 
