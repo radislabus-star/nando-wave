@@ -565,9 +565,10 @@ Progress checkpoint `R2-LEAF`:
 canonical JSON/SHA utilities        moved
 relation/program contracts          moved
 binding predicate vocabulary        moved
+ProtocolMode IR/validation           moved
 kernel tests / Clippy                PASS
 full failure fingerprint             PASS
-ProtocolMode / EffectLaw / artifact pending
+EffectLaw / executable artifact      pending
 STOP-R2                              NOT REACHED
 ```
 

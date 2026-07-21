@@ -1,150 +1,28 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
-
 mod selector;
 
-pub use selector::{
-    ProtocolArgumentRoleSchemaV2, ProtocolArgumentRoleV2, ProtocolCapabilityContractV2,
-    ProtocolConstantContractV2, ProtocolModeProgramV2, ProtocolRoleCardinalityV2,
-    ProtocolSelectorProgramV2, ProtocolSourceRoleSchemaV2, ProtocolSourceRoleV2,
-    ProtocolStructuralGuardV2, ProtocolTemporalCardinalityContractV2, ProtocolValueContractV2,
+pub use nando_operator_kernel::{
+    BindingProtocolCompileVerdictV2, BindingProtocolCompilerErrorV2,
+    BoundedProtocolModeCandidateV2, PROTOCOL_MODE_SET_SCHEMA_V2, ProtocolArgumentRoleSchemaV2,
+    ProtocolArgumentRoleV2, ProtocolCapabilityContractV2, ProtocolConstantContractV2,
+    ProtocolModeCompilerBudgetV2, ProtocolModeProgramV2, ProtocolModeSetV2, ProtocolModeV2,
+    ProtocolRoleCardinalityV2, ProtocolSelectorProgramV2, ProtocolSourceRoleSchemaV2,
+    ProtocolSourceRoleV2, ProtocolStructuralGuardV2, ProtocolTemporalCardinalityContractV2,
+    ProtocolValueContractV2,
+};
+use nando_operator_kernel::{
+    is_protocol_mode_sha256 as is_sha256, protocol_mode_from_candidate_v2,
+    protocol_mode_set_digest_v2, validate_protocol_mode_budget_v2 as validate_budget_v2,
+    validate_protocol_mode_candidate_v2 as validate_candidate_v2, validate_protocol_mode_set_v2,
 };
 
 use crate::binding_evidence_adjudication::{
-    AcceptedBindingLawEvidenceV2, BindingAdjudicationErrorV1, BindingTrialEvidenceLabelV2,
+    AcceptedBindingLawEvidenceV2, BindingTrialEvidenceLabelV2,
 };
 #[cfg(test)]
 use crate::binding_evidence_adjudication::{PhysicalTrialOutcomeV2, TrustedResolvedBindingRowV2};
-use crate::{CanonicalEffectLawV3, FrozenCandidateRelationGraphV1, canonical_json_sha256};
-
-pub const PROTOCOL_MODE_SET_SCHEMA_V2: &str = "nando.protocol-mode-set.v2.f4r2";
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BindingProtocolCompileVerdictV2 {
-    ProtocolModeSet,
-    Abstain,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ProtocolModeCompilerBudgetV2 {
-    pub max_candidates: usize,
-    pub max_surviving_modes: usize,
-}
-
-impl Default for ProtocolModeCompilerBudgetV2 {
-    fn default() -> Self {
-        Self {
-            max_candidates: 512,
-            max_surviving_modes: 32,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct BoundedProtocolModeCandidateV2 {
-    pub candidate_id_sha256: String,
-    pub effect_law_id_sha256: String,
-    pub relation_identity_sha256: String,
-    pub protocol_facet_root_sha256: String,
-    pub effect_invariant_root_sha256: String,
-    pub source_role_schema_root_sha256: String,
-    pub selector_program_root_sha256: String,
-    pub observed_emitted_types_root_sha256: String,
-    pub capability_protocol_root_sha256: String,
-    pub argument_role_schema_root_sha256: String,
-    pub constant_contract_root_sha256: String,
-    pub structural_guard_root_sha256: String,
-    pub temporal_cardinality_contract_root_sha256: String,
-    pub action_class_root_sha256: String,
-    pub program: ProtocolModeProgramV2,
-    pub covers_positive_rows_sha256: Vec<String>,
-    pub accepts_negative_rows_sha256: Vec<String>,
-    pub wrong_action_rows_sha256: Vec<String>,
-    pub verify_failed_rows_sha256: Vec<String>,
-    pub search_exhausted: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolModeV2 {
-    pub mode_id_sha256: String,
-    pub effect_law_id_sha256: String,
-    pub relation_identity_sha256: String,
-    pub protocol_facet_root_sha256: String,
-    pub effect_invariant_root_sha256: String,
-    pub source_role_schema_root_sha256: String,
-    pub selector_program_root_sha256: String,
-    pub observed_emitted_types_root_sha256: String,
-    pub capability_protocol_root_sha256: String,
-    pub argument_role_schema_root_sha256: String,
-    pub constant_contract_root_sha256: String,
-    pub structural_guard_root_sha256: String,
-    pub temporal_cardinality_contract_root_sha256: String,
-    pub action_class_root_sha256: String,
-    pub program: ProtocolModeProgramV2,
-    pub covered_positive_rows_sha256: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolModeSetV2 {
-    pub schema: String,
-    pub mode_set_sha256: String,
-    pub verdict: BindingProtocolCompileVerdictV2,
-    pub binding_capability_root_sha256: String,
-    pub effect_law_id_sha256: String,
-    pub relation_identity_sha256: String,
-    pub modes: Vec<ProtocolModeV2>,
-    pub positive_rows: usize,
-    pub positive_rows_covered: usize,
-    pub wrong_actions: usize,
-    pub verify_failed: usize,
-    pub negative_accepts: usize,
-    pub search_exhausted: bool,
-    pub action_equivalence_classes: usize,
-    pub all_surviving_covers_action_equivalent: bool,
-    pub production_admissible: bool,
-    pub execution_authority: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BindingProtocolCompilerErrorV2 {
-    InvalidDigest,
-    InvalidBudget,
-    InvalidCandidate,
-    InvalidGraphView,
-    InvalidModeSet,
-    Serialization,
-}
-
-impl From<BindingAdjudicationErrorV1> for BindingProtocolCompilerErrorV2 {
-    fn from(value: BindingAdjudicationErrorV1) -> Self {
-        match value {
-            BindingAdjudicationErrorV1::Serialization => Self::Serialization,
-            BindingAdjudicationErrorV1::InvalidDigest => Self::InvalidDigest,
-            _ => Self::InvalidCandidate,
-        }
-    }
-}
-
-impl ProtocolModeSetV2 {
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>, BindingProtocolCompilerErrorV2> {
-        pretty_json_bytes(self)
-    }
-
-    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, BindingProtocolCompilerErrorV2> {
-        let set: Self = serde_json::from_slice(bytes)
-            .map_err(|_| BindingProtocolCompilerErrorV2::InvalidModeSet)?;
-        if set.canonical_bytes()? != bytes {
-            return Err(BindingProtocolCompilerErrorV2::InvalidModeSet);
-        }
-        validate_protocol_mode_set_v2(&set)?;
-        Ok(set)
-    }
-}
+use crate::{CanonicalEffectLawV3, FrozenCandidateRelationGraphV1};
 
 pub fn compile_protocol_modes_for_effect_law_v3(
     evidence: &AcceptedBindingLawEvidenceV2,
@@ -372,13 +250,6 @@ fn compile_protocol_modes_internal_v2(
     Ok(set)
 }
 
-pub(super) fn derived_mode_root_v2<T: Serialize>(
-    label: &str,
-    material: &T,
-) -> Result<String, BindingProtocolCompilerErrorV2> {
-    sha256_json(&(PROTOCOL_MODE_SET_SCHEMA_V2, label, material))
-}
-
 #[cfg(test)]
 fn derive_facet_control_matrix_v2(
     candidate: &BoundedProtocolModeCandidateV2,
@@ -514,141 +385,6 @@ fn exact_cover_dfs_v2(
     false
 }
 
-fn validate_budget_v2(
-    budget: ProtocolModeCompilerBudgetV2,
-) -> Result<(), BindingProtocolCompilerErrorV2> {
-    if budget.max_candidates == 0
-        || budget.max_candidates > 4096
-        || budget.max_surviving_modes == 0
-        || budget.max_surviving_modes > 512
-    {
-        return Err(BindingProtocolCompilerErrorV2::InvalidBudget);
-    }
-    Ok(())
-}
-
-fn validate_candidate_v2(
-    candidate: &BoundedProtocolModeCandidateV2,
-) -> Result<(), BindingProtocolCompilerErrorV2> {
-    selector::validate_program_v2(&candidate.program)?;
-    let roots = [
-        candidate.candidate_id_sha256.as_str(),
-        candidate.effect_law_id_sha256.as_str(),
-        candidate.relation_identity_sha256.as_str(),
-        candidate.protocol_facet_root_sha256.as_str(),
-        candidate.effect_invariant_root_sha256.as_str(),
-        candidate.source_role_schema_root_sha256.as_str(),
-        candidate.selector_program_root_sha256.as_str(),
-        candidate.observed_emitted_types_root_sha256.as_str(),
-        candidate.capability_protocol_root_sha256.as_str(),
-        candidate.argument_role_schema_root_sha256.as_str(),
-        candidate.constant_contract_root_sha256.as_str(),
-        candidate.structural_guard_root_sha256.as_str(),
-        candidate.temporal_cardinality_contract_root_sha256.as_str(),
-        candidate.action_class_root_sha256.as_str(),
-    ];
-    if roots.into_iter().any(|root| !is_sha256(root))
-        || candidate.source_role_schema_root_sha256
-            != derived_mode_root_v2("source-role-schema", &candidate.program.source_role_schema)?
-        || candidate.selector_program_root_sha256
-            != derived_mode_root_v2("selector-program", &candidate.program.selector_program)?
-        || candidate.observed_emitted_types_root_sha256
-            != derived_mode_root_v2("observed-emitted-types", &candidate.program.value_contract)?
-        || candidate.capability_protocol_root_sha256
-            != derived_mode_root_v2(
-                "capability-protocol",
-                &candidate.program.capability_contract,
-            )?
-        || candidate.argument_role_schema_root_sha256
-            != derived_mode_root_v2(
-                "argument-role-schema",
-                &candidate.program.argument_role_schema,
-            )?
-        || candidate.constant_contract_root_sha256
-            != derived_mode_root_v2("constant-contract", &candidate.program.constant_contract)?
-        || candidate.structural_guard_root_sha256
-            != derived_mode_root_v2("structural-guard", &candidate.program.structural_guard)?
-        || candidate.temporal_cardinality_contract_root_sha256
-            != derived_mode_root_v2(
-                "temporal-cardinality",
-                &candidate.program.temporal_cardinality_contract,
-            )?
-        || candidate.protocol_facet_root_sha256
-            != candidate
-                .program
-                .capability_contract
-                .protocol_facet_root_sha256
-        || candidate.relation_identity_sha256
-            != candidate.program.structural_guard.relation_identity_sha256
-        || candidate.effect_invariant_root_sha256
-            != candidate
-                .program
-                .structural_guard
-                .effect_invariant_root_sha256
-        || candidate
-            .covers_positive_rows_sha256
-            .iter()
-            .chain(candidate.accepts_negative_rows_sha256.iter())
-            .chain(candidate.wrong_action_rows_sha256.iter())
-            .chain(candidate.verify_failed_rows_sha256.iter())
-            .any(|root| !is_sha256(root))
-    {
-        return Err(BindingProtocolCompilerErrorV2::InvalidDigest);
-    }
-    Ok(())
-}
-
-fn protocol_mode_from_candidate_v2(
-    candidate: &BoundedProtocolModeCandidateV2,
-    covered: BTreeSet<String>,
-) -> Result<ProtocolModeV2, BindingProtocolCompilerErrorV2> {
-    let covered_positive_rows_sha256 = covered.into_iter().collect::<Vec<_>>();
-    let mut mode = ProtocolModeV2 {
-        mode_id_sha256: String::new(),
-        effect_law_id_sha256: candidate.effect_law_id_sha256.clone(),
-        relation_identity_sha256: candidate.relation_identity_sha256.clone(),
-        protocol_facet_root_sha256: candidate.protocol_facet_root_sha256.clone(),
-        effect_invariant_root_sha256: candidate.effect_invariant_root_sha256.clone(),
-        source_role_schema_root_sha256: candidate.source_role_schema_root_sha256.clone(),
-        selector_program_root_sha256: candidate.selector_program_root_sha256.clone(),
-        observed_emitted_types_root_sha256: candidate.observed_emitted_types_root_sha256.clone(),
-        capability_protocol_root_sha256: candidate.capability_protocol_root_sha256.clone(),
-        argument_role_schema_root_sha256: candidate.argument_role_schema_root_sha256.clone(),
-        constant_contract_root_sha256: candidate.constant_contract_root_sha256.clone(),
-        structural_guard_root_sha256: candidate.structural_guard_root_sha256.clone(),
-        temporal_cardinality_contract_root_sha256: candidate
-            .temporal_cardinality_contract_root_sha256
-            .clone(),
-        action_class_root_sha256: candidate.action_class_root_sha256.clone(),
-        program: candidate.program.clone(),
-        covered_positive_rows_sha256,
-    };
-    mode.mode_id_sha256 = protocol_mode_digest_v2(&mode)?;
-    Ok(mode)
-}
-
-fn protocol_mode_digest_v2(
-    mode: &ProtocolModeV2,
-) -> Result<String, BindingProtocolCompilerErrorV2> {
-    sha256_json(&(
-        mode.effect_law_id_sha256.as_str(),
-        mode.relation_identity_sha256.as_str(),
-        mode.protocol_facet_root_sha256.as_str(),
-        mode.effect_invariant_root_sha256.as_str(),
-        mode.source_role_schema_root_sha256.as_str(),
-        mode.selector_program_root_sha256.as_str(),
-        mode.observed_emitted_types_root_sha256.as_str(),
-        mode.capability_protocol_root_sha256.as_str(),
-        mode.argument_role_schema_root_sha256.as_str(),
-        mode.constant_contract_root_sha256.as_str(),
-        mode.structural_guard_root_sha256.as_str(),
-        mode.temporal_cardinality_contract_root_sha256.as_str(),
-        mode.action_class_root_sha256.as_str(),
-        &mode.program,
-        &mode.covered_positive_rows_sha256,
-    ))
-}
-
 fn prune_dominated_modes_v2(mut modes: Vec<ProtocolModeV2>) -> Vec<ProtocolModeV2> {
     modes.sort_by(|left, right| {
         left.program
@@ -685,138 +421,4 @@ fn prune_dominated_modes_v2(mut modes: Vec<ProtocolModeV2>) -> Vec<ProtocolModeV
         retained.push(mode);
     }
     retained
-}
-
-fn validate_protocol_mode_set_v2(
-    set: &ProtocolModeSetV2,
-) -> Result<(), BindingProtocolCompilerErrorV2> {
-    let mode_ids = set
-        .modes
-        .iter()
-        .map(|mode| mode.mode_id_sha256.as_str())
-        .collect::<Vec<_>>();
-    let mode_ids_are_sorted = mode_ids.windows(2).all(|pair| pair[0] < pair[1]);
-    if set.schema != PROTOCOL_MODE_SET_SCHEMA_V2
-        || !is_sha256(&set.mode_set_sha256)
-        || !is_sha256(&set.binding_capability_root_sha256)
-        || !is_sha256(&set.effect_law_id_sha256)
-        || !is_sha256(&set.relation_identity_sha256)
-        || set.execution_authority
-        || !mode_ids_are_sorted
-        || set.positive_rows_covered > set.positive_rows
-        || set.mode_set_sha256 != protocol_mode_set_digest_v2(set)?
-        || (set.verdict == BindingProtocolCompileVerdictV2::Abstain && !set.modes.is_empty())
-        || (set.verdict == BindingProtocolCompileVerdictV2::ProtocolModeSet
-            && (set.modes.is_empty()
-                || set.search_exhausted
-                || set.action_equivalence_classes != 1
-                || set.wrong_actions != 0
-                || set.verify_failed != 0
-                || set.negative_accepts != 0
-                || set.positive_rows == 0
-                || set.positive_rows_covered != set.positive_rows
-                || !set.all_surviving_covers_action_equivalent))
-    {
-        return Err(BindingProtocolCompilerErrorV2::InvalidModeSet);
-    }
-    let mut mode_ids = BTreeSet::new();
-    let mut covered_rows = BTreeSet::new();
-    let mut action_classes = BTreeSet::new();
-    for mode in &set.modes {
-        selector::validate_program_v2(&mode.program)?;
-        let candidate = BoundedProtocolModeCandidateV2 {
-            candidate_id_sha256: mode.mode_id_sha256.clone(),
-            effect_law_id_sha256: mode.effect_law_id_sha256.clone(),
-            relation_identity_sha256: mode.relation_identity_sha256.clone(),
-            protocol_facet_root_sha256: mode.protocol_facet_root_sha256.clone(),
-            effect_invariant_root_sha256: mode.effect_invariant_root_sha256.clone(),
-            source_role_schema_root_sha256: mode.source_role_schema_root_sha256.clone(),
-            selector_program_root_sha256: mode.selector_program_root_sha256.clone(),
-            observed_emitted_types_root_sha256: mode.observed_emitted_types_root_sha256.clone(),
-            capability_protocol_root_sha256: mode.capability_protocol_root_sha256.clone(),
-            argument_role_schema_root_sha256: mode.argument_role_schema_root_sha256.clone(),
-            constant_contract_root_sha256: mode.constant_contract_root_sha256.clone(),
-            structural_guard_root_sha256: mode.structural_guard_root_sha256.clone(),
-            temporal_cardinality_contract_root_sha256: mode
-                .temporal_cardinality_contract_root_sha256
-                .clone(),
-            action_class_root_sha256: mode.action_class_root_sha256.clone(),
-            program: mode.program.clone(),
-            covers_positive_rows_sha256: Vec::new(),
-            accepts_negative_rows_sha256: Vec::new(),
-            wrong_action_rows_sha256: Vec::new(),
-            verify_failed_rows_sha256: Vec::new(),
-            search_exhausted: false,
-        };
-        validate_candidate_v2(&candidate)?;
-        if mode.effect_law_id_sha256 != set.effect_law_id_sha256
-            || mode.relation_identity_sha256 != set.relation_identity_sha256
-            || mode.mode_id_sha256 != protocol_mode_digest_v2(mode)?
-            || !mode_ids.insert(mode.mode_id_sha256.clone())
-            || mode.covered_positive_rows_sha256.is_empty()
-            || mode
-                .covered_positive_rows_sha256
-                .iter()
-                .any(|root| !is_sha256(root))
-        {
-            return Err(BindingProtocolCompilerErrorV2::InvalidModeSet);
-        }
-        if !mode
-            .covered_positive_rows_sha256
-            .windows(2)
-            .all(|pair| pair[0] < pair[1])
-            || mode
-                .covered_positive_rows_sha256
-                .iter()
-                .any(|row| !covered_rows.insert(row.clone()))
-        {
-            return Err(BindingProtocolCompilerErrorV2::InvalidModeSet);
-        }
-        action_classes.insert(mode.action_class_root_sha256.clone());
-    }
-    if !set.modes.is_empty()
-        && (covered_rows.len() != set.positive_rows_covered
-            || action_classes.len() != set.action_equivalence_classes)
-    {
-        return Err(BindingProtocolCompilerErrorV2::InvalidModeSet);
-    }
-    Ok(())
-}
-
-fn protocol_mode_set_digest_v2(
-    set: &ProtocolModeSetV2,
-) -> Result<String, BindingProtocolCompilerErrorV2> {
-    sha256_json(&(
-        set.schema.as_str(),
-        set.verdict,
-        set.binding_capability_root_sha256.as_str(),
-        set.effect_law_id_sha256.as_str(),
-        set.relation_identity_sha256.as_str(),
-        &set.modes,
-        set.positive_rows,
-        set.positive_rows_covered,
-        set.wrong_actions,
-        set.verify_failed,
-        set.negative_accepts,
-        set.search_exhausted,
-        set.action_equivalence_classes,
-        set.all_surviving_covers_action_equivalent,
-        set.production_admissible,
-        set.execution_authority,
-    ))
-}
-
-fn pretty_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, BindingProtocolCompilerErrorV2> {
-    let mut bytes = serde_json::to_vec_pretty(value)
-        .map_err(|_| BindingProtocolCompilerErrorV2::Serialization)?;
-    bytes.push(b'\n');
-    Ok(bytes)
-}
-
-fn sha256_json<T: Serialize>(value: &T) -> Result<String, BindingProtocolCompilerErrorV2> {
-    canonical_json_sha256(value).map_err(|_| BindingProtocolCompilerErrorV2::Serialization)
-}
-
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }

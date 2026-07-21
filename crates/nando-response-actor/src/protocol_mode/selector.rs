@@ -1,112 +1,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
-
 use super::{
-    BindingProtocolCompilerErrorV2, BoundedProtocolModeCandidateV2, ProtocolModeCompilerBudgetV2,
-    derived_mode_root_v2, is_sha256, sha256_json,
+    BindingProtocolCompilerErrorV2, BoundedProtocolModeCandidateV2, ProtocolArgumentRoleSchemaV2,
+    ProtocolArgumentRoleV2, ProtocolCapabilityContractV2, ProtocolConstantContractV2,
+    ProtocolModeCompilerBudgetV2, ProtocolModeProgramV2, ProtocolRoleCardinalityV2,
+    ProtocolSelectorProgramV2, ProtocolSourceRoleSchemaV2, ProtocolSourceRoleV2,
+    ProtocolStructuralGuardV2, ProtocolTemporalCardinalityContractV2, ProtocolValueContractV2,
 };
 use crate::binding_evidence::{binding_feature_predicates_v1, binding_predicate_matches_v1};
 use crate::{
-    AcceptedBindingLawEvidenceV2, BindingCompletionStateV1, BindingPredicateV1,
-    BindingTrialEvidenceLabelV2, BindingValueTypeV1, CanonicalEffectLawV3,
-    FrozenCandidateRelationGraphV1, PhysicalTrialOutcomeV2, TrustedResolvedBindingRowV2,
+    AcceptedBindingLawEvidenceV2, BindingPredicateV1, BindingTrialEvidenceLabelV2,
+    BindingValueTypeV1, CanonicalEffectLawV3, FrozenCandidateRelationGraphV1,
+    PhysicalTrialOutcomeV2, TrustedResolvedBindingRowV2,
 };
-
-const MAX_SELECTOR_PREDICATES_V2: usize = 3;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProtocolRoleCardinalityV2 {
-    OneActionClass,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolSourceRoleV2 {
-    pub role_id: u16,
-    pub value_type: BindingValueTypeV1,
-    pub cardinality: ProtocolRoleCardinalityV2,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolSourceRoleSchemaV2 {
-    pub roles: Vec<ProtocolSourceRoleV2>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolSelectorProgramV2 {
-    pub predicates: Vec<BindingPredicateV1>,
-    pub max_action_classes: u8,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolValueContractV2 {
-    pub observed: BindingValueTypeV1,
-    pub emitted: BindingValueTypeV1,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolCapabilityContractV2 {
-    pub protocol_facet_root_sha256: String,
-    pub physical_program_ids_sha256: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolArgumentRoleV2 {
-    pub argument_ordinal: u16,
-    pub source_role_id: u16,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolArgumentRoleSchemaV2 {
-    pub roles: Vec<ProtocolArgumentRoleV2>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolConstantContractV2 {
-    pub semantic_constants_sha256: Vec<String>,
-    pub protocol_noop_constants_sha256: Vec<String>,
-    pub execution_budget_roots_sha256: Vec<String>,
-    pub transport_default_roots_sha256: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolStructuralGuardV2 {
-    pub relation_identity_sha256: String,
-    pub effect_invariant_root_sha256: String,
-    pub selector_program_root_sha256: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolTemporalCardinalityContractV2 {
-    pub completion_states: Vec<BindingCompletionStateV1>,
-    pub temporal_distances: Vec<u16>,
-    pub event_candidate_cardinalities: Vec<u16>,
-    pub require_unique_action_class: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProtocolModeProgramV2 {
-    pub source_role_schema: ProtocolSourceRoleSchemaV2,
-    pub selector_program: ProtocolSelectorProgramV2,
-    pub value_contract: ProtocolValueContractV2,
-    pub capability_contract: ProtocolCapabilityContractV2,
-    pub argument_role_schema: ProtocolArgumentRoleSchemaV2,
-    pub constant_contract: ProtocolConstantContractV2,
-    pub structural_guard: ProtocolStructuralGuardV2,
-    pub temporal_cardinality_contract: ProtocolTemporalCardinalityContractV2,
-}
+use nando_operator_kernel::{
+    MAX_SELECTOR_PREDICATES_V2, derived_mode_root_v2, protocol_mode_json_sha256,
+    validate_protocol_mode_program_v2,
+};
 
 pub(super) struct CandidateGenerationV2 {
     pub candidates: Vec<BoundedProtocolModeCandidateV2>,
@@ -417,62 +327,11 @@ pub(super) fn derive_candidate_matrix_v2(
     Ok(matrix)
 }
 
-pub(super) fn validate_program_v2(
-    program: &ProtocolModeProgramV2,
-) -> Result<(), BindingProtocolCompilerErrorV2> {
-    if program.source_role_schema.roles.len() != 1
-        || program.source_role_schema.roles[0].role_id != 0
-        || program.source_role_schema.roles[0].cardinality
-            != ProtocolRoleCardinalityV2::OneActionClass
-        || program.selector_program.max_action_classes != 1
-        || program.selector_program.predicates.len() > MAX_SELECTOR_PREDICATES_V2
-        || program.argument_role_schema.roles
-            != vec![ProtocolArgumentRoleV2 {
-                argument_ordinal: 0,
-                source_role_id: 0,
-            }]
-        || program.value_contract.observed != program.source_role_schema.roles[0].value_type
-        || program.value_contract.emitted != program.source_role_schema.roles[0].value_type
-        || program.structural_guard.selector_program_root_sha256
-            != derived_mode_root_v2("selector-program", &program.selector_program)?
-        || !is_sha256(&program.structural_guard.relation_identity_sha256)
-        || !is_sha256(&program.structural_guard.effect_invariant_root_sha256)
-        || !is_sha256(&program.capability_contract.protocol_facet_root_sha256)
-        || program
-            .capability_contract
-            .physical_program_ids_sha256
-            .is_empty()
-        || program
-            .capability_contract
-            .physical_program_ids_sha256
-            .iter()
-            .any(|root| !is_sha256(root))
-        || constant_roots_v2(&program.constant_contract).any(|root| !is_sha256(root))
-    {
-        return Err(BindingProtocolCompilerErrorV2::InvalidCandidate);
-    }
-    let mut predicates = program.selector_program.predicates.clone();
-    predicates.sort();
-    predicates.dedup();
-    let mut physical_programs = program
-        .capability_contract
-        .physical_program_ids_sha256
-        .clone();
-    physical_programs.sort();
-    physical_programs.dedup();
-    if predicates != program.selector_program.predicates
-        || physical_programs != program.capability_contract.physical_program_ids_sha256
-    {
-        return Err(BindingProtocolCompilerErrorV2::InvalidCandidate);
-    }
-    Ok(())
-}
-
 fn execute_selector_v2(
     program: &ProtocolModeProgramV2,
     graph: &FrozenCandidateRelationGraphV1,
 ) -> Result<BTreeSet<String>, BindingProtocolCompilerErrorV2> {
-    validate_program_v2(program)?;
+    validate_protocol_mode_program_v2(program)?;
     let value_type = program.source_role_schema.roles[0].value_type;
     Ok(graph
         .graph
@@ -578,15 +437,6 @@ fn selector_preference_key_v2(program: &ProtocolSelectorProgramV2) -> (usize, us
     (
         program.predicates.len(),
         topology_predicates,
-        sha256_json(program).unwrap_or_default(),
+        protocol_mode_json_sha256(program).unwrap_or_default(),
     )
-}
-
-fn constant_roots_v2(contract: &ProtocolConstantContractV2) -> impl Iterator<Item = &String> {
-    contract
-        .semantic_constants_sha256
-        .iter()
-        .chain(contract.protocol_noop_constants_sha256.iter())
-        .chain(contract.execution_budget_roots_sha256.iter())
-        .chain(contract.transport_default_roots_sha256.iter())
 }
