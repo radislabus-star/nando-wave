@@ -17,7 +17,7 @@ R2  nando-operator-kernel                  COMPLETE
 R3  nando-operator-proof                   COMPLETE
 R4  nando-operator-runtime                 COMPLETE
 R5  nando-operator-admission               COMPLETE
-R6  nando-operator-learning                IN PROGRESS (A COMPLETE, B NEXT)
+R6  nando-operator-learning                IN PROGRESS (A-B COMPLETE, C NEXT)
 R7  thin facade and consumer migration     PENDING
 R8  remaining monolith split               PENDING
 R9  STOP-DECOMPOSITION                     PENDING
@@ -731,8 +731,8 @@ Current substage status:
 
 ```text
 R6-A evidence, capture, quotient, binding evidence     COMPLETE at dae7ec3
-R6-B compilers, crystallizer, causal controls, Wave    NEXT
-R6-C online state, CEGIS, checkpoint, reports          PENDING
+R6-B compilers, generation, causal controls, Wave      COMPLETE at e5a15a4
+R6-C online state, CEGIS, checkpoint, reports          NEXT
 ```
 
 Work:
