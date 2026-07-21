@@ -1,5 +1,5 @@
 [package]
-name = "nando-response-actor"
+name = "nando-operator-learning"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -8,11 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 nando-core = { path = "../nando-core" }
-nando-operator-admission = { path = "../nando-operator-admission" }
 nando-operator-kernel = { path = "../nando-operator-kernel" }
-nando-operator-learning = { path = "../nando-operator-learning" }
 nando-operator-proof = { path = "../nando-operator-proof" }
-nando-operator-runtime = { path = "../nando-operator-runtime" }
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 serde_bytes = "0.11"

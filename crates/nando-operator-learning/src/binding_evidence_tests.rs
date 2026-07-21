@@ -342,9 +342,11 @@ fn candidate_and_hypothesis_budgets_fail_closed() {
                 .join(" ")
         }]
     });
-    let mut budget = BindingEvidenceBudgetV1::default();
-    budget.max_candidates_per_row = 4;
-    budget.max_hypotheses = 2;
+    let budget = BindingEvidenceBudgetV1 {
+        max_candidates_per_row: 4,
+        max_hypotheses: 2,
+        ..BindingEvidenceBudgetV1::default()
+    };
     let surface = PreActionBindingSurfaceV1::capture(
         "d".repeat(64),
         "e".repeat(64),
@@ -374,8 +376,10 @@ fn candidate_and_hypothesis_budgets_fail_closed() {
     );
     assert_eq!(report.candidate_budget_exhausted_rows, 1);
 
-    let mut hypothesis_budget = BindingEvidenceBudgetV1::default();
-    hypothesis_budget.max_hypotheses = 2;
+    let hypothesis_budget = BindingEvidenceBudgetV1 {
+        max_hypotheses: 2,
+        ..BindingEvidenceBudgetV1::default()
+    };
     let graph = PreActionBindingSurfaceV1::capture(
         "d".repeat(64),
         "e".repeat(64),

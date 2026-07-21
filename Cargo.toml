@@ -5,6 +5,7 @@ members = [
     "crates/nando-operator-proof",
     "crates/nando-operator-runtime",
     "crates/nando-operator-admission",
+    "crates/nando-operator-learning",
     "crates/nando-cli",
     "crates/nando-eval",
     "crates/nando-transition-actor",
