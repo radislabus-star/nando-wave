@@ -1,0 +1,214 @@
+{
+  "schema": "nando.live-transition-composite-gate.v2",
+  "project_id": "nando-wave",
+  "project_root": "/home/ubu/projects/nando-wave",
+  "generated_at_unix": 1784671150,
+  "expires_at_unix": 1784671180,
+  "verdict": "PASS",
+  "eligible_for_local_accept": false,
+  "response_authority": {
+    "schema": "nando.response-authority.v2",
+    "registry_schema": "nando.response-registry.v6",
+    "registry_revision": 0,
+    "registry_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "gate_build_sha256": "67b9a066eeb7ed3d48143f2af61315d2dbc2f1eaecd99b80bb2850b8ea545868",
+    "runtime_build_sha256": "9746d4e4ab38b8b7cde09cf19c8bba818a4893a08f8ca57294dac9fc886991ad",
+    "packages": []
+  },
+  "m3_complete": false,
+  "enabled_checks": [
+    "structural",
+    "wave_causal",
+    "runtime_admission",
+    "response_runtime",
+    "deployment"
+  ],
+  "required_actions": [],
+  "sections": {
+    "structural": {
+      "section": "structural",
+      "verdict": "PASS",
+      "source": "live_structural_tool",
+      "pass_count": 3,
+      "route_count": 3,
+      "blocked_routes": [],
+      "routes": [
+        {
+          "route": "01_ingest_induction",
+          "verdict": "PASS",
+          "weak_triads": [],
+          "conflicts": [],
+          "evidence_gaps": [],
+          "repair_queue": [],
+          "trace_path": "/tmp/nanda-structural-gate/nando-live-01_ingest_induction.trace.json"
+        },
+        {
+          "route": "02_package_lifecycle",
+          "verdict": "PASS",
+          "weak_triads": [],
+          "conflicts": [],
+          "evidence_gaps": [],
+          "repair_queue": [],
+          "trace_path": "/tmp/nanda-structural-gate/nando-live-02_package_lifecycle.trace.json"
+        },
+        {
+          "route": "03_serving_recovery",
+          "verdict": "PASS",
+          "weak_triads": [],
+          "conflicts": [],
+          "evidence_gaps": [],
+          "repair_queue": [],
+          "trace_path": "/tmp/nanda-structural-gate/nando-live-03_serving_recovery.trace.json"
+        }
+      ]
+    },
+    "wave_causal": {
+      "section": "wave_causal",
+      "verdict": "PASS",
+      "receipt_hash_match": true,
+      "source_hash_mismatches": 0,
+      "receipt_contract_pass": true,
+      "proof": {
+        "verdict": "WAVE_CAUSAL_OPERATOR_PROOF_PASS",
+        "corpus_seeds": 3,
+        "heldout_queries": 1440,
+        "correct_cpu_executions": 1440,
+        "wrong_accepts": 0,
+        "anti_center_causal_pass": true,
+        "strict_anti_center_required": true
+      }
+    },
+    "expression_shadow": {
+      "section": "expression_shadow",
+      "verdict": "PASS",
+      "required": false,
+      "reason": "not_required_by_project_profile"
+    },
+    "runtime_admission": {
+      "report_kind": "nando_transition_admission_inspection_v1",
+      "verdict": "PASS",
+      "registry_path": "/var/lib/nando-wave/transition/registry.json",
+      "registry_revision": 44264,
+      "policy_version": "autonomous_event_time_v2",
+      "package_count": 20,
+      "profile_count": 70,
+      "active_profile_count": 5,
+      "non_raw_active_profile_count": 0,
+      "quarantined_profile_count": 64,
+      "revoked_profile_count": 1,
+      "validated_package_count": 20,
+      "validated_profile_count": 70,
+      "active_future_rows": 17338,
+      "active_future_clean_rows": 17338,
+      "active_grounded_future_rows": 17338,
+      "active_grounded_future_clean_rows": 17338,
+      "active_false_accepts": 0,
+      "active_runtime_parity_mismatches": 0,
+      "active_execution_p99_ns": 204395,
+      "package_bytes": 236726,
+      "traces_seen": 52395,
+      "shadow_executions": 17570,
+      "global_false_accepts": 0,
+      "global_runtime_parity_mismatches": 0,
+      "kill_switch_only_manual_control": true,
+      "package_validation_failures": [],
+      "package_accounting_warnings": [
+        "a1-0772a8dc578d4e21:package_bytes_mismatch:recorded=9871:actual=9889",
+        "a1-1d820da44c07ac6d:package_bytes_mismatch:recorded=9830:actual=9848",
+        "a1-26beedddbdc28cff:package_bytes_mismatch:recorded=9818:actual=9836",
+        "a1-2cf58177527209ff:package_bytes_mismatch:recorded=9828:actual=9846",
+        "a1-3ee0d8fc4ffb687d:package_bytes_mismatch:recorded=9827:actual=9845",
+        "a1-4288bfe1d878012c:package_bytes_mismatch:recorded=9883:actual=9901",
+        "a1-52227ab260696317:package_bytes_mismatch:recorded=9895:actual=9913",
+        "a1-6e16171d5b43274a:package_bytes_mismatch:recorded=9883:actual=9901",
+        "a1-71342b78eef1dad6:package_bytes_mismatch:recorded=9886:actual=9904",
+        "a1-732e8f37d86440c8:package_bytes_mismatch:recorded=9875:actual=9893",
+        "a1-783aabe6654ef0e0:package_bytes_mismatch:recorded=9767:actual=9785",
+        "a1-885bc55b45382977:package_bytes_mismatch:recorded=9887:actual=9905",
+        "a1-9aa58ea856b1b8b7:package_bytes_mismatch:recorded=9898:actual=9916",
+        "a1-aeaeae1a4ca8c6e2:package_bytes_mismatch:recorded=9815:actual=9833",
+        "a1-b95d411c6609a4ae:package_bytes_mismatch:recorded=9884:actual=9902",
+        "a1-bad3cf46e6e4edd9:package_bytes_mismatch:recorded=9896:actual=9914"
+      ],
+      "profile_linkage_failures": [],
+      "active_policy_failures": [],
+      "local_accept_eligible": true,
+      "boundary": "read-only package/profile/future-shadow inspection; does not promote or mutate registry",
+      "section": "runtime_admission",
+      "inspector_exit_code": 0
+    },
+    "response_runtime": {
+      "section": "response_runtime",
+      "verdict": "PASS",
+      "m3_verdict": "WATCH",
+      "baseline_safety_pass": true,
+      "safety_pass": true,
+      "registry_schema": "nando.response-registry.v6",
+      "registry_revision": 18095907199543453270,
+      "active_packages": 0,
+      "quarantined_packages": 0,
+      "automatic_lifecycle": true,
+      "manual_profile_approval": false,
+      "future_wrong_accepts": 0,
+      "cross_family_negative_accepts": 0,
+      "runtime_parity_failures": 0,
+      "online_miner_report_schema": "nando.embedded-response-online-miner.v1",
+      "online_miner_report_generated_at_unix_ms": 1784671147197,
+      "verified_avoided_input_tokens": 42515297,
+      "global_deduplicated_input_tokens": 5627217300,
+      "input_token_saving_share_milli": 7,
+      "minimum_m3_input_token_saving_share_milli": 500,
+      "false_accepts": 0,
+      "false_accept_evidence_available": true,
+      "false_accept_evidence_reason": "rust_terminal_verifier_events",
+      "source_reconciliation_complete": true,
+      "source_reconciliation_blockers": [],
+      "source_authority_valid": true,
+      "false_accept_authority_valid": true,
+      "evidence_authority_valid": true,
+      "m3_window_evaluation": {
+        "schema": "nando.live-transition-m3-evaluation.v1",
+        "evaluator": "rust_snapshot_jq_v2",
+        "source_authority_valid": true,
+        "false_accept_authority_valid": true,
+        "evidence_authority_valid": true,
+        "safety_veto": false,
+        "m3_verdict": "WATCH",
+        "completed_windows": 0,
+        "required_consecutive_windows": 3,
+        "windows": [],
+        "m3_blockers": [
+          "m3_windows_below_required",
+          "m3_window_coverage_below_threshold"
+        ]
+      },
+      "m3_blockers": [
+        "no_active_response_package",
+        "m3_windows_below_required",
+        "m3_window_coverage_below_threshold"
+      ]
+    },
+    "deployment": {
+      "section": "deployment",
+      "verdict": "PASS",
+      "health_pass": true,
+      "service_failures": 0,
+      "health": {
+        "ok": true,
+        "service": "nando-transition-serving",
+        "fallback_managed_by_nginx": true,
+        "executor_cache_ready": true,
+        "transition_profile_state": "loaded",
+        "transition_active_profiles": 5,
+        "transition_false_accepts": 0,
+        "upstream_configured": true
+      }
+    }
+  },
+  "policy": {
+    "automatic_project_profile": true,
+    "manual_per_profile_controls_allowed": false,
+    "fail_closed_for_local_accept": true,
+    "preserve_provider_fallback": true
+  }
+}

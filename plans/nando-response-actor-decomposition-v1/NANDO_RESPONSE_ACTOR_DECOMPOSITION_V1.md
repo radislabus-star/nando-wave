@@ -1,6 +1,6 @@
 # Nando Response Actor Spectral Decomposition V1
 
-Status: `IN_PROGRESS / STOP_R4_PASS / F5_B_PAUSED`
+Status: `IN_PROGRESS / STOP_R5_PASS / F5_B_PAUSED`
 
 Date: 2026-07-21
 
@@ -16,8 +16,8 @@ R1  bounded remote runner                  COMPLETE
 R2  nando-operator-kernel                  COMPLETE
 R3  nando-operator-proof                   COMPLETE
 R4  nando-operator-runtime                 COMPLETE
-R5  nando-operator-admission               NEXT
-R6  nando-operator-learning                PENDING
+R5  nando-operator-admission               COMPLETE
+R6  nando-operator-learning                NEXT
 R7  thin facade and consumer migration     PENDING
 R8  remaining monolith split               PENDING
 R9  STOP-DECOMPOSITION                     PENDING
