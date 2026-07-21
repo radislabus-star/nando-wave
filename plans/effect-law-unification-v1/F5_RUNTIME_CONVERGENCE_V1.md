@@ -323,7 +323,8 @@ structural set. Hidden pre-report phase pruning is forbidden.
 
 ## 7. Runtime Budgets
 
-These are acceptance targets, not current performance claims.
+These deterministic limits are normative runtime caps, not current performance
+claims.
 
 ```text
 request contexts per request                 1
@@ -333,16 +334,32 @@ runtime role candidates                      <= 64
 canonical roles per operator                 <= 32
 relations per operator                       <= 256
 advertised capabilities                      <= 64
-structurally indexed operator candidates     <= 32
-modes per mode set                           <= 32
+stored modes per mode set                    <= 32
+structurally dispatched runtime modes        <= 32 total
 mappings per mode                            <= 64
 total mapping evaluations per request        <= 2048
 request text                                 <= existing 16 KiB bound
 direct wrapped provider payload              <= existing 64 KiB bound
 ```
 
-Any exceeded deterministic budget yields `ABSTAIN_BUDGET_EXHAUSTED`. It is
-censored evidence and must not create an anti-center.
+The `2048` limit is a global per-request operation budget:
+
+```text
+32 structurally dispatched runtime modes
+* 64 complete mappings per evaluated mode
+= 2048 mapping evaluations maximum
+```
+
+It is not the product of all registry storage maxima. `modes per mode set` is
+a package/storage bound; the immutable dispatch index must return at most 32
+mode references in total across all matched mode sets. If exact observable
+dispatch leaves more than 32 runtime modes, the result is
+`ABSTAIN_DISPATCH_EXHAUSTED`. Runtime must not truncate by package order,
+fingerprint, phase score, or arrival time.
+
+Any other exceeded deterministic operation budget yields
+`ABSTAIN_BUDGET_EXHAUSTED`. Budget exhaustion is censored evidence and must not
+create an anti-center.
 
 Performance gates are measured on the local T480 because it is the production
 host. Builds and broad test suites run on the remote 20-core machine.
@@ -350,13 +367,25 @@ host. Builds and broad test suites run on the remote 20-core machine.
 ```text
 no-match incremental p99 target              <= 250 us
 matched bind+actor shadow p99 target          <= 1 ms
-hard per-request F5 shadow ceiling            <= 2 ms
-hot RSS delta for 2048 4-KiB pages + index    <= 16 MiB
+live-shadow p99 veto ceiling                  <= 2 ms
+hot RSS delta for 2048 operators + index      <= 16 MiB
 filesystem/network IO on request              0
 blocking learner queue operations             0
 ```
 
-If an absolute target is missed, STOP with measured profiles. Do not weaken
+The latency values are measured acceptance gates, not semantic timeouts and
+not an alternative source of truth. Deterministic node/mode/mapping counters
+control fail-closed runtime behavior. Scheduler delay or an elapsed-time
+overrun is recorded as `CENSORED_TIMEOUT`; it must not train a positive center,
+anti-center, or residual wave.
+
+The page budget is also explicit: `2048 * 4032 = 8,257,536` bytes, or
+`7.875 MiB`, leaving `8.125 MiB` inside the 16-MiB target for immutable
+dispatch indices, generation metadata, and alignment scratch. If an
+object-heavy hot representation cannot fit, compact it or keep it cold; do not
+silently raise the target.
+
+If a measured target is missed, STOP with measured profiles. Do not weaken
 binding or safety to recover latency.
 
 ## 8. Structural Dispatch Before Binding
@@ -372,15 +401,18 @@ observable RuntimeDispatchKey
   completion state
   cardinality class
   observable relation-plane signature
--> bounded candidate operator IDs
+-> bounded runtime mode references across all mode sets
 ```
 
 The key must contain only pre-action observables. It must not contain teacher
 actions, expected values, package labels, field names, or target patches.
 
-If a dispatch bucket exceeds the candidate budget, runtime must report
-`SearchExhausted` and abstain. Truncating by package order or fingerprint is
-forbidden because it can discard the correct law without evidence.
+The load-time index may contain many mode sets, each with at most 32 stored
+modes. A request may receive at most 32 exact-observable runtime mode
+references in total across all matched sets. If a dispatch bucket exceeds that
+global request budget, runtime must report `ABSTAIN_DISPATCH_EXHAUSTED` and
+abstain. Truncating by package order, fingerprint, phase score, or arrival time
+is forbidden because it can discard the correct law without evidence.
 
 ## 9. Binding And Action Collapse
 
@@ -525,6 +557,7 @@ ABSTAIN_UNSUPPORTED_PROJECTION
 ABSTAIN_CONTEXT_EXTRACTION_EXHAUSTED
 ABSTAIN_DISPATCH_EXHAUSTED
 ABSTAIN_BINDING_EXHAUSTED
+ABSTAIN_BUDGET_EXHAUSTED
 ABSTAIN_NO_STRUCTURAL_MAPPING
 ABSTAIN_AMBIGUOUS_ACTION
 ABSTAIN_MISSING_CAPABILITY
@@ -609,6 +642,9 @@ V3 calls bind_raw_pre_action_components             0
 hidden pre-report phase pruning                     0
 exactly-at-cap hidden frontier                       0
 overfull dispatch bucket                            ABSTAIN
+runtime modes after dispatch                        <= 32 or ABSTAIN
+total mapping evaluations                           <= 2048 or ABSTAIN
+package/fingerprint/phase-order truncation           0
 missing/tampered mode payload                       REJECT
 ```
 
@@ -762,9 +798,12 @@ f5_context_total
 f5_context_exhausted_total
 f5_dispatch_candidates_total
 f5_dispatch_exhausted_total
+f5_runtime_modes_total
 f5_binding_complete_total
 f5_binding_exhausted_total
 f5_mapping_count
+f5_mapping_evaluations_total
+f5_budget_exhausted_total
 f5_action_class_count
 f5_missing_capability_total
 f5_ambiguous_capability_total
@@ -773,7 +812,9 @@ f5_shadow_executed_total
 f5_shadow_abstain_by_class
 f5_actor_vm_parity_mismatch_total
 f5_queue_dropped_total
+f5_timeout_censored_total
 f5_context_ns / bind_ns / actor_vm_ns / total_ns
+f5_hot_registry_rss_bytes
 f5_generation_root / mode_set_root
 ```
 
