@@ -101,6 +101,28 @@ pub struct AdmissionRegistrySnapshot {
 
 #[doc(hidden)]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdmissionProofRoots {
+    pub support_manifest_sha256: String,
+    pub exact_causal_proof_sha256: String,
+    pub runtime_parity_receipt_set_sha256: String,
+    pub future_verifier_receipt_set_sha256: String,
+    pub semantic_alias_proof_sha256: String,
+}
+
+#[doc(hidden)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdmissionPackageBindingInput {
+    pub package_id: String,
+    pub package_sha256: String,
+    pub execution_payload_sha256: String,
+    pub actor_program_sha256: String,
+    pub independent_verifier_program_sha256: String,
+    pub verifier_schema: String,
+    pub proof_roots: AdmissionProofRoots,
+}
+
+#[doc(hidden)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthorizedResponsePackage {
     pub admission_sha256: String,
     pub registry_sha256: String,
@@ -237,6 +259,103 @@ pub fn response_proof_receipts_digest(
         future_verifier_receipt_set_sha256: &binding.future_verifier_receipt_set_sha256,
         semantic_alias_proof_schema: &binding.semantic_alias_proof_schema,
         semantic_alias_proof_sha256: &binding.semantic_alias_proof_sha256,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+#[doc(hidden)]
+pub fn build_composite_response_admission(
+    project_id: &str,
+    registry_schema: &str,
+    registry_revision: u64,
+    registry_sha256: &str,
+    now_unix: u64,
+    max_age_seconds: u64,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+    mut packages: Vec<AdmissionPackageBindingInput>,
+) -> Result<CompositeResponseAdmissionV2, &'static str> {
+    if project_id.is_empty()
+        || registry_schema != RESPONSE_REGISTRY_SCHEMA_V6
+        || registry_revision == 0
+        || !valid_nonzero_sha256(registry_sha256)
+        || !valid_nonzero_sha256(gate_build_sha256)
+        || !valid_nonzero_sha256(runtime_build_sha256)
+        || packages.is_empty()
+    {
+        return Err("response_admission_binding_input_invalid");
+    }
+    packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
+    if packages
+        .windows(2)
+        .any(|pair| pair[0].package_id == pair[1].package_id)
+    {
+        return Err("response_admission_duplicate_package_id");
+    }
+    let bindings = packages
+        .into_iter()
+        .map(|package| {
+            let roots = package.proof_roots;
+            if package.package_id.is_empty()
+                || package.verifier_schema.is_empty()
+                || [
+                    package.package_sha256.as_str(),
+                    package.execution_payload_sha256.as_str(),
+                    package.actor_program_sha256.as_str(),
+                    package.independent_verifier_program_sha256.as_str(),
+                    roots.support_manifest_sha256.as_str(),
+                    roots.exact_causal_proof_sha256.as_str(),
+                    roots.runtime_parity_receipt_set_sha256.as_str(),
+                    roots.future_verifier_receipt_set_sha256.as_str(),
+                    roots.semantic_alias_proof_sha256.as_str(),
+                ]
+                .into_iter()
+                .any(|digest| !valid_nonzero_sha256(digest))
+            {
+                return Err("response_admission_package_binding_input_invalid");
+            }
+            let mut binding = ResponsePackageAuthorityBindingV2 {
+                package_id: package.package_id,
+                registry_revision,
+                package_sha256: package.package_sha256,
+                execution_payload_sha256: package.execution_payload_sha256,
+                actor_program_sha256: package.actor_program_sha256,
+                independent_verifier_program_sha256: package.independent_verifier_program_sha256,
+                verifier_schema: package.verifier_schema,
+                support_manifest_schema: RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1.to_owned(),
+                support_manifest_sha256: roots.support_manifest_sha256,
+                exact_causal_proof_schema: RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2.to_owned(),
+                exact_causal_proof_sha256: roots.exact_causal_proof_sha256,
+                runtime_parity_receipt_set_schema: RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1
+                    .to_owned(),
+                runtime_parity_receipt_set_sha256: roots.runtime_parity_receipt_set_sha256,
+                future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
+                    .to_owned(),
+                future_verifier_receipt_set_sha256: roots.future_verifier_receipt_set_sha256,
+                semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
+                semantic_alias_proof_sha256: roots.semantic_alias_proof_sha256,
+                proof_receipts_sha256: String::new(),
+            };
+            binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
+            Ok(binding)
+        })
+        .collect::<Result<Vec<_>, &'static str>>()?;
+    Ok(CompositeResponseAdmissionV2 {
+        schema: COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
+        project_id: project_id.to_owned(),
+        generated_at_unix: now_unix,
+        expires_at_unix: now_unix.saturating_add(max_age_seconds),
+        verdict: "PASS".to_owned(),
+        eligible_for_local_accept: true,
+        response_authority: ResponseAuthorityV2 {
+            schema: RESPONSE_AUTHORITY_SCHEMA_V2.to_owned(),
+            registry_schema: registry_schema.to_owned(),
+            registry_revision,
+            registry_sha256: registry_sha256.to_owned(),
+            gate_build_sha256: gate_build_sha256.to_owned(),
+            runtime_build_sha256: runtime_build_sha256.to_owned(),
+            packages: bindings,
+        },
     })
 }
 

@@ -318,37 +318,24 @@ impl ResponsePackage {
                     .iter()
                     .all(|atom| self.required_routing_atom_ids.binary_search(atom).is_ok())
         };
-        if let Err(blocker) = self.validate() {
-            Some(blocker)
-        } else if !grounded_authority {
-            Some("grounded_authority_missing")
-        } else if self.state != ResponsePackageState::Active {
-            Some("package_not_active")
-        } else if self.proof.support_rows < 32 {
-            Some("support_rows_below_32")
-        } else if self.proof.future_rows < 32 {
-            Some("future_rows_below_32")
-        } else if self.proof.distinct_sessions < 3 {
-            Some("future_sessions_below_3")
-        } else if self.proof.distinct_surfaces < 2 {
-            Some("surfaces_below_2")
-        } else if self.proof.wrong_accepts != 0 {
-            Some("wrong_accepts_nonzero")
-        } else if self.proof.runtime_parity_failures != 0 {
-            Some("runtime_parity_failures_nonzero")
-        } else if self.proof.exact_cache_overlap != 0 {
-            Some("exact_cache_overlap_nonzero")
-        } else if !self.proof.wave_causal_pass {
-            Some("wave_causal_proof_missing")
-        } else if !verifier_bound {
-            Some("verifier_schema_not_bound")
-        } else if !verifier_program_bound {
-            Some("verifier_program_not_bound")
-        } else if !exact_guard_bound {
-            Some("exact_guard_not_bound")
-        } else {
-            None
-        }
+        nando_operator_admission::package_admission_candidate_blocker(
+            nando_operator_admission::PackageAdmissionFacts {
+                validation_blocker: self.validate().err(),
+                grounded_authority,
+                package_active: self.state == ResponsePackageState::Active,
+                support_rows: self.proof.support_rows,
+                future_rows: self.proof.future_rows,
+                distinct_sessions: self.proof.distinct_sessions,
+                distinct_surfaces: self.proof.distinct_surfaces,
+                wrong_accepts: self.proof.wrong_accepts,
+                runtime_parity_failures: self.proof.runtime_parity_failures,
+                exact_cache_overlap: self.proof.exact_cache_overlap,
+                wave_causal_pass: self.proof.wave_causal_pass,
+                verifier_schema_bound: verifier_bound,
+                verifier_program_bound,
+                exact_guard_bound,
+            },
+        )
     }
 
     /// Package state and counters are only admission inputs, never execution authority.

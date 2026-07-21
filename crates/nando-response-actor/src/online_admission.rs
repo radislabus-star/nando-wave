@@ -7,21 +7,18 @@ use serde::Serialize;
 
 use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
-    COMPOSITE_ADMISSION_SCHEMA_V2, CollectionSynthesisExample, CompositeResponseAdmissionV2,
+    CollectionSynthesisExample, CompositeResponseAdmissionV2,
     DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt, LearnedWaveRoute,
     LearnedWaveSubcenter, OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
-    RESPONSE_AUTHORITY_SCHEMA_V2, RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2,
     RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
     RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
-    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseAuthorityV2, ResponseExecutionStatus,
-    ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram,
-    ResponseRegistry, VerifiedCrystallizedOperator, canonical_json_sha256,
+    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseExecutionStatus, ResponsePackage,
+    ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram, ResponseRegistry,
+    VerifiedCrystallizedOperator, canonical_json_sha256,
     compile_source_neutral_quarantine_packages, evaluate_grounded_wave_causality, execute_response,
     frame_matches_program_action_contract, online_collection_future_manifest_digest,
     online_collection_support_manifest_digest, relation_frame_routes_to_package,
-    relation_frame_structural_family_id, response_actor_program_digest,
-    response_execution_payload_digest, response_independent_verifier_program_digest,
-    response_package_digest, response_program_authority_matches_example,
+    relation_frame_structural_family_id, response_program_authority_matches_example,
     response_program_required_routing_atom_ids, response_proof_receipts_digest,
     response_registry_digest, sha256_bytes, source_neutral_verifier_for_program,
     valid_nonzero_sha256, verify_response_independently,
@@ -246,61 +243,17 @@ pub fn build_crystallized_admission_snapshot(
         revision,
         packages,
     };
-    registry.validate()?;
-    let registry_sha256 = response_registry_digest(&registry)?;
-    let mut bindings = Vec::new();
-    for package in &registry.packages {
-        let (support, causal, parity, future, lineage) = receipts
-            .remove(&package.package_id)
-            .ok_or("crystallized_admission_receipts_missing")?;
-        let verifier = package
-            .verifier
-            .as_ref()
-            .ok_or("crystallized_admission_verifier_missing")?;
-        let mut binding = ResponsePackageAuthorityBindingV2 {
-            package_id: package.package_id.clone(),
-            registry_revision: revision,
-            package_sha256: response_package_digest(package)?,
-            execution_payload_sha256: response_execution_payload_digest(package)?,
-            actor_program_sha256: response_actor_program_digest(&package.program)?,
-            independent_verifier_program_sha256: response_independent_verifier_program_digest(
-                verifier,
-            )?,
-            verifier_schema: package.proof.verifier_schema.clone(),
-            support_manifest_schema: RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1.to_owned(),
-            support_manifest_sha256: support,
-            exact_causal_proof_schema: RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2.to_owned(),
-            exact_causal_proof_sha256: causal,
-            runtime_parity_receipt_set_schema: RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1
-                .to_owned(),
-            runtime_parity_receipt_set_sha256: parity,
-            future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
-                .to_owned(),
-            future_verifier_receipt_set_sha256: future,
-            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
-            semantic_alias_proof_sha256: lineage,
-            proof_receipts_sha256: String::new(),
-        };
-        binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
-        bindings.push(binding);
-    }
-    let admission = CompositeResponseAdmissionV2 {
-        schema: COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
-        project_id: project_id.to_owned(),
-        generated_at_unix: now_unix,
-        expires_at_unix: now_unix.saturating_add(max_age_seconds),
-        verdict: "PASS".to_owned(),
-        eligible_for_local_accept: true,
-        response_authority: ResponseAuthorityV2 {
-            schema: RESPONSE_AUTHORITY_SCHEMA_V2.to_owned(),
-            registry_schema: registry.schema.clone(),
-            registry_revision: revision,
-            registry_sha256,
-            gate_build_sha256: gate_build_sha256.to_owned(),
-            runtime_build_sha256: runtime_build_sha256.to_owned(),
-            packages: bindings,
-        },
-    };
+    let admission = crate::authority::build_composite_admission_for_registry(
+        &registry,
+        receipts,
+        project_id,
+        now_unix,
+        max_age_seconds,
+        gate_build_sha256,
+        runtime_build_sha256,
+        "crystallized_admission_receipts_missing",
+        "crystallized_admission_verifier_missing",
+    )?;
     Ok(Some(OnlineAdmissionSnapshot {
         registry,
         admission,
@@ -1437,62 +1390,17 @@ pub fn build_online_admission_evaluation(
         revision,
         packages,
     };
-    registry.validate()?;
-    let registry_sha256 = response_registry_digest(&registry)?;
-    let mut bindings = Vec::new();
-    for package in &registry.packages {
-        let (support, causal, parity, future, semantic_alias) = receipt_digests
-            .remove(&package.package_id)
-            .ok_or("online_admission_receipts_missing")?;
-        let verifier = package
-            .verifier
-            .as_ref()
-            .ok_or("online_admission_verifier_missing")?;
-        let mut binding = ResponsePackageAuthorityBindingV2 {
-            package_id: package.package_id.clone(),
-            registry_revision: revision,
-            package_sha256: response_package_digest(package)?,
-            execution_payload_sha256: response_execution_payload_digest(package)?,
-            actor_program_sha256: response_actor_program_digest(&package.program)?,
-            independent_verifier_program_sha256: response_independent_verifier_program_digest(
-                verifier,
-            )?,
-            verifier_schema: package.proof.verifier_schema.clone(),
-            support_manifest_schema: RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1.to_owned(),
-            support_manifest_sha256: support,
-            exact_causal_proof_schema: RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2.to_owned(),
-            exact_causal_proof_sha256: causal,
-            runtime_parity_receipt_set_schema: RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1
-                .to_owned(),
-            runtime_parity_receipt_set_sha256: parity,
-            future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
-                .to_owned(),
-            future_verifier_receipt_set_sha256: future,
-            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
-            semantic_alias_proof_sha256: semantic_alias,
-            proof_receipts_sha256: String::new(),
-        };
-        binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
-        bindings.push(binding);
-    }
-    bindings.sort_by(|left, right| left.package_id.cmp(&right.package_id));
-    let admission = CompositeResponseAdmissionV2 {
-        schema: COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
-        project_id: project_id.to_owned(),
-        generated_at_unix: now_unix,
-        expires_at_unix: now_unix.saturating_add(max_age_seconds),
-        verdict: "PASS".to_owned(),
-        eligible_for_local_accept: true,
-        response_authority: ResponseAuthorityV2 {
-            schema: RESPONSE_AUTHORITY_SCHEMA_V2.to_owned(),
-            registry_schema: registry.schema.clone(),
-            registry_revision: revision,
-            registry_sha256,
-            gate_build_sha256: gate_build_sha256.to_owned(),
-            runtime_build_sha256: runtime_build_sha256.to_owned(),
-            packages: bindings,
-        },
-    };
+    let admission = crate::authority::build_composite_admission_for_registry(
+        &registry,
+        receipt_digests,
+        project_id,
+        now_unix,
+        max_age_seconds,
+        gate_build_sha256,
+        runtime_build_sha256,
+        "online_admission_receipts_missing",
+        "online_admission_verifier_missing",
+    )?;
     Ok(OnlineAdmissionEvaluation {
         snapshot: Some(OnlineAdmissionSnapshot {
             registry,
@@ -2424,61 +2332,17 @@ pub fn build_online_collection_admission_snapshot(
         revision,
         packages,
     };
-    registry.validate()?;
-    let registry_sha256 = response_registry_digest(&registry)?;
-    let mut bindings = Vec::new();
-    for package in &registry.packages {
-        let (support, causal, parity, future, semantic_alias) = receipt_digests
-            .remove(&package.package_id)
-            .ok_or("online_collection_admission_receipts_missing")?;
-        let verifier = package
-            .verifier
-            .as_ref()
-            .ok_or("online_collection_admission_verifier_missing")?;
-        let mut binding = ResponsePackageAuthorityBindingV2 {
-            package_id: package.package_id.clone(),
-            registry_revision: revision,
-            package_sha256: response_package_digest(package)?,
-            execution_payload_sha256: response_execution_payload_digest(package)?,
-            actor_program_sha256: response_actor_program_digest(&package.program)?,
-            independent_verifier_program_sha256: response_independent_verifier_program_digest(
-                verifier,
-            )?,
-            verifier_schema: package.proof.verifier_schema.clone(),
-            support_manifest_schema: RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1.to_owned(),
-            support_manifest_sha256: support,
-            exact_causal_proof_schema: RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2.to_owned(),
-            exact_causal_proof_sha256: causal,
-            runtime_parity_receipt_set_schema: RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1
-                .to_owned(),
-            runtime_parity_receipt_set_sha256: parity,
-            future_verifier_receipt_set_schema: RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2
-                .to_owned(),
-            future_verifier_receipt_set_sha256: future,
-            semantic_alias_proof_schema: RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1.to_owned(),
-            semantic_alias_proof_sha256: semantic_alias,
-            proof_receipts_sha256: String::new(),
-        };
-        binding.proof_receipts_sha256 = response_proof_receipts_digest(&binding)?;
-        bindings.push(binding);
-    }
-    let admission = CompositeResponseAdmissionV2 {
-        schema: COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
-        project_id: project_id.to_owned(),
-        generated_at_unix: now_unix,
-        expires_at_unix: now_unix.saturating_add(max_age_seconds),
-        verdict: "PASS".to_owned(),
-        eligible_for_local_accept: true,
-        response_authority: ResponseAuthorityV2 {
-            schema: RESPONSE_AUTHORITY_SCHEMA_V2.to_owned(),
-            registry_schema: registry.schema.clone(),
-            registry_revision: revision,
-            registry_sha256,
-            gate_build_sha256: gate_build_sha256.to_owned(),
-            runtime_build_sha256: runtime_build_sha256.to_owned(),
-            packages: bindings,
-        },
-    };
+    let admission = crate::authority::build_composite_admission_for_registry(
+        &registry,
+        receipt_digests,
+        project_id,
+        now_unix,
+        max_age_seconds,
+        gate_build_sha256,
+        runtime_build_sha256,
+        "online_collection_admission_receipts_missing",
+        "online_collection_admission_verifier_missing",
+    )?;
     Ok(Some(OnlineAdmissionSnapshot {
         registry,
         admission,

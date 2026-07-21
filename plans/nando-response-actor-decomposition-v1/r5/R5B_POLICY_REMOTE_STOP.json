@@ -1,0 +1,42 @@
+{
+  "worker_verdict": "PASS",
+  "compile_exit": 0,
+  "test_exit": 0,
+  "clippy_exit": 0,
+  "compile_seconds": 5.416670392,
+  "test_seconds": 0.003865929,
+  "test_binary": "/home/e/projects/nando-wave-build/target-proof/debug/deps/nando_operator_admission-987490defb5c90c9",
+  "target": {
+    "path": "/home/e/projects/nando-wave-build/target-proof",
+    "bytes_before_prune": 119040380,
+    "bytes_after_prune": 119040380,
+    "prune": "none"
+  },
+  "schema": "nando.remote-gate.v1",
+  "head": "b87ce7594285a2e08b273b65c4293042a8e5cbaa",
+  "remote_host": "e@192.168.3.94",
+  "remote_source": "/home/e/projects/nando-wave-dev",
+  "profile": "stop",
+  "package": "nando-operator-admission",
+  "overlay": {
+    "scope_count": 4,
+    "untracked_files": 1,
+    "patch_sha256": "fbb5a9f1c44412a0eb89c8dd49a0effde2fe24a69158b65a8d2bf8b79333a839"
+  },
+  "fingerprint_verdict": "PASS",
+  "fingerprint_retirements": {
+    "test_failures": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "clippy_diagnostics": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "graphify": {
+    "verdict": "NOT_RUN",
+    "seconds": null
+  },
+  "new_background_build_processes": 0
+}

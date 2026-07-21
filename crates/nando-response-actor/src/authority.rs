@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -140,6 +142,62 @@ pub fn response_registry_digest(registry: &ResponseRegistry) -> Result<String, &
         revision: registry.revision,
         packages,
     })
+}
+
+pub(crate) type AdmissionReceiptDigests = (String, String, String, String, String);
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_composite_admission_for_registry(
+    registry: &ResponseRegistry,
+    mut receipt_digests: BTreeMap<String, AdmissionReceiptDigests>,
+    project_id: &str,
+    now_unix: u64,
+    max_age_seconds: u64,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+    missing_receipts_error: &'static str,
+    missing_verifier_error: &'static str,
+) -> Result<CompositeResponseAdmissionV2, &'static str> {
+    registry.validate()?;
+    let registry_sha256 = response_registry_digest(registry)?;
+    let packages = registry
+        .packages
+        .iter()
+        .map(|package| {
+            let (support, causal, parity, future, semantic_alias) = receipt_digests
+                .remove(&package.package_id)
+                .ok_or(missing_receipts_error)?;
+            let verifier = package.verifier.as_ref().ok_or(missing_verifier_error)?;
+            Ok(nando_operator_admission::AdmissionPackageBindingInput {
+                package_id: package.package_id.clone(),
+                package_sha256: response_package_digest(package)?,
+                execution_payload_sha256: response_execution_payload_digest(package)?,
+                actor_program_sha256: response_actor_program_digest(&package.program)?,
+                independent_verifier_program_sha256: response_independent_verifier_program_digest(
+                    verifier,
+                )?,
+                verifier_schema: package.proof.verifier_schema.clone(),
+                proof_roots: nando_operator_admission::AdmissionProofRoots {
+                    support_manifest_sha256: support,
+                    exact_causal_proof_sha256: causal,
+                    runtime_parity_receipt_set_sha256: parity,
+                    future_verifier_receipt_set_sha256: future,
+                    semantic_alias_proof_sha256: semantic_alias,
+                },
+            })
+        })
+        .collect::<Result<Vec<_>, &'static str>>()?;
+    nando_operator_admission::build_composite_response_admission(
+        project_id,
+        &registry.schema,
+        registry.revision,
+        &registry_sha256,
+        now_unix,
+        max_age_seconds,
+        gate_build_sha256,
+        runtime_build_sha256,
+        packages,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
