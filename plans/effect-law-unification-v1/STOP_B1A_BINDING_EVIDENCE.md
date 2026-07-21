@@ -9,7 +9,8 @@ exceptional rows                 10 / 10
 selector selected                NO
 ProtocolMode F4                  NOT STARTED / BLOCKED
 execution authority             false
-commit / push / deploy           NO
+B1A checkpoint commit            fb23013
+push / deploy                    NO
 service restart                  NO
 ```
 
@@ -42,15 +43,15 @@ ProtocolMode dependency.
 
 ```text
 plans/effect-law-unification-v1/STOP_B1A_BINDING_EVIDENCE.json
-schema        nando.binding-version-space-report.v1
-file sha256   d63eea15928f7f252a89192fc15f56ea0ff754635622791682a6bac21d45d181
-report sha256 1c6907b7de978ca516d688df2d4d5a2ce95f54820c616501196d20ee28a6c0cd
+schema        nando.binding-version-space-report.v1.r1
+file sha256   e2b887fbb8569afc1e702b9132b6b45c6e77c0d60353c1586d1fd8ef09783b73
+report sha256 cd9a6bdddd64cf8ad75f7be9e9c9c149030f7ff599716abd81fb63836bfed64b
 ```
 
 The checked-in file is byte-identical to the generated artifact at:
 
 ```text
-/home/ubu/tmp/nando-b1a/STOP_B1A_BINDING_EVIDENCE.json
+/home/ubu/tmp/nando-b1b0/STOP_B1A_BINDING_EVIDENCE.json
 ```
 
 ## Frozen Accounting
@@ -84,7 +85,7 @@ hypothesis budget exhaustion       false
 complete hypotheses                    0
 complete action-equivalence classes    0
 wrong bindings                         0
-negative accepts                       0
+negative accepts                       0 / denominator 0
 ```
 
 Values are represented only by opaque action-equivalence commitments. Value,
@@ -123,21 +124,28 @@ distinguishing probes emitted       86 / 86
 tie-report budget exhaustion        false
 ```
 
-All 86 ties require the same missing causal relation:
+All 86 ties prove the same relation-neutral missing distinction:
 
 ```text
-parent_action_to_capability_instance
+expected action class vs competing action classes
 ```
 
-Canonical acquisition probe:
+Canonical machine probe:
 
 ```text
-Capture two same-type pre-action candidates with identical layout; bind
-exactly one to the active parent action and preserve that lineage independently
-of names, values, order, and prefixes.
+Acquire a pre-action observable feature that separates the expected
+action-equivalence class from every competing class while holding the
+currently shared features constant.
 ```
 
-This is a B1B acquisition requirement, not a selector implementation.
+The existence of a missing discriminator is proven. Which causal relation
+provides it is unknown. `parent_action_to_capability_instance` is candidate
+hypothesis H1, not a B1A result. The null hypothesis H0 remains
+`relation_not_observable`; both are unproven until B1B acquisition.
+
+`negative_accepts=0` has an applicability-negative denominator of zero in
+B1A. It is exact accounting, not evidence that a binding hypothesis rejects
+applicability negatives.
 
 ## Leakage And Adversarial Controls
 
@@ -226,9 +234,8 @@ thresholds, selectors, checkpoints, registry authority, or ACTIVE packages.
 ## Repository And Authority State
 
 ```text
-HEAD                  32ce298799b331db32a311654c070ad5c393a00e
+accepted B1A checkpoint  fb23013
 branch                main
-commit created        NO
 push / deploy         NO
 service restart       NO
 execution authority   false
@@ -262,7 +269,9 @@ B1A version-space baseline       COMPLETE
 binding identifiable             NO
 verdict                          INSUFFICIENT_BINDING_EVIDENCE
 next architectural stage         B1B acquisition
-required new relation            parent_action_to_capability_instance
+missing discriminator            PROVEN
+resolving causal relation        UNKNOWN
+candidate relation H1            parent_action_to_capability_instance / UNPROVEN
 F4 ProtocolMode compiler         BLOCKED
 runtime / admission / authority  UNCHANGED
 ```

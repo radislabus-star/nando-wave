@@ -12,7 +12,8 @@ F1 diagnostic ownership        COMPLETE / STOP-F1
 F2 canonical effect law         COMPLETE / STOP-F2 V3
 F3 dual classification          COMPLETE / STOP-F3R
 B1A binding version space       COMPLETE / INSUFFICIENT at STOP-B1A
-B1B binding acquisition         NEXT / NOT STARTED
+B1B0 scientific preregistration COMPLETE / STOP-B1B0
+B1B binding acquisition         NOT STARTED
 F4 protocol mode compiler       BLOCKED pending B1B causal evidence
 production authority            false
 service deployment              out of scope
@@ -563,27 +564,39 @@ complete hypotheses                     0
 unresolved ties                        86 / 86
 distinguishing probes                  86 / 86
 verdict                                INSUFFICIENT_BINDING_EVIDENCE
-required missing relation              parent_action_to_capability_instance
+missing discriminator                  PROVEN
+resolving causal relation              UNKNOWN
+candidate relation H1                  parent_action_to_capability_instance / UNPROVEN
 selector / ProtocolMode / authority    NOT CREATED
 ```
 
 ### B1B: Acquire Causal Binding Evidence
 
-B1B is the next permitted stage and is not started by STOP-B1A. New traces
-must preserve the label-free relation from the active parent action to the
-specific capability instance while holding names, values, order, prefixes,
-and layout constant or adversarially varying them.
+B1B acquisition is not started. STOP-B1B0 preregisters H0
+`relation_not_observable`, H1 `parent_action_to_capability_instance`, and six
+causal interventions without choosing either hypothesis. New traces must
+determine which, if any, pre-action relation separates the expected action
+class from its competitors while names, values, order, prefixes, and layout
+are held constant or adversarially varied.
 
 Teacher or expected action data remains evaluation-only and must not enter
 candidate extraction. B1B may produce a new trusted evidence package; it may
 not compile a selector or `ProtocolMode`.
 
+Preregistration receipt:
+
+```text
+plans/effect-law-unification-v1/STOP_B1B0_PREREGISTRATION.md
+plans/effect-law-unification-v1/STOP_B1B0_PREREGISTRATION.json
+```
+
 STOP-B1B receipt:
 
 ```text
 all B1A ties evaluated against newly captured causal evidence
-parent_action_to_capability_instance observed or explicitly absent
+H0 and H1 adjudicated from pre-action wire evidence
 one action-equivalence class with wrong bindings = 0, or renewed INSUFFICIENT
+applicability-negative denominator present in support and future
 no selector / ProtocolMode / execution authority
 ```
 

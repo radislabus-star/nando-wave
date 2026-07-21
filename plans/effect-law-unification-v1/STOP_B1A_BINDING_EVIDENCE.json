@@ -1,6 +1,6 @@
 {
-  "schema": "nando.binding-version-space-report.v1",
-  "report_sha256": "1c6907b7de978ca516d688df2d4d5a2ce95f54820c616501196d20ee28a6c0cd",
+  "schema": "nando.binding-version-space-report.v1.r1",
+  "report_sha256": "cd9a6bdddd64cf8ad75f7be9e9c9c149030f7ff599716abd81fb63836bfed64b",
   "verdict": "INSUFFICIENT_BINDING_EVIDENCE",
   "frozen_denominator": 129,
   "positive_rows": 129,
@@ -57585,518 +57585,518 @@
     {
       "row_id_sha256": "01ca89dc50a4faceeb18eca665fe427c176494819d48d750c2575a97989eae48",
       "tie_root_sha256": "39b8bf17ba231499b0de13980aa3058fd5b25e105352ca8a42204748ee14e329",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "03412e883591d47fdf87e91d8e3be433eaa3ae49ace1ea8144fe3726f91464b2",
       "tie_root_sha256": "4506bc96dd704defbd3608b12e61f9b926266c108705b34dd8c07d65e1859c47",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "0edfa99564d56fa3a7c934c7824fbe4f17205918c1c4df84122907f4c339de79",
       "tie_root_sha256": "bb71e20c2d5096181f2bcc13186bc1e295f041b2a6d3402d3661e7c00cacd24c",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "17a446510384ed067d24ea19a7a129e48a7ad21d09876af64925d7acb2cf946e",
       "tie_root_sha256": "722ddf11ed1c11485eb1aea09a8ccf8de6a4f938d73a374bc1caa2bf72273fc4",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "1d443122ceabecec30f4308f74ba500c529363f4d28343ddace35d096e05b6ed",
       "tie_root_sha256": "b2b3db03032c7fe61630d786cd18d435722914670b22bbead59202dabfb7b46a",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "2273a26a96f60b7ee8e59fa760fb0222f7e6afaccf71280bd8612d3ef2b02ae4",
       "tie_root_sha256": "0f7d59851cc678c6df1a533c315cd5f4384afa0412650d8e95f3f672dfe01038",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "26613d1d150f27a179dfb132a9de208a3224a51c7895f59109a59ffe6ccac23b",
       "tie_root_sha256": "7d4a4a5925f370a08086c977159bb5823c3664fd712df10fe0987153a10651df",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "26613d1d150f27a179dfb132a9de208a3224a51c7895f59109a59ffe6ccac23b",
       "tie_root_sha256": "49032d6b8b50407a4c20cb865bf6f2e686e291b207c0476bf03e599d33bf7ec1",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "26613d1d150f27a179dfb132a9de208a3224a51c7895f59109a59ffe6ccac23b",
       "tie_root_sha256": "fefc771d32b44af37f7b8467241423c674c9485077473c0807cf930e9746d852",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "30e0b29f7c2c58c543324d16584893cd927beacd0c7fb904d9868caa69573441",
       "tie_root_sha256": "fa8842ab7fd72ea28f60a983019eac4ef7333bcdc50d32f3e33309233fa399c2",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "327e56983d499e14abd641fbf2a4f3f4a37793ec6f8f6e6c3e9d087c99fc3857",
       "tie_root_sha256": "2ef3320356e5ec59cf8f5f214a82421835f8817609f3f6d35ea51248df54115c",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "327e56983d499e14abd641fbf2a4f3f4a37793ec6f8f6e6c3e9d087c99fc3857",
       "tie_root_sha256": "669b48af01187e5f7127c3fa65f5e4eb63871c49592227d7be3bd8f5225dfa36",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "327e56983d499e14abd641fbf2a4f3f4a37793ec6f8f6e6c3e9d087c99fc3857",
       "tie_root_sha256": "23532325cf5261965c3d4f855f79282276fbcff0957e535be353b7a2bd6daecd",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "387e9962b6c11e6050d7c66058e42bb34351712eae298c2f12d81ade50abdb5f",
       "tie_root_sha256": "8a58d548668973c536ba6cae84307df7b970c47a6b86b446a04477e02c845431",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "3a5bb27cd84999d229cf9943cb030c09b7a8cf03479f7c833836101df494f840",
       "tie_root_sha256": "87825795303159db45ef0093d43141acdac3dedff0eacb42fc0fdbbaf2d2e924",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "3e284e9da8f32f41e9387d7ffcc8766f5568921a2ee159788f3bd27ff1d24126",
       "tie_root_sha256": "817307f4b98634d12040c65910e5489da7e57037c445bef29be8338d21b8c42c",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "3e284e9da8f32f41e9387d7ffcc8766f5568921a2ee159788f3bd27ff1d24126",
       "tie_root_sha256": "1a86825c160c0abb210343d8097c97ea06a5969c45c26ac7087851fdec97b2e9",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "46b786741c7bae44eda5f79480034afca3030ac49279f22b7fa8bdc1327459a8",
       "tie_root_sha256": "5a0efa6fc4bb40cd05bd9a91ad5ca95b2d4eafc657070465fa9c2d14085ed467",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "47bff977c1676fbe1ec93d6598b2cd13e15c7c1f7c6ab8bef074237539dae65c",
       "tie_root_sha256": "62538a6687dfb8a5110e63bfea20c100eba5efa023b7e1f132b82111527aeb8e",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "47bff977c1676fbe1ec93d6598b2cd13e15c7c1f7c6ab8bef074237539dae65c",
       "tie_root_sha256": "471b830c8525c7147804d4461a9eff68e4ce52ec3aea38d3f6e633b48410fbdd",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "49394e261904dea21980f1effdbfc0dda1bcc9ea2a197bb946d77650a453b048",
       "tie_root_sha256": "35040d39fd90ccf48b67d7cc93ec83980b29d4c3bf9d3371bcf40031314fb659",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "49394e261904dea21980f1effdbfc0dda1bcc9ea2a197bb946d77650a453b048",
       "tie_root_sha256": "db4019ce7a24f93dc307baa022e7c2cc0f60698fbdefce405259ba6d7d0621b8",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "49394e261904dea21980f1effdbfc0dda1bcc9ea2a197bb946d77650a453b048",
       "tie_root_sha256": "ff80b245694565e852a6a250c1b4b39e36a495e0364433cff7354515d88f4c46",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "49394e261904dea21980f1effdbfc0dda1bcc9ea2a197bb946d77650a453b048",
       "tie_root_sha256": "dcba0677b3cc95ba03ba1891a419ccecb9c0c13f2dd62e68461cc50db7f098e1",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "50818d844d0586cfedb0acda6ca171f7f78f1d081c8c6632e3fcb5c865b454b9",
       "tie_root_sha256": "9fa0e273957b30edee6b7a4ca8836468a6b2dc8cf683a96a09dd2c7d0d7807d9",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "50818d844d0586cfedb0acda6ca171f7f78f1d081c8c6632e3fcb5c865b454b9",
       "tie_root_sha256": "ac5c6cc5b47f633fb80a2387780866297aacce32cc5074bace3fbd8b89c1eaa5",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "50818d844d0586cfedb0acda6ca171f7f78f1d081c8c6632e3fcb5c865b454b9",
       "tie_root_sha256": "f6cc8d064257d7e00e65dcb6caca7186641fcecf6445c1d6032fa7c8d823887d",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "5b56d427b0026597b45c4194edd34815c3ec76cd54bb0ff8f5e1a8ceee6eda89",
       "tie_root_sha256": "d17c2585e16274ce5e7fa1e36fb763c5d1e58049e6ba9a2cca9f572cb15ee85d",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "5b56d427b0026597b45c4194edd34815c3ec76cd54bb0ff8f5e1a8ceee6eda89",
       "tie_root_sha256": "e08c64472fe92f33f5310dd1bd175396cdb2687684b08148375bb90f331d0aa0",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "5b56d427b0026597b45c4194edd34815c3ec76cd54bb0ff8f5e1a8ceee6eda89",
       "tie_root_sha256": "58dd9f7d68942e30a29a8da94660dee2e18715353e21f4ae856e098cc0b2e567",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "5c9f85b8ebc152949dda8c2ca5f853890c582e37ee159535061c4877e4b58e2e",
       "tie_root_sha256": "81dcf3e7e562219047060bccf77dbd7cd746350a3a3a1eb2437235a81108c298",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "64c253db04e0d0e7776c8ad38d55bdaa13eed01ae4962180af28d69d79af80e2",
       "tie_root_sha256": "c87021b3169bb4ffc53fb55dd5309a1bdf9d1bb2924c09b75be68f4b95908f07",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "68e587c6a8f1c4126911652b857b69d64ffc80f252b0d01b87aa7e8ad354a141",
       "tie_root_sha256": "377f2821e4ac066e291a9147e3670ab67c25307b023b3e85a72a81d0f295a09e",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "6afe74be37620688aa4fcd3a52a794fbfdf175db30ab8f780e5090b655eeeca1",
       "tie_root_sha256": "f9e300e94ee0a5ce496be5ebbe98238a933c0d1e0e4f233bf68c3ba206060331",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "6afe74be37620688aa4fcd3a52a794fbfdf175db30ab8f780e5090b655eeeca1",
       "tie_root_sha256": "476e913e7d37d737ff1cc84ffcca02e58e78c5f9caf7f13bbe5f23edec8a7a1b",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "6b160e221397672c31262b0e722a6e91ac114427aed927dde250fd253bb0d643",
       "tie_root_sha256": "34d214a83867dd447782206048ab449deb1436b547594c8d4d3fbcb6f9315285",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "6b7cf383af7c46d8d1febbd7833b10c9b43079153606e614c1fa9394452cca33",
       "tie_root_sha256": "60ba24086153f8b95b5c66925a24eb45078830911a76105c439ed73fbdc0bc7c",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "6d62475d74735a42f2ce67348865cc99ab48c33edfe9a09256c2b6f8bc9fff04",
       "tie_root_sha256": "a3c6cb721a9e65f7bcda91ef16121b57dc91f4e4f95fe5c995b12f71feb393c0",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "7283c68a2ca9c5bd25d966213a74fee2c1450167c23e1cbfafa5c87cd775c04c",
       "tie_root_sha256": "99fbfc7ae1ddfe5e1628692c46efb1839a90044e0f246d97c34b30b03b9fc6e9",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "72ff4e084fc417579c2b2b4e6afb450c93ece89350bdd39448426a465c351ced",
       "tie_root_sha256": "8b4056c3ae390f4ea35ef934ff3dd5bb3bc1330218dc166c03f2a27801666447",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "74df77e804bf23fed6260db99beb82ebe6c7b85f2dedf3444814d0e640985cd5",
       "tie_root_sha256": "a5683a3d71f18dd04d13c64f6b0a51ef8c67c657495916dadb8bfdc3ba9ee021",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "74df77e804bf23fed6260db99beb82ebe6c7b85f2dedf3444814d0e640985cd5",
       "tie_root_sha256": "da296ebe4c089b9c5feadd737d0c25281610f6a8f88b77667a43cc1afd555ef8",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "74df77e804bf23fed6260db99beb82ebe6c7b85f2dedf3444814d0e640985cd5",
       "tie_root_sha256": "efc8dc5e21fa4f2f8fa35ebbb6ae70cabf5200b4195fbcd95322e7ef26fa59b3",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "74df77e804bf23fed6260db99beb82ebe6c7b85f2dedf3444814d0e640985cd5",
       "tie_root_sha256": "c37e2e1f7da9e7fa50e1cca6f00c245578fc839f34da4f7e2fba96665cf9d2fa",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "74df77e804bf23fed6260db99beb82ebe6c7b85f2dedf3444814d0e640985cd5",
       "tie_root_sha256": "7fc1a47edb6d8a979d17621639e675ef7be042c078b947ecc62aed9e01099dd7",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "7b686a10be8f646dd6eb053abd12f2f190c175345b896be7b897f1010e5193f0",
       "tie_root_sha256": "0a3c5df28b67958211c37b56ca61ec908ab038612a7407e9ab4cf5c40e59f70a",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "803ef302b45a063ef7a0fbedf1642c2977b0b96fd65274dec2e710be87cf548d",
       "tie_root_sha256": "613e92dc0b393b49166a50128a2261ee84cf1fcc29e60ab8c05f819b6892620c",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "83cf75fbb34ff7f3a05232c736d28a2ae98c4a477a0b3a4b951a905db7a05e74",
       "tie_root_sha256": "50aa954d39a0a8ae61c0f731fa3230fc56ad758abbffce49a93de9978b046df7",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "83cf75fbb34ff7f3a05232c736d28a2ae98c4a477a0b3a4b951a905db7a05e74",
       "tie_root_sha256": "6af3a503f289e92fb11f1cd76426522a292f8d065e3541ffbdad607e8dc14d71",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "83cf75fbb34ff7f3a05232c736d28a2ae98c4a477a0b3a4b951a905db7a05e74",
       "tie_root_sha256": "3289253f4fc2adadd706fc142bb66bce6839f0496290dc141ecc0848ebae746e",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "861276b216278b1cbefbf532742b05968810102fe5a722188bf7c5568ae0d246",
       "tie_root_sha256": "1be7529966fab98f6ca18183d7d5f8b110913767b6c43d13f4cd608755515276",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "86d3500f0d6ac7309d816aa4c870595f5f5a9c6035d8bd10513c4e515bc6c637",
       "tie_root_sha256": "7e3728d597d68db35f7c24bf9019c4ae1c48958d4ca01cd56e51bf5fac4ee0d0",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "86d3500f0d6ac7309d816aa4c870595f5f5a9c6035d8bd10513c4e515bc6c637",
       "tie_root_sha256": "6f28529e83cffce29352c175174611b975a80f8a5cfbbc3517942035eb4f4e85",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "86e43ccd407abfaf675a1aaa014c9a85a2b6b7688cfb0373db5f09e8e535694c",
       "tie_root_sha256": "c65d25d4d5649f31f8d3294925ff45e30b7d4c0db150ad512f92f07b3f68feed",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "88f4a4362f9534c2ff364907b8787945d3b59fad79f532df1519887b056a1d1e",
       "tie_root_sha256": "b98d0908ad613c89df4a360ecdffaf0fb27fdd2ad27536fb0260577b637fc105",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "88f4a4362f9534c2ff364907b8787945d3b59fad79f532df1519887b056a1d1e",
       "tie_root_sha256": "713d0cf19e745128f47224cea60c48a38a5a79c44bc2d67377180e9fe36d644e",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "89a06ed3464c94009505eca861ef59491c0b2c38f68d1f70e95a135deadc027e",
       "tie_root_sha256": "323f56f335e7ec02cd409bda53c413d9b7504e11e3c51f3902edd627fee8efd7",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "99361a87fa0bd0fd6a9c0eafdfad5953f73fa136bab01e6bdd4d21c1e05b6a30",
       "tie_root_sha256": "ad089b637fec2339824e3f37b71d25d09a292906f6efc840adf7cd57b0ceb4e6",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "99361a87fa0bd0fd6a9c0eafdfad5953f73fa136bab01e6bdd4d21c1e05b6a30",
       "tie_root_sha256": "3c857a886c00fd7489a8832997cd1e4fca0bd75fd6ba711a47b17522c5e0039a",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "99361a87fa0bd0fd6a9c0eafdfad5953f73fa136bab01e6bdd4d21c1e05b6a30",
       "tie_root_sha256": "c9228d0f22674dda9040ee0333918130b4cfeae441bacb355cd72fa2a54e2c92",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "a37c9a8ad6044aaf25f5113b76a9155f90e01258ba302be3385e2a50f88a2d70",
       "tie_root_sha256": "d8f1b408b50360a93a4739fc82e8da77153fc0828dabcb1ce76ad1f65fec38aa",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "a37c9a8ad6044aaf25f5113b76a9155f90e01258ba302be3385e2a50f88a2d70",
       "tie_root_sha256": "54d32f52809a651f152edbc05f0826e85b7cf3377571ee3df50dbfc55b3e150a",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "a37c9a8ad6044aaf25f5113b76a9155f90e01258ba302be3385e2a50f88a2d70",
       "tie_root_sha256": "0623eaccb88fe40b07cf5232700b1c4aa8ac462332a22a05ff93338a4daad9b1",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "a3a48ba8a65cbe08f3eaf9fc1d5ce7f1bd96bdee5399be68a6203574baed1500",
       "tie_root_sha256": "f7ad5f5a2829bd3c08c82cc84f77000cb5c39ba7c8aaf8cbef475d9c0dc89eaa",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "a3a48ba8a65cbe08f3eaf9fc1d5ce7f1bd96bdee5399be68a6203574baed1500",
       "tie_root_sha256": "c22e2ffca81b934aec346be5634aa7234f3de130b8c895691abe5700bf612521",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "a60b8b573788aaa2ed2314be1cf5a990d14fc4c88035d9f7d9f0140e70bbbd11",
       "tie_root_sha256": "a2bd4ea5d5d3064822db3c668036367f6043a9c2073736eb12eef92c6a20a6bc",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "b1a52ff2f6604810e8b998195217f97aea1d0a357f12d7e35d06f7b598ac8b84",
       "tie_root_sha256": "65b997ede3724c1d2d077a62b6d32df87597e3d9b5a1eb089373b674e8578c91",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "c354ea127ff31fef5b594ef54a8c8779505b67e28b8dc379ed47736f6f0d1f14",
       "tie_root_sha256": "edc88a202e91be11eed91c1c0a9512cdd149cd28bc86d2195915829ca6ba987d",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "c4cc7c964a1b6b18f81aec65d831836e5890e97b1f96bf204f8e59eec8cde425",
       "tie_root_sha256": "7b1785c58f84342fcff67e00d221275f3d3056e6d4fe8fe3c5fc1cfb8a6713bc",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "c7822669da77831d881a90138f62e49e708e7ae3aca6ca72afba65f1464f3553",
       "tie_root_sha256": "08872bd6238a32d48aef4fc78450045e17b173d94ebb06e4a6cf18798fc6215e",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "cde622cba12074de95a8ffeb1abfd97d8978a71601b0273f746da03202ab92d2",
       "tie_root_sha256": "1462a1b1803f5a52ce9ac80ada91b8af65a9fff4e07189e6e829267829282c90",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "ce3ecb71d256348a8877c8d59be378e197c8d75ff1503342fd09dbd800e0dd5b",
       "tie_root_sha256": "7d5e74819a39bd5c87cbcc855737c7467eafd8af3d4c26b87f4b08a4dc94322f",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "ce948a8d7dc3510af27b07f3bf0201b93945a7b0be3503e050744bbba1ab5b47",
       "tie_root_sha256": "4e1946633d0b568376db245fd6fbf629bc0011527e4bd4eb579c3b1c77a7b2c6",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "d362d232d7df16ebeff9b076c57eb2cfbe0e7b7f5cf6e75a1794748a8d3e8eb2",
       "tie_root_sha256": "5da5b762b971243a7c641bbcda893aa9fcbf1a427edf80e1bb2efc36464eb67a",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "d5db8f67b0c1b3593bf358576a484b09bf4d6c01323321006b9819f9c642d605",
       "tie_root_sha256": "15b6154d23fda2c68b4e8dde9532049b3ce211187db7c2b9272a7e46694f6d62",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "d5db8f67b0c1b3593bf358576a484b09bf4d6c01323321006b9819f9c642d605",
       "tie_root_sha256": "4a9f22252739696966353dcc6e40493918d659b73414904ffe3d1b9acc7e26cd",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "d93e5122ae901dbf0912185dce712d9c6bac1f2ca84557b5c728380abd514d6e",
       "tie_root_sha256": "4f7b9a8f46687074d014775ac8a9e730fff6de0fa0db538475ecdcaad6d9b797",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "db7da609abd20e0b5fe0de5fd0cc5abb3513094816da79e9c5ff23278b2bc778",
       "tie_root_sha256": "779363031b800f1668ad945b58240ad2f1a24d292ba59f9dd462a7dd966d2202",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "dde7c64e5f784acb4ca2a3da1805d00ed02b4ea8c1b314f954fbf0f9adb125a1",
       "tie_root_sha256": "ec746599448c28ee0d9e03752d37087f934d9ca7ee2ab1b84034a818e9bc4885",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "ded13a09a1c62798b91eb8181ed571d2f215fbfacee3a0b65ee5d64352bb0884",
       "tie_root_sha256": "4fa4eedee7676208f06a7e41fd0fb49c777e099b39603c191a0e060b4d0150aa",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "e34209ca9bb6e00e15af413ef608703f2826bfb728f54faa09d8b6a8905edf49",
       "tie_root_sha256": "dfa1fb66ce293763828941d8ef516f8a18e1524f44e444678e1f8cdbde62f20c",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "e395327ce4d820ffa7d0724e47c05626fcb65d635546d9d140b0573205a0df83",
       "tie_root_sha256": "f832c9f1daf788398f4380aa221ad6a1f816e4c748a2f4c500d661afc25c5420",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "e8655540a2621898b959d95b0fed652649f294f1c549df73eeb6b8b852efbf89",
       "tie_root_sha256": "1acb75b9806c37455a90ff1c5de8db6a046f3e1d61aa005ce4e3822f9783513b",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "ef2072a00df180c3f2c6d0bb09597135ff0adcc9a8e3de09461b707b57bd3b71",
       "tie_root_sha256": "32cf7fe0fce928bb88a7e9a0126ec63cbd63648ac044601c99df7d29e7cda86b",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "ef257f1bf8b6a8f22f69459a20acb62b2e0317bff11f6e09057c9a3152ba47fb",
       "tie_root_sha256": "728a25d5b719efce602e63b71bf78ff5f674765c2ad8696366cd14cecda17932",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     },
     {
       "row_id_sha256": "ef257f1bf8b6a8f22f69459a20acb62b2e0317bff11f6e09057c9a3152ba47fb",
       "tie_root_sha256": "b77c76d0f2d3bc49a9eca2452ea083746ff75d31ba5929f17049c31a9ac5dfab",
-      "required_relation": "parent_action_to_capability_instance",
-      "probe": "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+      "required_distinction": "expected_action_class_vs_competing_action_classes",
+      "probe": "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
     }
   ],
   "row_accounting": [

@@ -15,7 +15,7 @@ pub const CANDIDATE_RELATION_GRAPH_SCHEMA_V1: &str = "nando.candidate-relation-g
 pub const FROZEN_CANDIDATE_RELATION_GRAPH_SCHEMA_V1: &str =
     "nando.frozen-candidate-relation-graph.v1";
 pub const EXPECTED_BINDING_RECEIPT_SCHEMA_V1: &str = "nando.expected-binding-receipt.v1";
-pub const BINDING_VERSION_SPACE_REPORT_SCHEMA_V1: &str = "nando.binding-version-space-report.v1";
+pub const BINDING_VERSION_SPACE_REPORT_SCHEMA_V1: &str = "nando.binding-version-space-report.v1.r1";
 
 pub const MAX_BINDING_JSON_NODES_V1: usize = 16_384;
 pub const MAX_BINDING_TEXT_BYTES_V1: usize = 256 * 1024;
@@ -312,7 +312,7 @@ pub struct BindingTieV1 {
 pub struct BindingDistinguishingProbeV1 {
     pub row_id_sha256: String,
     pub tie_root_sha256: String,
-    pub required_relation: String,
+    pub required_distinction: String,
     pub probe: String,
 }
 
@@ -546,6 +546,8 @@ impl CandidateRelationGraphV1 {
 }
 
 impl ExpectedBindingReceiptV1 {
+    /// Diagnostic-only label used to evaluate the frozen B1A graph. B1B
+    /// scored evidence must use the externally pinned trusted-label envelope.
     pub fn positive(
         graph: &FrozenCandidateRelationGraphV1,
         expected_action_equivalence_sha256: impl Into<String>,
@@ -1504,8 +1506,8 @@ fn distinguishing_probe(tie: &BindingTieV1) -> BindingDistinguishingProbeV1 {
     BindingDistinguishingProbeV1 {
         row_id_sha256: tie.row_id_sha256.clone(),
         tie_root_sha256,
-        required_relation: "parent_action_to_capability_instance".to_owned(),
-        probe: "Capture two same-type pre-action candidates with identical layout; bind exactly one to the active parent action and preserve that lineage independently of names, values, order, and prefixes."
+        required_distinction: "expected_action_class_vs_competing_action_classes".to_owned(),
+        probe: "Acquire a pre-action observable feature that separates the expected action-equivalence class from every competing class while holding the currently shared features constant."
             .to_owned(),
     }
 }
