@@ -2,6 +2,8 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+use crate::contracts::{ResponseValueSelector, canonical_response_value_selector};
+
 pub fn canonical_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, &'static str> {
     let value = serde_json::to_value(value).map_err(|_| "canonical_json_serialize_failed")?;
     let mut output = Vec::new();
@@ -32,6 +34,21 @@ pub fn stable_atom_id(atom: &str) -> u64 {
     atom.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
         (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
     })
+}
+
+#[must_use]
+pub fn stable_atom_id_parts(parts: &[&str]) -> u64 {
+    let mut value = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in parts.iter().flat_map(|part| part.bytes()) {
+        value = (value ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+    }
+    value
+}
+
+#[must_use]
+pub fn selector_phase_atom_id(selector: &ResponseValueSelector) -> u64 {
+    let canonical = canonical_response_value_selector(selector);
+    stable_atom_id_parts(&["selector:", &canonical])
 }
 
 fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> Result<(), &'static str> {

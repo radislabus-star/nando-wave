@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
     AtomValueType, ResponseArgument, ResponseOperation, ResponseProgram, ResponseValueSelector,
-    SemanticRole, canonical_response_value_selector, stable_atom_id,
+    SemanticRole, stable_atom_id,
 };
 use serde_json::Value;
 
@@ -400,17 +400,12 @@ pub fn immediate_observation_tool_kind(provider_payload: &Value) -> Option<Strin
 
 #[doc(hidden)]
 pub fn selector_phase_atom_id(selector: &ResponseValueSelector) -> u64 {
-    let canonical = canonical_response_value_selector(selector);
-    stable_atom_id_parts(&["selector:", &canonical])
+    nando_operator_kernel::selector_phase_atom_id(selector)
 }
 
 #[doc(hidden)]
 pub fn stable_atom_id_parts(parts: &[&str]) -> u64 {
-    let mut value = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in parts.iter().flat_map(|part| part.bytes()) {
-        value = (value ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-    }
-    value
+    nando_operator_kernel::stable_atom_id_parts(parts)
 }
 
 const fn value_type_name(value: AtomValueType) -> &'static str {
