@@ -6,6 +6,9 @@ use crate::{AtomSource, canonical_json_bytes, canonical_json_sha256, valid_nonze
 
 pub const CANONICAL_EFFECT_LAW_SCHEMA_V3: &str = "nando.canonical-effect-law.v3";
 pub const EFFECT_LAW_IR_VERSION_V3: u16 = 3;
+pub const PROTOCOL_FACET_SCHEMA_V3: &str = "nando.effect-protocol-facet.v3";
+pub const EFFECT_LAW_ACTION_PHASE_V3: u16 = 2;
+pub const EFFECT_LAW_MAX_PROTOCOL_FACET_ATOMS_V3: usize = 512;
 
 pub const EFFECT_REL_EQUAL: u16 = 0x1001;
 pub const EFFECT_REL_COPY: u16 = 0x1002;

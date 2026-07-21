@@ -21,6 +21,43 @@ fn root(seed: &str) -> String {
     sha256_bytes(seed.as_bytes())
 }
 
+fn test_only_canonical_effect_law_v3(seed: &str) -> CanonicalEffectLawV3 {
+    use nando_operator_kernel::{
+        CANONICAL_EFFECT_LAW_SCHEMA_V3, EFFECT_LAW_IR_VERSION_V3, EFFECT_OPERATION_CALL_V3,
+        EFFECT_REL_REQUIRE, EFFECT_VALUE_OPERATION_V3, EffectSource,
+    };
+
+    let digest = |suffix: &str| root(&format!("{seed}:{suffix}"));
+    let wire = serde_json::json!({
+        "schema": CANONICAL_EFFECT_LAW_SCHEMA_V3,
+        "ir_version": EFFECT_LAW_IR_VERSION_V3,
+        "dictionary_root_sha256": digest("dictionary"),
+        "quotient_hypothesis_root_sha256": digest("quotient"),
+        "topology_nodes": [{
+            "canonical_node": 1,
+            "source": EffectSource::Action,
+            "node_kind_code": EFFECT_OPERATION_CALL_V3,
+            "value_type_code": EFFECT_VALUE_OPERATION_V3,
+            "unique": true,
+            "operation_code": EFFECT_OPERATION_CALL_V3,
+        }],
+        "topology_edges": [],
+        "relation_program": [{
+            "relation_code": EFFECT_REL_REQUIRE,
+            "lhs": 1,
+            "rhs": null,
+            "argument_ordinal": 0,
+            "constant_type_code": null,
+            "constant_sha256": null,
+        }],
+        "effect_invariant_root_sha256": digest("effect-invariant"),
+        "preserved_frame_root_sha256": digest("preserved-frame"),
+        "action_equivalence_root_sha256": digest("action-equivalence"),
+    });
+    let bytes = crate::canonical_json_bytes(&wire).expect("test law bytes");
+    CanonicalEffectLawV3::from_canonical_bytes(&bytes).expect("test law")
+}
+
 fn actor_input(seed: &str, outcome: PhysicalActorOutcomeV2) -> PhysicalActorObservationInputV2 {
     PhysicalActorObservationInputV2 {
         frozen_row_root_sha256: root(&format!("{seed}:row")),
@@ -1005,7 +1042,7 @@ fn end_to_end_controlled_evidence_reaches_unique_safe_protocol_mode_set() {
 
 #[test]
 fn typed_effect_law_entrypoint_binds_action_equivalence() {
-    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-typed-law");
+    let effect_law = test_only_canonical_effect_law_v3("f4r-typed-law");
     let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, false);
     let mode_set = compile_protocol_modes_for_effect_law_v3(
         &evidence,
@@ -1041,8 +1078,7 @@ fn typed_effect_law_entrypoint_binds_action_equivalence() {
     assert_eq!(restored, mode_set);
     assert_eq!(restored.canonical_bytes().expect("restart bytes"), bytes);
 
-    let incompatible_law =
-        crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-incompatible-law");
+    let incompatible_law = test_only_canonical_effect_law_v3("f4r-incompatible-law");
     let rejected = compile_protocol_modes_for_effect_law_v3(
         &evidence,
         &incompatible_law,
@@ -1078,7 +1114,7 @@ fn f5a_artifact_fixture() -> (
     CanonicalEffectLawV3,
     BTreeMap<String, Vec<u8>>,
 ) {
-    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f5a-law");
+    let effect_law = test_only_canonical_effect_law_v3("f5a-law");
     let (evidence, graph_views, facets) =
         structural_f4r2_fixture_with_facets(&effect_law, false, false);
     let mode_set = compile_protocol_modes_for_effect_law_v3(
@@ -1202,7 +1238,7 @@ fn f5a_rejects_missing_extra_or_tampered_facet_evidence() {
 
 #[test]
 fn f5a_rejects_constants_that_v2_kept_only_as_surface_atoms() {
-    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f5a-constant-gap");
+    let effect_law = test_only_canonical_effect_law_v3("f5a-constant-gap");
     let (evidence, graph_views, facets) =
         structural_f4r2_fixture_with_facets(&effect_law, false, true);
     let mode_set = compile_protocol_modes_for_effect_law_v3(
@@ -1224,7 +1260,7 @@ fn f5a_rejects_constants_that_v2_kept_only_as_surface_atoms() {
 
 #[test]
 fn canonical_f4_rejects_missing_or_tampered_graph_payload() {
-    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-graph-seal");
+    let effect_law = test_only_canonical_effect_law_v3("f4r-graph-seal");
     let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, false);
     assert_eq!(
         compile_protocol_modes_for_effect_law_v3(
@@ -1267,7 +1303,7 @@ fn canonical_f4_rejects_missing_or_tampered_graph_payload() {
 
 #[test]
 fn canonical_f4_abstains_when_structural_roles_remain_symmetric() {
-    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-symmetric");
+    let effect_law = test_only_canonical_effect_law_v3("f4r-symmetric");
     let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, true);
     let mode_set = compile_protocol_modes_for_effect_law_v3(
         &evidence,
@@ -1286,7 +1322,7 @@ fn canonical_f4_abstains_when_structural_roles_remain_symmetric() {
 
 #[test]
 fn canonical_f4_restart_rejects_tampered_selector_program() {
-    let effect_law = crate::effect_law_v3::test_only_canonical_effect_law_v3("f4r-restart-tamper");
+    let effect_law = test_only_canonical_effect_law_v3("f4r-restart-tamper");
     let (evidence, graph_views) = structural_f4r2_fixture(&effect_law, false);
     let mode_set = compile_protocol_modes_for_effect_law_v3(
         &evidence,

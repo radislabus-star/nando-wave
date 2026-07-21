@@ -15,8 +15,9 @@ pub use nando_operator_kernel::{
     CanonicalEffectNodeV3, CanonicalNodeMappingV3, CanonicalRelationClauseV3,
     EFFECT_ATOM_ACTION_RELATION, EFFECT_ATOM_CARDINALITY, EFFECT_ATOM_PHYSICAL_SURFACE,
     EFFECT_ATOM_POSTCONDITION, EFFECT_ATOM_PRECONDITION, EFFECT_ATOM_RENDERER,
-    EFFECT_ATOM_TEMPORAL, EFFECT_REL_CONSTANT, EFFECT_REL_CONSUME, EFFECT_REL_COPY,
-    EFFECT_REL_EQUAL, EFFECT_REL_REQUIRE, EffectLawIdV3, EffectLawV3Error,
+    EFFECT_ATOM_TEMPORAL, EFFECT_LAW_ACTION_PHASE_V3, EFFECT_REL_CONSTANT, EFFECT_REL_CONSUME,
+    EFFECT_REL_COPY, EFFECT_REL_EQUAL, EFFECT_REL_REQUIRE, EffectLawIdV3, EffectLawV3Error,
+    PROTOCOL_FACET_SCHEMA_V3,
 };
 use nando_operator_kernel::{
     EFFECT_LAW_IR_VERSION_V3, EFFECT_OPERATION_CALL_V3, EFFECT_OPERATION_PLAN_ADVANCE_V3,
@@ -43,15 +44,12 @@ pub const TRUSTED_EFFECT_LAW_BUNDLE_ROOT_SCHEMA_V3: &str =
     "nando.trusted-effect-law-bundle-root.v3";
 pub const INDEPENDENT_EFFECT_STATE_SCHEMA_V3: &str = "nando.independent-effect-state.v3";
 pub const VERIFIED_EFFECT_DELTA_RECEIPT_SCHEMA_V3: &str = "nando.verified-effect-delta-receipt.v3";
-pub const PROTOCOL_FACET_SCHEMA_V3: &str = "nando.effect-protocol-facet.v3";
 pub const EFFECT_LAW_DUAL_CLASSIFICATION_REPORT_SCHEMA_V3: &str =
     "nando.effect-law-dual-classification-report.v1-v3.r1";
 
 const MAX_DICTIONARY_ENTRIES_V3: usize = 256;
 const MAX_OBSERVATIONS_V3: usize = 256;
 const MAX_EFFECT_ATOMS_V3: usize = 512;
-pub(crate) const EFFECT_LAW_ACTION_PHASE_V3: u16 = 2;
-pub(crate) const EFFECT_LAW_MAX_PROTOCOL_FACET_ATOMS_V3: usize = MAX_EFFECT_ATOMS_V3;
 const MAX_CANONICAL_PERMUTATIONS_V3: usize = 16_384;
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -406,39 +404,6 @@ impl EffectQuotientHypothesisV3 {
     pub fn root_sha256(&self) -> &str {
         &self.root_sha256
     }
-}
-
-#[cfg(test)]
-pub(crate) fn test_only_canonical_effect_law_v3(seed: &str) -> CanonicalEffectLawV3 {
-    let root = |suffix: &str| crate::sha256_bytes(format!("{seed}:{suffix}").as_bytes());
-    let wire = serde_json::json!({
-        "schema": CANONICAL_EFFECT_LAW_SCHEMA_V3,
-        "ir_version": EFFECT_LAW_IR_VERSION_V3,
-        "dictionary_root_sha256": root("dictionary"),
-        "quotient_hypothesis_root_sha256": root("quotient"),
-        "topology_nodes": [{
-            "canonical_node": 1,
-            "source": EffectSource::Action,
-            "node_kind_code": EFFECT_OPERATION_CALL_V3,
-            "value_type_code": EFFECT_VALUE_OPERATION_V3,
-            "unique": true,
-            "operation_code": EFFECT_OPERATION_CALL_V3,
-        }],
-        "topology_edges": [],
-        "relation_program": [{
-            "relation_code": EFFECT_REL_REQUIRE,
-            "lhs": 1,
-            "rhs": null,
-            "argument_ordinal": 0,
-            "constant_type_code": null,
-            "constant_sha256": null,
-        }],
-        "effect_invariant_root_sha256": root("effect-invariant"),
-        "preserved_frame_root_sha256": root("preserved-frame"),
-        "action_equivalence_root_sha256": root("action-equivalence"),
-    });
-    let bytes = crate::canonical_json_bytes(&wire).expect("test law bytes");
-    CanonicalEffectLawV3::from_canonical_bytes(&bytes).expect("test law")
 }
 
 impl EffectLawRestartBundleV3 {
