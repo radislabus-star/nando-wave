@@ -1,0 +1,239 @@
+[admission-authority]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-admission-authority
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-admission-authority.trace.json
+
+[admission-trust]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-admission-trust
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-admission-trust.trace.json
+
+[facade-direction]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-facade-direction
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-facade-direction.trace.json
+
+[facade-reverse]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-facade-reverse
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-facade-reverse.trace.json
+
+[kernel-boundary]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-kernel-boundary
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-kernel-boundary.trace.json
+
+[kernel-wave]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-kernel-wave
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-kernel-wave.trace.json
+
+[learning-authority]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-learning-authority
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-learning-authority.trace.json
+
+[learning-input]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-learning-input
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-learning-input.trace.json
+
+[pause-parity]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-pause-parity
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-pause-parity.trace.json
+
+[pause-resume]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-pause-resume
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-pause-resume.trace.json
+
+[pause-start]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-pause-start
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-pause-start.trace.json
+
+[proof-deps]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-proof-deps
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-proof-deps.trace.json
+
+[proof-derive]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-proof-derive
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-proof-derive.trace.json
+
+[runtime-exec]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-runtime-exec
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-runtime-exec.trace.json
+
+[runtime-verifier]
+verdict: PASS
+engine: nanda-check sparse-triad-v6.1-rust
+task_id: r0-runtime-verifier
+complexity_score: 6
+mandatory_gate: false
+authority_ready: false
+proof_mode: STRUCTURAL_ONLY
+proof_verdict: NOT_REQUESTED
+agent_action: SAFE_TO_EDIT
+codex_failure_field: NOT_ENABLED
+explanation:
+  - Candidate structure is coherent with source triads.
+  - Structural coherence only: trusted proof was not established and authority is false.
+trace_path: /tmp/nanda-structural-gate/r0-runtime-verifier.trace.json

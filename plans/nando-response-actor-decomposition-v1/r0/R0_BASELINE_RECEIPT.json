@@ -1,0 +1,122 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r0.v1",
+  "base_head": "3d7fbefe070d66e64870b4387870a843de697804",
+  "verdict": "PASS",
+  "authority": false,
+  "f5_b_started": false,
+  "accounting": {
+    "source_files": 95,
+    "source_files_accounted": 95,
+    "public_reexport_statements": 47,
+    "public_reexport_symbols": 699,
+    "public_symbols_accounted": 699,
+    "external_call_sites": 176,
+    "external_caller_files": 29,
+    "unknown_external_callers": 0,
+    "side_effect_candidate_calls": 1788,
+    "side_effect_owner_files": 64,
+    "unowned_side_effect_files": 0,
+    "mixed_owner_files": 46
+  },
+  "behavior": {
+    "schema": "nando.response-actor-behavior-baseline.v1",
+    "head": "3d7fbefe070d66e64870b4387870a843de697804",
+    "authority": false,
+    "full_lib": {
+      "passed": 502,
+      "known_failed": 26,
+      "failure_set_sha256": "9ada408b39863f06a8cbfddd626bf26e84428277dc0728f484c2afa3b56d9508"
+    },
+    "clippy": {
+      "library_diagnostics": 12,
+      "test_only_diagnostics": 8,
+      "total_diagnostics": 20,
+      "diagnostic_set_sha256": "63c9f1b7339470bb141ad2086e8cc8607b29c54fedf430be95610d53f058c451"
+    }
+  },
+  "structural_review": {
+    "owner_routes": 15,
+    "pass": 15,
+    "authority_ready": false,
+    "graphify_query": "PASS"
+  },
+  "live_baseline": {
+    "schema": "nando.response-actor-decomposition-live-baseline.v1",
+    "gate_exit_code": 1,
+    "generated_at_unix": 1784656805,
+    "verdict": "VETO",
+    "eligible_for_local_accept": false,
+    "m3_complete": false,
+    "response_authority": {
+      "schema": "nando.response-authority.v2",
+      "registry_schema": "nando.response-registry.v6",
+      "registry_revision": 0,
+      "registry_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "gate_build_sha256": "67b9a066eeb7ed3d48143f2af61315d2dbc2f1eaecd99b80bb2850b8ea545868",
+      "runtime_build_sha256": "9746d4e4ab38b8b7cde09cf19c8bba818a4893a08f8ca57294dac9fc886991ad",
+      "packages": []
+    },
+    "sections": {
+      "structural": "PASS",
+      "wave_causal": "PASS",
+      "runtime_admission": {
+        "verdict": "PASS",
+        "active_profile_count": 5,
+        "active_false_accepts": 0,
+        "active_runtime_parity_mismatches": 0
+      },
+      "response_runtime": {
+        "verdict": "VETO",
+        "m3_verdict": "WATCH",
+        "active_packages": 0,
+        "false_accepts": 0,
+        "runtime_parity_failures": 0,
+        "input_token_saving_share_milli": 7,
+        "blockers": [
+          "no_active_response_package",
+          "m3_windows_below_required",
+          "m3_window_coverage_below_threshold",
+          "response_baseline_safety_veto"
+        ]
+      },
+      "deployment": "PASS"
+    }
+  },
+  "service_baseline": {
+    "schema": "nando.response-actor-decomposition-systemd-baseline.v1",
+    "captured_at": "2026-07-21",
+    "services": [
+      {
+        "id": "nando-transition-serving.service",
+        "active_state": "active",
+        "sub_state": "running",
+        "invocation_id": "74ac3080f80b4fe387de2a94380e3657",
+        "main_pid": 263278,
+        "n_restarts": 0,
+        "memory_current": 169467904,
+        "memory_peak": 284889088,
+        "cpu_usage_nsec": 963556385000
+      },
+      {
+        "id": "nando-response-learning.service",
+        "active_state": "active",
+        "sub_state": "running",
+        "invocation_id": "8e59505eb1b943778601c9b3bacbd607",
+        "main_pid": 936491,
+        "n_restarts": 0,
+        "memory_current": 713392128,
+        "memory_peak": 1047973888,
+        "cpu_usage_nsec": 15941288934000
+      }
+    ]
+  },
+  "stop_contract": {
+    "source_files_accounted": true,
+    "public_symbols_accounted": true,
+    "mixed_owner_files_explicit": true,
+    "unowned_side_effects": 0,
+    "unknown_external_callers": 0,
+    "baseline_artifacts_canonical": true,
+    "authority": false
+  }
+}

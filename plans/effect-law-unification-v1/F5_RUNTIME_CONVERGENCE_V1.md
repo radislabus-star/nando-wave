@@ -1,6 +1,6 @@
 # F5 Runtime Convergence V1
 
-Status: `F5_A_COMPLETE_F5_B_NOT_STARTED`
+Status: `F5_A_COMPLETE_REFACTOR_PAUSE_BEFORE_F5_B`
 
 Base implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
 
@@ -17,6 +17,21 @@ authority                        false
 ```
 
 Receipt: `STOP_F5_A_EXECUTABLE_COMPLETENESS.md`.
+
+Development pause:
+
+```text
+F5-B and all later functional work are paused while the 103,389-line
+nando-response-actor crate is decomposed by authority owner. The preregistered
+move-only plan is:
+
+plans/nando-response-actor-decomposition-v1/
+  NANDO_RESPONSE_ACTOR_DECOMPOSITION_V1.md
+```
+
+The pause does not reopen or weaken STOP-F5-A. No runtime context, binding,
+admission, deployment, or authority work may be hidden inside the
+decomposition.
 
 This plan closes exactly one boundary:
 

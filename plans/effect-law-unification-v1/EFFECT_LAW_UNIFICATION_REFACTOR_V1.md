@@ -20,10 +20,22 @@ B1B adjudication                CONTROLLED_FIXTURE_PASS / REVIEWED
 B1B proof-owner split           COMPLETE
 AcceptedBindingLawEvidence      CONTROLLED_ONLY
 F4R2 protocol mode compiler     CONTROLLED_STRUCTURAL_PASS
-F5 runtime convergence          NOT_STARTED
+F5-A executable artifact        COMPLETE / STOP-F5-A
+F5-B runtime convergence        PAUSED FOR SPECTRAL DECOMPOSITION
+nando-response-actor cut        PREREGISTERED / NOT STARTED
 production authority            false
 service deployment              out of scope
 ```
+
+The active pause and resume gate are defined in:
+
+```text
+plans/nando-response-actor-decomposition-v1/
+  NANDO_RESPONSE_ACTOR_DECOMPOSITION_V1.md
+```
+
+No F5-B implementation begins until `STOP-DECOMPOSITION` passes. This is a
+move-only architecture cut; F4/F5-A semantics and bytes remain frozen.
 
 ## 1. Objective
 

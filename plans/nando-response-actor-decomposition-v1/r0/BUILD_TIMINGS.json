@@ -1,0 +1,19 @@
+{
+  "schema": "nando.response-actor-build-timings.v1",
+  "measured_at": "2026-07-21",
+  "remote_host": "e@192.168.3.94",
+  "remote_cpu_threads": 20,
+  "measurements": {
+    "source_change_compile_and_link_seconds": 19.1,
+    "focused_21_test_runtime_seconds": 0.24,
+    "warm_repeated_focused_compile_seconds": 0.03,
+    "full_528_test_runtime_seconds": 21.6,
+    "all_target_check_seconds": 10.5,
+    "graphify_seconds": 19.5,
+    "unit_test_binary_mebibytes": 88
+  },
+  "notes": [
+    "The focused Cargo filter still compiles and links the monolithic lib test binary.",
+    "The timings are a planning baseline, not an authority or performance claim."
+  ]
+}

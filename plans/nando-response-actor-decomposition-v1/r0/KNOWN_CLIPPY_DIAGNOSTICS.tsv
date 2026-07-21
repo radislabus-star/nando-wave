@@ -1,0 +1,20 @@
+crates/nando-response-actor/src/binding_evidence_tests.rs:346:5	field assignment outside of initializer for an instance created with Default::default()
+crates/nando-response-actor/src/binding_evidence_tests.rs:378:5	field assignment outside of initializer for an instance created with Default::default()
+crates/nando-response-actor/src/collection_synthesis.rs:2929:57	unnecessary use of `clone` to create a slice from a reference
+crates/nando-response-actor/src/effect_law_v3/../effect_law_dual_classifier_v3_tests.rs:308:5	this assertion has a constant value
+crates/nando-response-actor/src/online.rs:1577:49	using `clone` on type `[u8; 32]` which implements the `Copy` trait
+crates/nando-response-actor/src/online.rs:1914:16	manual implementation of `.is_multiple_of()`
+crates/nando-response-actor/src/online_collection.rs:2924:9	this `if` statement can be collapsed
+crates/nando-response-actor/src/online_collection.rs:2988:25	unnecessarily eager cloning of iterator items
+crates/nando-response-actor/src/online_collection.rs:4673:1	large size difference between variants
+crates/nando-response-actor/src/online_collection.rs:6048:9	this `let...else` may be rewritten with the `?` operator
+crates/nando-response-actor/src/online_state.rs:33:29	manual implementation of `.is_multiple_of()`
+crates/nando-response-actor/src/online_state.rs:3772:9	field assignment outside of initializer for an instance created with Default::default()
+crates/nando-response-actor/src/operator_vm.rs:159:73	this expression creates a reference which is immediately dereferenced by the compiler
+crates/nando-response-actor/src/runtime.rs:323:61	this expression creates a reference which is immediately dereferenced by the compiler
+crates/nando-response-actor/src/runtime.rs:536:33	this lifetime isn't used in the function definition
+crates/nando-response-actor/src/semantic_alias.rs:165:5	this function has a `#[must_use]` attribute with no message, but returns a type already marked as `#[must_use]`
+crates/nando-response-actor/src/semantic_alias.rs:170:5	this function has a `#[must_use]` attribute with no message, but returns a type already marked as `#[must_use]`
+crates/nando-response-actor/src/semantic_alias.rs:819:9	used `unwrap()` on a `Result` value
+crates/nando-response-actor/src/semantic_alias.rs:855:9	used `unwrap()` on a `Result` value
+crates/nando-response-actor/src/semantic_alias.rs:866:9	used `unwrap()` on a `Result` value

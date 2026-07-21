@@ -1,0 +1,16 @@
+{
+  "schema": "nando.response-actor-behavior-baseline.v1",
+  "head": "3d7fbefe070d66e64870b4387870a843de697804",
+  "authority": false,
+  "full_lib": {
+    "passed": 502,
+    "known_failed": 26,
+    "failure_set_sha256": "9ada408b39863f06a8cbfddd626bf26e84428277dc0728f484c2afa3b56d9508"
+  },
+  "clippy": {
+    "library_diagnostics": 12,
+    "test_only_diagnostics": 8,
+    "total_diagnostics": 20,
+    "diagnostic_set_sha256": "63c9f1b7339470bb141ad2086e8cc8607b29c54fedf430be95610d53f058c451"
+  }
+}

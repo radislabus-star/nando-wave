@@ -1,0 +1,42 @@
+{
+  "schema": "nando.response-actor-decomposition-live-baseline.v1",
+  "gate_exit_code": 1,
+  "generated_at_unix": 1784656805,
+  "verdict": "VETO",
+  "eligible_for_local_accept": false,
+  "m3_complete": false,
+  "response_authority": {
+    "schema": "nando.response-authority.v2",
+    "registry_schema": "nando.response-registry.v6",
+    "registry_revision": 0,
+    "registry_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "gate_build_sha256": "67b9a066eeb7ed3d48143f2af61315d2dbc2f1eaecd99b80bb2850b8ea545868",
+    "runtime_build_sha256": "9746d4e4ab38b8b7cde09cf19c8bba818a4893a08f8ca57294dac9fc886991ad",
+    "packages": []
+  },
+  "sections": {
+    "structural": "PASS",
+    "wave_causal": "PASS",
+    "runtime_admission": {
+      "verdict": "PASS",
+      "active_profile_count": 5,
+      "active_false_accepts": 0,
+      "active_runtime_parity_mismatches": 0
+    },
+    "response_runtime": {
+      "verdict": "VETO",
+      "m3_verdict": "WATCH",
+      "active_packages": 0,
+      "false_accepts": 0,
+      "runtime_parity_failures": 0,
+      "input_token_saving_share_milli": 7,
+      "blockers": [
+        "no_active_response_package",
+        "m3_windows_below_required",
+        "m3_window_coverage_below_threshold",
+        "response_baseline_safety_veto"
+      ]
+    },
+    "deployment": "PASS"
+  }
+}

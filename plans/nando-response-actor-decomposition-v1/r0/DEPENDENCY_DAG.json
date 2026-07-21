@@ -1,0 +1,382 @@
+{
+  "workspace_root": "/home/ubu/projects/nando-wave",
+  "target_directory": "/home/ubu/projects/nando-wave/target",
+  "packages": [
+    {
+      "name": "nando-cli",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-cli/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "nando-core",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-core",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "nando-eval",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-eval",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-core",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-core/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "sha2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-eval",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-eval/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "nando-core",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-core",
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-expression-runtime",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-expression-runtime/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "sha2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-gateway-control",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-gateway-control/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "axum",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "http-body-util",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "hyper",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "hyper-util",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "tokio",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-response-actor",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-response-actor/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "nando-core",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-core",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_bytes",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_cbor",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "sha2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "zstd",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-transition-actor",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-transition-actor/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-transition-inducer",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-transition-inducer/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "nando-core",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-core",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "nando-transition-actor",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-transition-actor",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "sha2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "time",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "nando-transition-serving",
+      "manifest_path": "/home/ubu/projects/nando-wave/crates/nando-transition-serving/Cargo.toml",
+      "dependencies": [
+        {
+          "name": "axum",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "bytes",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "memchr",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "mimalloc",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "nando-expression-runtime",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-expression-runtime",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "nando-response-actor",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-response-actor",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "nando-transition-inducer",
+          "source": null,
+          "path": "/home/ubu/projects/nando-wave/crates/nando-transition-inducer",
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "notify",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_cbor",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "serde_json",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "sha2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "tiktoken-rs",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "time",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        },
+        {
+          "name": "tokio",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "path": null,
+          "kind": null,
+          "optional": false
+        }
+      ]
+    }
+  ]
+}

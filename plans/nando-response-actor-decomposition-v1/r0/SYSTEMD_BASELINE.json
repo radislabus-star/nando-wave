@@ -1,0 +1,28 @@
+{
+  "schema": "nando.response-actor-decomposition-systemd-baseline.v1",
+  "captured_at": "2026-07-21",
+  "services": [
+    {
+      "id": "nando-transition-serving.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "invocation_id": "74ac3080f80b4fe387de2a94380e3657",
+      "main_pid": 263278,
+      "n_restarts": 0,
+      "memory_current": 169467904,
+      "memory_peak": 284889088,
+      "cpu_usage_nsec": 963556385000
+    },
+    {
+      "id": "nando-response-learning.service",
+      "active_state": "active",
+      "sub_state": "running",
+      "invocation_id": "8e59505eb1b943778601c9b3bacbd607",
+      "main_pid": 936491,
+      "n_restarts": 0,
+      "memory_current": 713392128,
+      "memory_peak": 1047973888,
+      "cpu_usage_nsec": 15941288934000
+    }
+  ]
+}

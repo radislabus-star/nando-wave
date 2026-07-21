@@ -1,0 +1,176 @@
+crates/nando-response-actor/src/bin/nando-binding-future-acquire.rs:8:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-binding-future-capture-owner.rs:7:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-binding-hypothesis-adjudicate.rs:5:use nando_response_actor::adjudicate_binding_hypotheses_v1;
+crates/nando-response-actor/src/bin/nando-binding-label-observe.rs:5:use nando_response_actor::{build_binding_label_manifest_v1, observe_frozen_binding_labels_v1};
+crates/nando-response-actor/src/bin/nando-binding-label-trust-owner.rs:5:use nando_response_actor::seal_binding_external_label_trust_v1;
+crates/nando-response-actor/src/bin/nando-binding-support-acquire.rs:5:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-binding-support-capture-owner.rs:5:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-evidence-checkpoint.rs:1:use nando_response_actor::{DeterministicEvidenceLedger, EvidencePolicyV1};
+crates/nando-response-actor/src/bin/nando-online-response-diagnose.rs:6:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-admission.rs:100:                .map(nando_response_actor::relation_frame_online_routing_atom_ids)
+crates/nando-response-actor/src/bin/nando-response-admission.rs:105:                .map(nando_response_actor::relation_frame_online_routing_atom_ids)
+crates/nando-response-actor/src/bin/nando-response-admission.rs:8:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-authority-inspect.rs:6:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-miner.rs:1305:        .filter(|package| package.state == nando_response_actor::ResponsePackageState::Quarantine)
+crates/nando-response-actor/src/bin/nando-response-miner.rs:1339:            package.state == nando_response_actor::ResponsePackageState::Quarantine
+crates/nando-response-actor/src/bin/nando-response-miner.rs:14:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2054:            BTreeMap::<String, nando_response_actor::SynthesizedCollectionProgram>::new();
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2126:    candidate: &nando_response_actor::SynthesizedCollectionProgram,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2603:                .map(nando_response_actor::ResponseRoutingPredicate::phase_atom_id),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2855:                        nando_response_actor::ResponseValueSelector::ContinuationHandle {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2858:                        nando_response_actor::ResponseValueSelector::UniqueScalar { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2861:                        nando_response_actor::ResponseValueSelector::UniqueTurnScalar { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2864:                        nando_response_actor::ResponseValueSelector::ContentLinePrefix {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2867:                        nando_response_actor::ResponseValueSelector::JsonField { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2870:                        nando_response_actor::ResponseValueSelector::JsonScalarOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2873:                        nando_response_actor::ResponseValueSelector::UniqueTurnJsonField {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2876:                        nando_response_actor::ResponseValueSelector::UniqueActiveTurnJsonField {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2879:                        nando_response_actor::ResponseValueSelector::RequestReferencedJsonField {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2882:                        nando_response_actor::ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2885:                        nando_response_actor::ResponseValueSelector::TurnOutputLine { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2888:                        nando_response_actor::ResponseValueSelector::TurnOutputScalarOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2891:                        nando_response_actor::ResponseValueSelector::LatestTurnOutputLine {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2894:                        nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2897:                        nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2900:                        nando_response_actor::ResponseValueSelector::CommandOutputBody => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2903:                        nando_response_actor::ResponseValueSelector::RequestLastToken => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:2906:                        nando_response_actor::ResponseValueSelector::RequestUniqueLiteral => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3081:    package: &nando_response_actor::ResponsePackage,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3235:        == Some(nando_response_actor::CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA);
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3444:    selector: &nando_response_actor::ResponseValueSelector,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3448:        nando_response_actor::ResponseValueSelector::ContinuationHandle { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3454:        nando_response_actor::ResponseValueSelector::UniqueScalar { .. }
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3455:        | nando_response_actor::ResponseValueSelector::UniqueTurnScalar { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3458:        nando_response_actor::ResponseValueSelector::ContentLinePrefix { prefix, .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3464:        nando_response_actor::ResponseValueSelector::JsonField { field, .. }
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3465:        | nando_response_actor::ResponseValueSelector::UniqueTurnJsonField { field, .. }
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3466:        | nando_response_actor::ResponseValueSelector::UniqueActiveTurnJsonField {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3475:        nando_response_actor::ResponseValueSelector::RequestReferencedJsonField { .. } => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3478:        nando_response_actor::ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3486:        nando_response_actor::ResponseValueSelector::JsonScalarOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3490:        nando_response_actor::ResponseValueSelector::TurnOutputScalarOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3495:        | nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3503:        nando_response_actor::ResponseValueSelector::LatestTurnOutputScalarFromEnd {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3511:        nando_response_actor::ResponseValueSelector::TurnOutputLine { line_index, .. }
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3512:        | nando_response_actor::ResponseValueSelector::LatestTurnOutputLine {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3525:        nando_response_actor::ResponseValueSelector::CommandOutputBody => {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3531:        nando_response_actor::ResponseValueSelector::RequestLastToken => Value::String(
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3536:        nando_response_actor::ResponseValueSelector::RequestUniqueLiteral => Value::String(
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3597:fn exact_package_hard_negative_accepts(package: &nando_response_actor::ResponsePackage) -> usize {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3648:    } else if schema == Some(nando_response_actor::CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA) {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3729:    use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3751:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3849:                renderer: nando_response_actor::CollectionOutputRenderer::Direct,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3878:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3885:            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3904:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3911:            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3914:                format: nando_response_actor::ValueProjectionFormat::PlainText,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3915:                renderer: nando_response_actor::CollectionOutputRenderer::Direct,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3940:            selector: nando_response_actor::ResponseValueSelector::UniqueScalar {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3941:                value_type: nando_response_actor::AtomValueType::Identifier,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3948:                selector: nando_response_actor::ResponseValueSelector::UniqueScalar {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3949:                    value_type: nando_response_actor::AtomValueType::Integer,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3951:                format: nando_response_actor::ValueProjectionFormat::CanonicalJson,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3952:                renderer: nando_response_actor::CollectionOutputRenderer::Direct,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:3970:            nando_response_actor::ProjectStatusMapping::ZeroIsSuccess,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4107:                    .is_some_and(nando_response_actor::valid_nonzero_sha256)
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4110:                    .is_some_and(nando_response_actor::valid_nonzero_sha256)
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4113:                    .is_some_and(nando_response_actor::valid_nonzero_sha256)
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4116:                    .is_some_and(nando_response_actor::valid_nonzero_sha256)
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4149:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4156:            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4171:            origin: nando_response_actor::ResponsePackageOrigin::GroundedSynthesis,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4173:            program: nando_response_actor::ResponseProgram::wait_on_any_yielded_cell(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4182:            proof: nando_response_actor::ResponsePackageProof {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4252:            |package_id: &str, verdict: &str| nando_response_actor::GroundedWaveCausalReport {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4253:                schema: nando_response_actor::RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4297:                    schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4304:                    extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4348:        let package = |program: nando_response_actor::ResponseProgram, support: &RelationFrame| {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4350:                nando_response_actor::response_program_required_routing_atom_ids(&program);
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4365:                proof: nando_response_actor::ResponsePackageProof {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4379:            nando_response_actor::ResponseProgram::function_call_from_roles(
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4381:                nando_response_actor::ResponseValueSelector::UniqueScalar {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4382:                    value_type: nando_response_actor::AtomValueType::String,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4384:                vec![nando_response_actor::ResponseArgument::Role {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4386:                    role: nando_response_actor::SemanticRole::SourceValue,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4387:                    value_type: Some(nando_response_actor::AtomValueType::String),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4393:            nando_response_actor::ResponseProgram::function_call_from_roles(
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4395:                nando_response_actor::ResponseValueSelector::ContentLinePrefix {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4397:                    value_type: nando_response_actor::AtomValueType::Identifier,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4399:                vec![nando_response_actor::ResponseArgument::Role {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4401:                    role: nando_response_actor::SemanticRole::ContinuationHandle,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4402:                    value_type: Some(nando_response_actor::AtomValueType::Identifier),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4419:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4426:            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4453:                    selector: nando_response_actor::ResponseValueSelector::JsonField {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4477:        let program = nando_response_actor::ResponseProgram::custom_tool_call_from_roles(
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4480:            nando_response_actor::ResponseValueSelector::JsonField {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4484:            vec![nando_response_actor::ResponseArgument::Role {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4486:                role: nando_response_actor::SemanticRole::ContinuationHandle,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4489:            nando_response_actor::CustomToolResultProjection::JsonStringifyResult,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4492:            nando_response_actor::response_program_required_routing_atom_ids(&program);
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4507:            proof: nando_response_actor::ResponsePackageProof {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4626:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4633:            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4653:                    schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4660:                    extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4681:            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4688:            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4720:            proof: nando_response_actor::ResponsePackageProof {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4803:                schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4810:                extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4842:        let causal = nando_response_actor::evaluate_grounded_wave_causality(
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4929:                        "schema": nando_response_actor::RELATION_FRAME_SCHEMA,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4936:                        "extractor_version": nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4988:        let admission = nando_response_actor::CompositeResponseAdmissionV2 {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4989:            schema: nando_response_actor::COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
+crates/nando-response-actor/src/bin/nando-response-miner.rs:4995:            response_authority: nando_response_actor::ResponseAuthorityV2 {
+crates/nando-response-actor/src/bin/nando-response-miner.rs:5052:            nando_response_actor::RESPONSE_RUNTIME_RECEIPT_SCHEMA_V2
+crates/nando-response-actor/src/bin/nando-response-miner.rs:5069:            "schema": nando_response_actor::RELATION_FRAME_SCHEMA,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:5076:            "extractor_version": nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+crates/nando-response-actor/src/bin/nando-response-miner.rs:51:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-wave-proof.rs:14:            program_hint: nando_response_actor::ResponseProgramHint {
+crates/nando-response-actor/src/bin/nando-response-wave-proof.rs:1:use nando_response_actor::{
+crates/nando-response-actor/src/bin/nando-response-wave-proof.rs:36:    let executor = nando_response_actor::ResponseExecutor::from_registry(ResponseRegistry {
+crates/nando-response-actor/src/bin/response_miner/authority.rs:3:use nando_response_actor::{
+crates/nando-response-actor/tests/crystallized_operator_causal.rs:7:use nando_response_actor::{
+crates/nando-transition-serving/src/bin/nando-collection-migration.rs:6:use nando_response_actor::{
+crates/nando-transition-serving/src/bin/nando-merge-relation-ledgers.rs:7:use nando_response_actor::{
+crates/nando-transition-serving/src/bin/nando-repair-relation-event-time.rs:6:use nando_response_actor::{RelationFrame, sha256_bytes};
+crates/nando-transition-serving/src/bin/nando-response-history-seed.rs:7:use nando_response_actor::{
+crates/nando-transition-serving/src/bin/nando-response-parity-backfill.rs:6:use nando_response_actor::{
+crates/nando-transition-serving/src/bin/nando-response-relation-backfill.rs:6:use nando_response_actor::{
+crates/nando-transition-serving/src/lib.rs:30:use nando_response_actor::{
+crates/nando-transition-serving/src/lib.rs:4337:    use nando_response_actor::{
+crates/nando-transition-serving/src/lib.rs:4379:                renderer: nando_response_actor::CollectionOutputRenderer::Direct,
+crates/nando-transition-serving/src/live_economics.rs:6:use nando_response_actor::{FramedCborLedger, read_framed_cbor, write_atomic_cbor};
+crates/nando-transition-serving/src/main.rs:11:            nando_response_actor::response_runtime_contract_sha256()
+crates/nando-transition-serving/src/miner_worker.rs:10:use nando_response_actor::{
+crates/nando-transition-serving/src/opportunity_scan.rs:467:fn program_class(program: &nando_response_actor::ResponseProgram) -> String {
+crates/nando-transition-serving/src/opportunity_scan.rs:9:use nando_response_actor::{
+crates/nando-transition-serving/src/session_backfill.rs:1287:    use nando_response_actor::{OnlineCollectionConfig, ResponsePackageState};
+crates/nando-transition-serving/src/session_backfill.rs:1367:        let space = nando_response_actor::enumerate_source_neutral_response_programs(&example)
+crates/nando-transition-serving/src/session_backfill.rs:144:    config: nando_response_actor::OnlineCollectionConfig,
+crates/nando-transition-serving/src/session_backfill.rs:161:    config: nando_response_actor::OnlineCollectionConfig,
+crates/nando-transition-serving/src/session_backfill.rs:178:    config: nando_response_actor::OnlineCollectionConfig,
+crates/nando-transition-serving/src/session_backfill.rs:460:    status: &nando_response_actor::OnlineCollectionStatus,
+crates/nando-transition-serving/src/session_backfill.rs:476:    status: &nando_response_actor::OnlineCollectionStatus,
+crates/nando-transition-serving/src/session_backfill.rs:953:            nando_response_actor::EvidenceEventTime::Known { unix_nanos } => Some(unix_nanos),
+crates/nando-transition-serving/src/session_backfill.rs:954:            nando_response_actor::EvidenceEventTime::Unknown => None,
+crates/nando-transition-serving/src/session_backfill.rs:9:use nando_response_actor::{
+crates/nando-transition-serving/src/session_stream.rs:10:use nando_response_actor::{
+crates/nando-transition-serving/src/session_stream.rs:1129:                nando_response_actor::EvidenceEventTime::Known { unix_nanos } => Some(unix_nanos),
+crates/nando-transition-serving/src/session_stream.rs:1130:                nando_response_actor::EvidenceEventTime::Unknown => None,
+crates/nando-transition-serving/src/session_stream.rs:1421:        state.request_phase_atom_ids = nando_response_actor::request_phase_atom_ids(text);
+crates/nando-transition-serving/src/session_stream.rs:1437:        state.request_phase_atom_ids = nando_response_actor::request_phase_atom_ids(&text);
+crates/nando-transition-serving/src/session_stream.rs:2798:    use nando_response_actor::{
+crates/nando-transition-serving/src/session_stream.rs:2934:            nando_response_actor::request_phase_atom_ids("submit the observed count");
+crates/nando-transition-serving/src/session_stream.rs:3068:            nando_response_actor::ResponseOperation::CustomToolCallFromRoles { .. }
+crates/nando-transition-serving/src/session_stream.rs:3629:                nando_response_actor::OnlineCollectionConfig::default(),
+crates/nando-transition-serving/src/session_stream.rs:3727:                nando_response_actor::OnlineCollectionConfig::default(),
+crates/nando-transition-serving/src/session_stream.rs:3754:                <= nando_response_actor::OnlineCollectionConfig::default().max_buckets
+crates/nando-transition-serving/src/session_stream.rs:44:    ) -> Result<nando_response_actor::EvidenceLedgerRecord, String> {
+crates/nando-transition-serving/src/session_stream.rs:52:    fn accounting(&self) -> nando_response_actor::EvidenceAccounting {
+crates/nando-transition-serving/src/stream_evidence.rs:5:use nando_response_actor::{

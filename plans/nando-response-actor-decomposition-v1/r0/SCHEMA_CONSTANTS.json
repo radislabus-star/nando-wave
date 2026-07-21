@@ -1,0 +1,695 @@
+[
+  {
+    "file": "crates/nando-response-actor/src/admission_bundle.rs",
+    "line": 12,
+    "name": "ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.online-admission-candidate-bundle.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/admission_bundle.rs",
+    "line": 14,
+    "name": "DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.durable-runtime-parity-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 12,
+    "name": "RESPONSE_REGISTRY_SCHEMA_V6",
+    "type": "&str",
+    "value": "\"nando.response-registry.v6\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 13,
+    "name": "RESPONSE_EXECUTION_PAYLOAD_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-execution-payload.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 14,
+    "name": "COMPOSITE_ADMISSION_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.live-transition-composite-gate.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 15,
+    "name": "RESPONSE_AUTHORITY_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.response-authority.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 16,
+    "name": "RESPONSE_RUNTIME_RECEIPT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.response-runtime-verification-receipt.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 18,
+    "name": "RESPONSE_POST_VERIFIER_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-post-verifier-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 20,
+    "name": "RESPONSE_POST_VERIFIER_ADMISSION_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-admission-binding.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 21,
+    "name": "RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-support-manifest.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 22,
+    "name": "RESPONSE_EXACT_CAUSAL_PROOF_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.grounded-response-wave-causal-report.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 24,
+    "name": "RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-runtime-parity-receipt-set.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 26,
+    "name": "RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.response-future-verifier-receipt-set.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 28,
+    "name": "RESPONSE_FUTURE_VERIFIER_RECEIPT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.response-future-verifier-receipt.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 30,
+    "name": "RESPONSE_PROOF_RECEIPT_BINDING_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-proof-receipt-binding.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 32,
+    "name": "RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.semantic-alias-proof.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/authority.rs",
+    "line": 33,
+    "name": "RESPONSE_RUNTIME_CONTRACT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.response-runtime-contract.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence.rs",
+    "line": 13,
+    "name": "PRE_ACTION_BINDING_SURFACE_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.pre-action-binding-surface.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence.rs",
+    "line": 14,
+    "name": "CANDIDATE_RELATION_GRAPH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.candidate-relation-graph.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence.rs",
+    "line": 15,
+    "name": "FROZEN_CANDIDATE_RELATION_GRAPH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.frozen-candidate-relation-graph.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence.rs",
+    "line": 17,
+    "name": "EXPECTED_BINDING_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.expected-binding-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence.rs",
+    "line": 18,
+    "name": "BINDING_VERSION_SPACE_REPORT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-version-space-report.v1.r1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/binding_law_evidence_v2.rs",
+    "line": 13,
+    "name": "BINDING_ADJUDICATION_REPORT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.binding-law-evidence-adjudication.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/independent_trial_verifier_v2.rs",
+    "line": 6,
+    "name": "INDEPENDENT_TRIAL_VERIFIER_RECEIPT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.binding-independent-trial-verifier-receipt.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/physical_actor_observation_v2.rs",
+    "line": 6,
+    "name": "PHYSICAL_ACTOR_OBSERVATION_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.binding-physical-actor-observation.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/physical_trial_v2.rs",
+    "line": 13,
+    "name": "PHYSICAL_TRIAL_RECEIPT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.binding-physical-trial-receipt.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/trusted_resolver_v2.rs",
+    "line": 11,
+    "name": "TRUSTED_RESOLVED_BINDING_ROWS_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.trusted-resolved-binding-rows.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/wire.rs",
+    "line": 10,
+    "name": "BINDING_PHYSICAL_LABEL_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-physical-label-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/wire.rs",
+    "line": 12,
+    "name": "BINDING_PHYSICAL_LABEL_SET_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-physical-label-receipt-set.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/wire.rs",
+    "line": 14,
+    "name": "BINDING_EXTERNAL_LABEL_TRUST_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-external-label-trust.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/wire.rs",
+    "line": 15,
+    "name": "BINDING_ADJUDICATION_REPORT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-causal-adjudication.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_adjudication/wire.rs",
+    "line": 16,
+    "name": "BINDING_OBSERVED_RELATION_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-observed-relation.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_capture_owner.rs",
+    "line": 24,
+    "name": "BINDING_SUPPORT_CAPTURE_ROW_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-support-capture-row.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_capture_owner.rs",
+    "line": 25,
+    "name": "BINDING_SUPPORT_CAPTURE_BATCH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-support-capture-batch.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_capture_owner.rs",
+    "line": 26,
+    "name": "BINDING_SUPPORT_FREEZE_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-support-freeze.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_capture_owner.rs",
+    "line": 27,
+    "name": "BINDING_SUPPORT_FREEZE_REPORT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-support-freeze-report.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_future_capture.rs",
+    "line": 26,
+    "name": "BINDING_FUTURE_ACQUISITION_PROTOCOL_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-future-acquisition-protocol.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_future_capture.rs",
+    "line": 28,
+    "name": "BINDING_FUTURE_CAPTURE_BATCH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-future-capture-batch.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_future_capture.rs",
+    "line": 29,
+    "name": "BINDING_FUTURE_CAPTURE_ROW_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-future-capture-row.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_future_capture.rs",
+    "line": 30,
+    "name": "BINDING_FUTURE_CAPTURE_FREEZE_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-future-capture-freeze.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_preregistration.rs",
+    "line": 16,
+    "name": "BINDING_LABEL_ENVELOPE_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-label-envelope.v1.r1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_preregistration.rs",
+    "line": 17,
+    "name": "BINDING_LABEL_MANIFEST_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-label-manifest.v1.r1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_preregistration.rs",
+    "line": 18,
+    "name": "BINDING_CAPTURE_WATERMARK_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-capture-watermark.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/binding_evidence_preregistration.rs",
+    "line": 19,
+    "name": "BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.binding-evidence-preregistration.v1.r1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/capture_provenance.rs",
+    "line": 7,
+    "name": "CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.capture-evidence-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/capture_provenance.rs",
+    "line": 8,
+    "name": "CAPTURE_COMMITMENT_INDEX_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.capture-commitment-index.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/contracts.rs",
+    "line": 7,
+    "name": "INGRESS_EVENT_SCHEMA",
+    "type": "&str",
+    "value": "\"nando.response-ingress-event.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/contracts.rs",
+    "line": 8,
+    "name": "RELATION_FRAME_SCHEMA",
+    "type": "&str",
+    "value": "\"nando.response-relation-frame.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/contracts.rs",
+    "line": 9,
+    "name": "ROLE_HYPOTHESIS_SCHEMA",
+    "type": "&str",
+    "value": "\"nando.response-role-hypothesis.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/contracts.rs",
+    "line": 10,
+    "name": "PROGRAM_CANDIDATE_SCHEMA",
+    "type": "&str",
+    "value": "\"nando.response-program-candidate.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/contracts.rs",
+    "line": 11,
+    "name": "VERIFIER_RECEIPT_SCHEMA",
+    "type": "&str",
+    "value": "\"nando.response-verifier-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_graph.rs",
+    "line": 8,
+    "name": "EFFECT_GRAPH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.effect-graph.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law.rs",
+    "line": 13,
+    "name": "CANONICAL_EFFECT_LAW_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.canonical-effect-law.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law.rs",
+    "line": 14,
+    "name": "EFFECT_OBSERVATION_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.evidence-bound-effect-observation.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law.rs",
+    "line": 15,
+    "name": "EFFECT_QUOTIENT_REPORT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.effect-quotient-report.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 20,
+    "name": "EFFECT_OBSERVATION_CANDIDATE_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.effect-observation-candidate.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 21,
+    "name": "SEALED_EFFECT_OBSERVATION_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.sealed-effect-observation.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 22,
+    "name": "EFFECT_DELTA_CONTRACT_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.effect-delta-contract.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 23,
+    "name": "CANONICAL_EFFECT_LAW_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.canonical-effect-law.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 24,
+    "name": "EFFECT_LAW_RESTART_BUNDLE_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.effect-law-restart-bundle.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 25,
+    "name": "EFFECT_QUOTIENT_HYPOTHESIS_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.effect-quotient-hypothesis.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 26,
+    "name": "TRUSTED_GENERATION_MANIFEST_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.trusted-effect-generation-manifest.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 28,
+    "name": "TRUSTED_EFFECT_EVIDENCE_SET_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.trusted-effect-evidence-set.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 29,
+    "name": "TRUSTED_EFFECT_LAW_BUNDLE_ROOT_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.trusted-effect-law-bundle-root.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 31,
+    "name": "INDEPENDENT_EFFECT_STATE_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.independent-effect-state.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 32,
+    "name": "VERIFIED_EFFECT_DELTA_RECEIPT_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.verified-effect-delta-receipt.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 33,
+    "name": "PROTOCOL_FACET_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.effect-protocol-facet.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "line": 34,
+    "name": "EFFECT_LAW_DUAL_CLASSIFICATION_REPORT_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.effect-law-dual-classification-report.v1-v3.r1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/evidence.rs",
+    "line": 13,
+    "name": "EVIDENCE_LEDGER_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.deterministic-evidence-ledger.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/evidence.rs",
+    "line": 14,
+    "name": "CANONICAL_EVENT_GRAPH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.canonical-event-graph.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/evidence_graph.rs",
+    "line": 14,
+    "name": "EVIDENCE_GRAPH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.evidence-graph.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/evidence_graph.rs",
+    "line": 15,
+    "name": "EVIDENCE_GRAPH_RECEIPT_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.evidence-graph-receipt.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/executable_protocol_mode/mod.rs",
+    "line": 11,
+    "name": "PROTOCOL_FACET_PAYLOAD_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.protocol-facet-payload.v3.f5a\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/executable_protocol_mode/mod.rs",
+    "line": 12,
+    "name": "EXECUTABLE_PROTOCOL_MODE_ARTIFACT_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.executable-protocol-mode-artifact.v3.f5a\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/online_diagnostics.rs",
+    "line": 15,
+    "name": "SEMANTIC_LAW_EVIDENCE_AUDIT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.semantic-law-evidence-audit.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/online_state.rs",
+    "line": 36,
+    "name": "SELF_TRAINING_STATE_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.self-training-stream-state.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/online_state.rs",
+    "line": 37,
+    "name": "SELF_TRAINING_STATE_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.self-training-stream-state.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/online_state.rs",
+    "line": 38,
+    "name": "SELF_TRAINING_STATE_SCHEMA_V4",
+    "type": "&str",
+    "value": "\"nando.self-training-stream-state.v4\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/online_state.rs",
+    "line": 39,
+    "name": "SELF_TRAINING_STATE_SCHEMA_V5",
+    "type": "&str",
+    "value": "\"nando.self-training-stream-state.v5\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/online_state.rs",
+    "line": 40,
+    "name": "SEMANTIC_EVIDENCE_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.semantic-evidence-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/opportunity.rs",
+    "line": 7,
+    "name": "OPPORTUNITY_BOARD_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.opportunity-board.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/opportunity.rs",
+    "line": 8,
+    "name": "OPPORTUNITY_BOARD_SCHEMA_V3",
+    "type": "&str",
+    "value": "\"nando.opportunity-board.v3\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/outcome_example.rs",
+    "line": 6,
+    "name": "COMPLETED_TURN_EXAMPLE_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.completed-turn-example.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/outcome_example.rs",
+    "line": 7,
+    "name": "COMPLETED_TURN_EXAMPLE_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.completed-turn-example.v2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 23,
+    "name": "CONTINUATION_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"continue_handle_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 24,
+    "name": "SOURCE_VALUE_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"source_value_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 25,
+    "name": "CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"custom_tool_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 26,
+    "name": "VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"value_projection_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 27,
+    "name": "STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"status_projection_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 29,
+    "name": "COLLECTION_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"collection_program_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/package.rs",
+    "line": 30,
+    "name": "PLAN_ADVANCE_EXTERNAL_VERIFIER_SCHEMA",
+    "type": "&str",
+    "value": "\"plan_advance_external_evidence.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/protocol_mode.rs",
+    "line": 21,
+    "name": "PROTOCOL_MODE_SET_SCHEMA_V2",
+    "type": "&str",
+    "value": "\"nando.protocol-mode-set.v2.f4r2\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/semantic_alias.rs",
+    "line": 8,
+    "name": "SEMANTIC_ALIAS_GRAPH_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.semantic-alias-graph.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/training_types.rs",
+    "line": 8,
+    "name": "RUNTIME_FRAME_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.runtime-frame.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/training_types.rs",
+    "line": 9,
+    "name": "TEACHER_OUTCOME_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.teacher-outcome.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/training_types.rs",
+    "line": 10,
+    "name": "TEACHER_TRANSITION_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.teacher-transition.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/training_types.rs",
+    "line": 11,
+    "name": "ECONOMICS_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.economics-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/verified_delta.rs",
+    "line": 6,
+    "name": "TYPED_EXECUTION_STAGE_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.typed-execution-stage-receipt.v1\""
+  },
+  {
+    "file": "crates/nando-response-actor/src/verified_delta.rs",
+    "line": 7,
+    "name": "VERIFIED_DELTA_RECEIPT_SCHEMA_V1",
+    "type": "&str",
+    "value": "\"nando.verified-delta-receipt.v1\""
+  }
+]
