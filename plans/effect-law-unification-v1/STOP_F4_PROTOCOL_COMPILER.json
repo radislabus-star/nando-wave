@@ -1,0 +1,120 @@
+{
+  "schema": "nando.stop-f4-protocol-compiler.v1",
+  "date": "2026-07-21",
+  "source_head": "4ad9ce83df7a4736a1193e2ff68b61fdc97cc095",
+  "verdict": "F4_CODE_COMPLETE_CONTROLLED_PASS_REAL_ADMISSION_BLOCKED",
+  "authority": false,
+  "f4": {
+    "compiler_code": "PASS",
+    "controlled_compiler_tests": "PASS",
+    "real_evidence_admission": "BLOCK",
+    "production_authority": false,
+    "f5_runtime_grounding": "NOT_STARTED"
+  },
+  "v1_compatibility": {
+    "golden_json_unchanged": true,
+    "goldens": {
+      "STOP_B1B_ADJUDICATION.json": "8e26fcafbbf723127cae096febde4d0a22e702b390ec98da2054a4acf73e0aeb",
+      "STOP_B1B_EXTERNAL_LABEL_TRUST.json": "ab166bd7f074e33be249846dcbb45f1c6aeb4ce4a5576656c2b52cc23d0cbfae",
+      "STOP_B1B_LABEL_MANIFEST.json": "ebb4d19258cb61c50c4fa70c67107d648fae998e857d8e5a0f9c78f6e8ea15f7",
+      "STOP_B1B_PHYSICAL_LABEL_RECEIPTS.json": "91993bfff1296e741e314a5150ff6aabd68c1842417b53a73b92d84bd8985314"
+    }
+  },
+  "v2_receipt_security": {
+    "matching_actor_verifier_roots": "PASS",
+    "different_actor_program_digest_rejects": "PASS",
+    "different_verifier_program_digest_rejects": "PASS",
+    "same_actor_verifier_program_rejects": "PASS",
+    "changed_candidate_action_rejects": "PASS",
+    "changed_pre_post_delta_root_rejects": "PASS",
+    "changed_graph_capture_root_rejects": "PASS",
+    "actor_or_verifier_receipt_mutation_rejects": "PASS",
+    "verifier_disagrees": "FAIL_RECEIPT_NO_AUTHORITY",
+    "timeout_or_environment_unavailable": "CENSORED_NO_SEMANTIC_EVIDENCE",
+    "v1_fixture_conversion": "IMPOSSIBLE_BY_SOURCE_BOUNDARY",
+    "json_roundtrip": "BYTE_IDENTICAL"
+  },
+  "resolver_integrity": {
+    "opaque_rows": true,
+    "requires_external_manifest_root": true,
+    "does_not_build_scenes": true,
+    "does_not_execute_actor": true,
+    "tampered_manifest_root_rejects": true,
+    "execution_authority": false
+  },
+  "capability": {
+    "accepted_binding_law_evidence_opaque": true,
+    "created_only_by_adjudicator": true,
+    "deserializable_from_json": false,
+    "public_constructor": false,
+    "report_can_become_capability": false,
+    "contains_selector": false,
+    "contains_protocol_mode": false,
+    "execution_authority": false
+  },
+  "compiler": {
+    "positive_coverage_complete_required": true,
+    "wrong_actions_zero_required": true,
+    "verify_failed_zero_required": true,
+    "negative_accepts_zero_required": true,
+    "unknown_negative_accept_abstains": true,
+    "search_not_exhausted_required": true,
+    "one_action_equivalence_class_required": true,
+    "abstain_clears_survivors": true,
+    "execution_authority": false
+  },
+  "controlled_protocol_mode_output": {
+    "verdict": "ProtocolModeSet",
+    "surviving_modes": 2,
+    "action_equivalence_classes": 1,
+    "positive_rows": 2,
+    "positive_rows_covered": 2,
+    "wrong_actions": 0,
+    "verify_failed": 0,
+    "negative_accepts": 0,
+    "search_exhausted": false,
+    "production_admissible": false,
+    "execution_authority": false
+  },
+  "checks": {
+    "physical_trial_v2_tests": "13/13 PASS",
+    "binding_evidence_adjudication_tests": "22/22 PASS",
+    "effect_law_v3_tests": "40/40 PASS",
+    "historical_effect_law_tests": "15/15 PASS",
+    "cargo_check_all_targets": "PASS",
+    "rustfmt_check": "PASS",
+    "git_diff_check": "PASS",
+    "full_lib_baseline": "494 PASS / 26 known FAIL",
+    "clippy": "BLOCKED_BY_EXISTING_LEGACY_SEMANTIC_ALIAS_UNWRAP_ERRORS_NO_NEW_V2_F4_DIAGNOSTICS"
+  },
+  "nanda_owner_routes": {
+    "actor_observation_owner": "PASS",
+    "verifier_owner": "PASS",
+    "trial_join_owner": "PASS",
+    "resolver_owner": "PASS",
+    "capability_owner": "PASS",
+    "compiler_owner": "PASS",
+    "authority_ready": false
+  },
+  "live_transition_gate": {
+    "verdict": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_m3": "WATCH",
+    "response_false_accepts": 0,
+    "runtime_false_accepts": 0,
+    "runtime_parity_mismatches": 0
+  },
+  "production_boundary": {
+    "production_callers_of_v2_f4_api": 0,
+    "runtime_changed": false,
+    "admission_changed": false,
+    "generation_changed": false,
+    "checkpoint_changed": false,
+    "deploy": false,
+    "restart": false,
+    "push": false,
+    "graphify_update": "SKIPPED_TO_PRESERVE_DIRTY_GRAPHIFY_OUT",
+    "real_independent_b1b_receipts": "0 / NOT_EVALUATED"
+  }
+}
