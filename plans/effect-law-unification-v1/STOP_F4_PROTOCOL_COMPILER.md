@@ -195,7 +195,9 @@ This read-only safety gate does not promote F4R2.
 
 ## Graphify
 
-Exact-commit Graphify receipt: PENDING_FINAL_COMMIT
+The exact-commit graph is stored untracked, as required by the architecture
+canon. `graphify-out/SOURCE_RECEIPT.md` records the final source commit, command,
+host, and graph counts. The generated graph is not production authority.
 
 ## Production Boundary
 

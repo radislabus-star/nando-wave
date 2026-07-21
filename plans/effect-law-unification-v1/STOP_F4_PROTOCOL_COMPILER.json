@@ -93,7 +93,9 @@
     "runtime_parity_mismatches": 0
   },
   "graphify": {
-    "status": "PENDING_FINAL_COMMIT"
+    "status": "EXACT_COMMIT_GRAPH_STORED_UNTRACKED",
+    "receipt_path": "graphify-out/SOURCE_RECEIPT.md",
+    "authority": false
   },
   "production_boundary": {
     "production_callers_of_canonical_f4r2_api": 0,
