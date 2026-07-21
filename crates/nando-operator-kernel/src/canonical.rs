@@ -27,6 +27,13 @@ pub fn valid_nonzero_sha256(value: &str) -> bool {
         && value.bytes().any(|byte| byte != b'0')
 }
 
+#[must_use]
+pub fn stable_atom_id(atom: &str) -> u64 {
+    atom.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
 fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> Result<(), &'static str> {
     match value {
         Value::Null => output.extend_from_slice(b"null"),

@@ -25,8 +25,7 @@ pub use nando_operator_kernel::canonical::{
 };
 
 pub(crate) use nando_operator_admission::{
-    AuthorizedResponsePackage, IndependentlyVerifiedExecution, ValidatedResponseAuthority,
-    finalize_runtime_receipt,
+    IndependentlyVerifiedExecution, ValidatedResponseAuthority, finalize_runtime_receipt,
 };
 
 pub const RESPONSE_EXECUTION_PAYLOAD_SCHEMA_V1: &str = "nando.response-execution-payload.v1";

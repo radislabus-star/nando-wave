@@ -9,7 +9,6 @@ use crate::{
     OnlineResponseAdmissionCandidate,
 };
 
-pub(crate) use nando_operator_admission::durable_runtime_parity_receipt_digest;
 pub use nando_operator_admission::{
     DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt,
 };

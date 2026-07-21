@@ -71,15 +71,21 @@ pub fn build_crystallized_admission_snapshot(
         let [candidate] = rebuilt.as_slice() else {
             return Err("crystallized_admission_resynthesis_failed");
         };
-        if submitted.package != candidate.package
-            || submitted.support_root_sha256 != candidate.support_root_sha256
-            || submitted.future_evidence_root_sha256 != candidate.future_evidence_root_sha256
-            || submitted.future_lineage_root_sha256 != candidate.future_lineage_root_sha256
-            || submitted.winner_seal_sha256 != candidate.winner_seal_sha256
-            || submitted.executable_parity_seal_sha256 != candidate.executable_parity_seal_sha256
-        {
-            return Err("crystallized_admission_resynthesis_mismatch");
-        }
+        let candidate_commitments = |candidate: &LiveScalarAdmissionCandidate| {
+            Ok(nando_operator_admission::AdmissionCandidateCommitments {
+                package_sha256: canonical_json_sha256(&candidate.package)?,
+                support_root_sha256: candidate.support_root_sha256.clone(),
+                future_evidence_root_sha256: candidate.future_evidence_root_sha256.clone(),
+                future_lineage_root_sha256: candidate.future_lineage_root_sha256.clone(),
+                winner_seal_sha256: candidate.winner_seal_sha256.clone(),
+                executable_parity_seal_sha256: candidate.executable_parity_seal_sha256.clone(),
+            })
+        };
+        nando_operator_admission::verify_reconstructed_admission_candidate(
+            &candidate_commitments(submitted)?,
+            &candidate_commitments(candidate)?,
+        )
+        .map_err(|_| "crystallized_admission_resynthesis_mismatch")?;
         let mut package = candidate.package.clone();
         if candidate.support.len() != package.proof.support_rows
             || candidate.future.len() != package.proof.future_rows

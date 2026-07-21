@@ -2,16 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
     AtomValueType, ResponseArgument, ResponseOperation, ResponseProgram, ResponseValueSelector,
-    SemanticRole, canonical_response_value_selector,
+    SemanticRole, canonical_response_value_selector, stable_atom_id,
 };
 use serde_json::Value;
-
-#[doc(hidden)]
-pub fn stable_atom_id(atom: &str) -> u64 {
-    atom.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-    })
-}
 
 pub fn request_phase_atom_ids(text: &str) -> Vec<u64> {
     let all_tokens = text

@@ -21,6 +21,11 @@ use crate::{
     execute_response, verify_response_independently,
 };
 
+pub use nando_operator_admission::{
+    LearnedWaveRoute, LearnedWaveSubcenter, ResponsePackageOrigin, ResponsePackageProof,
+    ResponsePackageState, ResponseRoutingComparison, ResponseRoutingPredicate,
+};
+
 pub const CONTINUATION_EXTERNAL_VERIFIER_SCHEMA: &str = "continue_handle_external_evidence.v1";
 pub const SOURCE_VALUE_EXTERNAL_VERIFIER_SCHEMA: &str = "source_value_external_evidence.v1";
 pub const CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA: &str = "custom_tool_external_evidence.v1";
@@ -37,104 +42,6 @@ fn response_operation_label(program: &ResponseProgram) -> &'static str {
         ResponseOperation::ComposeCollection { .. } => "collection",
         _ => "other",
     }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponsePackageOrigin {
-    GroundedSynthesis,
-    LegacyTemplate,
-    // Compatibility value for registries produced before authority was split.
-    RawPhaseInduction,
-    ImportedFixture,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponsePackageState {
-    Quarantine,
-    Active,
-    Revoked,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponseRoutingComparison {
-    AtMost,
-    AtLeast,
-    OneOf,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct ResponseRoutingPredicate {
-    pub role: String,
-    pub comparison: ResponseRoutingComparison,
-    pub threshold: u32,
-    #[serde(default)]
-    pub allowed_counts: Vec<u32>,
-}
-
-impl ResponseRoutingPredicate {
-    #[must_use]
-    pub fn matches_count(&self, count: u32) -> bool {
-        match self.comparison {
-            ResponseRoutingComparison::AtMost => count <= self.threshold,
-            ResponseRoutingComparison::AtLeast => count >= self.threshold,
-            ResponseRoutingComparison::OneOf => self.allowed_counts.binary_search(&count).is_ok(),
-        }
-    }
-
-    #[must_use]
-    pub fn phase_atom_id(&self) -> u64 {
-        let material = match self.comparison {
-            ResponseRoutingComparison::AtMost => {
-                format!("cardinality_at_most:{}:{}", self.role, self.threshold)
-            }
-            ResponseRoutingComparison::AtLeast => {
-                format!("cardinality_at_least:{}:{}", self.role, self.threshold)
-            }
-            ResponseRoutingComparison::OneOf => format!(
-                "cardinality_one_of:{}:{}",
-                self.role,
-                self.allowed_counts
-                    .iter()
-                    .map(u32::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ),
-        };
-        stable_atom_id(&material)
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ResponsePackageProof {
-    pub support_rows: usize,
-    pub future_rows: usize,
-    pub distinct_sessions: usize,
-    pub distinct_surfaces: usize,
-    pub wrong_accepts: usize,
-    pub runtime_parity_failures: usize,
-    pub exact_cache_overlap: usize,
-    pub wave_causal_pass: bool,
-    pub verifier_schema: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct LearnedWaveSubcenter {
-    pub center_delta_micro: Vec<i32>,
-    pub threshold_micro: i64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct LearnedWaveRoute {
-    pub cells: u16,
-    pub center_delta_micro: Vec<i32>,
-    pub threshold_micro: i64,
-    #[serde(default)]
-    pub query_atom_ids: Vec<u64>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub subcenters: Vec<LearnedWaveSubcenter>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

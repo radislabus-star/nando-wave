@@ -1,3 +1,4 @@
+mod admission_reconstruction;
 pub mod binding;
 pub mod decidability;
 mod surface;
@@ -5,6 +6,7 @@ pub mod verified_delta;
 pub mod verifier;
 mod verifier_program;
 
+pub use admission_reconstruction::*;
 pub use binding::*;
 pub use decidability::*;
 pub use verified_delta::*;
