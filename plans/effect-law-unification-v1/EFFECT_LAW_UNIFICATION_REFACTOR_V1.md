@@ -13,7 +13,9 @@ F2 canonical effect law         COMPLETE / STOP-F2 V3
 F3 dual classification          COMPLETE / STOP-F3R
 B1A binding version space       COMPLETE / INSUFFICIENT at STOP-B1A
 B1B0 scientific preregistration COMPLETE / STOP-B1B0R
-B1B binding acquisition         NOT STARTED
+B1B-S support acquisition       COMPLETE / SUPPORT FROZEN
+B1B-F future acquisition        NOT OPENED
+B1B adjudication                NOT STARTED
 F4 protocol mode compiler       BLOCKED pending B1B causal evidence
 production authority            false
 service deployment              out of scope
@@ -572,7 +574,7 @@ selector / ProtocolMode / authority    NOT CREATED
 
 ### B1B: Acquire Causal Binding Evidence
 
-B1B acquisition is not started. STOP-B1B0R preregisters H0
+B1B is split by a physical support freeze. STOP-B1B0R preregisters H0
 `relation_not_observable`, H1 `parent_action_to_capability_instance`, and six
 causal interventions without choosing either hypothesis. New traces must
 determine which, if any, pre-action relation separates the expected action
@@ -583,6 +585,24 @@ Teacher or expected action data remains evaluation-only and must not enter
 candidate extraction. B1B may produce a new trusted evidence package; it may
 not compile a selector or `ProtocolMode`.
 
+The mandatory acquisition order is:
+
+```text
+B1B-S controlled label-blind support capture
+-> independent capture owner seals exact index prefix
+-> STOP-B1B-S checkpoint
+-> B1B-F new post-freeze future capture
+-> trusted label resolver and H0/H1 adjudication
+-> STOP-B1B
+```
+
+STOP-B1B-S froze 12 controlled pre-action rows across four session lineages,
+with two rows for each I1-I6 intervention. The owner independently validated
+the canonical evidence-ledger record, capture receipt, capture-index membership,
+frozen candidate graph, and exact watermark. Expected labels are deliberately
+not joined at this stage, so positive/negative denominators remain pending the
+trusted resolver; H0 and H1 remain unproven. Future is not open.
+
 Preregistration receipt:
 
 ```text
@@ -590,6 +610,10 @@ plans/effect-law-unification-v1/STOP_B1B0_PREREGISTRATION.md
 plans/effect-law-unification-v1/STOP_B1B0_PREREGISTRATION.json
 plans/effect-law-unification-v1/STOP_B1B0R_TRUSTED_ACQUISITION_BOUNDARY.md
 plans/effect-law-unification-v1/STOP_B1B0R_PREREGISTRATION.json
+plans/effect-law-unification-v1/STOP_B1B_S_SUPPORT_FREEZE.md
+plans/effect-law-unification-v1/STOP_B1B_S_SUPPORT_FREEZE.json
+plans/effect-law-unification-v1/STOP_B1B_S_FREEZE.json
+plans/effect-law-unification-v1/STOP_B1B_S_WATERMARK.json
 ```
 
 `STOP-B1B0R` preserves the original no-run freeze and repairs its acquisition
@@ -599,6 +623,11 @@ that watermark and future records must follow it. Every label joins a concrete
 capture receipt and indexed record. Support and future remain session-disjoint,
 each partition requires at least three sessions, and one session cannot repeat
 the same `(label, intervention)` vote.
+
+`STOP-B1B-S` is support-only. Its checked-in watermark is the physical boundary
+that B1B-F must extend. Reclassifying these support rows as future, replacing the
+watermark, joining labels before all future graphs freeze, or opening F4 from
+this receipt is forbidden.
 
 STOP-B1B receipt:
 

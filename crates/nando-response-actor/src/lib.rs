@@ -2,6 +2,7 @@ mod admission_bundle;
 mod authority;
 mod backward_wave;
 mod binding_evidence;
+mod binding_evidence_capture_owner;
 mod binding_evidence_preregistration;
 mod capture_provenance;
 mod causal;
@@ -79,6 +80,13 @@ pub use binding_evidence::{
     MAX_BINDING_RELATION_EDGES_PER_ROW_V1, MAX_BINDING_REPORT_HYPOTHESES_V1,
     MAX_BINDING_REPORT_TIES_V1, MAX_BINDING_TEXT_BYTES_V1, PRE_ACTION_BINDING_SURFACE_SCHEMA_V1,
     PreActionBindingContextV1, PreActionBindingSurfaceV1, evaluate_binding_version_space_v1,
+};
+pub use binding_evidence_capture_owner::{
+    BINDING_SUPPORT_CAPTURE_BATCH_SCHEMA_V1, BINDING_SUPPORT_CAPTURE_ROW_SCHEMA_V1,
+    BINDING_SUPPORT_FREEZE_REPORT_SCHEMA_V1, BINDING_SUPPORT_FREEZE_SCHEMA_V1,
+    BindingSupportCaptureBatchV1, BindingSupportCaptureErrorV1, BindingSupportCaptureOwnerV1,
+    BindingSupportCaptureRowV1, BindingSupportFreezeReportV1, BindingSupportFreezeV1,
+    MAX_BINDING_SUPPORT_CAPTURE_ROWS_V1, MIN_BINDING_SUPPORT_CAPTURE_ROWS_V1,
 };
 pub use binding_evidence_preregistration::{
     BINDING_CAPTURE_WATERMARK_SCHEMA_V1, BINDING_EVIDENCE_PREREGISTRATION_SCHEMA_V1,

@@ -1,0 +1,35 @@
+{
+  "freeze": {
+    "acquisition_stage": "SUPPORT_FROZEN",
+    "capture_index_sha256": "6767c53f13fd42f74c55c154610ec69f534a874efee68f2eaf722b46bc5055ea",
+    "execution_authority": false,
+    "expected_labels_joined": false,
+    "f4_status": "BLOCKED",
+    "freeze_receipt_sha256": "c614e71c8856eb8c5787df694be4a79474caf5206a03739b7eec29e3a018241f",
+    "future_status": "NOT_OPENED",
+    "h0_status": "UNPROVEN",
+    "h1_status": "UNPROVEN",
+    "intervention_rows": {
+      "I1": 2,
+      "I2": 2,
+      "I3": 2,
+      "I4": 2,
+      "I5": 2,
+      "I6": 2
+    },
+    "schema": "nando.binding-support-freeze-report.v1",
+    "stop_id": "STOP-B1B-S",
+    "support_graphs_root_sha256": "bcdb667e6181f3f3db50949a596548a921cb98401a1ec2d86eaf6e2ef7b52946",
+    "support_label_denominators": "PENDING_TRUSTED_RESOLVER",
+    "support_lineages_root_sha256": "f703c9f74de2cccfaade3eade94faa4141d7eea547f63e01aebc0abef3b093fe",
+    "support_rows": 12,
+    "support_rows_root_sha256": "0d8f8a5eb6d4bb1639c0d2f8cd66ad303ebb7512dbd25335af62677598e6745f",
+    "support_session_lineages": 4,
+    "watermark_bytes_sha256": "4eb5160744dfdf0ffd3717fbe91a918cadab797532b3bfa733172b3926dcbaa5",
+    "watermark_next_sequence": 12
+  },
+  "freeze_file_sha256": "8a856f4abc9f56b3c618c78acb0d38e9a93b3b10a0f0a7cf1dc0248f38bb2a5f",
+  "source_capture_index_file_sha256": "0d46b9bd6d6f60069c7887cf079d3140d8fbc5534e44d3fa4ee1986675fb5925",
+  "support_batch_file_sha256": "559b9068713f83f7b3476830420df91c08b944cc11f80cafe75106d283f98ff7",
+  "watermark_file_sha256": "4eb5160744dfdf0ffd3717fbe91a918cadab797532b3bfa733172b3926dcbaa5"
+}
