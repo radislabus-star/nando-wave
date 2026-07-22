@@ -24,7 +24,7 @@ use crate::{
 #[cfg(test)]
 use nando_operator_kernel::{
     AtomSource, balanced_wave_hidden_atom_ids, ranked_wave_pairs, ranked_wave_triples,
-    relation_atom_phase_id,
+    relation_atom_phase_id, relation_frame_hidden_wave_atom_ids,
 };
 
 pub use nando_operator_admission::{
@@ -32,9 +32,8 @@ pub use nando_operator_admission::{
     ResponsePackageState, ResponseRoutingComparison, ResponseRoutingPredicate,
 };
 pub use nando_operator_kernel::{
-    relation_frame_hidden_wave_atom_ids, relation_frame_online_routing_atom_ids,
-    relation_frame_phase_atom_ids, relation_frame_routing_atom_ids,
-    response_program_required_routing_atom_ids,
+    relation_frame_online_routing_atom_ids, relation_frame_phase_atom_ids,
+    relation_frame_routing_atom_ids, response_program_required_routing_atom_ids,
 };
 
 pub const CONTINUATION_EXTERNAL_VERIFIER_SCHEMA: &str = "continue_handle_external_evidence.v1";
