@@ -1,0 +1,42 @@
+{
+  "worker_verdict": "PASS",
+  "compile_exit": 0,
+  "test_exit": 0,
+  "clippy_exit": 0,
+  "compile_seconds": 12.673973718,
+  "test_seconds": 2.189212399,
+  "test_binary": "/home/e/projects/nando-wave-build/target-proof/debug/deps/nando_operator_learning-00bd96bd3d7cfff2",
+  "target": {
+    "path": "/home/e/projects/nando-wave-build/target-proof",
+    "bytes_before_prune": 193305331,
+    "bytes_after_prune": 193305331,
+    "prune": "none"
+  },
+  "schema": "nando.remote-gate.v1",
+  "head": "81f0b8cb9b464d7ceaf794da0414911658f40866",
+  "remote_host": "e@192.168.3.94",
+  "remote_source": "/home/e/projects/nando-wave-dev",
+  "profile": "stop",
+  "package": "nando-operator-learning",
+  "overlay": {
+    "scope_count": 2,
+    "untracked_files": 1,
+    "patch_sha256": "15711f2410acf9425e433e7f9281257792139159466863580d45861405afb8b6"
+  },
+  "fingerprint_verdict": "PASS",
+  "fingerprint_retirements": {
+    "test_failures": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "clippy_diagnostics": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "graphify": {
+    "verdict": "NOT_RUN",
+    "seconds": null
+  },
+  "new_background_build_processes": 0
+}
