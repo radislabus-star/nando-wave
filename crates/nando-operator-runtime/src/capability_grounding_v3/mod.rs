@@ -37,6 +37,7 @@ pub struct MappingActionAttemptV3 {
     mapping_sha256: String,
     runtime_source_role_id: u16,
     phase_fit_fixed: i64,
+    phase_components_fixed: Box<[nando_core::wave::RuntimeRelationPhaseComponent]>,
     capability_id: Option<u16>,
     verdict: ActionDerivationVerdictV3,
     semantic_action_sha256: Option<String>,

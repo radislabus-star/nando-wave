@@ -358,6 +358,18 @@ pub struct BlueprintFutureReport {
 pub struct RuntimeRoleMapping {
     local_to_canonical: Box<[u8]>,
     phase_fit_fixed: i64,
+    phase_components_fixed: Box<[RuntimeRelationPhaseComponent]>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RuntimeRelationPhaseComponent {
+    plane: u8,
+    source_role: u8,
+    target_role: u8,
+    observed_re_fixed: i32,
+    observed_im_fixed: i32,
+    expected_re_fixed: i32,
+    expected_im_fixed: i32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1634,9 +1646,10 @@ impl RuntimeRoleBinder {
             .into_iter()
             .filter_map(|mapping| {
                 exact_runtime_relation_fit(bundle, relation_program, &mapping).map(
-                    |phase_fit_fixed| RuntimeRoleMapping {
+                    |(phase_fit_fixed, phase_components_fixed)| RuntimeRoleMapping {
                         local_to_canonical: mapping.into_boxed_slice(),
                         phase_fit_fixed,
+                        phase_components_fixed,
                     },
                 )
             })
@@ -1718,6 +1731,11 @@ impl RuntimeRoleMapping {
     }
 
     #[must_use]
+    pub fn phase_components_fixed(&self) -> &[RuntimeRelationPhaseComponent] {
+        &self.phase_components_fixed
+    }
+
+    #[must_use]
     pub fn local_role_for(&self, canonical_role: u8) -> Option<u8> {
         self.local_to_canonical
             .iter()
@@ -1743,12 +1761,13 @@ fn exact_runtime_relation_fit(
     bundle: &SurfaceFragmentBundle,
     relation_program: &OperatorCircuit,
     mapping: &[u8],
-) -> Option<i64> {
+) -> Option<(i64, Box<[RuntimeRelationPhaseComponent]>)> {
     if bundle.relations.len() != relation_program.relations().len() {
         return None;
     }
     let mut matched = BTreeSet::new();
     let mut phase_fit_fixed = 0_i64;
+    let mut phase_components_fixed = Vec::with_capacity(bundle.relations.len());
     for observed in &bundle.relations {
         let cell = OperatorRelationCell {
             plane: observed.plane,
@@ -1766,8 +1785,73 @@ fn exact_runtime_relation_fit(
         let aligned = align_phase(observed.phase_anchor, expected.phase_anchor);
         phase_fit_fixed =
             phase_fit_fixed.saturating_add((aligned.re * PhaseModeAggregate::SCALE).round() as i64);
+        phase_components_fixed.push(RuntimeRelationPhaseComponent {
+            plane: cell.plane,
+            source_role: cell.source_role,
+            target_role: cell.target_role,
+            observed_re_fixed: runtime_phase_fixed(observed.phase_anchor.re),
+            observed_im_fixed: runtime_phase_fixed(observed.phase_anchor.im),
+            expected_re_fixed: runtime_phase_fixed(expected.phase_anchor.re),
+            expected_im_fixed: runtime_phase_fixed(expected.phase_anchor.im),
+        });
     }
-    (matched.len() == relation_program.relations().len()).then_some(phase_fit_fixed)
+    (matched.len() == relation_program.relations().len())
+        .then_some((phase_fit_fixed, phase_components_fixed.into_boxed_slice()))
+}
+
+fn runtime_phase_fixed(value: f64) -> i32 {
+    (value.clamp(-1.0, 1.0) * PhaseModeAggregate::SCALE).round() as i32
+}
+
+impl RuntimeRelationPhaseComponent {
+    pub const SCALE_FIXED: i64 = PhaseModeAggregate::SCALE as i64;
+
+    #[must_use]
+    pub fn try_from_fixed(
+        plane: u8,
+        source_role: u8,
+        target_role: u8,
+        observed: (i32, i32),
+        expected: (i32, i32),
+    ) -> Option<Self> {
+        [observed.0, observed.1, expected.0, expected.1]
+            .into_iter()
+            .all(|value| i64::from(value).abs() <= Self::SCALE_FIXED)
+            .then_some(Self {
+                plane,
+                source_role,
+                target_role,
+                observed_re_fixed: observed.0,
+                observed_im_fixed: observed.1,
+                expected_re_fixed: expected.0,
+                expected_im_fixed: expected.1,
+            })
+    }
+
+    #[must_use]
+    pub const fn plane(self) -> u8 {
+        self.plane
+    }
+
+    #[must_use]
+    pub const fn source_role(self) -> u8 {
+        self.source_role
+    }
+
+    #[must_use]
+    pub const fn target_role(self) -> u8 {
+        self.target_role
+    }
+
+    #[must_use]
+    pub const fn observed_fixed(self) -> (i32, i32) {
+        (self.observed_re_fixed, self.observed_im_fixed)
+    }
+
+    #[must_use]
+    pub const fn expected_fixed(self) -> (i32, i32) {
+        (self.expected_re_fixed, self.expected_im_fixed)
+    }
 }
 
 fn score_blueprint_future(

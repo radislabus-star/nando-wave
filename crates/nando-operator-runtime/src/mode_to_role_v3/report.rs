@@ -46,6 +46,11 @@ impl RuntimeStructuralMappingV3 {
     pub const fn phase_fit_fixed(&self) -> i64 {
         self.phase_fit_fixed
     }
+
+    #[must_use]
+    pub fn phase_components_fixed(&self) -> &[nando_core::wave::RuntimeRelationPhaseComponent] {
+        &self.phase_components_fixed
+    }
 }
 
 impl ModeStructuralBindingReportV3 {

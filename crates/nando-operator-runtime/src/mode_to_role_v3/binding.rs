@@ -119,6 +119,7 @@ pub fn bind_structural_modes_v3(
                     runtime_source_role_id: candidate.role_id,
                     local_to_canonical: mapping.local_to_canonical().to_vec().into_boxed_slice(),
                     phase_fit_fixed: mapping.phase_fit_fixed(),
+                    phase_components_fixed: mapping.phase_components_fixed().into(),
                 }
             }));
         }

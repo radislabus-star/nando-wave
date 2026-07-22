@@ -25,6 +25,11 @@ impl MappingActionAttemptV3 {
     }
 
     #[must_use]
+    pub fn phase_components_fixed(&self) -> &[nando_core::wave::RuntimeRelationPhaseComponent] {
+        &self.phase_components_fixed
+    }
+
+    #[must_use]
     pub const fn capability_id(&self) -> Option<u16> {
         self.capability_id
     }

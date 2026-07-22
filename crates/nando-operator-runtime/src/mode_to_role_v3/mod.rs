@@ -90,6 +90,7 @@ pub struct RuntimeStructuralMappingV3 {
     runtime_source_role_id: u16,
     local_to_canonical: Box<[u8]>,
     phase_fit_fixed: i64,
+    phase_components_fixed: Box<[nando_core::wave::RuntimeRelationPhaseComponent]>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
