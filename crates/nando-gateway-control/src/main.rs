@@ -1,4 +1,5 @@
 mod f5_runtime_status;
+mod signal_map;
 
 use axum::extract::{Form, Path, State};
 use axum::http::{StatusCode, header};
@@ -33,73 +34,6 @@ struct AppState {
 #[derive(Deserialize)]
 struct ModeForm {
     mode: String,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum FlowState {
-    Live,
-    Pass,
-    Wait,
-    Block,
-    Locked,
-}
-
-impl FlowState {
-    fn class(self) -> &'static str {
-        match self {
-            Self::Live => "live",
-            Self::Pass => "pass",
-            Self::Wait => "wait",
-            Self::Block => "block",
-            Self::Locked => "locked",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Live => "LIVE",
-            Self::Pass => "PASS",
-            Self::Wait => "WAIT",
-            Self::Block => "BLOCK",
-            Self::Locked => "LOCKED",
-        }
-    }
-}
-
-struct SignalArchitectureView<'a> {
-    partition: u64,
-    generation: u64,
-    transitions: u64,
-    support: u64,
-    matching: u64,
-    matching_sessions: u64,
-    after_watermark: u64,
-    independent: u64,
-    consistent: u64,
-    routed: u64,
-    future: u64,
-    blocker: &'a str,
-    admission_verdict: &'a str,
-    admission_blocker: &'a str,
-    admission_blocker_stage: &'a str,
-    admission_age_seconds: u64,
-    admission_relation_candidates: u64,
-    admission_future_rows: u64,
-    admission_runtime_parity_cases: u64,
-    active_packages: u64,
-    online_ready: bool,
-}
-
-struct SignalStage<'a> {
-    id: &'a str,
-    step: &'a str,
-    title: &'a str,
-    logic: &'a str,
-    metric: String,
-    metric_label: &'a str,
-    module: &'a str,
-    owner: &'a str,
-    state: FlowState,
 }
 
 #[tokio::main]
@@ -477,8 +411,9 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let build_commit = metric_str(&build_manifest, "git_commit", "MISSING");
     let build_commit_short = build_commit.get(..12).unwrap_or(build_commit);
     let module_version_rows = module_version_rows(&build_manifest);
-    let signal_architecture = signal_architecture_html(
-        &SignalArchitectureView {
+    let proof_summary = f5_runtime_status::proof_summary();
+    let signal_architecture = signal_map::render(
+        &signal_map::LiveSignalView {
             partition: signal_partition,
             generation: signal_generation,
             transitions: online_transitions,
@@ -510,7 +445,9 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             active_packages: response_active,
             online_ready: online_status == "READY",
         },
+        &proof_summary,
         &build_manifest,
+        &state.config.model_label,
     );
     let research_architecture = f5_runtime_status::panel_html();
     let body = format!(
@@ -520,20 +457,22 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="15">
-<title>Nando Gateway</title>
+<title>Nando Machine · Signal Control</title>
 <style>
 :root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
-body {{ margin:0; background:#111315; font-size:15px; line-height:1.5; }}
+body {{ margin:0; background:#111315; font-size:16px; line-height:1.5; }}
 header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1px solid #4a5055; }}
-.header-inner {{ width:min(1180px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
-.brand {{ display:flex; align-items:baseline; gap:12px; min-width:0; }}
+.header-inner {{ width:min(1280px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
+.brand {{ display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 14px; min-width:0; }}
 h1 {{ margin:0; font-size:18px; letter-spacing:0; text-transform:uppercase; }}
 .build {{ color:#7f8991; font-size:12px; overflow-wrap:anywhere; }}
+.model-id {{ color:#8fd5ff; font-size:12px; font-weight:700; }}
+.model-id::before {{ content:"MODEL "; color:#66727a; font-weight:400; }}
 .mode-wrap {{ display:flex; align-items:center; gap:10px; }}
 .mode-label {{ color:#7f8991; font-size:12px; text-transform:uppercase; }}
 .mode {{ color:#66d98b; font-size:14px; font-weight:700; }}
-main {{ width:min(1180px,100%); margin:0 auto; padding:14px 20px 28px; }}
+main {{ width:min(1280px,100%); margin:0 auto; padding:14px 20px 28px; }}
 .controls {{ display:flex; flex-wrap:wrap; gap:12px; margin:0 0 12px; }}
 .controls form {{ margin:0; }}
 button {{ min-height:0; padding:2px 0; border:0; border-radius:0; background:transparent; color:#aeb7bf; font:700 13px inherit; cursor:pointer; }}
@@ -553,6 +492,7 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .state-chip {{ color:#8b949b; font-size:12px; font-weight:700; white-space:nowrap; }}
 .state-chip::before {{ content:"["; }} .state-chip::after {{ content:"]"; }}
 .state-chip.live,.state-chip.pass {{ color:#66d98b; }}
+.state-chip.proven {{ color:#82c7ff; }}
 .state-chip.wait {{ color:#e0b35a; }}
 .state-chip.block {{ color:#ff6b63; }}
 .state-chip.locked {{ color:#70777d; }}
@@ -572,6 +512,32 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .terminal-failure span {{ color:#ef938e; }}
 .terminal-failure code {{ color:#b87f7b; margin-left:10px; }}
 .terminal-rule {{ padding:8px 2px 0; color:#6f7980; font-size:12px; }}
+.identity-line {{ display:flex; flex-wrap:wrap; gap:5px 22px; margin:0 0 10px; padding:8px 0; border-top:1px solid #293035; border-bottom:1px solid #293035; color:#8b969e; font-size:12px; }}
+.identity-line b {{ color:#cbd4da; font-weight:700; }}
+.current-blocker {{ display:grid; grid-template-columns:150px minmax(220px,auto) minmax(320px,1fr); gap:8px 16px; align-items:baseline; margin:0 0 10px; padding:10px 12px; border-left:3px solid #ff6b63; background:#151011; }}
+.current-blocker .blocker-label {{ color:#ff6b63; font-size:12px; font-weight:700; }}
+.current-blocker strong {{ color:#ffd1ce; font-size:14px; }}
+.current-blocker p {{ margin:0; color:#b88d8a; font-size:12px; }}
+.unified-tree {{ padding:12px 14px; }}
+.map-stage {{ min-width:760px; padding:3px 0; }}
+.map-stage-main {{ display:grid; grid-template-columns:38px 62px minmax(260px,1fr) minmax(150px,auto) 78px; align-items:baseline; gap:8px; }}
+.map-stage-meta {{ display:flex; flex-wrap:wrap; gap:3px 18px; padding-left:108px; color:#68747c; font-size:12px; }}
+.map-stage-meta .signal-state {{ color:#89949b; }}
+.map-stage.proven .stage-title {{ color:#b8ddf8; }}
+.map-stage.proven .stage-metric {{ color:#82c7ff; }}
+.map-stage.block .stage-title,.map-stage.block .stage-metric {{ color:#ff7770; }}
+.map-stage.locked .stage-title,.map-stage.locked .stage-metric {{ color:#687178; }}
+.map-edge {{ display:grid; grid-template-columns:38px minmax(0,1fr); min-width:760px; gap:8px; padding:2px 0 4px; color:#68747c; font-size:12px; }}
+.map-branch {{ display:grid; grid-template-columns:38px minmax(250px,1fr) auto; min-width:760px; gap:8px; margin:7px 0 3px; padding-top:7px; border-top:1px dotted #30383d; color:#7f8a92; font-size:12px; }}
+.map-branch strong {{ color:#dce3e7; font-size:13px; }}
+.map-branch.live strong {{ color:#79dfa0; }}
+.map-branch.proven strong {{ color:#82c7ff; }}
+.map-evidence {{ display:flex; flex-wrap:wrap; gap:3px 16px; min-width:760px; padding:3px 0 7px 108px; color:#74818a; font-size:12px; }}
+.map-evidence span::before {{ content:"· "; color:#485158; }}
+.map-blocked-edge {{ display:grid; grid-template-columns:38px 180px minmax(300px,1fr); min-width:760px; gap:8px; margin:4px 0; padding:7px 0; border-top:1px solid #5c2b29; border-bottom:1px solid #5c2b29; color:#d98a85; font-size:12px; }}
+.map-blocked-edge strong {{ color:#ff6b63; }}
+.proof-console {{ padding:4px 0 14px; border-bottom:1px solid #24292d; }}
+.proof-console .research-architecture {{ margin-top:0; }}
 .research-architecture {{ margin-top:16px; }}
 .research-architecture .architecture-title h2 {{ color:#89bff2; }}
 .research-architecture .architecture-state {{ flex-wrap:wrap; justify-content:flex-end; }}
@@ -640,12 +606,25 @@ td:last-child {{ text-align:right; font-weight:700; }}
   .console-panel.wide .console-table td {{ width:100%; padding:0; border:0; text-align:left; }}
   .console-panel.wide .console-table td:first-child {{ padding-bottom:2px; }}
   .console-toolbar {{ align-items:flex-start; flex-direction:column; gap:2px; }}
+  .identity-line {{ flex-direction:column; gap:3px; }}
+  .current-blocker {{ grid-template-columns:1fr; gap:3px; }}
+  .map-stage,.map-edge,.map-branch,.map-evidence,.map-blocked-edge {{ min-width:0; }}
+  .map-stage-main {{ grid-template-columns:30px 52px minmax(0,1fr); gap:4px; }}
+  .map-stage-main .stage-metric {{ grid-column:3; text-align:left; white-space:normal; overflow-wrap:anywhere; }}
+  .map-stage-main .state-chip {{ grid-column:3; justify-self:start; }}
+  .map-stage-meta {{ padding-left:86px; gap:2px 10px; overflow-wrap:anywhere; }}
+  .map-edge {{ grid-template-columns:30px minmax(0,1fr); }}
+  .map-branch {{ grid-template-columns:30px minmax(0,1fr); }}
+  .map-branch span:last-child {{ grid-column:2; }}
+  .map-evidence {{ padding-left:86px; }}
+  .map-blocked-edge {{ grid-template-columns:30px minmax(0,1fr); }}
+  .map-blocked-edge strong,.map-blocked-edge span:last-child {{ grid-column:2; }}
 }}
 </style>
 </head>
 <body>
 <header><div class="header-inner">
-<div class="brand"><h1>Nando Gateway</h1><span class="build">build {build_id} · {build_commit_short}</span></div>
+<div class="brand"><h1>Nando Machine</h1><span class="model-id">{model_label}</span><span class="build">deployed {build_id} · {build_commit_short}</span></div>
 <div class="mode-wrap"><span class="mode-label">Режим</span><span class="mode">{mode}</span></div>
 </div></header>
 <main>
@@ -655,7 +634,6 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="CPU"><button{cpu_disabled}>CPU</button></form>
 </div>
 {signal_architecture}
-{research_architecture}
 <div class="metric-grid compact">
 <section class="band"><h2>Продуктовый результат</h2><table>
 <tr><td>Обычный трафик на CPU</td><td>{cpu_share}</td></tr>
@@ -670,8 +648,9 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <tr><td>Admission emitted / blocked</td><td>{online_emitted} / {online_blocked}</td></tr>
 </table></section>
 </div>
-<details id="technical-details" class="technical-console"><summary><span class="technical-toggle" aria-hidden="true"></span><span class="technical-summary-title">ТЕХНИЧЕСКИЕ ДЕТАЛИ</span><span class="technical-summary-meta">LIVE SNAPSHOT · AUTO 15S</span></summary><div class="advanced">
-<div class="console-toolbar"><span class="console-path">nando://control/diagnostics</span><span>build {build_id} · {build_commit_short}</span></div>
+<details id="technical-details" class="technical-console"><summary><span class="technical-toggle" aria-hidden="true"></span><span class="technical-summary-title">ДИАГНОСТИКА И ДОКАЗАТЕЛЬСТВА</span><span class="technical-summary-meta">LIVE SNAPSHOT · AUTO 15S</span></summary><div class="advanced">
+<div class="console-toolbar"><span class="console-path">nando://control/signal-map</span><span>model {model_label} · build {build_id} · {build_commit_short}</span></div>
+<div class="proof-console">{research_architecture}</div>
 <div class="technical-layout">
 <section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> systemctl <span class="console-arg">--scope nando</span></h2><table class="console-table">{service_rows}</table></section>
 	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> admission inspect <span class="console-arg">--strict</span></h2><table class="console-table">
@@ -780,6 +759,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
 </body>
 </html>"#,
         mode = current.mode,
+        model_label = html_escape(&state.config.model_label),
         service_rows = service_rows,
         build_id = html_escape(build_id),
         build_commit_short = html_escape(build_commit_short),
@@ -965,311 +945,6 @@ fn collection_blockers_text(status: &Value) -> String {
             .map(|(blocker, count)| format!("{blocker} ×{count}"))
             .collect::<Vec<_>>()
             .join("; ")
-    }
-}
-
-fn signal_architecture_html(view: &SignalArchitectureView<'_>, manifest: &Value) -> String {
-    let future_state = if view.future >= 32 {
-        FlowState::Pass
-    } else {
-        FlowState::Wait
-    };
-    let admission_state = if view.future < 32 {
-        FlowState::Locked
-    } else if view.admission_verdict == "PASS" {
-        FlowState::Pass
-    } else if view.admission_verdict == "BLOCK" {
-        FlowState::Block
-    } else {
-        FlowState::Wait
-    };
-    let cpu_state = if view.active_packages > 0 {
-        FlowState::Live
-    } else {
-        FlowState::Locked
-    };
-    let overall_state = if admission_state == FlowState::Block {
-        FlowState::Block
-    } else if cpu_state == FlowState::Live {
-        FlowState::Live
-    } else {
-        FlowState::Wait
-    };
-    let stages = [
-        SignalStage {
-            id: "capture",
-            step: "00",
-            title: "Захват завершённых переходов",
-            logic: "Формирует state_before / action / state_after и receipt для проверенного teacher-перехода.",
-            metric: view.transitions.to_string(),
-            metric_label: "teacher transitions",
-            module: "Streaming worker",
-            owner: "nando-transition-serving::session_stream",
-            state: if view.online_ready {
-                FlowState::Live
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "support",
-            step: "01",
-            title: "Замороженный support",
-            logic: "Закрепляет receipt-backed support и immutable root текущего operator circuit.",
-            metric: format!("{} / 32", view.support),
-            metric_label: "support receipts",
-            module: "Teacher/student miner",
-            owner: "nando-response-actor::online_state",
-            state: if view.support >= 32 {
-                FlowState::Pass
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "law-match",
-            step: "02",
-            title: "Совпадение с relation-law",
-            logic: "Сравнивает новые runtime parity frames с teacher signature и выбранным cohort.",
-            metric: view.matching.to_string(),
-            metric_label: "current diagnostic window; sessions shown below",
-            module: "Teacher/student miner",
-            owner: "online_state::parity_diagnostics",
-            state: if view.matching > 0 {
-                FlowState::Pass
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "watermark",
-            step: "03",
-            title: "Event-time watermark",
-            logic: "Оставляет только события новее max(support watermark, repair watermark).",
-            metric: view.after_watermark.to_string(),
-            metric_label: "current diagnostic window; not cumulative",
-            module: "Frozen future",
-            owner: "online_state::future_watermark",
-            state: if view.after_watermark > 0 {
-                FlowState::Pass
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "independence",
-            step: "04",
-            title: "Независимость от support",
-            logic: "Исключает повтор frame, session, intent и event из замороженного support.",
-            metric: view.independent.to_string(),
-            metric_label: "current diagnostic window; not cumulative",
-            module: "Frozen future",
-            owner: "online_state::independence_filter",
-            state: if view.independent > 0 {
-                FlowState::Pass
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "typed-parity",
-            step: "05",
-            title: "Typed program parity",
-            logic: "Проверяет, что winner program воспроизводит ожидаемую структуру; mismatch даёт ABSTAIN.",
-            metric: view.consistent.to_string(),
-            metric_label: "current diagnostic window; not cumulative",
-            module: "Typed DSL + verifier",
-            owner: "synthesis::program_is_consistent",
-            state: if view.consistent > 0 {
-                FlowState::Pass
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "future-route",
-            step: "06",
-            title: "Маршрутизация в generation",
-            logic: "Winner должен направить frame в тот же cohort и подтверждённый physical adapter.",
-            metric: view.routed.to_string(),
-            metric_label: "current diagnostic window; not cumulative",
-            module: "Teacher/student miner",
-            owner: "cegis::winner_routes_frame",
-            state: if view.routed > 0 {
-                FlowState::Pass
-            } else {
-                FlowState::Wait
-            },
-        },
-        SignalStage {
-            id: "future-store",
-            step: "07",
-            title: "Generation-owned future storage",
-            logic: "Должен атомарно записать frame и parity receipt в immutable future поколения g+1.",
-            metric: format!("{} / 32", view.future),
-            metric_label: "cumulative generation-owned receipts",
-            module: "Frozen future",
-            owner: "generation.future + parity_receipts.future",
-            state: future_state,
-        },
-        SignalStage {
-            id: "admission",
-            step: "08",
-            title: "External admission",
-            logic: "Пересобирает proof, проверяет 32 future rows, zero wrong/parity и только затем выдаёт package.",
-            metric: if view.future < 32 {
-                format!("proof {} / 32", view.future)
-            } else {
-                format!(
-                    "{} · candidates {}",
-                    view.admission_verdict, view.admission_relation_candidates
-                )
-            },
-            metric_label: if view.future < 32 {
-                "не запускался"
-            } else {
-                view.admission_blocker
-            },
-            module: "Admission",
-            owner: "nando-response-actor::online_admission",
-            state: admission_state,
-        },
-        SignalStage {
-            id: "hot-cpu",
-            step: "09",
-            title: "ACTIVE CPU execution",
-            logic: "Role grounding и actor исполняют package; независимый verifier всё ещё может вернуть ABSTAIN.",
-            metric: format!("{} ACTIVE packages", view.active_packages),
-            metric_label: "registry authority; global",
-            module: "Rust serving",
-            owner: "runtime::execute_response",
-            state: cpu_state,
-        },
-    ];
-    let edge_labels = [
-        "verified transition receipt".to_owned(),
-        "support root + winner cohort".to_owned(),
-        format!("{} matching sessions", view.matching_sessions),
-        "event-time disjointness".to_owned(),
-        "typed structural replay".to_owned(),
-        "winner route predicate".to_owned(),
-        "durable accumulator; diagnostic-window counts are not 1:1".to_owned(),
-        "proof-carrying candidate".to_owned(),
-        "ACTIVE authority lease".to_owned(),
-    ];
-    let mut tree = String::new();
-    for (index, stage) in stages.iter().enumerate() {
-        tree.push_str(&signal_stage_html(
-            stage,
-            manifest,
-            view.partition,
-            index + 1 == stages.len(),
-        ));
-        if index + 1 == stages.len() {
-            continue;
-        }
-        if index == 7 && view.support >= 32 && view.future < 32 {
-            tree.push_str(&format!(
-                "<div class=\"terminal-line terminal-failure\" data-edge=\"future-to-admission\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>future {} / 32; не хватает {}</span><code>{}</code></div>",
-                view.future,
-                32_u64.saturating_sub(view.future),
-                html_escape(view.blocker)
-            ));
-        } else if index == 7 && admission_state == FlowState::Block {
-            tree.push_str(&format!(
-                "<div class=\"terminal-line terminal-failure\" data-edge=\"admission-controller\"><span class=\"tree-glyph\">├─</span><strong>BLOCK НА ЭТОМ РЕБРЕ</strong><span>controller BLOCK at {}; snapshot age {} s; candidates {}; future {}; parity cases {}</span><code>{}</code></div>",
-                html_escape(view.admission_blocker_stage),
-                view.admission_age_seconds,
-                view.admission_relation_candidates,
-                view.admission_future_rows,
-                view.admission_runtime_parity_cases,
-                html_escape(view.admission_blocker)
-            ));
-        } else if let Some(label) = edge_labels.get(index) {
-            tree.push_str(&format!(
-                "<div class=\"terminal-edge\"><span class=\"tree-glyph\">│</span>{}</div>",
-                html_escape(label)
-            ));
-        }
-    }
-    format!(
-        r#"<section class="architecture" data-signal-status="{}">
-<div class="architecture-head">
-<div class="architecture-title"><h2>NANDO SIGNAL PATH</h2><p>live trace -&gt; frozen future -&gt; admission -&gt; CPU</p></div>
-<div class="architecture-state"><span class="state-chip {}">{}</span><span class="architecture-meta">partition v{} · generation {}</span></div>
-</div>
-<div class="flow-tree">{}</div>
-<div class="terminal-rule">support != future | verifier = authority | missing proof = ABSTAIN</div>
-</section>"#,
-        overall_state.class(),
-        overall_state.class(),
-        overall_state.label(),
-        view.partition,
-        view.generation,
-        tree
-    )
-}
-
-fn signal_stage_html(
-    stage: &SignalStage<'_>,
-    manifest: &Value,
-    runtime_partition: u64,
-    last: bool,
-) -> String {
-    let branch = if last { "└─" } else { "├─" };
-    format!(
-        r#"<div class="terminal-stage {}" data-stage="{}" title="{}">
-<div class="terminal-line"><span class="tree-glyph">{}</span><span class="stage-index">[{}]</span><strong class="stage-title">{}</strong><span class="stage-metric">{}</span><span class="state-chip {}">{}</span></div>
-<div class="terminal-detail"><span class="tree-glyph">│</span>{} · {} · {}</div>
-</div>"#,
-        stage.state.class(),
-        html_escape(stage.id),
-        html_escape(stage.logic),
-        branch,
-        html_escape(stage.step),
-        html_escape(stage.title),
-        html_escape(&stage.metric),
-        stage.state.class(),
-        stage.state.label(),
-        module_identity_text(manifest, stage.module, runtime_partition),
-        html_escape(stage.owner),
-        html_escape(stage.metric_label)
-    )
-}
-
-fn module_identity_text(manifest: &Value, module_name: &str, runtime_partition: u64) -> String {
-    let module = manifest
-        .get("modules")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .find(|module| module.get("name").and_then(Value::as_str) == Some(module_name));
-    let manifest_version = module
-        .and_then(|module| module.get("version"))
-        .and_then(Value::as_str)
-        .unwrap_or("MISSING");
-    let version = if module_name == "Frozen future" && runtime_partition > 0 {
-        format!("partition.v{runtime_partition}")
-    } else {
-        manifest_version.to_owned()
-    };
-    let contract = module
-        .and_then(|module| module.get("contract"))
-        .and_then(Value::as_str)
-        .unwrap_or("MISSING");
-    format!(
-        "{} {} {}",
-        html_escape(module_name),
-        html_escape(&version),
-        html_escape(&compact_identity(contract))
-    )
-}
-
-fn compact_identity(value: &str) -> String {
-    if value.len() <= 24 {
-        value.to_owned()
-    } else {
-        format!("{}...", value.chars().take(12).collect::<String>())
     }
 }
 
@@ -1514,183 +1189,6 @@ mod tests {
         let selected = strongest_signal_generation(&generations).expect("generation");
         assert_eq!(metric_u64(selected, "generation"), 5);
         assert_eq!(metric_u64(selected, "future_rows"), 18);
-    }
-
-    #[test]
-    fn architecture_tree_places_threshold_gap_after_durable_storage() {
-        let manifest = json!({
-            "modules": [
-                {"name":"Streaming worker","version":"event-driven.v2","contract":"0-events-or-60s","sha256":"aaaaaaaaaaaa1111"},
-                {"name":"Teacher/student miner","version":"strategy.v3","contract":"state.v3","sha256":"bbbbbbbbbbbb2222"},
-                {"name":"Frozen future","version":"partition.v14","contract":"event-time-disjoint","sha256":"cccccccccccc3333"},
-                {"name":"Typed DSL + verifier","version":"registry.v6","contract":"typed-v6","sha256":"dddddddddddd4444"},
-                {"name":"Admission","version":"gate.v2","contract":"proof-carrying","sha256":"eeeeeeeeeeee5555"},
-                {"name":"Rust serving","version":"0.1.0","contract":"runtime-v6","sha256":"ffffffffffff6666"}
-            ]
-        });
-        let html = signal_architecture_html(
-            &SignalArchitectureView {
-                partition: 14,
-                generation: 4,
-                transitions: 14_878,
-                support: 32,
-                matching: 55,
-                matching_sessions: 7,
-                after_watermark: 22,
-                independent: 18,
-                consistent: 18,
-                routed: 18,
-                future: 0,
-                blocker: "future_rows_below_32",
-                admission_verdict: "MISSING",
-                admission_blocker: "controller_report_missing",
-                admission_blocker_stage: "controller_report",
-                admission_age_seconds: 0,
-                admission_relation_candidates: 0,
-                admission_future_rows: 0,
-                admission_runtime_parity_cases: 0,
-                active_packages: 0,
-                online_ready: true,
-            },
-            &manifest,
-        );
-
-        let route = html.find("data-stage=\"future-route\"").expect("route");
-        let storage = html.find("data-stage=\"future-store\"").expect("storage");
-        let failure = html
-            .find("data-edge=\"future-to-admission\"")
-            .expect("failure edge");
-        assert!(route < storage && storage < failure);
-        assert!(html.contains("diagnostic-window counts are not 1:1"));
-        assert!(html.contains("future_rows_below_32"));
-        assert!(html.contains("partition.v14"));
-        assert!(html.contains("data-stage=\"admission\""));
-        assert!(html.contains("state-chip locked\">LOCKED"));
-    }
-
-    #[test]
-    fn architecture_tree_does_not_invent_failure_when_route_is_persisted() {
-        let html = signal_architecture_html(
-            &SignalArchitectureView {
-                partition: 14,
-                generation: 5,
-                transitions: 20_000,
-                support: 32,
-                matching: 40,
-                matching_sessions: 8,
-                after_watermark: 32,
-                independent: 32,
-                consistent: 32,
-                routed: 32,
-                future: 32,
-                blocker: "none",
-                admission_verdict: "MISSING",
-                admission_blocker: "controller_report_missing",
-                admission_blocker_stage: "controller_report",
-                admission_age_seconds: 0,
-                admission_relation_candidates: 0,
-                admission_future_rows: 0,
-                admission_runtime_parity_cases: 0,
-                active_packages: 0,
-                online_ready: true,
-            },
-            &Value::Null,
-        );
-
-        assert!(!html.contains("route-to-future"));
-        assert!(!html.contains("BLOCK НА ЭТОМ РЕБРЕ"));
-        assert!(html.contains("MISSING · candidates 0"));
-        assert!(html.contains("controller_report_missing"));
-        assert!(html.contains("0 ACTIVE packages"));
-        assert!(html.contains("MISSING"));
-    }
-
-    #[test]
-    fn architecture_tree_moves_threshold_blocker_below_persisted_future() {
-        let html = signal_architecture_html(
-            &SignalArchitectureView {
-                partition: 14,
-                generation: 5,
-                transitions: 20_000,
-                support: 32,
-                matching: 40,
-                matching_sessions: 8,
-                after_watermark: 17,
-                independent: 17,
-                consistent: 17,
-                routed: 17,
-                future: 17,
-                blocker: "future_rows_below_32",
-                admission_verdict: "MISSING",
-                admission_blocker: "controller_report_missing",
-                admission_blocker_stage: "controller_report",
-                admission_age_seconds: 0,
-                admission_relation_candidates: 0,
-                admission_future_rows: 0,
-                admission_runtime_parity_cases: 0,
-                active_packages: 0,
-                online_ready: true,
-            },
-            &Value::Null,
-        );
-
-        let storage = html.find("data-stage=\"future-store\"").expect("storage");
-        let failure = html
-            .find("data-edge=\"future-to-admission\"")
-            .expect("threshold blocker");
-        let admission = html.find("data-stage=\"admission\"").expect("admission");
-        assert!(storage < failure && failure < admission);
-        assert!(!html.contains("data-edge=\"route-to-future\""));
-        assert!(html.contains("future 17 / 32; не хватает 15"));
-        assert!(html.contains("future_rows_below_32"));
-        assert!(html.contains("proof 17 / 32"));
-        assert!(html.contains("не запускался"));
-        assert!(!html.contains("0 / 10"));
-        assert!(!html.contains("0.7%"));
-    }
-
-    #[test]
-    fn architecture_tree_shows_independent_controller_blocker() {
-        let html = signal_architecture_html(
-            &SignalArchitectureView {
-                partition: 16,
-                generation: 2,
-                transitions: 16_240,
-                support: 32,
-                matching: 86,
-                matching_sessions: 8,
-                after_watermark: 32,
-                independent: 19,
-                consistent: 19,
-                routed: 19,
-                future: 32,
-                blocker: "none",
-                admission_verdict: "BLOCK",
-                admission_blocker: "no_candidate_with_complete_runtime_parity",
-                admission_blocker_stage: "wave_route_separability",
-                admission_age_seconds: 7,
-                admission_relation_candidates: 1,
-                admission_future_rows: 32,
-                admission_runtime_parity_cases: 64,
-                active_packages: 0,
-                online_ready: true,
-            },
-            &Value::Null,
-        );
-
-        let storage = html.find("data-stage=\"future-store\"").expect("storage");
-        let failure = html
-            .find("data-edge=\"admission-controller\"")
-            .expect("controller blocker");
-        let admission = html.find("data-stage=\"admission\"").expect("admission");
-        assert!(storage < failure && failure < admission);
-        assert!(html.contains(
-            "controller BLOCK at wave_route_separability; snapshot age 7 s; candidates 1; future 32; parity cases 64"
-        ));
-        assert!(html.contains("no_candidate_with_complete_runtime_parity"));
-        assert!(html.contains("BLOCK · candidates 1"));
-        assert!(html.contains("partition.v16"));
-        assert!(html.contains("0 ACTIVE packages"));
     }
 
     #[test]

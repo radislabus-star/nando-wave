@@ -20,6 +20,20 @@ const F8_RESOURCE_RECEIPT: &str =
 
 static PANEL_HTML: OnceLock<String> = OnceLock::new();
 
+pub(crate) struct ProofSummary {
+    pub(crate) verified: bool,
+    pub(crate) failure: Option<String>,
+    pub(crate) f5_commit: String,
+    pub(crate) f7_receipt_date: String,
+    pub(crate) f7_queue_max: u64,
+    pub(crate) f7_no_match_p99_ns: u64,
+    pub(crate) f7_matched_p99_ns: u64,
+    pub(crate) f8_rss_bytes: u64,
+    pub(crate) f8_rss_target_bytes: u64,
+    pub(crate) f8_resource_observations: u64,
+    pub(crate) f8_no_match_p99_max_ns: u64,
+}
+
 pub(crate) fn panel_html() -> &'static str {
     // This panel is proof-backed UI. A missing or incompatible receipt must
     // remove the PASS claim instead of falling back to duplicated constants.
@@ -34,6 +48,40 @@ pub(crate) fn panel_html() -> &'static str {
             )
         })
         .as_str()
+}
+
+pub(crate) fn proof_summary() -> ProofSummary {
+    match (
+        receipt::parse_and_validate(CONVERGENCE_RECEIPT, TRAFFIC_RECEIPT, F6_RECEIPT, F7_RECEIPT),
+        f8_resource_receipt::parse_and_validate(F8_RESOURCE_RECEIPT),
+    ) {
+        (Ok(status), Ok(resource)) => ProofSummary {
+            verified: true,
+            failure: None,
+            f5_commit: status.f5_implementation_commit,
+            f7_receipt_date: status.f7_receipt_date,
+            f7_queue_max: status.f7_queue_max,
+            f7_no_match_p99_ns: status.f7_no_match_p99_ns,
+            f7_matched_p99_ns: status.f7_matched_p99_ns,
+            f8_rss_bytes: resource.max_peak_rss_delta_bytes,
+            f8_rss_target_bytes: resource.rss_target_bytes,
+            f8_resource_observations: resource.resource_observations,
+            f8_no_match_p99_max_ns: resource.no_match_p99_max_ns,
+        },
+        (Err(error), _) | (_, Err(error)) => ProofSummary {
+            verified: false,
+            failure: Some(error),
+            f5_commit: String::new(),
+            f7_receipt_date: String::new(),
+            f7_queue_max: 0,
+            f7_no_match_p99_ns: 0,
+            f7_matched_p99_ns: 0,
+            f8_rss_bytes: 0,
+            f8_rss_target_bytes: 0,
+            f8_resource_observations: 0,
+            f8_no_match_p99_max_ns: 0,
+        },
+    }
 }
 
 fn render_from_sources(

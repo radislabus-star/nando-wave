@@ -53,6 +53,7 @@ impl Display for GatewayMode {
 pub struct ControlConfig {
     pub bind: String,
     pub status_key: String,
+    pub model_label: String,
     pub state_path: PathBuf,
     pub public_state_path: PathBuf,
     pub audit_path: PathBuf,
@@ -89,6 +90,8 @@ impl ControlConfig {
             bind: env::var("NANDO_GATEWAY_CONTROL_BIND")
                 .unwrap_or_else(|_| "127.0.0.1:18788".into()),
             status_key,
+            model_label: env::var("NANDO_GATEWAY_MODEL_LABEL")
+                .unwrap_or_else(|_| "UNDECLARED".into()),
             state_path: state_dir.join("mode.json"),
             public_state_path: PathBuf::from(
                 env::var("NANDO_GATEWAY_PUBLIC_MODE_JSON")
@@ -495,6 +498,7 @@ mod tests {
         ControlConfig {
             bind: "127.0.0.1:0".into(),
             status_key: "0123456789abcdef".into(),
+            model_label: "test-model".into(),
             state_path: root.join("mode.json"),
             public_state_path: root.join("public-mode.json"),
             audit_path: root.join("audit.jsonl"),
