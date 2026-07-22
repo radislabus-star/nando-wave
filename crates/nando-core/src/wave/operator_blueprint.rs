@@ -363,6 +363,8 @@ pub struct RuntimeRoleMapping {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeRoleBindingReport {
     mappings: Box<[RuntimeRoleMapping]>,
+    phase_winner_count: usize,
+    phase_runner_up_fit_fixed: Option<i64>,
     completion: SearchCompletion,
 }
 
@@ -409,12 +411,17 @@ struct FutureMappingSearch<'a> {
 
 impl FutureMappingSearch<'_> {
     fn visit(&mut self, local_role: usize, current: &mut Vec<u8>, used: &mut BTreeSet<u8>) {
-        if self.output.len() >= self.limit {
+        // Keep one look-ahead mapping so an exact-cap result cannot hide a
+        // still-live search branch and masquerade as complete.
+        if self.output.len() > self.limit {
             self.complete = false;
             return;
         }
         if local_role == self.bundle.roles.len() {
             self.output.push(current.clone());
+            if self.output.len() > self.limit {
+                self.complete = false;
+            }
             return;
         }
         for (canonical_role, signature) in self.role_graph.canonical_roles.iter().enumerate() {
@@ -429,7 +436,7 @@ impl FutureMappingSearch<'_> {
             self.visit(local_role + 1, current, used);
             current.pop();
             used.remove(&canonical_role);
-            if self.output.len() >= self.limit {
+            if self.output.len() > self.limit {
                 return;
             }
         }
@@ -1640,20 +1647,57 @@ impl RuntimeRoleBinder {
                 .cmp(&left.phase_fit_fixed)
                 .then_with(|| left.local_to_canonical.cmp(&right.local_to_canonical))
         });
-        if let Some(best) = valid.first().map(|mapping| mapping.phase_fit_fixed) {
-            valid.retain(|mapping| mapping.phase_fit_fixed == best);
-        }
+        let phase_winner_count = valid.first().map_or(0, |best| {
+            valid
+                .iter()
+                .take_while(|mapping| mapping.phase_fit_fixed == best.phase_fit_fixed)
+                .count()
+        });
+        let phase_runner_up_fit_fixed = valid
+            .get(phase_winner_count)
+            .map(|mapping| mapping.phase_fit_fixed);
         RuntimeRoleBindingReport {
             mappings: valid.into_boxed_slice(),
+            phase_winner_count,
+            phase_runner_up_fit_fixed,
             completion: SearchCompletion::Complete { explored },
         }
     }
 }
 
 impl RuntimeRoleBindingReport {
+    /// Compatibility view for callers that historically consumed only the
+    /// best phase-equivalent mappings.
     #[must_use]
     pub fn mappings(&self) -> &[RuntimeRoleMapping] {
+        self.phase_winner_mappings()
+    }
+
+    #[must_use]
+    pub fn structural_mappings(&self) -> &[RuntimeRoleMapping] {
         &self.mappings
+    }
+
+    #[must_use]
+    pub fn phase_winner_mappings(&self) -> &[RuntimeRoleMapping] {
+        &self.mappings[..self.phase_winner_count]
+    }
+
+    #[must_use]
+    pub const fn phase_winner_count(&self) -> usize {
+        self.phase_winner_count
+    }
+
+    #[must_use]
+    pub const fn phase_runner_up_fit_fixed(&self) -> Option<i64> {
+        self.phase_runner_up_fit_fixed
+    }
+
+    #[must_use]
+    pub fn phase_margin_fixed(&self) -> Option<i64> {
+        let winner = self.mappings.first()?.phase_fit_fixed;
+        self.phase_runner_up_fit_fixed
+            .map(|runner_up| winner.saturating_sub(runner_up))
     }
 
     #[must_use]
@@ -1685,6 +1729,8 @@ impl RuntimeRoleMapping {
 fn exhausted_runtime_binding(explored: usize) -> RuntimeRoleBindingReport {
     RuntimeRoleBindingReport {
         mappings: Box::new([]),
+        phase_winner_count: 0,
+        phase_runner_up_fit_fixed: None,
         completion: SearchCompletion::Exhausted {
             stage: SearchStage::RoleAlignment,
             explored,
@@ -1940,6 +1986,7 @@ fn future_role_mappings(
         complete: true,
     };
     search.visit(0, &mut Vec::new(), &mut BTreeSet::new());
+    search.output.truncate(limit);
     (search.output, search.complete)
 }
 
@@ -2695,6 +2742,9 @@ fn score_table_commitment(scores: &[BlueprintFutureScore]) -> Commitment256 {
     }
     hasher.finalize().into()
 }
+
+#[cfg(test)]
+mod runtime_role_binder_tests;
 
 #[cfg(test)]
 mod tests {

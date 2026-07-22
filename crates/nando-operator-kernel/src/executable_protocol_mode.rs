@@ -191,6 +191,11 @@ impl ExecutableProtocolModeV3 {
     pub fn payload(&self) -> &ProtocolFacetPayloadV3 {
         &self.payload
     }
+
+    #[must_use]
+    pub fn executable_mode_root_sha256(&self) -> &str {
+        &self.executable_mode_root_sha256
+    }
 }
 
 impl ProtocolFacetPayloadV3 {
