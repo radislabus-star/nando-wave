@@ -1,0 +1,76 @@
+{
+  "schema": "nando.stop-f5-d-action-grounding.v1",
+  "status": "PASS",
+  "implementation_commit": "759701564f0bd69c484617f7ea1efd246a602642",
+  "authority": false,
+  "production_callers": 0,
+  "wrong_bindings": 0,
+  "negative_accepts": 0,
+  "matrix": [
+    {
+      "case": "renamed_compatible_capability",
+      "semantic_identity_preserved": true,
+      "physical_identity_rebound": true,
+      "verdict": "COMPLETE"
+    },
+    {
+      "case": "multiple_mappings_same_action",
+      "minimum_structural_mappings": 2,
+      "semantic_action_classes": 1,
+      "physical_action_classes": 1,
+      "verdict": "COMPLETE"
+    },
+    {
+      "case": "multiple_mappings_different_actions",
+      "minimum_semantic_action_classes": 2,
+      "verdict": "ABSTAIN_AMBIGUOUS_ACTION"
+    },
+    {
+      "case": "duplicate_identical_capability",
+      "physical_action_classes": 1,
+      "verdict": "COMPLETE"
+    },
+    {
+      "case": "duplicate_distinct_capability_symbols",
+      "semantic_action_classes": 1,
+      "physical_action_classes": 2,
+      "verdict": "ABSTAIN_AMBIGUOUS_CAPABILITY"
+    },
+    {
+      "case": "missing_capability",
+      "actions": 0,
+      "verdict": "ABSTAIN_NO_STRUCTURAL_MAPPING"
+    },
+    {
+      "case": "incompatible_capability",
+      "actions": 0,
+      "verdict": "ABSTAIN_NO_STRUCTURAL_MAPPING"
+    },
+    {
+      "case": "cross_request_binding_reuse",
+      "actions": 0,
+      "verdict": "REJECT_INDEX_MISMATCH"
+    }
+  ],
+  "budgets": {
+    "structural_candidates": 32,
+    "mappings_per_mode": 64,
+    "total_action_derivations": 2048,
+    "advertised_capabilities": 64
+  },
+  "verification": {
+    "local_tests_passed": 237,
+    "local_tests_failed": 0,
+    "remote_tests_passed": 237,
+    "remote_tests_failed": 0,
+    "local_clippy_deny_warnings": "PASS",
+    "remote_clippy_deny_warnings": "PASS",
+    "live_composite_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_false_accepts": 0,
+    "response_runtime_parity_failures": 0
+  },
+  "next": "F5_E_UNLOCKED_NOT_STARTED",
+  "f6": "LOCKED"
+}
