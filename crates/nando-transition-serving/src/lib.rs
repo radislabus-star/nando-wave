@@ -911,6 +911,7 @@ async fn health(State(state): State<AppState>) -> Response {
     let (
         turn_graphs_finalized,
         turn_graphs_rejected_overflow,
+        censored_invalid_session_identities,
         session_watcher_alive,
         session_watcher_events,
         session_watcher_last_event_unix,
@@ -923,6 +924,7 @@ async fn health(State(state): State<AppState>) -> Response {
         "duplicate_graph_total": 0,
         "recovered_partial_tail_bytes": 0,
         "raw_payload_persisted": false,
+        "censored_invalid_session_identity": censored_invalid_session_identities,
         "session_watcher_alive": session_watcher_alive,
         "session_watcher_events": session_watcher_events,
         "session_watcher_last_event_unix": session_watcher_last_event_unix,

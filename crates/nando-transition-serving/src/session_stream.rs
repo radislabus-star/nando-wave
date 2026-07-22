@@ -39,6 +39,7 @@ const MAX_TURN_EVIDENCE_EVENTS: usize = 64;
 const MAX_TURN_EVIDENCE_NODES: usize = 8_192;
 const MAX_CAPABILITY_SESSIONS: usize = 4_096;
 const SESSION_REBUILD_TAIL_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
 const MAX_PENDING_RUNTIME_PARITY_CASES: usize = 1_024;
 const MAX_PENDING_MINER_INPUTS: usize = 4_096;
 
@@ -282,6 +283,7 @@ impl RequestCapabilityIndex {
 pub struct SessionStreamMetrics {
     finalized_graphs: AtomicU64,
     rejected_overflow_graphs: AtomicU64,
+    censored_invalid_session_identities: AtomicU64,
     watcher_alive: std::sync::atomic::AtomicBool,
     watcher_events: AtomicU64,
     watcher_last_event_unix: AtomicU64,
@@ -289,10 +291,12 @@ pub struct SessionStreamMetrics {
 
 impl SessionStreamMetrics {
     #[must_use]
-    pub fn snapshot(&self) -> (u64, u64, bool, u64, u64) {
+    pub fn snapshot(&self) -> (u64, u64, u64, bool, u64, u64) {
         (
             self.finalized_graphs.load(Ordering::Relaxed),
             self.rejected_overflow_graphs.load(Ordering::Relaxed),
+            self.censored_invalid_session_identities
+                .load(Ordering::Relaxed),
             self.watcher_alive.load(Ordering::Acquire),
             self.watcher_events.load(Ordering::Relaxed),
             self.watcher_last_event_unix.load(Ordering::Relaxed),
@@ -320,6 +324,7 @@ struct Observation {
 #[derive(Default)]
 struct SessionState {
     offset: u64,
+    session_identity_pinned: bool,
     session_id_sha256: String,
     calls: BTreeMap<String, CallShape>,
     observations: Vec<Observation>,
@@ -382,13 +387,17 @@ where
                     .map(|metadata| metadata.len())
                     .unwrap_or(0)
             });
-        let mut state = SessionState {
-            offset,
-            session_id: source_stream_id,
-            ..SessionState::default()
-        };
-        state.session_id_sha256 = sha256_bytes(path.to_string_lossy().as_bytes());
-        states.insert(path, state);
+        match canonical_session_state(&path, offset) {
+            Ok(state) => {
+                states.insert(path, state);
+            }
+            Err(error) => {
+                metrics
+                    .censored_invalid_session_identities
+                    .fetch_add(1, Ordering::Relaxed);
+                eprintln!("nando-session-stream identity error: {error}");
+            }
+        }
     }
     thread::Builder::new()
         .name("nando-session-stream".to_owned())
@@ -411,7 +420,30 @@ where
                     if path.extension().and_then(|value| value.to_str()) != Some("jsonl") {
                         continue;
                     }
-                    let state = states.entry(path.clone()).or_default();
+                    if !states.contains_key(&path) {
+                        let source_stream_id = path.to_string_lossy().into_owned();
+                        let offset = evidence
+                            .lock()
+                            .ok()
+                            .and_then(|ledger| ledger.resume_offset(&source_stream_id))
+                            .map(|offset| offset.saturating_sub(SESSION_REBUILD_TAIL_BYTES))
+                            .unwrap_or(0);
+                        let state = match canonical_session_state(&path, offset) {
+                            Ok(state) => state,
+                            Err(_) => {
+                                // A create event can arrive before session_meta is fully written.
+                                // Censor it and leave the path untracked so a later data event retries.
+                                metrics
+                                    .censored_invalid_session_identities
+                                    .fetch_add(1, Ordering::Relaxed);
+                                continue;
+                            }
+                        };
+                        states.insert(path.clone(), state);
+                    }
+                    let Some(state) = states.get_mut(&path) else {
+                        continue;
+                    };
                     let frames = match read_appended_frames(
                         &path,
                         state,
@@ -496,11 +528,7 @@ fn training_cases_from_session_range(
             .read_until(b'\n', &mut partial)
             .map_err(|error| format!("session_backfill_partial:{error}"))?;
     }
-    let mut state = SessionState {
-        session_id: path.to_string_lossy().into_owned(),
-        session_id_sha256: sha256_bytes(path.to_string_lossy().as_bytes()),
-        ..SessionState::default()
-    };
+    let mut state = canonical_session_state(path, start_offset)?;
     let mut emitted = Vec::new();
     let mut line = String::new();
     let end_offset = max_bytes.map(|bytes| start_offset.saturating_add(bytes));
@@ -565,11 +593,7 @@ pub fn verified_collection_observations_from_session(
         let collector = CollectionObservationCollector::default();
         let metrics = Arc::new(SessionStreamMetrics::default());
         let capabilities = Arc::new(RequestCapabilityIndex::default());
-        let mut state = SessionState {
-            session_id: path.to_string_lossy().into_owned(),
-            session_id_sha256: sha256_bytes(path.to_string_lossy().as_bytes()),
-            ..SessionState::default()
-        };
+        let mut state = canonical_session_state(path, 0)?;
         read_appended_frames(
             path,
             &mut state,
@@ -594,34 +618,16 @@ pub fn verified_collection_observations_from_session(
 pub fn verified_session_identity_sha256_candidates(
     path: &Path,
 ) -> Result<BTreeSet<String>, String> {
-    const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
-
+    let session_id = canonical_session_id(path)?;
     let path_identity = path.to_string_lossy();
-    let mut identities = BTreeSet::from([
+    // Path commitments are accepted only while rehydrating legacy receipts.
+    // Live capture is pinned exclusively to the verified session_meta identity.
+    Ok(BTreeSet::from([
+        evidence_session_id_sha256(&session_id),
+        sha256_bytes(session_id.as_bytes()),
         evidence_session_id_sha256(&path_identity),
         sha256_bytes(path_identity.as_bytes()),
-    ]);
-    let file = File::open(path).map_err(|error| format!("session_meta_open:{error}"))?;
-    let mut reader = BufReader::new(file).take(MAX_SESSION_META_BYTES);
-    let mut line = Vec::new();
-    loop {
-        line.clear();
-        let bytes = reader
-            .read_until(b'\n', &mut line)
-            .map_err(|error| format!("session_meta_read:{error}"))?;
-        if bytes == 0 {
-            break;
-        }
-        if contains_bytes(&line, b"\"type\":\"session_meta\"")
-            && let Ok(row) = serde_json::from_slice::<Value>(&line)
-            && let Some(id) = session_id_from_meta(&row)
-        {
-            identities.insert(evidence_session_id_sha256(id));
-            identities.insert(sha256_bytes(id.as_bytes()));
-            break;
-        }
-    }
-    Ok(identities)
+    ]))
 }
 
 pub fn verified_relation_frames_from_session_tail(
@@ -1021,6 +1027,62 @@ fn session_files(root: &Path) -> Vec<PathBuf> {
     output
 }
 
+fn canonical_session_state(path: &Path, offset: u64) -> Result<SessionState, String> {
+    let session_id = canonical_session_id(path)?;
+    Ok(SessionState {
+        offset,
+        session_identity_pinned: true,
+        session_id_sha256: sha256_bytes(session_id.as_bytes()),
+        session_id,
+        ..SessionState::default()
+    })
+}
+
+fn canonical_session_id(path: &Path) -> Result<String, String> {
+    let file = File::open(path).map_err(|error| format!("session_identity_open:{error}"))?;
+    let mut reader = BufReader::new(file).take(MAX_SESSION_META_BYTES);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let bytes = reader
+            .read_until(b'\n', &mut line)
+            .map_err(|error| format!("session_identity_read:{error}"))?;
+        if bytes == 0 {
+            break;
+        }
+        if contains_bytes(&line, b"\"type\":\"session_meta\"")
+            && let Ok(row) = serde_json::from_slice::<Value>(&line)
+            && let Some(session_id) = session_id_from_meta(&row)
+        {
+            if session_id.is_empty() {
+                return Err("session_identity_empty".to_owned());
+            }
+            if let Some(filename_id) = rollout_session_id_from_path(path)
+                && filename_id != session_id
+            {
+                return Err("session_identity_filename_mismatch".to_owned());
+            }
+            return Ok(session_id.to_owned());
+        }
+    }
+    Err("session_identity_missing_meta".to_owned())
+}
+
+fn rollout_session_id_from_path(path: &Path) -> Option<&str> {
+    let filename = path.file_name()?.to_str()?;
+    let stem = filename.strip_prefix("rollout-")?.strip_suffix(".jsonl")?;
+    let candidate = stem.get(stem.len().checked_sub(36)?..)?;
+    (candidate.len() == 36
+        && candidate
+            .bytes()
+            .enumerate()
+            .all(|(index, byte)| match index {
+                8 | 13 | 18 | 23 => byte == b'-',
+                _ => byte.is_ascii_hexdigit(),
+            }))
+    .then_some(candidate)
+}
+
 struct SessionReadContext<'a, L> {
     evidence: &'a Arc<Mutex<L>>,
     evidence_graphs: Option<&'a Arc<Mutex<DeterministicEvidenceGraphStore>>>,
@@ -1049,10 +1111,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         .map_err(|error| format!("session_metadata:{error}"))?
         .len();
     if state.offset > length {
-        *state = SessionState {
-            session_id: path.to_string_lossy().into_owned(),
-            ..SessionState::default()
-        };
+        *state = canonical_session_state(path, 0)?;
     }
     let (mut reader, aligned_offset) = aligned_session_reader(file, state.offset)?;
     state.offset = aligned_offset;
@@ -1087,8 +1146,12 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             state.turn_index = state.turn_index.saturating_add(1);
         }
         if let Some(session_id) = parsed.as_ref().and_then(session_id_from_meta) {
+            if state.session_identity_pinned && state.session_id != session_id {
+                return Err("session_identity_changed".to_owned());
+            }
             state.session_id = session_id.to_owned();
             state.session_id_sha256 = sha256_bytes(session_id.as_bytes());
+            state.session_identity_pinned = true;
         }
         let event_time_unix_nanos = parsed.as_ref().and_then(event_time_unix_nanos);
         let event_id = parsed
@@ -2835,6 +2898,79 @@ mod tests {
         }
     }
 
+    fn identity_test_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "nando-session-identity-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("identity test root");
+        root
+    }
+
+    #[test]
+    fn canonical_identity_survives_resume_beyond_rebuild_tail() {
+        let root = identity_test_root("large-resume");
+        let session_id = "019e6470-ba33-7840-9015-79a294d89a15";
+        let path = root.join(format!("rollout-2026-05-26T16-19-29-{session_id}.jsonl"));
+        fs::write(
+            &path,
+            format!("{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"{session_id}\"}}}}\n"),
+        )
+        .expect("session meta");
+
+        let offset = SESSION_REBUILD_TAIL_BYTES * 128;
+        let state = canonical_session_state(&path, offset).expect("canonical state");
+        assert_eq!(state.offset, offset);
+        assert_eq!(state.session_id, session_id);
+        assert!(state.session_identity_pinned);
+        assert_ne!(
+            state.session_id_sha256,
+            sha256_bytes(path.to_string_lossy().as_bytes())
+        );
+        fs::remove_dir_all(root).expect("identity cleanup");
+    }
+
+    #[test]
+    fn rollout_filename_mismatch_is_censored() {
+        let root = identity_test_root("mismatch");
+        let path =
+            root.join("rollout-2026-05-26T16-19-29-019e6470-ba33-7840-9015-79a294d89a15.jsonl");
+        fs::write(
+            &path,
+            b"{\"type\":\"session_meta\",\"payload\":{\"id\":\"019e3309-e6c6-75d0-80a9-25969b44266e\"}}\n",
+        )
+        .expect("mismatched session meta");
+
+        assert_eq!(
+            canonical_session_state(&path, 0)
+                .err()
+                .expect("mismatch must be censored"),
+            "session_identity_filename_mismatch"
+        );
+        fs::remove_dir_all(root).expect("identity cleanup");
+    }
+
+    #[test]
+    fn missing_session_meta_is_censored_without_path_fallback() {
+        let root = identity_test_root("missing");
+        let path = root.join("session.jsonl");
+        fs::write(&path, b"{\"type\":\"turn_context\",\"payload\":{}}\n")
+            .expect("session without meta");
+
+        assert_eq!(
+            canonical_session_state(&path, 0)
+                .err()
+                .expect("missing identity must be censored"),
+            "session_identity_missing_meta"
+        );
+        assert!(verified_session_identity_sha256_candidates(&path).is_err());
+        fs::remove_dir_all(root).expect("identity cleanup");
+    }
+
     #[test]
     fn runtime_provider_payload_retains_all_outputs_in_the_active_turn() {
         let first_call = CallShape {
@@ -3219,6 +3355,7 @@ mod tests {
                 .as_nanos()
         ));
         let rows = [
+            json!({"type":"session_meta","payload":{"id":"relation-backfill-session"}}),
             json!({"type":"event_msg","payload":{"type":"user_message","message":"submit the observed count"}}),
             json!({"type":"response_item","payload":{"type":"function_call","name":"lookup","call_id":"1","arguments":"{}"}}),
             json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"1","output":"{\"count\":7}"}}),
