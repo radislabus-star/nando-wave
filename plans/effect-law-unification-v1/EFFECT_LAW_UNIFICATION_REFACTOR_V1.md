@@ -26,7 +26,9 @@ F5-C mode-to-role compilation   COMPLETE / STOP-F5-C
 F5-D capability/action binding  COMPLETE / STOP-F5-D
 F5-E actor/VM shadow            COMPLETE / STOP-F5-E
 F5-F phase integration          SAFETY PASS / WAVE GAIN WATCH
-F5-G traffic/performance        UNLOCKED / NOT STARTED
+F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
+STOP-F5 runtime convergence     COMPLETE
+F6 independent verifier        UNLOCKED / NOT STARTED
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -47,10 +49,14 @@ plans/effect-law-unification-v1/f5e/
   STOP_F5_E_ACTOR_VM_SHADOW.md
 plans/effect-law-unification-v1/f5f/
   STOP_F5_F_PHASE_INTEGRATION.md
+plans/effect-law-unification-v1/f5g/
+  STOP_F5_G_TRAFFIC_SHADOW.md
+plans/effect-law-unification-v1/
+  STOP_F5_RUNTIME_CONVERGENCE.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
-remain frozen; F5-G is now the only unlocked implementation boundary.
+remain frozen; F5 is complete. F6 is unlocked and intentionally not started.
 
 ## 1. Objective
 
@@ -836,6 +842,8 @@ Wave cannot override failed binding
 ```
 
 ### F6: Independent Verifier Convergence
+
+Status: `UNLOCKED / NOT STARTED`
 
 The verifier receives raw bounded request/output evidence, immutable IR, and
 the actor result. It must not trust actor-selected selectors, values, mappings,

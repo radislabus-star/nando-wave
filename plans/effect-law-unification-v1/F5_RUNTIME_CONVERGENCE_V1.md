@@ -1,6 +1,6 @@
 # F5 Runtime Convergence V1
 
-Status: `F5_F_COMPLETE_F5_G_UNLOCKED`
+Status: `F5_COMPLETE_F6_UNLOCKED_NOT_STARTED`
 
 F5-A implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
 
@@ -14,6 +14,8 @@ F5-E implementation: `a785ba330f330a5dbf7b371a89c75c791ec285a3`
 
 F5-F implementation: `e887349ab34a41ed7dd70173fca255862d22ec19`
 
+F5-G implementation: `98cee36bf9edc2333facaea836df5b837e2cbbe9`
+
 Authority: `false`
 
 Completed implementation boundary:
@@ -26,7 +28,9 @@ F5-C mode-to-role compilation    COMPLETE / STOP-F5-C
 F5-D capability/action grounding COMPLETE / STOP-F5-D
 F5-E actor/VM shadow             COMPLETE / STOP-F5-E
 F5-F phase integration           SAFETY PASS / WAVE GAIN WATCH
-F5-G traffic/performance         UNLOCKED / NOT STARTED
+F5-G traffic/performance         COMPLETE / PERFORMANCE WATCH
+STOP-F5 runtime convergence      COMPLETE
+F6 independent verifier         UNLOCKED / NOT STARTED
 runtime callers                  0
 authority                        false
 ```
@@ -40,6 +44,8 @@ f5c/STOP_F5_C_MODE_TO_ROLE_COMPILATION.md
 f5d/STOP_F5_D_ACTION_GROUNDING.md
 f5e/STOP_F5_E_ACTOR_VM_SHADOW.md
 f5f/STOP_F5_F_PHASE_INTEGRATION.md
+f5g/STOP_F5_G_TRAFFIC_SHADOW.md
+STOP_F5_RUNTIME_CONVERGENCE.md
 ```
 
 Development resume:
@@ -54,7 +60,8 @@ plans/nando-response-actor-decomposition-v1/
 ```
 
 The completed cuts did not reopen or weaken STOP-F5-A through STOP-F5-F. F5-G
-is the next and only unlocked functional boundary.
+closed the traffic-shadow boundary without production callers or authority.
+F6 is unlocked but has not started.
 
 This plan closes exactly one boundary:
 
@@ -1014,7 +1021,7 @@ The first four cross-owner worksheets correctly returned `VETO` for mixing
 artifact/context/binder/action, hot/cold traffic, F5-F8 authority, and runtime
 budget owners.
 
-After splitting at the immutable handoff objects, seven owner-local routes
+After splitting at the immutable handoff objects, ten owner-local routes
 returned structural `PASS`:
 
 ```text
@@ -1025,6 +1032,9 @@ canonical action owner          PASS / authority_ready=false
 actor/VM shadow owner           PASS / authority_ready=false
 hot serving owner               PASS / authority_ready=false
 cold learning owner             PASS / authority_ready=false
+generation ownership           PASS / authority_ready=false
+traffic shadow pipeline        PASS / authority_ready=false
+traffic/privacy handoff         PASS / authority_ready=false
 ```
 
 These are coherence checks, not proof authority. Any implementation that

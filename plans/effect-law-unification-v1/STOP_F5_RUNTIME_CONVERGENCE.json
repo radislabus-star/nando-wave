@@ -1,0 +1,50 @@
+{
+  "schema": "nando.stop-f5-runtime-convergence.v1",
+  "status": "F5_COMPLETE_F6_UNLOCKED_NOT_STARTED",
+  "authority": false,
+  "stages": {
+    "f5_a": "COMPLETE",
+    "f5_b": "COMPLETE",
+    "f5_c": "COMPLETE",
+    "f5_d": "COMPLETE",
+    "f5_e": "COMPLETE",
+    "f5_f": "SAFETY_PASS_WAVE_GAIN_WATCH",
+    "f5_g": "COMPLETE_PERFORMANCE_WATCH"
+  },
+  "matrix": {
+    "renamed_surface": "PASS",
+    "same_action_multiple_mappings": "PASS",
+    "different_action_multiple_mappings": "ABSTAIN",
+    "missing_capability": "ABSTAIN",
+    "ambiguous_capability": "ABSTAIN",
+    "exhaustion": "ABSTAIN",
+    "wave_structural_override": 0,
+    "actor_vm_parity_mismatches": 0,
+    "wrong_bindings": 0,
+    "negative_accepts": 0,
+    "ordinary_rows": 25,
+    "ordinary_rows_accounted": 25,
+    "mixed_generation_receipts": 0,
+    "raw_payloads_persisted": 0,
+    "production_callers": 0,
+    "execution_authority": false
+  },
+  "watch": {
+    "phase_search_gain": "WATCH_NO_SEARCH_GAIN",
+    "organic_replay": "WATCH_PAYLOAD_UNAVAILABLE",
+    "no_match_latency": "WATCH",
+    "matched_latency": "WATCH",
+    "hard_latency_ceiling": "PASS",
+    "hot_rss": "WATCH"
+  },
+  "live": {
+    "composite_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_m3": "WATCH",
+    "response_false_accepts": 0,
+    "response_runtime_parity_failures": 0,
+    "service_restarts": 0
+  },
+  "next": "F6_UNLOCKED_NOT_STARTED"
+}
