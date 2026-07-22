@@ -1,0 +1,44 @@
+{
+  "schema": "nando.stop-f5-e-actor-vm-shadow.v1",
+  "status": "PASS",
+  "implementation_commit": "a785ba330f330a5dbf7b371a89c75c791ec285a3",
+  "authority": false,
+  "production_callers": 0,
+  "supported_capability": "function",
+  "unsupported_capabilities": [
+    "custom_tool"
+  ],
+  "opcode_version": 3,
+  "manual_actor_templates": 0,
+  "actor_vm_parity_mismatches": 0,
+  "matrix": {
+    "all_bound_value_types": "PASS",
+    "program_root_owned_by_mode_and_binding": "PASS",
+    "forged_program_root": "REJECT",
+    "unknown_opcode": "ABSTAIN",
+    "truncated_bytecode": "ABSTAIN",
+    "output_budget": "ABSTAIN",
+    "unsupported_capability": "ABSTAIN"
+  },
+  "budgets": {
+    "arguments": 32,
+    "value_bytes": 16384,
+    "bytecode_bytes": 32768,
+    "output_bytes": 16384
+  },
+  "verification": {
+    "local_tests_passed": 244,
+    "local_tests_failed": 0,
+    "remote_tests_passed": 244,
+    "remote_tests_failed": 0,
+    "focused_tests_passed": 7,
+    "clippy_deny_warnings": "PASS",
+    "live_composite_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_false_accepts": 0,
+    "response_runtime_parity_failures": 0
+  },
+  "next": "F5_F_UNLOCKED_NOT_STARTED",
+  "f6": "LOCKED"
+}

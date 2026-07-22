@@ -1,6 +1,6 @@
 # F5 Runtime Convergence V1
 
-Status: `F5_D_COMPLETE_F5_E_UNLOCKED`
+Status: `F5_E_COMPLETE_F5_F_UNLOCKED`
 
 F5-A implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
 
@@ -9,6 +9,8 @@ F5-B implementation: `a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d`
 F5-C implementation: `ba0824702f8fedf93a2a2f05c88dad2c17e88a6c`
 
 F5-D implementation: `759701564f0bd69c484617f7ea1efd246a602642`
+
+F5-E implementation: `a785ba330f330a5dbf7b371a89c75c791ec285a3`
 
 Authority: `false`
 
@@ -20,7 +22,8 @@ constant-bearing V2 modes        fail closed until ordinal-bound bytes exist
 F5-B runtime context             COMPLETE / STOP-F5-B
 F5-C mode-to-role compilation    COMPLETE / STOP-F5-C
 F5-D capability/action grounding COMPLETE / STOP-F5-D
-F5-E actor/VM shadow           UNLOCKED / NOT STARTED
+F5-E actor/VM shadow             COMPLETE / STOP-F5-E
+F5-F phase integration           UNLOCKED / NOT STARTED
 runtime callers                  0
 authority                        false
 ```
