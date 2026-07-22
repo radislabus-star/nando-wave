@@ -1,0 +1,61 @@
+{
+  "schema": "nando.stop-f6-independent-verifier-convergence.v1",
+  "date": "2026-07-22",
+  "verdict": "COMPLETE_CONTROLLED_PROOF_PASS",
+  "authority": false,
+  "f7_status": "UNLOCKED_NOT_STARTED",
+  "scope": {
+    "effect_operation": "function_call",
+    "relation_program": "copy",
+    "preserved_frame": "output_only",
+    "live_integration": false,
+    "production_callers": 0
+  },
+  "independence": {
+    "request_text_derived_from_provider_bytes": true,
+    "actor_mapping_trusted": false,
+    "actor_value_trusted": false,
+    "actor_capability_trusted": false,
+    "actor_expected_output_trusted": false,
+    "normal_dependency_on_runtime": false,
+    "runtime_dev_dependency_for_handoff_tests": true
+  },
+  "tests": {
+    "proof_unit_pass": 5,
+    "f6_integration_pass": 8,
+    "performance_gate_pass": 1,
+    "kernel_runtime_proof_pass": 72,
+    "kernel_runtime_proof_ignored": 2,
+    "workspace_check": "PASS",
+    "clippy_deny_warnings": "PASS",
+    "gateway_control_pass": 17,
+    "gateway_control_clippy": "PASS",
+    "nanda_owner_local_pass": 4,
+    "nanda_composite_single_owner": "VETO_EXPECTED_OWNER_SPLIT",
+    "nanda_authority_ready": false,
+    "controlled_false_accepts": 0,
+    "controlled_parity_mismatches": 0
+  },
+  "performance": {
+    "samples_per_route": 4096,
+    "matched_p99_ns": 291773,
+    "no_match_p99_ns": 34659,
+    "hard_max_ns": 354921,
+    "matched_p99_budget_ns": 1000000,
+    "no_match_p99_budget_ns": 250000,
+    "hard_ceiling_ns": 2000000
+  },
+  "production": {
+    "services_restarted": false,
+    "deployment_changed": false,
+    "active_packages_changed": false,
+    "execution_authority": false,
+    "live_composite_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_m3": "WATCH",
+    "response_false_accepts": 0,
+    "response_runtime_parity_failures": 0,
+    "gateway_health": "PASS"
+  }
+}

@@ -1,6 +1,7 @@
 mod admission_reconstruction;
 pub mod binding;
 pub mod decidability;
+pub mod independent_verifier_v3;
 mod surface;
 pub mod verified_delta;
 pub mod verifier;

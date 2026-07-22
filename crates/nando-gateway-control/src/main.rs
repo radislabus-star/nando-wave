@@ -559,7 +559,7 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .architecture-meta {{ color:#707a82; font-size:12px; font-weight:700; }}
 .flow-tree {{ padding:14px 16px; border:1px solid #3f464b; background:#080a0b; font-size:14px; line-height:1.45; overflow-x:auto; }}
 .terminal-stage {{ min-width:620px; }}
-.terminal-line {{ display:grid; grid-template-columns:22px 42px minmax(240px,1fr) minmax(70px,auto) 74px; align-items:baseline; gap:8px; min-height:19px; }}
+.terminal-line {{ display:grid; grid-template-columns:22px 42px minmax(240px,1fr) minmax(70px,auto) minmax(74px,auto); align-items:baseline; gap:8px; min-height:19px; }}
 .tree-glyph {{ color:#566068; white-space:pre; }}
 .stage-index {{ color:#737e86; }}
 .stage-title {{ color:#dce2e6; font-weight:700; }}

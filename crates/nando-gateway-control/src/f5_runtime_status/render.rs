@@ -86,20 +86,36 @@ pub(super) fn verified_panel(status: &F5Status) -> String {
         "f6",
         "F6",
         "Independent verifier",
-        "F6 must independently derive and verify the selected action before any authority can exist.",
+        "Independently rebuilds the request scene, roles, capability, action and expected output.",
+        &format!(
+            "{} adversarial · p99 {} ns",
+            status.f6_integration_pass, status.f6_matched_p99_ns
+        ),
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("opaque verifier receipt · authority=false"));
+    stages.push_str(
+        r#"<div class="research-boundary" data-edge="f6-to-f7"><span class="tree-glyph">│</span><strong>FULL CONTROLLED F5 TO F6 PROOF PATH CONFIRMED</strong><span>live generation and admission are not connected</span></div>"#,
+    );
+    stages.push_str(&stage(
+        "f7",
+        "F7",
+        "Generation + persistence",
+        "Must bind fresh generation ownership, restart identity and live verifier receipts before admission.",
         "authority=false · ACTIVE=0",
         "NOT STARTED",
         "not-started",
     ));
 
     format!(
-        r#"<section class="architecture research-architecture" data-research-status="f5-complete-f6-not-started">
+        r#"<section class="architecture research-architecture" data-research-status="f6-complete-f7-not-started">
 <div class="architecture-head">
-<div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>operator artifact -&gt; runtime grounding -&gt; VM shadow -&gt; F6 verifier</p></div>
-<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip locked">F6 LOCKED</span><span class="architecture-meta">proof {}</span></div>
+<div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>operator artifact -&gt; grounding -&gt; VM -&gt; independent verifier -&gt; F7</p></div>
+<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip locked">F7 LOCKED</span><span class="architecture-meta">proof {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
-<div class="terminal-rule">controlled F5 path confirmed | performance WATCH remains | F6 and production authority are not claimed</div>
+<div class="terminal-rule">controlled F5 -&gt; F6 proof confirmed | F5 phase gain WATCH | F7 and production authority are not claimed</div>
 </section>"#,
         escape(commit),
         stages,
@@ -109,7 +125,7 @@ pub(super) fn verified_panel(status: &F5Status) -> String {
 fn facts(status: &F5Status) -> String {
     format!(
         r#"<div class="research-facts">
-<span>projection {}/{}</span><span>organic replay {}</span><span>no-match p99 {} / target {} ns</span><span>matched p99 {} / target {} ns</span><span>hard ceiling {} ns PASS</span><span>RSS {} / target {} B</span>
+<span>projection {}/{}</span><span>organic replay {}</span><span>F5 no-match p99 {} / target {} ns</span><span>F5 matched p99 {} / target {} ns</span><span>F5 hard ceiling {} ns PASS</span><span>RSS {} / target {} B</span><span>F6 no-match p99 {} ns</span><span>F6 matched p99 {} ns</span><span>F6 max {} ns</span>
 </div>"#,
         status.projection_controls_passed,
         status.projection_controls_total,
@@ -121,6 +137,9 @@ fn facts(status: &F5Status) -> String {
         status.hard_ceiling_ns,
         status.rss_delta_bytes,
         status.rss_target_bytes,
+        status.f6_no_match_p99_ns,
+        status.f6_matched_p99_ns,
+        status.f6_hard_max_ns,
     )
 }
 
@@ -133,7 +152,7 @@ fn stage(
     label: &str,
     class: &str,
 ) -> String {
-    let branch = if id == "f6" { "└─" } else { "├─" };
+    let branch = if id == "f7" { "└─" } else { "├─" };
     format!(
         r#"<div class="terminal-stage {}" data-rd-stage="{}" title="{}">
 <div class="terminal-line"><span class="tree-glyph">{}</span><span class="stage-index">[{}]</span><strong class="stage-title">{}</strong><span class="stage-metric">{}</span><span class="state-chip {}">{}</span></div>
@@ -162,7 +181,7 @@ pub(super) fn unavailable_panel(error: &str) -> String {
         r#"<section class="architecture research-architecture" data-research-status="unavailable">
 <div class="architecture-head">
 <div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>receipt-backed status unavailable</p></div>
-<div class="architecture-state"><span class="state-chip block">F5 STATUS UNAVAILABLE</span><span class="state-chip locked">F6 LOCKED</span></div>
+<div class="architecture-state"><span class="state-chip block">R&amp;D STATUS UNAVAILABLE</span><span class="state-chip locked">F7 LOCKED</span></div>
 </div>
 <div class="flow-tree"><div class="terminal-line terminal-failure"><span class="tree-glyph">└─</span><strong>FAIL-CLOSED</strong><span>{}</span></div></div>
 <div class="terminal-rule">no receipt = no PASS claim | authority remains false</div>

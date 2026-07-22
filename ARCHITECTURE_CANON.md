@@ -1272,6 +1272,34 @@ The verifier independently reconstructs the structural anchor, checks the
 relation program, computes the expected value, and compares it with the actor
 response. Reusing the actor's selected value as verifier truth is forbidden.
 
+#### F6 independent verifier boundary
+
+The canonical F6 implementation is
+`nando-operator-proof::independent_verifier_v3`.
+
+```text
+raw provider request bytes
++ cold-validated immutable artifact set
++ opaque F5 actor action/output claim
+-> independently derive request text from provider bytes
+-> independently extract structural roles and capabilities
+-> independently evaluate selectors and action classes
+-> one physical action class
+-> reference effect execution and preserved-frame check
+-> opaque verifier receipt with authority=false
+```
+
+`nando-operator-proof` has no normal dependency on `nando-operator-runtime`.
+Runtime is a dev-only dependency used to generate adversarial F5 handoffs in
+tests. Immutable artifacts are validated once into a digest-bound verifier set;
+per-request verification cannot repair or reinterpret them. Missing request
+provenance, exhausted search, duplicated capability paths, multiple physical
+actions, and unsupported effect opcodes are `ABSTAIN` or `REJECT`.
+
+STOP-F6 proves only the current function `CALL` + `COPY`, output-only effect
+surface. It does not wire live receipts, persist a new generation, grant
+admission, or change production authority. Those remain F7/F8 boundaries.
+
 `RuntimeSurfaceEvidence` supplied by a caller is a laboratory interface, never
 production authority. Live routing and parity verification must start from the
 raw pre-action request and provider payload, independently enumerate structural

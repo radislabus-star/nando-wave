@@ -28,7 +28,8 @@ F5-E actor/VM shadow            COMPLETE / STOP-F5-E
 F5-F phase integration          SAFETY PASS / WAVE GAIN WATCH
 F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
-F6 independent verifier        UNLOCKED / NOT STARTED
+F6 independent verifier        COMPLETE / STOP-F6
+F7 generation and persistence  UNLOCKED / NOT STARTED
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -53,10 +54,12 @@ plans/effect-law-unification-v1/f5g/
   STOP_F5_G_TRAFFIC_SHADOW.md
 plans/effect-law-unification-v1/
   STOP_F5_RUNTIME_CONVERGENCE.md
+  STOP_F6_INDEPENDENT_VERIFIER_CONVERGENCE.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
-remain frozen; F5 is complete. F6 is unlocked and intentionally not started.
+remain frozen; F5 and F6 are complete. F7 is unlocked and intentionally not
+started.
 
 ## 1. Objective
 
@@ -843,7 +846,7 @@ Wave cannot override failed binding
 
 ### F6: Independent Verifier Convergence
 
-Status: `UNLOCKED / NOT STARTED`
+Status: `COMPLETE / STOP-F6`
 
 The verifier receives raw bounded request/output evidence, immutable IR, and
 the actor result. It must not trust actor-selected selectors, values, mappings,
@@ -861,13 +864,22 @@ STOP-F6 adversarial gate:
 ```text
 actor selector mutation       REJECT
 role swap                     REJECT
-semantic constant mutation    REJECT
+actor semantic value mutation REJECT
 capability mutation           REJECT
 duplicate candidate paths     ABSTAIN
 missing expected role         ABSTAIN
 false accepts                 0
 parity mismatches             0
 ```
+
+The canonical implementation is
+`nando-operator-proof::independent_verifier_v3`. It accepts no separate
+request-text hint, validates immutable artifacts into a cold digest-bound set,
+and independently rebuilds the bounded structural candidate set and physical
+action class from exact provider bytes. The production dependency graph does
+not contain proof -> runtime; runtime is used only by F6 integration tests to
+produce an opaque F5 actor claim. The current executable proof surface is
+function `CALL` + `COPY`; unsupported effect operations return `ABSTAIN`.
 
 ### F7: New Generation And Persistence
 

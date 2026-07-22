@@ -595,6 +595,7 @@ version = "0.1.0"
 dependencies = [
  "nando-core",
  "nando-operator-kernel",
+ "nando-operator-runtime",
  "serde",
  "serde_json",
  "sha2",
