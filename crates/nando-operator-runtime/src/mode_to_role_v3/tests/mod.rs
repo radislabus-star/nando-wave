@@ -53,6 +53,9 @@ fn mode_compiles_to_existing_graph_and_exposes_complete_structural_mapping() {
             .iter()
             .any(|mapping| mapping.runtime_source_role_id() == expected_role)
     );
+    let complete = binding.into_complete().expect("complete handoff");
+    assert_eq!(complete.mode_reports().len(), 1);
+    assert!(!complete.execution_authority());
 }
 
 #[test]
@@ -200,6 +203,7 @@ fn overfull_dispatch_bucket_abstains_without_package_order_truncation() {
     );
     assert_eq!(binding.mapping_evaluations(), 0);
     assert!(binding.mode_reports().is_empty());
+    assert!(binding.into_complete().is_none());
 }
 
 #[test]

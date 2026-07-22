@@ -1,6 +1,7 @@
 use super::{
-    ModeStructuralBindingReportV3, RuntimeStructuralMappingV3, StructuralBindingOutcomeV3,
-    StructuralBindingVerdictV3, StructuralDispatchReportV3, StructuralDispatchVerdictV3,
+    CompleteRuntimeRoleBindingReportV3, ModeStructuralBindingReportV3, RuntimeStructuralMappingV3,
+    StructuralBindingOutcomeV3, StructuralBindingVerdictV3, StructuralDispatchReportV3,
+    StructuralDispatchVerdictV3,
 };
 
 impl StructuralDispatchReportV3 {
@@ -115,6 +116,46 @@ impl StructuralBindingOutcomeV3 {
     #[must_use]
     pub const fn verdict(&self) -> StructuralBindingVerdictV3 {
         self.verdict
+    }
+
+    #[must_use]
+    pub const fn execution_authority(&self) -> bool {
+        false
+    }
+
+    #[must_use]
+    pub fn into_complete(self) -> Option<CompleteRuntimeRoleBindingReportV3> {
+        if self.verdict != StructuralBindingVerdictV3::Complete {
+            return None;
+        }
+        Some(CompleteRuntimeRoleBindingReportV3 {
+            index_sha256: self.index_sha256,
+            mode_reports: self.mode_reports,
+            source_candidate_evaluations: self.source_candidate_evaluations,
+            mapping_evaluations: self.mapping_evaluations,
+        })
+    }
+}
+
+impl CompleteRuntimeRoleBindingReportV3 {
+    #[must_use]
+    pub fn index_sha256(&self) -> &str {
+        &self.index_sha256
+    }
+
+    #[must_use]
+    pub fn mode_reports(&self) -> &[ModeStructuralBindingReportV3] {
+        &self.mode_reports
+    }
+
+    #[must_use]
+    pub const fn source_candidate_evaluations(&self) -> usize {
+        self.source_candidate_evaluations
+    }
+
+    #[must_use]
+    pub const fn mapping_evaluations(&self) -> usize {
+        self.mapping_evaluations
     }
 
     #[must_use]

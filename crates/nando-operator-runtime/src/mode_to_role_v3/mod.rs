@@ -106,6 +106,14 @@ pub struct StructuralBindingOutcomeV3 {
     verdict: StructuralBindingVerdictV3,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompleteRuntimeRoleBindingReportV3 {
+    index_sha256: String,
+    mode_reports: Box<[ModeStructuralBindingReportV3]>,
+    source_candidate_evaluations: usize,
+    mapping_evaluations: usize,
+}
+
 impl CompiledProtocolModeV3 {
     #[must_use]
     pub fn artifact_root_sha256(&self) -> &str {
