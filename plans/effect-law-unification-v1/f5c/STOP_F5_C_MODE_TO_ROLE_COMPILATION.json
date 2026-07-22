@@ -1,0 +1,88 @@
+{
+  "schema": "nando.stop-f5-c.v1",
+  "verdict": "PASS",
+  "implementation_commits": [
+    "e558e40273f51c270f263cc6837f135e43c3a9cc",
+    "e54518832fdc19dbc0ed69710cca92d273421de4",
+    "ba0824702f8fedf93a2a2f05c88dad2c17e88a6c"
+  ],
+  "final_code_head": "ba0824702f8fedf93a2a2f05c88dad2c17e88a6c",
+  "authority": false,
+  "production_callers": 0,
+  "next_stage": "F5_D_UNLOCKED_NOT_STARTED",
+  "stop_matrix": {
+    "new_graph_language": 0,
+    "legacy_raw_binder_calls": 0,
+    "provider_payload_rescans": 0,
+    "hidden_pre_report_phase_pruning": 0,
+    "exact_cap_hidden_frontier": 0,
+    "overfull_dispatch": "ABSTAIN",
+    "overfull_test_matched_modes": 70,
+    "package_or_phase_order_truncation": 0,
+    "tampered_artifact": "REJECT"
+  },
+  "budgets": {
+    "indexed_modes": 2048,
+    "dispatched_modes": 32,
+    "mappings_per_mode": 64,
+    "source_candidate_evaluations": 2048,
+    "mapping_evaluations": 2048
+  },
+  "tests": {
+    "operator_core": {"passed": 176, "failed": 0, "ignored": 5},
+    "operator_kernel": {"passed": 13, "failed": 0},
+    "operator_runtime": {"passed": 20, "failed": 0},
+    "owner_total": {"passed": 209, "failed": 0, "ignored": 5},
+    "focused_final_core": {"passed": 3, "failed": 0},
+    "focused_final_f5c": {"passed": 7, "failed": 0},
+    "clippy_deny_warnings": "PASS",
+    "scoped_rustfmt": "PASS"
+  },
+  "remote_exact_head": {
+    "host": "e@192.168.3.94",
+    "runtime_head": "ba0824702f8fedf93a2a2f05c88dad2c17e88a6c",
+    "runtime_overlay_scope_count": 0,
+    "runtime_untracked_files": 0,
+    "new_background_build_processes": 0,
+    "core_full_receipt_sha256": "1b7f9bafdeecf445d7a7493dbf8c79b56ae20c2a34521a878f9b412eba3fa4fd",
+    "core_final_fast_receipt_sha256": "e36b1627811e24a5b0f67f2ea8755fbc4aa03d2a4d6fca794daa9670755b4c70",
+    "kernel_receipt_sha256": "bf38827694ab7110e6a97d720397fa4de1272f447ce44c7bf14a6ec3e956bdf6",
+    "runtime_receipt_sha256": "08425a90038cd5d31fea02792f3a56795e22285b6a77b8dd36b5f580070d9a0c"
+  },
+  "nanda": {
+    "graph_compiler": "PASS",
+    "binder_core": "PASS",
+    "runtime_bridge": "PASS",
+    "authority_ready": false,
+    "graph_compiler_trace_sha256": "a226184ca9019eeacb7791ec4d35215bcf8ef14f014b4fc9b41670e295a89a83",
+    "binder_core_trace_sha256": "4b58854797ca56f6b96afce46bdcfbc6f6903c30a26aa228cf2745256ec3f712",
+    "runtime_bridge_trace_sha256": "52b828e47c946ccbcff51c534b2f174c01b788a847ca90c395b18683f18f34e3"
+  },
+  "graphify": {
+    "verdict": "PASS",
+    "remote": true,
+    "nodes": 25885,
+    "edges": 58197,
+    "communities": 1197,
+    "seconds": 16.05,
+    "compiler_to_binder_hops": 4,
+    "runtime_to_context_hops": 1
+  },
+  "live_gate": {
+    "verdict": "PASS",
+    "receipt_sha256": "0284bec60c4f485bffd6dad52b81699fe1f1711a6cb00dd3edd3e782d82b728a",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "m3_complete": false,
+    "false_accepts": 0,
+    "runtime_parity_failures": 0
+  },
+  "services": {
+    "restarted": false,
+    "transition_serving_invocation_id": "74ac3080f80b4fe387de2a94380e3657",
+    "response_learning_invocation_id": "8e59505eb1b943778601c9b3bacbd607",
+    "state_receipt_sha256": "ac0a3bb77352a0f67152e3a902a726a7c54ab266b1453135efa1dde0901e5e1b",
+    "nrestarts": 0
+  },
+  "performance_claim": "NOT_EVALUATED_UNTIL_F5_G"
+}

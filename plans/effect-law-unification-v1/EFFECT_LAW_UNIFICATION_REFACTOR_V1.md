@@ -22,7 +22,8 @@ AcceptedBindingLawEvidence      CONTROLLED_ONLY
 F4R2 protocol mode compiler     CONTROLLED_STRUCTURAL_PASS
 F5-A executable artifact        COMPLETE / STOP-F5-A
 F5-B canonical runtime context  COMPLETE / STOP-F5-B
-F5-C mode-to-role compilation   UNLOCKED / NOT STARTED
+F5-C mode-to-role compilation   COMPLETE / STOP-F5-C
+F5-D capability/action binding  UNLOCKED / NOT STARTED
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -35,10 +36,12 @@ plans/nando-response-actor-decomposition-v1/
   NANDO_RESPONSE_ACTOR_DECOMPOSITION_V1.md
 plans/effect-law-unification-v1/f5b/
   STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md
+plans/effect-law-unification-v1/f5c/
+  STOP_F5_C_MODE_TO_ROLE_COMPILATION.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
-remain frozen; F5-C is now the only unlocked implementation boundary.
+remain frozen; F5-D is now the only unlocked implementation boundary.
 
 ## 1. Objective
 

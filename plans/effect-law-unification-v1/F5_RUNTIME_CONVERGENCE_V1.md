@@ -1,10 +1,12 @@
 # F5 Runtime Convergence V1
 
-Status: `F5_B_COMPLETE_F5_C_UNLOCKED`
+Status: `F5_C_COMPLETE_F5_D_UNLOCKED`
 
 F5-A implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
 
 F5-B implementation: `a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d`
+
+F5-C implementation: `ba0824702f8fedf93a2a2f05c88dad2c17e88a6c`
 
 Authority: `false`
 
@@ -14,7 +16,8 @@ Completed implementation boundary:
 F5-A executable completeness     PASS for no-constant F4R2 modes
 constant-bearing V2 modes        fail closed until ordinal-bound bytes exist
 F5-B runtime context             COMPLETE / STOP-F5-B
-F5-C mode-to-role compilation    UNLOCKED / NOT STARTED
+F5-C mode-to-role compilation    COMPLETE / STOP-F5-C
+F5-D capability/action grounding UNLOCKED / NOT STARTED
 runtime callers                  0
 authority                        false
 ```
@@ -24,6 +27,7 @@ Receipts:
 ```text
 STOP_F5_A_EXECUTABLE_COMPLETENESS.md
 f5b/STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md
+f5c/STOP_F5_C_MODE_TO_ROLE_COMPILATION.md
 ```
 
 Development resume:
@@ -37,8 +41,8 @@ plans/nando-response-actor-decomposition-v1/
   NANDO_RESPONSE_ACTOR_DECOMPOSITION_V1.md
 ```
 
-The completed cut did not reopen or weaken STOP-F5-A. F5-C is the next and only
-unlocked functional boundary.
+The completed cuts did not reopen or weaken STOP-F5-A or STOP-F5-B. F5-D is
+the next and only unlocked functional boundary.
 
 This plan closes exactly one boundary:
 
@@ -679,6 +683,15 @@ window. Wide events, overfull capability sets, and oversized request text
 ABSTAIN. Production callers and authority remain zero.
 
 ### F5-C: Mode-To-Role Compilation
+
+Completed on 2026-07-22 at
+`ba0824702f8fedf93a2a2f05c88dad2c17e88a6c`. Selector predicates compile into
+the existing `RoleGraph` and `OperatorCircuit` vocabulary. An immutable
+capability-aware bitset index performs exact observable preselection without
+package-order truncation, while `RuntimeRoleBinder` remains the independent
+owner of complete structural mappings. The full mapping set, phase-winner
+view, and runner-up margin are separate report fields. Production callers and
+authority remain zero.
 
 Work:
 
