@@ -261,6 +261,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let online_discovery = self_training.get("discovery").unwrap_or(&Value::Null);
     let online_cegis = self_training.get("cegis").unwrap_or(&Value::Null);
     let online_opportunity = self_training.get("opportunity").unwrap_or(&Value::Null);
+    let visible_miner_tokens = exact_miner_observed_tokens(&live_miner, &online_miner).unwrap_or(0);
     let strongest_generation = self_training
         .get("generations")
         .and_then(Value::as_array)
@@ -502,12 +503,13 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 :root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; background:#111315; font-size:16px; line-height:1.5; }}
-.token-dashboard {{ width:min(1120px,100%); min-height:100vh; margin:0 auto; padding:72px 48px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:center; gap:0; }}
-.token-metric {{ min-width:0; padding:18px 46px; }}
-.token-metric:first-child {{ padding-left:0; border-right:1px solid #3a4044; }}
+.token-dashboard {{ width:min(1280px,100%); min-height:100vh; margin:0 auto; padding:72px 48px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-content:center; gap:0; }}
+.token-metric {{ min-width:0; padding:18px 38px; border-right:1px solid #3a4044; }}
+.token-metric:first-child {{ padding-left:0; }}
 .token-metric:last-child {{ padding-right:0; }}
 .token-label {{ margin-bottom:18px; color:#89939a; font-size:18px; font-weight:700; text-transform:uppercase; }}
-.token-value {{ display:block; max-width:100%; color:#f0f3f5; font-size:48px; font-weight:700; line-height:1.12; overflow-wrap:anywhere; }}
+.token-value {{ display:block; max-width:100%; color:#f0f3f5; font-size:42px; font-weight:700; line-height:1.12; overflow-wrap:anywhere; }}
+.token-metric.miner .token-value {{ color:#82c7ff; }}
 .token-metric.cpu .token-value {{ color:#66d98b; }}
 header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1px solid #4a5055; }}
 .header-inner {{ width:min(1280px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
@@ -648,11 +650,13 @@ td:last-child {{ text-align:right; font-weight:700; }}
 .console-table td:first-child {{ width:46%; color:#89939a; }}
 .console-table td:last-child {{ color:#d8dde2; }}
 .console-panel.wide .console-table td:last-child {{ text-align:left; }}
-@media (max-width:680px) {{
+@media (max-width:900px) {{
   .token-dashboard {{ grid-template-columns:1fr; padding:42px 22px; }}
-  .token-metric {{ padding:30px 0; }}
-  .token-metric:first-child {{ border-right:0; border-bottom:1px solid #3a4044; }}
+  .token-metric {{ padding:30px 0; border-right:0; border-bottom:1px solid #3a4044; }}
+  .token-metric:last-child {{ border-bottom:0; }}
   .token-value {{ font-size:38px; }}
+}}
+@media (max-width:680px) {{
   .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
   .header-inner,.brand {{ gap:6px; }}
   .signal-pipeline .architecture-state {{ justify-content:flex-start; }}
@@ -700,6 +704,10 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <section class="token-metric">
 <div class="token-label">ПРОШЛО ЧЕРЕЗ NANDO</div>
 <output id="total-token-count" class="token-value">{visible_total_tokens}</output>
+</section>
+<section class="token-metric miner">
+<div class="token-label">УВИДЕЛ МАЙНЕР</div>
+<output id="miner-token-count" class="token-value">{visible_miner_tokens}</output>
 </section>
 <section class="token-metric cpu">
 <div class="token-label">ОБРАБОТАНО НА CPU</div>
@@ -844,14 +852,16 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <script>
 (() => {{
   const total = document.getElementById("total-token-count");
+  const miner = document.getElementById("miner-token-count");
   const cpu = document.getElementById("cpu-token-count");
-  if (!total || !cpu) return;
+  if (!total || !miner || !cpu) return;
   const endpoint = `${{window.location.pathname.replace(/\/$/, "")}}/tokens`;
   const format = new Intl.NumberFormat("ru-RU");
   const render = (node, value) => {{
     if (Number.isSafeInteger(value) && value >= 0) node.textContent = format.format(value);
   }};
   render(total, Number(total.textContent));
+  render(miner, Number(miner.textContent));
   render(cpu, Number(cpu.textContent));
   const refresh = async () => {{
     try {{
@@ -859,6 +869,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
       if (!response.ok) return;
       const snapshot = await response.json();
       render(total, snapshot.total_input_tokens);
+      render(miner, snapshot.miner_input_tokens);
       render(cpu, snapshot.cpu_input_tokens);
     }} catch (_) {{}}
   }};
@@ -871,6 +882,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
         mode = current.mode,
         model_label = html_escape(&state.config.model_label),
         visible_total_tokens = visible_total_tokens,
+        visible_miner_tokens = visible_miner_tokens,
         visible_cpu_tokens = visible_cpu_tokens,
         service_rows = service_rows,
         build_id = html_escape(build_id),
@@ -972,6 +984,7 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         return not_found().await;
     }
     let fallback = read_json(&state.config.economics_path);
+    let persisted_miner = read_json(&state.config.response_online_miner_report_path);
     let live = read_live_miner_report().await;
     let economics = live
         .get("economics")
@@ -985,11 +998,20 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         )
             .into_response();
     };
+    let Some(miner_input_tokens) = exact_miner_observed_tokens(&live, &persisted_miner) else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(json!({"available":false})),
+        )
+            .into_response();
+    };
     (
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
             "available": true,
             "total_input_tokens": total_input_tokens,
+            "miner_input_tokens": miner_input_tokens,
             "cpu_input_tokens": cpu_input_tokens,
         })),
     )
@@ -1106,6 +1128,22 @@ fn exact_token_totals(economics: &Value) -> Option<(u64, u64)> {
     let total = economics.get("global_input_tokens")?.as_u64()?;
     let cpu = economics.get("avoided_input_tokens")?.as_u64()?;
     (cpu <= total).then_some((total, cpu))
+}
+
+fn exact_miner_observed_tokens(live: &Value, persisted: &Value) -> Option<u64> {
+    let opportunity = live
+        .pointer("/response/self_training_v2/opportunity")
+        .filter(|value| value.is_object())
+        .or_else(|| persisted.pointer("/miner/self_training_v2/opportunity"))?;
+    if opportunity.get("schema").and_then(Value::as_str) != Some("nando.opportunity-board.v3")
+        || opportunity
+            .get("classification_identity_holds")
+            .and_then(Value::as_bool)
+            != Some(true)
+    {
+        return None;
+    }
+    opportunity.get("ordinary_tokens")?.as_u64()
 }
 
 fn strongest_signal_generation(generations: &[Value]) -> Option<&Value> {
@@ -1410,5 +1448,32 @@ mod tests {
             "avoided_input_tokens": 101,
         });
         assert_eq!(exact_token_totals(&impossible), None);
+    }
+
+    #[test]
+    fn token_dashboard_uses_only_accounted_miner_denominator() {
+        let persisted = json!({
+            "miner": {"self_training_v2": {"opportunity": {
+                "schema": "nando.opportunity-board.v3",
+                "classification_identity_holds": true,
+                "ordinary_tokens": 497_237_835,
+            }}}
+        });
+        assert_eq!(
+            exact_miner_observed_tokens(&Value::Null, &persisted),
+            Some(497_237_835)
+        );
+
+        let unaccounted = json!({
+            "miner": {"self_training_v2": {"opportunity": {
+                "schema": "nando.opportunity-board.v3",
+                "classification_identity_holds": false,
+                "ordinary_tokens": 497_237_835,
+            }}}
+        });
+        assert_eq!(
+            exact_miner_observed_tokens(&Value::Null, &unaccounted),
+            None
+        );
     }
 }
