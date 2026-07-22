@@ -626,6 +626,9 @@ td:last-child {{ text-align:right; font-weight:700; }}
   .terminal-failure {{ grid-template-columns:18px minmax(0,1fr); gap:3px 4px; }}
   .terminal-failure strong,.terminal-failure span,.terminal-failure code {{ grid-column:2; margin:0; }}
   .research-architecture .architecture-state {{ justify-content:flex-start; }}
+  .research-architecture .terminal-stage .terminal-line {{ grid-template-columns:18px 34px minmax(0,1fr); }}
+  .research-architecture .terminal-stage .stage-metric {{ grid-column:3; grid-row:2; justify-self:start; text-align:left; white-space:normal; overflow-wrap:anywhere; }}
+  .research-architecture .terminal-stage .terminal-line .state-chip {{ grid-column:3; grid-row:3; }}
   .research-facts {{ min-width:0; padding-left:56px; gap:3px 12px; }}
   .research-boundary {{ grid-template-columns:18px minmax(0,1fr); min-width:0; }}
   .research-boundary strong,.research-boundary span:last-child {{ grid-column:2; white-space:normal; }}
