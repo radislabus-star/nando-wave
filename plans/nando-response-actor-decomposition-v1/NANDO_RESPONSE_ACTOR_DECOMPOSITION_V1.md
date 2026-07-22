@@ -1,6 +1,6 @@
 # Nando Response Actor Spectral Decomposition V1
 
-Status: `IN_PROGRESS / STOP_R5_PASS / F5_B_PAUSED`
+Status: `IN_PROGRESS / STOP_R6_PASS / R7_NEXT / F5_B_PAUSED`
 
 Date: 2026-07-21
 
@@ -17,8 +17,8 @@ R2  nando-operator-kernel                  COMPLETE
 R3  nando-operator-proof                   COMPLETE
 R4  nando-operator-runtime                 COMPLETE
 R5  nando-operator-admission               COMPLETE
-R6  nando-operator-learning                IN PROGRESS (A-B COMPLETE, C NEXT)
-R7  thin facade and consumer migration     PENDING
+R6  nando-operator-learning                COMPLETE
+R7  thin facade and consumer migration     NEXT
 R8  remaining monolith split               PENDING
 R9  STOP-DECOMPOSITION                     PENDING
 F5-B canonical runtime context             PAUSED
@@ -718,8 +718,9 @@ full failure-set delta                                    0
 
 ### R6: Extract nando-operator-learning
 
-This is the largest cut and is split into three commits, not dozens of
-micro-commits:
+This is the largest cut and is split into three reviewed substages. R6-C uses
+bounded owner-local commits because its mixed facade files cannot move as one
+unit without crossing runtime, proof, and admission boundaries:
 
 ```text
 R6-A evidence, capture, quotient, binding evidence
@@ -732,7 +733,7 @@ Current substage status:
 ```text
 R6-A evidence, capture, quotient, binding evidence     COMPLETE at dae7ec3
 R6-B compilers, generation, causal controls, Wave      COMPLETE at e5a15a4
-R6-C online state, CEGIS, checkpoint, reports          NEXT
+R6-C online state, CEGIS, checkpoint, reports          COMPLETE at 716ae73
 ```
 
 Work:
@@ -755,6 +756,20 @@ censored-to-semantic update regressions                    0
 false accepts                                              0
 parity mismatches                                          0
 authority                                              false
+```
+
+Final status `STOP-R6`:
+
+```text
+learning core, CEGIS, phase fitting, contracts          moved
+learning imports runtime/admission                         0
+historical failure fingerprint                          PASS
+new Clippy diagnostics                                     0
+response facade tracked Rust lines                    56,255
+learning tracked Rust lines                           30,734
+cross-owner online orchestration                 R7/R8 debt
+authority                                              false
+STOP-R6                                                 PASS at 716ae73
 ```
 
 ### R7: Thin Facade, Binaries, And Consumers
