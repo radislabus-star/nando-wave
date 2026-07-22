@@ -1,3 +1,5 @@
+mod f5_runtime_status;
+
 use axum::extract::{Form, Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -510,6 +512,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         },
         &build_manifest,
     );
+    let research_architecture = f5_runtime_status::panel_html();
     let body = format!(
         r#"<!doctype html>
 <html lang="ru">
@@ -569,6 +572,15 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .terminal-failure span {{ color:#ef938e; }}
 .terminal-failure code {{ color:#b87f7b; margin-left:10px; }}
 .terminal-rule {{ padding:8px 2px 0; color:#6f7980; font-size:12px; }}
+.research-architecture {{ margin-top:16px; }}
+.research-architecture .architecture-title h2 {{ color:#89bff2; }}
+.research-architecture .architecture-state {{ flex-wrap:wrap; justify-content:flex-end; }}
+.research-facts {{ display:flex; flex-wrap:wrap; gap:5px 18px; min-width:620px; padding:8px 0 10px 72px; border-top:1px dotted #30363a; color:#849099; font-size:12px; }}
+.research-facts span::before {{ content:"· "; color:#4f5960; }}
+.research-boundary {{ display:grid; grid-template-columns:22px minmax(300px,1fr) auto; gap:8px; min-width:620px; margin:4px 0; padding:8px 0; border-top:1px solid #315b3d; border-bottom:1px solid #315b3d; color:#66d98b; }}
+.research-boundary strong {{ color:#8ee6a8; }}
+.research-boundary span:last-child {{ color:#78838a; font-size:12px; white-space:nowrap; }}
+.terminal-stage.not-started .stage-title,.terminal-stage.not-started .stage-metric,.terminal-stage.not-started .state-chip {{ color:#ff6b63; }}
 .compact td {{ padding:5px 0; }}
 table {{ width:100%; border-collapse:collapse; font-size:13px; }}
 td {{ padding:5px 0; border-bottom:1px dotted #3a4044; overflow-wrap:anywhere; vertical-align:top; }}
@@ -613,6 +625,10 @@ td:last-child {{ text-align:right; font-weight:700; }}
   .terminal-detail .tree-glyph,.terminal-edge .tree-glyph {{ width:18px; margin-left:-56px; margin-right:38px; }}
   .terminal-failure {{ grid-template-columns:18px minmax(0,1fr); gap:3px 4px; }}
   .terminal-failure strong,.terminal-failure span,.terminal-failure code {{ grid-column:2; margin:0; }}
+  .research-architecture .architecture-state {{ justify-content:flex-start; }}
+  .research-facts {{ min-width:0; padding-left:56px; gap:3px 12px; }}
+  .research-boundary {{ grid-template-columns:18px minmax(0,1fr); min-width:0; }}
+  .research-boundary strong,.research-boundary span:last-child {{ grid-column:2; white-space:normal; }}
   .technical-console summary {{ align-items:flex-start; flex-wrap:wrap; }}
   .technical-summary-meta {{ width:100%; margin-left:22px; }}
   .technical-layout {{ grid-template-columns:1fr; }}
@@ -636,6 +652,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <form method="post" action="/control/{key}/mode"><input type="hidden" name="mode" value="CPU"><button{cpu_disabled}>CPU</button></form>
 </div>
 {signal_architecture}
+{research_architecture}
 <div class="metric-grid compact">
 <section class="band"><h2>Продуктовый результат</h2><table>
 <tr><td>Обычный трафик на CPU</td><td>{cpu_share}</td></tr>
@@ -766,6 +783,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
         key = html_escape(&key),
         cpu_disabled = cpu_disabled,
         signal_architecture = signal_architecture,
+        research_architecture = research_architecture,
         module_version_rows = module_version_rows,
         verdict = html_escape(&admission.verdict),
         eligible = yes_no(admission.eligible_for_local_accept),
