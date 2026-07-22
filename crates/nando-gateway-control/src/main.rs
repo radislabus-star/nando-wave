@@ -270,6 +270,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let signal_partition = metric_u64(strongest_generation, "partition_version");
     let signal_generation = metric_u64(strongest_generation, "generation");
     let signal_support = metric_u64(strongest_generation, "support_runtime_parity_rows");
+    let signal_physical_adapters = metric_u64(strongest_generation, "physical_adapter_count");
     let signal_matching = metric_u64(strongest_generation, "matching_runtime_parity_rows");
     let signal_matching_sessions =
         metric_u64(strongest_generation, "matching_runtime_parity_sessions");
@@ -426,6 +427,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             generation: signal_generation,
             transitions: online_transitions,
             support: signal_support,
+            physical_adapters: signal_physical_adapters,
             matching: signal_matching,
             matching_sessions: signal_matching_sessions,
             after_watermark: signal_after_watermark,
@@ -433,6 +435,12 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             consistent: signal_consistent,
             routed: signal_routed,
             future: signal_future,
+            support_frame_rejects: metric_u64(strongest_generation, "support_frame_rejects"),
+            support_session_rejects: metric_u64(strongest_generation, "support_session_rejects"),
+            support_intent_rejects: metric_u64(strongest_generation, "support_intent_rejects"),
+            support_event_rejects: metric_u64(strongest_generation, "support_event_rejects"),
+            program_mismatch_rejects: metric_u64(strongest_generation, "program_mismatch_rejects"),
+            route_mismatch_rejects: metric_u64(strongest_generation, "route_mismatch_rejects"),
             blocker: signal_blocker,
             admission_verdict: signal_admission_verdict,
             admission_blocker: signal_admission_blocker,
@@ -1001,14 +1009,18 @@ fn metric_u64(metrics: &Value, key: &str) -> u64 {
 }
 
 fn strongest_signal_generation(generations: &[Value]) -> Option<&Value> {
-    // Follow the generation closest to admission. Routed diagnostics break
-    // ties, but must not hide a cohort that already owns more durable future.
+    // A persisted generation may outlive the current winner that created it.
+    // Such an orphan has durable rows but no executable adapter, so it cannot
+    // represent the live path toward admission.
     generations.iter().max_by_key(|generation| {
         (
+            u64::from(metric_u64(generation, "physical_adapter_count") > 0),
             metric_u64(generation, "support_runtime_parity_rows"),
-            metric_u64(generation, "future_rows"),
             metric_u64(generation, "routed_future_rows"),
+            metric_u64(generation, "independent_future_rows"),
+            metric_u64(generation, "after_future_watermark_rows"),
             metric_u64(generation, "matching_runtime_parity_rows"),
+            metric_u64(generation, "future_rows"),
         )
     })
 }
@@ -1214,12 +1226,14 @@ mod tests {
         let generations = vec![
             json!({
                 "generation": 0,
+                "physical_adapter_count": 0,
                 "support_runtime_parity_rows": 0,
                 "routed_future_rows": 0,
                 "future_rows": 0
             }),
             json!({
                 "generation": 4,
+                "physical_adapter_count": 1,
                 "support_runtime_parity_rows": 32,
                 "matching_runtime_parity_rows": 51,
                 "routed_future_rows": 15,
@@ -1227,6 +1241,7 @@ mod tests {
             }),
             json!({
                 "generation": 5,
+                "physical_adapter_count": 1,
                 "support_runtime_parity_rows": 32,
                 "matching_runtime_parity_rows": 40,
                 "routed_future_rows": 10,
@@ -1235,8 +1250,31 @@ mod tests {
         ];
 
         let selected = strongest_signal_generation(&generations).expect("generation");
-        assert_eq!(metric_u64(selected, "generation"), 5);
-        assert_eq!(metric_u64(selected, "future_rows"), 18);
+        assert_eq!(metric_u64(selected, "generation"), 4);
+        assert_eq!(metric_u64(selected, "routed_future_rows"), 15);
+    }
+
+    #[test]
+    fn signal_tree_ignores_orphan_with_more_persisted_future() {
+        let generations = vec![
+            json!({
+                "generation": 1,
+                "physical_adapter_count": 0,
+                "support_runtime_parity_rows": 32,
+                "future_rows": 31
+            }),
+            json!({
+                "generation": 2,
+                "physical_adapter_count": 1,
+                "support_runtime_parity_rows": 32,
+                "matching_runtime_parity_rows": 64,
+                "after_future_watermark_rows": 32,
+                "future_rows": 0
+            }),
+        ];
+
+        let selected = strongest_signal_generation(&generations).expect("generation");
+        assert_eq!(metric_u64(selected, "generation"), 2);
     }
 
     #[test]

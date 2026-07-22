@@ -6,6 +6,7 @@ pub(crate) struct LiveSignalView<'a> {
     pub(crate) generation: u64,
     pub(crate) transitions: u64,
     pub(crate) support: u64,
+    pub(crate) physical_adapters: u64,
     pub(crate) matching: u64,
     pub(crate) matching_sessions: u64,
     pub(crate) after_watermark: u64,
@@ -13,6 +14,12 @@ pub(crate) struct LiveSignalView<'a> {
     pub(crate) consistent: u64,
     pub(crate) routed: u64,
     pub(crate) future: u64,
+    pub(crate) support_frame_rejects: u64,
+    pub(crate) support_session_rejects: u64,
+    pub(crate) support_intent_rejects: u64,
+    pub(crate) support_event_rejects: u64,
+    pub(crate) program_mismatch_rejects: u64,
+    pub(crate) route_mismatch_rejects: u64,
     pub(crate) blocker: &'a str,
     pub(crate) admission_verdict: &'a str,
     pub(crate) admission_blocker: &'a str,
@@ -122,6 +129,7 @@ pub(crate) fn render(
     } else {
         live.capture_last_error
     };
+    let natural_blocker = natural_blocker_text(live);
 
     let proof_boundary = if proof.verified {
         format!(
@@ -151,8 +159,8 @@ pub(crate) fn render(
             "L3",
             "L3 ОТКРЫТИЕ ЕСТЕСТВЕННОГО ОПЕРАТОРА",
             format!(
-                "Обычные трассы доходят до обучения, но естественного OperatorPackage пока нет: support {}/32, future {}/32, маршрутизировано {}, блокер {}. STOP-F8 доказывает только нижнюю техническую цепочку; его контролируемый seed не является естественным evidence.",
-                live.support, live.future, live.routed, live.blocker,
+                "Обычные трассы доходят до обучения, но естественного OperatorPackage пока нет: {}. STOP-F8 доказывает только нижнюю техническую цепочку; его контролируемый seed не является естественным evidence.",
+                natural_blocker,
             ),
         )
     } else {
@@ -219,13 +227,26 @@ pub(crate) fn render(
             owner: "nando-operator-learning".into(),
             input: "фрагменты отношений + teacher-evidence завершённой трассы".into(),
             live: format!(
-                "support {}/32 / future {}/32 / совпадений {} в {} сессиях / независимых {}",
-                live.support, live.future, live.matching, live.matching_sessions, live.independent,
+                "support {}/32 / адаптеров {} / совпадений {} в {} сессиях / независимых {} / future {}/32",
+                live.support,
+                live.physical_adapters,
+                live.matching,
+                live.matching_sessions,
+                live.independent,
+                live.future,
             ),
             proof: "НЕ ОЦЕНЕНО в STOP-F8; контролируемый seed вводится после этой границы".into(),
             diagnostic: format!(
-                "watermark {} / согласованных {} / маршрутизировано {} / блокер {}",
-                live.after_watermark, live.consistent, live.routed, live.blocker,
+                "watermark {} / support-rejects frame:{} session:{} intent:{} event:{} / program-rejects {} / route-rejects {} / согласованных {} / маршрутизировано {}",
+                live.after_watermark,
+                live.support_frame_rejects,
+                live.support_session_rejects,
+                live.support_intent_rejects,
+                live.support_event_rejects,
+                live.program_mismatch_rejects,
+                live.route_mismatch_rejects,
+                live.consistent,
+                live.routed,
             ),
             output: "естественный circuit-attractor + типизированный OperatorPackage".into(),
             state: if natural_operator_live {
@@ -531,11 +552,56 @@ fn handoff(from: &str, to: &str, label: &str, live: bool) -> String {
 }
 
 fn live_signal_break(live: &LiveSignalView<'_>) -> String {
+    let blocker = natural_blocker_text(live);
     format!(
-        r#"<div class="pipeline-break" data-blocker-stage="L3"><strong>ЖИВОЙ СИГНАЛ ОСТАНОВЛЕН ЗДЕСЬ</strong><span>Естественный OperatorPackage отсутствует: future {}/32, маршрутизировано {}, блокер {}.</span><span>Ниже этой границы синий маршрут показывает только контролируемое доказательство STOP-F8.</span></div>"#,
-        live.future,
-        live.routed,
-        escape(live.blocker),
+        r#"<div class="pipeline-break" data-blocker-stage="L3"><strong>ЖИВОЙ СИГНАЛ ОСТАНОВЛЕН ЗДЕСЬ</strong><span>{}</span><span>Ниже этой границы синий маршрут показывает только контролируемое доказательство STOP-F8.</span></div>"#,
+        escape(&blocker),
+    )
+}
+
+fn natural_blocker_text(live: &LiveSignalView<'_>) -> String {
+    if live.physical_adapters == 0 {
+        return format!(
+            "текущий winner не восстановил physical adapter; runtime parity и routing не начинаются (raw future {}/32)",
+            live.future
+        );
+    }
+    if live.matching == 0 {
+        return "physical adapter есть, но нет ни одной runtime-parity строки, совпавшей с программой и маршрутом"
+            .to_owned();
+    }
+    if live.after_watermark == 0 {
+        return format!(
+            "{} runtime-parity строк совпали, но новых наблюдений после frozen watermark нет",
+            live.matching
+        );
+    }
+    if live.independent == 0 {
+        let support_rejects = live
+            .support_frame_rejects
+            .saturating_add(live.support_session_rejects)
+            .saturating_add(live.support_intent_rejects)
+            .saturating_add(live.support_event_rejects);
+        return format!(
+            "{} post-freeze наблюдений не дали независимого evidence: {} отклонены как support reuse (session {}); нужны новые независимые сессии",
+            live.after_watermark, support_rejects, live.support_session_rejects,
+        );
+    }
+    if live.consistent == 0 {
+        return format!(
+            "{} независимых строк не прошли program consistency; rejects {}",
+            live.independent, live.program_mismatch_rejects,
+        );
+    }
+    if live.routed == 0 {
+        return format!(
+            "{} program-consistent строк не прошли фазовую маршрутизацию; rejects {}",
+            live.consistent, live.route_mismatch_rejects,
+        );
+    }
+    format!(
+        "доказанный маршрут сформирован, но immutable future ещё {}/32; блокер {}",
+        live.future, live.blocker,
     )
 }
 
@@ -606,6 +672,7 @@ mod tests {
             generation: 7,
             transitions: 18_721,
             support: 32,
+            physical_adapters: 1,
             matching: 19,
             matching_sessions: 4,
             after_watermark: 16,
@@ -613,6 +680,12 @@ mod tests {
             consistent: 16,
             routed: 16,
             future: 11,
+            support_frame_rejects: 0,
+            support_session_rejects: 0,
+            support_intent_rejects: 0,
+            support_event_rejects: 0,
+            program_mismatch_rejects: 0,
+            route_mismatch_rejects: 0,
             blocker: "future_rows_below_32",
             admission_verdict: "BLOCK",
             admission_blocker: "no_candidate",
@@ -704,6 +777,25 @@ mod tests {
         assert!(!html.contains(
             "data-stage=\"L4\" data-owner=\"nando-operator-learning\" data-live-flow=\"true\""
         ));
+    }
+
+    #[test]
+    fn blocker_explains_support_session_reuse_before_future_threshold() {
+        let mut live = live();
+        live.matching = 64;
+        live.matching_sessions = 5;
+        live.after_watermark = 32;
+        live.independent = 0;
+        live.consistent = 0;
+        live.routed = 0;
+        live.future = 0;
+        live.support_session_rejects = 32;
+
+        let html = render(&live, &proof(true), &manifest(), "gpt-test");
+
+        assert!(html.contains("32 post-freeze наблюдений"));
+        assert!(html.contains("32 отклонены как support reuse"));
+        assert!(html.contains("нужны новые независимые сессии"));
     }
 
     #[test]
