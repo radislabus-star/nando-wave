@@ -620,6 +620,7 @@ dependencies = [
 name = "nando-operator-runtime"
 version = "0.1.0"
 dependencies = [
+ "mimalloc",
  "nando-core",
  "nando-operator-kernel",
  "serde",

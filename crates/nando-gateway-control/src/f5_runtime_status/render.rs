@@ -1,6 +1,7 @@
+use super::f8_resource_receipt::F8ResourceStatus;
 use super::receipt::PipelineStatus;
 
-pub(super) fn verified_panel(status: &PipelineStatus) -> String {
+pub(super) fn verified_panel(status: &PipelineStatus, resource: &F8ResourceStatus) -> String {
     let commit = status
         .f5_implementation_commit
         .get(..12)
@@ -155,27 +156,43 @@ pub(super) fn verified_panel(status: &PipelineStatus) -> String {
         r#"<div class="research-boundary" data-edge="f7-to-f8"><span class="tree-glyph">│</span><strong>FULL CONTROLLED F5 TO F7 PROOF PATH CONFIRMED</strong><span>live producer, admission and authority are not claimed</span></div>"#,
     );
     stages.push_str(&stage(
-        "f8",
-        "F8",
-        "External admission + live authority",
-        "Requires a deployed capture owner, independent reconstruction and a resolved or re-budgeted F5 registry RSS debt.",
+        "f8-0",
+        "8-0",
+        "Production allocator resource truth",
+        "Separates compiler retention from the retained hot registry under the already deployed allocator policy.",
+        &format!(
+            "production-policy RSS {} / target {} B · {} runs",
+            resource.max_peak_rss_delta_bytes,
+            resource.rss_target_bytes,
+            resource.resource_observations,
+        ),
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("latency WATCH · capture owner absent"));
+    stages.push_str(&stage(
+        "f8-a",
+        "8-A",
+        "Live provider capture owner",
+        "Must emit bounded hash-only request provenance before external admission can consume real traffic.",
         "authority=false · ACTIVE=0",
-        "BLOCKED",
-        "block",
+        "READY",
+        "wait",
     ));
 
     format!(
-        r#"<section class="architecture research-architecture" data-research-status="f7-complete-f8-blocked">
+        r#"<section class="architecture research-architecture" data-research-status="f8-0-pass-f8-a-ready">
 <div class="architecture-head">
 <div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>artifact -&gt; grounding -&gt; VM -&gt; verifier -&gt; generation -&gt; F8 admission</p></div>
-<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip block">F8 BLOCKED</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
+<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip pass">F8-0 PASS</span><span class="state-chip wait">F8-A READY</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
-<div class="terminal-rule">controlled F5 -&gt; F7 proof confirmed | live capture producer missing | F5 RSS WATCH | F8 and production authority are not claimed</div>
+<div class="terminal-rule">controlled F5 -&gt; F7 proof confirmed | F8-0 resource PASS | F8-D latency WATCH ({}) | live capture producer missing | authority false</div>
 </section>"#,
         escape(commit),
         escape(&status.f7_receipt_date),
         stages,
+        resource.no_match_p99_max_ns,
     )
 }
 
@@ -203,7 +220,7 @@ fn facts(status: &PipelineStatus) -> String {
 fn f7_facts(status: &PipelineStatus) -> String {
     format!(
         r#"<div class="research-facts">
-<span>capture join exact</span><span>request generation pinned</span><span>raw persisted 0 B</span><span>local accepts 0</span><span>F7 no-match p99 {} ns</span><span>F7 matched p99 {} ns</span><span>F7 max {} ns</span><span>RSS {} / target {} B WATCH</span><span>live capture producer missing</span>
+<span>capture join exact</span><span>request generation pinned</span><span>raw persisted 0 B</span><span>local accepts 0</span><span>F7 no-match p99 {} ns</span><span>F7 matched p99 {} ns</span><span>F7 max {} ns</span><span>F5 conservative RSS {} / target {} B WATCH</span><span>live capture producer missing</span>
 </div>"#,
         status.f7_no_match_p99_ns,
         status.f7_matched_p99_ns,
@@ -222,7 +239,7 @@ fn stage(
     label: &str,
     class: &str,
 ) -> String {
-    let branch = if id == "f8" { "└─" } else { "├─" };
+    let branch = if id == "f8-a" { "└─" } else { "├─" };
     format!(
         r#"<div class="terminal-stage {}" data-rd-stage="{}" title="{}">
 <div class="terminal-line"><span class="tree-glyph">{}</span><span class="stage-index">[{}]</span><strong class="stage-title">{}</strong><span class="stage-metric">{}</span><span class="state-chip {}">{}</span></div>

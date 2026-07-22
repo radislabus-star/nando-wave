@@ -1,0 +1,56 @@
+{
+  "schema": "nando.stop-f8-0-resource-truth.v1",
+  "date": "2026-07-22",
+  "verdict": "RESOURCE_PASS_LATENCY_WATCH",
+  "authority": false,
+  "environment": {
+    "host": "e-MEGA-MINI-M1-13th",
+    "allocator": "mimalloc-0.1.52",
+    "required_policy": "MIMALLOC_PURGE_DELAY=0",
+    "repository_unit_has_policy": true,
+    "loaded_systemd_unit_has_policy": true,
+    "services_restarted": false,
+    "deployment_changed": false
+  },
+  "control": {
+    "policy": "mimalloc-default",
+    "peak_rss_delta_bytes": 62099456,
+    "target_bytes": 16777216,
+    "verdict": "WATCH_ALLOCATOR_RETENTION"
+  },
+  "production_policy": {
+    "resource_observations": 12,
+    "observations_within_target": 12,
+    "max_peak_rss_delta_bytes": 10723328,
+    "target_bytes": 16777216,
+    "operators": 2048,
+    "warmup_requests": 256,
+    "measured_requests": 8192,
+    "verdict": "PASS"
+  },
+  "latency_watch": {
+    "no_match_p99_target_ns": 250000,
+    "matched_p99_target_ns": 1000000,
+    "hard_ceiling_ns": 2000000,
+    "observed_no_match_p99_min_ns": 160882,
+    "observed_no_match_p99_max_ns": 284901,
+    "observed_matched_p99_max_ns": 619241,
+    "observed_hard_max_ns": 1236284,
+    "verdict": "WATCH_F8_D_PROTOCOL_NOT_FROZEN"
+  },
+  "proof": {
+    "canonical_resource_test": "PASS",
+    "production_policy_required_by_test": true,
+    "runtime_unit_pass": 47,
+    "runtime_release_ignored": 1,
+    "gateway_control_pass": 19,
+    "clippy_deny_warnings": "PASS",
+    "graphify_nodes": 27402,
+    "graphify_edges": 61309,
+    "graphify_communities": 1279,
+    "raw_payload_bytes_persisted": 0,
+    "local_accepts": 0,
+    "execution_authority": false
+  },
+  "next": "F8_A_LIVE_PROVIDER_CAPTURE_OWNER"
+}

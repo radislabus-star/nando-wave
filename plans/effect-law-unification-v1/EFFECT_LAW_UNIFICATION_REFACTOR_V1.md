@@ -30,7 +30,7 @@ F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
 F6 independent verifier        COMPLETE / STOP-F6
 F7 generation and persistence  COMPLETE / STOP-F7-E CONTROLLED SHADOW
-F8 external admission          BLOCKED
+F8 external admission          F8-0 PASS / F8-A READY / AUTHORITY FALSE
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -929,6 +929,9 @@ not read the session JSONL evidence ledger as HTTP request provenance, persist
 raw payloads, call admission, or grant local authority.
 
 ### F8: External Admission And Live Shadow
+
+Detailed implementation contract:
+`F8_EXTERNAL_ADMISSION_LIVE_SHADOW_V1.md`.
 
 Admission independently recomputes or validates:
 

@@ -1,22 +1,30 @@
-use std::fs;
 use std::sync::Arc;
 use std::time::Instant;
+use std::{env, fs};
 
-use nando_operator_kernel::{BindingPredicateV1, RuntimeProjectionV3, sha256_bytes};
-use serde_json::{Value, json};
+use nando_operator_kernel::{sha256_bytes, BindingPredicateV1, RuntimeProjectionV3};
+use serde_json::{json, Value};
 
 use super::root;
 use crate::mode_to_role_v3::tests::fixtures::{
     artifact, mentioned_string_selector, request_payload,
 };
 use crate::{
-    RuntimeContextBudgetV3, TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowSourceV3,
-    compile_structural_dispatch_index_v3, execute_traffic_shadow_v3,
+    compile_structural_dispatch_index_v3, execute_traffic_shadow_v3, RuntimeContextBudgetV3,
+    TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowSourceV3,
 };
 
+#[global_allocator]
+static PRODUCTION_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[test]
-#[ignore = "release-only T480 F5-G performance receipt"]
-fn t480_latency_and_hot_registry_measurement() {
+#[ignore = "release-only production allocator F8-0 resource gate"]
+fn production_allocator_hot_registry_resource_measurement() {
+    assert_eq!(
+        env::var("MIMALLOC_PURGE_DELAY").as_deref(),
+        Ok("0"),
+        "the production resource gate requires the deployed allocator policy",
+    );
     let rss_before = rss_bytes();
     let mut artifacts = Vec::with_capacity(2_048);
     artifacts.push(artifact(1, mentioned_string_selector()));
@@ -31,16 +39,14 @@ fn t480_latency_and_hot_registry_measurement() {
     let index = compile_structural_dispatch_index_v3(&artifacts).expect("2048-mode index");
     drop(artifacts);
     let generation = Arc::new(TrafficShadowGenerationV3::new(1, index).expect("generation"));
-    let rss_delta = rss_bytes().saturating_sub(rss_before);
+    let rss_after_load = rss_bytes().saturating_sub(rss_before);
     let matched_input = PreparedInput::matched();
     let unmatched_input = PreparedInput::unmatched();
 
     for _ in 0..128 {
-        assert!(
-            !matched_input
-                .execute(Arc::clone(&generation))
-                .execution_authority()
-        );
+        assert!(!matched_input
+            .execute(Arc::clone(&generation))
+            .execution_authority());
         let receipt = unmatched_input.execute(Arc::clone(&generation));
         assert_ne!(
             receipt.verdict(),
@@ -48,6 +54,7 @@ fn t480_latency_and_hot_registry_measurement() {
         );
         assert!(!receipt.execution_authority());
     }
+    let rss_after_warmup = rss_bytes().saturating_sub(rss_before);
     let mut matched = Vec::with_capacity(4_096);
     let mut no_match = Vec::with_capacity(4_096);
     for _ in 0..4_096 {
@@ -65,17 +72,23 @@ fn t480_latency_and_hot_registry_measurement() {
         assert!(!receipt.execution_authority());
         no_match.push(started.elapsed().as_nanos() as u64);
     }
+    let rss_after_benchmark = rss_bytes().saturating_sub(rss_before);
+    let rss_delta = rss_after_load
+        .max(rss_after_warmup)
+        .max(rss_after_benchmark);
     matched.sort_unstable();
     no_match.sort_unstable();
     let matched_p99 = matched[matched.len() * 99 / 100];
     let no_match_p99 = no_match[no_match.len() * 99 / 100];
+    let hard_max = matched
+        .last()
+        .copied()
+        .unwrap_or_default()
+        .max(no_match.last().copied().unwrap_or_default());
     println!(
-        "F5G_PERF no_match_p99_ns={no_match_p99} matched_p99_ns={matched_p99} rss_delta_bytes={rss_delta} no_match_target_pass={} matched_target_pass={} hard_ceiling_pass={} rss_target_pass={}",
-        no_match_p99 <= 250_000,
-        matched_p99 <= 1_000_000,
-        matched_p99 <= 2_000_000,
-        rss_delta <= 16 * 1_024 * 1_024,
+        "F8_RESOURCE no_match_p99_ns={no_match_p99} matched_p99_ns={matched_p99} hard_max_ns={hard_max} rss_after_load_bytes={rss_after_load} rss_after_warmup_bytes={rss_after_warmup} rss_after_benchmark_bytes={rss_after_benchmark} rss_peak_delta_bytes={rss_delta}",
     );
+    assert!(rss_delta <= 16 * 1_024 * 1_024);
 }
 
 struct PreparedInput {
