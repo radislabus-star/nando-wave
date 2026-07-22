@@ -62,7 +62,7 @@ pub(super) fn verified_panel(status: &F5Status) -> String {
         "Phase integration",
         "Phase ranking preserves safety; this corpus did not yet prove search reduction.",
         &status.phase_search_gain,
-        "SAFETY PASS / GAIN WATCH",
+        "WATCH",
         "wait",
     ));
     stages.push_str(&edge("traffic projection + pinned generations"));
@@ -75,7 +75,7 @@ pub(super) fn verified_panel(status: &F5Status) -> String {
             "{} / {} ordinary",
             status.accounted_rows, status.ordinary_rows
         ),
-        "PASS / PERF WATCH",
+        "WATCH",
         "wait",
     ));
     stages.push_str(&facts(status));
@@ -87,7 +87,7 @@ pub(super) fn verified_panel(status: &F5Status) -> String {
         "F6",
         "Independent verifier",
         "F6 must independently derive and verify the selected action before any authority can exist.",
-        "authority false · ACTIVE 0",
+        "authority=false · ACTIVE=0",
         "NOT STARTED",
         "not-started",
     ));

@@ -39,7 +39,7 @@ mod tests {
         }
         assert!(html.contains("FULL CONTROLLED F5 SIGNAL TO F6 INPUT CONFIRMED"));
         assert!(html.contains("NOT STARTED"));
-        assert!(html.contains("authority false · ACTIVE 0"));
+        assert!(html.contains("authority=false · ACTIVE=0"));
         assert!(html.contains("WATCH_NO_SEARCH_GAIN"));
         assert!(!html.contains("production end-to-end confirmed"));
     }
