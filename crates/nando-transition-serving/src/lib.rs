@@ -9,6 +9,7 @@ mod economics_worker;
 pub mod generation_shadow;
 mod live_economics;
 mod miner_worker;
+mod provider_capture;
 mod runtime_policy;
 pub mod session_backfill;
 mod session_stream;
@@ -29,7 +30,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use nando_expression_runtime::ExpressionRuntime;
 use nando_operator_admission::finalize_post_verifier_receipt;
-use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3};
+use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3, Sha256CommitmentV3};
 use nando_operator_learning::{
     EvidencePolicyV1, OnlineCollectionConfig, OnlineCollectionStatus, ReducibilityClass,
     is_source_neutral_relation_frame,
@@ -68,6 +69,9 @@ use generation_shadow::{
     GenerationShadowConfigV3, GenerationShadowIngressV3, GenerationShadowRuntimeV3,
 };
 use miner_worker::{MinerWorkerHandle, spawn_miner_worker};
+use provider_capture::{
+    ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
+};
 use runtime_policy::{RuntimePolicyCache, spawn_runtime_policy_watch};
 use session_stream::{
     RequestCapabilityIndex, SessionMinerBridge, SessionStreamMetrics, spawn_session_stream,
@@ -118,6 +122,9 @@ pub struct ServingConfig {
     pub operator_generation_capture_index_path: PathBuf,
     pub operator_generation_shadow_queue_capacity: usize,
     pub operator_generation_shadow_poll_ms: u64,
+    pub provider_capture_enabled: bool,
+    pub provider_capture_store_path: PathBuf,
+    pub provider_capture_queue_capacity: usize,
 }
 
 impl ServingConfig {
@@ -248,6 +255,13 @@ impl ServingConfig {
                 "NANDO_OPERATOR_GENERATION_SHADOW_POLL_MS",
                 1_000,
             ),
+            provider_capture_enabled: env_flag("NANDO_PROVIDER_CAPTURE_ENABLED"),
+            provider_capture_store_path: env_path_join(
+                "NANDO_PROVIDER_CAPTURE_STORE",
+                &state_dir,
+                "provider-capture-v3-f8a",
+            ),
+            provider_capture_queue_capacity: env_usize("NANDO_PROVIDER_CAPTURE_QUEUE", 32),
         })
     }
 }
@@ -414,6 +428,7 @@ struct AppState {
     authority_trigger: Arc<Mutex<Option<SyncSender<()>>>>,
     event_lock: Arc<Mutex<()>>,
     counters: Arc<ServingCounters>,
+    provider_capture: Arc<ProviderCaptureRuntimeV3>,
     operator_generation_shadow: Arc<GenerationShadowRuntimeV3>,
 }
 
@@ -523,6 +538,9 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     let operator_generation_shadow = Arc::new(GenerationShadowRuntimeV3::new(
         generation_shadow_config(&config),
     )?);
+    let provider_capture = Arc::new(ProviderCaptureRuntimeV3::new(provider_capture_config(
+        &config,
+    ))?);
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -543,6 +561,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         authority_trigger: Arc::new(Mutex::new(None)),
         event_lock: Arc::new(Mutex::new(())),
         counters: Arc::new(ServingCounters::default()),
+        provider_capture,
         operator_generation_shadow,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
@@ -578,6 +597,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(&state.config.bind)
         .await
         .map_err(|error| format!("bind:{}:{error}", state.config.bind))?;
+    state.provider_capture.start_after_http_bind();
     state.operator_generation_shadow.start_after_http_bind()?;
     spawn_miner_warmup(state.clone())?;
     axum::serve(listener, app)
@@ -1005,6 +1025,10 @@ async fn health(State(state): State<AppState>) -> Response {
             json!(state.live_economics.status()),
         );
         object.insert(
+            "provider_capture".to_owned(),
+            json!(state.provider_capture.status()),
+        );
+        object.insert(
             "operator_generation_shadow".to_owned(),
             json!(state.operator_generation_shadow.status()),
         );
@@ -1104,6 +1128,8 @@ async fn miner_report(State(state): State<AppState>) -> Response {
             "evidence": evidence,
             "economics": economics,
             "economics_worker": state.live_economics.status(),
+            "provider_capture": state.provider_capture.status(),
+            "operator_generation_shadow": state.operator_generation_shadow.status(),
             "signal_tree": signal_tree,
             "claim_boundary": "in-memory Rust state and generated snapshots; only admission receipts grant execution authority",
         }),
@@ -1643,7 +1669,10 @@ fn handle_openai(
         .unwrap_or_else(|| format!("anonymous:{request_hash}:{request_ordinal}"));
     let payload = match serde_json::from_slice::<Value>(&body) {
         Ok(payload) => payload,
-        Err(_) => return fallback(&state, "request_json_unavailable"),
+        Err(_) => {
+            state.provider_capture.observe_invalid_provenance();
+            return fallback(&state, "request_json_unavailable");
+        }
     };
     state
         .request_capabilities
@@ -1653,15 +1682,15 @@ fn handle_openai(
         .get("stream")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    submit_operator_generation_shadow(
+    if let Some(capture_receipt) = capture_provider_request(
         &state,
-        &body,
+        &client_intent_id,
         &request_hash,
-        request_ordinal,
-        &request_text,
         projection,
         request_streaming,
-    );
+    ) {
+        submit_operator_generation_shadow(&state, &body, capture_receipt, &request_text);
+    }
     let traffic_source_header = headers
         .get("x-nando-traffic-source")
         .and_then(|value| value.to_str().ok())
@@ -1769,31 +1798,48 @@ fn handle_openai(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+fn capture_provider_request(
+    state: &AppState,
+    client_intent_id: &str,
+    request_sha256: &str,
+    projection: Projection,
+    streaming: bool,
+) -> Option<nando_operator_learning::ProviderRequestCaptureReceiptV3> {
+    let projection = match projection {
+        Projection::Responses => RuntimeProjectionV3::Responses,
+        Projection::ChatCompletions => RuntimeProjectionV3::ChatCompletions,
+        Projection::TransitionApi => RuntimeProjectionV3::TransitionApi,
+    };
+    let request_root_sha256 = Sha256CommitmentV3::from_hex(request_sha256).ok()?;
+    let lineage_root_sha256 = Sha256CommitmentV3::digest_parts(
+        b"nando.provider-capture-lineage.v3.f8a",
+        &[client_intent_id.as_bytes()],
+    );
+    state
+        .provider_capture
+        .try_capture(ProviderCaptureIngressV3 {
+            lineage_root_sha256,
+            request_root_sha256,
+            projection,
+            streaming,
+            observed_at_unix_ms: unix_now_ms(),
+        })
+        .into_receipt()
+}
+
 fn submit_operator_generation_shadow(
     state: &AppState,
     body: &Bytes,
-    request_sha256: &str,
-    request_ordinal: u64,
+    capture_receipt: nando_operator_learning::ProviderRequestCaptureReceiptV3,
     request_text: &str,
-    projection: Projection,
-    streaming: bool,
 ) {
     if !state.operator_generation_shadow.enabled() {
         return;
     }
-    let projection = match projection {
-        Projection::Responses => RuntimeProjectionV3::Responses,
-        Projection::ChatCompletions => RuntimeProjectionV3::ChatCompletions,
-        Projection::TransitionApi => return,
-    };
     state
         .operator_generation_shadow
         .observe_provider_request(GenerationShadowIngressV3 {
-            request_sha256,
-            request_ordinal,
-            projection,
-            streaming,
+            capture_receipt,
             request_text,
             provider_payload_bytes: body.clone(),
         });
@@ -4390,6 +4436,14 @@ fn generation_shadow_config(config: &ServingConfig) -> GenerationShadowConfigV3 
     }
 }
 
+fn provider_capture_config(config: &ServingConfig) -> ProviderCaptureConfigV3 {
+    ProviderCaptureConfigV3 {
+        enabled: config.provider_capture_enabled,
+        store_path: config.provider_capture_store_path.clone(),
+        queue_capacity: config.provider_capture_queue_capacity,
+    }
+}
+
 fn env_u64(name: &str, fallback: u64) -> u64 {
     env::var(name)
         .ok()
@@ -4420,6 +4474,14 @@ fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs())
+}
+
+fn unix_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+        })
 }
 
 async fn shutdown_signal() {
@@ -4620,7 +4682,14 @@ mod tests {
                 .join("operator-generation-capture-v3.cbor"),
             operator_generation_shadow_queue_capacity: 8,
             operator_generation_shadow_poll_ms: 1_000,
+            provider_capture_enabled: false,
+            provider_capture_store_path: root.join("provider-capture-v3-f8a"),
+            provider_capture_queue_capacity: 8,
         };
+        let provider_capture = Arc::new(
+            ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
+                .expect("provider capture"),
+        );
         let operator_generation_shadow = Arc::new(
             GenerationShadowRuntimeV3::new(generation_shadow_config(&config))
                 .expect("generation shadow"),
@@ -4649,6 +4718,7 @@ mod tests {
             authority_trigger: Arc::new(Mutex::new(None)),
             event_lock: Arc::new(Mutex::new(())),
             counters: Arc::new(ServingCounters::default()),
+            provider_capture,
             operator_generation_shadow,
         };
         refresh_response_executor(&state);

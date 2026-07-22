@@ -184,7 +184,7 @@ pub(super) fn verified_panel(status: &PipelineStatus, resource: &F8ResourceStatu
         r#"<section class="architecture research-architecture" data-research-status="f8-0-pass-f8-a-ready">
 <div class="architecture-head">
 <div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>artifact -&gt; grounding -&gt; VM -&gt; verifier -&gt; generation -&gt; F8 admission</p></div>
-<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip pass">F8-0 PASS</span><span class="state-chip wait">F8-A READY</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
+<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip pass">F8-0 PASS</span><span class="state-chip wait">F8-A CONTROLLED</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
 <div class="terminal-rule">controlled F5 -&gt; F7 proof confirmed | F8-0 resource PASS | F8-D latency WATCH ({}) | live capture producer missing | authority false</div>

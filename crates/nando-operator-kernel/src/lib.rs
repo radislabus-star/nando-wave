@@ -9,6 +9,7 @@ pub mod operator_generation;
 pub mod program;
 pub mod protocol_mode;
 pub mod relation_routing;
+pub mod sha256_commitment;
 pub mod structural_context;
 pub mod vm;
 
@@ -23,5 +24,6 @@ pub use operator_generation::*;
 pub use program::*;
 pub use protocol_mode::*;
 pub use relation_routing::*;
+pub use sha256_commitment::*;
 pub use structural_context::*;
 pub use vm::*;

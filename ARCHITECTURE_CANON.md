@@ -1300,6 +1300,45 @@ STOP-F6 proves only the current function `CALL` + `COPY`, output-only effect
 surface. It does not wire live receipts, persist a new generation, grant
 admission, or change production authority. Those remain F7/F8 boundaries.
 
+#### F8-A provider capture boundary
+
+The provider boundary has one hash-only capture route. It reuses the exact
+request digest already computed by `handle_openai`; capture code must never hash
+or persist the request body again:
+
+```text
+HTTP bind available
+-> existing request SHA-256
+-> ProviderCaptureRuntimeV3
+-> durable sequence lease already published
+-> ProviderRequestCaptureReceiptV3
+-> bounded try_send
+-> background ProviderCaptureStoreV3
+-> inactive slot + fsync + rename + directory fsync
+-> durable CAPTURED status
+```
+
+`ProviderRequestCaptureReceiptV3` contains only fixed-size commitments,
+projection, streaming state, sequence and observation time. Raw request bytes,
+request text, parsed JSON, teacher output and actor results are forbidden from
+the receipt and capture index. The index is bounded to 16,384 records and 8 MiB;
+the writer queue is bounded to 48. A restart publishes a new lease before
+allocating and permanently skips the prior unused sequence range. Corrupt
+committed slots block restore rather than falling back to a sequence that could
+be reused.
+
+Ingress reports `ENQUEUED`; only the writer reports `CAPTURED` after durable
+publication. F7 may consume the exact enqueued receipt for no-authority
+telemetry, but F8-B must independently join it to the durable capture index
+before it can become generation evidence. Queue overload, disabled capture,
+missing lease, invalid provenance and persistence failure are censored and
+cannot update semantic centers or authority.
+
+Canonical controlled receipt:
+`plans/effect-law-unification-v1/STOP_F8_A_PROVIDER_CAPTURE_OWNER.json`.
+F8-A is disabled by default and has not been enabled on live traffic. F8-B,
+external admission, local accept and production authority remain blocked.
+
 `RuntimeSurfaceEvidence` supplied by a caller is a laboratory interface, never
 production authority. Live routing and parity verification must start from the
 raw pre-action request and provider payload, independently enumerate structural

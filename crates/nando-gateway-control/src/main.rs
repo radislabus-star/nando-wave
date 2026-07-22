@@ -221,6 +221,10 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .pointer("/collection/status")
         .unwrap_or(&Value::Null);
     let worker_status = live_miner.get("worker").unwrap_or(&Value::Null);
+    let provider_capture = live_miner.get("provider_capture").unwrap_or(&Value::Null);
+    let operator_generation_shadow = live_miner
+        .get("operator_generation_shadow")
+        .unwrap_or(&Value::Null);
     let collection_outcomes = live_miner
         .pointer("/collection/candidate_outcomes")
         .unwrap_or(&Value::Null);
@@ -444,6 +448,17 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             ),
             active_packages: response_active,
             online_ready: online_status == "READY",
+            capture_phase: metric_str(provider_capture, "phase", "missing"),
+            capture_records: metric_u64(provider_capture, "records"),
+            capture_captured: metric_u64(provider_capture, "captured"),
+            capture_censored: metric_u64(provider_capture, "censored"),
+            capture_publish_sequence: metric_u64(provider_capture, "publish_sequence"),
+            capture_last_error: metric_str(provider_capture, "last_error", ""),
+            shadow_phase: metric_str(operator_generation_shadow, "phase", "missing"),
+            shadow_submitted: metric_u64(operator_generation_shadow, "submitted"),
+            shadow_evaluated: metric_u64(operator_generation_shadow, "evaluated"),
+            shadow_verified: metric_u64(operator_generation_shadow, "verified"),
+            shadow_parity_mismatches: metric_u64(operator_generation_shadow, "parity_mismatches"),
         },
         &proof_summary,
         &build_manifest,

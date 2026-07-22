@@ -1,6 +1,6 @@
 # F8 External Admission And Live Shadow V1
 
-Status: `F8-0 PASS / F8-A READY / F8-B..E NOT STARTED / AUTHORITY FALSE`
+Status: `F8-0 PASS / F8-A CONTROLLED PASS / F8-A LIVE NOT RUN / F8-B..E NOT STARTED / AUTHORITY FALSE`
 
 Date: `2026-07-22`
 
@@ -148,6 +148,11 @@ existing body hash
 -> continue provider fallback immediately
 ```
 
+The request path reports `ENQUEUED`, not `CAPTURED`. `CAPTURED` is a terminal
+writer-owned state recorded only after the inactive slot has been published and
+read back byte-identically. An enqueued receipt may feed F7 telemetry, but it is
+not durable evidence until F8-B joins it against the published capture index.
+
 Outcomes:
 
 ```text
@@ -182,6 +187,13 @@ restart sequence reuse                       0
 duplicate event/request roots                BLOCK
 queue overload semantic updates              0
 ```
+
+F8-A controlled implementation result:
+`STOP_F8_A_PROVIDER_CAPTURE_OWNER.md`. All six STOP invariants pass in focused,
+restart, privacy and structural tests. The feature remains disabled by default;
+no live provider capture, deployment, service restart or authority change was
+performed. Therefore the implementation boundary is `CONTROLLED_PASS` and the
+live boundary remains `NOT_RUN`.
 
 ## F8-B: Generation Shadow Receipt Ledger
 

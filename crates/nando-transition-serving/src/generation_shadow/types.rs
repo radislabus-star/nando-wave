@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use axum::body::Bytes;
 use nando_operator_kernel::{RuntimeProjectionV3, sha256_bytes, valid_nonzero_sha256};
+use nando_operator_learning::ProviderRequestCaptureReceiptV3;
 use nando_operator_proof::independent_verifier_v3::{
     F6_MAX_RAW_REQUEST_BYTES_V3, F6_MAX_REQUEST_TEXT_BYTES_V3,
 };
@@ -22,16 +23,14 @@ pub struct GenerationShadowConfigV3 {
 }
 
 pub(crate) struct GenerationShadowIngressV3<'a> {
-    pub request_sha256: &'a str,
-    pub request_ordinal: u64,
-    pub projection: RuntimeProjectionV3,
-    pub streaming: bool,
+    pub capture_receipt: ProviderRequestCaptureReceiptV3,
     pub request_text: &'a str,
     pub provider_payload_bytes: Bytes,
 }
 
 #[derive(Clone)]
 pub struct GenerationShadowRequestV3 {
+    capture_receipt: Option<ProviderRequestCaptureReceiptV3>,
     window_row_sha256: String,
     request_sha256: String,
     projection: RuntimeProjectionV3,
@@ -76,6 +75,9 @@ pub struct GenerationShadowEvaluationReceiptV3 {
     pub generation_id_sha256: String,
     pub publish_sequence: u64,
     pub request_sha256: String,
+    pub capture_sequence: Option<u64>,
+    pub capture_event_sha256: Option<String>,
+    pub capture_receipt_sha256: Option<String>,
     pub traffic_receipt_sha256: String,
     pub verifier_receipt_sha256: Option<String>,
     pub verdict: GenerationShadowEvaluationVerdictV3,
@@ -141,6 +143,7 @@ impl GenerationShadowRequestV3 {
             return Err(GenerationShadowRequestErrorV3::RequestDigestMismatch);
         }
         Self::from_capture_owner(
+            None,
             window_row_sha256,
             request_sha256,
             projection,
@@ -151,6 +154,7 @@ impl GenerationShadowRequestV3 {
     }
 
     pub(super) fn from_capture_owner(
+        capture_receipt: Option<ProviderRequestCaptureReceiptV3>,
         window_row_sha256: String,
         request_sha256: String,
         projection: RuntimeProjectionV3,
@@ -165,6 +169,7 @@ impl GenerationShadowRequestV3 {
             return Err(GenerationShadowRequestErrorV3::BudgetExhausted);
         }
         Ok(Self {
+            capture_receipt,
             window_row_sha256,
             request_sha256,
             projection,
@@ -174,12 +179,36 @@ impl GenerationShadowRequestV3 {
         })
     }
 
+    pub(super) fn from_provider_capture(
+        capture_receipt: ProviderRequestCaptureReceiptV3,
+        request_text: String,
+        provider_payload_bytes: Bytes,
+    ) -> Result<Self, GenerationShadowRequestErrorV3> {
+        let window_row_sha256 = capture_receipt.event_root_sha256().to_hex();
+        let request_sha256 = capture_receipt.request_root_sha256().to_hex();
+        let projection = capture_receipt.projection();
+        let streaming = capture_receipt.streaming();
+        Self::from_capture_owner(
+            Some(capture_receipt),
+            window_row_sha256,
+            request_sha256,
+            projection,
+            streaming,
+            request_text,
+            provider_payload_bytes,
+        )
+    }
+
     pub(super) fn window_row_sha256(&self) -> &str {
         &self.window_row_sha256
     }
 
     pub(super) fn request_sha256(&self) -> &str {
         &self.request_sha256
+    }
+
+    pub(super) const fn capture_receipt(&self) -> Option<&ProviderRequestCaptureReceiptV3> {
+        self.capture_receipt.as_ref()
     }
 
     pub(super) const fn projection(&self) -> RuntimeProjectionV3 {
@@ -196,5 +225,47 @@ impl GenerationShadowRequestV3 {
 
     pub(super) fn provider_payload_bytes(&self) -> &[u8] {
         &self.provider_payload_bytes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nando_operator_kernel::Sha256CommitmentV3;
+    use nando_operator_learning::{
+        ProviderRequestCaptureInputV3, seal_provider_request_capture_v3,
+    };
+
+    #[test]
+    fn live_shadow_preserves_the_capture_owner_receipt_without_a_second_body_hash() {
+        let request_root = Sha256CommitmentV3::digest_bytes(b"owner-hashed-provider-body");
+        let receipt = seal_provider_request_capture_v3(ProviderRequestCaptureInputV3 {
+            capture_sequence: 17,
+            capture_epoch_root: root("epoch"),
+            lineage_root_sha256: root("lineage"),
+            request_root_sha256: request_root,
+            projection: RuntimeProjectionV3::Responses,
+            streaming: true,
+            observed_at_unix_ms: 1_750_000_000_000,
+        })
+        .expect("capture receipt");
+
+        // F6 owns the independent byte-parity check off the request path.
+        let request = GenerationShadowRequestV3::from_provider_capture(
+            receipt.clone(),
+            "continue".to_owned(),
+            Bytes::from_static(b"not-rehashed-on-ingress"),
+        )
+        .expect("shadow request");
+        assert_eq!(request.request_sha256(), request_root.to_hex());
+        assert_eq!(
+            request.window_row_sha256(),
+            receipt.event_root_sha256().to_hex()
+        );
+        assert_eq!(request.capture_receipt(), Some(&receipt));
+    }
+
+    fn root(label: &str) -> Sha256CommitmentV3 {
+        Sha256CommitmentV3::digest_bytes(label.as_bytes())
     }
 }

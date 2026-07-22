@@ -125,7 +125,7 @@ mod tests {
         assert!(html.contains("F6 COMPLETE"));
         assert!(html.contains("F7 COMPLETE"));
         assert!(html.contains("F8-0 PASS"));
-        assert!(html.contains("F8-A READY"));
+        assert!(html.contains("F8-A CONTROLLED"));
         assert!(html.contains("authority=false · ACTIVE=0"));
         assert!(html.contains("WATCH_NO_SEARCH_GAIN"));
         assert!(html.contains("live capture producer missing"));

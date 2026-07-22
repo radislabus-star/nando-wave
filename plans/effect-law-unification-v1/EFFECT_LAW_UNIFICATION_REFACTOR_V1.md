@@ -30,7 +30,7 @@ F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
 F6 independent verifier        COMPLETE / STOP-F6
 F7 generation and persistence  COMPLETE / STOP-F7-E CONTROLLED SHADOW
-F8 external admission          F8-0 PASS / F8-A READY / AUTHORITY FALSE
+F8 external admission          F8-0 PASS / F8-A CONTROLLED PASS / LIVE NOT RUN
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -57,6 +57,8 @@ plans/effect-law-unification-v1/
   STOP_F5_RUNTIME_CONVERGENCE.md
   STOP_F6_INDEPENDENT_VERIFIER_CONVERGENCE.md
   F7_GENERATION_PERSISTENCE_V1.md
+  F8_EXTERNAL_ADMISSION_LIVE_SHADOW_V1.md
+  STOP_F8_A_PROVIDER_CAPTURE_OWNER.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
@@ -67,8 +69,10 @@ freeze without granting authority; F7-D added a separate two-slot atomic
 persistence owner with monotonic recovery. F7-E now joins the checkpoint to a
 separate capture-owner index, loads only after HTTP fallback is available,
 pins each queued request to one immutable generation, and runs F5 plus the
-independent F6 verifier in controlled shadow. The live capture producer,
-external admission and authority remain blocked at F8.
+independent F6 verifier in controlled shadow. F8-A now implements the disabled-
+by-default hash-only capture producer, durable sequence leases and exact F7
+handoff. Live capture remains unrun; the durable generation receipt, external
+admission and authority remain blocked at F8-B and later stages.
 
 ## 1. Objective
 

@@ -4,7 +4,9 @@
 //! classify evidence, verify an action, or grant admission authority.
 
 mod checkpoint;
+mod provider_capture_store_v3;
 mod store;
 
 pub use checkpoint::*;
+pub use provider_capture_store_v3::*;
 pub use store::*;

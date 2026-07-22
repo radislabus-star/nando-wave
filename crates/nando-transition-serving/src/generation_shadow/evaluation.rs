@@ -149,6 +149,15 @@ fn receipt(
             .to_owned(),
         publish_sequence: generation.checkpoint().publish_sequence(),
         request_sha256: request.request_sha256().to_owned(),
+        capture_sequence: request
+            .capture_receipt()
+            .map(|receipt| receipt.capture_sequence()),
+        capture_event_sha256: request
+            .capture_receipt()
+            .map(|receipt| receipt.event_root_sha256().to_hex()),
+        capture_receipt_sha256: request
+            .capture_receipt()
+            .map(|receipt| receipt.receipt_sha256().to_hex()),
         traffic_receipt_sha256,
         verifier_receipt_sha256,
         verdict,

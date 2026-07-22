@@ -1,0 +1,60 @@
+{
+  "schema": "nando.stop-f8-a-provider-capture-owner.v1",
+  "generated_at": "2026-07-22T20:22:01+03:00",
+  "baseline_commit": "37c887136dca0e3512552415028d6e5530906564",
+  "code_manifest_sha256": "cc621a7d5b513f6609765bd8496467e064ffd0b7155e6311db3eba17ac41473f",
+  "verdict": "CONTROLLED_PASS_LIVE_NOT_RUN",
+  "implementation": {
+    "request_path_blocking_writes": 0,
+    "second_request_body_hashes": 0,
+    "raw_payload_bytes_persisted": 0,
+    "restart_sequence_reuse": 0,
+    "duplicate_commitments": "BLOCK",
+    "queue_overload_semantic_updates": 0,
+    "capture_queue_max": 48,
+    "index_records_max": 16384,
+    "index_bytes_max": 8388608,
+    "feature_default_enabled": false
+  },
+  "tests": {
+    "kernel": { "passed": 18, "failed": 0 },
+    "learning": { "passed": 213, "failed": 0 },
+    "persistence": { "passed": 13, "failed": 0 },
+    "gateway": { "passed": 18, "failed": 0 },
+    "transition_serving": {
+      "passed": 51,
+      "failed": 3,
+      "baseline_passed": 49,
+      "baseline_failed": 3,
+      "new_failure_classes": 0
+    },
+    "f7_integration": { "passed": 5, "failed": 0, "ignored_release_perf": 1 },
+    "clippy_deny_warnings": true,
+    "rustfmt": true,
+    "diff_check": true
+  },
+  "structural_gates": {
+    "http_ingress": "PASS_AUTHORITY_FALSE",
+    "capture_kernel": "PASS_AUTHORITY_FALSE",
+    "persistence": "PASS_AUTHORITY_FALSE",
+    "f7_handoff": "PASS_AUTHORITY_FALSE",
+    "live_transition_gate": "PASS",
+    "eligible_for_local_accept": false
+  },
+  "graphify": {
+    "nodes": 27690,
+    "edges": 61972,
+    "communities": 1289
+  },
+  "live": {
+    "provider_capture_enabled": false,
+    "provider_capture_rows": 0,
+    "deployment_performed": false,
+    "service_restart_performed": false,
+    "active_response_packages": 0,
+    "execution_authority": false,
+    "m3": "WATCH"
+  },
+  "next_stage": "PREDEPLOY_REVIEW_THEN_F8_A_SHADOW_ENABLE",
+  "f8_b_started": false
+}
