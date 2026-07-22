@@ -57,7 +57,7 @@ pub(super) fn exact_package_runtime_parity(
     (frames.len(), failures, receipts)
 }
 
-fn collection_runtime_parity(
+pub(super) fn collection_runtime_parity(
     package: &ResponsePackage,
     rows: &[ColdCollectionRow],
     frames: &[RelationFrame],
@@ -109,7 +109,7 @@ fn collection_runtime_parity(
     (frames.len(), failures, receipts)
 }
 
-fn parity_provider_payload(
+pub(super) fn parity_provider_payload(
     package: &ResponsePackage,
     frame: &RelationFrame,
     index: usize,
@@ -296,7 +296,7 @@ fn parity_provider_payload(
     serde_json::json!({"input": input})
 }
 
-fn parity_provider_output(selector: &ResponseValueSelector, value: &Value) -> String {
+pub(super) fn parity_provider_output(selector: &ResponseValueSelector, value: &Value) -> String {
     match selector {
         ResponseValueSelector::ContinuationHandle { .. } => {
             let value = value
@@ -365,7 +365,7 @@ fn parity_provider_output(selector: &ResponseValueSelector, value: &Value) -> St
     }
 }
 
-fn parity_projection_output(
+pub(super) fn parity_projection_output(
     selector: &nando_response_actor::ResponseValueSelector,
     value: &Value,
 ) -> Value {
@@ -466,7 +466,7 @@ fn parity_projection_output(
     }
 }
 
-fn parity_request_referenced_ordinal_output(
+pub(super) fn parity_request_referenced_ordinal_output(
     ordinal: u16,
     value_type: AtomValueType,
     value: &Value,
@@ -491,7 +491,11 @@ fn parity_request_referenced_ordinal_output(
     serde_json::to_string(&Value::Object(object)).unwrap_or_else(|_| "{}".to_owned())
 }
 
-fn parity_scalar_ordinal_output(ordinal: u16, value_type: AtomValueType, value: &Value) -> String {
+pub(super) fn parity_scalar_ordinal_output(
+    ordinal: u16,
+    value_type: AtomValueType,
+    value: &Value,
+) -> String {
     let filler = match value_type {
         AtomValueType::String | AtomValueType::Identifier => Value::String(String::new()),
         AtomValueType::Integer => Value::from(0),
@@ -503,7 +507,7 @@ fn parity_scalar_ordinal_output(ordinal: u16, value_type: AtomValueType, value: 
     serde_json::json!({"values": values}).to_string()
 }
 
-fn parity_scalar_reverse_ordinal_output(
+pub(super) fn parity_scalar_reverse_ordinal_output(
     reverse_ordinal: u16,
     value_type: AtomValueType,
     value: &Value,
@@ -519,7 +523,9 @@ fn parity_scalar_reverse_ordinal_output(
     serde_json::to_string(&values).unwrap_or_default()
 }
 
-fn exact_package_hard_negative_accepts(package: &nando_response_actor::ResponsePackage) -> usize {
+pub(super) fn exact_package_hard_negative_accepts(
+    package: &nando_response_actor::ResponsePackage,
+) -> usize {
     let continuation_outputs = vec![
         Value::String("completed successfully".to_owned()),
         Value::String(

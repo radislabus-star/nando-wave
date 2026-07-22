@@ -22,7 +22,7 @@ pub(super) fn dedupe_relation_frames(
     (unique, duplicate_rows, conflicting_ids.len())
 }
 
-fn read_json_lines<T: DeserializeOwned>(path: &Path) -> Result<Vec<T>, String> {
+pub(super) fn read_json_lines<T: DeserializeOwned>(path: &Path) -> Result<Vec<T>, String> {
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -44,18 +44,18 @@ fn read_json_lines<T: DeserializeOwned>(path: &Path) -> Result<Vec<T>, String> {
     Ok(rows)
 }
 
-fn is_grounded_package(package: &ResponsePackage) -> bool {
+pub(super) fn is_grounded_package(package: &ResponsePackage) -> bool {
     package.package_id.starts_with("raw-phase-grounded-")
 }
 
-fn promotion_debt(package: &&ResponsePackage) -> usize {
+pub(super) fn promotion_debt(package: &&ResponsePackage) -> usize {
     32_usize.saturating_sub(package.proof.support_rows)
         + 32_usize.saturating_sub(package.proof.future_rows)
         + 3_usize.saturating_sub(package.proof.distinct_sessions)
         + 2_usize.saturating_sub(package.proof.distinct_surfaces)
 }
 
-fn candidate_progress(package: Option<&ResponsePackage>) -> Value {
+pub(super) fn candidate_progress(package: Option<&ResponsePackage>) -> Value {
     package.map_or(Value::Null, |package| {
         serde_json::json!({
             "package_id": package.package_id,
@@ -77,7 +77,7 @@ fn candidate_progress(package: Option<&ResponsePackage>) -> Value {
     })
 }
 
-const fn verifier_coverage_state(required: usize, emitted: usize) -> &'static str {
+pub(super) const fn verifier_coverage_state(required: usize, emitted: usize) -> &'static str {
     if required == 0 {
         "NOT_EVALUATED"
     } else if emitted >= required {
@@ -87,7 +87,7 @@ const fn verifier_coverage_state(required: usize, emitted: usize) -> &'static st
     }
 }
 
-const fn package_state_name(state: ResponsePackageState) -> &'static str {
+pub(super) const fn package_state_name(state: ResponsePackageState) -> &'static str {
     match state {
         ResponsePackageState::Quarantine => "quarantine",
         ResponsePackageState::Active => "active",
@@ -95,7 +95,7 @@ const fn package_state_name(state: ResponsePackageState) -> &'static str {
     }
 }
 
-const fn program_operation_name(operation: &ResponseOperation) -> &'static str {
+pub(super) const fn program_operation_name(operation: &ResponseOperation) -> &'static str {
     match operation {
         ResponseOperation::UniqueConsensus { .. } => "unique_consensus",
         ResponseOperation::AdvancePlan { .. } => "advance_plan",
@@ -113,25 +113,25 @@ const fn program_operation_name(operation: &ResponseOperation) -> &'static str {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-struct ColdCollectionEvidence {
-    schema: String,
-    provider_payload: Value,
-    expected_response: String,
+pub(super) struct ColdCollectionEvidence {
+    pub(super) schema: String,
+    pub(super) provider_payload: Value,
+    pub(super) expected_response: String,
 }
 
 #[derive(Clone, Debug)]
-struct ColdCollectionRow {
-    frame_id_sha256: String,
-    session_id_sha256: String,
-    client_intent_id_sha256: String,
-    observed_at_unix_nanos: u64,
-    surface_sha256: String,
-    phase_valid: bool,
-    request_phase_atom_ids: Vec<u64>,
-    example: CollectionSynthesisExample,
+pub(super) struct ColdCollectionRow {
+    pub(super) frame_id_sha256: String,
+    pub(super) session_id_sha256: String,
+    pub(super) client_intent_id_sha256: String,
+    pub(super) observed_at_unix_nanos: u64,
+    pub(super) surface_sha256: String,
+    pub(super) phase_valid: bool,
+    pub(super) request_phase_atom_ids: Vec<u64>,
+    pub(super) example: CollectionSynthesisExample,
 }
 
-fn cold_collection_rows(rows: &[Value]) -> Vec<ColdCollectionRow> {
+pub(super) fn cold_collection_rows(rows: &[Value]) -> Vec<ColdCollectionRow> {
     let mut output = Vec::new();
     for row in rows {
         let Some(cold_value) = row.get("cold_collection_example") else {
@@ -198,7 +198,7 @@ fn cold_collection_rows(rows: &[Value]) -> Vec<ColdCollectionRow> {
     output
 }
 
-fn read_relation_frame_input(
+pub(super) fn read_relation_frame_input(
     path: &Path,
 ) -> Result<(Vec<RelationFrame>, Vec<ColdCollectionRow>), String> {
     if !path.exists() {
@@ -226,7 +226,7 @@ fn read_relation_frame_input(
     Ok((frames, cold))
 }
 
-fn collection_surface_digest(payload: &Value) -> Option<String> {
+pub(super) fn collection_surface_digest(payload: &Value) -> Option<String> {
     let text = payload
         .get("input")?
         .as_array()?
@@ -252,7 +252,7 @@ fn collection_surface_digest(payload: &Value) -> Option<String> {
     canonical_json_sha256(&shape).ok()
 }
 
-fn collection_families(rows: &[ColdCollectionRow]) -> Vec<Vec<ColdCollectionRow>> {
+pub(super) fn collection_families(rows: &[ColdCollectionRow]) -> Vec<Vec<ColdCollectionRow>> {
     let mut shape_buckets = BTreeMap::<String, Vec<ColdCollectionRow>>::new();
     for row in rows {
         let key = serde_json::from_str::<Value>(&row.example.expected_response)
@@ -266,7 +266,7 @@ fn collection_families(rows: &[ColdCollectionRow]) -> Vec<Vec<ColdCollectionRow>
         .collect()
 }
 
-fn split_collection_bucket_by_behavior(
+pub(super) fn split_collection_bucket_by_behavior(
     mut rows: Vec<ColdCollectionRow>,
 ) -> Vec<Vec<ColdCollectionRow>> {
     const MAX_SEED_PAIRS: usize = 256;
@@ -355,7 +355,7 @@ fn split_collection_bucket_by_behavior(
     families
 }
 
-fn collection_candidate_covers(
+pub(super) fn collection_candidate_covers(
     candidate: &nando_response_actor::SynthesizedCollectionProgram,
     row: &ColdCollectionRow,
 ) -> bool {
@@ -370,7 +370,7 @@ fn collection_candidate_covers(
         .is_ok()
 }
 
-fn value_shape(value: &Value) -> String {
+pub(super) fn value_shape(value: &Value) -> String {
     match value {
         Value::Null => "null".to_owned(),
         Value::Bool(_) => "boolean".to_owned(),
@@ -388,11 +388,13 @@ fn value_shape(value: &Value) -> String {
     }
 }
 
-fn compile_collection_quarantine_package(rows: &[ColdCollectionRow]) -> Option<ResponsePackage> {
+pub(super) fn compile_collection_quarantine_package(
+    rows: &[ColdCollectionRow],
+) -> Option<ResponsePackage> {
     compile_collection_package(rows, None)
 }
 
-fn compile_collection_package(
+pub(super) fn compile_collection_package(
     rows: &[ColdCollectionRow],
     manifest: Option<&ResponseSupportManifest>,
 ) -> Option<ResponsePackage> {
@@ -553,7 +555,7 @@ fn compile_collection_package(
     })
 }
 
-fn build_collection_support_manifest(
+pub(super) fn build_collection_support_manifest(
     rows: &[ColdCollectionRow],
     package: &ResponsePackage,
 ) -> Option<ResponseSupportManifest> {

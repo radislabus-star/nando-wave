@@ -32,9 +32,15 @@ hard production violations          0
 AST functions and methods                56/56
 nando-response-actor frozen fingerprint  PASS
 compile                                  PASS
+all-target sibling visibility            PASS after R8J repair
 new remote background builds                0
 execution authority                     false
 deploy/restart                          not run
 ```
 
 Machine receipt: `R8H_MINER_APP_SPLIT_STOP.json`.
+
+The original library-only STOP did not compile every binary test route. R8J
+closed that gap by keeping the moved helpers `pub(super)` inside the miner
+application and running the full all-target Clippy/fingerprint gate. No helper
+became part of the crate API.

@@ -49,6 +49,7 @@ use authority::{
     aggregate_causal_verdict, compile_runtime_registry, package_receipt_sets,
     response_authority_candidate,
 };
+// These bridges stay private to the miner application and do not extend the crate API.
 use collection::*;
 use io::*;
 use orchestration::run_with_args;

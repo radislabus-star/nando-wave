@@ -22,14 +22,14 @@ pub(super) fn causal_proof_passes(path: &Path) -> bool {
             .is_some_and(|(full, shuffled)| full < shuffled)
 }
 
-fn atomic_write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+pub(super) fn atomic_write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     atomic_write_value(
         path,
         &serde_json::to_value(value).map_err(|error| error.to_string())?,
     )
 }
 
-fn atomic_write_value(path: &Path, value: &Value) -> Result<(), String> {
+pub(super) fn atomic_write_value(path: &Path, value: &Value) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| format!("no_parent:{}", path.display()))?;
@@ -51,7 +51,7 @@ fn atomic_write_value(path: &Path, value: &Value) -> Result<(), String> {
     fs::rename(&temporary, path).map_err(|error| format!("rename:{}:{error}", path.display()))
 }
 
-fn unix_now() -> u64 {
+pub(super) fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs())

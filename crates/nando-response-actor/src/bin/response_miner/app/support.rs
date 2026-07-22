@@ -8,7 +8,7 @@ pub(super) fn read_json<T: DeserializeOwned>(path: &Path) -> Option<T> {
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
 }
 
-fn miner_input_fingerprint(paths: &[&Path]) -> Result<String, String> {
+pub(super) fn miner_input_fingerprint(paths: &[&Path]) -> Result<String, String> {
     let rows = paths
         .iter()
         .map(|path| {
@@ -28,7 +28,7 @@ fn miner_input_fingerprint(paths: &[&Path]) -> Result<String, String> {
     canonical_json_sha256(&rows).map_err(str::to_owned)
 }
 
-fn refresh_idle_miner_status(
+pub(super) fn refresh_idle_miner_status(
     status_path: &Path,
     input_fingerprint_sha256: &str,
     elapsed_ms: u64,
@@ -56,7 +56,7 @@ fn refresh_idle_miner_status(
     Ok(true)
 }
 
-fn compact_live_support_manifests(
+pub(super) fn compact_live_support_manifests(
     manifests: &mut Vec<ResponseSupportManifest>,
     generations_per_lineage: usize,
 ) -> Vec<ResponseSupportManifest> {
@@ -103,7 +103,7 @@ fn compact_live_support_manifests(
     removed
 }
 
-fn archive_support_manifests(
+pub(super) fn archive_support_manifests(
     support_manifests_path: &Path,
     removed: &[ResponseSupportManifest],
 ) -> Result<(), String> {
@@ -139,7 +139,7 @@ fn archive_support_manifests(
         .map_err(|error| format!("archive_sync:{error}"))
 }
 
-fn latest_grounded_support_manifests(
+pub(super) fn latest_grounded_support_manifests(
     manifests: &[ResponseSupportManifest],
 ) -> Vec<ResponseSupportManifest> {
     let mut latest = BTreeMap::<String, ResponseSupportManifest>::new();
@@ -167,7 +167,7 @@ fn latest_grounded_support_manifests(
     latest.into_values().collect()
 }
 
-fn manifest_runtime_phase_centers(
+pub(super) fn manifest_runtime_phase_centers(
     manifest: &ResponseSupportManifest,
     frames: &[RelationFrame],
 ) -> Vec<u64> {
@@ -207,7 +207,7 @@ fn manifest_runtime_phase_centers(
     centers
 }
 
-fn read_registry_revision(path: &Path) -> u64 {
+pub(super) fn read_registry_revision(path: &Path) -> u64 {
     fs::read(path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<ResponseRegistry>(&bytes).ok())
@@ -215,7 +215,7 @@ fn read_registry_revision(path: &Path) -> u64 {
 }
 
 #[cfg(test)]
-fn package_negative_frame_refs<'a>(
+pub(super) fn package_negative_frame_refs<'a>(
     package: &ResponsePackage,
     support: &[RelationFrame],
     frames: &'a [RelationFrame],
@@ -235,7 +235,7 @@ fn package_negative_frame_refs<'a>(
     )
 }
 
-fn package_negative_frame_refs_with_grounding<'a>(
+pub(super) fn package_negative_frame_refs_with_grounding<'a>(
     package: &ResponsePackage,
     support: &[RelationFrame],
     frames: &'a [RelationFrame],
@@ -311,13 +311,13 @@ fn package_negative_frame_refs_with_grounding<'a>(
         .collect()
 }
 
-fn relation_frame_family_id(frame: &RelationFrame) -> Option<u64> {
+pub(super) fn relation_frame_family_id(frame: &RelationFrame) -> Option<u64> {
     let hypotheses = ground_roles(frame);
     (hypotheses.len() == 1 && hypotheses[0].competing_binding_count == 0)
         .then(|| hypotheses[0].frame_family_id)
 }
 
-fn learned_discriminating_anti_centers(
+pub(super) fn learned_discriminating_anti_centers(
     support: &[RelationFrame],
     negatives: &[&RelationFrame],
 ) -> Vec<u64> {
@@ -345,7 +345,7 @@ fn learned_discriminating_anti_centers(
         .collect()
 }
 
-fn routed_counterexample_summary(frame: &RelationFrame) -> Value {
+pub(super) fn routed_counterexample_summary(frame: &RelationFrame) -> Value {
     let mut call_shape = "missing";
     let mut completion = "missing";
     let mut response_shape = "missing";
@@ -381,7 +381,7 @@ fn routed_counterexample_summary(frame: &RelationFrame) -> Value {
     })
 }
 
-fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -> Value {
+pub(super) fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -> Value {
     let positive_rows = frames
         .iter()
         .filter(|frame| frame.verifier_label == Some(true))
@@ -534,7 +534,7 @@ fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -> Value {
     })
 }
 
-fn token_opportunity_report(frames: &[RelationFrame]) -> Value {
+pub(super) fn token_opportunity_report(frames: &[RelationFrame]) -> Value {
     let mut by_event = BTreeMap::<&str, u64>::new();
     let mut positive_by_event = BTreeMap::<&str, u64>::new();
     for frame in frames {
@@ -560,7 +560,7 @@ fn token_opportunity_report(frames: &[RelationFrame]) -> Value {
     })
 }
 
-fn verified_future_sessions_for_self_training(
+pub(super) fn verified_future_sessions_for_self_training(
     future: &[RelationFrame],
 ) -> std::collections::BTreeSet<String> {
     if future.len() < SELF_TRAINING_MIN_VERIFIED_FUTURE_ROWS {
@@ -602,7 +602,7 @@ fn verified_future_sessions_for_self_training(
     selected
 }
 
-fn evidence_refresh_improves(
+pub(super) fn evidence_refresh_improves(
     current: &ResponseSupportManifest,
     candidate: &ResponseSupportManifest,
 ) -> bool {
@@ -615,7 +615,7 @@ fn evidence_refresh_improves(
                 && candidate.support_frame_ids != current.support_frame_ids))
 }
 
-fn rollover_manifest_improves(
+pub(super) fn rollover_manifest_improves(
     current: &ResponseSupportManifest,
     candidate: &ResponseSupportManifest,
 ) -> bool {
@@ -637,12 +637,12 @@ fn rollover_manifest_improves(
     routing_contract_changed || materially_more_support
 }
 
-fn dedupe_frame_refs(frames: &mut Vec<&RelationFrame>) {
+pub(super) fn dedupe_frame_refs(frames: &mut Vec<&RelationFrame>) {
     frames.sort_unstable_by_key(|frame| frame.frame_id_sha256.as_str());
     frames.dedup_by_key(|frame| frame.frame_id_sha256.as_str());
 }
 
-fn action_value_sha256(frame: &RelationFrame) -> Option<&str> {
+pub(super) fn action_value_sha256(frame: &RelationFrame) -> Option<&str> {
     frame.atoms.iter().find_map(|atom| match atom {
         RelationAtom::TypedSlot {
             source: AtomSource::Action,
@@ -653,7 +653,7 @@ fn action_value_sha256(frame: &RelationFrame) -> Option<&str> {
     })
 }
 
-fn project_status_response_shape_is_valid(frame: &RelationFrame) -> bool {
+pub(super) fn project_status_response_shape_is_valid(frame: &RelationFrame) -> bool {
     if !frame
         .atoms
         .iter()
@@ -672,6 +672,6 @@ fn project_status_response_shape_is_valid(frame: &RelationFrame) -> bool {
         })
 }
 
-fn is_sha256(value: &str) -> bool {
+pub(super) fn is_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
