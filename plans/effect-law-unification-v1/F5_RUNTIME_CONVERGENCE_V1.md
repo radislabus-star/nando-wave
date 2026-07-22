@@ -1,8 +1,10 @@
 # F5 Runtime Convergence V1
 
-Status: `F5_A_COMPLETE_REFACTOR_PAUSE_BEFORE_F5_B`
+Status: `F5_B_COMPLETE_F5_C_UNLOCKED`
 
-Base implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
+F5-A implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
+
+F5-B implementation: `a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d`
 
 Authority: `false`
 
@@ -11,27 +13,32 @@ Completed implementation boundary:
 ```text
 F5-A executable completeness     PASS for no-constant F4R2 modes
 constant-bearing V2 modes        fail closed until ordinal-bound bytes exist
-F5-B runtime context             NOT_STARTED
+F5-B runtime context             COMPLETE / STOP-F5-B
+F5-C mode-to-role compilation    UNLOCKED / NOT STARTED
 runtime callers                  0
 authority                        false
 ```
 
-Receipt: `STOP_F5_A_EXECUTABLE_COMPLETENESS.md`.
-
-Development pause:
+Receipts:
 
 ```text
-F5-B and all later functional work are paused while the 103,389-line
-nando-response-actor crate is decomposed by authority owner. The preregistered
-move-only plan is:
+STOP_F5_A_EXECUTABLE_COMPLETENESS.md
+f5b/STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md
+```
+
+Development resume:
+
+```text
+The 103,389-line nando-response-actor decomposition completed at STOP-R9.
+F5-B then resumed as the first post-decomposition feature and closed without
+runtime callers or authority. The decomposition record is:
 
 plans/nando-response-actor-decomposition-v1/
   NANDO_RESPONSE_ACTOR_DECOMPOSITION_V1.md
 ```
 
-The pause does not reopen or weaken STOP-F5-A. No runtime context, binding,
-admission, deployment, or authority work may be hidden inside the
-decomposition.
+The completed cut did not reopen or weaken STOP-F5-A. F5-C is the next and only
+unlocked functional boundary.
 
 This plan closes exactly one boundary:
 
@@ -660,6 +667,16 @@ one extraction per request                          PASS
 budget exhaustion                                   ABSTAIN
 raw durable payloads                                0
 ```
+
+F5-B completed on 2026-07-21 at
+`a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d`. Frozen evidence and live requests
+now use one source-neutral structural walker owned by
+`nando-operator-kernel`. Learning adapts the frozen graph; runtime performs one
+bounded request-local extraction and retains only a borrowed payload handle.
+Event shape/class computation shares the same JSON node counter, and the
+runtime synopsis is restricted to a bounded recent-event and capability
+window. Wide events, overfull capability sets, and oversized request text
+ABSTAIN. Production callers and authority remain zero.
 
 ### F5-C: Mode-To-Role Compilation
 

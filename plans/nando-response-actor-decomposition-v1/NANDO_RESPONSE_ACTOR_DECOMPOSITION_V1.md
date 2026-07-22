@@ -1,6 +1,6 @@
 # Nando Response Actor Spectral Decomposition V1
 
-Status: `STOP_R9_PASS / F5_B_UNLOCKED`
+Status: `STOP_R9_PASS / F5_B_COMPLETE / F5_C_UNLOCKED`
 
 Date: 2026-07-21
 
@@ -21,7 +21,8 @@ R6  nando-operator-learning                COMPLETE
 R7  thin facade and consumer migration     COMPLETE
 R8  remaining monolith split               COMPLETE
 R9  STOP-DECOMPOSITION                     COMPLETE
-F5-B canonical runtime context             UNLOCKED / NOT STARTED
+F5-B canonical runtime context             COMPLETE / a237c3c
+F5-C mode-to-role compilation              UNLOCKED / NOT STARTED
 ```
 
 ## 1. Pause Contract
@@ -31,15 +32,16 @@ The functional route stops exactly here:
 ```text
 F4R2 canonical ProtocolMode compiler       PASS on controlled evidence
 F5-A executable artifact completeness      PASS in bounded no-constant domain
-F5-B canonical runtime context             UNLOCKED / NOT STARTED
-F5-C through F8                            NOT STARTED
+F5-B canonical runtime context             PASS / STOP-F5-B
+F5-C                                      UNLOCKED / NOT STARTED
+F5-D through F8                            NOT STARTED
 production callers                         0
 production authority                       false
 ```
 
-No F5-B implementation may begin until `STOP-DECOMPOSITION` passes. This pause
-does not invalidate STOP-F5-A and does not reopen F4 search, thresholds,
-evidence, or compiler semantics.
+This pause condition was satisfied at STOP-R9. F5-B subsequently completed at
+`a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d` without reopening F4 search,
+thresholds, evidence, or compiler semantics. F5-C is the next boundary.
 
 Allowed during the pause:
 
@@ -1089,7 +1091,7 @@ The debt is separately repaired after decomposition.
 Control: reject new runtime-context symbols, production callers, schema
 versions, or behavior changes until STOP-DECOMPOSITION.
 
-## 13. Resume Gate For F5-B
+## 13. F5-B Resume Gate (Satisfied)
 
 F5-B may resume only after all are true:
 
@@ -1107,8 +1109,11 @@ services restarted                              0
 authority                                       false
 ```
 
-The first post-decomposition feature commit is still F5-B canonical runtime
-context. It must not be bundled with the final refactor commit.
+The first post-decomposition feature was F5-B canonical runtime context at
+`a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d`. It was not bundled with the final
+refactor commit. Its receipt is
+`plans/effect-law-unification-v1/f5b/STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md`;
+F5-C is now the active next boundary.
 
 ## 14. Executor Handoff Template
 

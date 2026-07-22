@@ -1,0 +1,88 @@
+{
+  "schema": "nando.stop-f5-b.v1",
+  "verdict": "PASS",
+  "code_head": "a237c3cd73ab43247d32ea03a4d8530b4bbe9e0d",
+  "authority": false,
+  "production_callers": 0,
+  "next_stage": "F5_C_UNLOCKED_NOT_STARTED",
+  "architecture": {
+    "recursive_structural_walker_count": 1,
+    "frozen_adapter_owner": "nando-operator-learning",
+    "structural_language_owner": "nando-operator-kernel",
+    "live_context_owner": "nando-operator-runtime",
+    "raw_payload_ownership": "borrowed_request_local",
+    "physical_capability_symbols": "ephemeral_request_local"
+  },
+  "stop_matrix": {
+    "direct_wrapped_surface_canonical_parity": "PASS",
+    "renamed_reordered_surface_canonical_parity": "PASS",
+    "teacher_action_leakage_scan": "PASS",
+    "one_extraction_per_request": "PASS",
+    "budget_exhaustion": "ABSTAIN",
+    "raw_durable_payloads": 0
+  },
+  "budgets": {
+    "request_text_bytes": 16384,
+    "json_nodes": 4096,
+    "payload_text_bytes": 65536,
+    "recent_events": 32,
+    "role_candidates": 64,
+    "relations": 256,
+    "advertised_capabilities": 64
+  },
+  "tests": {
+    "operator_kernel": {"passed": 13, "failed": 0},
+    "operator_runtime": {"passed": 13, "failed": 0},
+    "operator_learning": {"passed": 198, "failed": 0},
+    "owner_total": {"passed": 224, "failed": 0},
+    "response_actor": {"passed": 287, "known_failed": 26, "fingerprint": "PASS"},
+    "owner_clippy_deny_warnings": "PASS",
+    "workspace_check_all_targets": "PASS",
+    "scoped_rustfmt": "PASS",
+    "workspace_rustfmt": "PREEXISTING_DRIFT_OUTSIDE_F5B"
+  },
+  "remote_exact_head": {
+    "host": "e@192.168.3.94",
+    "overlay_scope_count": 0,
+    "untracked_files": 0,
+    "background_build_processes_left": 0,
+    "kernel_receipt_sha256": "dc11a436b4f6e1fd094431f606a48c4fbc593380c6354d7bf8724b1150f9005c",
+    "runtime_receipt_sha256": "83610e0f4e8280c8bbe92ae2645241bcea7f9e13d9c0f51d733fad693b17e8e5",
+    "learning_receipt_sha256": "c2da3fdb137ba43cec1f220d9d7d984e06b88ebbee688bedec7b0911002e2eda",
+    "response_receipt_sha256": "b7ea4221ae9dd137cc9c92e46e9a4762c76c64f9a2d7299282cb84333a638125"
+  },
+  "nanda": {
+    "kernel": "PASS",
+    "learning": "PASS",
+    "runtime": "PASS",
+    "authority_ready": false
+  },
+  "graphify": {
+    "verdict": "PASS",
+    "nodes": 25728,
+    "edges": 57818,
+    "communities": 1188,
+    "runtime_to_kernel_path_hops": 1,
+    "learning_to_kernel_path_hops": 2
+  },
+  "live_gate": {
+    "verdict": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "m3_verdict": "WATCH",
+    "false_accepts": 0,
+    "runtime_parity_failures": 0
+  },
+  "services": {
+    "restarted": false,
+    "transition_serving_invocation_id": "74ac3080f80b4fe387de2a94380e3657",
+    "response_learning_invocation_id": "8e59505eb1b943778601c9b3bacbd607",
+    "nrestarts": 0
+  },
+  "p0_closed": [
+    "event topology and class now share the candidate walk node budget",
+    "capability discovery is bounded without materializing the full declaration set",
+    "runtime synopsis examines only the bounded recent event window",
+    "oversized request text abstains before payload extraction"
+  ]
+}

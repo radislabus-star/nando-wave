@@ -1230,6 +1230,26 @@ nondeterministic ranking rule.
 
 #### Runtime role grounding contract
 
+Before binding, frozen evidence and live traffic must enter one canonical
+structural language:
+
+```text
+frozen evidence graph --learning adapter--\
+                                         -> CanonicalRuntimeStructuralViewV3
+live provider request --runtime adapter--/
+```
+
+`nando-operator-kernel::structural_context` owns the source-neutral walker and
+canonicalization. Candidate evidence, event topology, and event class share one
+bounded recursive traversal. `nando-operator-learning` may adapt an immutable
+frozen graph, while `nando-operator-runtime` may build one request-local
+`CanonicalRuntimeRequestV3` with borrowed payload access. Neither adapter may
+invent another relation language, persist raw values, inspect teacher or
+post-action fields, select an operator, or grant authority. Exhausted context
+construction is `ABSTAIN`, never a truncated earlier role. The frozen F5-B
+receipt is
+`plans/effect-law-unification-v1/f5b/STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md`.
+
 The binder solves a bounded CSP over only pre-action structural evidence:
 
 ```text
