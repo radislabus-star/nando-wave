@@ -1,0 +1,61 @@
+{
+  "schema": "nando.stop-f7-a-generation-restart.v1",
+  "date": "2026-07-22",
+  "verdict": "COMPLETE_CONTROLLED_PROOF_PASS",
+  "authority": false,
+  "f7_status": "F7_A_COMPLETE_F7_B_UNLOCKED",
+  "scope": {
+    "max_artifacts": 32,
+    "manifest_max_bytes": 8192,
+    "restart_bundle_max_bytes": 524288,
+    "raw_payload_bytes_persisted": 0,
+    "live_integration": false,
+    "production_callers": 0
+  },
+  "identity": {
+    "single_kernel_owner": true,
+    "sequence_and_parent_committed": true,
+    "component_roots_committed": 7,
+    "every_component_changes_generation_id": true,
+    "old_generation_bytes_immutable": true
+  },
+  "restart": {
+    "canonical_artifact_order": true,
+    "dispatch_rebuilt_from_artifacts": true,
+    "artifact_set_root_matches_f6": true,
+    "dispatch_root_checked": true,
+    "byte_identical_roundtrip": true,
+    "tamper_rejected": true,
+    "truncation_rejected": true,
+    "duplicates_rejected": true,
+    "oversize_rejected": true
+  },
+  "deferred_to_f7_e": {
+    "actor_root_owner_convergence": true,
+    "renderer_root_owner_convergence": true,
+    "verifier_root_owner_convergence": true,
+    "capability_root_owner_convergence": true,
+    "resource_budget_root_owner_convergence": true
+  },
+  "tests": {
+    "kernel_generation_pass": 3,
+    "restart_integration_pass": 2,
+    "kernel_runtime_proof_pass": 77,
+    "kernel_runtime_proof_ignored": 2,
+    "clippy_deny_warnings": "PASS",
+    "changed_file_rustfmt": "PASS",
+    "workspace_fmt_baseline": "PRE_EXISTING_NANDO_CORE_WAVE_RS_DEBT",
+    "git_diff_check": "PASS",
+    "nanda_owner_local_pass": 3,
+    "nanda_authority_ready": false
+  },
+  "production": {
+    "services_restarted": false,
+    "deployment_changed": false,
+    "active_packages_changed": false,
+    "execution_authority": false,
+    "live_future_snapshot": 24,
+    "live_future_required": 32,
+    "live_cohort_is_separate": true
+  }
+}

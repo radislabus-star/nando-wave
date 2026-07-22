@@ -1,6 +1,6 @@
 use nando_operator_kernel::{
     CanonicalEffectLawV3, ExecutableProtocolModeArtifactV3, canonical_json_bytes,
-    canonical_json_sha256, validate_canonical_effect_law_v3,
+    executable_artifact_set_sha256_v3, validate_canonical_effect_law_v3,
     validate_executable_protocol_mode_artifact_v3,
 };
 
@@ -55,11 +55,11 @@ impl IndependentVerifierArtifactSetV3 {
         if mode_count == 0 || mode_count > F6_MAX_MODES_V3 {
             return Err(IndependentVerifierArtifactSetErrorV3::OverBudget);
         }
-        let roots = verified
+        let artifacts = verified
             .iter()
-            .map(|entry| entry.artifact.artifact_sha256())
+            .map(|entry| entry.artifact.clone())
             .collect::<Vec<_>>();
-        let artifact_set_sha256 = canonical_json_sha256(&("nando.f6.artifact-set.v3", roots))
+        let artifact_set_sha256 = executable_artifact_set_sha256_v3(&artifacts)
             .map_err(|_| IndependentVerifierArtifactSetErrorV3::Serialization)?;
         Ok(Self {
             artifact_set_sha256,

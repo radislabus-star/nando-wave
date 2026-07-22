@@ -29,7 +29,7 @@ F5-F phase integration          SAFETY PASS / WAVE GAIN WATCH
 F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
 F6 independent verifier        COMPLETE / STOP-F6
-F7 generation and persistence  UNLOCKED / NOT STARTED
+F7 generation and persistence  IN PROGRESS / F7-B
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -55,11 +55,13 @@ plans/effect-law-unification-v1/f5g/
 plans/effect-law-unification-v1/
   STOP_F5_RUNTIME_CONVERGENCE.md
   STOP_F6_INDEPENDENT_VERIFIER_CONVERGENCE.md
+  F7_GENERATION_PERSISTENCE_V1.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
-remain frozen; F5 and F6 are complete. F7 is unlocked and intentionally not
-started.
+remain frozen; F5 and F6 are complete. F7-A closed the new kernel manifest and
+restart-bundle path. F7-B is unlocked for the generation-owned support/future
+ledger; live admission and authority remain unchanged.
 
 ## 1. Objective
 
