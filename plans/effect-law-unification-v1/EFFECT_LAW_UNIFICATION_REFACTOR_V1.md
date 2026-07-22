@@ -29,7 +29,8 @@ F5-F phase integration          SAFETY PASS / WAVE GAIN WATCH
 F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
 F6 independent verifier        COMPLETE / STOP-F6
-F7 generation and persistence  IN PROGRESS / F7-E
+F7 generation and persistence  COMPLETE / STOP-F7-E CONTROLLED SHADOW
+F8 external admission          BLOCKED
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -63,9 +64,11 @@ remain frozen; F5 and F6 are complete. F7-A closed the kernel manifest and
 restart bundle; F7-B closed the generation-owned support/future ledger; F7-C
 bound exact F6 verdicts to generation, partition, lineage, event and support
 freeze without granting authority; F7-D added a separate two-slot atomic
-persistence owner with monotonic recovery. F7-E is unlocked for controlled
-capture-owner joining and shadow orchestration; live admission and authority
-remain unchanged.
+persistence owner with monotonic recovery. F7-E now joins the checkpoint to a
+separate capture-owner index, loads only after HTTP fallback is available,
+pins each queued request to one immutable generation, and runs F5 plus the
+independent F6 verifier in controlled shadow. The live capture producer,
+external admission and authority remain blocked at F8.
 
 ## 1. Objective
 
@@ -917,6 +920,13 @@ restart byte identity
 no ambient episodic memory needed for execution
 old generation unchanged
 ```
+
+Canonical F7 receipt:
+`STOP_F7_E_CONTROLLED_GENERATION_SHADOW.json`.
+
+The production request-path adapter exists but is disabled by default. It does
+not read the session JSONL evidence ledger as HTTP request provenance, persist
+raw payloads, call admission, or grant local authority.
 
 ### F8: External Admission And Live Shadow
 

@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::{
     TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowReceiptV3, TrafficShadowSourceV3,
-    execute_traffic_shadow_v3,
+    TrafficShadowVerdictV3, execute_traffic_shadow_v3, execute_traffic_shadow_with_handoff_v3,
 };
 use crate::mode_to_role_v3::tests::fixtures::{
     artifact, mentioned_string_selector, request_payload, root,
@@ -52,4 +52,50 @@ fn execute_control(
 
 fn request_digest(payload: &Value) -> String {
     sha256_bytes(&serde_json::to_vec(payload).expect("request bytes"))
+}
+
+#[test]
+fn complete_shadow_exposes_ephemeral_f6_handoff_without_changing_receipt() {
+    let generation = Arc::new(generation(1, 733));
+    let payload = payload();
+    let request_sha256 = request_digest(&payload);
+    let row = root("f7e-handoff-row");
+    let input = TrafficShadowInputV3::replayable(
+        &row,
+        &request_sha256,
+        RuntimeProjectionV3::Responses,
+        false,
+        TrafficShadowSourceV3::Replay,
+        "continue CellA17",
+        &payload,
+    )
+    .expect("replayable input");
+    let execution = execute_traffic_shadow_with_handoff_v3(
+        Arc::clone(&generation),
+        input,
+        RuntimeContextBudgetV3::default(),
+    );
+    assert_eq!(
+        execution.receipt().verdict(),
+        TrafficShadowVerdictV3::CompleteShadow
+    );
+    assert!(execution.actor_action().is_some());
+    assert!(execution.actor_output().is_some());
+    assert!(!execution.execution_authority());
+
+    let input = TrafficShadowInputV3::replayable(
+        &row,
+        &request_sha256,
+        RuntimeProjectionV3::Responses,
+        false,
+        TrafficShadowSourceV3::Replay,
+        "continue CellA17",
+        &payload,
+    )
+    .expect("replayable input");
+    let legacy = execute_traffic_shadow_v3(generation, input, RuntimeContextBudgetV3::default());
+    assert_eq!(
+        execution.receipt().receipt_sha256(),
+        legacy.receipt_sha256()
+    );
 }

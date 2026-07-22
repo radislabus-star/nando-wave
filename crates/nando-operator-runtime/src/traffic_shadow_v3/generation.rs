@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use nando_operator_kernel::canonical_json_sha256;
 
 use super::TrafficShadowGenerationErrorV3;
-use crate::StructuralDispatchIndexV3;
+use crate::{RestoredOperatorGenerationV3, StructuralDispatchIndexV3};
 
 pub struct TrafficShadowGenerationV3 {
     sequence: u64,
@@ -29,6 +29,22 @@ impl TrafficShadowGenerationV3 {
             sequence,
             generation_root_sha256,
             index,
+        })
+    }
+
+    pub fn from_restored_generation(
+        generation: &RestoredOperatorGenerationV3,
+    ) -> Result<Self, TrafficShadowGenerationErrorV3> {
+        let manifest = generation.manifest();
+        if manifest.sequence() == 0
+            || manifest.components().dispatch_index_sha256 != generation.index().index_sha256()
+        {
+            return Err(TrafficShadowGenerationErrorV3::GenerationMismatch);
+        }
+        Ok(Self {
+            sequence: manifest.sequence(),
+            generation_root_sha256: manifest.generation_id_sha256().to_owned(),
+            index: generation.index().clone(),
         })
     }
 

@@ -1,12 +1,14 @@
+mod execution;
 mod generation;
 mod handoff;
 mod input;
 mod pipeline;
 mod receipt;
 
+pub use execution::TrafficShadowExecutionV3;
 pub use generation::{TrafficShadowGenerationV3, TrafficShadowRegistryV3};
 pub use input::TrafficShadowInputV3;
-pub use pipeline::execute_traffic_shadow_v3;
+pub use pipeline::{execute_traffic_shadow_v3, execute_traffic_shadow_with_handoff_v3};
 
 use nando_operator_kernel::RuntimeProjectionV3;
 use serde::Serialize;
@@ -53,6 +55,7 @@ pub enum TrafficShadowInputErrorV3 {
 pub enum TrafficShadowGenerationErrorV3 {
     InvalidSequence,
     InvalidRoot,
+    GenerationMismatch,
     NonMonotonicSwap,
     RegistryPoisoned,
 }

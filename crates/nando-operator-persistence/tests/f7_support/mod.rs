@@ -167,6 +167,11 @@ pub fn root(label: &str) -> String {
     canonical_json_sha256(&label).expect("root")
 }
 
+#[allow(dead_code)]
+pub fn support_request_payload() -> serde_json::Value {
+    request_payload_v3("continue_session", "handle", "CellA17")
+}
+
 fn verify(handoff: &f6_support::F5HandoffV3, output: &str) -> IndependentVerifierReceiptV3 {
     let artifact_set =
         IndependentVerifierArtifactSetV3::new(&handoff.artifacts).expect("artifact set");

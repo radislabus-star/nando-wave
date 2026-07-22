@@ -14,6 +14,7 @@ mimalloc = "0.1"
 nando-operator-admission = { path = "../nando-operator-admission" }
 nando-operator-kernel = { path = "../nando-operator-kernel" }
 nando-operator-learning = { path = "../nando-operator-learning" }
+nando-operator-persistence = { path = "../nando-operator-persistence" }
 nando-operator-proof = { path = "../nando-operator-proof" }
 nando-operator-runtime = { path = "../nando-operator-runtime" }
 nando-response-actor = { path = "../nando-response-actor" }

@@ -678,6 +678,7 @@ dependencies = [
  "nando-operator-admission",
  "nando-operator-kernel",
  "nando-operator-learning",
+ "nando-operator-persistence",
  "nando-operator-proof",
  "nando-operator-runtime",
  "nando-response-actor",

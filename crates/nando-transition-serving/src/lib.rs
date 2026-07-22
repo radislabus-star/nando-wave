@@ -6,6 +6,7 @@
 
 mod custom_tool_projection;
 mod economics_worker;
+pub mod generation_shadow;
 mod live_economics;
 mod miner_worker;
 mod runtime_policy;
@@ -28,7 +29,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use nando_expression_runtime::ExpressionRuntime;
 use nando_operator_admission::finalize_post_verifier_receipt;
-use nando_operator_kernel::RelationFrame;
+use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3};
 use nando_operator_learning::{
     EvidencePolicyV1, OnlineCollectionConfig, OnlineCollectionStatus, ReducibilityClass,
     is_source_neutral_relation_frame,
@@ -63,6 +64,9 @@ use custom_tool_projection::{
     parse_actor_custom_tool_call, responses_projection as custom_tool_responses_projection,
 };
 use economics_worker::{EconomicsWorkerHandle, spawn_economics_worker};
+use generation_shadow::{
+    GenerationShadowConfigV3, GenerationShadowIngressV3, GenerationShadowRuntimeV3,
+};
 use miner_worker::{MinerWorkerHandle, spawn_miner_worker};
 use runtime_policy::{RuntimePolicyCache, spawn_runtime_policy_watch};
 use session_stream::{
@@ -109,6 +113,11 @@ pub struct ServingConfig {
     pub streaming_evidence_path: PathBuf,
     pub online_collection_checkpoint_path: PathBuf,
     pub response_admission_candidate_path: PathBuf,
+    pub operator_generation_shadow_enabled: bool,
+    pub operator_generation_store_path: PathBuf,
+    pub operator_generation_capture_index_path: PathBuf,
+    pub operator_generation_shadow_queue_capacity: usize,
+    pub operator_generation_shadow_poll_ms: u64,
 }
 
 impl ServingConfig {
@@ -217,6 +226,27 @@ impl ServingConfig {
                 "NANDO_RESPONSE_ADMISSION_CANDIDATES",
                 &state_dir,
                 "response-admission-candidates.cbor",
+            ),
+            operator_generation_shadow_enabled: env_flag(
+                "NANDO_OPERATOR_GENERATION_SHADOW_ENABLED",
+            ),
+            operator_generation_store_path: env_path_join(
+                "NANDO_OPERATOR_GENERATION_STORE",
+                &state_dir,
+                "operator-generation-v3",
+            ),
+            operator_generation_capture_index_path: env_path_join(
+                "NANDO_OPERATOR_GENERATION_CAPTURE_INDEX",
+                &state_dir,
+                "operator-generation-capture-v3.cbor",
+            ),
+            operator_generation_shadow_queue_capacity: env_usize(
+                "NANDO_OPERATOR_GENERATION_SHADOW_QUEUE",
+                32,
+            ),
+            operator_generation_shadow_poll_ms: env_u64(
+                "NANDO_OPERATOR_GENERATION_SHADOW_POLL_MS",
+                1_000,
             ),
         })
     }
@@ -384,6 +414,7 @@ struct AppState {
     authority_trigger: Arc<Mutex<Option<SyncSender<()>>>>,
     event_lock: Arc<Mutex<()>>,
     counters: Arc<ServingCounters>,
+    operator_generation_shadow: Arc<GenerationShadowRuntimeV3>,
 }
 
 #[derive(Default)]
@@ -489,6 +520,9 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         config.mode_path.clone(),
         config.kill_switch_path.clone(),
     ));
+    let operator_generation_shadow = Arc::new(GenerationShadowRuntimeV3::new(
+        generation_shadow_config(&config),
+    )?);
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -509,6 +543,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         authority_trigger: Arc::new(Mutex::new(None)),
         event_lock: Arc::new(Mutex::new(())),
         counters: Arc::new(ServingCounters::default()),
+        operator_generation_shadow,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -543,6 +578,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(&state.config.bind)
         .await
         .map_err(|error| format!("bind:{}:{error}", state.config.bind))?;
+    state.operator_generation_shadow.start_after_http_bind()?;
     spawn_miner_warmup(state.clone())?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -967,6 +1003,10 @@ async fn health(State(state): State<AppState>) -> Response {
         object.insert(
             "economics_worker".to_owned(),
             json!(state.live_economics.status()),
+        );
+        object.insert(
+            "operator_generation_shadow".to_owned(),
+            json!(state.operator_generation_shadow.status()),
         );
     }
     json_response(StatusCode::OK, health)
@@ -1609,6 +1649,19 @@ fn handle_openai(
         .request_capabilities
         .observe_provider_payload(&payload);
     let request_text = extract_request_text(&payload);
+    let request_streaming = payload
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    submit_operator_generation_shadow(
+        &state,
+        &body,
+        &request_hash,
+        request_ordinal,
+        &request_text,
+        projection,
+        request_streaming,
+    );
     let traffic_source_header = headers
         .get("x-nando-traffic-source")
         .and_then(|value| value.to_str().ok())
@@ -1694,10 +1747,7 @@ fn handle_openai(
             "worker": "rust_transition_serving",
         }),
     );
-    let stream = payload
-        .get("stream")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let stream = request_streaming;
     let model = payload
         .get("model")
         .and_then(Value::as_str)
@@ -1717,6 +1767,36 @@ fn handle_openai(
         stream,
         input_tokens,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn submit_operator_generation_shadow(
+    state: &AppState,
+    body: &Bytes,
+    request_sha256: &str,
+    request_ordinal: u64,
+    request_text: &str,
+    projection: Projection,
+    streaming: bool,
+) {
+    if !state.operator_generation_shadow.enabled() {
+        return;
+    }
+    let projection = match projection {
+        Projection::Responses => RuntimeProjectionV3::Responses,
+        Projection::ChatCompletions => RuntimeProjectionV3::ChatCompletions,
+        Projection::TransitionApi => return,
+    };
+    state
+        .operator_generation_shadow
+        .observe_provider_request(GenerationShadowIngressV3 {
+            request_sha256,
+            request_ordinal,
+            projection,
+            streaming,
+            request_text,
+            provider_payload_bytes: body.clone(),
+        });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4298,6 +4378,18 @@ fn env_flag(name: &str) -> bool {
         .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
 }
 
+fn generation_shadow_config(config: &ServingConfig) -> GenerationShadowConfigV3 {
+    GenerationShadowConfigV3 {
+        enabled: config.operator_generation_shadow_enabled,
+        store_path: config.operator_generation_store_path.clone(),
+        // This index commits raw provider requests. Session JSONL evidence is
+        // a different physical stream and cannot satisfy the F6 request root.
+        capture_index_path: config.operator_generation_capture_index_path.clone(),
+        queue_capacity: config.operator_generation_shadow_queue_capacity,
+        poll_interval: Duration::from_millis(config.operator_generation_shadow_poll_ms),
+    }
+}
+
 fn env_u64(name: &str, fallback: u64) -> u64 {
     env::var(name)
         .ok()
@@ -4522,7 +4614,17 @@ mod tests {
             streaming_evidence_path: root.join("streaming-evidence"),
             online_collection_checkpoint_path: root.join("online-collection-version-space.json"),
             response_admission_candidate_path: root.join("response-admission-candidates.cbor"),
+            operator_generation_shadow_enabled: false,
+            operator_generation_store_path: root.join("operator-generation-v3"),
+            operator_generation_capture_index_path: root
+                .join("operator-generation-capture-v3.cbor"),
+            operator_generation_shadow_queue_capacity: 8,
+            operator_generation_shadow_poll_ms: 1_000,
         };
+        let operator_generation_shadow = Arc::new(
+            GenerationShadowRuntimeV3::new(generation_shadow_config(&config))
+                .expect("generation shadow"),
+        );
         let state = AppState {
             config: Arc::new(config),
             cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -4547,6 +4649,7 @@ mod tests {
             authority_trigger: Arc::new(Mutex::new(None)),
             event_lock: Arc::new(Mutex::new(())),
             counters: Arc::new(ServingCounters::default()),
+            operator_generation_shadow,
         };
         refresh_response_executor(&state);
         state

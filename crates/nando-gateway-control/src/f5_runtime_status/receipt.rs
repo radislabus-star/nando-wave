@@ -9,8 +9,9 @@ const F6_SCHEMA: &str = "nando.stop-f6-independent-verifier-convergence.v1";
 const F6_VERDICT: &str = "COMPLETE_CONTROLLED_PROOF_PASS";
 const F7_STATUS: &str = "UNLOCKED_NOT_STARTED";
 
-pub(super) struct F5Status {
-    pub(super) implementation_commit: String,
+pub(super) struct PipelineStatus {
+    pub(super) f5_implementation_commit: String,
+    pub(super) f7_receipt_date: String,
     pub(super) phase_search_gain: String,
     pub(super) ordinary_rows: u64,
     pub(super) accounted_rows: u64,
@@ -28,6 +29,12 @@ pub(super) struct F5Status {
     pub(super) f6_matched_p99_ns: u64,
     pub(super) f6_no_match_p99_ns: u64,
     pub(super) f6_hard_max_ns: u64,
+    pub(super) f7_no_match_p99_ns: u64,
+    pub(super) f7_matched_p99_ns: u64,
+    pub(super) f7_hard_max_ns: u64,
+    pub(super) f7_queue_max: u64,
+    pub(super) f7_rss_delta_bytes: u64,
+    pub(super) f7_rss_target_bytes: u64,
 }
 
 #[derive(Deserialize)]
@@ -207,17 +214,20 @@ pub(super) fn parse_and_validate(
     convergence_source: &str,
     traffic_source: &str,
     f6_source: &str,
-) -> Result<F5Status, String> {
+    f7_source: &str,
+) -> Result<PipelineStatus, String> {
     let convergence = serde_json::from_str::<ConvergenceReceipt>(convergence_source)
         .map_err(|error| format!("convergence receipt: {error}"))?;
     let traffic = serde_json::from_str::<TrafficReceipt>(traffic_source)
         .map_err(|error| format!("traffic receipt: {error}"))?;
     let f6 = serde_json::from_str::<F6Receipt>(f6_source)
         .map_err(|error| format!("F6 receipt: {error}"))?;
+    let f7 = super::f7_receipt::parse_and_validate(f7_source)?;
     validate(&convergence, &traffic, &f6)?;
 
-    Ok(F5Status {
-        implementation_commit: traffic.implementation_commit,
+    Ok(PipelineStatus {
+        f5_implementation_commit: traffic.implementation_commit,
+        f7_receipt_date: f7.receipt_date,
         phase_search_gain: convergence.watch.phase_search_gain,
         ordinary_rows: traffic.ordinary_window.ordinary_rows,
         accounted_rows: traffic.ordinary_window.accounted_rows,
@@ -235,6 +245,12 @@ pub(super) fn parse_and_validate(
         f6_matched_p99_ns: f6.performance.matched_p99_ns,
         f6_no_match_p99_ns: f6.performance.no_match_p99_ns,
         f6_hard_max_ns: f6.performance.hard_max_ns,
+        f7_no_match_p99_ns: f7.no_match_p99_ns,
+        f7_matched_p99_ns: f7.matched_p99_ns,
+        f7_hard_max_ns: f7.hard_max_ns,
+        f7_queue_max: f7.queue_max,
+        f7_rss_delta_bytes: f7.rss_delta_bytes,
+        f7_rss_target_bytes: f7.rss_target_bytes,
     })
 }
 

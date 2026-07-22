@@ -1,0 +1,77 @@
+{
+  "schema": "nando.stop-f7-e-controlled-generation-shadow.v1",
+  "date": "2026-07-22",
+  "verdict": "COMPLETE_CONTROLLED_SHADOW_PASS",
+  "authority": false,
+  "f7_status": "COMPLETE",
+  "capture_owner": {
+    "separate_provider_request_index": true,
+    "exact_checkpoint_join": true,
+    "session_jsonl_used_as_http_request_provenance": false,
+    "missing_or_tampered_relation_blocked": true,
+    "live_producer_deployed": false
+  },
+  "runtime": {
+    "http_bound_before_restore": true,
+    "immutable_generation_registry": true,
+    "monotonic_swap": true,
+    "generation_pinned_before_enqueue": true,
+    "empty_store_clears_registry": true,
+    "queue_operation": "try_send",
+    "max_queued_requests": 48,
+    "raw_payload_bytes_persisted": 0,
+    "local_accepts": 0,
+    "execution_authority": false
+  },
+  "signal": {
+    "checkpoint_restore": "PASS",
+    "capture_join": "PASS",
+    "f5_role_grounding_actor": "PASS",
+    "f6_independent_verifier": "PASS",
+    "external_admission": "BLOCKED_F8"
+  },
+  "performance_ns": {
+    "f5_no_match_p99": 241282,
+    "f5_matched_p99": 493988,
+    "f6_no_match_p99": 34284,
+    "f6_matched_p99": 288692,
+    "f6_hard_max": 301597,
+    "f7e_no_match_p99": 192028,
+    "f7e_matched_p99": 616290,
+    "f7e_hard_max": 719743
+  },
+  "resource_watch": {
+    "f5_registry_operators": 2048,
+    "f5_registry_rss_delta_bytes": 49631232,
+    "f5_registry_rss_target_bytes": 16777216,
+    "f5_registry_rss_target_pass": false
+  },
+  "tests": {
+    "generation_capture_pass": 3,
+    "capture_join_pass": 2,
+    "traffic_shadow_pass": 8,
+    "serving_shadow_pass": 5,
+    "release_performance_pass": 3,
+    "broad_pass": 354,
+    "broad_ignored_release_tests": 3,
+    "known_serving_failures_excluded": 3,
+    "known_failure_set_baseline_identical": true,
+    "gateway_control_pass": 18,
+    "gateway_control_clippy": "PASS",
+    "clippy_deny_warnings": "PASS",
+    "changed_file_rustfmt": "PASS",
+    "nanda_composite_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "graphify_nodes": 27372,
+    "graphify_edges": 61264,
+    "graphify_communities": 1269
+  },
+  "production": {
+    "feature_default_enabled": false,
+    "services_restarted": false,
+    "deployment_changed": false,
+    "active_packages_changed": false,
+    "external_admission_calls": 0,
+    "execution_authority": false
+  }
+}

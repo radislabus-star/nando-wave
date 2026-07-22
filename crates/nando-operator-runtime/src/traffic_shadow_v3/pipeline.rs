@@ -4,7 +4,8 @@ use nando_operator_kernel::{RuntimeContextExtractionVerdictV3, RuntimeProjection
 
 use super::receipt::TrafficShadowReceiptBuilderV3;
 use super::{
-    TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowReceiptV3, TrafficShadowVerdictV3,
+    TrafficShadowExecutionV3, TrafficShadowGenerationV3, TrafficShadowInputV3,
+    TrafficShadowReceiptV3, TrafficShadowVerdictV3,
 };
 use crate::{
     CapabilityGroundingVerdictV3, OperatorShadowVerdictV3, PhaseControlV3, PhaseSelectionVerdictV3,
@@ -20,12 +21,24 @@ pub fn execute_traffic_shadow_v3(
     input: TrafficShadowInputV3<'_>,
     budget: RuntimeContextBudgetV3,
 ) -> TrafficShadowReceiptV3 {
+    execute_traffic_shadow_with_handoff_v3(generation, input, budget).into_receipt()
+}
+
+#[must_use]
+pub fn execute_traffic_shadow_with_handoff_v3(
+    generation: Arc<TrafficShadowGenerationV3>,
+    input: TrafficShadowInputV3<'_>,
+    budget: RuntimeContextBudgetV3,
+) -> TrafficShadowExecutionV3 {
     let mut receipt = TrafficShadowReceiptBuilderV3::new(&generation, &input);
     let Some((request_text, provider_payload)) = input.runtime_payload() else {
-        return receipt.finish(TrafficShadowVerdictV3::CensoredPayloadUnavailable);
+        return finish(receipt, TrafficShadowVerdictV3::CensoredPayloadUnavailable);
     };
     let Some(projection) = supported_projection(input.projection()) else {
-        return receipt.finish(TrafficShadowVerdictV3::AbstainUnsupportedProjection);
+        return finish(
+            receipt,
+            TrafficShadowVerdictV3::AbstainUnsupportedProjection,
+        );
     };
     let extraction = match extract_canonical_runtime_request_v3(
         input.request_sha256(),
@@ -35,68 +48,88 @@ pub fn execute_traffic_shadow_v3(
         budget,
     ) {
         Ok(extraction) => extraction,
-        Err(error) => return receipt.finish(context_error_verdict(error)),
+        Err(error) => return finish(receipt, context_error_verdict(error)),
     };
     receipt.set_extraction_receipt(&extraction.receipt().receipt_sha256);
     if extraction.receipt().verdict != RuntimeContextExtractionVerdictV3::Complete {
-        return receipt.finish(match extraction.receipt().verdict {
-            RuntimeContextExtractionVerdictV3::AbstainBudgetExhausted => {
-                TrafficShadowVerdictV3::AbstainContextBudget
-            }
-            RuntimeContextExtractionVerdictV3::AbstainInvalidRequest => {
-                TrafficShadowVerdictV3::AbstainContextExtraction
-            }
-            RuntimeContextExtractionVerdictV3::Complete => {
-                TrafficShadowVerdictV3::RejectInvariantMismatch
-            }
-        });
+        return finish(
+            receipt,
+            match extraction.receipt().verdict {
+                RuntimeContextExtractionVerdictV3::AbstainBudgetExhausted => {
+                    TrafficShadowVerdictV3::AbstainContextBudget
+                }
+                RuntimeContextExtractionVerdictV3::AbstainInvalidRequest => {
+                    TrafficShadowVerdictV3::AbstainContextExtraction
+                }
+                RuntimeContextExtractionVerdictV3::Complete => {
+                    TrafficShadowVerdictV3::RejectInvariantMismatch
+                }
+            },
+        );
     }
     let Some(context) = extraction.into_context() else {
-        return receipt.finish(TrafficShadowVerdictV3::RejectInvariantMismatch);
+        return finish(receipt, TrafficShadowVerdictV3::RejectInvariantMismatch);
     };
 
     let dispatch = generation.index().dispatch(&context);
     if dispatch.verdict() != StructuralDispatchVerdictV3::Complete
         || dispatch.mode_indices().is_empty()
     {
-        return receipt.finish(TrafficShadowVerdictV3::AbstainDispatch);
+        return finish(receipt, TrafficShadowVerdictV3::AbstainDispatch);
     }
     let binding = bind_structural_modes_v3(generation.index(), &context, &dispatch);
     if binding.verdict() != StructuralBindingVerdictV3::Complete {
-        return receipt.finish(binding_verdict(binding.verdict()));
+        return finish(receipt, binding_verdict(binding.verdict()));
     }
     let Some(binding) = binding.into_complete() else {
-        return receipt.finish(TrafficShadowVerdictV3::RejectInvariantMismatch);
+        return finish(receipt, TrafficShadowVerdictV3::RejectInvariantMismatch);
     };
 
     let grounded = ground_protocol_actions_v3(generation.index(), &context, &binding);
     let phase = evaluate_phase_ranking_v3(&grounded);
     receipt.set_phase_report(phase.report_sha256());
     if grounded.verdict() != CapabilityGroundingVerdictV3::Complete {
-        return receipt.finish(grounding_verdict(grounded.verdict()));
+        return finish(receipt, grounding_verdict(grounded.verdict()));
     }
     let full_phase = phase
         .controls()
         .iter()
         .find(|control| control.control() == PhaseControlV3::Full);
     let Some(actions) = grounded.into_complete() else {
-        return receipt.finish(TrafficShadowVerdictV3::RejectInvariantMismatch);
+        return finish(receipt, TrafficShadowVerdictV3::RejectInvariantMismatch);
     };
     if full_phase.is_none_or(|control| {
         control.verdict() != PhaseSelectionVerdictV3::Selected
             || control.selected_physical_action_sha256()
                 != Some(actions.action().physical_action_sha256())
     }) {
-        return receipt.finish(TrafficShadowVerdictV3::AbstainPhase);
+        return finish(receipt, TrafficShadowVerdictV3::AbstainPhase);
     }
 
     let shadow = execute_bound_protocol_shadow_v3(actions.action());
     receipt.set_operator_shadow_receipt(shadow.receipt().receipt_sha256());
-    receipt.finish(match shadow.receipt().verdict() {
+    let verdict = match shadow.receipt().verdict() {
         OperatorShadowVerdictV3::Complete => TrafficShadowVerdictV3::CompleteShadow,
         OperatorShadowVerdictV3::ParityMismatch => TrafficShadowVerdictV3::ActorVmParityMismatch,
         _ => TrafficShadowVerdictV3::AbstainActorVm,
-    })
+    };
+    if verdict == TrafficShadowVerdictV3::CompleteShadow
+        && let Some(actor_output) = shadow.actor_output()
+    {
+        return TrafficShadowExecutionV3::complete(
+            receipt.finish(verdict),
+            actions.action().clone(),
+            actor_output.to_owned(),
+        );
+    }
+    finish(receipt, verdict)
+}
+
+fn finish(
+    receipt: TrafficShadowReceiptBuilderV3,
+    verdict: TrafficShadowVerdictV3,
+) -> TrafficShadowExecutionV3 {
+    TrafficShadowExecutionV3::receipt_only(receipt.finish(verdict))
 }
 
 const fn supported_projection(

@@ -8,7 +8,8 @@ mod request_provenance;
 mod surface;
 
 pub use input::{
-    IndependentVerifierBudgetV3, IndependentVerifierInputErrorV3, IndependentVerifierInputV3,
+    F6_MAX_RAW_REQUEST_BYTES_V3, F6_MAX_REQUEST_TEXT_BYTES_V3, IndependentVerifierBudgetV3,
+    IndependentVerifierInputErrorV3, IndependentVerifierInputV3,
 };
 pub use receipt::{INDEPENDENT_VERIFIER_RECEIPT_SCHEMA_V3, IndependentVerifierReceiptV3};
 

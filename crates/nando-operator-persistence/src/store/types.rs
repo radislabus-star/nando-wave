@@ -84,6 +84,11 @@ impl GenerationStoreRestoreV3 {
     pub const fn execution_authority(&self) -> bool {
         false
     }
+
+    #[must_use]
+    pub fn into_checkpoint(self) -> Option<RestoredGenerationCheckpointV3> {
+        self.checkpoint
+    }
 }
 
 impl GenerationStorePublishV3 {

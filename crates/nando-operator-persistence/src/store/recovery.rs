@@ -66,8 +66,11 @@ impl GenerationCheckpointStoreV3 {
                 return Err(GenerationStoreErrorV3::SlotConflict);
             }
             if !same_publish
-                && validate_transition(&candidates[0].checkpoint, &candidates[1].checkpoint)
-                    .is_err()
+                && validate_generation_checkpoint_transition_v3(
+                    &candidates[0].checkpoint,
+                    &candidates[1].checkpoint,
+                )
+                .is_err()
             {
                 let invalid = candidates
                     .pop()
@@ -98,7 +101,7 @@ impl GenerationCheckpointStoreV3 {
             .map_err(|_| GenerationStoreErrorV3::InvalidCheckpoint)?;
         let current = self.restore()?;
         if let Some(previous) = current.checkpoint() {
-            validate_transition(previous, &next)?;
+            validate_generation_checkpoint_transition_v3(previous, &next)?;
         }
         let slot = current
             .active_slot()
@@ -119,7 +122,7 @@ impl GenerationCheckpointStoreV3 {
     }
 }
 
-fn validate_transition(
+pub fn validate_generation_checkpoint_transition_v3(
     current: &RestoredGenerationCheckpointV3,
     next: &RestoredGenerationCheckpointV3,
 ) -> Result<(), GenerationStoreErrorV3> {

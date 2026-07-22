@@ -1,6 +1,6 @@
 # F7 Generation And Persistence V1
 
-Status: `F7-A/B/C/D COMPLETE / F7-E UNLOCKED`
+Status: `F7 COMPLETE / STOP-F7-E CONTROLLED_SHADOW_PASS`
 
 Authority: `false`
 
@@ -271,6 +271,44 @@ request-path caller. Those integrations belong only to F7-E shadow work.
 F7-D cannot call external admission, publish an ACTIVE package, enable local
 accept or authorize execution. Those powers remain blocked until F8.
 
+## F7-E Controlled Shadow Integration
+
+The serving integration is disabled by default. When explicitly enabled, HTTP
+bind and fallback availability happen before generation restore. A cold loader
+then joins one restored checkpoint to a separately owned raw-provider-request
+capture index and publishes an immutable shadow snapshot.
+
+The session JSONL evidence ledger is not that capture owner. It commits Codex
+trace records, while F6 verifies exact provider request bytes; treating those
+two hashes as interchangeable is forbidden.
+
+```text
+HTTP bound / fallback available                    PASS
+separate HTTP capture-index contract               PASS
+checkpoint receipt -> exact capture membership     PASS
+missing or tampered capture membership             BLOCK
+support frozen before load                         REQUIRED
+generation registry swap                           ATOMIC
+request generation pinned before enqueue           PASS
+store removal clears executable shadow             PASS
+queue operation                                    NON-BLOCKING
+queue maximum                                      48 requests
+F5 role grounding + actor                          PASS
+independent F6 verifier                            PASS
+raw payload bytes persisted                        0
+local accepts                                      0
+execution authority                                false
+external admission call                            0
+```
+
+The capture-index format and consumer are complete, but no live producer or
+deployment is claimed by STOP-F7-E. The controlled fixture is the capture owner
+for this proof. A real producer, externally sealed admission receipt, rollout
+and authority decision belong to F8.
+
+Canonical receipt:
+`STOP_F7_E_CONTROLLED_GENERATION_SHADOW.json`.
+
 ## STOP-F7
 
 ```text
@@ -287,12 +325,14 @@ censored semantic updates                  0
 false accepts                              0
 parity mismatches                          0
 execution authority                        false
-production callers                         0 until F7-E shadow
+disabled production request-path caller    1
+live capture-index producer                NOT DEPLOYED
+external admission                         BLOCKED / F8
 ```
 
-F8 remains blocked until STOP-F7 is complete and an external reader can
-independently reconstruct the same generation, partition roots, and F6 receipt
-set.
+F8 remains blocked until a real capture owner emits the exact index, an
+external reader independently reconstructs the same generation and receipt
+set, and the F5-G registry RSS debt is resolved or explicitly re-budgeted.
 
 ## F7-A Result
 
