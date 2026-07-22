@@ -6,6 +6,7 @@ pub mod executable_protocol_mode;
 pub mod program;
 pub mod protocol_mode;
 pub mod relation_routing;
+pub mod structural_context;
 pub mod vm;
 
 pub use binding::*;
@@ -16,4 +17,5 @@ pub use executable_protocol_mode::*;
 pub use program::*;
 pub use protocol_mode::*;
 pub use relation_routing::*;
+pub use structural_context::*;
 pub use vm::*;

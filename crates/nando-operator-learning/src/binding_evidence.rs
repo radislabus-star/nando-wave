@@ -14,6 +14,12 @@ pub use nando_operator_kernel::binding::{
     BindingCallLineageV1, BindingCapabilityClassV1, BindingCompletionStateV1, BindingPredicateV1,
     BindingRequestRelationV1, BindingSourceEventClassV1, BindingValueTypeV1,
 };
+use nando_operator_kernel::{
+    CanonicalRuntimeStructuralViewV3, StructuralCandidateObservationV3, StructuralContextV3,
+    StructuralExtractionBudgetV3, StructuralExtractionScopeV3, StructuralExtractionV3,
+    StructuralRelationKindV3, StructuralSourceRelationV3, canonicalize_runtime_structural_view_v3,
+    extract_structural_surface_v3,
+};
 
 pub const PRE_ACTION_BINDING_SURFACE_SCHEMA_V1: &str = "nando.pre-action-binding-surface.v1";
 pub const CANDIDATE_RELATION_GRAPH_SCHEMA_V1: &str = "nando.candidate-relation-graph.v1";
@@ -99,14 +105,6 @@ pub struct PreActionBindingContextV1 {
 }
 
 impl PreActionBindingContextV1 {
-    fn capability_class(&self) -> BindingCapabilityClassV1 {
-        match self.capability_count.max(self.call_shape_count) {
-            0 => BindingCapabilityClassV1::None,
-            1 => BindingCapabilityClassV1::Single,
-            _ => BindingCapabilityClassV1::Multiple,
-        }
-    }
-
     fn validate(&self) -> Result<(), BindingEvidenceErrorV1> {
         if !is_sha256(&self.topology_neighborhood_root_sha256) {
             return Err(BindingEvidenceErrorV1::InvalidContext);
@@ -310,52 +308,6 @@ pub enum BindingEvidenceErrorV1 {
     Serialization,
 }
 
-#[derive(Clone)]
-struct RawCandidate {
-    normalized: String,
-    action_equivalence_sha256: String,
-    value_type: BindingValueTypeV1,
-    event_key: u32,
-    temporal_distance: u16,
-    event_class: BindingSourceEventClassV1,
-    topology_neighborhood_root_sha256: String,
-}
-
-#[derive(Default)]
-struct EventEvidence {
-    anchors: BTreeSet<String>,
-}
-
-struct ExtractionState<'a> {
-    budget: BindingEvidenceBudgetV1,
-    request_tokens: BTreeSet<String>,
-    request_present: bool,
-    json_nodes_visited: usize,
-    text_bytes_visited: usize,
-    next_event_key: u32,
-    raw_candidates: Vec<RawCandidate>,
-    events: BTreeMap<u32, EventEvidence>,
-    event_candidate_values: BTreeMap<u32, BTreeSet<String>>,
-    candidate_events: BTreeMap<String, BTreeSet<u32>>,
-    stopped: bool,
-    _payload: &'a Value,
-}
-
-#[derive(Clone)]
-struct EventContext {
-    event_key: u32,
-    temporal_distance: u16,
-    event_class: BindingSourceEventClassV1,
-    topology_neighborhood_root_sha256: String,
-}
-
-#[derive(Default)]
-struct ShapeStats {
-    strings: usize,
-    structured: usize,
-    scalars: usize,
-}
-
 impl PreActionBindingSurfaceV1 {
     pub fn capture(
         row_id_sha256: impl Into<String>,
@@ -372,30 +324,61 @@ impl PreActionBindingSurfaceV1 {
         if !is_sha256(&row_id_sha256) || !is_sha256(&evidence_ref_sha256) {
             return Err(BindingEvidenceErrorV1::InvalidDigest);
         }
-        let request_tokens = tokenize_candidate_text(request_text)
+        let extraction = extract_structural_surface_v3(
+            request_text,
+            provider_payload,
+            StructuralContextV3 {
+                call_shape_count: context.call_shape_count,
+                capability_count: context.capability_count,
+                completion_state: context.completion_state,
+                temporal_relation_count: context.temporal_relation_count,
+                cardinality_relation_count: context.cardinality_relation_count,
+                topology_neighborhood_root_sha256: context
+                    .topology_neighborhood_root_sha256
+                    .clone(),
+            },
+            StructuralExtractionBudgetV3 {
+                max_json_nodes: budget.max_json_nodes,
+                max_text_bytes: budget.max_text_bytes,
+                max_recent_events: budget.max_recent_events,
+                max_role_candidates: budget.max_candidates_per_row,
+                max_relations: budget.max_relation_edges_per_row,
+            },
+            StructuralExtractionScopeV3::FrozenEvidence,
+        )
+        .map_err(|_| BindingEvidenceErrorV1::InvalidCorpus)?;
+        let mut nodes = extraction
+            .candidates
             .into_iter()
-            .map(|(token, _)| token)
-            .collect();
-        let mut state = ExtractionState {
-            budget,
-            request_tokens,
-            request_present: !request_text.trim().is_empty(),
-            json_nodes_visited: 0,
-            text_bytes_visited: 0,
-            next_event_key: 1,
-            raw_candidates: Vec::new(),
-            events: BTreeMap::new(),
-            event_candidate_values: BTreeMap::new(),
-            candidate_events: BTreeMap::new(),
-            stopped: false,
-            _payload: provider_payload,
-        };
-        visit_value(provider_payload, None, &mut state);
-
-        let candidates_before_budget = state.raw_candidates.len();
-        let mut nodes = materialize_candidates(&row_id_sha256, &context, &state);
-        let candidate_budget_exhausted =
-            state.stopped || nodes.len() > budget.max_candidates_per_row;
+            .map(|candidate| {
+                let features = BindingCandidateFeaturesV1 {
+                    source_event_class: candidate.features.source_event_class,
+                    call_lineage: candidate.features.call_lineage,
+                    capability_class: candidate.features.capability_class,
+                    temporal_distance: candidate.features.temporal_distance,
+                    completion_state: candidate.features.completion_state,
+                    event_candidate_cardinality: candidate.features.event_candidate_cardinality,
+                    value_type: candidate.features.value_type,
+                    request_relation: candidate.features.request_relation,
+                    topology_neighborhood_root_sha256: candidate
+                        .features
+                        .topology_neighborhood_root_sha256,
+                };
+                let candidate_id_sha256 = sha256_json(&(
+                    CANDIDATE_RELATION_GRAPH_SCHEMA_V1,
+                    &row_id_sha256,
+                    &candidate.value_sha256,
+                    &features,
+                ))
+                .unwrap_or_else(|_| sha256_bytes(b"binding-candidate-serialization-error"));
+                BindingCandidateNodeV1 {
+                    candidate_id_sha256,
+                    action_equivalence_sha256: candidate.value_sha256,
+                    features,
+                    occurrence_count: candidate.occurrence_count,
+                }
+            })
+            .collect::<Vec<_>>();
         nodes.sort_by(|left, right| left.candidate_id_sha256.cmp(&right.candidate_id_sha256));
         nodes.truncate(budget.max_candidates_per_row);
         Ok(Self {
@@ -404,10 +387,10 @@ impl PreActionBindingSurfaceV1 {
             evidence_ref_sha256,
             context,
             candidates: nodes,
-            json_nodes_visited: state.json_nodes_visited,
-            text_bytes_visited: state.text_bytes_visited,
-            candidates_before_budget,
-            candidate_budget_exhausted,
+            json_nodes_visited: extraction.json_nodes_visited,
+            text_bytes_visited: extraction.text_bytes_visited,
+            candidates_before_budget: extraction.candidates_before_budget,
+            candidate_budget_exhausted: extraction.candidate_budget_exhausted,
         })
     }
 
@@ -482,6 +465,114 @@ impl CandidateRelationGraphV1 {
             graph: self,
         })
     }
+}
+
+pub fn canonical_runtime_structural_view_v3_from_frozen_graph(
+    frozen: &FrozenCandidateRelationGraphV1,
+) -> Result<CanonicalRuntimeStructuralViewV3, BindingEvidenceErrorV1> {
+    if frozen.schema != FROZEN_CANDIDATE_RELATION_GRAPH_SCHEMA_V1
+        || sha256_json(&frozen.graph)? != frozen.graph_root_sha256
+    {
+        return Err(BindingEvidenceErrorV1::InvalidCorpus);
+    }
+    let source_ids = frozen
+        .graph
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| {
+            u16::try_from(index)
+                .map(|source_id| (node.candidate_id_sha256.as_str(), source_id))
+                .map_err(|_| BindingEvidenceErrorV1::InvalidCorpus)
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let candidates = frozen
+        .graph
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| {
+            Ok(StructuralCandidateObservationV3 {
+                source_role_id: u16::try_from(index)
+                    .map_err(|_| BindingEvidenceErrorV1::InvalidCorpus)?,
+                value_sha256: node.action_equivalence_sha256.clone(),
+                features: nando_operator_kernel::StructuralCandidateFeaturesV3 {
+                    source_event_class: node.features.source_event_class,
+                    call_lineage: node.features.call_lineage,
+                    capability_class: node.features.capability_class,
+                    temporal_distance: node.features.temporal_distance,
+                    completion_state: node.features.completion_state,
+                    event_candidate_cardinality: node.features.event_candidate_cardinality,
+                    value_type: node.features.value_type,
+                    request_relation: node.features.request_relation,
+                    topology_neighborhood_root_sha256: node
+                        .features
+                        .topology_neighborhood_root_sha256
+                        .clone(),
+                },
+                occurrence_count: node.occurrence_count,
+            })
+        })
+        .collect::<Result<Vec<_>, BindingEvidenceErrorV1>>()?;
+    let relations = frozen
+        .graph
+        .edges
+        .iter()
+        .map(|edge| {
+            let left_source_role_id = source_ids
+                .get(edge.left_candidate_id_sha256.as_str())
+                .copied()
+                .ok_or(BindingEvidenceErrorV1::InvalidCorpus)?;
+            let right_source_role_id = source_ids
+                .get(edge.right_candidate_id_sha256.as_str())
+                .copied()
+                .ok_or(BindingEvidenceErrorV1::InvalidCorpus)?;
+            let relation = match edge.relation {
+                BindingCandidateRelationKindV1::SameActionEquivalence => {
+                    StructuralRelationKindV3::SameValue
+                }
+                BindingCandidateRelationKindV1::SameCallLineage => {
+                    StructuralRelationKindV3::SameCallLineage
+                }
+                BindingCandidateRelationKindV1::SameTopologyNeighborhood => {
+                    StructuralRelationKindV3::SameTopologyNeighborhood
+                }
+                BindingCandidateRelationKindV1::AdjacentTemporalDistance => {
+                    StructuralRelationKindV3::AdjacentTemporalDistance
+                }
+            };
+            Ok(StructuralSourceRelationV3 {
+                left_source_role_id,
+                right_source_role_id,
+                relation,
+            })
+        })
+        .collect::<Result<Vec<_>, BindingEvidenceErrorV1>>()?;
+    let context = StructuralContextV3 {
+        call_shape_count: frozen.graph.context.call_shape_count,
+        capability_count: frozen.graph.context.capability_count,
+        completion_state: frozen.graph.context.completion_state,
+        temporal_relation_count: frozen.graph.context.temporal_relation_count,
+        cardinality_relation_count: frozen.graph.context.cardinality_relation_count,
+        topology_neighborhood_root_sha256: frozen
+            .graph
+            .context
+            .topology_neighborhood_root_sha256
+            .clone(),
+    };
+    canonicalize_runtime_structural_view_v3(
+        context,
+        &StructuralExtractionV3 {
+            candidates,
+            relations,
+            json_nodes_visited: 0,
+            text_bytes_visited: 0,
+            candidates_before_budget: frozen.graph.nodes.len(),
+            candidate_budget_exhausted: frozen.graph.extraction_budget_exhausted,
+            relation_budget_exhausted: frozen.graph.relation_budget_exhausted,
+        },
+    )
+    .map_err(|_| BindingEvidenceErrorV1::InvalidCorpus)
 }
 
 impl ExpectedBindingReceiptV1 {
@@ -775,396 +866,6 @@ pub fn evaluate_binding_version_space_v1(
     };
     report.report_sha256 = binding_report_digest(&report)?;
     Ok(report)
-}
-
-fn visit_value(value: &Value, event: Option<EventContext>, state: &mut ExtractionState<'_>) {
-    if state.stopped || state.json_nodes_visited >= state.budget.max_json_nodes {
-        state.stopped = true;
-        return;
-    }
-    state.json_nodes_visited += 1;
-    match value {
-        Value::Object(values) => {
-            for child in values.values() {
-                visit_value(child, event.clone(), state);
-                if state.stopped {
-                    break;
-                }
-            }
-        }
-        Value::Array(values) if event.is_none() => {
-            let count = values.len();
-            let start = count.saturating_sub(state.budget.max_recent_events);
-            for (index, child) in values.iter().enumerate().skip(start) {
-                let event_key = state.next_event_key;
-                state.next_event_key = state.next_event_key.saturating_add(1);
-                state.events.entry(event_key).or_default();
-                let shape = canonical_shape(child, 0);
-                let event = EventContext {
-                    event_key,
-                    temporal_distance: u16::try_from(count.saturating_sub(index + 1))
-                        .unwrap_or(u16::MAX),
-                    event_class: source_event_class(child),
-                    topology_neighborhood_root_sha256: sha256_bytes(shape.as_bytes()),
-                };
-                visit_value(child, Some(event), state);
-                if state.stopped {
-                    break;
-                }
-            }
-        }
-        Value::Array(values) => {
-            for child in values {
-                visit_value(child, event.clone(), state);
-                if state.stopped {
-                    break;
-                }
-            }
-        }
-        Value::String(text) => {
-            let remaining = state
-                .budget
-                .max_text_bytes
-                .saturating_sub(state.text_bytes_visited);
-            if remaining == 0 {
-                state.stopped = true;
-                return;
-            }
-            let bounded = if text.len() > remaining {
-                state.stopped = true;
-                &text[..nearest_char_boundary(text, remaining)]
-            } else {
-                text.as_str()
-            };
-            state.text_bytes_visited = state.text_bytes_visited.saturating_add(bounded.len());
-            record_anchor(bounded, event.as_ref(), state);
-            for (token, value_type) in tokenize_candidate_text(bounded) {
-                add_raw_candidate(&token, value_type, event.as_ref(), state);
-                if value_type == BindingValueTypeV1::Integer {
-                    add_raw_candidate(&token, BindingValueTypeV1::String, event.as_ref(), state);
-                }
-            }
-            for digits in bounded
-                .split(|character: char| !character.is_ascii_digit())
-                .filter(|digits| !digits.is_empty())
-            {
-                add_raw_candidate(digits, BindingValueTypeV1::Integer, event.as_ref(), state);
-                add_raw_candidate(digits, BindingValueTypeV1::String, event.as_ref(), state);
-            }
-            if let Ok(embedded) = serde_json::from_str::<Value>(bounded) {
-                visit_value(&embedded, event, state);
-            }
-        }
-        Value::Number(number) => {
-            let token = number.to_string();
-            record_anchor(&token, event.as_ref(), state);
-            if number.is_i64() || number.is_u64() {
-                add_raw_candidate(&token, BindingValueTypeV1::Integer, event.as_ref(), state);
-            }
-        }
-        Value::Bool(value) => {
-            let token = value.to_string();
-            record_anchor(&token, event.as_ref(), state);
-            add_raw_candidate(&token, BindingValueTypeV1::Boolean, event.as_ref(), state);
-        }
-        Value::Null => {}
-    }
-}
-
-fn add_raw_candidate(
-    token: &str,
-    value_type: BindingValueTypeV1,
-    event: Option<&EventContext>,
-    state: &mut ExtractionState<'_>,
-) {
-    if state.raw_candidates.len() >= state.budget.max_candidates_per_row.saturating_mul(8) {
-        state.stopped = true;
-        return;
-    }
-    let normalized = token.to_owned();
-    let action_equivalence_sha256 = match value_type {
-        BindingValueTypeV1::Integer => token
-            .parse::<u64>()
-            .ok()
-            .and_then(|value| sha256_json(&value).ok()),
-        BindingValueTypeV1::Boolean => token
-            .parse::<bool>()
-            .ok()
-            .and_then(|value| sha256_json(&value).ok()),
-        BindingValueTypeV1::String | BindingValueTypeV1::Identifier => sha256_json(&token).ok(),
-    };
-    let Some(action_equivalence_sha256) = action_equivalence_sha256 else {
-        return;
-    };
-    let event_key = event.map_or(0, |event| event.event_key);
-    let raw = RawCandidate {
-        normalized,
-        action_equivalence_sha256: action_equivalence_sha256.clone(),
-        value_type,
-        event_key,
-        temporal_distance: event.map_or(u16::MAX, |event| event.temporal_distance),
-        event_class: event.map_or(BindingSourceEventClassV1::Unknown, |event| {
-            event.event_class
-        }),
-        topology_neighborhood_root_sha256: event.map_or_else(
-            || sha256_bytes(b"root-scalar"),
-            |event| event.topology_neighborhood_root_sha256.clone(),
-        ),
-    };
-    state
-        .event_candidate_values
-        .entry(event_key)
-        .or_default()
-        .insert(action_equivalence_sha256.clone());
-    state
-        .candidate_events
-        .entry(action_equivalence_sha256)
-        .or_default()
-        .insert(event_key);
-    state.raw_candidates.push(raw);
-}
-
-fn record_anchor(text: &str, event: Option<&EventContext>, state: &mut ExtractionState<'_>) {
-    let Some(event) = event else {
-        return;
-    };
-    let trimmed = text.trim();
-    if trimmed.is_empty() || trimmed.len() > 128 || trimmed.chars().any(char::is_whitespace) {
-        return;
-    }
-    state
-        .events
-        .entry(event.event_key)
-        .or_default()
-        .anchors
-        .insert(sha256_bytes(trimmed.as_bytes()));
-}
-
-fn materialize_candidates(
-    row_id_sha256: &str,
-    context: &PreActionBindingContextV1,
-    state: &ExtractionState<'_>,
-) -> Vec<BindingCandidateNodeV1> {
-    let mut anchor_events = BTreeMap::<String, BTreeSet<u32>>::new();
-    for (event_key, event) in &state.events {
-        for anchor in &event.anchors {
-            anchor_events
-                .entry(anchor.clone())
-                .or_default()
-                .insert(*event_key);
-        }
-    }
-    let mut grouped =
-        BTreeMap::<(String, BindingCandidateFeaturesV1), (usize, BTreeSet<String>)>::new();
-    for raw in &state.raw_candidates {
-        let same_value_events = state
-            .candidate_events
-            .get(&raw.action_equivalence_sha256)
-            .map_or(0, BTreeSet::len);
-        let shared_anchor = state.events.get(&raw.event_key).is_some_and(|event| {
-            event.anchors.iter().any(|anchor| {
-                anchor_events
-                    .get(anchor)
-                    .is_some_and(|events| events.len() > 1)
-            })
-        });
-        let call_lineage = if raw.event_key == 0 {
-            BindingCallLineageV1::Unknown
-        } else if same_value_events > 1 {
-            BindingCallLineageV1::SameValueAcrossEvents
-        } else if shared_anchor {
-            BindingCallLineageV1::SharedOpaqueAnchor
-        } else {
-            BindingCallLineageV1::Unlinked
-        };
-        let request_relation = if !state.request_present {
-            BindingRequestRelationV1::RequestAbsent
-        } else if state.request_tokens.contains(&raw.normalized) {
-            BindingRequestRelationV1::Mentioned
-        } else {
-            BindingRequestRelationV1::NotMentioned
-        };
-        let features = BindingCandidateFeaturesV1 {
-            source_event_class: raw.event_class,
-            call_lineage,
-            capability_class: context.capability_class(),
-            temporal_distance: raw.temporal_distance,
-            completion_state: context.completion_state,
-            event_candidate_cardinality: u16::try_from(
-                state
-                    .event_candidate_values
-                    .get(&raw.event_key)
-                    .map_or(0, BTreeSet::len),
-            )
-            .unwrap_or(u16::MAX),
-            value_type: raw.value_type,
-            request_relation,
-            topology_neighborhood_root_sha256: raw.topology_neighborhood_root_sha256.clone(),
-        };
-        let entry = grouped
-            .entry((raw.action_equivalence_sha256.clone(), features))
-            .or_default();
-        entry.0 = entry.0.saturating_add(1);
-        entry.1.insert(raw.normalized.clone());
-    }
-    grouped
-        .into_iter()
-        .map(
-            |((action_equivalence_sha256, features), (occurrences, _))| {
-                let candidate_id_sha256 = sha256_json(&(
-                    CANDIDATE_RELATION_GRAPH_SCHEMA_V1,
-                    row_id_sha256,
-                    &action_equivalence_sha256,
-                    &features,
-                ))
-                .unwrap_or_else(|_| sha256_bytes(b"binding-candidate-serialization-error"));
-                BindingCandidateNodeV1 {
-                    candidate_id_sha256,
-                    action_equivalence_sha256,
-                    features,
-                    occurrence_count: u16::try_from(occurrences).unwrap_or(u16::MAX),
-                }
-            },
-        )
-        .collect()
-}
-
-fn tokenize_candidate_text(text: &str) -> Vec<(String, BindingValueTypeV1)> {
-    let has_structure = text.chars().any(char::is_whitespace)
-        || text.contains('{')
-        || text.contains('[')
-        || text.contains(':');
-    let mut output = BTreeSet::new();
-    for token in text
-        .split(|character: char| {
-            !(character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.' | ':' | '/'))
-        })
-        .map(|token| token.trim_matches(|character: char| matches!(character, ':' | '/' | '.')))
-        .filter(|token| !token.is_empty())
-    {
-        if token.len() > 256 || token.len() < 2 {
-            continue;
-        }
-        if token.bytes().all(|byte| byte.is_ascii_digit()) {
-            if token.parse::<u64>().is_ok() {
-                output.insert((token.to_owned(), BindingValueTypeV1::Integer));
-            }
-            continue;
-        }
-        let contains_digit = token.bytes().any(|byte| byte.is_ascii_digit());
-        let contains_upper = token.bytes().any(|byte| byte.is_ascii_uppercase());
-        let contains_lower = token.bytes().any(|byte| byte.is_ascii_lowercase());
-        let opaque = token.len() >= 4
-            && (contains_digit || (contains_upper && contains_lower))
-            && token.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')
-            });
-        if opaque || (has_structure && token.len() >= 12 && token.contains(['-', '_'])) {
-            output.insert((token.to_owned(), BindingValueTypeV1::Identifier));
-            output.insert((token.to_owned(), BindingValueTypeV1::String));
-        }
-    }
-    output.into_iter().collect()
-}
-
-fn source_event_class(value: &Value) -> BindingSourceEventClassV1 {
-    let mut stats = ShapeStats::default();
-    collect_shape_stats(collapse_singleton_object(value), &mut stats, 0);
-    match (
-        stats.strings > 0,
-        stats.structured > 1,
-        stats.scalars > stats.strings,
-    ) {
-        (true, false, false) => BindingSourceEventClassV1::Textual,
-        (false, true, _) => BindingSourceEventClassV1::Structured,
-        (true, true, _) => BindingSourceEventClassV1::Mixed,
-        (false, false, true) => BindingSourceEventClassV1::Scalar,
-        _ => BindingSourceEventClassV1::Unknown,
-    }
-}
-
-fn collapse_singleton_object(mut value: &Value) -> &Value {
-    while let Value::Object(values) = value {
-        if values.len() != 1 {
-            break;
-        }
-        let Some(child) = values.values().next() else {
-            break;
-        };
-        value = child;
-    }
-    value
-}
-
-fn collect_shape_stats(value: &Value, stats: &mut ShapeStats, depth: usize) {
-    if depth > 32 {
-        return;
-    }
-    match value {
-        Value::Object(values) => {
-            stats.structured = stats.structured.saturating_add(1);
-            for value in values.values() {
-                collect_shape_stats(value, stats, depth + 1);
-            }
-        }
-        Value::Array(values) => {
-            stats.structured = stats.structured.saturating_add(1);
-            for value in values {
-                collect_shape_stats(value, stats, depth + 1);
-            }
-        }
-        Value::String(_) => {
-            stats.strings = stats.strings.saturating_add(1);
-            stats.scalars = stats.scalars.saturating_add(1);
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {
-            stats.scalars = stats.scalars.saturating_add(1);
-        }
-    }
-}
-
-fn canonical_shape(value: &Value, depth: usize) -> String {
-    if depth > 32 {
-        return "depth_limit".to_owned();
-    }
-    match value {
-        Value::Null => "null".to_owned(),
-        Value::Bool(_) => "bool".to_owned(),
-        Value::Number(number) if number.is_i64() || number.is_u64() => "integer".to_owned(),
-        Value::Number(_) => "number".to_owned(),
-        Value::String(value) => {
-            if serde_json::from_str::<Value>(value).is_ok() {
-                "string:embedded_json".to_owned()
-            } else if value.contains('\n') {
-                "string:multiline".to_owned()
-            } else if value.chars().any(char::is_whitespace) {
-                "string:text".to_owned()
-            } else {
-                "string:scalar".to_owned()
-            }
-        }
-        Value::Array(values) => {
-            let mut children = values
-                .iter()
-                .map(|value| canonical_shape(value, depth + 1))
-                .collect::<Vec<_>>();
-            children.sort();
-            format!("array[{}]", children.join(","))
-        }
-        Value::Object(values) => {
-            let mut children = values
-                .values()
-                .map(|value| canonical_shape(value, depth + 1))
-                .collect::<Vec<_>>();
-            children.sort();
-            children.dedup();
-            if children.len() == 1 {
-                children.pop().unwrap_or_default()
-            } else {
-                format!("object{{{}}}", children.join(","))
-            }
-        }
-    }
 }
 
 fn add_group_edges<F>(
@@ -1477,13 +1178,6 @@ fn binding_report_digest(
     let mut material = report.clone();
     material.report_sha256.clear();
     sha256_json(&material)
-}
-
-fn nearest_char_boundary(value: &str, mut index: usize) -> usize {
-    while index > 0 && !value.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
 }
 
 fn is_sha256(value: &str) -> bool {

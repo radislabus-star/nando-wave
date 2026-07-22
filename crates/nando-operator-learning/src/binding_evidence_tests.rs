@@ -103,6 +103,46 @@ fn content_part_reordering_is_graph_invariant() {
 }
 
 #[test]
+fn frozen_graph_and_shared_structural_extractor_have_identical_canonical_views() {
+    let payload = payload_with_parts(vec![
+        json!({"text": "first opaque-00000001"}),
+        json!({"text": "active target-00000002"}),
+    ]);
+    let frozen = graph('9', "continue target-00000002", &payload);
+    let from_frozen = canonical_runtime_structural_view_v3_from_frozen_graph(&frozen)
+        .expect("frozen graph canonical view");
+    let proof_context = context();
+    let structural_context = nando_operator_kernel::StructuralContextV3 {
+        call_shape_count: proof_context.call_shape_count,
+        capability_count: proof_context.capability_count,
+        completion_state: proof_context.completion_state,
+        temporal_relation_count: proof_context.temporal_relation_count,
+        cardinality_relation_count: proof_context.cardinality_relation_count,
+        topology_neighborhood_root_sha256: proof_context.topology_neighborhood_root_sha256,
+    };
+    let extraction = nando_operator_kernel::extract_structural_surface_v3(
+        "continue target-00000002",
+        &payload,
+        structural_context.clone(),
+        nando_operator_kernel::StructuralExtractionBudgetV3 {
+            max_json_nodes: MAX_BINDING_JSON_NODES_V1,
+            max_text_bytes: MAX_BINDING_TEXT_BYTES_V1,
+            max_recent_events: MAX_BINDING_RECENT_EVENTS_V1,
+            max_role_candidates: MAX_BINDING_CANDIDATES_PER_ROW_V1,
+            max_relations: MAX_BINDING_RELATION_EDGES_PER_ROW_V1,
+        },
+        nando_operator_kernel::StructuralExtractionScopeV3::FrozenEvidence,
+    )
+    .expect("shared structural extraction");
+    let direct = nando_operator_kernel::canonicalize_runtime_structural_view_v3(
+        structural_context,
+        &extraction,
+    )
+    .expect("direct canonical view");
+    assert_eq!(from_frozen, direct);
+}
+
+#[test]
 fn renamed_fields_and_function_names_do_not_change_candidate_relations() {
     let left = json!({
         "input": [
