@@ -504,6 +504,7 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .architecture-title h2 {{ margin-bottom:3px; color:#8ee6a8; font-size:15px; }}
 .architecture-title p {{ margin:0; color:#707a82; font-size:12px; line-height:1.4; }}
 .architecture-state {{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }}
+.signal-pipeline .architecture-state {{ flex-wrap:wrap; justify-content:flex-end; }}
 .state-chip {{ color:#8b949b; font-size:12px; font-weight:700; white-space:nowrap; }}
 .state-chip::before {{ content:"["; }} .state-chip::after {{ content:"]"; }}
 .state-chip.live,.state-chip.pass {{ color:#66d98b; }}
@@ -533,24 +534,46 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .current-blocker .blocker-label {{ color:#ff6b63; font-size:12px; font-weight:700; }}
 .current-blocker strong {{ color:#ffd1ce; font-size:14px; }}
 .current-blocker p {{ margin:0; color:#b88d8a; font-size:12px; }}
-.unified-tree {{ padding:12px 14px; }}
-.map-stage {{ min-width:760px; padding:3px 0; }}
-.map-stage-main {{ display:grid; grid-template-columns:38px 62px minmax(260px,1fr) minmax(150px,auto) 78px; align-items:baseline; gap:8px; }}
-.map-stage-meta {{ display:flex; flex-wrap:wrap; gap:3px 18px; padding-left:108px; color:#68747c; font-size:12px; }}
-.map-stage-meta .signal-state {{ color:#89949b; }}
-.map-stage.proven .stage-title {{ color:#b8ddf8; }}
-.map-stage.proven .stage-metric {{ color:#82c7ff; }}
-.map-stage.block .stage-title,.map-stage.block .stage-metric {{ color:#ff7770; }}
-.map-stage.locked .stage-title,.map-stage.locked .stage-metric {{ color:#687178; }}
-.map-edge {{ display:grid; grid-template-columns:38px minmax(0,1fr); min-width:760px; gap:8px; padding:2px 0 4px; color:#68747c; font-size:12px; }}
-.map-branch {{ display:grid; grid-template-columns:38px minmax(250px,1fr) auto; min-width:760px; gap:8px; margin:7px 0 3px; padding-top:7px; border-top:1px dotted #30383d; color:#7f8a92; font-size:12px; }}
-.map-branch strong {{ color:#dce3e7; font-size:13px; }}
-.map-branch.live strong {{ color:#79dfa0; }}
-.map-branch.proven strong {{ color:#82c7ff; }}
-.map-evidence {{ display:flex; flex-wrap:wrap; gap:3px 16px; min-width:760px; padding:3px 0 7px 108px; color:#74818a; font-size:12px; }}
-.map-evidence span::before {{ content:"· "; color:#485158; }}
-.map-blocked-edge {{ display:grid; grid-template-columns:38px 180px minmax(300px,1fr); min-width:760px; gap:8px; margin:4px 0; padding:7px 0; border-top:1px solid #5c2b29; border-bottom:1px solid #5c2b29; color:#d98a85; font-size:12px; }}
-.map-blocked-edge strong {{ color:#ff6b63; }}
+.pipeline-legend {{ display:flex; flex-wrap:wrap; gap:5px 22px; margin-bottom:10px; color:#77828a; font-size:12px; line-height:1.45; }}
+.pipeline-legend b {{ color:#cbd4da; }}
+.pipeline-stack {{ border:1px solid #3f464b; background:#080a0b; }}
+.pipeline-stage {{ position:relative; padding:13px 16px 12px; border-left:3px solid #4d565d; border-bottom:1px solid #272d31; }}
+.pipeline-stage:last-child {{ border-bottom:0; }}
+.pipeline-stage.live {{ border-left-color:#58c87d; }}
+.pipeline-stage.proven {{ border-left-color:#65aee7; }}
+.pipeline-stage.wait {{ border-left-color:#d2a34b; }}
+.pipeline-stage.block {{ border-left-color:#f05f58; background:#120d0e; }}
+.pipeline-stage.locked {{ border-left-color:#565e64; background:#090b0c; }}
+.pipeline-stage-head {{ display:grid; grid-template-columns:58px minmax(0,1fr) auto; align-items:start; gap:10px; }}
+.pipeline-index {{ color:#8c979f; font-size:14px; font-weight:700; }}
+.pipeline-stage h3 {{ margin:0; color:#dce3e7; font-size:15px; line-height:1.35; }}
+.pipeline-stage.live h3 {{ color:#a9e8bb; }}
+.pipeline-stage.proven h3 {{ color:#add9f8; }}
+.pipeline-stage.block h3 {{ color:#ffc0bc; }}
+.pipeline-stage.locked h3 {{ color:#777f85; }}
+.stage-owner {{ margin:3px 0 0; color:#7f8991; font-size:12px; overflow-wrap:anywhere; }}
+.stage-owner b {{ color:#aeb8bf; }}
+.pipeline-diagnostics {{ margin:10px 0 0 68px; font-size:13px; line-height:1.45; }}
+.diagnostic-row {{ display:grid; grid-template-columns:62px minmax(0,1fr); gap:8px; padding:3px 0; border-top:1px dotted #252b2f; }}
+.diagnostic-row:first-child {{ border-top:0; }}
+.diagnostic-row dt {{ color:#667178; font-weight:700; }}
+.diagnostic-row dd {{ min-width:0; margin:0; color:#aeb7bd; overflow-wrap:anywhere; }}
+.diagnostic-row.live dt {{ color:#66d98b; }}
+.diagnostic-row.proof dt {{ color:#82c7ff; }}
+.diagnostic-row.diagnostic dt {{ color:#e0b35a; }}
+.diagnostic-row.output dt {{ color:#b5c0c7; }}
+.pipeline-stage.locked .diagnostic-row dd {{ color:#737b81; }}
+.pipeline-handoff {{ display:grid; grid-template-columns:72px minmax(0,1fr); align-items:center; min-height:34px; padding:0 16px; color:#69747b; font-size:12px; }}
+.pipeline-handoff .handoff-line {{ justify-self:center; width:1px; height:34px; background:#3b444a; }}
+.pipeline-handoff.live {{ color:#68bd83; }}
+.pipeline-handoff.live .handoff-line {{ background:#3d8052; }}
+.pipeline-handoff.proof {{ color:#6faedb; }}
+.pipeline-handoff.proof .handoff-line {{ background:#356787; }}
+.pipeline-break {{ display:grid; grid-template-columns:210px minmax(0,1fr); gap:5px 16px; padding:11px 16px 11px 84px; border-top:1px solid #722f2b; border-bottom:1px solid #722f2b; background:#1a0f10; color:#c98d89; font-size:13px; line-height:1.45; }}
+.pipeline-break strong {{ color:#ff6b63; }}
+.pipeline-break span:last-child {{ grid-column:2; color:#76b9e7; }}
+.authority-boundary {{ display:grid; grid-template-columns:210px minmax(0,1fr); gap:16px; padding:12px 16px 12px 84px; border-top:1px solid #5e2927; border-bottom:1px solid #5e2927; background:#120d0e; color:#b78582; font-size:13px; line-height:1.45; }}
+.authority-boundary strong {{ color:#ff6b63; }}
 .proof-console {{ padding:4px 0 14px; border-bottom:1px solid #24292d; }}
 .proof-console .research-architecture {{ margin-top:0; }}
 .research-architecture {{ margin-top:16px; }}
@@ -596,6 +619,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
 @media (max-width:680px) {{
   .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
   .header-inner,.brand {{ gap:6px; }}
+  .signal-pipeline .architecture-state {{ justify-content:flex-start; }}
   main {{ padding:12px 10px 24px; }}
   .metric-grid {{ grid-template-columns:1fr; }}
   .flow-tree {{ padding:10px; }}
@@ -623,17 +647,15 @@ td:last-child {{ text-align:right; font-weight:700; }}
   .console-toolbar {{ align-items:flex-start; flex-direction:column; gap:2px; }}
   .identity-line {{ flex-direction:column; gap:3px; }}
   .current-blocker {{ grid-template-columns:1fr; gap:3px; }}
-  .map-stage,.map-edge,.map-branch,.map-evidence,.map-blocked-edge {{ min-width:0; }}
-  .map-stage-main {{ grid-template-columns:30px 52px minmax(0,1fr); gap:4px; }}
-  .map-stage-main .stage-metric {{ grid-column:3; text-align:left; white-space:normal; overflow-wrap:anywhere; }}
-  .map-stage-main .state-chip {{ grid-column:3; justify-self:start; }}
-  .map-stage-meta {{ padding-left:86px; gap:2px 10px; overflow-wrap:anywhere; }}
-  .map-edge {{ grid-template-columns:30px minmax(0,1fr); }}
-  .map-branch {{ grid-template-columns:30px minmax(0,1fr); }}
-  .map-branch span:last-child {{ grid-column:2; }}
-  .map-evidence {{ padding-left:86px; }}
-  .map-blocked-edge {{ grid-template-columns:30px minmax(0,1fr); }}
-  .map-blocked-edge strong,.map-blocked-edge span:last-child {{ grid-column:2; }}
+  .pipeline-legend {{ flex-direction:column; gap:3px; }}
+  .pipeline-stage {{ padding:12px 10px 11px; }}
+  .pipeline-stage-head {{ grid-template-columns:38px minmax(0,1fr); gap:7px; }}
+  .pipeline-stage-head .state-chip {{ grid-column:2; justify-self:start; margin-top:4px; }}
+  .pipeline-diagnostics {{ margin-left:45px; font-size:12px; }}
+  .diagnostic-row {{ grid-template-columns:52px minmax(0,1fr); gap:5px; }}
+  .pipeline-handoff {{ grid-template-columns:38px minmax(0,1fr); padding:0 10px; }}
+  .pipeline-break,.authority-boundary {{ grid-template-columns:1fr; gap:4px; padding:10px 12px; }}
+  .pipeline-break span:last-child {{ grid-column:1; }}
 }}
 </style>
 </head>
