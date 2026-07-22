@@ -1,6 +1,6 @@
 # F5 Runtime Convergence V1
 
-Status: `F5_E_COMPLETE_F5_F_UNLOCKED`
+Status: `F5_F_COMPLETE_F5_G_UNLOCKED`
 
 F5-A implementation: `be0c4b465d271e3b3a92700cedfff09867b3f068`
 
@@ -11,6 +11,8 @@ F5-C implementation: `ba0824702f8fedf93a2a2f05c88dad2c17e88a6c`
 F5-D implementation: `759701564f0bd69c484617f7ea1efd246a602642`
 
 F5-E implementation: `a785ba330f330a5dbf7b371a89c75c791ec285a3`
+
+F5-F implementation: `e887349ab34a41ed7dd70173fca255862d22ec19`
 
 Authority: `false`
 
@@ -23,7 +25,8 @@ F5-B runtime context             COMPLETE / STOP-F5-B
 F5-C mode-to-role compilation    COMPLETE / STOP-F5-C
 F5-D capability/action grounding COMPLETE / STOP-F5-D
 F5-E actor/VM shadow             COMPLETE / STOP-F5-E
-F5-F phase integration           UNLOCKED / NOT STARTED
+F5-F phase integration           SAFETY PASS / WAVE GAIN WATCH
+F5-G traffic/performance         UNLOCKED / NOT STARTED
 runtime callers                  0
 authority                        false
 ```
@@ -34,6 +37,9 @@ Receipts:
 STOP_F5_A_EXECUTABLE_COMPLETENESS.md
 f5b/STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md
 f5c/STOP_F5_C_MODE_TO_ROLE_COMPILATION.md
+f5d/STOP_F5_D_ACTION_GROUNDING.md
+f5e/STOP_F5_E_ACTOR_VM_SHADOW.md
+f5f/STOP_F5_F_PHASE_INTEGRATION.md
 ```
 
 Development resume:
@@ -47,8 +53,8 @@ plans/nando-response-actor-decomposition-v1/
   NANDO_RESPONSE_ACTOR_DECOMPOSITION_V1.md
 ```
 
-The completed cuts did not reopen or weaken STOP-F5-A or STOP-F5-B. F5-D is
-the next and only unlocked functional boundary.
+The completed cuts did not reopen or weaken STOP-F5-A through STOP-F5-F. F5-G
+is the next and only unlocked functional boundary.
 
 This plan closes exactly one boundary:
 

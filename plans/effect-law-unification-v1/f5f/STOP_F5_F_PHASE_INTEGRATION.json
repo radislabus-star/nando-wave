@@ -1,0 +1,50 @@
+{
+  "schema": "nando.stop-f5-f-phase-integration.v1",
+  "status": "SAFETY_PASS_WAVE_GAIN_WATCH",
+  "implementation_commit": "e887349ab34a41ed7dd70173fca255862d22ec19",
+  "authority": false,
+  "production_callers": 0,
+  "controls": [
+    "full",
+    "no_phase",
+    "shuffled_phase",
+    "magnitude_only",
+    "matched_random_center"
+  ],
+  "matrix": {
+    "phase_trace_recomputes_binder_score": "PASS",
+    "phase_trace_committed": "PASS",
+    "wave_rescues_failed_binding": 0,
+    "full_phase_wrong_actions": 0,
+    "all_controls_wrong_actions": 0,
+    "distinct_action_tie": "ABSTAIN",
+    "missing_capability": "ABSTAIN",
+    "ambiguous_structural_action": "ABSTAIN",
+    "action_changes_from_structural_result": 0
+  },
+  "gain": {
+    "full_exact_action_checks": 1,
+    "no_phase_exact_action_checks": 1,
+    "search_reduction": 0,
+    "verdict": "WATCH_NO_SEARCH_GAIN"
+  },
+  "verification": {
+    "focused_tests_passed": 6,
+    "runtime_binder_tests_passed": 3,
+    "runtime_tests_passed": 39,
+    "remote_core_lib_passed": 176,
+    "remote_core_lib_ignored": 5,
+    "remote_kernel_tests_passed": 13,
+    "remote_learning_tests_passed": 198,
+    "remote_runtime_tests_passed": 39,
+    "remote_integrations": "PASS",
+    "clippy_deny_warnings": "PASS",
+    "live_composite_gate": "PASS",
+    "eligible_for_local_accept": false,
+    "response_active_packages": 0,
+    "response_false_accepts": 0,
+    "response_runtime_parity_failures": 0
+  },
+  "next": "F5_G_UNLOCKED_NOT_STARTED",
+  "f6": "LOCKED"
+}

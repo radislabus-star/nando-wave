@@ -23,7 +23,10 @@ F4R2 protocol mode compiler     CONTROLLED_STRUCTURAL_PASS
 F5-A executable artifact        COMPLETE / STOP-F5-A
 F5-B canonical runtime context  COMPLETE / STOP-F5-B
 F5-C mode-to-role compilation   COMPLETE / STOP-F5-C
-F5-D capability/action binding  UNLOCKED / NOT STARTED
+F5-D capability/action binding  COMPLETE / STOP-F5-D
+F5-E actor/VM shadow            COMPLETE / STOP-F5-E
+F5-F phase integration          SAFETY PASS / WAVE GAIN WATCH
+F5-G traffic/performance        UNLOCKED / NOT STARTED
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -38,10 +41,16 @@ plans/effect-law-unification-v1/f5b/
   STOP_F5_B_CANONICAL_RUNTIME_CONTEXT.md
 plans/effect-law-unification-v1/f5c/
   STOP_F5_C_MODE_TO_ROLE_COMPILATION.md
+plans/effect-law-unification-v1/f5d/
+  STOP_F5_D_ACTION_GROUNDING.md
+plans/effect-law-unification-v1/f5e/
+  STOP_F5_E_ACTOR_VM_SHADOW.md
+plans/effect-law-unification-v1/f5f/
+  STOP_F5_F_PHASE_INTEGRATION.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
-remain frozen; F5-D is now the only unlocked implementation boundary.
+remain frozen; F5-G is now the only unlocked implementation boundary.
 
 ## 1. Objective
 
