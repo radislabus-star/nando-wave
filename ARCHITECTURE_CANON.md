@@ -1326,11 +1326,13 @@ all pre-action observables. Such a case remains an equivalence orbit or ABSTAIN.
 Future may select one circuit only when independently observed phase/history
 relations break the symmetry without teacher-only or post-action leakage.
 
-Crystallization belongs in `nando-response-actor`, not in the pure wave core.
-`CrystallizedOperator` compiles the supported generic `TransformOp8` into the
-existing `ResponseProgram`, builds an independent `VerifierProgram`, requires
-one exact parity receipt per admitted future lineage, and binds actor/verifier
-digests into `OperatorPage32`. Unknown opcodes, empty transforms, cyclic
+Crystallization does not belong in the pure Wave core. Its reusable contracts
+are split by authority owner: immutable artifact data lives in
+`nando-operator-kernel`, candidate compilation in `nando-operator-learning`,
+binding and VM execution in `nando-operator-runtime`, independent derivation in
+`nando-operator-proof`, and authority in `nando-operator-admission`.
+`nando-response-actor` retains only response-specific integration and
+cross-owner orchestration. Unknown opcodes, empty transforms, cyclic
 composition, incomplete receipts, or ambiguous future mappings fail closed.
 Renderer/verifier hashes alone are insufficient.
 
@@ -1387,30 +1389,31 @@ Current ownership:
 completed trace and teacher join
   crates/nando-transition-serving/src/session_stream.rs
 
-streaming teacher/student state
+immutable law, mode, artifact, and VM contracts
+  crates/nando-operator-kernel/src
+
+evidence, grouping, quotient, CEGIS, and candidate compilation
+  crates/nando-operator-learning/src
+
+role grounding and deterministic actor execution
+  crates/nando-operator-runtime/src
+
+independent expected consequence and receipt reconstruction
+  crates/nando-operator-proof/src
+
+proof validation and authority lease
+  crates/nando-operator-admission/src
+
+response-specific adapters and cross-owner orchestration
   crates/nando-response-actor/src/online.rs
   crates/nando-response-actor/src/online_state.rs
-  crates/nando-response-actor/src/online_checkpoint.rs
-
-structural grouping and semantic equivalence
-  crates/nando-response-actor/src/semantic_alias.rs
-  crates/nando-response-actor/src/online_subcenter.rs
-
-counterexamples, repair, anti-centers, winning laws
-  crates/nando-response-actor/src/cegis.rs
-
-ordinary structured-result induction
   crates/nando-response-actor/src/online_collection.rs
   crates/nando-response-actor/src/collection_synthesis.rs
+  crates/nando-response-actor/src/crystallized_operator.rs
 
-program and execution
-  crates/nando-response-actor/src/program.rs
-  crates/nando-response-actor/src/runtime.rs
-
-independent verification and admission
-  crates/nando-response-actor/src/verifier.rs
-  crates/nando-response-actor/src/online_admission.rs
-  crates/nando-response-actor/src/bin/nando-response-admission.rs
+compatibility exports and stable command entrypoints
+  crates/nando-response-actor/src/lib.rs
+  crates/nando-response-actor/src/bin
 ```
 
 ## 5. The Required Feedback Loop

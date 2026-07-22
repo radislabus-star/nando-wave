@@ -1,0 +1,1190 @@
+[
+  {
+    "path": "crates/nando-operator-admission/src/authority.rs",
+    "owner": "operator-admission",
+    "lines": 703,
+    "sha256": "24e9cd4687bdaf6bb461fc721cda5f604afdc4d48cba24681caeb8b50d9c88fd"
+  },
+  {
+    "path": "crates/nando-operator-admission/src/lib.rs",
+    "owner": "operator-admission",
+    "lines": 19,
+    "sha256": "6557e89dc6eab0fcd70592c352f3fa8fcf3f3209fb8de69a1053734a3ecb6dd1"
+  },
+  {
+    "path": "crates/nando-operator-admission/src/package_policy.rs",
+    "owner": "operator-admission",
+    "lines": 181,
+    "sha256": "fbca8ffb8a60fe806f7328c3c2b82b7a9d32cb692dd12ad37cd5589fc8fb7dc2"
+  },
+  {
+    "path": "crates/nando-operator-admission/src/parity.rs",
+    "owner": "operator-admission",
+    "lines": 85,
+    "sha256": "6df0ef7493cdabb703b0e65859974d33ccc8c5a9782b7f14ea432f2095f1ece5"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/binding.rs",
+    "owner": "operator-kernel",
+    "lines": 67,
+    "sha256": "ab7952e7b1a6d4be7a7eabffc44b49ca302147b795a49a16d9020d7cc8c23a52"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/canonical.rs",
+    "owner": "operator-kernel",
+    "lines": 119,
+    "sha256": "f3a37cf3811255fd4f775d829d88e3253b2de5d72aa2fdedc1274f0724664524"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/contracts.rs",
+    "owner": "operator-kernel",
+    "lines": 460,
+    "sha256": "442fdd3b74f35ff4aaac9e6db6a5332e3c72f179dd0fda6561cbd8c5e90a386e"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/effect_law.rs",
+    "owner": "operator-kernel",
+    "lines": 344,
+    "sha256": "59611ccf053458bb9ecb2c9dbc99770df9bab32b6a841c98b467ee35a10d3825"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/executable_protocol_mode.rs",
+    "owner": "operator-kernel",
+    "lines": 674,
+    "sha256": "5173d4c6fae52432f77b7b4bfc44596ee0bc24c0f7f4368a1c39636a1be30ba1"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/lib.rs",
+    "owner": "operator-kernel",
+    "lines": 19,
+    "sha256": "d0e834b81cc703cd552079d3936de5cd7e19365a1b971bec88b555cb0324bc12"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/program.rs",
+    "owner": "operator-kernel",
+    "lines": 1562,
+    "sha256": "591a3c55a855188e973dad4e94aa4c35d76199d89383e32c42d4ae4be4fa5c08"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/protocol_mode.rs",
+    "owner": "operator-kernel",
+    "lines": 721,
+    "sha256": "538c01089c2a19b0ebb5a64a702235f7e4eed89e5acfd4f8dbe3ee7dacfbe662"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/relation_routing.rs",
+    "owner": "operator-kernel",
+    "lines": 534,
+    "sha256": "b5c7736a1616bfe6e394164585df8a88a49499a1089b244dafcb6f3156eb6f2e"
+  },
+  {
+    "path": "crates/nando-operator-kernel/src/vm.rs",
+    "owner": "operator-kernel",
+    "lines": 23,
+    "sha256": "11f0cd3d9ffcfe721078149dce6b4ec9ff8fc88d3c775d870c2b1643d90954d3"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/backward_wave.rs",
+    "owner": "operator-learning",
+    "lines": 188,
+    "sha256": "381719f918167de0c0afa1ace0d9ef5ac7441768a45cea642cb80085c3cce28d"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence.rs",
+    "owner": "operator-learning",
+    "lines": 1505,
+    "sha256": "8599ea8ed6511d1ae0206141ad31abaf1064c4391ce23d8b3688212b4ceeb9d1"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/canonical.rs",
+    "owner": "operator-learning",
+    "lines": 331,
+    "sha256": "7b39870c3a9ba58e31de4d0bdb3717af72bda0dd4809b56ad471cc26f6609f46"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/causal_adjudicator.rs",
+    "owner": "operator-learning",
+    "lines": 352,
+    "sha256": "160a114b2098d8c5b0cff73dad40652956621410d70a6c83843c2b495524e1ba"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/controlled_replay.rs",
+    "owner": "operator-learning",
+    "lines": 424,
+    "sha256": "860cbd7bbfd4b066dd615fd61374aca8b7aa4fc85a967731c7eb37a859653dcc"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/external_trust.rs",
+    "owner": "operator-learning",
+    "lines": 116,
+    "sha256": "2eb97f9235105bad1c0618977a71f69425890d1f7336a28ab0b9bf954bde95f5"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/label_manifest.rs",
+    "owner": "operator-learning",
+    "lines": 161,
+    "sha256": "713d86203e849b7fcf125c023e70f8d6c1e48a27174359f55ca39e01b1f740b2"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/mod.rs",
+    "owner": "operator-learning",
+    "lines": 53,
+    "sha256": "0b19a20737acd31fcdb6b557fcb3be3b175ace3b455e97dd677e0417692a938f"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/physical_trial.rs",
+    "owner": "operator-learning",
+    "lines": 368,
+    "sha256": "b583ad87cdbb0f57458662b3067025abadb73223a94131abdc9a507dbc22977b"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/report.rs",
+    "owner": "operator-learning",
+    "lines": 67,
+    "sha256": "7127a8aab04ae9cbeca95aee4f3e0e2a98809895b89ed3c6ca8e0c1cc5e6244d"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication/wire.rs",
+    "owner": "operator-learning",
+    "lines": 234,
+    "sha256": "e816a2fa6c272ff80b575442cf50478fc20ec47891ee83a06ff6e2b7bfc4b659"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_adjudication_tests.rs",
+    "owner": "operator-learning",
+    "lines": 283,
+    "sha256": "d601dd5f245d6635100376d2580f389ed19b9ee4be42517a22d9c9f40aa5316d"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_capture_owner.rs",
+    "owner": "operator-learning",
+    "lines": 719,
+    "sha256": "fbe291533e3af4c2fbb32bde5f9e9a48f70b3084c573c82d2361007628a7a283"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_capture_owner_tests.rs",
+    "owner": "operator-learning",
+    "lines": 344,
+    "sha256": "0f78cdd5a07535e80ca1ce17f568a9aa746c4d092aa4aeb7cbc75c4f83a700b5"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_future_capture.rs",
+    "owner": "operator-learning",
+    "lines": 1260,
+    "sha256": "10fc8bc9eba3e14caed7520e04173e65c5a4f58624a3d328bf6fbf7d9425163f"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_future_capture_tests.rs",
+    "owner": "operator-learning",
+    "lines": 712,
+    "sha256": "e9619ca23368c697447c98418f269a2fdc641b69b3411a26833ee8cf8534ef13"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_preregistration.rs",
+    "owner": "operator-learning",
+    "lines": 881,
+    "sha256": "deb7e6630ab7f84a5a68b65c7990883a5efb6eeb7ce07b85ebc18cc44bf43ec2"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_preregistration_tests.rs",
+    "owner": "operator-learning",
+    "lines": 518,
+    "sha256": "3e809be51ddfbc2dccdd0b4acc7c7c3e45122781455c7874889339bee5febf7c"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/binding_evidence_tests.rs",
+    "owner": "operator-learning",
+    "lines": 457,
+    "sha256": "5d8152ebc4dc6387bce780bb7a5488ce02afef91e3d9cf493bd18cb4e61061f0"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/capture_provenance.rs",
+    "owner": "operator-learning",
+    "lines": 184,
+    "sha256": "b4af014f99e17d3672cad5592b87ce04476cc32b15197ee91225a2a9dcd9c903"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/cegis.rs",
+    "owner": "operator-learning",
+    "lines": 2300,
+    "sha256": "cc844a33ec99ede0961545bc15a0ea95f34d7c94a071d24f8290dbe41e93ae66"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/collection_types.rs",
+    "owner": "operator-learning",
+    "lines": 40,
+    "sha256": "e85e237bb07b699d3d51daa37aa57c7526ce7d375371aa63e1a4dd58f741b2cc"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/effect_graph.rs",
+    "owner": "operator-learning",
+    "lines": 699,
+    "sha256": "4993aa804f8f798e403d9f65ec032148479b3f97142f14fcea0184c8808b5a79"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/effect_law.rs",
+    "owner": "operator-learning",
+    "lines": 1313,
+    "sha256": "fdf05969a86f75f22d40bd6ca2e3262f801c21f9ccee16560dd65e593ea2cd91"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/effect_law_tests.rs",
+    "owner": "operator-learning",
+    "lines": 516,
+    "sha256": "cde9b71595a241c45f359cb785875b8838519358b343021edb69c7c6863bf069"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/evidence.rs",
+    "owner": "operator-learning",
+    "lines": 1924,
+    "sha256": "af73556218fe37242973865d018827cac0b27a8e4c52f5578345e252ef83125d"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/evidence_graph.rs",
+    "owner": "operator-learning",
+    "lines": 951,
+    "sha256": "87a8ea9cfa5877c264d51ab57022fc202e7bcdeaee3d89add2df472a713ffbb9"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/executable_protocol_mode/compiler.rs",
+    "owner": "operator-learning",
+    "lines": 199,
+    "sha256": "a6cccb663140a19fd6ebbe3596d4c9138b32675733ea0275f31d7b64b3341521"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/executable_protocol_mode/mod.rs",
+    "owner": "operator-learning",
+    "lines": 15,
+    "sha256": "2c05f2cf5b9f83ccba3506be818cee791551d0d84fbb86b67dbfde4446e4ac55"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/family_discovery.rs",
+    "owner": "operator-learning",
+    "lines": 1073,
+    "sha256": "5a536cb6b0923cbc94fe27b60516d736142f5fe5494f1cb1a8e8c9d52a1ea6c4"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/grounding.rs",
+    "owner": "operator-learning",
+    "lines": 537,
+    "sha256": "5c31ba83f5638bb02ce2ee6cb3c0ecbaa034b0e8dbcf131896d97fbe66cefa63"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/grounding_tests.rs",
+    "owner": "operator-learning",
+    "lines": 204,
+    "sha256": "2c6c85faf5b84402d08b2a8a78f3f2a58cee8348636487eb9ff587e5c1601059"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/lib.rs",
+    "owner": "operator-learning",
+    "lines": 90,
+    "sha256": "bdde6dd2300c51ab558b847489bd1a83aa6ecb6a4fba003a7e49d733df02f7cc"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/online_checkpoint.rs",
+    "owner": "operator-learning",
+    "lines": 390,
+    "sha256": "8c1e12b62cbf31d2000be579cf6643e5bfc23139e474c4bd4e136fb2ce02f6d6"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/online_collection_types.rs",
+    "owner": "operator-learning",
+    "lines": 268,
+    "sha256": "bf9d97a442504c30a1767327ebab9f34c01515aebe57b7506b41ef7a586ca52b"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/online_subcenter.rs",
+    "owner": "operator-learning",
+    "lines": 265,
+    "sha256": "72d3bdbead88e40c962ce5447803f2244e51ffa0e895fc5660e642b7286a6b99"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/operator_generation.rs",
+    "owner": "operator-learning",
+    "lines": 415,
+    "sha256": "2f2070880e18d627162df45b20b83644b723dfb7f1374043287ecd9e31c8bd85"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/opportunity.rs",
+    "owner": "operator-learning",
+    "lines": 838,
+    "sha256": "6172679a2469738f08d8214e648589db2fe821a4c6215b126ee9d8bcb58a6faa"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/physical_trial_v2_tests.rs",
+    "owner": "operator-learning",
+    "lines": 1465,
+    "sha256": "638fd94944eb6284dd8bf249e0e2efc7bec5f3a4160ec9688c97417bdc850b1e"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/protocol_mode.rs",
+    "owner": "operator-learning",
+    "lines": 424,
+    "sha256": "8911a502b74a7a8185caf6ac519505d163d2a831e1242b4a25a386cdedfb4eb0"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/protocol_mode/selector.rs",
+    "owner": "operator-learning",
+    "lines": 442,
+    "sha256": "32b81f62aec3cf2a43b59d4adeedf35b0677c010972189066f8819fa13974476"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/rollover.rs",
+    "owner": "operator-learning",
+    "lines": 965,
+    "sha256": "2f2b3dc0c8fea6a6b2b30989d6f5122777fd0e53be0737ce6731874a1d40a459"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/runtime_parity.rs",
+    "owner": "operator-learning",
+    "lines": 154,
+    "sha256": "7f284b381595c55cc181edff84c7070bb174e518c731184ced819a5ed9a24d7b"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/self_training_types.rs",
+    "owner": "operator-learning",
+    "lines": 160,
+    "sha256": "e80ca06da1c9a94d3b0d1a78329652a156222a6390b6f42d2ccb71c6401787de"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/semantic_alias.rs",
+    "owner": "operator-learning",
+    "lines": 918,
+    "sha256": "b7992513813e72a91397970e709cc1a3f65522dbf62eed798cf01833559a9a47"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/synthesis.rs",
+    "owner": "operator-learning",
+    "lines": 2230,
+    "sha256": "cb79bb741208485dcf117a7ce1dc7dbc49735868e66d4ce386976e34d9b186fe"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/synthesis_tests.rs",
+    "owner": "operator-learning",
+    "lines": 479,
+    "sha256": "0ec4d1ac0673095629a51a5fb22ca8e813620620cdda1173229e40dc308d9cd3"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/teacher_join.rs",
+    "owner": "operator-learning",
+    "lines": 1081,
+    "sha256": "3db201b0b29a49b97cbe8a3b89b3c4134ef95af26f5103dbc39a90af014276ac"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/training_types.rs",
+    "owner": "operator-learning",
+    "lines": 227,
+    "sha256": "d8c5485ed5f8e7914de2857a616544f15fd86bc8d22e91f66cb25014b952603e"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/version_space.rs",
+    "owner": "operator-learning",
+    "lines": 488,
+    "sha256": "87b694fba56545a3c22221ec330c8134797024257854b3261de76ec1058e06de"
+  },
+  {
+    "path": "crates/nando-operator-learning/src/wave_route_learning.rs",
+    "owner": "operator-learning",
+    "lines": 511,
+    "sha256": "90c2491641a57c0fc734ac1e396cc0441e93614fff61ea820874027aab4c7c3e"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/admission_reconstruction.rs",
+    "owner": "operator-proof",
+    "lines": 101,
+    "sha256": "47519a5af2a7a53315f845d52ea738e225294c1ea2d1f7f67be6bee282221800"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/binding_law_evidence_v2.rs",
+    "owner": "operator-proof",
+    "lines": 249,
+    "sha256": "8ff1c97b6736def45d132a9deaa433717c18b4e336f8ed9957e2e9c98ba9e0d1"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/canonical.rs",
+    "owner": "operator-proof",
+    "lines": 26,
+    "sha256": "6c33b3902356a087eebe5a48ea6924efdce1a92705214cff3a8414c693b7a732"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/independent_trial_verifier_v2.rs",
+    "owner": "operator-proof",
+    "lines": 120,
+    "sha256": "3bcd4d904b987e26de9c7fd3f4866e7580aa00422cbe4903af1d6e20be23d8e2"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/mod.rs",
+    "owner": "operator-proof",
+    "lines": 12,
+    "sha256": "dc119668bd49b08cd2728f0eaf9fb7a5da3cb46da65ec48e883031d7c910b891"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/physical_actor_observation_v2.rs",
+    "owner": "operator-proof",
+    "lines": 131,
+    "sha256": "b7288ba7d24835e2bcd811842830b54e86b2de526f2751666596e24e1e0fac1a"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/physical_trial_v2.rs",
+    "owner": "operator-proof",
+    "lines": 233,
+    "sha256": "35124f4c8fca45a31bf9bc7ddaea72d382e754df5b070b3e266600aa141ac894"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/binding/trusted_resolver_v2.rs",
+    "owner": "operator-proof",
+    "lines": 433,
+    "sha256": "1fca2aea89f39ed6e7a297e43d2231e50f2155c8f4112d50953b917381c0dce0"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/decidability.rs",
+    "owner": "operator-proof",
+    "lines": 238,
+    "sha256": "eb2fb311195efb48da7a5044544251751fafb042e39aeed3f43146007e3c71fb"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/lib.rs",
+    "owner": "operator-proof",
+    "lines": 13,
+    "sha256": "d92542ff839f8cf7d025dd256b608d0f5b595efaa538c1d03476633943caa05a"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/surface.rs",
+    "owner": "operator-proof",
+    "lines": 450,
+    "sha256": "3ac92932c1c3875c49114da7a8aa14817be66ddf4bbeba680e426208844e86a3"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/verified_delta.rs",
+    "owner": "operator-proof",
+    "lines": 304,
+    "sha256": "6a0e2edb61565d245fb5cd10b417c783e072cd2d563082134bfdfb67b6e788a3"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/verifier.rs",
+    "owner": "operator-proof",
+    "lines": 1786,
+    "sha256": "08d66a52b67605a7495cd44c6503f3b7f7726006daa9660be792bd9355d6f3ec"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/verifier/collection.rs",
+    "owner": "operator-proof",
+    "lines": 668,
+    "sha256": "31639486ca2145eac8bbccffeabc750c15df3201cd6b2465f6bb0f7c81e3c959"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/verifier/input.rs",
+    "owner": "operator-proof",
+    "lines": 38,
+    "sha256": "f73ff31f61d7bd59c73fe0662e78c6c532977d5dc7fc689afd0551e3b4deee45"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/verifier/selection.rs",
+    "owner": "operator-proof",
+    "lines": 1508,
+    "sha256": "696df4c94d8838a246ef7f570ce49b3e297f83241ce592c54809fe8ddc631619"
+  },
+  {
+    "path": "crates/nando-operator-proof/src/verifier_program.rs",
+    "owner": "operator-proof",
+    "lines": 146,
+    "sha256": "8d0375300ebb55662da47f9d75681a6c45e743db8b7f0d5e3efe1da3b190e1d5"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/artifact.rs",
+    "owner": "operator-runtime",
+    "lines": 426,
+    "sha256": "5f8ad7a30aff4cc287bc8ae7241fbec9781a3e602e9cdfea838288ca92c4da98"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/crystallized_binding.rs",
+    "owner": "operator-runtime",
+    "lines": 1254,
+    "sha256": "e58c6f5496b49a463a66d92e4e874c1836e497785a98aa484c8c16047cc17581"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/lib.rs",
+    "owner": "operator-runtime",
+    "lines": 14,
+    "sha256": "bc5374d756868f9c7f63b4b59c284ff1f4c8c1f06eeb64fd4f11b8067431278e"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/operator_vm.rs",
+    "owner": "operator-runtime",
+    "lines": 364,
+    "sha256": "10b805a5295da62393a40b4e4562a6274cdcac4d67eb3d84b6af55ff64be64d8"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/routing.rs",
+    "owner": "operator-runtime",
+    "lines": 419,
+    "sha256": "5c4e1ddcdfdf9bf79ac11304a847329e85d01e649737a4280bfbd04b07e2e462"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/runtime.rs",
+    "owner": "operator-runtime",
+    "lines": 2142,
+    "sha256": "e75da1081f8578f822c5ab577011261f0fd79939b0ef80f96fc184fd35694a8e"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/runtime/selection.rs",
+    "owner": "operator-runtime",
+    "lines": 1590,
+    "sha256": "e3a184a44654676269996ceb9a8c95276d00f85e36015d91759d75bf3d960ea1"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/runtime_scalar_budget_tests.rs",
+    "owner": "operator-runtime",
+    "lines": 177,
+    "sha256": "4c0ad94819b6bfc8242222e7038b033b691307fdd807c8be4235ec12915bff99"
+  },
+  {
+    "path": "crates/nando-operator-runtime/src/selector_candidates.rs",
+    "owner": "operator-runtime",
+    "lines": 437,
+    "sha256": "ee6dbd82580cfeaec81c99a5d53703ef9552f1274cf2057a75cf8fbe571f00e9"
+  },
+  {
+    "path": "crates/nando-response-actor/src/admission_bundle.rs",
+    "owner": "response-application",
+    "lines": 42,
+    "sha256": "c3f16d9d617301750de9075ff59abaf5cbf98dbf6611db8dc732ce237d62ec5d"
+  },
+  {
+    "path": "crates/nando-response-actor/src/authority.rs",
+    "owner": "response-application",
+    "lines": 318,
+    "sha256": "b686034e18de464969702042a558e40a231a92599e440ae7f1a19804d12d6d9c"
+  },
+  {
+    "path": "crates/nando-response-actor/src/backward_wave.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "dcae07a6aada2b01820200ea0e8cea6bcd973d834e114c85f1a9955ebc0b6d42"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/binding_future_acquire/app.rs",
+    "owner": "response-application-cli",
+    "lines": 395,
+    "sha256": "9e7b0782a94469c93b930179d1db6cf15a0857b6811d68d07aa4bb7167d4e618"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/binding_future_capture_owner/app.rs",
+    "owner": "response-application-cli",
+    "lines": 213,
+    "sha256": "8c31ea22ecbe6acf11b47cb8b095cfab776e91148e89c6d4e8efe7a0fc8607b5"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/binding_support_acquire/app.rs",
+    "owner": "response-application-cli",
+    "lines": 302,
+    "sha256": "a84c82381341462afad2b055e011bd93fe9f3c6d4cca136067f51d4bd5068e40"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-future-acquire.rs",
+    "owner": "response-application-cli",
+    "lines": 6,
+    "sha256": "0862691ebf4e05433c3f7ffae5e137fda717f104adb3f4ef444e427ab0ebfca5"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-future-capture-owner.rs",
+    "owner": "response-application-cli",
+    "lines": 6,
+    "sha256": "05107ec0d99c166db23b9edf0034206de3e497c6073e1967fa20c2782c0353a5"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-hypothesis-adjudicate.rs",
+    "owner": "response-application-cli",
+    "lines": 67,
+    "sha256": "5024cd6d30dd20611ec0d0bc7b425ae479f789a5a8b302ba7580711090c27d74"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-label-observe.rs",
+    "owner": "response-application-cli",
+    "lines": 72,
+    "sha256": "17a0bc91ff5a54a76b4352c8fa730a06cb1d124617b015369efef7a657d6af58"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-label-trust-owner.rs",
+    "owner": "response-application-cli",
+    "lines": 65,
+    "sha256": "538ee735b7289f645809a1cf22c5ae5ad2a1c93210a1cc757ef940780e6a5e98"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-support-acquire.rs",
+    "owner": "response-application-cli",
+    "lines": 6,
+    "sha256": "93f5647709fcd26c834aabc2cc098abcae47b3a8d7376014436fa4aaf68c8227"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-binding-support-capture-owner.rs",
+    "owner": "response-application-cli",
+    "lines": 108,
+    "sha256": "31459d6de48dac8e789db3aebcfe7902303b85849fc6596c6c717c137b976bc5"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-evidence-checkpoint.rs",
+    "owner": "response-application-cli",
+    "lines": 26,
+    "sha256": "3f3bfcfbbcbb1526e663389291a1c8ce9ff58a23ce02759908bbac89f0c94e00"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-online-response-diagnose.rs",
+    "owner": "response-application-cli",
+    "lines": 6,
+    "sha256": "c10616198a95569b93bcf749ff8397e0ddf4c2469200c7447d38ac64c2d2037c"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-response-admission.rs",
+    "owner": "response-application-cli",
+    "lines": 6,
+    "sha256": "b31f1d211bcf9acb8daf053b6d0046722f4b0b53f2455fcbe5155e95ba5b12e9"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-response-authority-inspect.rs",
+    "owner": "response-application-cli",
+    "lines": 166,
+    "sha256": "f8d1ac8229c848cea26825c0593123bb4188ae9d976152fd090e786e118a83f4"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-response-miner.rs",
+    "owner": "response-application-cli",
+    "lines": 8,
+    "sha256": "83915751818a40babed29ff84b57d63825fba809a5b38e5d4c42d3b82d3730ac"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/nando-response-wave-proof.rs",
+    "owner": "response-application-cli",
+    "lines": 84,
+    "sha256": "280de4b05e74cd094b63502e12668a0dd8b9e2e4bce88c29273acc60baa366f0"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/online_response_diagnose/app.rs",
+    "owner": "response-application-cli",
+    "lines": 444,
+    "sha256": "f5186724bf7f439b2a722364837c78802806892c8015459ab1d0da6bc7bf27a3"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_admission/app.rs",
+    "owner": "response-application-cli",
+    "lines": 624,
+    "sha256": "af8b91129fd058e035f5b5ab5124875ac4b802c25324e663e2c41ca4dc1cc2ee"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/app.rs",
+    "owner": "response-application-cli",
+    "lines": 87,
+    "sha256": "444d7e8ca58dd3ee5e4be146df57268ada775f8606a6075aa3287f9e0edf850c"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/app/collection.rs",
+    "owner": "response-application-cli",
+    "lines": 639,
+    "sha256": "e8265f7aece4af0a45082602ae9b0b837cffdc400b56d983ea73bc50e03c6e31"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/app/io.rs",
+    "owner": "response-application-cli",
+    "lines": 58,
+    "sha256": "71c234b20b8e42d3e34aa5103ced6e22f2c8c7f5be943f21d92014766c688ec2"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/app/orchestration.rs",
+    "owner": "response-application-cli",
+    "lines": 1706,
+    "sha256": "1baa508f2770a299543860e404100c1120eb75ce7022bc00554a613d3065c8dc"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/app/parity.rs",
+    "owner": "response-application-cli",
+    "lines": 601,
+    "sha256": "83d9f5a903a998882f645de62ac6b2e1f7d10c7dedba318bf293873c368f3f66"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/app/support.rs",
+    "owner": "response-application-cli",
+    "lines": 677,
+    "sha256": "281c9b621eff88d44ed9aa4bebd190e62d0b2766a6664006914c1415ca78ee40"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/authority.rs",
+    "owner": "response-application-cli",
+    "lines": 234,
+    "sha256": "243ae12115ab7a1d2a723844394fe964bac3729bd42ef872cc2e8e67620d72e0"
+  },
+  {
+    "path": "crates/nando-response-actor/src/bin/response_miner/tests.rs",
+    "owner": "response-application-cli",
+    "lines": 1392,
+    "sha256": "fc64af8f58c034c048de8d203b0efaa5de375df95a2e5b131610643dd41f9e42"
+  },
+  {
+    "path": "crates/nando-response-actor/src/binding_evidence.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "f1cdc18af66a236f7f1b3c414b3aa4489ade489068d4a3f89e918a8df25d8c95"
+  },
+  {
+    "path": "crates/nando-response-actor/src/binding_evidence_adjudication/mod.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "8ea17e8186ccf7432846a809b8bda317c5b4f71e35f0f7424818826a86bbe623"
+  },
+  {
+    "path": "crates/nando-response-actor/src/binding_evidence_capture_owner.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "b90512055af452832f71a7ef43041d2a182ef7207c9295b8c990b12eab459dff"
+  },
+  {
+    "path": "crates/nando-response-actor/src/binding_evidence_future_capture.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "c2e2bf2ef909b97bd4030f4fa6874a86e66c681337c1ba2276f5d3d60656f13a"
+  },
+  {
+    "path": "crates/nando-response-actor/src/binding_evidence_preregistration.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "7ab46b8f5225edb133dea50cab014a04c34f0d65f91c28bd18041b6c93b0acf6"
+  },
+  {
+    "path": "crates/nando-response-actor/src/capture_provenance.rs",
+    "owner": "response-application",
+    "lines": 25,
+    "sha256": "ef18f03d3a5226addeeab16ba5ea45041a8732923e798f56816c77a7ab18a632"
+  },
+  {
+    "path": "crates/nando-response-actor/src/causal.rs",
+    "owner": "response-application",
+    "lines": 369,
+    "sha256": "5b63d595cfec94e7958bdd66b0a314f67ddae4e282e597d7e5ab364f462514a1"
+  },
+  {
+    "path": "crates/nando-response-actor/src/cegis.rs",
+    "owner": "response-application",
+    "lines": 1,
+    "sha256": "c8cacb529da3e0d1586ad9a1384ec678cffe97de4943e85f5ba48ebba22e733b"
+  },
+  {
+    "path": "crates/nando-response-actor/src/collection_synthesis.rs",
+    "owner": "response-application",
+    "lines": 2453,
+    "sha256": "4f63993883980c9a4cad9d8dc511ff829a7119a7c43f5d977563dcda52c4d6cf"
+  },
+  {
+    "path": "crates/nando-response-actor/src/collection_synthesis_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 1666,
+    "sha256": "e05876417708caaeae9ece182486150f41119bec8edf5e4ba270917447d8ebfd"
+  },
+  {
+    "path": "crates/nando-response-actor/src/contracts.rs",
+    "owner": "response-application",
+    "lines": 1,
+    "sha256": "5a96a85242f587fbdb98bda9959104b4f094a225e66d3140c2ac04ece0fbdac9"
+  },
+  {
+    "path": "crates/nando-response-actor/src/crystallized_operator.rs",
+    "owner": "response-application",
+    "lines": 1990,
+    "sha256": "0a01c5a2e07e897cbd05aba6a65811516b3aa19f20828d51c72f3ad40640e8f7"
+  },
+  {
+    "path": "crates/nando-response-actor/src/decidability.rs",
+    "owner": "response-application",
+    "lines": 1,
+    "sha256": "357a22e96273c765755068b3ff4d55d272944e73ec98fa1a0d0e0d045b8d3e0b"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_graph.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "58af2fa1f21772b9ee25ff649142bfaef4dcc4f32d0378ca46b5e491280ed4f4"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "207d9c62a42b1b8845efd2401b638c6c9cd10330fa9c47a1593a604665101deb"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_dual_classifier_v3_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 347,
+    "sha256": "1b026ee8f01077722f38e2d92b73d0a4455a161db74ddc19a11adf2ccae04611"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_v3.rs",
+    "owner": "response-application",
+    "lines": 496,
+    "sha256": "68a55efaa391b213d78cd34d95a13740ea6f8e14387e4b5cc804ab99df51aa94"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_v3/canonical.rs",
+    "owner": "response-application",
+    "lines": 855,
+    "sha256": "35eab4cad57714c25917500cd9227462f0294df75253ea8b7ed560ab6def6c61"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_v3/dual_classifier.rs",
+    "owner": "response-application",
+    "lines": 940,
+    "sha256": "5720163b719017492a2e16495f4748a1aaff47778eae2d312e7c70ebb113e3b9"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_v3/evidence.rs",
+    "owner": "response-application",
+    "lines": 894,
+    "sha256": "d337640b173e6e691663b9f50669964ac87cff74e58676893cbba7f01a8fed35"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_v3/trust.rs",
+    "owner": "response-application",
+    "lines": 365,
+    "sha256": "3e09bd2a688511baf9a8982f8d7f78c6c3eda6d9e91f6ff4f59c0c24885086f3"
+  },
+  {
+    "path": "crates/nando-response-actor/src/effect_law_v3_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 1081,
+    "sha256": "688a1f05d2a7eeed5d8877606e285a58df340972367316bebd7db4d1692dd523"
+  },
+  {
+    "path": "crates/nando-response-actor/src/evidence.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "13d5682150735f6832e6c088770b8cf73ddaf3e5058de1e833a6d95e3c489fb8"
+  },
+  {
+    "path": "crates/nando-response-actor/src/evidence_graph.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "45654054d5ef8c3487925a0103d43bc56b7100f92d631a2e9b32156d62073c39"
+  },
+  {
+    "path": "crates/nando-response-actor/src/executable_protocol_mode.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "4e2f2ef3b613ce78c94de362d6bcb0555f419d2131505913c42767b0d1ae534a"
+  },
+  {
+    "path": "crates/nando-response-actor/src/family_discovery.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "1a07111d0be026b87c2463839d33a1f09e268e00f5c9887686a9a83be51b62ab"
+  },
+  {
+    "path": "crates/nando-response-actor/src/grounding.rs",
+    "owner": "response-application",
+    "lines": 5,
+    "sha256": "7c1ea434a3ab5d99a40dfa3d04f51b4ee502ddfc8655bc8be66b18c1d7825ee7"
+  },
+  {
+    "path": "crates/nando-response-actor/src/grounding_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 38,
+    "sha256": "c70279553d0938e39257b6f947902be6270c21e5d9cc9468a151c7caafa0d495"
+  },
+  {
+    "path": "crates/nando-response-actor/src/lib.rs",
+    "owner": "compatibility-facade",
+    "lines": 399,
+    "sha256": "cbd620aef98bd7aa921c6057da4993fc18425db19beb8b1084b5b9248d9bd4fb"
+  },
+  {
+    "path": "crates/nando-response-actor/src/lib_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 1871,
+    "sha256": "8699210a9621fc15b8b4ab643232ca2ee64a296260d9549c4e1a6455bd4114e7"
+  },
+  {
+    "path": "crates/nando-response-actor/src/lib_tests/projection.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 796,
+    "sha256": "f457af5f8392b880abb4486ef4bf3e4fce6f27b0ac68b3afdadb5f9c56ae13e0"
+  },
+  {
+    "path": "crates/nando-response-actor/src/lifecycle.rs",
+    "owner": "response-application",
+    "lines": 1807,
+    "sha256": "2d4be664e0e5905a160d573dd3fa6d4bb57d14713f2b1db120c0990ff1d682a4"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online.rs",
+    "owner": "response-application",
+    "lines": 2119,
+    "sha256": "60bdbadc864245990ecf6976322d9530af61b93a6ecb1b8724dad99dce84b756"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online/admission.rs",
+    "owner": "response-application",
+    "lines": 602,
+    "sha256": "3871c570742f2652eb60eab14f30c0e749ac08cb9f00bb662922edf4bf45b41f"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online/evidence.rs",
+    "owner": "response-application",
+    "lines": 286,
+    "sha256": "2a03088f79716dd5d66d28c6e4a83bbc5c0563955961561e7e286a2f5c777deb"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online/stream.rs",
+    "owner": "response-application",
+    "lines": 840,
+    "sha256": "07cf9506aef91e30a1b0822b338069a2ccaa13c4e481024c00e97b7dd0203dc9"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_admission.rs",
+    "owner": "response-application",
+    "lines": 2056,
+    "sha256": "78420b6a7d0b56d1766f5dc79cd5df719f40bfb9bd5a0d7a66de6b8c6fcfe528"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_admission_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 681,
+    "sha256": "b51197541c6c1d786a31964f5487658480bbcc5d0424fcce19396ce89d92f50a"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_checkpoint.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "18d87aa414f3786ca8ba1d17456c4d07c1daddad014818998af4c1523585a3fa"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection.rs",
+    "owner": "response-application",
+    "lines": 304,
+    "sha256": "a2741652cb4755e9fdb06f82df0ffc25318352b375da182d219d17ddb0316d74"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection/admission.rs",
+    "owner": "response-application",
+    "lines": 1111,
+    "sha256": "93082db960c15165ffdcdba3a5fcbf7adb9a5ebf25d63c7cc5821e3e06245886"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection/authority.rs",
+    "owner": "response-application",
+    "lines": 1113,
+    "sha256": "b62932c20e6924eed12410ff91d6b016e6e14f0cc3835c9a201202f093700c85"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection/ingest.rs",
+    "owner": "response-application",
+    "lines": 1538,
+    "sha256": "1cd8141668b565ac20860c790248c4dfa47e7aef009799421266a3f6fa16588c"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection/migration.rs",
+    "owner": "response-application",
+    "lines": 983,
+    "sha256": "9974417ee682e8a1e32acd28d79874f46acfc4f821b61a4a877d3aceb5e1119d"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection/status.rs",
+    "owner": "response-application",
+    "lines": 424,
+    "sha256": "b09165fdf0e15e4599a660de446e0738eaff0900717110979825c51dc54dbd9c"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection/subcenter.rs",
+    "owner": "response-application",
+    "lines": 1273,
+    "sha256": "bd1bf57d96ae702ff3d584dd50f4db1226b41b9a05053ad7c3effd9e77698798"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 2207,
+    "sha256": "fbc8aa07524eecaa0bb1040dc03ce58d959ae5a36d044fff581eea8dd9fa4416"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_collection_tests/scored.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 986,
+    "sha256": "2db060cebbdd81f9930f78197304e5ccc082837e98432c38f830a2059e56ef99"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_diagnostics.rs",
+    "owner": "response-application",
+    "lines": 1069,
+    "sha256": "66cff4550a5dfdd35e0004fddf241038ff09313d0cec2f530b4f71fb2aabbafb"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_generation_evidence.rs",
+    "owner": "response-application",
+    "lines": 158,
+    "sha256": "427d2f9d9e843f95ed983363a6e5a951cc608c758fe4a7c5d78268e22e3dfb84"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_signal_tree.rs",
+    "owner": "response-application",
+    "lines": 166,
+    "sha256": "c466dc7de51b7ef0dd830cb080bce17a27111a8d15ec4363151e63622b9cc393"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_state.rs",
+    "owner": "response-application",
+    "lines": 2476,
+    "sha256": "b7110d2379bfdf0829670d688677693f3098a4fb6b71adee62972f7e1d1b2805"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_state_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 1157,
+    "sha256": "696f20acd463404783eedac4aadc13b7a9df1bf1fafcfc4f56e7fa16055d516f"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_subcenter.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "de486b6ec7ca032aabfe710b5771b9c02b1021459e4f809c8ccaba868ca0d583"
+  },
+  {
+    "path": "crates/nando-response-actor/src/online_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 1515,
+    "sha256": "1b999abc8acfa14a36e1ea4856cf40731dfd341c7177577cb6a0867828449352"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_generation.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "721324eb482aef317d0e5c0221dd23645af6b1b7111bc2e67bda220ff87b6b10"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_live_shadow.rs",
+    "owner": "response-application",
+    "lines": 225,
+    "sha256": "2c94d21ac740eac93387ab43b8be526f68ad74740efc02a3b2f6d33b4cfd5bf4"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_live_shadow/induction.rs",
+    "owner": "response-application",
+    "lines": 2375,
+    "sha256": "d241f0be72d607c42d30fc0133e8143723e6b2036851b42626c20481afe61a05"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_live_shadow/state.rs",
+    "owner": "response-application",
+    "lines": 835,
+    "sha256": "cb355be1388e17d34b40b65897c52fb89bb4c662b012b7ec543ca9d05ff8aa1c"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_live_shadow_tests.rs",
+    "owner": "cross-owner-integration-proof",
+    "lines": 1125,
+    "sha256": "370205399b61136cc077414a02c26cfff67ab074012bdc1bd12be557e9e068a9"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_vm.rs",
+    "owner": "response-application",
+    "lines": 483,
+    "sha256": "6a0d23ddecb80ce1953439f64a246f10408119d3b273d418a4e441cb99e5d19f"
+  },
+  {
+    "path": "crates/nando-response-actor/src/operator_vm_compiler.rs",
+    "owner": "response-application",
+    "lines": 164,
+    "sha256": "ab92e537ae927d711d2dcde4a3e6b592fa1455f257394d621aa79676913aee2f"
+  },
+  {
+    "path": "crates/nando-response-actor/src/opportunity.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "aa7e1629886241a6ddfa9b63eb432f133f94c17c26abed2d1c3e209ab200d402"
+  },
+  {
+    "path": "crates/nando-response-actor/src/outcome_example.rs",
+    "owner": "response-application",
+    "lines": 113,
+    "sha256": "abc659cad6f38429cc5eed5a49d9d5c965e998a895a12854479f8ef58b28fa62"
+  },
+  {
+    "path": "crates/nando-response-actor/src/output_graph.rs",
+    "owner": "response-application",
+    "lines": 266,
+    "sha256": "10a06ad38a925068a14e18548efa17acd90e1d4552477b4b3348f96e4b43b4af"
+  },
+  {
+    "path": "crates/nando-response-actor/src/package.rs",
+    "owner": "response-application",
+    "lines": 2146,
+    "sha256": "2179e4a5f867d6450c909fba7242631c537b489824fedf03e80a37f332d341d5"
+  },
+  {
+    "path": "crates/nando-response-actor/src/program.rs",
+    "owner": "response-application",
+    "lines": 1,
+    "sha256": "49b8ac0eeef953a9786b0c50ab37607df1787bb0616459f591cc768b56a3de91"
+  },
+  {
+    "path": "crates/nando-response-actor/src/protocol_mode.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "c1e845381eb0151298d4a56f0011d65e1297dfd1d5085e93571711ecc0bbc7f6"
+  },
+  {
+    "path": "crates/nando-response-actor/src/rollover.rs",
+    "owner": "response-application",
+    "lines": 1,
+    "sha256": "5da23b707417342449d9616ca76237e16643586500b102f7325b0e8c58f9e284"
+  },
+  {
+    "path": "crates/nando-response-actor/src/runtime.rs",
+    "owner": "response-application",
+    "lines": 22,
+    "sha256": "3d015a004ecd833dfb11e4ea82afb7c850d4aee3e29be9cb5951b142d53a0ca3"
+  },
+  {
+    "path": "crates/nando-response-actor/src/semantic_alias.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "11d4bc2e452e238bcfea1fefa45abe88674b4696720b8dddd2aa32a313f174da"
+  },
+  {
+    "path": "crates/nando-response-actor/src/synthesis.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "68a18dfcce6aa81ed4a00c70b157a4bf1543dce476633d0ff6d33a35e830b0bc"
+  },
+  {
+    "path": "crates/nando-response-actor/src/teacher_join.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "2856b3aeae127e9763318d84f97879d4381f522cc3ec17fee260a9c39f7fd45f"
+  },
+  {
+    "path": "crates/nando-response-actor/src/training_types.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "7e18d59de50b1f8d4fb0e575827c6ba281c7a8fc757d94d7c380256170eed336"
+  },
+  {
+    "path": "crates/nando-response-actor/src/transferable_operator_v2.rs",
+    "owner": "response-application",
+    "lines": 274,
+    "sha256": "06f451e36294515ba5abb8eaa68bfb1a306bc4973689d3c5a4859ae31c55661e"
+  },
+  {
+    "path": "crates/nando-response-actor/src/verified_delta.rs",
+    "owner": "response-application",
+    "lines": 1,
+    "sha256": "fc8805e9cc2155d73c8dddee7d8d84631964771b7fccb5803e50dce9fb3707d7"
+  },
+  {
+    "path": "crates/nando-response-actor/src/verifier.rs",
+    "owner": "response-application",
+    "lines": 492,
+    "sha256": "44e3bef83e73c84f8588b1f2095388598d24d5b50f9aa95b4e70db237cb103f2"
+  },
+  {
+    "path": "crates/nando-response-actor/src/version_space.rs",
+    "owner": "response-application",
+    "lines": 3,
+    "sha256": "e5b0919f4f5bfd08861b3ee618f3b4c66e8f4f93e89f28a1b16cfadab6a54e98"
+  }
+]

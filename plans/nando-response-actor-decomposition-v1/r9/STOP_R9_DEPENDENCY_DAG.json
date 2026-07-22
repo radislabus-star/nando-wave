@@ -1,0 +1,53 @@
+[
+  {
+    "name": "nando-operator-admission",
+    "deps": [
+      "nando-operator-kernel",
+      "nando-operator-proof"
+    ]
+  },
+  {
+    "name": "nando-operator-kernel",
+    "deps": []
+  },
+  {
+    "name": "nando-operator-learning",
+    "deps": [
+      "nando-operator-kernel",
+      "nando-operator-proof"
+    ]
+  },
+  {
+    "name": "nando-operator-proof",
+    "deps": [
+      "nando-operator-kernel"
+    ]
+  },
+  {
+    "name": "nando-operator-runtime",
+    "deps": [
+      "nando-operator-kernel"
+    ]
+  },
+  {
+    "name": "nando-response-actor",
+    "deps": [
+      "nando-operator-admission",
+      "nando-operator-kernel",
+      "nando-operator-learning",
+      "nando-operator-proof",
+      "nando-operator-runtime"
+    ]
+  },
+  {
+    "name": "nando-transition-serving",
+    "deps": [
+      "nando-operator-admission",
+      "nando-operator-kernel",
+      "nando-operator-learning",
+      "nando-operator-proof",
+      "nando-operator-runtime",
+      "nando-response-actor"
+    ]
+  }
+]

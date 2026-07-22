@@ -1,0 +1,15 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r8.v1",
+  "code_head": "54c3350e8c3f2fc88032a57412526214a374e17b",
+  "verdict": "PASS",
+  "tracked_response_actor_rust_lines": 56411,
+  "largest_production_file_lines": 2476,
+  "production_hard_veto_files": 0,
+  "test_soft_watch_files": 0,
+  "new_crate_over_40000_lines": 0,
+  "new_generic_junk_drawers": 0,
+  "historical_failure_names_preserved": 26,
+  "historical_failure_name_drift": 0,
+  "graphify_dependency_cycles": 0,
+  "authority": false
+}

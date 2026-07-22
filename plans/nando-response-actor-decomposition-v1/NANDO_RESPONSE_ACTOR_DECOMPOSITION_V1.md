@@ -1,6 +1,6 @@
 # Nando Response Actor Spectral Decomposition V1
 
-Status: `IN_PROGRESS / STOP_R6_PASS / R7_NEXT / F5_B_PAUSED`
+Status: `STOP_R9_PASS / F5_B_UNLOCKED`
 
 Date: 2026-07-21
 
@@ -18,10 +18,10 @@ R3  nando-operator-proof                   COMPLETE
 R4  nando-operator-runtime                 COMPLETE
 R5  nando-operator-admission               COMPLETE
 R6  nando-operator-learning                COMPLETE
-R7  thin facade and consumer migration     NEXT
-R8  remaining monolith split               PENDING
-R9  STOP-DECOMPOSITION                     PENDING
-F5-B canonical runtime context             PAUSED
+R7  thin facade and consumer migration     COMPLETE
+R8  remaining monolith split               COMPLETE
+R9  STOP-DECOMPOSITION                     COMPLETE
+F5-B canonical runtime context             UNLOCKED / NOT STARTED
 ```
 
 ## 1. Pause Contract
@@ -31,7 +31,7 @@ The functional route stops exactly here:
 ```text
 F4R2 canonical ProtocolMode compiler       PASS on controlled evidence
 F5-A executable artifact completeness      PASS in bounded no-constant domain
-F5-B canonical runtime context             PAUSED / NOT STARTED
+F5-B canonical runtime context             UNLOCKED / NOT STARTED
 F5-C through F8                            NOT STARTED
 production callers                         0
 production authority                       false
@@ -774,6 +774,19 @@ STOP-R6                                                 PASS at 716ae73
 
 ### R7: Thin Facade, Binaries, And Consumers
 
+Final status `STOP-R7`:
+
+```text
+facade root definitions                                  0
+facade root lib.rs                                     399 lines
+Cargo binary names                                  13/13
+largest root binary wrapper                            166 lines
+public compatibility surface                        342/342 lines
+transition-serving owner imports                        PASS
+learning imports runtime/admission                         0
+STOP-R7                                                 PASS at 54c3350
+```
+
 Work:
 
 1. Reduce `nando-response-actor/src/lib.rs` to compatibility exports and
@@ -799,6 +812,18 @@ public compatibility manifest drift                        0
 ```
 
 ### R8: Split Remaining Oversized Owner Files
+
+Final status `STOP-R8`:
+
+```text
+tracked response-actor Rust lines                      56,411
+largest production file                                 2,476
+production hard VETO files                                  0
+test soft WATCH files                                        0
+new generic junk drawers                                    0
+historical test identities preserved                    26/26
+STOP-R8                                                 PASS at 54c3350
+```
 
 After crate ownership is correct, split internal files by route. Do not create
 `utils`, `helpers`, `common`, or another generic junk drawer.
@@ -863,6 +888,27 @@ Graphify dependency cycles                               0
 ```
 
 ### R9: STOP-DECOMPOSITION
+
+Final status `STOP-R9`:
+
+```text
+tracked source ownership                           198/198
+operator dependency cycles                              0
+owner crate tests                                  223 PASS
+response baseline                         287 PASS / 26 known FAIL
+serving baseline                            47 PASS / 3 known FAIL
+workspace all-target check                             PASS
+owner and serving Clippy                               PASS
+public API SHA parity                                  PASS
+F4R2 / F5-A focused parity                       3/3 + 3/3 PASS
+Graphify exact-HEAD                                    PASS
+NANDA owner routes                                6/6 PASS
+live composite gate                                    PASS
+response M3                                           WATCH
+response ACTIVE packages                                  0
+authority                                             false
+STOP-R9                                                 PASS at 54c3350
+```
 
 Run the clean remote proof profile from the exact final commit.
 

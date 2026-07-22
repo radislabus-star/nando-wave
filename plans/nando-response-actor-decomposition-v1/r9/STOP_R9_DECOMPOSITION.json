@@ -1,0 +1,55 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r9.v1",
+  "code_head": "54c3350e8c3f2fc88032a57412526214a374e17b",
+  "verdict": "PASS",
+  "ownership": {
+    "tracked_rust_files": 198,
+    "accounted_files": 198,
+    "unowned_files": 0,
+    "dependency_cycles": 0
+  },
+  "compatibility": {
+    "public_api_sha256": "4d389e1ae4f156260de2137f346a4f1de2592842a95caba7866928babf9b6225",
+    "public_api_drift": 0,
+    "legacy_schema_constants": 99,
+    "legacy_schema_drift": 0,
+    "new_owner_internal_schema_constants": 2
+  },
+  "proof": {
+    "owner_tests_passed": 223,
+    "owner_tests_failed": 0,
+    "response_tests_passed": 287,
+    "response_known_failed": 26,
+    "response_failure_fingerprint": "PASS",
+    "serving_tests_passed": 47,
+    "serving_known_failed": 3,
+    "workspace_all_targets": "PASS",
+    "owner_clippy": "PASS",
+    "serving_clippy": "PASS",
+    "f4r2_focused": "3/3 PASS",
+    "f5a_focused": "3/3 PASS",
+    "graphify": "PASS",
+    "nanda_owner_routes": "6/6 PASS",
+    "nanda_authority_ready": false
+  },
+  "performance": {
+    "kernel_warm_seconds": 0.14,
+    "runtime_warm_seconds": 0.09,
+    "admission_warm_seconds": 0.10,
+    "learning_warm_seconds": 0.67,
+    "facade_test_binary_bytes": 76642408,
+    "facade_test_binary_target": "WATCH"
+  },
+  "live": {
+    "composite_gate": "PASS",
+    "m3": "WATCH",
+    "active_response_packages": 0,
+    "false_accepts": 0,
+    "runtime_parity_mismatches": 0,
+    "eligible_for_local_accept": false,
+    "service_restarts": 0,
+    "deployment": false,
+    "authority": false
+  },
+  "f5_b": "UNLOCKED_NOT_STARTED"
+}

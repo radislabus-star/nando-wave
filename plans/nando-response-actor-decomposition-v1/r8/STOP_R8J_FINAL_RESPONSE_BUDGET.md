@@ -29,7 +29,7 @@ crate API.
 ## Final Budget
 
 ```text
-tracked response-actor Rust lines             56,804
+tracked response-actor Rust lines             56,411
 largest production file                        2,476
 production hard VETO files (>2500)                 0
 test soft WATCH files (>2500)                      0

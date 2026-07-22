@@ -1,0 +1,25 @@
+{
+  "schema": "nando.response-actor-decomposition.stop-r7.v1",
+  "code_head": "54c3350e8c3f2fc88032a57412526214a374e17b",
+  "verdict": "PASS",
+  "facade": {
+    "root_lines": 399,
+    "root_domain_definitions": 0,
+    "public_surface_lines": 342,
+    "public_surface_sha256": "4d389e1ae4f156260de2137f346a4f1de2592842a95caba7866928babf9b6225",
+    "public_surface_drift": 0
+  },
+  "binaries": {
+    "cargo_targets": 13,
+    "source_wrappers": 13,
+    "name_drift": 0,
+    "largest_root_wrapper_lines": 166
+  },
+  "dependencies": {
+    "operator_cycles": 0,
+    "learning_imports_runtime": false,
+    "learning_imports_admission": false,
+    "transition_serving_owner_imports": true
+  },
+  "authority": false
+}
