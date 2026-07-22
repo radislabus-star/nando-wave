@@ -1,0 +1,79 @@
+{
+  "schema": "nando.stop-f8.v1",
+  "date": "2026-07-22",
+  "verdict": "PASS_CONTROLLED_LIVE_SHADOW",
+  "scope": {
+    "seed": "CONTROLLED_SHADOW_ONLY",
+    "natural_operator": "NOT_EVALUATED",
+    "ordinary_traffic_coverage": "NOT_EVALUATED",
+    "m3": "WATCH",
+    "execution_authority": false,
+    "local_accept": false,
+    "active_change": 0
+  },
+  "live": {
+    "generation_id_sha256": "6d88caa5b63f62e5b4206a26a0b746be1373db9a230c0a2e4577a4766fc4058f",
+    "generation_checkpoint_sha256": "373bcc9209b3ef739de6881bf4dc9f5b2092421527f0adb7aee46437220a4fd2",
+    "provider_capture_index_sha256": "f84454908f4aec300ad2d7f4dd761dc01ccc279fd047bf86925d36f06a94b0e3",
+    "shadow_ledger_sha256": "7e687e3bc25adab5f15b81b104eb87a0a8d45237946b00b98e482900a728ef7e",
+    "provider_records": 4,
+    "verified_receipts": 3,
+    "false_accepts": 0,
+    "wrong_actions": 0,
+    "parity_mismatches": 0,
+    "raw_payload_bytes_persisted": 0,
+    "restart_sequence_reuse": 0,
+    "duplicate_terminal_us": 20133,
+    "automatic_service_restarts": 0,
+    "deployed_binary_sha256": "e28a56d884383b5adc0c5506ddddbff43055e8a3cba49c2dce530bf776720ad2"
+  },
+  "causal_controls": {
+    "receipt_sha256": "375493f33dda4a5059bdc52d00988d78dced611bd14d3cbbd6a33cfcd9e3a2f7",
+    "traffic_receipt_set_sha256": "19e9ee184f8657863939e29c7738eff8edde4e5f5a74fdd5dc62ed2438d6c73a",
+    "full_correct": 3,
+    "full_selected": 3,
+    "best_control_correct": 0,
+    "full_phase_gain": 3,
+    "search_gain": 0,
+    "gain_kind": "APPLICABILITY",
+    "support_future_overlap": 0,
+    "censored_semantic_updates": 0
+  },
+  "external_admission": {
+    "verdict": "SHADOW_READY",
+    "commitments_sha256": "84e0c8fc735d5c7397757fbbedd40bf8c2f49a17df9d33a754d6c8989fdb7c7f",
+    "live_shadow_denominator": 3,
+    "live_verified_passes": 3,
+    "negative_denominator": 0,
+    "censored_denominator": 0,
+    "execution_authority": false
+  },
+  "artifacts": {
+    "phase_control_file_sha256": "1207700a779bc6e1abf15aaa2dbabce7f69dbce4d51ed2db722e820420a1ecf9",
+    "external_candidate_file_sha256": "b1fdb98045600d3dd5f5c48ed366ad8b1a40ea4ccf4c5c9cba303ad5fbef77a4"
+  },
+  "performance": {
+    "matched_p99_max_ns": 648010,
+    "no_match_p99_max_ns": 195340,
+    "hard_max_ns": 690741,
+    "hot_rss_peak_delta_bytes": 10493952,
+    "matched_p99_budget_ns": 1000000,
+    "no_match_p99_budget_ns": 250000,
+    "hard_ceiling_ns": 2000000,
+    "hot_rss_budget_bytes": 16777216
+  },
+  "tests": {
+    "kernel_pass": 18,
+    "learning_pass": 217,
+    "persistence_pass": 16,
+    "admission_pass": 7,
+    "explicit_live_audit_pass": 1,
+    "runtime_pass": 47,
+    "transition_serving_pass": 51,
+    "transition_serving_known_fail": 3,
+    "gateway_control_pass": 20,
+    "baseline_failure_set_unchanged": true,
+    "clippy_deny_warnings": "PASS"
+  },
+  "next": "SEPARATE_EXPLICIT_AUTHORITY_ROLLOUT_OR_NATURAL_OPERATOR_EVIDENCE"
+}

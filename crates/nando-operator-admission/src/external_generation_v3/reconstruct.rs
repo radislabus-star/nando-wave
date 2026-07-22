@@ -14,7 +14,8 @@ use super::{
     ExternalGenerationAdmissionCandidateV3, ExternalGenerationAdmissionErrorV3,
     ExternalGenerationAdmissionInputV3, ExternalGenerationAdmissionVerdictV3,
     ExternalPhaseControlReceiptV3, ReconstructedCommitmentInputV3,
-    external_phase_control_traffic_set_sha256_v3, resource::validate_resource_receipt_v3,
+    derive_external_phase_control_receipt_v3, external_phase_control_traffic_set_sha256_v3,
+    resource::validate_resource_receipt_v3,
 };
 
 pub fn reconstruct_external_generation_admission_candidate_v3(
@@ -34,7 +35,7 @@ pub fn reconstruct_external_generation_admission_candidate_v3(
             .map_err(|_| ExternalGenerationAdmissionErrorV3::InvalidProviderCaptureIndex)?;
     let shadow = GenerationShadowReceiptLedgerV3::from_canonical_bytes(input.shadow_ledger_bytes)
         .map_err(|_| ExternalGenerationAdmissionErrorV3::InvalidShadowLedger)?;
-    let controls =
+    let submitted_controls =
         ExternalPhaseControlReceiptV3::from_canonical_bytes(input.phase_control_receipt_bytes)?;
     let resource = validate_resource_receipt_v3(input.resource_receipt_bytes)?;
 
@@ -42,7 +43,7 @@ pub fn reconstruct_external_generation_admission_candidate_v3(
     if shadow.generation_id_sha256() != manifest.generation_id_sha256()
         || shadow.generation_publish_sequence() != checkpoint.publish_sequence()
         || shadow.generation_checkpoint_sha256() != checkpoint.checkpoint_sha256()
-        || controls.generation_id_sha256() != manifest.generation_id_sha256()
+        || submitted_controls.generation_id_sha256() != manifest.generation_id_sha256()
     {
         return Err(ExternalGenerationAdmissionErrorV3::GenerationDrift);
     }
@@ -65,8 +66,13 @@ pub fn reconstruct_external_generation_admission_candidate_v3(
         manifest.generation_id_sha256(),
         &traffic_receipt_roots,
     )?;
-    if controls.traffic_receipt_set_sha256() != traffic_receipt_set_sha256 {
+    if submitted_controls.traffic_receipt_set_sha256() != traffic_receipt_set_sha256 {
         return Err(ExternalGenerationAdmissionErrorV3::ControlTrafficMismatch);
+    }
+    let controls =
+        derive_external_phase_control_receipt_v3(manifest.generation_id_sha256(), &shadow, 0)?;
+    if controls.canonical_bytes()?.as_ref() != input.phase_control_receipt_bytes {
+        return Err(ExternalGenerationAdmissionErrorV3::ControlEvidenceMismatch);
     }
     let accounting = checkpoint.ledger().accounting();
     let verdict = if controls.full_phase_gain() > 0 {

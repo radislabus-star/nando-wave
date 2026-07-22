@@ -9,7 +9,7 @@ use nando_operator_learning::{
     GenerationShadowReceiptInputV3, GenerationShadowReceiptLedgerV3,
     GenerationShadowTerminalOutcomeV3, ProviderCaptureIndexV3,
 };
-use nando_operator_persistence::{GenerationShadowReceiptStoreV3, ProviderCaptureStoreV3};
+use nando_operator_persistence::{GenerationShadowReceiptStoreV3, ProviderCaptureStoreReaderV3};
 use nando_operator_runtime::TrafficShadowReceiptV3;
 
 use super::telemetry::GenerationShadowTelemetryV3;
@@ -20,7 +20,7 @@ use super::{
     },
 };
 
-const CAPTURE_JOIN_RETRIES_V3: usize = 25;
+const CAPTURE_JOIN_RETRIES_V3: usize = 250;
 const CAPTURE_JOIN_RETRY_DELAY_V3: Duration = Duration::from_millis(2);
 
 pub(super) struct GenerationShadowWorkItemV3 {
@@ -46,13 +46,14 @@ pub(super) fn run_generation_shadow_worker_v3(
     provider_capture_store_path: PathBuf,
     receipt_store_path: PathBuf,
 ) {
-    let provider_capture_store = match ProviderCaptureStoreV3::open(provider_capture_store_path) {
-        Ok(store) => store,
-        Err(error) => {
-            telemetry.blocked(&format!("generation_shadow_capture_store:{error:?}"));
-            return;
-        }
-    };
+    let provider_capture_store =
+        match ProviderCaptureStoreReaderV3::open(provider_capture_store_path) {
+            Ok(store) => store,
+            Err(error) => {
+                telemetry.blocked(&format!("generation_shadow_capture_store:{error:?}"));
+                return;
+            }
+        };
     let mut durable = None;
     while let Ok(item) = receiver.recv() {
         let evaluation =
@@ -83,7 +84,7 @@ struct ActiveDurableLedgerV3 {
 }
 
 fn persist_evaluation(
-    capture_store: &ProviderCaptureStoreV3,
+    capture_store: &ProviderCaptureStoreReaderV3,
     receipt_store_root: &Path,
     active: &mut Option<ActiveDurableLedgerV3>,
     item: &GenerationShadowWorkItemV3,
@@ -129,6 +130,7 @@ fn persist_evaluation(
             traffic_verdict_code: traffic_receipt.verdict() as u8,
             traffic_phase_report_sha256: traffic_receipt.phase_report_sha256(),
             traffic_operator_receipt_sha256: traffic_receipt.operator_shadow_receipt_sha256(),
+            phase_control_evidence: evaluation.phase_control_evidence(),
             f6_receipt: evaluation.verifier_receipt(),
             outcome: durable_outcome(evaluation),
             parity_mismatch: evaluation.receipt().parity_mismatch,
@@ -165,7 +167,7 @@ fn validate_traffic_binding(
 }
 
 fn wait_for_durable_capture(
-    store: &ProviderCaptureStoreV3,
+    store: &ProviderCaptureStoreReaderV3,
     capture: &nando_operator_learning::ProviderRequestCaptureReceiptV3,
 ) -> Result<Option<ProviderCaptureIndexV3>, String> {
     for attempt in 0..CAPTURE_JOIN_RETRIES_V3 {
@@ -181,6 +183,17 @@ fn wait_for_durable_capture(
             )
         {
             return Ok(Some(index.clone()));
+        }
+        if let Some(index) = restored.index()
+            && (index
+                .records()
+                .iter()
+                .any(|existing| existing.capture_sequence() == capture.capture_sequence())
+                || index.contains_event_root(capture.event_root_sha256())
+                || index.contains_request_root(capture.request_root_sha256())
+                || index.contains_receipt_root(capture.receipt_sha256()))
+        {
+            return Ok(None);
         }
         if attempt + 1 < CAPTURE_JOIN_RETRIES_V3 {
             thread::sleep(CAPTURE_JOIN_RETRY_DELAY_V3);

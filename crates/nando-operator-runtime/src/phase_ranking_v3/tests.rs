@@ -42,20 +42,25 @@ fn real_phase_trace_recomputes_the_existing_binder_score() {
 }
 
 #[test]
-fn complete_structural_action_survives_every_control_without_authority() {
+fn full_phase_is_required_for_structurally_valid_runtime_applicability() {
     let outcome = outcome(json!({"handle": "CellA17"}));
     let report = evaluate_phase_ranking_v3(&outcome);
 
     assert_eq!(report.controls().len(), PhaseControlV3::ALL.len());
-    assert!(
-        report
-            .controls()
-            .iter()
-            .all(|control| control.verdict() == PhaseSelectionVerdictV3::Selected)
-    );
-    assert_eq!(report.action_changes_from_structural_result(), 0);
+    let full = &report.controls()[0];
+    assert_eq!(full.verdict(), PhaseSelectionVerdictV3::Selected);
+    assert_eq!(full.winner_coherence_fixed(), Some(1_000_000_000));
+    assert!(report.controls()[1..].iter().all(|control| {
+        control.verdict() == PhaseSelectionVerdictV3::AbstainCoherenceFloor
+            && control.selected_physical_action_sha256().is_none()
+    }));
+    assert_eq!(report.action_changes_from_structural_result(), 4);
     assert_eq!(report.full_phase_search_gain(), 0);
-    assert_eq!(report.gain_verdict(), PhaseGainVerdictV3::WatchNoSearchGain);
+    assert_eq!(report.full_phase_applicability_gain(), 4);
+    assert_eq!(report.gain_verdict(), PhaseGainVerdictV3::Measured);
+    let evidence = export_runtime_phase_control_evidence_v3(&report).expect("phase evidence");
+    assert_eq!(evidence.report_sha256(), report.report_sha256());
+    assert_eq!(evidence.observations().len(), 5);
     assert!(!report.execution_authority());
 }
 
@@ -98,12 +103,14 @@ fn distinct_action_tie_is_always_abstain() {
                 physical_action_sha256: "b".repeat(64),
                 phase_trace_sha256: "e".repeat(64),
                 score_fixed: 7,
+                coherence_fixed: 1_000_000_000,
             },
             PhaseAttemptScoreV3 {
                 mapping_sha256: "c".repeat(64),
                 physical_action_sha256: "d".repeat(64),
                 phase_trace_sha256: "f".repeat(64),
                 score_fixed: 7,
+                coherence_fixed: 1_000_000_000,
             },
         ],
     );

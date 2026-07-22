@@ -551,6 +551,7 @@ dependencies = [
  "hyper-util",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
 ]
 
@@ -559,7 +560,10 @@ name = "nando-operator-admission"
 version = "0.1.0"
 dependencies = [
  "nando-operator-kernel",
+ "nando-operator-learning",
+ "nando-operator-persistence",
  "nando-operator-proof",
+ "nando-operator-runtime",
  "serde",
  "serde_json",
  "sha2",

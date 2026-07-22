@@ -14,6 +14,11 @@ use super::{
 pub struct ProviderCaptureStoreV3 {
     root: PathBuf,
     operation_lock: Mutex<()>,
+    startup_quarantine: Mutex<Vec<PathBuf>>,
+}
+
+pub struct ProviderCaptureStoreReaderV3 {
+    root: PathBuf,
 }
 
 struct SlotCandidateV3 {
@@ -26,9 +31,16 @@ impl ProviderCaptureStoreV3 {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, ProviderCaptureStoreErrorV3> {
         let root = root.into();
         prepare_root(&root)?;
+        let mut startup_quarantine = Vec::new();
+        for slot in [ProviderCaptureStoreSlotV3::A, ProviderCaptureStoreSlotV3::B] {
+            if let Some(path) = quarantine_stale_temporary(&root, slot)? {
+                startup_quarantine.push(path);
+            }
+        }
         Ok(Self {
             root,
             operation_lock: Mutex::new(()),
+            startup_quarantine: Mutex::new(startup_quarantine),
         })
     }
 
@@ -107,44 +119,15 @@ impl ProviderCaptureStoreV3 {
     fn restore_unlocked(
         &self,
     ) -> Result<ProviderCaptureStoreRestoreV3, ProviderCaptureStoreErrorV3> {
-        let mut quarantined = Vec::new();
-        for slot in [ProviderCaptureStoreSlotV3::A, ProviderCaptureStoreSlotV3::B] {
-            if let Some(path) = quarantine_stale_temporary(&self.root, slot)? {
-                quarantined.push(path);
-            }
-        }
-        let mut candidates = Vec::new();
-        for slot in [ProviderCaptureStoreSlotV3::A, ProviderCaptureStoreSlotV3::B] {
-            if let Some(bytes) = read_slot(&self.root, slot)? {
-                let index = ProviderCaptureIndexV3::from_canonical_bytes(&bytes)
-                    .map_err(|_| ProviderCaptureStoreErrorV3::CommittedSlotCorrupt)?;
-                candidates.push(SlotCandidateV3 { slot, index, bytes });
-            }
-        }
-        candidates.sort_by_key(|candidate| candidate.index.publish_sequence());
-        if candidates.len() == 2 {
-            let first = &candidates[0];
-            let second = &candidates[1];
-            if first.index.publish_sequence() == second.index.publish_sequence() {
-                if first.bytes != second.bytes {
-                    return Err(ProviderCaptureStoreErrorV3::SlotConflict);
-                }
-            } else {
-                second
-                    .index
-                    .validate_transition_from(&first.index)
-                    .map_err(map_index_error)?;
-            }
-        }
-        let chosen = candidates.pop();
-        let (index, active_slot) = chosen
-            .map(|candidate| (Some(candidate.index), Some(candidate.slot)))
-            .unwrap_or((None, None));
-        Ok(ProviderCaptureStoreRestoreV3 {
-            index,
-            active_slot,
-            quarantined_files: quarantined.into_boxed_slice(),
-        })
+        // Recovery owns pre-existing temporaries; live readers must never move
+        // a writer's in-flight atomic publication.
+        let quarantined = self
+            .startup_quarantine
+            .lock()
+            .map_err(|_| ProviderCaptureStoreErrorV3::Io)?
+            .drain(..)
+            .collect::<Vec<_>>();
+        restore_committed_slots(&self.root, quarantined)
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, ()>, ProviderCaptureStoreErrorV3> {
@@ -152,6 +135,61 @@ impl ProviderCaptureStoreV3 {
             .lock()
             .map_err(|_| ProviderCaptureStoreErrorV3::Io)
     }
+}
+
+impl ProviderCaptureStoreReaderV3 {
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, ProviderCaptureStoreErrorV3> {
+        let root = root.into();
+        prepare_root(&root)?;
+        Ok(Self { root })
+    }
+
+    pub fn restore(&self) -> Result<ProviderCaptureStoreRestoreV3, ProviderCaptureStoreErrorV3> {
+        restore_committed_slots(&self.root, Vec::new())
+    }
+
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+}
+
+fn restore_committed_slots(
+    root: &Path,
+    quarantined: Vec<PathBuf>,
+) -> Result<ProviderCaptureStoreRestoreV3, ProviderCaptureStoreErrorV3> {
+    let mut candidates = Vec::new();
+    for slot in [ProviderCaptureStoreSlotV3::A, ProviderCaptureStoreSlotV3::B] {
+        if let Some(bytes) = read_slot(root, slot)? {
+            let index = ProviderCaptureIndexV3::from_canonical_bytes(&bytes)
+                .map_err(|_| ProviderCaptureStoreErrorV3::CommittedSlotCorrupt)?;
+            candidates.push(SlotCandidateV3 { slot, index, bytes });
+        }
+    }
+    candidates.sort_by_key(|candidate| candidate.index.publish_sequence());
+    if candidates.len() == 2 {
+        let first = &candidates[0];
+        let second = &candidates[1];
+        if first.index.publish_sequence() == second.index.publish_sequence() {
+            if first.bytes != second.bytes {
+                return Err(ProviderCaptureStoreErrorV3::SlotConflict);
+            }
+        } else {
+            second
+                .index
+                .validate_transition_from(&first.index)
+                .map_err(map_index_error)?;
+        }
+    }
+    let chosen = candidates.pop();
+    let (index, active_slot) = chosen
+        .map(|candidate| (Some(candidate.index), Some(candidate.slot)))
+        .unwrap_or((None, None));
+    Ok(ProviderCaptureStoreRestoreV3 {
+        index,
+        active_slot,
+        quarantined_files: quarantined.into_boxed_slice(),
+    })
 }
 
 fn map_index_error(

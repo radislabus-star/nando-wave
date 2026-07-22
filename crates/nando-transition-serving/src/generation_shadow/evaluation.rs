@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nando_operator_kernel::canonical_json_sha256;
+use nando_operator_kernel::{RuntimePhaseControlEvidenceV3, canonical_json_sha256};
 use nando_operator_proof::independent_verifier_v3::{
     IndependentVerifierBudgetV3, IndependentVerifierInputV3, IndependentVerifierReceiptV3,
     IndependentVerifierVerdictV3, verify_operator_result_v3,
@@ -14,6 +14,7 @@ pub(super) struct GenerationShadowEvaluationV3 {
     receipt: GenerationShadowEvaluationReceiptV3,
     traffic_receipt: Option<TrafficShadowReceiptV3>,
     verifier_receipt: Option<IndependentVerifierReceiptV3>,
+    phase_control_evidence: Option<RuntimePhaseControlEvidenceV3>,
 }
 
 impl GenerationShadowEvaluationV3 {
@@ -27,6 +28,10 @@ impl GenerationShadowEvaluationV3 {
 
     pub(super) const fn verifier_receipt(&self) -> Option<&IndependentVerifierReceiptV3> {
         self.verifier_receipt.as_ref()
+    }
+
+    pub(super) const fn phase_control_evidence(&self) -> Option<&RuntimePhaseControlEvidenceV3> {
+        self.phase_control_evidence.as_ref()
     }
 
     pub(super) fn into_receipt(self) -> GenerationShadowEvaluationReceiptV3 {
@@ -73,6 +78,7 @@ pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
         RuntimeContextBudgetV3::default(),
     );
     let traffic_receipt = execution.receipt();
+    let phase_control_evidence = execution.phase_control_evidence().cloned();
     let parity_mismatch =
         traffic_receipt.verdict() == TrafficShadowVerdictV3::ActorVmParityMismatch;
     if traffic_receipt.verdict() != TrafficShadowVerdictV3::CompleteShadow {
@@ -81,6 +87,7 @@ pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
             request,
             Some(traffic_receipt.clone()),
             None,
+            phase_control_evidence,
             if parity_mismatch || is_runtime_reject(traffic_receipt.verdict()) {
                 GenerationShadowEvaluationVerdictV3::RuntimeReject
             } else {
@@ -95,6 +102,7 @@ pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
             request,
             Some(traffic_receipt.clone()),
             None,
+            phase_control_evidence,
             GenerationShadowEvaluationVerdictV3::RuntimeReject,
             false,
         );
@@ -114,6 +122,7 @@ pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
                 request,
                 Some(traffic_receipt.clone()),
                 None,
+                phase_control_evidence,
                 GenerationShadowEvaluationVerdictV3::VerifierReject,
                 false,
             );
@@ -127,6 +136,7 @@ pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
                 request,
                 Some(traffic_receipt.clone()),
                 Some(verifier),
+                phase_control_evidence,
                 verdict,
                 false,
             )
@@ -136,6 +146,7 @@ pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
             request,
             Some(traffic_receipt.clone()),
             None,
+            phase_control_evidence,
             GenerationShadowEvaluationVerdictV3::VerifierReject,
             false,
         ),
@@ -167,6 +178,7 @@ fn invalid_request_evaluation(
         ),
         traffic_receipt: None,
         verifier_receipt: None,
+        phase_control_evidence: None,
     }
 }
 
@@ -175,6 +187,7 @@ fn evaluation(
     request: &GenerationShadowRequestV3,
     traffic_receipt: Option<TrafficShadowReceiptV3>,
     verifier_receipt: Option<IndependentVerifierReceiptV3>,
+    phase_control_evidence: Option<RuntimePhaseControlEvidenceV3>,
     verdict: GenerationShadowEvaluationVerdictV3,
     parity_mismatch: bool,
 ) -> GenerationShadowEvaluationV3 {
@@ -196,6 +209,7 @@ fn evaluation(
         ),
         traffic_receipt,
         verifier_receipt,
+        phase_control_evidence,
     }
 }
 

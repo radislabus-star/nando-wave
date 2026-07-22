@@ -96,6 +96,7 @@ impl GenerationShadowReceiptLedgerV3 {
         {
             return Err(GenerationShadowLedgerErrorV3::InvalidTrafficReceipt);
         }
+        validate_phase_control_input(&input)?;
         if self
             .receipts
             .last()
@@ -142,6 +143,7 @@ impl GenerationShadowReceiptLedgerV3 {
             traffic_operator_receipt_sha256: input
                 .traffic_operator_receipt_sha256
                 .map(str::to_owned),
+            phase_control_evidence: input.phase_control_evidence.cloned(),
             actor_action_sha256,
             actor_output_sha256,
             verifier_receipt_sha256,
@@ -342,6 +344,7 @@ pub(super) fn receipt_digest(
             receipt.traffic_phase_report_sha256.as_deref(),
             receipt.traffic_operator_receipt_sha256.as_deref(),
         ),
+        receipt.phase_control_evidence.as_ref(),
         (
             receipt.actor_action_sha256.as_deref(),
             receipt.actor_output_sha256.as_deref(),
@@ -357,6 +360,34 @@ pub(super) fn receipt_digest(
         ),
     ))
     .map_err(|_| GenerationShadowLedgerErrorV3::Serialization)
+}
+
+fn validate_phase_control_input(
+    input: &GenerationShadowReceiptInputV3<'_>,
+) -> Result<(), GenerationShadowLedgerErrorV3> {
+    match (
+        input.traffic_phase_report_sha256,
+        input.phase_control_evidence,
+    ) {
+        (None, None) => Ok(()),
+        (Some(report), Some(evidence))
+            if evidence.report_sha256() == report
+                && evidence.index_sha256() == input.traffic_index_sha256
+                && evidence.raw_payloads_persisted() == 0
+                && !evidence.execution_authority() =>
+        {
+            let bytes = evidence
+                .canonical_bytes()
+                .map_err(|_| GenerationShadowLedgerErrorV3::InvalidPhaseControlEvidence)?;
+            let restored =
+                nando_operator_kernel::RuntimePhaseControlEvidenceV3::from_canonical_bytes(&bytes)
+                    .map_err(|_| GenerationShadowLedgerErrorV3::InvalidPhaseControlEvidence)?;
+            (restored == *evidence)
+                .then_some(())
+                .ok_or(GenerationShadowLedgerErrorV3::InvalidPhaseControlEvidence)
+        }
+        _ => Err(GenerationShadowLedgerErrorV3::InvalidPhaseControlEvidence),
+    }
 }
 
 pub(super) fn ledger_digest(

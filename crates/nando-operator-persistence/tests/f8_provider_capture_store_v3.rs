@@ -7,7 +7,7 @@ use nando_operator_kernel::{RuntimeProjectionV3, Sha256CommitmentV3};
 use nando_operator_learning::{ProviderRequestCaptureInputV3, seal_provider_request_capture_v3};
 use nando_operator_persistence::{
     PROVIDER_CAPTURE_STORE_SLOT_A_FILE_V3, PROVIDER_CAPTURE_STORE_SLOT_B_FILE_V3,
-    ProviderCaptureStoreErrorV3, ProviderCaptureStoreV3,
+    ProviderCaptureStoreErrorV3, ProviderCaptureStoreReaderV3, ProviderCaptureStoreV3,
 };
 
 struct Fixture {
@@ -121,7 +121,9 @@ fn stale_temporary_is_quarantined_but_committed_corruption_blocks_restore() {
         b"interrupted-write",
     )
     .expect("stale temporary");
-    let restored = store.restore().expect("stale recovery");
+    drop(store);
+    let restarted = ProviderCaptureStoreV3::open(&fixture.directory).expect("restart");
+    let restored = restarted.restore().expect("stale recovery");
     assert_eq!(restored.quarantined_files().len(), 1);
 
     fs::write(
@@ -132,9 +134,25 @@ fn stale_temporary_is_quarantined_but_committed_corruption_blocks_restore() {
     )
     .expect("corrupt slot");
     assert!(matches!(
-        store.restore(),
+        restarted.restore(),
         Err(ProviderCaptureStoreErrorV3::CommittedSlotCorrupt)
     ));
+}
+
+#[test]
+fn live_reader_never_quarantines_an_inflight_writer_temporary() {
+    let fixture = Fixture::new("concurrent-reader");
+    let writer = ProviderCaptureStoreV3::open(&fixture.directory).expect("writer");
+    writer.reserve_sequence_lease().expect("lease");
+    let reader = ProviderCaptureStoreReaderV3::open(&fixture.directory).expect("reader");
+    let temporary = fixture
+        .directory
+        .join(format!(".{PROVIDER_CAPTURE_STORE_SLOT_B_FILE_V3}.new"));
+    fs::write(&temporary, b"inflight-publication").expect("temporary");
+
+    let restored = reader.restore().expect("live restore");
+    assert!(restored.quarantined_files().is_empty());
+    assert!(temporary.exists());
 }
 
 fn receipt(

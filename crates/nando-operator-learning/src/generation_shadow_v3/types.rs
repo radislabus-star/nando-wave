@@ -1,4 +1,6 @@
-use nando_operator_kernel::{Sha256CommitmentV3, valid_nonzero_sha256};
+use nando_operator_kernel::{
+    RuntimePhaseControlEvidenceV3, Sha256CommitmentV3, valid_nonzero_sha256,
+};
 use nando_operator_proof::independent_verifier_v3::IndependentVerifierReceiptV3;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +40,7 @@ pub struct GenerationShadowReceiptInputV3<'a> {
     pub traffic_verdict_code: u8,
     pub traffic_phase_report_sha256: Option<&'a str>,
     pub traffic_operator_receipt_sha256: Option<&'a str>,
+    pub phase_control_evidence: Option<&'a RuntimePhaseControlEvidenceV3>,
     pub f6_receipt: Option<&'a IndependentVerifierReceiptV3>,
     pub outcome: GenerationShadowTerminalOutcomeV3,
     pub parity_mismatch: bool,
@@ -64,6 +67,7 @@ pub struct GenerationShadowReceiptV3 {
     pub(super) traffic_verdict_code: u8,
     pub(super) traffic_phase_report_sha256: Option<String>,
     pub(super) traffic_operator_receipt_sha256: Option<String>,
+    pub(super) phase_control_evidence: Option<RuntimePhaseControlEvidenceV3>,
     pub(super) actor_action_sha256: Option<String>,
     pub(super) actor_output_sha256: Option<String>,
     pub(super) verifier_receipt_sha256: Option<String>,
@@ -83,6 +87,7 @@ pub enum GenerationShadowLedgerErrorV3 {
     InvalidCheckpoint,
     InvalidCaptureJoin,
     InvalidTrafficReceipt,
+    InvalidPhaseControlEvidence,
     InvalidVerifierReceipt,
     OutcomeMismatch,
     NonMonotonicCapture,
@@ -113,6 +118,11 @@ impl GenerationShadowReceiptV3 {
             || self.raw_payloads_persisted != 0
             || self.local_accepts != 0
             || self.execution_authority
+            || !valid_phase_control_evidence(
+                self.traffic_index_sha256.as_str(),
+                self.traffic_phase_report_sha256.as_deref(),
+                self.phase_control_evidence.as_ref(),
+            )
         {
             return Err(GenerationShadowLedgerErrorV3::InvalidLedger);
         }
@@ -219,6 +229,11 @@ impl GenerationShadowReceiptV3 {
     }
 
     #[must_use]
+    pub const fn phase_control_evidence(&self) -> Option<&RuntimePhaseControlEvidenceV3> {
+        self.phase_control_evidence.as_ref()
+    }
+
+    #[must_use]
     pub fn actor_action_sha256(&self) -> Option<&str> {
         self.actor_action_sha256.as_deref()
     }
@@ -271,5 +286,26 @@ impl GenerationShadowReceiptV3 {
     #[must_use]
     pub fn receipt_sha256(&self) -> &str {
         &self.receipt_sha256
+    }
+}
+
+fn valid_phase_control_evidence(
+    traffic_index_sha256: &str,
+    phase_report_sha256: Option<&str>,
+    evidence: Option<&RuntimePhaseControlEvidenceV3>,
+) -> bool {
+    match (phase_report_sha256, evidence) {
+        (None, None) => true,
+        (Some(report), Some(evidence)) => {
+            evidence.report_sha256() == report
+                && evidence.index_sha256() == traffic_index_sha256
+                && evidence.raw_payloads_persisted() == 0
+                && !evidence.execution_authority()
+                && evidence.canonical_bytes().is_ok_and(|bytes| {
+                    RuntimePhaseControlEvidenceV3::from_canonical_bytes(&bytes)
+                        .is_ok_and(|restored| restored == *evidence)
+                })
+        }
+        _ => false,
     }
 }

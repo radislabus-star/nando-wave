@@ -1,6 +1,6 @@
 # F8 External Admission And Live Shadow V1
 
-Status: `F8-0 PASS / F8-A CONTROLLED PASS / F8-B PASS / F8-C PASS / F8-D..E IN PROGRESS / AUTHORITY FALSE`
+Status: `STOP-F8 PASS / CONTROLLED LIVE SHADOW / AUTHORITY FALSE`
 
 Date: `2026-07-22`
 
@@ -330,6 +330,12 @@ full phase search or applicability gain > controls
 
 Equal results produce `WATCH_NO_CAUSAL_GAIN`, not PASS.
 
+F8-D result: `STOP_F8_D_CAUSAL_CONTROLS.md`. Runtime-owned observations are
+now committed to the generation shadow ledger and independently aggregated by
+admission. The controlled live set produced three full-phase selections and
+zero selections under every ablation. This is an applicability gain; search
+gain remains zero and is not claimed.
+
 ## F8-E: Live Shadow
 
 F8-E may be enabled only after STOP-F8-0 through STOP-F8-D pass. Initial
@@ -366,6 +372,11 @@ hot RSS delta for 2,048 operators <= 16 MiB or accepted frozen replacement
 The HTTP handler may perform bounded allocation and `try_send`; it may not wait
 for disk, generation restore, actor, verifier, admission or Graphify.
 
+F8-E result: `STOP_F8_E_LIVE_SHADOW.md`. Three verified receipts crossed the
+actual HTTP boundary, survived restart-monotonic durable append and reconstructed
+one `SHADOW_READY` candidate from immutable bytes. The seed is explicitly
+controlled, local accept remained false and no ACTIVE package changed.
+
 ## STOP-F8
 
 ```text
@@ -389,3 +400,5 @@ ACTIVE change                                0
 Only after STOP-F8 may an explicit, separately reviewed rollout change be
 proposed. That change must have its own kill switch, rollback proof and signed
 authority lease.
+
+Canonical final receipt: `STOP_F8.md` and `STOP_F8.json`.

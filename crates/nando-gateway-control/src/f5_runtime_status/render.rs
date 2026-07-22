@@ -1,7 +1,12 @@
+use super::f8_final_receipt::F8FinalStatus;
 use super::f8_resource_receipt::F8ResourceStatus;
 use super::receipt::PipelineStatus;
 
-pub(super) fn verified_panel(status: &PipelineStatus, resource: &F8ResourceStatus) -> String {
+pub(super) fn verified_panel(
+    status: &PipelineStatus,
+    resource: &F8ResourceStatus,
+    final_status: &F8FinalStatus,
+) -> String {
     let commit = status
         .f5_implementation_commit
         .get(..12)
@@ -169,30 +174,89 @@ pub(super) fn verified_panel(status: &PipelineStatus, resource: &F8ResourceStatu
         "PASS",
         "pass",
     ));
-    stages.push_str(&edge("latency WATCH · capture owner absent"));
+    stages.push_str(&edge("hash-only provider request receipt"));
     stages.push_str(&stage(
         "f8-a",
         "8-A",
         "Live provider capture owner",
-        "Must emit bounded hash-only request provenance before external admission can consume real traffic.",
-        "authority=false · ACTIVE=0",
-        "READY",
-        "wait",
+        "Persists bounded request provenance without retaining or rehashing raw provider payloads.",
+        &format!("{} durable records", final_status.provider_records),
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("generation-owned verified receipt"));
+    stages.push_str(&stage(
+        "f8-b",
+        "8-B",
+        "Durable shadow ledger",
+        "Joins capture, generation, actor and independent verifier receipts without semantic authority.",
+        &format!("{} verified receipts", final_status.verified_receipts),
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("immutable reconstruction inputs"));
+    stages.push_str(&stage(
+        "f8-c",
+        "8-C",
+        "External admission reconstruction",
+        "Rebuilds one candidate from immutable checkpoint, capture index and shadow ledger bytes.",
+        &final_status.external_verdict,
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("runtime-owned phase evidence"));
+    stages.push_str(&stage(
+        "f8-d",
+        "8-D",
+        "Causal controls + traffic budgets",
+        "Recomputes full and ablated phase outcomes from the exact durable traffic receipt set.",
+        &format!(
+            "applicability gain {} · search gain {}",
+            final_status.full_phase_gain, final_status.search_gain
+        ),
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("restart-exact controlled live shadow"));
+    stages.push_str(&stage(
+        "f8-e",
+        "8-E",
+        "Controlled live shadow",
+        "Crosses the real Rust HTTP service and independently reconstructs SHADOW_READY after restart.",
+        &format!(
+            "{}/{} verified",
+            final_status.verified_receipts, final_status.verified_receipts
+        ),
+        "PASS",
+        "pass",
+    ));
+    stages.push_str(&edge("separate authority lease required"));
+    stages.push_str(&stage(
+        "cpu",
+        "CPU",
+        "ACTIVE execution",
+        "Controlled evidence cannot grant production authority or claim natural operator coverage.",
+        "ACTIVE=0 · authority=false",
+        "LOCKED",
+        "locked",
     ));
 
     format!(
-        r#"<section class="architecture research-architecture" data-research-status="f8-0-pass-f8-a-ready">
+        r#"<section class="architecture research-architecture" data-research-status="stop-f8-pass-authority-false">
 <div class="architecture-head">
 <div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>artifact -&gt; grounding -&gt; VM -&gt; verifier -&gt; generation -&gt; F8 admission</p></div>
-<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip pass">F8-0 PASS</span><span class="state-chip wait">F8-A CONTROLLED</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
+<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip pass">F8 COMPLETE</span><span class="state-chip locked">AUTHORITY OFF</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
-<div class="terminal-rule">controlled F5 -&gt; F7 proof confirmed | F8-0 resource PASS | F8-D latency WATCH ({}) | live capture producer missing | authority false</div>
+<div class="terminal-rule">controlled F5 -&gt; F8 shadow path confirmed | p99 no-match/matched {}/{} ns | hard max {} ns | hot RSS {} B | natural operator NOT EVALUATED | authority false</div>
 </section>"#,
         escape(commit),
         escape(&status.f7_receipt_date),
         stages,
-        resource.no_match_p99_max_ns,
+        final_status.no_match_p99_max_ns,
+        final_status.matched_p99_max_ns,
+        final_status.hard_max_ns,
+        final_status.hot_rss_bytes,
     )
 }
 
@@ -220,7 +284,7 @@ fn facts(status: &PipelineStatus) -> String {
 fn f7_facts(status: &PipelineStatus) -> String {
     format!(
         r#"<div class="research-facts">
-<span>capture join exact</span><span>request generation pinned</span><span>raw persisted 0 B</span><span>local accepts 0</span><span>F7 no-match p99 {} ns</span><span>F7 matched p99 {} ns</span><span>F7 max {} ns</span><span>F5 conservative RSS {} / target {} B WATCH</span><span>live capture producer missing</span>
+<span>capture join exact</span><span>request generation pinned</span><span>raw persisted 0 B</span><span>local accepts 0</span><span>F7 no-match p99 {} ns</span><span>F7 matched p99 {} ns</span><span>F7 max {} ns</span><span>F5 conservative RSS {} / target {} B WATCH</span>
 </div>"#,
         status.f7_no_match_p99_ns,
         status.f7_matched_p99_ns,
@@ -239,7 +303,7 @@ fn stage(
     label: &str,
     class: &str,
 ) -> String {
-    let branch = if id == "f8-a" { "└─" } else { "├─" };
+    let branch = if id == "cpu" { "└─" } else { "├─" };
     format!(
         r#"<div class="terminal-stage {}" data-rd-stage="{}" title="{}">
 <div class="terminal-line"><span class="tree-glyph">{}</span><span class="stage-index">[{}]</span><strong class="stage-title">{}</strong><span class="stage-metric">{}</span><span class="state-chip {}">{}</span></div>

@@ -45,6 +45,25 @@ pub(super) fn score_phase_components_v3(
         .fold(0_i64, i64::saturating_add)
 }
 
+pub(super) fn coherence_phase_components_v3(
+    components: &[RuntimeRelationPhaseComponent],
+    control: PhaseControlV3,
+) -> i64 {
+    let Ok(component_count) = i64::try_from(components.len()) else {
+        return 0;
+    };
+    if component_count == 0 {
+        return 0;
+    }
+    score_phase_components_v3(components, control)
+        .checked_div(component_count)
+        .unwrap_or_default()
+        .clamp(
+            -RuntimeRelationPhaseComponent::SCALE_FIXED,
+            RuntimeRelationPhaseComponent::SCALE_FIXED,
+        )
+}
+
 fn random_center(plane: u8, source_role: u8, target_role: u8) -> (i64, i64) {
     const DIAGONAL: i64 = 707_106_781;
     const CENTERS: [(i64, i64); 8] = [

@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use nando_core::wave::RuntimeRelationPhaseComponent;
-use nando_operator_kernel::sha256_bytes;
+use nando_operator_kernel::{RUNTIME_PHASE_APPLICABILITY_FLOOR_FIXED_V3, sha256_bytes};
 
-use super::controls::score_phase_components_v3;
+use super::controls::{coherence_phase_components_v3, score_phase_components_v3};
 use super::{
     PhaseAttemptScoreV3, PhaseControlReportV3, PhaseControlV3, PhaseGainVerdictV3,
     PhaseRankingReportV3, PhaseSelectionVerdictV3,
@@ -33,10 +33,18 @@ pub fn evaluate_phase_ranking_v3(outcome: &BoundProtocolActionOutcomeV3) -> Phas
     let full_phase_search_gain = no_phase
         .exact_action_checks
         .saturating_sub(full.exact_action_checks);
+    let full_phase_applicability_gain = controls
+        .iter()
+        .skip(1)
+        .filter(|control| {
+            control.selected_physical_action_sha256.as_deref()
+                != full.selected_physical_action_sha256.as_deref()
+        })
+        .count();
     let evaluated = full.verdict == PhaseSelectionVerdictV3::Selected;
     let gain_verdict = if !evaluated {
         PhaseGainVerdictV3::NotEvaluated
-    } else if full_phase_search_gain > 0 {
+    } else if full_phase_search_gain > 0 || full_phase_applicability_gain > 0 {
         PhaseGainVerdictV3::Measured
     } else {
         PhaseGainVerdictV3::WatchNoSearchGain
@@ -64,6 +72,7 @@ pub fn evaluate_phase_ranking_v3(outcome: &BoundProtocolActionOutcomeV3) -> Phas
         request_view_sha256: outcome.request_view_sha256().to_owned(),
         controls: controls.into_boxed_slice(),
         full_phase_search_gain,
+        full_phase_applicability_gain,
         gain_verdict,
         phase_trace_informative,
         action_changes_from_structural_result,
@@ -84,6 +93,10 @@ fn evaluate_complete_control(
                 physical_action_sha256: attempt.physical_action_sha256()?.to_owned(),
                 phase_trace_sha256: phase_trace_digest(attempt.phase_components_fixed()),
                 score_fixed: score_phase_components_v3(attempt.phase_components_fixed(), control),
+                coherence_fixed: coherence_phase_components_v3(
+                    attempt.phase_components_fixed(),
+                    control,
+                ),
             })
         })
         .collect::<Vec<_>>();
@@ -96,30 +109,39 @@ pub(super) fn select_action_class(
 ) -> PhaseControlReportV3 {
     scores.sort_by(|left, right| {
         right
-            .score_fixed
-            .cmp(&left.score_fixed)
+            .coherence_fixed
+            .cmp(&left.coherence_fixed)
+            .then_with(|| right.score_fixed.cmp(&left.score_fixed))
             .then_with(|| {
                 left.physical_action_sha256
                     .cmp(&right.physical_action_sha256)
             })
             .then_with(|| left.mapping_sha256.cmp(&right.mapping_sha256))
     });
-    let mut action_scores = BTreeMap::<String, i64>::new();
+    let mut action_scores = BTreeMap::<String, (i64, i64)>::new();
     for score in &scores {
         action_scores
             .entry(score.physical_action_sha256.clone())
-            .and_modify(|current| *current = (*current).max(score.score_fixed))
-            .or_insert(score.score_fixed);
+            .and_modify(|current| {
+                *current = (*current).max((score.coherence_fixed, score.score_fixed));
+            })
+            .or_insert((score.coherence_fixed, score.score_fixed));
     }
     let action_classes = action_scores.len();
     let mut ranked = action_scores.into_iter().collect::<Vec<_>>();
     ranked.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
-    let winner_score_fixed = ranked.first().map(|(_, score)| *score);
-    let runner_up_score_fixed = ranked.get(1).map(|(_, score)| *score);
-    let tie = winner_score_fixed.is_some() && winner_score_fixed == runner_up_score_fixed;
+    let winner_score_fixed = ranked.first().map(|(_, (_, score))| *score);
+    let runner_up_score_fixed = ranked.get(1).map(|(_, (_, score))| *score);
+    let winner_coherence_fixed = ranked.first().map(|(_, (coherence, _))| *coherence);
+    let runner_up_coherence_fixed = ranked.get(1).map(|(_, (coherence, _))| *coherence);
+    let tie =
+        winner_coherence_fixed.is_some() && winner_coherence_fixed == runner_up_coherence_fixed;
     let (selected, verdict) = match ranked.first() {
         None => (None, PhaseSelectionVerdictV3::AbstainNoCandidate),
         Some(_) if tie => (None, PhaseSelectionVerdictV3::AbstainTie),
+        Some((_, (coherence, _))) if *coherence < RUNTIME_PHASE_APPLICABILITY_FLOOR_FIXED_V3 => {
+            (None, PhaseSelectionVerdictV3::AbstainCoherenceFloor)
+        }
         Some((action, _)) => (Some(action.clone()), PhaseSelectionVerdictV3::Selected),
     };
     PhaseControlReportV3 {
@@ -130,6 +152,8 @@ pub(super) fn select_action_class(
         selected_physical_action_sha256: selected,
         winner_score_fixed,
         runner_up_score_fixed,
+        winner_coherence_fixed,
+        runner_up_coherence_fixed,
         verdict,
     }
 }
@@ -146,6 +170,8 @@ fn blocked_control(
         selected_physical_action_sha256: None,
         winner_score_fixed: None,
         runner_up_score_fixed: None,
+        winner_coherence_fixed: None,
+        runner_up_coherence_fixed: None,
         verdict,
     }
 }
@@ -209,6 +235,7 @@ fn report_digest(
             bytes.extend_from_slice(score.physical_action_sha256.as_bytes());
             bytes.extend_from_slice(score.phase_trace_sha256.as_bytes());
             bytes.extend_from_slice(&score.score_fixed.to_le_bytes());
+            bytes.extend_from_slice(&score.coherence_fixed.to_le_bytes());
         }
     }
     sha256_bytes(&bytes)

@@ -7,7 +7,6 @@ pub(super) struct F8ResourceStatus {
     pub(super) max_peak_rss_delta_bytes: u64,
     pub(super) rss_target_bytes: u64,
     pub(super) resource_observations: u64,
-    pub(super) no_match_p99_max_ns: u64,
 }
 
 #[derive(Deserialize)]
@@ -135,7 +134,6 @@ pub(super) fn parse_and_validate(source: &str) -> Result<F8ResourceStatus, Strin
         max_peak_rss_delta_bytes: receipt.production_policy.max_peak_rss_delta_bytes,
         rss_target_bytes: receipt.production_policy.target_bytes,
         resource_observations: receipt.production_policy.resource_observations,
-        no_match_p99_max_ns: receipt.latency_watch.observed_no_match_p99_max_ns,
     })
 }
 

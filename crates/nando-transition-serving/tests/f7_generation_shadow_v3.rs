@@ -206,8 +206,89 @@ fn provider_capture_joins_to_a_durable_generation_owned_shadow_receipt() {
     );
     assert_eq!(ledger.receipts()[0].semantic_updates(), 1);
     assert!(ledger.receipts()[0].verifier_receipt().is_some());
+    let phase = ledger.receipts()[0]
+        .phase_control_evidence()
+        .expect("runtime-owned phase controls");
+    assert_eq!(
+        Some(phase.report_sha256()),
+        ledger.receipts()[0].traffic_phase_report_sha256()
+    );
+    assert_eq!(phase.raw_payloads_persisted(), 0);
+    assert!(!phase.execution_authority());
     assert_eq!(ledger.raw_payloads_persisted(), 0);
     assert!(!ledger.execution_authority());
+}
+
+#[test]
+fn duplicate_capture_root_is_censored_without_waiting_for_the_join_deadline() {
+    let mut fixture = FixtureV3::new("f8b-duplicate-capture");
+    fixture.append_support();
+    fixture.freeze_and_append_future();
+    let checkpoint_bytes = fixture.checkpoint(1);
+    GenerationCheckpointStoreV3::open(&fixture.directory)
+        .expect("generation store")
+        .publish(&checkpoint_bytes)
+        .expect("publish generation");
+    let generation_capture_path = fixture.directory.join("generation-capture-index-v3.cbor");
+    write_capture_index(&generation_capture_path, &checkpoint_bytes);
+
+    let provider_store_path = fixture.directory.join("provider-capture-v3-f8a");
+    let provider_store = ProviderCaptureStoreV3::open(&provider_store_path).expect("capture store");
+    let lease = provider_store
+        .reserve_sequence_lease()
+        .expect("capture lease");
+    let payload_bytes = serde_json::to_vec(&support_request_payload()).expect("payload bytes");
+    let request_root = Sha256CommitmentV3::digest_bytes(&payload_bytes);
+    let first = seal_provider_request_capture_v3(ProviderRequestCaptureInputV3 {
+        capture_sequence: lease.first_sequence(),
+        capture_epoch_root: lease.epoch_root_sha256(),
+        lineage_root_sha256: Sha256CommitmentV3::digest_bytes(b"duplicate-first-lineage"),
+        request_root_sha256: request_root,
+        projection: RuntimeProjectionV3::Responses,
+        streaming: false,
+        observed_at_unix_ms: 1_750_000_000_000,
+    })
+    .expect("first capture");
+    let restored = provider_store.restore().expect("capture restore");
+    let next = restored
+        .index()
+        .expect("capture index")
+        .append_batch(std::slice::from_ref(&first))
+        .expect("capture append");
+    provider_store
+        .publish_index(&next)
+        .expect("capture publish");
+
+    let duplicate = seal_provider_request_capture_v3(ProviderRequestCaptureInputV3 {
+        capture_sequence: lease.first_sequence() + 1,
+        capture_epoch_root: lease.epoch_root_sha256(),
+        lineage_root_sha256: Sha256CommitmentV3::digest_bytes(b"duplicate-second-lineage"),
+        request_root_sha256: request_root,
+        projection: RuntimeProjectionV3::Responses,
+        streaming: false,
+        observed_at_unix_ms: 1_750_000_000_001,
+    })
+    .expect("duplicate capture");
+    let runtime = runtime(&fixture, &generation_capture_path);
+    assert!(runtime.reconcile_once().expect("reconcile"));
+    runtime.start_after_http_bind().expect("start worker");
+    let request = GenerationShadowRequestV3::from_provider_capture(
+        duplicate,
+        "continue CellA17".to_owned(),
+        Bytes::from(payload_bytes),
+    )
+    .expect("request");
+    let started = Instant::now();
+    assert_eq!(
+        runtime.try_submit(request),
+        GenerationShadowSubmitVerdictV3::Enqueued
+    );
+    let deadline = started + Duration::from_secs(2);
+    while runtime.status().durable_censored == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(runtime.status().durable_censored, 1);
+    assert!(started.elapsed() < Duration::from_millis(250));
 }
 
 #[test]

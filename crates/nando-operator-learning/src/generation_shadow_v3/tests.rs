@@ -1,4 +1,8 @@
-use nando_operator_kernel::{RuntimeProjectionV3, Sha256CommitmentV3};
+use nando_operator_kernel::{
+    RuntimePhaseControlEvidenceInputV3, RuntimePhaseControlKindV3,
+    RuntimePhaseControlObservationInputV3, RuntimePhaseSelectionV3, RuntimeProjectionV3,
+    Sha256CommitmentV3, seal_runtime_phase_control_evidence_v3,
+};
 
 use crate::{
     ProviderCaptureIndexV3, ProviderRequestCaptureInputV3, ProviderRequestCaptureReceiptV3,
@@ -72,6 +76,7 @@ fn censored_shadow_receipts_roundtrip_without_semantic_authority() {
                     traffic_verdict_code: 2,
                     traffic_phase_report_sha256: None,
                     traffic_operator_receipt_sha256: None,
+                    phase_control_evidence: None,
                     f6_receipt: None,
                     outcome: GenerationShadowTerminalOutcomeV3::Censored,
                     parity_mismatch: false,
@@ -109,6 +114,7 @@ fn ledger_blocks_missing_capture_duplicate_and_foreign_generation_transition() {
         traffic_verdict_code: 2,
         traffic_phase_report_sha256: None,
         traffic_operator_receipt_sha256: None,
+        phase_control_evidence: None,
         f6_receipt: None,
         outcome: GenerationShadowTerminalOutcomeV3::RuntimeAbstain,
         parity_mismatch: false,
@@ -136,6 +142,7 @@ fn ledger_blocks_missing_capture_duplicate_and_foreign_generation_transition() {
                 traffic_verdict_code: 2,
                 traffic_phase_report_sha256: None,
                 traffic_operator_receipt_sha256: None,
+                phase_control_evidence: None,
                 f6_receipt: None,
                 outcome: GenerationShadowTerminalOutcomeV3::Censored,
                 parity_mismatch: false,
@@ -173,6 +180,7 @@ fn verified_pass_cannot_be_relabelled_without_an_f6_receipt() {
                 traffic_verdict_code: 1,
                 traffic_phase_report_sha256: None,
                 traffic_operator_receipt_sha256: None,
+                phase_control_evidence: None,
                 f6_receipt: None,
                 outcome: GenerationShadowTerminalOutcomeV3::VerifiedPass,
                 parity_mismatch: false,
@@ -198,4 +206,95 @@ fn provider_capture_exact_join_checks_all_commitments() {
         Sha256CommitmentV3::digest_bytes(b"wrong"),
         capture.receipt_sha256(),
     ));
+}
+
+#[test]
+fn phase_control_evidence_is_bound_to_the_exact_runtime_report() {
+    let (index, captures) = reserved_captures(1);
+    let index_root = root("index");
+    let report_root = root("phase-report");
+    let evidence = phase_evidence(&index_root, &report_root);
+    let mut ledger =
+        GenerationShadowReceiptLedgerV3::new(root("generation"), 7, root("checkpoint"))
+            .expect("ledger");
+    ledger
+        .append(
+            &index,
+            GenerationShadowReceiptInputV3 {
+                capture_receipt: &captures[0],
+                traffic_receipt_sha256: &root("traffic-with-phase"),
+                traffic_generation_sequence: 3,
+                traffic_generation_id_sha256: &root("generation"),
+                traffic_index_sha256: &index_root,
+                traffic_request_sha256: &captures[0].request_root_sha256().to_hex(),
+                traffic_verdict_code: 2,
+                traffic_phase_report_sha256: Some(&report_root),
+                traffic_operator_receipt_sha256: None,
+                phase_control_evidence: Some(&evidence),
+                f6_receipt: None,
+                outcome: GenerationShadowTerminalOutcomeV3::RuntimeAbstain,
+                parity_mismatch: false,
+            },
+        )
+        .expect("phase append");
+    let bytes = ledger.canonical_bytes().expect("ledger bytes");
+    let restored = GenerationShadowReceiptLedgerV3::from_canonical_bytes(&bytes).expect("restore");
+    assert_eq!(
+        restored.receipts()[0]
+            .phase_control_evidence()
+            .expect("phase evidence")
+            .evidence_sha256(),
+        evidence.evidence_sha256()
+    );
+
+    let wrong = phase_evidence(&index_root, &root("other-report"));
+    let mut rejected =
+        GenerationShadowReceiptLedgerV3::new(root("generation"), 7, root("checkpoint"))
+            .expect("ledger");
+    assert_eq!(
+        rejected
+            .append(
+                &index,
+                GenerationShadowReceiptInputV3 {
+                    capture_receipt: &captures[0],
+                    traffic_receipt_sha256: &root("traffic-wrong-phase"),
+                    traffic_generation_sequence: 3,
+                    traffic_generation_id_sha256: &root("generation"),
+                    traffic_index_sha256: &index_root,
+                    traffic_request_sha256: &captures[0].request_root_sha256().to_hex(),
+                    traffic_verdict_code: 2,
+                    traffic_phase_report_sha256: Some(&report_root),
+                    traffic_operator_receipt_sha256: None,
+                    phase_control_evidence: Some(&wrong),
+                    f6_receipt: None,
+                    outcome: GenerationShadowTerminalOutcomeV3::RuntimeAbstain,
+                    parity_mismatch: false,
+                },
+            )
+            .err(),
+        Some(GenerationShadowLedgerErrorV3::InvalidPhaseControlEvidence)
+    );
+}
+
+fn phase_evidence(
+    index_sha256: &str,
+    report_sha256: &str,
+) -> nando_operator_kernel::RuntimePhaseControlEvidenceV3 {
+    seal_runtime_phase_control_evidence_v3(RuntimePhaseControlEvidenceInputV3 {
+        index_sha256: index_sha256.to_owned(),
+        request_view_sha256: root("request-view"),
+        report_sha256: report_sha256.to_owned(),
+        observations: RuntimePhaseControlKindV3::ALL
+            .into_iter()
+            .map(|control| RuntimePhaseControlObservationInputV3 {
+                control,
+                selection: RuntimePhaseSelectionV3::AbstainNoCandidate,
+                exact_action_checks: 0,
+                selected_physical_action_sha256: None,
+                winner_coherence_fixed: None,
+                runner_up_coherence_fixed: None,
+            })
+            .collect(),
+    })
+    .expect("phase evidence")
 }

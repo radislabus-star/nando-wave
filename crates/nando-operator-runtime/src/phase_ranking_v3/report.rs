@@ -23,6 +23,11 @@ impl PhaseAttemptScoreV3 {
     pub const fn score_fixed(&self) -> i64 {
         self.score_fixed
     }
+
+    #[must_use]
+    pub const fn coherence_fixed(&self) -> i64 {
+        self.coherence_fixed
+    }
 }
 
 impl PhaseControlReportV3 {
@@ -62,6 +67,16 @@ impl PhaseControlReportV3 {
     }
 
     #[must_use]
+    pub const fn winner_coherence_fixed(&self) -> Option<i64> {
+        self.winner_coherence_fixed
+    }
+
+    #[must_use]
+    pub const fn runner_up_coherence_fixed(&self) -> Option<i64> {
+        self.runner_up_coherence_fixed
+    }
+
+    #[must_use]
     pub const fn verdict(&self) -> PhaseSelectionVerdictV3 {
         self.verdict
     }
@@ -91,6 +106,11 @@ impl PhaseRankingReportV3 {
     #[must_use]
     pub const fn full_phase_search_gain(&self) -> usize {
         self.full_phase_search_gain
+    }
+
+    #[must_use]
+    pub const fn full_phase_applicability_gain(&self) -> usize {
+        self.full_phase_applicability_gain
     }
 
     #[must_use]

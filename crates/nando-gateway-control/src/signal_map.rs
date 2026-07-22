@@ -102,29 +102,33 @@ pub(crate) fn render(
     } else {
         RouteState::Locked
     };
-    // PROVEN is receipt-backed controlled execution, never evidence that live
-    // provider traffic crossed the missing F8-A capture boundary.
+    // PROVEN is receipt-backed controlled execution. It never upgrades the
+    // current process counters or grants production authority.
     let controlled_state = if proof.verified {
         RouteState::Proven
     } else {
         RouteState::Locked
     };
     let capture_ready = live.capture_phase == "ready_hash_only";
-    let capture_live = capture_ready && live.capture_captured > 0;
-    let capture_state = if capture_live {
+    let capture_durable =
+        capture_ready && (live.capture_records > 0 || proof.f8_provider_records > 0);
+    let capture_state = if proof.verified {
+        RouteState::Proven
+    } else if capture_durable {
         RouteState::Live
     } else if capture_ready {
         RouteState::Wait
     } else {
         RouteState::Block
     };
-    let shadow_live = live.shadow_phase == "ready_shadow" && live.shadow_submitted > 0;
-    let evaluated_live = shadow_live && live.shadow_evaluated > 0;
     let proof_commit = compact(&proof.f5_commit);
     let proof_boundary = if proof.verified {
         format!(
-            "F5/F6/F7 controlled proof {} · F7 receipt {}",
-            proof_commit, proof.f7_receipt_date
+            "F5-F8 controlled proof {} · F7 receipt {} · {} verified · {}",
+            proof_commit,
+            proof.f7_receipt_date,
+            proof.f8_verified_receipts,
+            proof.f8_external_verdict
         )
     } else {
         format!(
@@ -137,29 +141,15 @@ pub(crate) fn render(
     };
     let current_blocker = if !proof.verified {
         "PROOF RECEIPT VALIDATION"
-    } else if capture_live {
-        "F8-B DURABLE GENERATION SHADOW LEDGER"
     } else {
-        "F8-A LIVE PROVIDER CAPTURE OWNER"
+        "PRODUCTION AUTHORITY / NATURAL OPERATOR EVIDENCE"
     };
     let current_reason = if !proof.verified {
         "Proof-backed состояние F5-F8 не прошло fail-closed проверку, поэтому downstream-модули не могут показываться как доказанные.".to_owned()
-    } else if capture_live {
-        format!(
-            "F8-A durable capture работает: {} записей. Следующая граница — сохранить generation-owned F5/F6 receipt; текущая evaluation пока только telemetry.",
-            live.capture_records
-        )
     } else {
         format!(
-            "Hash-only capture ещё не доказан живым трафиком: phase {}, captured {}, censored {}, error {}.",
-            live.capture_phase,
-            live.capture_captured,
-            live.capture_censored,
-            if live.capture_last_error.is_empty() {
-                "none"
-            } else {
-                live.capture_last_error
-            }
+            "STOP-F8 завершён в controlled live shadow: {}/{} verified, phase gain {}, false accepts 0. До CPU остаётся отдельный authority rollout либо natural operator evidence; текущий seed authority не получает.",
+            proof.f8_verified_receipts, proof.f8_verified_receipts, proof.f8_full_phase_gain,
         )
     };
 
@@ -245,21 +235,32 @@ pub(crate) fn render(
     let mut target_branch = String::new();
     target_branch.push_str(&branch_label(
         "└─",
-        "TARGET F8 OPERATOR BRANCH",
-        "целевая Nando Machine",
+        "CONTROLLED F8 PROOF BRANCH",
+        "полный shadow-маршрут; не production authority",
         "proven",
     ));
     target_branch.push_str(&stage(
         "   ├─",
         &RouteStage {
             id: "F8-A",
-            title: "Live provider capture owner",
+            title: "Hash-only provider capture owner",
             metric: format!(
-                "captured {} · records {} · publish {}",
-                live.capture_captured, live.capture_records, live.capture_publish_sequence
+                "{} · durable {} · captured/censored {}/{} · publish {} · error {}",
+                live.capture_phase,
+                proof.f8_provider_records.max(live.capture_records),
+                live.capture_captured,
+                live.capture_censored,
+                live.capture_publish_sequence,
+                if live.capture_last_error.is_empty() {
+                    "none"
+                } else {
+                    live.capture_last_error
+                },
             ),
             module: "nando-transition-serving · provider_capture.v3".into(),
-            signal: if capture_live {
+            signal: if proof.verified {
+                "CONTROLLED DURABLE CAPTURE"
+            } else if capture_durable {
                 "HASH-ONLY SIGNAL LIVE"
             } else if capture_ready {
                 "READY / NO DURABLE TRAFFIC"
@@ -269,7 +270,7 @@ pub(crate) fn render(
             state: capture_state,
         },
     ));
-    if !capture_live {
+    if !proof.verified && !capture_durable {
         target_branch.push_str(&blocked_edge(
             "real request hash -> no durable trusted capture receipt -> no live generation evidence",
         ));
@@ -288,16 +289,8 @@ pub(crate) fn render(
                 "proof unavailable".into()
             },
             module: "nando-operator-persistence · generation-checkpoint.v3".into(),
-            signal: if shadow_live {
-                "PINNED LIVE INPUT"
-            } else {
-                "CONTROLLED PROOF ONLY"
-            },
-            state: if shadow_live {
-                RouteState::Live
-            } else {
-                controlled_state
-            },
+            signal: "PINNED CONTROLLED GENERATION",
+            state: controlled_state,
         },
     ));
     target_branch.push_str(&stage(
@@ -307,16 +300,8 @@ pub(crate) fn render(
             title: "Role grounding + Operator VM",
             metric: "bounded actor execution".into(),
             module: "nando-operator-runtime · traffic-shadow.v3".into(),
-            signal: if evaluated_live {
-                "LIVE ACTOR EVALUATED"
-            } else {
-                "CONTROLLED PROOF ONLY"
-            },
-            state: if evaluated_live {
-                RouteState::Live
-            } else {
-                controlled_state
-            },
+            signal: "WINNER-OWNED ACTOR",
+            state: controlled_state,
         },
     ));
     target_branch.push_str(&stage(
@@ -324,27 +309,13 @@ pub(crate) fn render(
         &RouteStage {
             id: "F6",
             title: "Independent verifier",
-            metric: if evaluated_live {
-                format!(
-                    "evaluated {} · verified {} · parity {}",
-                    live.shadow_evaluated, live.shadow_verified, live.shadow_parity_mismatches
-                )
-            } else if proof.verified {
-                "independent controlled receipt path PASS".into()
-            } else {
-                "proof unavailable".into()
-            },
+            metric: format!(
+                "verified {} · parity {}",
+                proof.f8_verified_receipts, live.shadow_parity_mismatches
+            ),
             module: "nando-operator-proof · independent-verifier.v3".into(),
-            signal: if evaluated_live {
-                "LIVE VERIFIER RECEIPT"
-            } else {
-                "CONTROLLED PROOF ONLY"
-            },
-            state: if evaluated_live {
-                RouteState::Live
-            } else {
-                controlled_state
-            },
+            signal: "INDEPENDENT CONTROLLED PASS",
+            state: controlled_state,
         },
     ));
     target_branch.push_str(&stage(
@@ -353,36 +324,31 @@ pub(crate) fn render(
             id: "F8-B",
             title: "Generation shadow receipt ledger",
             metric: format!(
-                "in-memory evaluated {} · durable receipts 0",
-                live.shadow_evaluated
+                "{} durable · process {} {}/{}/{}",
+                proof.f8_verified_receipts,
+                live.shadow_phase,
+                live.shadow_submitted,
+                live.shadow_evaluated,
+                live.shadow_verified,
             ),
             module: "nando-operator-learning · receipt-ledger.v3".into(),
-            signal: if capture_live {
-                "NEXT BLOCK"
-            } else {
-                "LOCKED BY F8-A"
-            },
-            state: if capture_live {
-                RouteState::Block
-            } else {
-                RouteState::Locked
-            },
+            signal: "DURABLE LEDGER VERIFIED",
+            state: controlled_state,
         },
     ));
-    if capture_live {
-        target_branch.push_str(&blocked_edge(
-            "capture receipt -> F5/F6 telemetry exists, but GenerationShadowReceiptV3 is not durable yet",
-        ));
-    }
     target_branch.push_str(&stage(
         "   ├─",
         &RouteStage {
             id: "F8-C",
             title: "External admission reconstruction",
-            metric: "immutable bytes -> candidate".into(),
+            metric: format!(
+                "{} · {}",
+                proof.f8_external_verdict,
+                compact(&proof.f8_commitments_sha256)
+            ),
             module: "nando-operator-admission · external-admission.v3".into(),
-            signal: "NOT STARTED",
-            state: RouteState::Locked,
+            signal: "IMMUTABLE RECONSTRUCTION",
+            state: controlled_state,
         },
     ));
     target_branch.push_str(&stage(
@@ -390,29 +356,34 @@ pub(crate) fn render(
         &RouteStage {
             id: "F8-D",
             title: "Causal controls + frozen latency",
-            metric: if proof.verified {
-                format!(
-                    "no-match max {} ns · protocol not frozen",
-                    proof.f8_no_match_p99_max_ns
-                )
-            } else {
-                "proof unavailable".into()
-            },
+            metric: format!(
+                "gain {} · search {} · p99 {}/{} ns",
+                proof.f8_full_phase_gain,
+                proof.f8_search_gain,
+                proof.f8_no_match_p99_max_ns,
+                proof.f8_matched_p99_max_ns,
+            ),
             module: "nando-live-transition-gate · composite-gate.v2".into(),
-            signal: "WAITING FOR F8-A..C",
-            state: RouteState::Wait,
+            signal: "APPLICABILITY CAUSAL PASS",
+            state: controlled_state,
         },
     ));
     target_branch.push_str(&stage(
         "   ├─",
         &RouteStage {
             id: "F8-E",
-            title: "Live shadow proof",
-            metric: "real traffic · authority=false".into(),
+            title: "Controlled live shadow proof",
+            metric: format!(
+                "{}/{} verified · authority=false",
+                proof.f8_verified_receipts, proof.f8_verified_receipts
+            ),
             module: "nando-transition-serving · live-shadow.v3".into(),
-            signal: "NOT STARTED",
-            state: RouteState::Locked,
+            signal: "STOP-F8 PASS",
+            state: controlled_state,
         },
+    ));
+    target_branch.push_str(&blocked_edge(
+        "SHADOW_READY -> controlled seed has no authority lease; natural operator and ordinary-traffic coverage are NOT_EVALUATED",
     ));
     target_branch.push_str(&stage(
         "   └─",
@@ -432,15 +403,19 @@ pub(crate) fn render(
 
     let resource_text = if proof.verified {
         format!(
-            "F8-0 RSS {} / {} B PASS ({} runs) · latency WATCH",
-            proof.f8_rss_bytes, proof.f8_rss_target_bytes, proof.f8_resource_observations
+            "STOP-F8 hot RSS {} / {} B PASS · precursor max {} B over {} runs · hard max {} ns PASS",
+            proof.f8_hot_rss_bytes,
+            proof.f8_rss_target_bytes,
+            proof.f8_rss_bytes,
+            proof.f8_resource_observations,
+            proof.f8_hard_max_ns,
         )
     } else {
         "F8-0 proof unavailable".into()
     };
-    let current_stage = if capture_live { "f8-b" } else { "f8-a" };
-    let (current_chip_class, current_chip) = if capture_live {
-        ("block", "F8-B BLOCK")
+    let current_stage = if proof.verified { "authority" } else { "proof" };
+    let (current_chip_class, current_chip) = if proof.verified {
+        ("proven", "STOP-F8 PASS")
     } else if capture_ready {
         ("wait", "F8-A READY")
     } else {
@@ -450,7 +425,7 @@ pub(crate) fn render(
     format!(
         r#"<section class="architecture unified-map" data-current-stage="{}" data-proof-verified="{}">
 <div class="architecture-head">
-<div class="architecture-title"><h2>NANDO MACHINE · SIGNAL MAP</h2><p>одна карта: где живой сигнал идёт сейчас и где начинается доказанный, но ещё не подключённый F8-контур</p></div>
+<div class="architecture-title"><h2>NANDO MACHINE · SIGNAL MAP</h2><p>живой observer, полный controlled F8 proof и отдельная граница production authority</p></div>
 <div class="architecture-state"><span class="state-chip live">LIVE OBSERVER</span><span class="state-chip {}">{}</span><span class="state-chip locked">AUTHORITY OFF</span></div>
 </div>
 <div class="identity-line"><span><b>MODEL</b> {}</span><span><b>DEPLOYED</b> {} · {}</span><span><b>LIVE LINEAGE</b> partition.v{} · generation {}</span><span><b>PROOF</b> {}</span></div>
@@ -595,7 +570,17 @@ mod tests {
             f8_rss_bytes: 10,
             f8_rss_target_bytes: 16,
             f8_resource_observations: 12,
-            f8_no_match_p99_max_ns: 284_901,
+            f8_no_match_p99_max_ns: 195_340,
+            f8_provider_records: 4,
+            f8_verified_receipts: 3,
+            f8_full_phase_gain: 3,
+            f8_search_gain: 0,
+            f8_external_verdict: "SHADOW_READY".into(),
+            f8_commitments_sha256:
+                "84e0c8fc735d5c7397757fbbedd40bf8c2f49a17df9d33a754d6c8989fdb7c7f".into(),
+            f8_matched_p99_max_ns: 648_010,
+            f8_hard_max_ns: 690_741,
+            f8_hot_rss_bytes: 10_493_952,
         }
     }
 
@@ -650,37 +635,37 @@ mod tests {
     }
 
     #[test]
-    fn map_places_the_live_signal_and_f8_block_on_different_routes() {
+    fn map_separates_live_observer_controlled_f8_and_authority() {
         let html = render(&live(), &proof(true), &manifest(), "gpt-test");
 
         assert!(html.contains("CURRENT LIVE OBSERVER BRANCH"));
         assert!(html.contains("data-stage=\"L1\" data-signal=\"SIGNAL PRESENT\""));
-        assert!(html.contains("data-stage=\"F8-A\" data-signal=\"SIGNAL STOPS HERE\""));
-        assert!(html.contains("data-stage=\"F7\" data-signal=\"CONTROLLED PROOF ONLY\""));
+        assert!(html.contains("CONTROLLED F8 PROOF BRANCH"));
+        assert!(html.contains("data-stage=\"F8-A\" data-signal=\"CONTROLLED DURABLE CAPTURE\""));
+        assert!(html.contains("data-stage=\"F8-E\" data-signal=\"STOP-F8 PASS\""));
+        assert!(html.contains("data-stage=\"CPU\" data-signal=\"AUTHORITY FALSE\""));
         assert!(html.contains("CURRENT BLOCKER"));
+        assert!(html.contains("PRODUCTION AUTHORITY / NATURAL OPERATOR EVIDENCE"));
         assert!(html.contains("model gpt-test"));
         assert!(html.contains("future 11/32"));
-        assert!(!html.contains("production end-to-end confirmed"));
+        assert!(html.contains("natural operator and ordinary-traffic coverage are NOT_EVALUATED"));
     }
 
     #[test]
-    fn durable_capture_moves_the_visible_blocker_to_f8_b() {
+    fn durable_capture_survives_process_counter_reset_in_the_view() {
         let mut live = live();
         live.capture_phase = "ready_hash_only";
         live.capture_records = 3;
-        live.capture_captured = 3;
+        live.capture_captured = 0;
         live.capture_publish_sequence = 2;
         live.shadow_phase = "ready_shadow";
-        live.shadow_submitted = 3;
-        live.shadow_evaluated = 2;
-        live.shadow_verified = 1;
         let html = render(&live, &proof(true), &manifest(), "gpt-test");
 
-        assert!(html.contains("data-current-stage=\"f8-b\""));
-        assert!(html.contains("data-stage=\"F8-A\" data-signal=\"HASH-ONLY SIGNAL LIVE\""));
-        assert!(html.contains("data-stage=\"F8-B\" data-signal=\"NEXT BLOCK\""));
-        assert!(html.contains("F8-B DURABLE GENERATION SHADOW LEDGER"));
-        assert!(html.contains("durable receipts 0"));
+        assert!(html.contains("data-current-stage=\"authority\""));
+        assert!(html.contains("data-stage=\"F8-A\" data-signal=\"CONTROLLED DURABLE CAPTURE\""));
+        assert!(html.contains("durable 4 · captured/censored 0/0"));
+        assert!(html.contains("data-stage=\"F8-B\" data-signal=\"DURABLE LEDGER VERIFIED\""));
+        assert!(!html.contains("F8-B BLOCK"));
     }
 
     #[test]
@@ -689,6 +674,6 @@ mod tests {
 
         assert!(html.contains("data-proof-verified=\"false\""));
         assert!(html.contains("PROOF RECEIPT VALIDATION"));
-        assert!(!html.contains("F5/F6/F7 controlled proof 1234567890ab..."));
+        assert!(!html.contains("F5-F8 controlled proof 1234567890ab..."));
     }
 }

@@ -125,6 +125,7 @@ fn append(
                 traffic_verdict_code: 2,
                 traffic_phase_report_sha256: None,
                 traffic_operator_receipt_sha256: None,
+                phase_control_evidence: None,
                 f6_receipt: None,
                 outcome: GenerationShadowTerminalOutcomeV3::Censored,
                 parity_mismatch: false,

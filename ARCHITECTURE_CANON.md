@@ -1336,8 +1336,28 @@ cannot update semantic centers or authority.
 
 Canonical controlled receipt:
 `plans/effect-law-unification-v1/STOP_F8_A_PROVIDER_CAPTURE_OWNER.json`.
-F8-A is disabled by default and has not been enabled on live traffic. F8-B,
-external admission, local accept and production authority remain blocked.
+F8-A remains disabled by default in the repository. The bounded F8-E run
+enabled it through a runtime-only SHADOW drop-in, with local accept explicitly
+unset.
+
+The complete F8 evidence route is now:
+
+```text
+ProviderCaptureStoreV3 writer
++ ProviderCaptureStoreReaderV3 read-only join
+-> GenerationShadowReceiptLedgerV3
+-> runtime-owned phase-control evidence
+-> admission-owned causal aggregate
+-> immutable external reconstruction
+-> SHADOW_READY with authority=false
+```
+
+The controlled live result contains three verified receipts, zero wrong
+actions, zero parity mismatches and zero false accepts across restart. Every
+phase ablation abstains, while full phase selects all three actions. This is a
+scoped applicability proof, not natural circuit discovery or broad traffic
+coverage. Canonical receipts are `STOP_F8_D_CAUSAL_CONTROLS.md`,
+`STOP_F8_E_LIVE_SHADOW.md` and `STOP_F8.md`.
 
 `RuntimeSurfaceEvidence` supplied by a caller is a laboratory interface, never
 production authority. Live routing and parity verification must start from the
@@ -1366,7 +1386,7 @@ immutable BackwardWave generation loop            PASS
 OperatorPage32 + bounded registry restart          PASS
 whole executable learned operator                 LAB PASS
 streaming scalar trace-to-circuit bridge          CODE PASS
-sealed crystallized external admission             CODE PASS
+sealed crystallized external admission             CONTROLLED LIVE PASS
 raw scalar circuit controls runtime phase margin   CODE PASS
 generic multi-relation raw grounding               BLOCK
 real post-commit scalar shadow evidence            WATCH

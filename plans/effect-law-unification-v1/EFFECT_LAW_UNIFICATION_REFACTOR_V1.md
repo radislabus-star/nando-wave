@@ -30,10 +30,10 @@ F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
 F6 independent verifier        COMPLETE / STOP-F6
 F7 generation and persistence  COMPLETE / STOP-F7-E CONTROLLED SHADOW
-F8 external admission          F8-0 PASS / F8-A CONTROLLED PASS / LIVE NOT RUN
+F8 external admission          COMPLETE / CONTROLLED LIVE SHADOW / AUTHORITY FALSE
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
-service deployment              out of scope
+production deployment           out of scope
 ```
 
 The completed decomposition and F5-B receipt are defined in:
@@ -59,6 +59,9 @@ plans/effect-law-unification-v1/
   F7_GENERATION_PERSISTENCE_V1.md
   F8_EXTERNAL_ADMISSION_LIVE_SHADOW_V1.md
   STOP_F8_A_PROVIDER_CAPTURE_OWNER.md
+  STOP_F8_D_CAUSAL_CONTROLS.md
+  STOP_F8_E_LIVE_SHADOW.md
+  STOP_F8.md
 ```
 
 `STOP-DECOMPOSITION` passed before F5-B began. F4/F5-A semantics and bytes
@@ -69,10 +72,12 @@ freeze without granting authority; F7-D added a separate two-slot atomic
 persistence owner with monotonic recovery. F7-E now joins the checkpoint to a
 separate capture-owner index, loads only after HTTP fallback is available,
 pins each queued request to one immutable generation, and runs F5 plus the
-independent F6 verifier in controlled shadow. F8-A now implements the disabled-
-by-default hash-only capture producer, durable sequence leases and exact F7
-handoff. Live capture remains unrun; the durable generation receipt, external
-admission and authority remain blocked at F8-B and later stages.
+independent F6 verifier in controlled shadow. F8 now closes hash-only provider
+capture, generation-owned durable receipts, proof-owned causal controls,
+restart-monotonic live shadow and immutable external reconstruction. The
+result is `SHADOW_READY` for an explicitly controlled seed. Local accept,
+ACTIVE mutation, natural-operator claims and production authority remain
+blocked.
 
 ## 1. Objective
 

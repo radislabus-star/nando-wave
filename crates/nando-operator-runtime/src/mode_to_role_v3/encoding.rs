@@ -47,6 +47,7 @@ pub(super) fn runtime_candidate_bundle_v3(
         .map(CompiledConstraintV3::plane)
         .collect::<Vec<_>>();
     let mut roles = Vec::with_capacity(mode.constraints.len().saturating_add(1));
+    let mut matched_observed = Vec::with_capacity(mode.constraints.len());
     roles.push(source_role_signature_v3(
         candidate.features.value_type,
         planes,
@@ -58,8 +59,9 @@ pub(super) fn runtime_candidate_bundle_v3(
             .find(|observed| observed.kind == constraint.kind && observed.slot == constraint.slot)
             .ok_or(ModeToRoleErrorV3::InvalidGraph)?;
         roles.push(observed.signature());
+        matched_observed.push(*observed);
     }
-    let relations = constraint_relations_v3(&mode.constraints)?;
+    let relations = constraint_relations_v3(&matched_observed)?;
     SurfaceFragmentBundle::new(
         commitment_v3(
             b"nando.f5c.runtime-lineage.v3",
@@ -98,7 +100,7 @@ fn constraint_circuit_v3(
                             .map_err(|_| ModeToRoleErrorV3::InvalidGraph)?,
                     },
                     state: TernaryRelationState::Supported,
-                    phase_anchor: neutral_phase_v3(),
+                    phase_anchor: constraint_phase_v3(constraint),
                 })
             })
             .collect::<Result<Vec<_>, ModeToRoleErrorV3>>()?,
@@ -119,7 +121,7 @@ fn constraint_relations_v3(
                 target_local_role: u8::try_from(index.saturating_add(1))
                     .map_err(|_| ModeToRoleErrorV3::InvalidGraph)?,
                 state: TernaryRelationState::Supported,
-                phase_anchor: neutral_phase_v3(),
+                phase_anchor: constraint_phase_v3(constraint),
             })
         })
         .collect()
@@ -138,8 +140,18 @@ fn source_role_signature_v3(
     )
 }
 
-const fn neutral_phase_v3() -> PhaseCenterCell {
-    PhaseCenterCell { re: 1.0, im: 0.0 }
+fn constraint_phase_v3(constraint: &CompiledConstraintV3) -> PhaseCenterCell {
+    const CENTERS: [PhaseCenterCell; 4] = [
+        PhaseCenterCell { re: 1.0, im: 0.0 },
+        PhaseCenterCell { re: 0.0, im: 1.0 },
+        PhaseCenterCell { re: -1.0, im: 0.0 },
+        PhaseCenterCell { re: 0.0, im: -1.0 },
+    ];
+    let mixed = u32::from(constraint.plane())
+        .wrapping_mul(0x9e37_79b9)
+        .wrapping_add(u32::from(constraint.slot).wrapping_mul(0x85eb_ca6b))
+        .wrapping_add(constraint.expected.wrapping_mul(0xc2b2_ae35));
+    CENTERS[(mixed as usize) % CENTERS.len()]
 }
 
 fn commitment_v3(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] {

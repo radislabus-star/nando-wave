@@ -10,6 +10,7 @@ pub enum ExternalGenerationAdmissionErrorV3 {
     GenerationDrift,
     CaptureJoinMismatch,
     ControlTrafficMismatch,
+    ControlEvidenceMismatch,
     RuntimeParityMismatch,
     CommitmentDrift,
     UnknownSchema,
