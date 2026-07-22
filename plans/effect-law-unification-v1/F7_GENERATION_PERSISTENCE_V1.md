@@ -1,6 +1,6 @@
 # F7 Generation And Persistence V1
 
-Status: `F7-A/B COMPLETE / F7-C UNLOCKED`
+Status: `F7-A/B/C COMPLETE / F7-D UNLOCKED`
 
 Authority: `false`
 
@@ -173,6 +173,33 @@ CanonicalGenerationId
 
 The envelope does not upgrade a F6 `ABSTAIN` or `REJECT` to PASS. It stores no
 raw payload and grants no authority.
+
+The envelope commits the capture sequence, lineage, event, partition and exact
+support-freeze boundary, but it does not claim that arbitrary caller-supplied
+roots are trusted capture evidence. F7-E must join these roots to the live
+capture owner's immutable commitment before they can enter shadow evaluation.
+That join remains outside the proof module so the verifier cannot become a
+second capture owner.
+
+F7-C result:
+
+```text
+F6 receipt canonical restart                         PASS
+F6 artifact set equals generation artifact set       PASS
+exact F6 verdict preserved                           PASS
+REJECT relabelled as VERIFIED_PASS                   BLOCK
+foreign generation manifest                          BLOCK
+support receipt carrying freeze root                 BLOCK
+future receipt before watermark                      BLOCK
+future receipt without exact support freeze          BLOCK
+receipt -> generation ledger bridge                  PASS
+raw episodic payload persisted                       NO
+production callers                                   0
+execution authority                                  false
+```
+
+Canonical receipt:
+`STOP_F7_C_GENERATION_VERIFIER_RECEIPT.json`.
 
 ## F7-D Persistence
 

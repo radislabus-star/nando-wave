@@ -48,6 +48,15 @@ impl GenerationEvidenceLedgerV3 {
         if self.freeze.is_some() {
             return Err(GenerationEvidenceErrorV3::SupportClosed);
         }
+        if observation.capture_sequence >= observation.support_watermark_next_sequence
+            || observation.support_freeze_sha256.is_some()
+            || self.support.first().is_some_and(|record| {
+                record.observation.support_watermark_next_sequence
+                    != observation.support_watermark_next_sequence
+            })
+        {
+            return Err(GenerationEvidenceErrorV3::InvalidPartitionBinding);
+        }
         self.append(GenerationEvidencePartitionV3::Support, observation)
     }
 
@@ -67,6 +76,12 @@ impl GenerationEvidenceLedgerV3 {
         }
         if !valid_nonzero_sha256(&watermark_root_sha256) {
             return Err(GenerationEvidenceErrorV3::InvalidRoot);
+        }
+        if self.support.iter().any(|record| {
+            record.observation.support_watermark_next_sequence != next_capture_sequence
+                || record.observation.support_freeze_sha256.is_some()
+        }) {
+            return Err(GenerationEvidenceErrorV3::InvalidPartitionBinding);
         }
         let support_partition_sha256 = self.support_partition_sha256()?;
         let support_lineages = u32::try_from(self.support_lineages.len())
@@ -104,6 +119,11 @@ impl GenerationEvidenceLedgerV3 {
         if observation.capture_sequence < freeze.next_capture_sequence {
             return Err(GenerationEvidenceErrorV3::BeforeWatermark);
         }
+        if observation.support_watermark_next_sequence != freeze.next_capture_sequence
+            || observation.support_freeze_sha256.as_deref() != Some(freeze.freeze_sha256())
+        {
+            return Err(GenerationEvidenceErrorV3::InvalidPartitionBinding);
+        }
         if self
             .support_lineages
             .contains(&observation.lineage_root_sha256)
@@ -119,6 +139,9 @@ impl GenerationEvidenceLedgerV3 {
         observation: GenerationEvidenceObservationV3,
     ) -> Result<&GenerationEvidenceRecordV3, GenerationEvidenceErrorV3> {
         observation.validate()?;
+        if observation.generation_id_sha256 != self.generation_id_sha256 {
+            return Err(GenerationEvidenceErrorV3::InvalidGeneration);
+        }
         if observation.capture_sequence <= self.last_capture_sequence {
             return Err(GenerationEvidenceErrorV3::InvalidSequence);
         }

@@ -17,5 +17,8 @@ serde_json = "1"
 sha2 = "0.10"
 zstd = "0.13"
 
+[dev-dependencies]
+nando-operator-runtime = { path = "../nando-operator-runtime" }
+
 [lints]
 workspace = true

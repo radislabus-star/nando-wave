@@ -1,0 +1,54 @@
+{
+  "schema": "nando.stop-f7-c-generation-verifier-receipt.v1",
+  "date": "2026-07-22",
+  "verdict": "COMPLETE_CONTROLLED_PROOF_PASS",
+  "authority": false,
+  "f7_status": "F7_A_B_C_COMPLETE_F7_D_UNLOCKED",
+  "scope": {
+    "proof_owner": "nando-operator-proof",
+    "ledger_owner": "nando-operator-learning",
+    "max_receipt_bytes": 16384,
+    "raw_payload_bytes_persisted": 0,
+    "live_capture_join": false,
+    "production_callers": 0
+  },
+  "binding": {
+    "generation_id": true,
+    "artifact_set_root": true,
+    "f6_canonical_receipt": true,
+    "f6_request_root": true,
+    "f6_exact_verdict": true,
+    "partition": true,
+    "capture_sequence": true,
+    "support_watermark": true,
+    "support_freeze": true,
+    "lineage_root_committed": true,
+    "event_root_committed": true,
+    "live_capture_owner_attested": false
+  },
+  "fail_closed": {
+    "foreign_generation_rejected": true,
+    "artifact_set_mismatch_rejected": true,
+    "support_with_freeze_rejected": true,
+    "future_before_watermark_rejected": true,
+    "future_without_freeze_rejected": true,
+    "reject_relabelled_verified_pass_rejected": true,
+    "tampered_envelope_rejected": true
+  },
+  "tests": {
+    "f7_c_receipt_pass": 4,
+    "receipt_ledger_bridge_pass": 1,
+    "f7_b_ledger_pass": 6,
+    "broad_pass": 240,
+    "broad_ignored_perf_gate": 1,
+    "clippy_deny_warnings": "PASS",
+    "runtime_all_targets_check": "PASS",
+    "changed_file_rustfmt": "PASS"
+  },
+  "production": {
+    "services_restarted": false,
+    "deployment_changed": false,
+    "active_packages_changed": false,
+    "execution_authority": false
+  }
+}

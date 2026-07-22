@@ -11,6 +11,13 @@ pub const OPERATOR_GENERATION_MANIFEST_SCHEMA_V3: &str = "nando.operator-generat
 pub const OPERATOR_GENERATION_MANIFEST_MAX_BYTES_V3: usize = 8 * 1024;
 pub const OPERATOR_GENERATION_MAX_ARTIFACTS_V3: usize = 32;
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GenerationEvidencePartitionV3 {
+    Support,
+    Future,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OperatorGenerationComponentRootsV3 {
     pub artifact_set_sha256: String,

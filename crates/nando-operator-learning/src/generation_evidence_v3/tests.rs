@@ -26,18 +26,24 @@ fn manifest(label: &str) -> nando_operator_kernel::OperatorGenerationManifestV3 
 }
 
 fn observation(
+    manifest: &nando_operator_kernel::OperatorGenerationManifestV3,
     sequence: u64,
+    support_watermark_next_sequence: u64,
+    support_freeze_sha256: Option<&str>,
     lineage: &str,
     outcome: GenerationLearningOutcomeV3,
 ) -> GenerationEvidenceObservationV3 {
-    seal_generation_evidence_observation_v3(
-        sequence,
-        root(&format!("{lineage}:lineage")),
-        root(&format!("{lineage}:{sequence}:event")),
-        root(&format!("{lineage}:{sequence}:request")),
-        root(&format!("{lineage}:{sequence}:receipt")),
+    seal_generation_evidence_observation_v3(GenerationEvidenceObservationInputV3 {
+        generation_id_sha256: manifest.generation_id_sha256().to_owned(),
+        capture_sequence: sequence,
+        support_watermark_next_sequence,
+        support_freeze_sha256: support_freeze_sha256.map(str::to_owned),
+        lineage_root_sha256: root(&format!("{lineage}:lineage")),
+        event_root_sha256: root(&format!("{lineage}:{sequence}:event")),
+        request_root_sha256: root(&format!("{lineage}:{sequence}:request")),
+        verifier_receipt_root_sha256: root(&format!("{lineage}:{sequence}:receipt")),
         outcome,
-    )
+    })
     .expect("observation")
 }
 
@@ -47,32 +53,46 @@ fn frozen_partitions_restart_byte_identically_without_changing_generation() {
     let mut ledger = GenerationEvidenceLedgerV3::new(&manifest);
     ledger
         .append_support(observation(
+            &manifest,
             1,
+            10,
+            None,
             "support-a",
             GenerationLearningOutcomeV3::VerifiedPass,
         ))
         .expect("support a");
     ledger
         .append_support(observation(
+            &manifest,
             2,
+            10,
+            None,
             "support-b",
             GenerationLearningOutcomeV3::ApplicabilityNegative,
         ))
         .expect("support b");
-    ledger
+    let freeze_sha256 = ledger
         .freeze_support(10, root("support watermark"))
-        .expect("freeze");
+        .expect("freeze")
+        .freeze_sha256()
+        .to_owned();
     let root_before_future = ledger.evidence_root_sha256().expect("root before");
     ledger
         .append_future(observation(
+            &manifest,
             10,
+            10,
+            Some(&freeze_sha256),
             "future-a",
             GenerationLearningOutcomeV3::VerifiedPass,
         ))
         .expect("future a");
     ledger
         .append_future(observation(
+            &manifest,
             11,
+            10,
+            Some(&freeze_sha256),
             "future-b",
             GenerationLearningOutcomeV3::Censored(GenerationCensoredReasonV3::Timeout),
         ))
@@ -107,18 +127,26 @@ fn support_cannot_be_relabelled_as_future_or_cross_the_watermark() {
     let mut ledger = GenerationEvidenceLedgerV3::new(&manifest);
     ledger
         .append_support(observation(
+            &manifest,
             1,
+            10,
+            None,
             "same-lineage",
             GenerationLearningOutcomeV3::VerifiedPass,
         ))
         .expect("support");
-    ledger
+    let freeze_sha256 = ledger
         .freeze_support(10, root("watermark"))
-        .expect("freeze");
+        .expect("freeze")
+        .freeze_sha256()
+        .to_owned();
 
     assert_eq!(
         ledger.append_support(observation(
+            &manifest,
             2,
+            10,
+            None,
             "late-support",
             GenerationLearningOutcomeV3::VerifiedPass,
         )),
@@ -126,7 +154,10 @@ fn support_cannot_be_relabelled_as_future_or_cross_the_watermark() {
     );
     assert_eq!(
         ledger.append_future(observation(
+            &manifest,
             9,
+            10,
+            Some(&freeze_sha256),
             "future-before-watermark",
             GenerationLearningOutcomeV3::VerifiedPass,
         )),
@@ -134,7 +165,10 @@ fn support_cannot_be_relabelled_as_future_or_cross_the_watermark() {
     );
     assert_eq!(
         ledger.append_future(observation(
+            &manifest,
             10,
+            10,
+            Some(&freeze_sha256),
             "same-lineage",
             GenerationLearningOutcomeV3::VerifiedPass,
         )),
@@ -171,7 +205,10 @@ fn restart_rejects_tamper_and_foreign_generation() {
     let mut ledger = GenerationEvidenceLedgerV3::new(&generation_manifest);
     ledger
         .append_support(observation(
+            &generation_manifest,
             1,
+            2,
+            None,
             "support",
             GenerationLearningOutcomeV3::VerifiedPass,
         ))
@@ -197,27 +234,52 @@ fn restart_rejects_tamper_and_foreign_generation() {
 fn duplicate_event_request_and_receipt_roots_are_independently_rejected() {
     let generation_manifest = manifest("generation-d");
     let mut ledger = GenerationEvidenceLedgerV3::new(&generation_manifest);
-    let first = observation(1, "first", GenerationLearningOutcomeV3::VerifiedPass);
+    let first = observation(
+        &generation_manifest,
+        1,
+        10,
+        None,
+        "first",
+        GenerationLearningOutcomeV3::VerifiedPass,
+    );
     ledger.append_support(first.clone()).expect("first");
 
-    let mut duplicate_event =
-        observation(2, "event-copy", GenerationLearningOutcomeV3::VerifiedPass);
+    let mut duplicate_event = observation(
+        &generation_manifest,
+        2,
+        10,
+        None,
+        "event-copy",
+        GenerationLearningOutcomeV3::VerifiedPass,
+    );
     duplicate_event.event_root_sha256 = first.event_root_sha256.clone();
     assert_eq!(
         ledger.append_support(duplicate_event),
         Err(GenerationEvidenceErrorV3::DuplicateEvent)
     );
 
-    let mut duplicate_request =
-        observation(2, "request-copy", GenerationLearningOutcomeV3::VerifiedPass);
+    let mut duplicate_request = observation(
+        &generation_manifest,
+        2,
+        10,
+        None,
+        "request-copy",
+        GenerationLearningOutcomeV3::VerifiedPass,
+    );
     duplicate_request.request_root_sha256 = first.request_root_sha256.clone();
     assert_eq!(
         ledger.append_support(duplicate_request),
         Err(GenerationEvidenceErrorV3::DuplicateRequest)
     );
 
-    let mut duplicate_receipt =
-        observation(2, "receipt-copy", GenerationLearningOutcomeV3::VerifiedPass);
+    let mut duplicate_receipt = observation(
+        &generation_manifest,
+        2,
+        10,
+        None,
+        "receipt-copy",
+        GenerationLearningOutcomeV3::VerifiedPass,
+    );
     duplicate_receipt.verifier_receipt_root_sha256 = first.verifier_receipt_root_sha256.clone();
     assert_eq!(
         ledger.append_support(duplicate_receipt),
@@ -231,7 +293,10 @@ fn future_requires_a_nonempty_freeze_and_restart_is_bounded() {
     let mut ledger = GenerationEvidenceLedgerV3::new(&generation_manifest);
     assert_eq!(
         ledger.append_future(observation(
+            &generation_manifest,
             1,
+            2,
+            Some(&root("not-yet-frozen")),
             "early-future",
             GenerationLearningOutcomeV3::VerifiedPass,
         )),

@@ -2,17 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use nando_operator_kernel::{canonical_json_sha256, valid_nonzero_sha256};
 
+pub use nando_operator_kernel::GenerationEvidencePartitionV3;
+
 pub const GENERATION_EVIDENCE_LEDGER_SCHEMA_V3: &str =
     "nando.operator-generation-evidence-ledger.v3.f7";
 pub const GENERATION_EVIDENCE_MAX_ROWS_PER_PARTITION_V3: usize = 2_048;
 pub const GENERATION_EVIDENCE_MAX_BYTES_V3: usize = 2 * 1024 * 1024;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GenerationEvidencePartitionV3 {
-    Support,
-    Future,
-}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,12 +52,28 @@ impl GenerationLearningOutcomeV3 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GenerationEvidenceObservationV3 {
+    pub(super) generation_id_sha256: String,
     pub(super) capture_sequence: u64,
+    pub(super) support_watermark_next_sequence: u64,
+    pub(super) support_freeze_sha256: Option<String>,
     pub(super) lineage_root_sha256: String,
     pub(super) event_root_sha256: String,
     pub(super) request_root_sha256: String,
     pub(super) verifier_receipt_root_sha256: String,
     pub(super) outcome: GenerationLearningOutcomeV3,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenerationEvidenceObservationInputV3 {
+    pub generation_id_sha256: String,
+    pub capture_sequence: u64,
+    pub support_watermark_next_sequence: u64,
+    pub support_freeze_sha256: Option<String>,
+    pub lineage_root_sha256: String,
+    pub event_root_sha256: String,
+    pub request_root_sha256: String,
+    pub verifier_receipt_root_sha256: String,
+    pub outcome: GenerationLearningOutcomeV3,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -102,6 +113,8 @@ pub enum GenerationEvidenceErrorV3 {
     InvalidGeneration,
     InvalidRoot,
     InvalidSequence,
+    InvalidPartitionBinding,
+    VerifierOutcomeMismatch,
     SupportClosed,
     SupportNotFrozen,
     EmptySupport,
@@ -119,20 +132,18 @@ pub enum GenerationEvidenceErrorV3 {
 }
 
 pub fn seal_generation_evidence_observation_v3(
-    capture_sequence: u64,
-    lineage_root_sha256: String,
-    event_root_sha256: String,
-    request_root_sha256: String,
-    verifier_receipt_root_sha256: String,
-    outcome: GenerationLearningOutcomeV3,
+    input: GenerationEvidenceObservationInputV3,
 ) -> Result<GenerationEvidenceObservationV3, GenerationEvidenceErrorV3> {
     let observation = GenerationEvidenceObservationV3 {
-        capture_sequence,
-        lineage_root_sha256,
-        event_root_sha256,
-        request_root_sha256,
-        verifier_receipt_root_sha256,
-        outcome,
+        generation_id_sha256: input.generation_id_sha256,
+        capture_sequence: input.capture_sequence,
+        support_watermark_next_sequence: input.support_watermark_next_sequence,
+        support_freeze_sha256: input.support_freeze_sha256,
+        lineage_root_sha256: input.lineage_root_sha256,
+        event_root_sha256: input.event_root_sha256,
+        request_root_sha256: input.request_root_sha256,
+        verifier_receipt_root_sha256: input.verifier_receipt_root_sha256,
+        outcome: input.outcome,
     };
     observation.validate()?;
     Ok(observation)
@@ -140,7 +151,10 @@ pub fn seal_generation_evidence_observation_v3(
 
 impl GenerationEvidenceObservationV3 {
     pub(super) fn validate(&self) -> Result<(), GenerationEvidenceErrorV3> {
-        if self.capture_sequence == 0 {
+        if !valid_nonzero_sha256(&self.generation_id_sha256) {
+            return Err(GenerationEvidenceErrorV3::InvalidGeneration);
+        }
+        if self.capture_sequence == 0 || self.support_watermark_next_sequence == 0 {
             return Err(GenerationEvidenceErrorV3::InvalidSequence);
         }
         let roots = [
@@ -153,12 +167,35 @@ impl GenerationEvidenceObservationV3 {
             .iter()
             .all(|root| valid_nonzero_sha256(root))
             .then_some(())
-            .ok_or(GenerationEvidenceErrorV3::InvalidRoot)
+            .ok_or(GenerationEvidenceErrorV3::InvalidRoot)?;
+        if self
+            .support_freeze_sha256
+            .as_deref()
+            .is_some_and(|root| !valid_nonzero_sha256(root))
+        {
+            return Err(GenerationEvidenceErrorV3::InvalidRoot);
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn generation_id_sha256(&self) -> &str {
+        &self.generation_id_sha256
     }
 
     #[must_use]
     pub const fn capture_sequence(&self) -> u64 {
         self.capture_sequence
+    }
+
+    #[must_use]
+    pub const fn support_watermark_next_sequence(&self) -> u64 {
+        self.support_watermark_next_sequence
+    }
+
+    #[must_use]
+    pub fn support_freeze_sha256(&self) -> Option<&str> {
+        self.support_freeze_sha256.as_deref()
     }
 
     #[must_use]
