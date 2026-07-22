@@ -1,0 +1,50 @@
+{
+  "schema": "nando.stop-f7-b-generation-evidence-ledger.v1",
+  "date": "2026-07-22",
+  "verdict": "COMPLETE_CONTROLLED_PROOF_PASS",
+  "authority": false,
+  "f7_status": "F7_A_B_COMPLETE_F7_C_UNLOCKED",
+  "scope": {
+    "owner": "nando-operator-learning",
+    "max_rows_per_partition": 2048,
+    "max_canonical_bytes": 2097152,
+    "raw_payload_bytes_persisted": 0,
+    "live_integration": false,
+    "production_callers": 0
+  },
+  "partition_state_machine": {
+    "support_open_then_freeze_then_future_open": true,
+    "support_append_after_freeze_rejected": true,
+    "future_append_before_freeze_rejected": true,
+    "future_before_watermark_rejected": true,
+    "cross_partition_lineage_rejected": true,
+    "duplicate_event_rejected": true,
+    "duplicate_request_rejected": true,
+    "duplicate_receipt_rejected": true
+  },
+  "identity": {
+    "generation_id_stable_during_future_growth": true,
+    "evidence_root_changes_during_future_growth": true,
+    "support_freeze_immutable": true,
+    "canonical_restart_byte_identical": true
+  },
+  "outcomes": {
+    "verified_pass": "positive_reinforcement",
+    "applicability_negative": "applicability_counter_wave",
+    "hard_contradiction": "structural_revision",
+    "censored": "no_semantic_update"
+  },
+  "tests": {
+    "f7_b_causal_pass": 6,
+    "learning_crate_pass": 204,
+    "learning_clippy_deny_warnings": "PASS",
+    "changed_file_rustfmt": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "production": {
+    "services_restarted": false,
+    "deployment_changed": false,
+    "active_packages_changed": false,
+    "execution_authority": false
+  }
+}

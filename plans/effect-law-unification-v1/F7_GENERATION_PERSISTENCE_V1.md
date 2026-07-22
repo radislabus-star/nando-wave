@@ -1,6 +1,6 @@
 # F7 Generation And Persistence V1
 
-Status: `F7-A COMPLETE / F7-B UNLOCKED`
+Status: `F7-A/B COMPLETE / F7-C UNLOCKED`
 
 Authority: `false`
 
@@ -136,6 +136,25 @@ censored and cannot become anti-centers.
 
 Old support may remain support when its provenance still validates. It can
 never be copied into the post-freeze future partition.
+
+F7-B result:
+
+```text
+support-open -> freeze -> future-open state machine PASS
+support append after freeze                         BLOCK
+future append before freeze                         BLOCK
+future row before watermark                         BLOCK
+support lineage reused as future                    BLOCK
+duplicate event/request/receipt roots               BLOCK
+future growth changes evidence root                 PASS
+future growth changes generation ID                 NO
+censored semantic update                            NONE
+canonical restart                                   BYTE IDENTICAL
+execution authority                                 false
+```
+
+Canonical receipt:
+`STOP_F7_B_GENERATION_EVIDENCE_LEDGER.json`.
 
 ## F7-C Receipt Binding
 
