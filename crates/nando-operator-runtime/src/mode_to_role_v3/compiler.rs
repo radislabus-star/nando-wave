@@ -20,8 +20,10 @@ struct CompiledModeCommitmentV3<'a> {
     payload_root_sha256: &'a str,
     effect_law_id_sha256: &'a str,
     source_value_type: nando_operator_kernel::BindingValueTypeV1,
+    source_roles: &'a [(u16, nando_operator_kernel::BindingValueTypeV1)],
     capability_kind: nando_operator_kernel::ProtocolCapabilityKindV3,
     capability_argument_types: &'a [nando_operator_kernel::BindingValueTypeV1],
+    capability_arguments: &'a [nando_operator_kernel::ProtocolCapabilityArgumentV3],
     role_graph_sha256: String,
     relation_program_fingerprint64: u64,
     constraints: &'a [super::constraint::CompiledConstraintV3],
@@ -61,6 +63,14 @@ pub fn compile_structural_dispatch_index_v3(
                 .first()
                 .ok_or(ModeToRoleErrorV3::InvalidSelector)?
                 .value_type;
+            let source_roles = mode
+                .program
+                .source_role_schema
+                .roles
+                .iter()
+                .map(|role| (role.role_id, role.value_type))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
             let (role_graph, relation_program, constraints) = compile_mode_graph_v3(mode)?;
             modes.push(CompiledProtocolModeV3 {
                 artifact_root_sha256: artifact.artifact_sha256().to_owned(),
@@ -68,7 +78,9 @@ pub fn compile_structural_dispatch_index_v3(
                 executable_mode_root_sha256: executable.executable_mode_root_sha256().to_owned(),
                 payload_root_sha256: executable.payload().payload_root_sha256().to_owned(),
                 effect_law_id_sha256: mode.effect_law_id_sha256.clone(),
+                action_class_root_sha256: mode.action_class_root_sha256.clone(),
                 source_value_type,
+                source_roles,
                 capability_kind: executable.payload().capability_kind(),
                 capability_argument_types: executable
                     .payload()
@@ -77,6 +89,7 @@ pub fn compile_structural_dispatch_index_v3(
                     .map(|argument| argument.value_type())
                     .collect::<Vec<_>>()
                     .into_boxed_slice(),
+                capability_arguments: executable.payload().arguments().to_vec().into_boxed_slice(),
                 role_graph,
                 relation_program,
                 constraints,
@@ -119,8 +132,10 @@ fn index_digest(modes: &[CompiledProtocolModeV3]) -> Result<String, ModeToRoleEr
                 payload_root_sha256: &mode.payload_root_sha256,
                 effect_law_id_sha256: &mode.effect_law_id_sha256,
                 source_value_type: mode.source_value_type,
+                source_roles: &mode.source_roles,
                 capability_kind: mode.capability_kind,
                 capability_argument_types: &mode.capability_argument_types,
+                capability_arguments: &mode.capability_arguments,
                 role_graph_sha256: role_graph_digest(mode)?,
                 relation_program_fingerprint64: mode.relation_program.fingerprint64(),
                 constraints: &mode.constraints,

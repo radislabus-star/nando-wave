@@ -16,11 +16,18 @@ pub fn bind_structural_modes_v3(
     dispatch: &StructuralDispatchReportV3,
 ) -> StructuralBindingOutcomeV3 {
     if dispatch.index_sha256 != index.index_sha256 {
-        return blocked(index, 0, 0, StructuralBindingVerdictV3::RejectIndexMismatch);
+        return blocked(
+            index,
+            request,
+            0,
+            0,
+            StructuralBindingVerdictV3::RejectIndexMismatch,
+        );
     }
     if dispatch.verdict == StructuralDispatchVerdictV3::AbstainDispatchExhausted {
         return blocked(
             index,
+            request,
             0,
             0,
             StructuralBindingVerdictV3::AbstainDispatchExhausted,
@@ -34,6 +41,7 @@ pub fn bind_structural_modes_v3(
         let Some(mode) = index.modes.get(mode_index) else {
             return blocked(
                 index,
+                request,
                 total_source_candidates,
                 total_mappings,
                 StructuralBindingVerdictV3::RejectIndexMismatch,
@@ -51,6 +59,7 @@ pub fn bind_structural_modes_v3(
             if total_source_candidates >= F5C_MAX_SOURCE_CANDIDATE_EVALUATIONS_V3 {
                 return blocked(
                     index,
+                    request,
                     total_source_candidates,
                     total_mappings,
                     StructuralBindingVerdictV3::AbstainBudgetExhausted,
@@ -62,6 +71,7 @@ pub fn bind_structural_modes_v3(
             else {
                 return blocked(
                     index,
+                    request,
                     total_source_candidates,
                     total_mappings,
                     StructuralBindingVerdictV3::AbstainBindingExhausted,
@@ -72,6 +82,7 @@ pub fn bind_structural_modes_v3(
             if remaining_mode == 0 {
                 return blocked(
                     index,
+                    request,
                     total_source_candidates,
                     total_mappings,
                     StructuralBindingVerdictV3::AbstainBindingExhausted,
@@ -80,6 +91,7 @@ pub fn bind_structural_modes_v3(
             if remaining_global == 0 {
                 return blocked(
                     index,
+                    request,
                     total_source_candidates,
                     total_mappings,
                     StructuralBindingVerdictV3::AbstainBudgetExhausted,
@@ -95,6 +107,7 @@ pub fn bind_structural_modes_v3(
             if !matches!(report.completion(), SearchCompletion::Complete { .. }) {
                 return blocked(
                     index,
+                    request,
                     total_source_candidates,
                     total_mappings,
                     StructuralBindingVerdictV3::AbstainBindingExhausted,
@@ -139,6 +152,7 @@ pub fn bind_structural_modes_v3(
 
     StructuralBindingOutcomeV3 {
         index_sha256: index.index_sha256.clone(),
+        request_view_sha256: request.view().request_view_sha256.clone(),
         mode_reports: mode_reports.into_boxed_slice(),
         source_candidate_evaluations: total_source_candidates,
         mapping_evaluations: total_mappings,
@@ -148,12 +162,14 @@ pub fn bind_structural_modes_v3(
 
 fn blocked(
     index: &StructuralDispatchIndexV3,
+    request: &CanonicalRuntimeRequestV3<'_>,
     source_candidate_evaluations: usize,
     mapping_evaluations: usize,
     verdict: StructuralBindingVerdictV3,
 ) -> StructuralBindingOutcomeV3 {
     StructuralBindingOutcomeV3 {
         index_sha256: index.index_sha256.clone(),
+        request_view_sha256: request.view().request_view_sha256.clone(),
         mode_reports: Box::new([]),
         source_candidate_evaluations,
         mapping_evaluations,

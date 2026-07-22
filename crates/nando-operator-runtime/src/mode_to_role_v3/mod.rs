@@ -12,7 +12,8 @@ pub use compiler::compile_structural_dispatch_index_v3;
 
 use nando_core::wave::{OperatorCircuit, RoleGraph};
 use nando_operator_kernel::{
-    BindingValueTypeV1, ProtocolCapabilityKindV3, RuntimeCapabilityKindV3,
+    BindingValueTypeV1, ProtocolCapabilityArgumentV3, ProtocolCapabilityKindV3,
+    RuntimeCapabilityKindV3,
 };
 
 use self::constraint::CompiledConstraintV3;
@@ -58,9 +59,12 @@ pub struct CompiledProtocolModeV3 {
     executable_mode_root_sha256: String,
     payload_root_sha256: String,
     effect_law_id_sha256: String,
+    action_class_root_sha256: String,
     source_value_type: BindingValueTypeV1,
+    source_roles: Box<[(u16, BindingValueTypeV1)]>,
     capability_kind: ProtocolCapabilityKindV3,
     capability_argument_types: Box<[BindingValueTypeV1]>,
+    capability_arguments: Box<[ProtocolCapabilityArgumentV3]>,
     role_graph: RoleGraph,
     relation_program: OperatorCircuit,
     constraints: Box<[CompiledConstraintV3]>,
@@ -100,6 +104,7 @@ pub struct ModeStructuralBindingReportV3 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StructuralBindingOutcomeV3 {
     index_sha256: String,
+    request_view_sha256: String,
     mode_reports: Box<[ModeStructuralBindingReportV3]>,
     source_candidate_evaluations: usize,
     mapping_evaluations: usize,
@@ -109,6 +114,7 @@ pub struct StructuralBindingOutcomeV3 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompleteRuntimeRoleBindingReportV3 {
     index_sha256: String,
+    request_view_sha256: String,
     mode_reports: Box<[ModeStructuralBindingReportV3]>,
     source_candidate_evaluations: usize,
     mapping_evaluations: usize,
@@ -141,8 +147,20 @@ impl CompiledProtocolModeV3 {
     }
 
     #[must_use]
+    pub fn action_class_root_sha256(&self) -> &str {
+        &self.action_class_root_sha256
+    }
+
+    #[must_use]
     pub const fn source_value_type(&self) -> BindingValueTypeV1 {
         self.source_value_type
+    }
+
+    #[must_use]
+    pub fn source_role_type(&self, source_role_id: u16) -> Option<BindingValueTypeV1> {
+        self.source_roles
+            .iter()
+            .find_map(|(role_id, value_type)| (*role_id == source_role_id).then_some(*value_type))
     }
 
     #[must_use]
@@ -153,6 +171,11 @@ impl CompiledProtocolModeV3 {
     #[must_use]
     pub fn capability_argument_types(&self) -> &[BindingValueTypeV1] {
         &self.capability_argument_types
+    }
+
+    #[must_use]
+    pub fn capability_arguments(&self) -> &[ProtocolCapabilityArgumentV3] {
+        &self.capability_arguments
     }
 
     #[must_use]
@@ -187,4 +210,4 @@ impl StructuralDispatchIndexV3 {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

@@ -1,4 +1,5 @@
 pub mod binding;
+pub mod bound_protocol_action;
 pub mod canonical;
 pub mod contracts;
 pub mod effect_law;
@@ -10,6 +11,7 @@ pub mod structural_context;
 pub mod vm;
 
 pub use binding::*;
+pub use bound_protocol_action::*;
 pub use canonical::*;
 pub use contracts::*;
 pub use effect_law::*;

@@ -99,6 +99,11 @@ impl StructuralBindingOutcomeV3 {
     }
 
     #[must_use]
+    pub fn request_view_sha256(&self) -> &str {
+        &self.request_view_sha256
+    }
+
+    #[must_use]
     pub fn mode_reports(&self) -> &[ModeStructuralBindingReportV3] {
         &self.mode_reports
     }
@@ -130,6 +135,7 @@ impl StructuralBindingOutcomeV3 {
         }
         Some(CompleteRuntimeRoleBindingReportV3 {
             index_sha256: self.index_sha256,
+            request_view_sha256: self.request_view_sha256,
             mode_reports: self.mode_reports,
             source_candidate_evaluations: self.source_candidate_evaluations,
             mapping_evaluations: self.mapping_evaluations,
@@ -141,6 +147,11 @@ impl CompleteRuntimeRoleBindingReportV3 {
     #[must_use]
     pub fn index_sha256(&self) -> &str {
         &self.index_sha256
+    }
+
+    #[must_use]
+    pub fn request_view_sha256(&self) -> &str {
+        &self.request_view_sha256
     }
 
     #[must_use]

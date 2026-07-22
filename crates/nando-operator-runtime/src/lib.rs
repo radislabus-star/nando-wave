@@ -1,4 +1,5 @@
 mod artifact;
+mod capability_grounding_v3;
 mod crystallized_binding;
 mod mode_to_role_v3;
 mod operator_vm;
@@ -8,6 +9,7 @@ mod runtime_context_v3;
 mod selector_candidates;
 
 pub use artifact::*;
+pub use capability_grounding_v3::*;
 pub use crystallized_binding::*;
 pub use mode_to_role_v3::*;
 pub use nando_operator_kernel::{canonical_json_sha256, sha256_bytes, stable_atom_id};

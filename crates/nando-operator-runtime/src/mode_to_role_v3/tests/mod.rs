@@ -1,4 +1,4 @@
-mod fixtures;
+pub(crate) mod fixtures;
 
 use nando_operator_kernel::{
     BindingCallLineageV1, BindingPredicateV1, BindingRequestRelationV1, BindingValueTypeV1,

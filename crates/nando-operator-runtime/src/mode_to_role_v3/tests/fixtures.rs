@@ -20,11 +20,11 @@ use crate::{
 };
 use nando_operator_kernel::RuntimeProjectionV3;
 
-pub(super) fn root(label: &str) -> String {
+pub(crate) fn root(label: &str) -> String {
     canonical_json_sha256(&label).expect("fixture root")
 }
 
-pub(super) fn request_payload(output: Value) -> Value {
+pub(crate) fn request_payload(output: Value) -> Value {
     json!({
         "model": "ignored-model",
         "tools": [{
@@ -44,7 +44,7 @@ pub(super) fn request_payload(output: Value) -> Value {
     })
 }
 
-pub(super) fn runtime_context<'a>(
+pub(crate) fn runtime_context<'a>(
     request_text: &str,
     payload: &'a Value,
 ) -> CanonicalRuntimeRequestV3<'a> {
@@ -65,7 +65,7 @@ pub(super) fn runtime_context<'a>(
     .expect("complete runtime context")
 }
 
-pub(super) fn artifact(
+pub(crate) fn artifact(
     seed: u16,
     mut predicates: Vec<BindingPredicateV1>,
 ) -> ExecutableProtocolModeArtifactV3 {
@@ -257,7 +257,7 @@ fn candidate(
     }
 }
 
-pub(super) fn mentioned_string_selector() -> Vec<BindingPredicateV1> {
+pub(crate) fn mentioned_string_selector() -> Vec<BindingPredicateV1> {
     vec![
         BindingPredicateV1::ValueType {
             value: BindingValueTypeV1::String,

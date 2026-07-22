@@ -575,6 +575,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nando-operator-learning"
+version = "0.1.0"
+dependencies = [
+ "nando-core",
+ "nando-operator-kernel",
+ "nando-operator-proof",
+ "serde",
+ "serde_bytes",
+ "serde_cbor",
+ "serde_json",
+ "sha2",
+ "zstd",
+]
+
+[[package]]
 name = "nando-operator-proof"
 version = "0.1.0"
 dependencies = [
@@ -604,6 +619,7 @@ dependencies = [
  "nando-core",
  "nando-operator-admission",
  "nando-operator-kernel",
+ "nando-operator-learning",
  "nando-operator-proof",
  "nando-operator-runtime",
  "serde",
@@ -643,6 +659,11 @@ dependencies = [
  "memchr",
  "mimalloc",
  "nando-expression-runtime",
+ "nando-operator-admission",
+ "nando-operator-kernel",
+ "nando-operator-learning",
+ "nando-operator-proof",
+ "nando-operator-runtime",
  "nando-response-actor",
  "nando-transition-inducer",
  "notify",

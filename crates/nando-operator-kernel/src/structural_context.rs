@@ -119,8 +119,17 @@ pub struct StructuralCandidateFeaturesV3 {
 pub struct StructuralCandidateObservationV3 {
     pub source_role_id: u16,
     pub value_sha256: String,
+    /// Ephemeral normalized values from the bounded walk. Canonical views and
+    /// durable receipts deliberately exclude these bytes.
+    pub normalized_values: Box<[String]>,
     pub features: StructuralCandidateFeaturesV3,
     pub occurrence_count: u16,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanonicalStructuralSourceBindingV3 {
+    pub source_role_id: u16,
+    pub canonical_role_id: u16,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -379,6 +388,20 @@ pub fn canonicalize_runtime_structural_view_v3(
     context: StructuralContextV3,
     extraction: &StructuralExtractionV3,
 ) -> Result<CanonicalRuntimeStructuralViewV3, StructuralExtractionErrorV3> {
+    canonicalize_runtime_structural_projection_v3(context, extraction)
+        .map(|projection| projection.0)
+}
+
+pub fn canonicalize_runtime_structural_projection_v3(
+    context: StructuralContextV3,
+    extraction: &StructuralExtractionV3,
+) -> Result<
+    (
+        CanonicalRuntimeStructuralViewV3,
+        Box<[CanonicalStructuralSourceBindingV3]>,
+    ),
+    StructuralExtractionErrorV3,
+> {
     context.validate()?;
     if extraction.candidate_budget_exhausted || extraction.relation_budget_exhausted {
         return Err(StructuralExtractionErrorV3::BudgetExhausted);
@@ -393,6 +416,7 @@ pub fn canonicalize_runtime_structural_view_v3(
     });
     let mut source_to_canonical = BTreeMap::new();
     let mut roles = Vec::with_capacity(ordered.len());
+    let mut source_bindings = Vec::with_capacity(ordered.len());
     for (index, source) in ordered.into_iter().enumerate() {
         let role_id =
             u16::try_from(index).map_err(|_| StructuralExtractionErrorV3::BudgetExhausted)?;
@@ -402,6 +426,10 @@ pub fn canonicalize_runtime_structural_view_v3(
         {
             return Err(StructuralExtractionErrorV3::InvalidSource);
         }
+        source_bindings.push(CanonicalStructuralSourceBindingV3 {
+            source_role_id: source.source_role_id,
+            canonical_role_id: role_id,
+        });
         roles.push(CanonicalStructuralRoleV3 {
             role_id,
             features: source.features.clone(),
@@ -436,7 +464,8 @@ pub fn canonicalize_runtime_structural_view_v3(
         relations,
     };
     view.structural_view_sha256 = structural_view_digest(&view)?;
-    Ok(view)
+    source_bindings.sort_by_key(|binding| binding.canonical_role_id);
+    Ok((view, source_bindings.into_boxed_slice()))
 }
 
 fn canonicalize_relation_components(
@@ -948,14 +977,17 @@ fn materialize_candidates(
     grouped
         .into_iter()
         .enumerate()
-        .map(|(index, ((value_sha256, features), (occurrences, _)))| {
-            StructuralCandidateObservationV3 {
-                source_role_id: u16::try_from(index).unwrap_or(u16::MAX),
-                value_sha256,
-                features,
-                occurrence_count: u16::try_from(occurrences).unwrap_or(u16::MAX),
-            }
-        })
+        .map(
+            |(index, ((value_sha256, features), (occurrences, normalized_values)))| {
+                StructuralCandidateObservationV3 {
+                    source_role_id: u16::try_from(index).unwrap_or(u16::MAX),
+                    value_sha256,
+                    normalized_values: normalized_values.into_iter().collect(),
+                    features,
+                    occurrence_count: u16::try_from(occurrences).unwrap_or(u16::MAX),
+                }
+            },
+        )
         .collect()
 }
 

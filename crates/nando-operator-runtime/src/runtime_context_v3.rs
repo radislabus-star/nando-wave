@@ -1,12 +1,13 @@
 use std::collections::BTreeSet;
 
 use nando_operator_kernel::{
-    BindingCompletionStateV1, BindingValueTypeV1, CanonicalRuntimeRequestViewV3,
-    ExtractionReceiptV3, RuntimeCapabilityDescriptorV3, RuntimeCapabilityKindV3,
-    RuntimeContextExtractionVerdictV3, RuntimeProjectionV3, StructuralContextV3,
+    BindingCompletionStateV1, BindingValueTypeV1, BoundProtocolValueV3,
+    CanonicalRuntimeRequestViewV3, CanonicalStructuralSourceBindingV3, ExtractionReceiptV3,
+    RuntimeCapabilityDescriptorV3, RuntimeCapabilityKindV3, RuntimeContextExtractionVerdictV3,
+    RuntimeProjectionV3, StructuralCandidateObservationV3, StructuralContextV3,
     StructuralExtractionBudgetV3, StructuralExtractionErrorV3, StructuralExtractionScopeV3,
     build_canonical_runtime_request_view_v3, build_extraction_receipt_v3, canonical_json_sha256,
-    canonicalize_runtime_structural_view_v3, extract_structural_surface_v3, sha256_bytes,
+    canonicalize_runtime_structural_projection_v3, extract_structural_surface_v3, sha256_bytes,
     validate_extraction_receipt_v3,
 };
 use serde_json::Value;
@@ -70,10 +71,44 @@ impl RuntimeContextBudgetV3 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RuntimeCapabilityArgumentBindingV3<'a> {
+    pub argument_ordinal: u16,
+    pub physical_name: &'a str,
+    pub value_type: BindingValueTypeV1,
+    pub required: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeCapabilityBindingV3<'a> {
     pub capability_id: u16,
     pub kind: RuntimeCapabilityKindV3,
     pub physical_symbol: &'a str,
+    pub arguments: Box<[RuntimeCapabilityArgumentBindingV3<'a>]>,
+    pub argument_topology_ambiguous: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeRoleValueBindingV3 {
+    role_id: u16,
+    value_sha256: String,
+    values: Box<[BoundProtocolValueV3]>,
+}
+
+impl RuntimeRoleValueBindingV3 {
+    #[must_use]
+    pub const fn role_id(&self) -> u16 {
+        self.role_id
+    }
+
+    #[must_use]
+    pub fn value_sha256(&self) -> &str {
+        &self.value_sha256
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[BoundProtocolValueV3] {
+        &self.values
+    }
 }
 
 pub struct CanonicalRuntimeRequestV3<'a> {
@@ -81,6 +116,7 @@ pub struct CanonicalRuntimeRequestV3<'a> {
     view: CanonicalRuntimeRequestViewV3,
     provider_payload: &'a Value,
     capability_bindings: Vec<RuntimeCapabilityBindingV3<'a>>,
+    role_values: Box<[RuntimeRoleValueBindingV3]>,
 }
 
 impl<'a> CanonicalRuntimeRequestV3<'a> {
@@ -102,6 +138,19 @@ impl<'a> CanonicalRuntimeRequestV3<'a> {
     #[must_use]
     pub fn capability_bindings(&self) -> &[RuntimeCapabilityBindingV3<'a>] {
         &self.capability_bindings
+    }
+
+    #[must_use]
+    pub fn role_values(&self) -> &[RuntimeRoleValueBindingV3] {
+        &self.role_values
+    }
+
+    #[must_use]
+    pub fn role_value(&self, role_id: u16) -> Option<&RuntimeRoleValueBindingV3> {
+        self.role_values
+            .binary_search_by_key(&role_id, RuntimeRoleValueBindingV3::role_id)
+            .ok()
+            .and_then(|index| self.role_values.get(index))
     }
 }
 
@@ -141,7 +190,16 @@ struct CapabilitySource<'a> {
     physical_symbol: &'a str,
     symbol_sha256: String,
     argument_types: Vec<BindingValueTypeV1>,
+    arguments: Vec<CapabilityArgumentSource<'a>>,
     required_arity: u16,
+    argument_topology_ambiguous: bool,
+}
+
+#[derive(Clone, Debug)]
+struct CapabilityArgumentSource<'a> {
+    physical_name: &'a str,
+    value_type: BindingValueTypeV1,
+    required: bool,
 }
 
 struct RuntimeInputSynopsis<'a> {
@@ -217,8 +275,10 @@ pub fn extract_canonical_runtime_request_v3<'a>(
         });
     }
 
-    let structural = canonicalize_runtime_structural_view_v3(synopsis.context, &extraction)
-        .map_err(|_| RuntimeContextErrorV3::Structural)?;
+    let (structural, source_bindings) =
+        canonicalize_runtime_structural_projection_v3(synopsis.context, &extraction)
+            .map_err(|_| RuntimeContextErrorV3::Structural)?;
+    let role_values = runtime_role_values(&extraction.candidates, &source_bindings)?;
     let (capabilities, capability_bindings) = canonical_capabilities(synopsis.capability_sources)
         .map_err(|_| RuntimeContextErrorV3::Structural)?;
     let view = build_canonical_runtime_request_view_v3(
@@ -247,6 +307,7 @@ pub fn extract_canonical_runtime_request_v3<'a>(
             view,
             provider_payload,
             capability_bindings,
+            role_values,
         }),
         receipt,
     })
@@ -315,6 +376,10 @@ fn runtime_input_synopsis<'a>(
             .cmp(&right.kind)
             .then_with(|| left.argument_types.cmp(&right.argument_types))
             .then_with(|| left.required_arity.cmp(&right.required_arity))
+            .then_with(|| {
+                left.argument_topology_ambiguous
+                    .cmp(&right.argument_topology_ambiguous)
+            })
             .then_with(|| left.symbol_sha256.cmp(&right.symbol_sha256))
     });
     let context =
@@ -389,15 +454,41 @@ fn capability_source(
     if argument_budget_exhausted {
         return (None, true);
     }
-    let mut argument_types = properties
+    let required_names = required
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut arguments = properties
         .map(|properties| {
             properties
-                .values()
-                .filter_map(schema_value_type)
-                .collect::<Vec<_>>()
+                .iter()
+                .map(|(name, schema)| {
+                    schema_value_type(schema).map(|value_type| CapabilityArgumentSource {
+                        physical_name: name.as_str(),
+                        value_type,
+                        required: required_names.contains(name.as_str()),
+                    })
+                })
+                .collect::<Option<Vec<_>>>()
         })
-        .unwrap_or_default();
-    argument_types.sort();
+        .unwrap_or_else(|| Some(Vec::new()));
+    let Some(mut arguments) = arguments.take() else {
+        return (None, false);
+    };
+    arguments.sort_by(|left, right| {
+        left.value_type
+            .cmp(&right.value_type)
+            .then_with(|| right.required.cmp(&left.required))
+            .then_with(|| left.physical_name.cmp(right.physical_name))
+    });
+    let argument_topology_ambiguous = arguments.windows(2).any(|pair| {
+        pair[0].value_type == pair[1].value_type && pair[0].required == pair[1].required
+    });
+    let argument_types = arguments
+        .iter()
+        .map(|argument| argument.value_type)
+        .collect();
     let required_arity = required.map_or(0, Vec::len);
     (
         Some(CapabilitySource {
@@ -405,7 +496,9 @@ fn capability_source(
             physical_symbol,
             symbol_sha256: sha256_bytes(physical_symbol.as_bytes()),
             argument_types,
+            arguments,
             required_arity: u16::try_from(required_arity).unwrap_or(u16::MAX),
+            argument_topology_ambiguous,
         }),
         false,
     )
@@ -445,9 +538,64 @@ fn canonical_capabilities<'a>(
             capability_id,
             kind: source.kind,
             physical_symbol: source.physical_symbol,
+            arguments: source
+                .arguments
+                .into_iter()
+                .enumerate()
+                .map(|(index, argument)| RuntimeCapabilityArgumentBindingV3 {
+                    argument_ordinal: u16::try_from(index).unwrap_or(u16::MAX),
+                    physical_name: argument.physical_name,
+                    value_type: argument.value_type,
+                    required: argument.required,
+                })
+                .collect(),
+            argument_topology_ambiguous: source.argument_topology_ambiguous,
         });
     }
     Ok((descriptors, bindings))
+}
+
+fn runtime_role_values(
+    candidates: &[StructuralCandidateObservationV3],
+    source_bindings: &[CanonicalStructuralSourceBindingV3],
+) -> Result<Box<[RuntimeRoleValueBindingV3]>, RuntimeContextErrorV3> {
+    let mut values = Vec::with_capacity(source_bindings.len());
+    for binding in source_bindings {
+        let candidate = candidates
+            .iter()
+            .find(|candidate| candidate.source_role_id == binding.source_role_id)
+            .ok_or(RuntimeContextErrorV3::Structural)?;
+        let mut typed = candidate
+            .normalized_values
+            .iter()
+            .map(|value| typed_runtime_value(value, candidate.features.value_type))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(RuntimeContextErrorV3::Structural)?;
+        typed.sort();
+        typed.dedup();
+        values.push(RuntimeRoleValueBindingV3 {
+            role_id: binding.canonical_role_id,
+            value_sha256: candidate.value_sha256.clone(),
+            values: typed.into_boxed_slice(),
+        });
+    }
+    values.sort_by_key(RuntimeRoleValueBindingV3::role_id);
+    Ok(values.into_boxed_slice())
+}
+
+fn typed_runtime_value(
+    value: &str,
+    value_type: BindingValueTypeV1,
+) -> Option<BoundProtocolValueV3> {
+    match value_type {
+        BindingValueTypeV1::String => Some(BoundProtocolValueV3::String(value.to_owned())),
+        BindingValueTypeV1::Identifier => Some(BoundProtocolValueV3::Identifier(value.to_owned())),
+        BindingValueTypeV1::Integer => value.parse::<u64>().ok().map(BoundProtocolValueV3::Integer),
+        BindingValueTypeV1::Boolean => value
+            .parse::<bool>()
+            .ok()
+            .map(BoundProtocolValueV3::Boolean),
+    }
 }
 
 fn runtime_structural_context(

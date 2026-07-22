@@ -496,6 +496,7 @@ pub fn canonical_runtime_structural_view_v3_from_frozen_graph(
                 source_role_id: u16::try_from(index)
                     .map_err(|_| BindingEvidenceErrorV1::InvalidCorpus)?,
                 value_sha256: node.action_equivalence_sha256.clone(),
+                normalized_values: Box::new([]),
                 features: nando_operator_kernel::StructuralCandidateFeaturesV3 {
                     source_event_class: node.features.source_event_class,
                     call_lineage: node.features.call_lineage,
