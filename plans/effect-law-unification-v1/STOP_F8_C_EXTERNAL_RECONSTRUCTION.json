@@ -1,0 +1,24 @@
+{
+  "schema": "nando.stop-f8-c-external-reconstruction.v1",
+  "date": "2026-07-22",
+  "verdict": "PASS",
+  "tests": {
+    "external_reconstruction_pass": 5,
+    "admission_full_pass": 7,
+    "learning_full_pass": 217,
+    "persistence_full_pass": 15,
+    "clippy_deny_warnings": "PASS"
+  },
+  "proof": {
+    "generation_capture_join": "EXACT",
+    "provider_capture_join": "EXACT",
+    "traffic_receipt_set_join": "EXACT",
+    "f5_f6_reconstruction": "EXACT",
+    "commitment_tamper": "BLOCK",
+    "unknown_schema": "BLOCK",
+    "missing_input": "ABSTAIN",
+    "production_callers": 0,
+    "execution_authority": false
+  },
+  "next": "F8_D_PROOF_OWNED_MATCHED_TRAFFIC_CAUSAL_CONTROLS"
+}

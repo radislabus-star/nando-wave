@@ -2,13 +2,37 @@ use std::sync::Arc;
 
 use nando_operator_kernel::canonical_json_sha256;
 use nando_operator_proof::independent_verifier_v3::{
-    IndependentVerifierBudgetV3, IndependentVerifierInputV3, IndependentVerifierVerdictV3,
-    verify_operator_result_v3,
+    IndependentVerifierBudgetV3, IndependentVerifierInputV3, IndependentVerifierReceiptV3,
+    IndependentVerifierVerdictV3, verify_operator_result_v3,
 };
 use nando_operator_runtime::{
-    RuntimeContextBudgetV3, TrafficShadowInputV3, TrafficShadowSourceV3, TrafficShadowVerdictV3,
-    execute_traffic_shadow_with_handoff_v3,
+    RuntimeContextBudgetV3, TrafficShadowInputV3, TrafficShadowReceiptV3, TrafficShadowSourceV3,
+    TrafficShadowVerdictV3, execute_traffic_shadow_with_handoff_v3,
 };
+
+pub(super) struct GenerationShadowEvaluationV3 {
+    receipt: GenerationShadowEvaluationReceiptV3,
+    traffic_receipt: Option<TrafficShadowReceiptV3>,
+    verifier_receipt: Option<IndependentVerifierReceiptV3>,
+}
+
+impl GenerationShadowEvaluationV3 {
+    pub(super) const fn receipt(&self) -> &GenerationShadowEvaluationReceiptV3 {
+        &self.receipt
+    }
+
+    pub(super) const fn traffic_receipt(&self) -> Option<&TrafficShadowReceiptV3> {
+        self.traffic_receipt.as_ref()
+    }
+
+    pub(super) const fn verifier_receipt(&self) -> Option<&IndependentVerifierReceiptV3> {
+        self.verifier_receipt.as_ref()
+    }
+
+    pub(super) fn into_receipt(self) -> GenerationShadowEvaluationReceiptV3 {
+        self.receipt
+    }
+}
 
 use super::{
     GenerationShadowEvaluationReceiptV3, GenerationShadowEvaluationVerdictV3,
@@ -20,9 +44,16 @@ pub fn evaluate_generation_shadow_request_v3(
     generation: &GenerationShadowSnapshotV3,
     request: &GenerationShadowRequestV3,
 ) -> GenerationShadowEvaluationReceiptV3 {
+    evaluate_generation_shadow_request_with_evidence_v3(generation, request).into_receipt()
+}
+
+pub(super) fn evaluate_generation_shadow_request_with_evidence_v3(
+    generation: &GenerationShadowSnapshotV3,
+    request: &GenerationShadowRequestV3,
+) -> GenerationShadowEvaluationV3 {
     let payload = match serde_json::from_slice(request.provider_payload_bytes()) {
         Ok(payload) => payload,
-        Err(_) => return invalid_request_receipt(generation, request),
+        Err(_) => return invalid_request_evaluation(generation, request),
     };
     let input = match TrafficShadowInputV3::replayable(
         request.window_row_sha256(),
@@ -34,7 +65,7 @@ pub fn evaluate_generation_shadow_request_v3(
         &payload,
     ) {
         Ok(input) => input,
-        Err(_) => return invalid_request_receipt(generation, request),
+        Err(_) => return invalid_request_evaluation(generation, request),
     };
     let execution = execute_traffic_shadow_with_handoff_v3(
         Arc::clone(generation.traffic_generation()),
@@ -45,10 +76,10 @@ pub fn evaluate_generation_shadow_request_v3(
     let parity_mismatch =
         traffic_receipt.verdict() == TrafficShadowVerdictV3::ActorVmParityMismatch;
     if traffic_receipt.verdict() != TrafficShadowVerdictV3::CompleteShadow {
-        return receipt(
+        return evaluation(
             generation,
             request,
-            traffic_receipt.receipt_sha256().to_owned(),
+            Some(traffic_receipt.clone()),
             None,
             if parity_mismatch || is_runtime_reject(traffic_receipt.verdict()) {
                 GenerationShadowEvaluationVerdictV3::RuntimeReject
@@ -59,10 +90,10 @@ pub fn evaluate_generation_shadow_request_v3(
         );
     }
     let (Some(action), Some(output)) = (execution.actor_action(), execution.actor_output()) else {
-        return receipt(
+        return evaluation(
             generation,
             request,
-            traffic_receipt.receipt_sha256().to_owned(),
+            Some(traffic_receipt.clone()),
             None,
             GenerationShadowEvaluationVerdictV3::RuntimeReject,
             false,
@@ -78,10 +109,10 @@ pub fn evaluate_generation_shadow_request_v3(
     ) {
         Ok(input) => input,
         Err(_) => {
-            return receipt(
+            return evaluation(
                 generation,
                 request,
-                traffic_receipt.receipt_sha256().to_owned(),
+                Some(traffic_receipt.clone()),
                 None,
                 GenerationShadowEvaluationVerdictV3::VerifierReject,
                 false,
@@ -89,18 +120,21 @@ pub fn evaluate_generation_shadow_request_v3(
         }
     };
     match verify_operator_result_v3(&verifier_input, IndependentVerifierBudgetV3::default()) {
-        Ok(verifier) => receipt(
+        Ok(verifier) => {
+            let verdict = verifier_verdict(verifier.verdict());
+            evaluation(
+                generation,
+                request,
+                Some(traffic_receipt.clone()),
+                Some(verifier),
+                verdict,
+                false,
+            )
+        }
+        Err(_) => evaluation(
             generation,
             request,
-            traffic_receipt.receipt_sha256().to_owned(),
-            Some(verifier.receipt_sha256().to_owned()),
-            verifier_verdict(verifier.verdict()),
-            false,
-        ),
-        Err(_) => receipt(
-            generation,
-            request,
-            traffic_receipt.receipt_sha256().to_owned(),
+            Some(traffic_receipt.clone()),
             None,
             GenerationShadowEvaluationVerdictV3::VerifierReject,
             false,
@@ -108,10 +142,10 @@ pub fn evaluate_generation_shadow_request_v3(
     }
 }
 
-fn invalid_request_receipt(
+fn invalid_request_evaluation(
     generation: &GenerationShadowSnapshotV3,
     request: &GenerationShadowRequestV3,
-) -> GenerationShadowEvaluationReceiptV3 {
+) -> GenerationShadowEvaluationV3 {
     let traffic_receipt_sha256 = canonical_json_sha256(&(
         "nando.generation-shadow-invalid-request.v3.f7",
         generation
@@ -122,14 +156,47 @@ fn invalid_request_receipt(
         request.request_sha256(),
     ))
     .unwrap_or_else(|_| "0".repeat(64));
-    receipt(
-        generation,
-        request,
-        traffic_receipt_sha256,
-        None,
-        GenerationShadowEvaluationVerdictV3::InvalidRequest,
-        false,
-    )
+    GenerationShadowEvaluationV3 {
+        receipt: receipt(
+            generation,
+            request,
+            traffic_receipt_sha256,
+            None,
+            GenerationShadowEvaluationVerdictV3::InvalidRequest,
+            false,
+        ),
+        traffic_receipt: None,
+        verifier_receipt: None,
+    }
+}
+
+fn evaluation(
+    generation: &GenerationShadowSnapshotV3,
+    request: &GenerationShadowRequestV3,
+    traffic_receipt: Option<TrafficShadowReceiptV3>,
+    verifier_receipt: Option<IndependentVerifierReceiptV3>,
+    verdict: GenerationShadowEvaluationVerdictV3,
+    parity_mismatch: bool,
+) -> GenerationShadowEvaluationV3 {
+    let traffic_receipt_sha256 = traffic_receipt
+        .as_ref()
+        .map(|receipt| receipt.receipt_sha256().to_owned())
+        .unwrap_or_else(|| "0".repeat(64));
+    let verifier_receipt_sha256 = verifier_receipt
+        .as_ref()
+        .map(|receipt| receipt.receipt_sha256().to_owned());
+    GenerationShadowEvaluationV3 {
+        receipt: receipt(
+            generation,
+            request,
+            traffic_receipt_sha256,
+            verifier_receipt_sha256,
+            verdict,
+            parity_mismatch,
+        ),
+        traffic_receipt,
+        verifier_receipt,
+    }
 }
 
 fn receipt(

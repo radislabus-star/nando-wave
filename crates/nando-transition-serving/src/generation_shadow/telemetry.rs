@@ -38,6 +38,9 @@ pub(super) struct GenerationShadowTelemetryV3 {
     runtime_rejects: AtomicU64,
     verifier_abstains: AtomicU64,
     verifier_rejects: AtomicU64,
+    durable_appends: AtomicU64,
+    durable_censored: AtomicU64,
+    shadow_ledger_sha256: RwLock<String>,
     parity_mismatches: AtomicU64,
 }
 
@@ -59,6 +62,9 @@ impl GenerationShadowTelemetryV3 {
             runtime_rejects: AtomicU64::new(0),
             verifier_abstains: AtomicU64::new(0),
             verifier_rejects: AtomicU64::new(0),
+            durable_appends: AtomicU64::new(0),
+            durable_censored: AtomicU64::new(0),
+            shadow_ledger_sha256: RwLock::new(String::new()),
             parity_mismatches: AtomicU64::new(0),
         }
     }
@@ -142,11 +148,28 @@ impl GenerationShadowTelemetryV3 {
         }
     }
 
+    pub(super) fn observe_durable_append(&self, ledger_sha256: &str) {
+        self.durable_appends.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut root) = self.shadow_ledger_sha256.write() {
+            root.clear();
+            root.push_str(ledger_sha256);
+        }
+    }
+
+    pub(super) fn observe_durable_censored(&self) {
+        self.durable_censored.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub(super) fn snapshot(&self) -> GenerationShadowStatusV3 {
         let identity = self
             .identity
             .read()
             .map(|identity| identity.clone())
+            .unwrap_or_default();
+        let shadow_ledger_sha256 = self
+            .shadow_ledger_sha256
+            .read()
+            .map(|root| root.clone())
             .unwrap_or_default();
         GenerationShadowStatusV3 {
             enabled: self.enabled,
@@ -168,6 +191,9 @@ impl GenerationShadowTelemetryV3 {
             runtime_rejects: self.runtime_rejects.load(Ordering::Relaxed),
             verifier_abstains: self.verifier_abstains.load(Ordering::Relaxed),
             verifier_rejects: self.verifier_rejects.load(Ordering::Relaxed),
+            durable_appends: self.durable_appends.load(Ordering::Relaxed),
+            durable_censored: self.durable_censored.load(Ordering::Relaxed),
+            shadow_ledger_sha256,
             false_accepts: 0,
             parity_mismatches: self.parity_mismatches.load(Ordering::Relaxed),
             local_accepts: 0,

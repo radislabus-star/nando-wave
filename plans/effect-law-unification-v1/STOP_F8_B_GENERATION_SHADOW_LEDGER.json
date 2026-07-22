@@ -1,0 +1,28 @@
+{
+  "schema": "nando.stop-f8-b-generation-shadow-ledger.v1",
+  "date": "2026-07-22",
+  "verdict": "PASS",
+  "code_manifest_sha256": "6a333770d1951bf4b29ec0a151a772e9d478a102753ff6d401b2fa6a6785d8b8",
+  "tests": {
+    "generation_shadow_learning_pass": 4,
+    "shadow_persistence_pass": 2,
+    "serving_integration_pass": 6,
+    "serving_release_perf_ignored": 1,
+    "learning_full_pass": 217,
+    "persistence_full_pass": 15,
+    "clippy_deny_warnings": "PASS"
+  },
+  "proof": {
+    "exact_capture_join": true,
+    "exact_f5_binding": true,
+    "exact_f6_binding": true,
+    "restart_byte_identical": true,
+    "duplicate_blocked": true,
+    "foreign_generation_blocked": true,
+    "unverified_pass_blocked": true,
+    "censored_semantic_updates": 0,
+    "raw_payload_bytes_persisted": 0,
+    "local_accepts": 0,
+    "execution_authority": false
+  }
+}

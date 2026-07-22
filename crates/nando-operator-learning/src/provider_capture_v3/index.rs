@@ -155,6 +155,42 @@ impl ProviderCaptureIndexV3 {
     }
 
     #[must_use]
+    pub fn contains_exact(
+        &self,
+        capture_sequence: u64,
+        event_root_sha256: Sha256CommitmentV3,
+        request_root_sha256: Sha256CommitmentV3,
+        receipt_sha256: Sha256CommitmentV3,
+    ) -> bool {
+        self.find_exact(
+            capture_sequence,
+            event_root_sha256,
+            request_root_sha256,
+            receipt_sha256,
+        )
+        .is_some()
+    }
+
+    #[must_use]
+    pub fn find_exact(
+        &self,
+        capture_sequence: u64,
+        event_root_sha256: Sha256CommitmentV3,
+        request_root_sha256: Sha256CommitmentV3,
+        receipt_sha256: Sha256CommitmentV3,
+    ) -> Option<&ProviderRequestCaptureReceiptV3> {
+        self.records
+            .binary_search_by_key(&capture_sequence, |record| record.capture_sequence())
+            .ok()
+            .and_then(|index| self.records.get(index))
+            .filter(|record| {
+                record.event_root_sha256() == event_root_sha256
+                    && record.request_root_sha256() == request_root_sha256
+                    && record.receipt_sha256() == receipt_sha256
+            })
+    }
+
+    #[must_use]
     pub const fn publish_sequence(&self) -> u64 {
         self.publish_sequence
     }

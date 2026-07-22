@@ -1,12 +1,12 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
+use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, OnceLock};
 use std::thread;
 
 use super::loader::load_generation_shadow_snapshot_v3;
 use super::telemetry::GenerationShadowTelemetryV3;
 use super::watcher::run_generation_shadow_watcher_v3;
-use super::worker::{run_generation_shadow_worker_v3, GenerationShadowWorkItemV3};
+use super::worker::{GenerationShadowWorkItemV3, run_generation_shadow_worker_v3};
 use super::{
     GenerationShadowConfigV3, GenerationShadowRegistryV3, GenerationShadowRequestV3,
     GenerationShadowStatusV3, GenerationShadowSubmitVerdictV3,
@@ -50,9 +50,18 @@ impl GenerationShadowRuntimeV3 {
             .map_err(|_| "generation_shadow_sender_already_set".to_owned())?;
 
         let telemetry = Arc::clone(&self.telemetry);
+        let provider_capture_store_path = self.config.provider_capture_store_path.clone();
+        let receipt_store_path = self.config.receipt_store_path.clone();
         thread::Builder::new()
             .name("nando-generation-shadow-worker".to_owned())
-            .spawn(move || run_generation_shadow_worker_v3(receiver, telemetry))
+            .spawn(move || {
+                run_generation_shadow_worker_v3(
+                    receiver,
+                    telemetry,
+                    provider_capture_store_path,
+                    receipt_store_path,
+                );
+            })
             .map_err(|error| format!("generation_shadow_worker_spawn:{error}"))?;
 
         let runtime = Arc::clone(self);

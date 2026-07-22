@@ -18,6 +18,8 @@ pub struct GenerationShadowConfigV3 {
     pub enabled: bool,
     pub store_path: PathBuf,
     pub capture_index_path: PathBuf,
+    pub provider_capture_store_path: PathBuf,
+    pub receipt_store_path: PathBuf,
     pub queue_capacity: usize,
     pub poll_interval: Duration,
 }
@@ -108,6 +110,9 @@ pub struct GenerationShadowStatusV3 {
     pub runtime_rejects: u64,
     pub verifier_abstains: u64,
     pub verifier_rejects: u64,
+    pub durable_appends: u64,
+    pub durable_censored: u64,
+    pub shadow_ledger_sha256: String,
     pub false_accepts: u64,
     pub parity_mismatches: u64,
     pub local_accepts: u64,
@@ -179,7 +184,7 @@ impl GenerationShadowRequestV3 {
         })
     }
 
-    pub(super) fn from_provider_capture(
+    pub fn from_provider_capture(
         capture_receipt: ProviderRequestCaptureReceiptV3,
         request_text: String,
         provider_payload_bytes: Bytes,

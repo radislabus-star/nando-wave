@@ -161,6 +161,11 @@ impl FixtureV3 {
         encode_generation_checkpoint_v3(publish_sequence, &self.bundle, &self.ledger, &refs)
             .expect("checkpoint")
     }
+
+    #[allow(dead_code)]
+    pub fn support_f6_receipt(&self) -> IndependentVerifierReceiptV3 {
+        verify(&self.support, &self.support.actor_output)
+    }
 }
 
 pub fn root(label: &str) -> String {

@@ -7,16 +7,20 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::body::Bytes;
-use f7_support::{root, support_request_payload, FixtureV3};
-use nando_operator_kernel::{sha256_bytes, RuntimeProjectionV3};
-use nando_operator_learning::{GenerationCaptureCommitmentV3, GenerationCaptureIndexV3};
+use f7_support::{FixtureV3, root, support_request_payload};
+use nando_operator_kernel::{RuntimeProjectionV3, Sha256CommitmentV3, sha256_bytes};
+use nando_operator_learning::{
+    GenerationCaptureCommitmentV3, GenerationCaptureIndexV3, ProviderRequestCaptureInputV3,
+    seal_provider_request_capture_v3,
+};
 use nando_operator_persistence::{
-    decode_generation_checkpoint_v3, GenerationCheckpointStoreV3, RestoredGenerationCheckpointV3,
+    GenerationCheckpointStoreV3, GenerationShadowReceiptStoreV3, ProviderCaptureStoreV3,
+    RestoredGenerationCheckpointV3, decode_generation_checkpoint_v3,
 };
 use nando_transition_serving::generation_shadow::{
-    evaluate_generation_shadow_request_v3, GenerationShadowConfigV3,
-    GenerationShadowEvaluationVerdictV3, GenerationShadowRequestV3, GenerationShadowRuntimeV3,
-    GenerationShadowSubmitVerdictV3,
+    GenerationShadowConfigV3, GenerationShadowEvaluationVerdictV3, GenerationShadowRequestV3,
+    GenerationShadowRuntimeV3, GenerationShadowSubmitVerdictV3,
+    evaluate_generation_shadow_request_v3,
 };
 
 fn capture_index(checkpoint: &RestoredGenerationCheckpointV3) -> GenerationCaptureIndexV3 {
@@ -53,6 +57,8 @@ fn runtime(fixture: &FixtureV3, capture_path: &std::path::Path) -> Arc<Generatio
             enabled: true,
             store_path: fixture.directory.clone(),
             capture_index_path: capture_path.to_owned(),
+            provider_capture_store_path: fixture.directory.join("provider-capture-v3-f8a"),
+            receipt_store_path: fixture.directory.join("generation-shadow-v3-f8b"),
             queue_capacity: 4,
             poll_interval: Duration::from_secs(60),
         })
@@ -118,6 +124,90 @@ fn joined_generation_executes_f5_and_independent_f6_without_authority() {
     assert_eq!(status.verified, 1);
     assert_eq!(status.false_accepts, 0);
     assert_eq!(status.local_accepts, 0);
+}
+
+#[test]
+fn provider_capture_joins_to_a_durable_generation_owned_shadow_receipt() {
+    let mut fixture = FixtureV3::new("f8b-durable-shadow");
+    fixture.append_support();
+    fixture.freeze_and_append_future();
+    let checkpoint_bytes = fixture.checkpoint(1);
+    GenerationCheckpointStoreV3::open(&fixture.directory)
+        .expect("generation store")
+        .publish(&checkpoint_bytes)
+        .expect("publish generation");
+    let generation_capture_path = fixture.directory.join("generation-capture-index-v3.cbor");
+    write_capture_index(&generation_capture_path, &checkpoint_bytes);
+
+    let provider_store_path = fixture.directory.join("provider-capture-v3-f8a");
+    let provider_store = ProviderCaptureStoreV3::open(&provider_store_path).expect("capture store");
+    let lease = provider_store
+        .reserve_sequence_lease()
+        .expect("capture lease");
+    let payload_bytes = serde_json::to_vec(&support_request_payload()).expect("payload bytes");
+    let capture = seal_provider_request_capture_v3(ProviderRequestCaptureInputV3 {
+        capture_sequence: lease.first_sequence(),
+        capture_epoch_root: lease.epoch_root_sha256(),
+        lineage_root_sha256: Sha256CommitmentV3::digest_bytes(b"ordinary-live-lineage"),
+        request_root_sha256: Sha256CommitmentV3::digest_bytes(&payload_bytes),
+        projection: RuntimeProjectionV3::Responses,
+        streaming: false,
+        observed_at_unix_ms: 1_750_000_000_000,
+    })
+    .expect("capture receipt");
+    let restored = provider_store.restore().expect("capture restore");
+    let next = restored
+        .index()
+        .expect("capture index")
+        .append_batch(std::slice::from_ref(&capture))
+        .expect("capture append");
+    provider_store
+        .publish_index(&next)
+        .expect("capture publish");
+
+    let runtime = runtime(&fixture, &generation_capture_path);
+    assert!(runtime.reconcile_once().expect("reconcile"));
+    runtime.start_after_http_bind().expect("start worker");
+    let request = GenerationShadowRequestV3::from_provider_capture(
+        capture.clone(),
+        "continue CellA17".to_owned(),
+        Bytes::from(payload_bytes),
+    )
+    .expect("request");
+    assert_eq!(
+        runtime.try_submit(request),
+        GenerationShadowSubmitVerdictV3::Enqueued
+    );
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while runtime.status().durable_appends == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let status = runtime.status();
+    assert_eq!(status.durable_appends, 1);
+    assert_eq!(status.durable_censored, 0);
+    assert_eq!(status.verified, 1);
+    assert!(!status.shadow_ledger_sha256.is_empty());
+
+    let generation = runtime.registry().pin().expect("pin").expect("generation");
+    let ledger_store = GenerationShadowReceiptStoreV3::open(
+        fixture
+            .directory
+            .join("generation-shadow-v3-f8b")
+            .join(fixture.manifest.generation_id_sha256())
+            .join(generation.checkpoint().checkpoint_sha256()),
+    )
+    .expect("ledger store");
+    let persisted = ledger_store.restore().expect("ledger restore");
+    let ledger = persisted.ledger().expect("ledger");
+    assert_eq!(ledger.publish_sequence(), 1);
+    assert_eq!(
+        ledger.receipts()[0].capture_sequence(),
+        capture.capture_sequence()
+    );
+    assert_eq!(ledger.receipts()[0].semantic_updates(), 1);
+    assert!(ledger.receipts()[0].verifier_receipt().is_some());
+    assert_eq!(ledger.raw_payloads_persisted(), 0);
+    assert!(!ledger.execution_authority());
 }
 
 #[test]

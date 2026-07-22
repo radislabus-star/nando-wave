@@ -1,6 +1,6 @@
 # F8 External Admission And Live Shadow V1
 
-Status: `F8-0 PASS / F8-A CONTROLLED PASS / F8-A LIVE NOT RUN / F8-B..E NOT STARTED / AUTHORITY FALSE`
+Status: `F8-0 PASS / F8-A CONTROLLED PASS / F8-B PASS / F8-C PASS / F8-D..E IN PROGRESS / AUTHORITY FALSE`
 
 Date: `2026-07-22`
 
@@ -238,6 +238,11 @@ raw payload bytes persisted            0
 execution authority                    false
 ```
 
+F8-B result: `STOP_F8_B_GENERATION_SHADOW_LEDGER.md`. The exact provider
+capture, F5 traffic and complete hash-only F6 receipt now enter a separate
+generation-owned atomic ledger. Restart is byte-identical and no receipt grants
+authority.
+
 ## F8-C: External Admission Reconstructor
 
 `nando-operator-admission` receives immutable bytes, not trusted Rust objects:
@@ -292,6 +297,11 @@ unknown schema                           BLOCK
 candidate authority                      false
 production callers                       0
 ```
+
+F8-C result: `STOP_F8_C_EXTERNAL_RECONSTRUCTION.md`. The reconstructor joins
+the frozen generation and live provider capture domains independently and
+binds phase controls to the exact live traffic receipt set. The candidate and
+verified submission remain opaque and authority-free.
 
 ## F8-D: Causal Controls
 

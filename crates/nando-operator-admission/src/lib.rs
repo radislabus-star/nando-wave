@@ -1,8 +1,10 @@
 mod authority;
+mod external_generation_v3;
 mod package_policy;
 mod parity;
 
 pub use authority::*;
+pub use external_generation_v3::*;
 pub use package_policy::*;
 pub use parity::*;
 

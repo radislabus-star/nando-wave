@@ -125,6 +125,7 @@ pub struct ServingConfig {
     pub provider_capture_enabled: bool,
     pub provider_capture_store_path: PathBuf,
     pub provider_capture_queue_capacity: usize,
+    pub operator_generation_shadow_receipt_store_path: PathBuf,
 }
 
 impl ServingConfig {
@@ -262,6 +263,11 @@ impl ServingConfig {
                 "provider-capture-v3-f8a",
             ),
             provider_capture_queue_capacity: env_usize("NANDO_PROVIDER_CAPTURE_QUEUE", 32),
+            operator_generation_shadow_receipt_store_path: env_path_join(
+                "NANDO_OPERATOR_GENERATION_SHADOW_RECEIPT_STORE",
+                &state_dir,
+                "operator-generation-shadow-v3-f8b",
+            ),
         })
     }
 }
@@ -4431,6 +4437,8 @@ fn generation_shadow_config(config: &ServingConfig) -> GenerationShadowConfigV3 
         // This index commits raw provider requests. Session JSONL evidence is
         // a different physical stream and cannot satisfy the F6 request root.
         capture_index_path: config.operator_generation_capture_index_path.clone(),
+        provider_capture_store_path: config.provider_capture_store_path.clone(),
+        receipt_store_path: config.operator_generation_shadow_receipt_store_path.clone(),
         queue_capacity: config.operator_generation_shadow_queue_capacity,
         poll_interval: Duration::from_millis(config.operator_generation_shadow_poll_ms),
     }
@@ -4685,6 +4693,8 @@ mod tests {
             provider_capture_enabled: false,
             provider_capture_store_path: root.join("provider-capture-v3-f8a"),
             provider_capture_queue_capacity: 8,
+            operator_generation_shadow_receipt_store_path: root
+                .join("operator-generation-shadow-v3-f8b"),
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))

@@ -8,7 +8,10 @@ rust-version.workspace = true
 
 [dependencies]
 nando-operator-kernel = { path = "../nando-operator-kernel" }
+nando-operator-learning = { path = "../nando-operator-learning" }
+nando-operator-persistence = { path = "../nando-operator-persistence" }
 nando-operator-proof = { path = "../nando-operator-proof" }
+nando-operator-runtime = { path = "../nando-operator-runtime" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
