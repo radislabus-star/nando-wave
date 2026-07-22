@@ -29,7 +29,7 @@ F5-F phase integration          SAFETY PASS / WAVE GAIN WATCH
 F5-G traffic/performance        COMPLETE / PERFORMANCE WATCH
 STOP-F5 runtime convergence     COMPLETE
 F6 independent verifier        COMPLETE / STOP-F6
-F7 generation and persistence  IN PROGRESS / F7-D
+F7 generation and persistence  IN PROGRESS / F7-E
 nando-response-actor cut        COMPLETE / STOP-R9
 production authority            false
 service deployment              out of scope
@@ -62,8 +62,10 @@ plans/effect-law-unification-v1/
 remain frozen; F5 and F6 are complete. F7-A closed the kernel manifest and
 restart bundle; F7-B closed the generation-owned support/future ledger; F7-C
 bound exact F6 verdicts to generation, partition, lineage, event and support
-freeze without granting authority. F7-D is unlocked for atomic persistence;
-live admission and authority remain unchanged.
+freeze without granting authority; F7-D added a separate two-slot atomic
+persistence owner with monotonic recovery. F7-E is unlocked for controlled
+capture-owner joining and shadow orchestration; live admission and authority
+remain unchanged.
 
 ## 1. Objective
 

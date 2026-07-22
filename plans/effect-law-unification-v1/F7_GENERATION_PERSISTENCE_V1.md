@@ -1,6 +1,6 @@
 # F7 Generation And Persistence V1
 
-Status: `F7-A/B/C COMPLETE / F7-D UNLOCKED`
+Status: `F7-A/B/C/D COMPLETE / F7-E UNLOCKED`
 
 Authority: `false`
 
@@ -76,8 +76,11 @@ nando-operator-proof
 nando-operator-learning
   owns support/future partition state and censored outcomes
 
+nando-operator-persistence
+  owns checkpoint composition, atomic file IO and crash recovery
+
 nando-response-actor
-  may own only atomic file IO and orchestration adapters
+  may own only startup and shadow orchestration adapters
 
 nando-operator-admission
   is read-only during F7
@@ -203,9 +206,27 @@ Canonical receipt:
 
 ## F7-D Persistence
 
-The IO adapter must use write-new, fsync, rename, directory-fsync semantics.
-Startup opens HTTP/fallback before loading the generation. Restore happens
-off the request path and swaps the ready immutable generation atomically.
+`nando-operator-persistence` stores one self-validating checkpoint containing:
+
+```text
+canonical generation restart bundle
++ generation-owned evidence ledger
++ exact F6 receipt bytes
++ exact F7 receipt envelopes
++ receipt-set and checkpoint roots
+```
+
+Every ledger row must join one receipt pair exactly on generation, partition,
+sequence, watermark, support freeze, lineage, event, request and positive
+verdict. Missing, duplicate or extra receipts invalidate the checkpoint.
+
+The store uses two alternating slots. It writes the inactive slot with
+`create_new`, mode `0600`, file `fsync`, atomic rename and directory `fsync`.
+The previous slot remains untouched until the new slot is fully durable.
+
+Startup will eventually open HTTP/fallback before loading this store. Restore
+happens off the request path and swaps the ready immutable generation only in
+F7-E; F7-D has no serving caller.
 
 Failure behavior:
 
@@ -216,6 +237,39 @@ unknown schema           -> no migration in place
 partial write            -> retain previous generation
 non-monotonic generation -> reject swap
 ```
+
+F7-D result:
+
+```text
+bundle + ledger + exact F6/F7 receipt join       PASS
+canonical checkpoint restart                     BYTE IDENTICAL
+two-slot publication                              PASS
+file fsync -> rename -> directory fsync           SYSCALL VERIFIED
+stale partial .new                                QUARANTINE
+corrupt newest slot                               PREVIOUS RESTORED
+both slots corrupt                                EMPTY SHADOW
+same-generation evidence rollback                 BLOCK
+publish sequence jump                             BLOCK
+wrong next-generation parent                      BLOCK
+symlink slot                                      QUARANTINE
+broken temporary symlink                          QUARANTINE
+raw runtime payload persisted                     NO
+production callers                                0
+execution authority                               false
+```
+
+Canonical receipt:
+`STOP_F7_D_ATOMIC_GENERATION_STORE.json`.
+
+### F7-D Live Boundary
+
+F7-D has no live capture-owner join, startup loader, serving registry swap or
+request-path caller. Those integrations belong only to F7-E shadow work.
+
+### F7-D Authority Boundary
+
+F7-D cannot call external admission, publish an ACTIVE package, enable local
+accept or authorize execution. Those powers remain blocked until F8.
 
 ## STOP-F7
 

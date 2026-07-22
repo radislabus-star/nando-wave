@@ -204,6 +204,21 @@ impl GenerationEvidenceObservationV3 {
     }
 
     #[must_use]
+    pub fn event_root_sha256(&self) -> &str {
+        &self.event_root_sha256
+    }
+
+    #[must_use]
+    pub fn request_root_sha256(&self) -> &str {
+        &self.request_root_sha256
+    }
+
+    #[must_use]
+    pub fn verifier_receipt_root_sha256(&self) -> &str {
+        &self.verifier_receipt_root_sha256
+    }
+
+    #[must_use]
     pub const fn outcome(&self) -> GenerationLearningOutcomeV3 {
         self.outcome
     }

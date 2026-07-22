@@ -4,6 +4,7 @@ members = [
     "crates/nando-operator-kernel",
     "crates/nando-operator-proof",
     "crates/nando-operator-runtime",
+    "crates/nando-operator-persistence",
     "crates/nando-operator-admission",
     "crates/nando-operator-learning",
     "crates/nando-cli",

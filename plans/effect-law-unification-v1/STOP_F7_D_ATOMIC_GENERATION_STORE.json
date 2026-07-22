@@ -1,0 +1,59 @@
+{
+  "schema": "nando.stop-f7-d-atomic-generation-store.v1",
+  "date": "2026-07-22",
+  "verdict": "COMPLETE_CONTROLLED_PROOF_PASS",
+  "authority": false,
+  "f7_status": "F7_A_B_C_D_COMPLETE_F7_E_UNLOCKED",
+  "ownership": {
+    "owner": "nando-operator-persistence",
+    "response_actor_callers": 0,
+    "production_callers": 0,
+    "live_capture_join": false
+  },
+  "checkpoint": {
+    "generation_bundle_bound": true,
+    "evidence_ledger_bound": true,
+    "f6_receipt_bytes_bound": true,
+    "f7_receipt_bytes_bound": true,
+    "ledger_receipt_set_exact": true,
+    "canonical_restart_byte_identical": true,
+    "max_bytes": 16777216,
+    "max_receipt_pairs": 4096,
+    "raw_payload_bytes_persisted": 0
+  },
+  "durability": {
+    "alternating_slots": 2,
+    "temporary_create_exclusive": true,
+    "file_mode": "0600",
+    "file_fsync": true,
+    "atomic_rename": true,
+    "directory_fsync": true,
+    "syscall_order_observed": true,
+    "previous_slot_retained": true
+  },
+  "recovery": {
+    "stale_temporary_quarantined": true,
+    "corrupt_newest_recovers_previous": true,
+    "both_corrupt_yields_empty_shadow": true,
+    "evidence_rollback_rejected": true,
+    "publish_sequence_jump_rejected": true,
+    "wrong_generation_parent_rejected": true,
+    "symlink_slot_quarantined": true,
+    "broken_temporary_symlink_quarantined": true
+  },
+  "tests": {
+    "f7_d_atomic_recovery_pass": 8,
+    "syscall_order_pass": 1,
+    "broad_pass": 248,
+    "broad_ignored_perf_gate": 1,
+    "runtime_all_targets_check": "PASS",
+    "clippy_deny_warnings": "PASS",
+    "changed_file_rustfmt": "PASS"
+  },
+  "production": {
+    "services_restarted": false,
+    "deployment_changed": false,
+    "active_packages_changed": false,
+    "execution_authority": false
+  }
+}
