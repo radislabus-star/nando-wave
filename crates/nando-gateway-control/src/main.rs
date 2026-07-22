@@ -56,6 +56,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/control/:key", get(control_page))
+        .route("/control/:key/tokens", get(control_token_stats))
         .route("/control/:key/state", get(control_state))
         .route("/control/:key/mode", post(change_mode))
         .fallback(not_found)
@@ -106,6 +107,12 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         read_json(&state.config.response_admission_controller_report_path);
     let online_miner = read_json(&state.config.response_online_miner_report_path);
     let live_miner = read_live_miner_report().await;
+    let live_economics = live_miner
+        .get("economics")
+        .filter(|value| value.is_object())
+        .unwrap_or(&economics);
+    let (visible_total_tokens, visible_cpu_tokens) =
+        exact_token_totals(live_economics).unwrap_or((0, 0));
     let build_manifest = read_json(&state.config.build_manifest_path);
     let admission_receipt = read_json(&state.config.admission_path);
     let runtime_admission = admission_receipt
@@ -490,12 +497,18 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="15">
-<title>Nando Machine · Управление сигналом</title>
+<title>Nando Machine · Токены</title>
 <style>
 :root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; background:#111315; font-size:16px; line-height:1.5; }}
+.token-dashboard {{ width:min(1120px,100%); min-height:100vh; margin:0 auto; padding:72px 48px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:center; gap:0; }}
+.token-metric {{ min-width:0; padding:18px 46px; }}
+.token-metric:first-child {{ padding-left:0; border-right:1px solid #3a4044; }}
+.token-metric:last-child {{ padding-right:0; }}
+.token-label {{ margin-bottom:18px; color:#89939a; font-size:18px; font-weight:700; text-transform:uppercase; }}
+.token-value {{ display:block; max-width:100%; color:#f0f3f5; font-size:48px; font-weight:700; line-height:1.12; overflow-wrap:anywhere; }}
+.token-metric.cpu .token-value {{ color:#66d98b; }}
 header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1px solid #4a5055; }}
 .header-inner {{ width:min(1280px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
 .brand {{ display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 14px; min-width:0; }}
@@ -636,6 +649,10 @@ td:last-child {{ text-align:right; font-weight:700; }}
 .console-table td:last-child {{ color:#d8dde2; }}
 .console-panel.wide .console-table td:last-child {{ text-align:left; }}
 @media (max-width:680px) {{
+  .token-dashboard {{ grid-template-columns:1fr; padding:42px 22px; }}
+  .token-metric {{ padding:30px 0; }}
+  .token-metric:first-child {{ border-right:0; border-bottom:1px solid #3a4044; }}
+  .token-value {{ font-size:38px; }}
   .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
   .header-inner,.brand {{ gap:6px; }}
   .signal-pipeline .architecture-state {{ justify-content:flex-start; }}
@@ -679,6 +696,17 @@ td:last-child {{ text-align:right; font-weight:700; }}
 </style>
 </head>
 <body>
+<main class="token-dashboard" aria-label="Живой учёт токенов Nando">
+<section class="token-metric">
+<div class="token-label">ПРОШЛО ЧЕРЕЗ NANDO</div>
+<output id="total-token-count" class="token-value">{visible_total_tokens}</output>
+</section>
+<section class="token-metric cpu">
+<div class="token-label">ОБРАБОТАНО НА CPU</div>
+<output id="cpu-token-count" class="token-value">{visible_cpu_tokens}</output>
+</section>
+</main>
+<div class="legacy-dashboard" hidden aria-hidden="true">
 <header><div class="header-inner">
 <div class="brand"><h1>Nando Machine</h1><span class="model-id">{model_label}</span><span class="build">развёрнуто {build_id} · {build_commit_short}</span></div>
 <div class="mode-wrap"><span class="mode-label">Режим</span><span class="mode">{mode}</span></div>
@@ -812,10 +840,38 @@ td:last-child {{ text-align:right; font-weight:700; }}
   }}
 }})();
 </script>
+</div>
+<script>
+(() => {{
+  const total = document.getElementById("total-token-count");
+  const cpu = document.getElementById("cpu-token-count");
+  if (!total || !cpu) return;
+  const endpoint = `${{window.location.pathname.replace(/\/$/, "")}}/tokens`;
+  const format = new Intl.NumberFormat("ru-RU");
+  const render = (node, value) => {{
+    if (Number.isSafeInteger(value) && value >= 0) node.textContent = format.format(value);
+  }};
+  render(total, Number(total.textContent));
+  render(cpu, Number(cpu.textContent));
+  const refresh = async () => {{
+    try {{
+      const response = await fetch(endpoint, {{ cache: "no-store" }});
+      if (!response.ok) return;
+      const snapshot = await response.json();
+      render(total, snapshot.total_input_tokens);
+      render(cpu, snapshot.cpu_input_tokens);
+    }} catch (_) {{}}
+  }};
+  refresh();
+  window.setInterval(refresh, 2000);
+}})();
+</script>
 </body>
 </html>"#,
         mode = current.mode,
         model_label = html_escape(&state.config.model_label),
+        visible_total_tokens = visible_total_tokens,
+        visible_cpu_tokens = visible_cpu_tokens,
         service_rows = service_rows,
         build_id = html_escape(build_id),
         build_commit_short = html_escape(build_commit_short),
@@ -909,6 +965,35 @@ td:last-child {{ text-align:right; font-weight:700; }}
         policy_version = html_escape(policy_version),
     );
     ([(header::CACHE_CONTROL, "no-store")], Html(body)).into_response()
+}
+
+async fn control_token_stats(Path(key): Path<String>, State(state): State<AppState>) -> Response {
+    if !authorized(&state, &key) {
+        return not_found().await;
+    }
+    let fallback = read_json(&state.config.economics_path);
+    let live = read_live_miner_report().await;
+    let economics = live
+        .get("economics")
+        .filter(|value| value.is_object())
+        .unwrap_or(&fallback);
+    let Some((total_input_tokens, cpu_input_tokens)) = exact_token_totals(economics) else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(json!({"available":false})),
+        )
+            .into_response();
+    };
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({
+            "available": true,
+            "total_input_tokens": total_input_tokens,
+            "cpu_input_tokens": cpu_input_tokens,
+        })),
+    )
+        .into_response()
 }
 
 async fn control_state(Path(key): Path<String>, State(state): State<AppState>) -> Response {
@@ -1006,6 +1091,21 @@ fn collection_blockers_text(status: &Value) -> String {
 
 fn metric_u64(metrics: &Value, key: &str) -> u64 {
     metrics.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn exact_token_totals(economics: &Value) -> Option<(u64, u64)> {
+    let schema = economics.get("schema").and_then(Value::as_str)?;
+    if !schema.starts_with("nando.economics-snapshot.v")
+        || economics
+            .get("input_token_accounting_exact")
+            .and_then(Value::as_bool)
+            != Some(true)
+    {
+        return None;
+    }
+    let total = economics.get("global_input_tokens")?.as_u64()?;
+    let cpu = economics.get("avoided_input_tokens")?.as_u64()?;
+    (cpu <= total).then_some((total, cpu))
 }
 
 fn strongest_signal_generation(generations: &[Value]) -> Option<&Value> {
@@ -1283,5 +1383,32 @@ mod tests {
         assert!(!should_auto_promote(GatewayMode::Shadow, false));
         assert!(!should_auto_promote(GatewayMode::Bypass, true));
         assert!(!should_auto_promote(GatewayMode::Cpu, true));
+    }
+
+    #[test]
+    fn token_dashboard_accepts_only_exact_consistent_accounting() {
+        let exact = json!({
+            "schema": "nando.economics-snapshot.v3",
+            "input_token_accounting_exact": true,
+            "global_input_tokens": 1_000,
+            "avoided_input_tokens": 125,
+        });
+        assert_eq!(exact_token_totals(&exact), Some((1_000, 125)));
+
+        let estimated = json!({
+            "schema": "nando.economics-snapshot.v3",
+            "input_token_accounting_exact": false,
+            "global_input_tokens": 1_000,
+            "avoided_input_tokens": 125,
+        });
+        assert_eq!(exact_token_totals(&estimated), None);
+
+        let impossible = json!({
+            "schema": "nando.economics-snapshot.v3",
+            "input_token_accounting_exact": true,
+            "global_input_tokens": 100,
+            "avoided_input_tokens": 101,
+        });
+        assert_eq!(exact_token_totals(&impossible), None);
     }
 }
