@@ -1,6 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use nando_core::wave::{PhaseCenterCell, phase_margin_to_micro, phase_vector_from_atom_ids};
+use nando_operator_kernel::{
+    MAX_ADAPTER_WAVE_ANCHOR_ATOMS, MAX_ADAPTER_WAVE_FINGERPRINTS, MAX_ADAPTER_WAVE_SUBCENTERS,
+    ResponseAdapterWaveRoute, ResponseAdapterWaveSubcenter,
+};
 
 use crate::{
     LearnedWaveRoute, LearnedWaveSubcenter, RelationFrame, relation_frame_online_routing_atom_ids,
@@ -316,4 +320,192 @@ fn learned_wave_feature_vocabulary(
         .collect::<Vec<_>>();
     atoms.sort_unstable();
     atoms
+}
+
+#[doc(hidden)]
+#[must_use]
+pub fn fit_adapter_wave_route(
+    positive_atoms: &[Vec<u64>],
+    negative_atoms: &[Vec<u64>],
+    cells: usize,
+) -> Option<ResponseAdapterWaveRoute> {
+    if cells == 0 || positive_atoms.is_empty() || negative_atoms.is_empty() {
+        return None;
+    }
+    let anchor_atom_ids = fit_adapter_wave_anchor_atoms(positive_atoms, negative_atoms);
+    let positive_fingerprint_ids = positive_atoms
+        .iter()
+        .map(|atoms| adapter_wave_atom_fingerprint(atoms))
+        .collect::<BTreeSet<_>>();
+    let negative_fingerprint_ids = negative_atoms
+        .iter()
+        .map(|atoms| adapter_wave_atom_fingerprint(atoms))
+        .collect::<BTreeSet<_>>();
+    if positive_fingerprint_ids
+        .iter()
+        .any(|fingerprint| negative_fingerprint_ids.contains(fingerprint))
+        || positive_fingerprint_ids.len() > MAX_ADAPTER_WAVE_FINGERPRINTS
+    {
+        return None;
+    }
+    let positives = positive_atoms
+        .iter()
+        .map(|atoms| phase_vector_from_atom_ids(atoms.iter().copied(), cells))
+        .collect::<Vec<_>>();
+    let negatives = negative_atoms
+        .iter()
+        .map(|atoms| phase_vector_from_atom_ids(atoms.iter().copied(), cells))
+        .collect::<Vec<_>>();
+    let mut negative_center = vec![PhaseCenterCell::default(); cells];
+    for vector in &negatives {
+        for (center, cell) in negative_center.iter_mut().zip(vector) {
+            center.re += cell.re / negatives.len() as f64;
+            center.im += cell.im / negatives.len() as f64;
+        }
+    }
+    let score = |vector: &[PhaseCenterCell], center: &[i32]| {
+        phase_margin_to_micro(
+            vector
+                .iter()
+                .zip(center.chunks_exact(2))
+                .map(|(query, center)| {
+                    query.re * f64::from(center[0]) / 1_000_000.0
+                        + query.im * f64::from(center[1]) / 1_000_000.0
+                })
+                .sum::<f64>()
+                / cells as f64,
+        )
+        .unwrap_or(i64::MIN)
+    };
+    let mut candidates = Vec::<(BTreeSet<usize>, Vec<i32>, i64, i64)>::new();
+    for representative in &positives {
+        let center = representative
+            .iter()
+            .zip(&negative_center)
+            .flat_map(|(positive, negative)| {
+                [
+                    ((positive.re - negative.re) * 1_000_000.0).round() as i32,
+                    ((positive.im - negative.im) * 1_000_000.0).round() as i32,
+                ]
+            })
+            .collect::<Vec<_>>();
+        let maximum_negative = negatives
+            .iter()
+            .map(|vector| score(vector, &center))
+            .max()?;
+        let threshold = maximum_negative.checked_add(1)?.max(1);
+        let coverage = positives
+            .iter()
+            .enumerate()
+            .filter_map(|(index, vector)| (score(vector, &center) >= threshold).then_some(index))
+            .collect::<BTreeSet<_>>();
+        if coverage.is_empty() {
+            continue;
+        }
+        let gap = coverage
+            .iter()
+            .map(|index| score(&positives[*index], &center))
+            .min()
+            .unwrap_or(i64::MIN)
+            .saturating_sub(maximum_negative);
+        candidates.push((coverage, center, threshold, gap));
+    }
+    let mut uncovered = (0..positives.len()).collect::<BTreeSet<_>>();
+    let mut selected = Vec::<usize>::new();
+    while !uncovered.is_empty() && selected.len() < MAX_ADAPTER_WAVE_SUBCENTERS {
+        let next = candidates
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !selected.contains(index))
+            .map(|(index, candidate)| {
+                (
+                    candidate.0.intersection(&uncovered).count(),
+                    candidate.3,
+                    index,
+                )
+            })
+            .filter(|(gain, _, _)| *gain > 0)
+            .max_by(|left, right| left.cmp(right))?;
+        selected.push(next.2);
+        for covered in &candidates[next.2].0 {
+            uncovered.remove(covered);
+        }
+    }
+    if !uncovered.is_empty() {
+        return None;
+    }
+    let primary = candidates.get(*selected.first()?)?;
+    Some(ResponseAdapterWaveRoute {
+        cells: u16::try_from(cells).ok()?,
+        center_delta_micro: primary.1.clone(),
+        threshold_micro: primary.2,
+        anchor_atom_ids,
+        positive_fingerprint_ids: positive_fingerprint_ids.into_iter().collect(),
+        subcenters: selected
+            .iter()
+            .skip(1)
+            .filter_map(|index| candidates.get(*index))
+            .map(|candidate| ResponseAdapterWaveSubcenter {
+                center_delta_micro: candidate.1.clone(),
+                threshold_micro: candidate.2,
+            })
+            .collect(),
+    })
+}
+
+fn fit_adapter_wave_anchor_atoms(positives: &[Vec<u64>], negatives: &[Vec<u64>]) -> Vec<u64> {
+    let negative_atoms = negatives
+        .iter()
+        .flat_map(|atoms| atoms.iter().copied())
+        .collect::<BTreeSet<_>>();
+    let mut coverage = BTreeMap::<u64, BTreeSet<usize>>::new();
+    for (index, atoms) in positives.iter().enumerate() {
+        for atom in atoms {
+            if !negative_atoms.contains(atom) {
+                coverage.entry(*atom).or_default().insert(index);
+            }
+        }
+    }
+    let mut uncovered = (0..positives.len()).collect::<BTreeSet<_>>();
+    let mut selected = Vec::<u64>::new();
+    while !uncovered.is_empty() && selected.len() < MAX_ADAPTER_WAVE_ANCHOR_ATOMS {
+        let Some((atom, covered)) = coverage
+            .iter()
+            .filter(|(atom, _)| !selected.contains(*atom))
+            .map(|(atom, indices)| {
+                (
+                    *atom,
+                    indices
+                        .intersection(&uncovered)
+                        .copied()
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .filter(|(_, covered)| !covered.is_empty())
+            .max_by(|left, right| {
+                left.1
+                    .len()
+                    .cmp(&right.1.len())
+                    .then_with(|| right.0.cmp(&left.0))
+            })
+        else {
+            break;
+        };
+        selected.push(atom);
+        for index in covered {
+            uncovered.remove(&index);
+        }
+    }
+    selected.sort_unstable();
+    selected
+}
+
+#[doc(hidden)]
+#[must_use]
+pub fn adapter_wave_atom_fingerprint(atoms: &[u64]) -> u64 {
+    let mut fingerprint = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in atoms.iter().flat_map(|atom| atom.to_le_bytes()) {
+        fingerprint = (fingerprint ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+    }
+    fingerprint
 }

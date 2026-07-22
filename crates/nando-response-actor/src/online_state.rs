@@ -30,7 +30,7 @@ fn parity_teacher_signature(frame: &crate::RelationFrame) -> String {
 }
 
 fn cross_pool_negative_refresh_due(transitions_seen: u64) -> bool {
-    transitions_seen > 0 && transitions_seen % CROSS_POOL_NEGATIVE_REFRESH_INTERVAL == 0
+    transitions_seen > 0 && transitions_seen.is_multiple_of(CROSS_POOL_NEGATIVE_REFRESH_INTERVAL)
 }
 
 pub const SELF_TRAINING_STATE_SCHEMA_V2: &str = "nando.self-training-stream-state.v2";
@@ -1567,13 +1567,13 @@ impl StreamingSelfTrainingState {
             }
             let negative_fingerprints = negatives
                 .iter()
-                .map(|atoms| crate::online_collection::adapter_wave_atom_fingerprint(atoms))
+                .map(|atoms| nando_operator_learning::adapter_wave_atom_fingerprint(atoms))
                 .collect::<BTreeSet<_>>();
             let clean_positives = positives
                 .into_iter()
                 .filter(|atoms| {
                     !negative_fingerprints.contains(
-                        &crate::online_collection::adapter_wave_atom_fingerprint(atoms),
+                        &nando_operator_learning::adapter_wave_atom_fingerprint(atoms),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -1635,7 +1635,7 @@ impl StreamingSelfTrainingState {
                 let routes = adapter_training
                     .iter()
                     .map(|(positives, negatives)| {
-                        crate::online_collection::fit_adapter_wave_route(positives, negatives, 16)
+                        nando_operator_learning::fit_adapter_wave_route(positives, negatives, 16)
                             .ok_or_else(|| {
                                 format!(
                                     "semantic_law_adapter_wave_unseparable:positives={}:negatives={}",
@@ -3768,8 +3768,10 @@ mod tests {
                 && generation.support_rows == 32
                 && generation.future_rows == 0
         }));
-        let mut constrained_discovery = crate::FamilyDiscoveryConfig::default();
-        constrained_discovery.positive_reservoir_rows = 1;
+        let constrained_discovery = crate::FamilyDiscoveryConfig {
+            positive_reservoir_rows: 1,
+            ..crate::FamilyDiscoveryConfig::default()
+        };
         state
             .discovery
             .enforce_runtime_limits(constrained_discovery);
