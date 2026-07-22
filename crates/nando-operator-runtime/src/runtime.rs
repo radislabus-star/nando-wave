@@ -13,6 +13,8 @@ use nando_operator_kernel::{
 
 mod selection;
 
+#[cfg(test)]
+use selection::latest_turn_output_scalar_from_end;
 pub use selection::{
     ExtractedScalar, ObservedRoleCandidate, ObservedSourceClass,
     canonical_request_ordinal_selector, immediate_selected_scalar, immediate_tool_output_value,
@@ -23,8 +25,6 @@ use selection::{
     active_turn_output_value, identifier_tokens, immediate_selected_scalar_with_request,
     request_mentions_identifier, runtime_embedded_json_objects,
 };
-#[cfg(test)]
-use selection::latest_turn_output_scalar_from_end;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResponseExecutionStatus {

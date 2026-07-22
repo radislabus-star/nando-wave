@@ -12,6 +12,9 @@ use nando_operator_kernel::{
 };
 use serde_json::Value;
 
+mod protocol_call_v3;
+pub use protocol_call_v3::execute_protocol_vm_bytecode_v3;
+
 use crate::{ResponseExecutionStatus, selected_value_with_request};
 
 const OPERATOR_VM_MAX_OUTPUT_BYTES: usize = 16_384;
