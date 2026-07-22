@@ -9,6 +9,7 @@ mod economics_worker;
 pub mod generation_shadow;
 mod live_economics;
 mod miner_worker;
+mod opportunity_bridge;
 mod provider_capture;
 mod runtime_policy;
 pub mod session_backfill;
@@ -32,8 +33,8 @@ use nando_expression_runtime::ExpressionRuntime;
 use nando_operator_admission::finalize_post_verifier_receipt;
 use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3, Sha256CommitmentV3};
 use nando_operator_learning::{
-    EvidencePolicyV1, OnlineCollectionConfig, OnlineCollectionStatus, ReducibilityClass,
-    is_source_neutral_relation_frame,
+    EvidencePolicyV1, OnlineCollectionConfig, OnlineCollectionStatus, OpportunityBridgeEventV1,
+    ReducibilityClass, is_source_neutral_relation_frame,
 };
 use nando_operator_proof::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
 use nando_operator_runtime::{ResponseExecutionStatus, provider_tool_capability_atom_ids};
@@ -69,6 +70,7 @@ use generation_shadow::{
     GenerationShadowConfigV3, GenerationShadowIngressV3, GenerationShadowRuntimeV3,
 };
 use miner_worker::{MinerWorkerHandle, spawn_miner_worker};
+use opportunity_bridge::OpportunityBridgeRuntime;
 use provider_capture::{
     ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
 };
@@ -126,6 +128,10 @@ pub struct ServingConfig {
     pub provider_capture_store_path: PathBuf,
     pub provider_capture_queue_capacity: usize,
     pub operator_generation_shadow_receipt_store_path: PathBuf,
+    pub opportunity_bridge_root_path: PathBuf,
+    pub opportunity_bridge_producer_enabled: bool,
+    pub opportunity_bridge_consumer_enabled: bool,
+    pub opportunity_bridge_poll_ms: u64,
 }
 
 impl ServingConfig {
@@ -268,6 +274,18 @@ impl ServingConfig {
                 &state_dir,
                 "operator-generation-shadow-v3-f8b",
             ),
+            opportunity_bridge_root_path: env_path_join(
+                "NANDO_OPPORTUNITY_BRIDGE_ROOT",
+                &state_dir,
+                "opportunity-bridge-v1",
+            ),
+            opportunity_bridge_producer_enabled: env_flag(
+                "NANDO_OPPORTUNITY_BRIDGE_PRODUCER_ENABLED",
+            ),
+            opportunity_bridge_consumer_enabled: env_flag(
+                "NANDO_OPPORTUNITY_BRIDGE_CONSUMER_ENABLED",
+            ),
+            opportunity_bridge_poll_ms: env_u64("NANDO_OPPORTUNITY_BRIDGE_POLL_MS", 100),
         })
     }
 }
@@ -436,6 +454,7 @@ struct AppState {
     counters: Arc<ServingCounters>,
     provider_capture: Arc<ProviderCaptureRuntimeV3>,
     operator_generation_shadow: Arc<GenerationShadowRuntimeV3>,
+    opportunity_bridge: OpportunityBridgeRuntime,
 }
 
 #[derive(Default)]
@@ -517,6 +536,12 @@ struct RuntimeFalseAcceptReport {
 }
 
 pub async fn serve(config: ServingConfig) -> Result<(), String> {
+    if config.opportunity_bridge_producer_enabled && config.embedded_response_miner_enabled {
+        return Err("opportunity_bridge_producer_requires_external_miner".to_owned());
+    }
+    if config.opportunity_bridge_consumer_enabled && !config.embedded_response_miner_enabled {
+        return Err("opportunity_bridge_consumer_requires_embedded_miner".to_owned());
+    }
     ensure_parent(&config.trace_path)?;
     if config.legacy_json_audit_enabled {
         ensure_parent(&config.event_path)?;
@@ -547,6 +572,12 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     let provider_capture = Arc::new(ProviderCaptureRuntimeV3::new(provider_capture_config(
         &config,
     ))?);
+    let opportunity_bridge = OpportunityBridgeRuntime::new(
+        config.opportunity_bridge_root_path.clone(),
+        config.opportunity_bridge_producer_enabled,
+        config.opportunity_bridge_consumer_enabled,
+        Duration::from_millis(config.opportunity_bridge_poll_ms),
+    )?;
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -569,6 +600,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         counters: Arc::new(ServingCounters::default()),
         provider_capture,
         operator_generation_shadow,
+        opportunity_bridge,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
     if state.config.embedded_response_miner_enabled {
@@ -710,6 +742,13 @@ fn spawn_miner_warmup(state: AppState) -> Result<(), String> {
             {
                 set_miner_warmup(&state, "failed", &error, 0, unix_now());
                 eprintln!("nando-miner-warmup bridge: {error}");
+                return;
+            }
+            if let Some(worker) = worker.as_ref()
+                && let Err(error) = state.opportunity_bridge.start_consumer(worker.clone())
+            {
+                set_miner_warmup(&state, "failed", &error, 0, unix_now());
+                eprintln!("nando-miner-warmup opportunity bridge: {error}");
                 return;
             }
             if let Ok(mut slots) = state.miners.write() {
@@ -1040,6 +1079,10 @@ async fn health(State(state): State<AppState>) -> Response {
             "operator_generation_shadow".to_owned(),
             json!(state.operator_generation_shadow.status()),
         );
+        object.insert(
+            "opportunity_process_bridge".to_owned(),
+            json!(state.opportunity_bridge.status()),
+        );
     }
     json_response(StatusCode::OK, health)
 }
@@ -1138,6 +1181,7 @@ async fn miner_report(State(state): State<AppState>) -> Response {
             "economics_worker": state.live_economics.status(),
             "provider_capture": state.provider_capture.status(),
             "operator_generation_shadow": state.operator_generation_shadow.status(),
+            "opportunity_process_bridge": state.opportunity_bridge.status(),
             "signal_tree": signal_tree,
             "claim_boundary": "in-memory Rust state and generated snapshots; only admission receipts grant execution authority",
         }),
@@ -1610,9 +1654,11 @@ async fn report_false_accept(State(state): State<AppState>, body: Bytes) -> Resp
     let _ = state
         .live_economics
         .observe_false_accept(report.request_sha256.clone());
-    if let Some(worker) = current_miner_worker(&state) {
-        let _ = worker.submit_opportunity_false_accept(report.request_sha256.clone());
-    }
+    submit_opportunity_event(
+        &state,
+        OpportunityBridgeEventV1::false_accept(report.request_sha256.clone()),
+        "false_accept",
+    );
     if let Ok(mut cache) = state.response_cache.write() {
         cache.executor = None;
         cache.ready = false;
@@ -2751,12 +2797,11 @@ fn record_runtime_parity_failure(
     {
         eprintln!("nando-live-economics parity: {error}");
     }
-    if let Some(worker) = current_miner_worker(state)
-        && let Err(error) = worker.submit_opportunity_parity_failure(intent_sha256)
-    {
-        state.counters.errors.fetch_add(1, Ordering::Relaxed);
-        eprintln!("nando-response-miner parity: {error}");
-    }
+    submit_opportunity_event(
+        state,
+        OpportunityBridgeEventV1::parity_failure(intent_sha256),
+        "parity_failure",
+    );
     record_response_actor_fallback(state, request_hash, client_intent_id, "verifier", reason);
 }
 
@@ -4280,13 +4325,12 @@ fn observe_live_economics_request(
         state.counters.errors.fetch_add(1, Ordering::Relaxed);
         eprintln!("nando-live-economics request: {error}");
     }
-    if eligible
-        && let Some(worker) = current_miner_worker(state)
-        && let Err(error) =
-            worker.submit_opportunity_request(intent_sha256, input_tokens, unix_now())
-    {
-        state.counters.errors.fetch_add(1, Ordering::Relaxed);
-        eprintln!("nando-response-miner opportunity request: {error}");
+    if eligible {
+        submit_opportunity_event(
+            state,
+            OpportunityBridgeEventV1::request(intent_sha256, input_tokens, unix_now()),
+            "request",
+        );
     }
 }
 
@@ -4303,12 +4347,11 @@ fn observe_live_economics_verified_accept(
         state.counters.errors.fetch_add(1, Ordering::Relaxed);
         eprintln!("nando-live-economics accept: {error}");
     }
-    if let Some(worker) = current_miner_worker(state)
-        && let Err(error) = worker.submit_opportunity_verified(intent_sha256)
-    {
-        state.counters.errors.fetch_add(1, Ordering::Relaxed);
-        eprintln!("nando-response-miner opportunity accept: {error}");
-    }
+    submit_opportunity_event(
+        state,
+        OpportunityBridgeEventV1::verified(intent_sha256),
+        "verified",
+    );
 }
 
 fn submit_opportunity_classification(
@@ -4317,14 +4360,24 @@ fn submit_opportunity_classification(
     class: ReducibilityClass,
     blocker: &str,
 ) {
-    let Some(worker) = current_miner_worker(state) else {
+    submit_opportunity_event(
+        state,
+        OpportunityBridgeEventV1::classify(intent_sha256, class, bounded_reason(blocker)),
+        "classification",
+    );
+}
+
+fn submit_opportunity_event(state: &AppState, event: OpportunityBridgeEventV1, event_kind: &str) {
+    let result = if let Some(worker) = current_miner_worker(state) {
+        worker.submit_opportunity_event(event)
+    } else if state.opportunity_bridge.producer_enabled() {
+        state.opportunity_bridge.submit(event)
+    } else {
         return;
     };
-    if let Err(error) =
-        worker.submit_opportunity_classification(intent_sha256, class, bounded_reason(blocker))
-    {
+    if let Err(error) = result {
         state.counters.errors.fetch_add(1, Ordering::Relaxed);
-        eprintln!("nando-response-miner opportunity classification: {error}");
+        eprintln!("nando-response-miner opportunity {event_kind}: {error}");
     }
 }
 
@@ -4697,6 +4750,10 @@ mod tests {
             provider_capture_queue_capacity: 8,
             operator_generation_shadow_receipt_store_path: root
                 .join("operator-generation-shadow-v3-f8b"),
+            opportunity_bridge_root_path: root.join("opportunity-bridge-v1"),
+            opportunity_bridge_producer_enabled: false,
+            opportunity_bridge_consumer_enabled: false,
+            opportunity_bridge_poll_ms: 100,
         };
         let provider_capture = Arc::new(
             ProviderCaptureRuntimeV3::new(provider_capture_config(&config))
@@ -4706,6 +4763,13 @@ mod tests {
             GenerationShadowRuntimeV3::new(generation_shadow_config(&config))
                 .expect("generation shadow"),
         );
+        let opportunity_bridge = OpportunityBridgeRuntime::new(
+            config.opportunity_bridge_root_path.clone(),
+            false,
+            false,
+            Duration::from_millis(100),
+        )
+        .expect("opportunity bridge");
         let state = AppState {
             config: Arc::new(config),
             cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -4732,6 +4796,7 @@ mod tests {
             counters: Arc::new(ServingCounters::default()),
             provider_capture,
             operator_generation_shadow,
+            opportunity_bridge,
         };
         refresh_response_executor(&state);
         state

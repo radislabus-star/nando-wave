@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use nando_operator_kernel::RelationFrame;
 use nando_operator_learning::{
     ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, FramedCborLedger, OnlineCollectionObservation,
-    ReducibilityClass, RuntimeParityCase, TeacherTransition, read_framed_cbor,
-    teacher_transition_from_completed,
+    OpportunityBridgeEventKindV1, OpportunityBridgeEventV1, ReducibilityClass, RuntimeParityCase,
+    TeacherTransition, read_framed_cbor, teacher_transition_from_completed,
 };
 use nando_response_actor::{
     OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
@@ -122,9 +122,14 @@ pub struct MinerWorkerHandle {
 enum MinerCommand {
     Transition(Box<TeacherTransition>),
     Collection(OnlineCollectionObservation),
-    Opportunity(MinerOpportunityEvent),
+    Opportunity {
+        event: MinerOpportunityEvent,
+        durable_ack: Option<SyncSender<Result<(), String>>>,
+    },
 }
 
+// Keep the persisted V2 opportunity ledger byte-compatible. The versioned
+// bridge envelope is a transport contract and is lowered only at this owner.
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 enum MinerOpportunityEvent {
     Request {
@@ -146,6 +151,40 @@ enum MinerOpportunityEvent {
     FalseAccept {
         intent_sha256: String,
     },
+}
+
+impl From<OpportunityBridgeEventV1> for MinerOpportunityEvent {
+    fn from(value: OpportunityBridgeEventV1) -> Self {
+        match value.event {
+            OpportunityBridgeEventKindV1::Request {
+                intent_sha256,
+                input_tokens,
+                observed_at_unix,
+            } => Self::Request {
+                intent_sha256,
+                input_tokens,
+                now_unix: observed_at_unix,
+            },
+            OpportunityBridgeEventKindV1::Classify {
+                intent_sha256,
+                class,
+                blocker,
+            } => Self::Classify {
+                intent_sha256,
+                class,
+                blocker,
+            },
+            OpportunityBridgeEventKindV1::Verified { intent_sha256 } => {
+                Self::Verified { intent_sha256 }
+            }
+            OpportunityBridgeEventKindV1::ParityFailure { intent_sha256 } => {
+                Self::ParityFailure { intent_sha256 }
+            }
+            OpportunityBridgeEventKindV1::FalseAccept { intent_sha256 } => {
+                Self::FalseAccept { intent_sha256 }
+            }
+        }
+    }
 }
 
 impl MinerWorkerHandle {
@@ -192,46 +231,48 @@ impl MinerWorkerHandle {
         Ok(())
     }
 
-    pub fn submit_opportunity_request(
+    pub fn submit_opportunity_event(&self, event: OpportunityBridgeEventV1) -> Result<(), String> {
+        self.try_submit_opportunity(event)
+    }
+
+    #[cfg(test)]
+    pub fn submit_opportunity_durable(
         &self,
-        intent_sha256: String,
-        input_tokens: u64,
-        now_unix: u64,
+        event: OpportunityBridgeEventV1,
+        timeout: Duration,
     ) -> Result<(), String> {
-        self.try_submit_opportunity(MinerOpportunityEvent::Request {
-            intent_sha256,
-            input_tokens,
-            now_unix,
-        })
+        self.submit_opportunity_durable_async(event)?
+            .recv_timeout(timeout)
+            .map_err(|error| format!("miner_worker_durable_ack:{error}"))?
     }
 
-    pub fn submit_opportunity_classification(
+    pub fn submit_opportunity_durable_async(
         &self,
-        intent_sha256: String,
-        class: ReducibilityClass,
-        blocker: String,
-    ) -> Result<(), String> {
-        self.try_submit_opportunity(MinerOpportunityEvent::Classify {
-            intent_sha256,
-            class,
-            blocker,
-        })
+        event: OpportunityBridgeEventV1,
+    ) -> Result<mpsc::Receiver<Result<(), String>>, String> {
+        event.validate()?;
+        let event = MinerOpportunityEvent::from(event);
+        let (ack_sender, ack_receiver) = mpsc::sync_channel(1);
+        match self.sender.try_send(MinerCommand::Opportunity {
+            event,
+            durable_ack: Some(ack_sender),
+        }) {
+            Ok(()) => {
+                self.counters.enqueued.fetch_add(1, Ordering::Relaxed);
+                Ok(ack_receiver)
+            }
+            Err(mpsc::TrySendError::Full(_)) => Err("miner_worker_queue_full".to_owned()),
+            Err(mpsc::TrySendError::Disconnected(_)) => Err("miner_worker_stopped".to_owned()),
+        }
     }
 
-    pub fn submit_opportunity_verified(&self, intent_sha256: String) -> Result<(), String> {
-        self.try_submit_opportunity(MinerOpportunityEvent::Verified { intent_sha256 })
-    }
-
-    pub fn submit_opportunity_parity_failure(&self, intent_sha256: String) -> Result<(), String> {
-        self.try_submit_opportunity(MinerOpportunityEvent::ParityFailure { intent_sha256 })
-    }
-
-    pub fn submit_opportunity_false_accept(&self, intent_sha256: String) -> Result<(), String> {
-        self.try_submit_opportunity(MinerOpportunityEvent::FalseAccept { intent_sha256 })
-    }
-
-    fn try_submit_opportunity(&self, event: MinerOpportunityEvent) -> Result<(), String> {
-        match self.sender.try_send(MinerCommand::Opportunity(event)) {
+    fn try_submit_opportunity(&self, event: OpportunityBridgeEventV1) -> Result<(), String> {
+        event.validate()?;
+        let event = MinerOpportunityEvent::from(event);
+        match self.sender.try_send(MinerCommand::Opportunity {
+            event,
+            durable_ack: None,
+        }) {
             Ok(()) => {
                 self.counters.enqueued.fetch_add(1, Ordering::Relaxed);
                 Ok(())
@@ -498,7 +539,10 @@ pub fn spawn_miner_worker(
                         .or_else(|| {
                             opportunity_replay
                                 .pop_front()
-                                .map(MinerCommand::Opportunity)
+                                .map(|event| MinerCommand::Opportunity {
+                                    event,
+                                    durable_ack: None,
+                                })
                         })
                 };
                 let command = if let Ok(command) = live_probe {
@@ -621,12 +665,19 @@ pub fn spawn_miner_worker(
                             let _ = trigger.try_send(());
                         }
                     }
-                    Some(MinerCommand::Opportunity(event)) => {
+                    Some(MinerCommand::Opportunity { event, durable_ack }) => {
                         let started = Instant::now();
                         let result = (if command_is_replay {
                             Ok(())
                         } else {
                             opportunity_ledger.append(&event).map(|_| ())
+                        })
+                        .and_then(|()| {
+                            if durable_ack.is_some() {
+                                opportunity_ledger.sync()
+                            } else {
+                                Ok(())
+                            }
                         })
                         .and_then(|_| {
                             let mut stream = miner
@@ -641,6 +692,9 @@ pub fn spawn_miner_worker(
                             &thread_counters.opportunity_total_micros,
                             elapsed_micros(started),
                         );
+                        if let Some(ack) = durable_ack {
+                            let _ = ack.send(result.clone());
+                        }
                         if let Err(error) = result {
                             if command_is_replay {
                                 replay_rejected_records = replay_rejected_records.saturating_add(1);
@@ -884,4 +938,77 @@ fn record_timing(last: &AtomicU64, maximum: &AtomicU64, total: &AtomicU64, micro
     let _ = total.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
         Some(current.saturating_add(micros))
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use nando_operator_learning::{OnlineCollectionConfig, OpportunityBridgeEventV1};
+    use nando_response_actor::{OnlineResponseStream, OnlineResponseTailConfig};
+
+    #[test]
+    fn durable_opportunity_ack_follows_synced_ledger_and_applied_state() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-miner-durable-opportunity-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let frames = root.join("frames.jsonl");
+        File::create(&frames).expect("empty frames");
+        let response = Arc::new(Mutex::new(
+            OnlineResponseStream::open_streaming(OnlineResponseTailConfig {
+                input_path: frames,
+                report_path: root.join("report.json"),
+                checkpoint_path: root.join("response.checkpoint"),
+                idle_sleep: Duration::from_millis(1),
+            })
+            .expect("response stream"),
+        ));
+        let collection = Arc::new(Mutex::new(
+            OnlineCollectionMiner::open(
+                root.join("collection.checkpoint"),
+                OnlineCollectionConfig::default(),
+            )
+            .expect("collection miner"),
+        ));
+        let worker = spawn_miner_worker(response.clone(), collection, root.clone(), None)
+            .expect("miner worker");
+        worker
+            .submit_opportunity_durable(
+                OpportunityBridgeEventV1::request("51".repeat(32), 29, 1),
+                Duration::from_secs(2),
+            )
+            .expect("durable ack");
+
+        let persisted = read_framed_cbor::<MinerOpportunityEvent>(
+            &root.join("response-opportunity-segments-v2"),
+            "opportunity",
+        )
+        .expect("persisted ledger");
+        assert_eq!(persisted.len(), 1);
+        assert!(matches!(
+            persisted.first(),
+            Some(MinerOpportunityEvent::Request {
+                input_tokens: 29,
+                ..
+            })
+        ));
+        assert_eq!(
+            response
+                .lock()
+                .expect("response state")
+                .status()
+                .opportunity_ordinary_tokens,
+            29
+        );
+        drop(worker);
+        let _ = fs::remove_dir_all(root);
+    }
 }

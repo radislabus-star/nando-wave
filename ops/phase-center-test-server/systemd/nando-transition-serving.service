@@ -16,6 +16,9 @@ Environment=NANDO_GATEWAY_CPU_ROUTE_READY=1
 Environment=NANDO_FALLBACK_MANAGED_BY_NGINX=1
 Environment=NANDO_EMBEDDED_RESPONSE_MINER_ENABLED=0
 Environment=NANDO_GENERIC_RESPONSE_MINER_ENABLED=0
+Environment=NANDO_OPPORTUNITY_BRIDGE_PRODUCER_ENABLED=1
+Environment=NANDO_OPPORTUNITY_BRIDGE_CONSUMER_ENABLED=0
+Environment=NANDO_OPPORTUNITY_BRIDGE_ROOT=/var/lib/nando-wave/transition/opportunity-bridge-v1
 Environment=MIMALLOC_PURGE_DELAY=0
 WorkingDirectory=/opt/nando-wave
 ExecStart=/opt/nando-wave/bin/nando-transition-serving
