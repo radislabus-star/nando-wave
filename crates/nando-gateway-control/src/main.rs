@@ -119,7 +119,11 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
                 "<tr><td>{}</td><td class=\"{}\">{}</td></tr>",
                 html_escape(service.unit),
                 if service.active { "ok" } else { "off" },
-                if service.active { "RUNNING" } else { "STOPPED" }
+                if service.active {
+                    "РАБОТАЕТ"
+                } else {
+                    "ОСТАНОВЛЕН"
+                }
             )
         })
         .collect::<String>();
@@ -135,12 +139,12 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let economics_status = match economics.get("schema").and_then(Value::as_str) {
         Some(schema) if schema.starts_with("nando.economics-snapshot.v") => {
             if economics_age <= 120 {
-                "FRESH"
+                "СВЕЖИЙ"
             } else {
-                "STALE"
+                "УСТАРЕЛ"
             }
         }
-        _ => "MISSING",
+        _ => "ОТСУТСТВУЕТ",
     };
     let economics_age_text = format!("{} с", economics_age);
     let hard_gate = yes_no(
@@ -447,6 +451,13 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
                 "relation_max_runtime_parity_cases",
             ),
             active_packages: response_active,
+            active_transition_profiles: active_profiles,
+            verified_local_accepts,
+            call_saving_share_milli: metric_u64(&economics, "call_saving_share_milli"),
+            input_token_saving_share_milli: metric_u64(
+                &economics,
+                "input_token_saving_share_milli",
+            ),
             online_ready: online_status == "READY",
             capture_phase: metric_str(provider_capture, "phase", "missing"),
             capture_records: metric_u64(provider_capture, "records"),
@@ -472,7 +483,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="15">
-<title>Nando Machine · Signal Control</title>
+<title>Nando Machine · Управление сигналом</title>
 <style>
 :root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
@@ -483,7 +494,7 @@ header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1p
 h1 {{ margin:0; font-size:18px; letter-spacing:0; text-transform:uppercase; }}
 .build {{ color:#7f8991; font-size:12px; overflow-wrap:anywhere; }}
 .model-id {{ color:#8fd5ff; font-size:12px; font-weight:700; }}
-.model-id::before {{ content:"MODEL "; color:#66727a; font-weight:400; }}
+.model-id::before {{ content:"МОДЕЛЬ "; color:#66727a; font-weight:400; }}
 .mode-wrap {{ display:flex; align-items:center; gap:10px; }}
 .mode-label {{ color:#7f8991; font-size:12px; text-transform:uppercase; }}
 .mode {{ color:#66d98b; font-size:14px; font-weight:700; }}
@@ -507,7 +518,7 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .signal-pipeline .architecture-state {{ flex-wrap:wrap; justify-content:flex-end; }}
 .state-chip {{ color:#8b949b; font-size:12px; font-weight:700; white-space:nowrap; }}
 .state-chip::before {{ content:"["; }} .state-chip::after {{ content:"]"; }}
-.state-chip.live,.state-chip.pass {{ color:#66d98b; }}
+.state-chip.live,.state-chip.work,.state-chip.pass {{ color:#66d98b; }}
 .state-chip.proven {{ color:#82c7ff; }}
 .state-chip.wait {{ color:#e0b35a; }}
 .state-chip.block {{ color:#ff6b63; }}
@@ -539,7 +550,7 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .pipeline-stack {{ border:1px solid #3f464b; background:#080a0b; }}
 .pipeline-stage {{ position:relative; padding:13px 16px 12px; border-left:3px solid #4d565d; border-bottom:1px solid #272d31; }}
 .pipeline-stage:last-child {{ border-bottom:0; }}
-.pipeline-stage.live {{ border-left-color:#58c87d; }}
+.pipeline-stage.live,.pipeline-stage.work {{ border-left-color:#58c87d; }}
 .pipeline-stage.proven {{ border-left-color:#65aee7; }}
 .pipeline-stage.wait {{ border-left-color:#d2a34b; }}
 .pipeline-stage.block {{ border-left-color:#f05f58; background:#120d0e; }}
@@ -547,7 +558,7 @@ h2 {{ margin:0 0 10px; color:#dfe5e9; font-size:14px; letter-spacing:0; text-tra
 .pipeline-stage-head {{ display:grid; grid-template-columns:58px minmax(0,1fr) auto; align-items:start; gap:10px; }}
 .pipeline-index {{ color:#8c979f; font-size:14px; font-weight:700; }}
 .pipeline-stage h3 {{ margin:0; color:#dce3e7; font-size:15px; line-height:1.35; }}
-.pipeline-stage.live h3 {{ color:#a9e8bb; }}
+.pipeline-stage.live h3,.pipeline-stage.work h3 {{ color:#a9e8bb; }}
 .pipeline-stage.proven h3 {{ color:#add9f8; }}
 .pipeline-stage.block h3 {{ color:#ffc0bc; }}
 .pipeline-stage.locked h3 {{ color:#777f85; }}
@@ -661,7 +672,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
 </head>
 <body>
 <header><div class="header-inner">
-<div class="brand"><h1>Nando Machine</h1><span class="model-id">{model_label}</span><span class="build">deployed {build_id} · {build_commit_short}</span></div>
+<div class="brand"><h1>Nando Machine</h1><span class="model-id">{model_label}</span><span class="build">развёрнуто {build_id} · {build_commit_short}</span></div>
 <div class="mode-wrap"><span class="mode-label">Режим</span><span class="mode">{mode}</span></div>
 </div></header>
 <main>
@@ -676,95 +687,95 @@ td:last-child {{ text-align:right; font-weight:700; }}
 <tr><td>Обычный трафик на CPU</td><td>{cpu_share}</td></tr>
 <tr><td>Экономия входных токенов</td><td>{token_share}</td></tr>
 <tr><td>Предотвращено LLM-вызовов</td><td>{avoided_calls}</td></tr>
-<tr><td>ACTIVE / QUARANTINE</td><td>{response_active} / {response_quarantine}</td></tr>
+<tr><td>Активные / карантин</td><td>{response_active} / {response_quarantine}</td></tr>
 </table></section>
 <section class="band"><h2>Независимый допуск</h2><table>
-<tr><td>Composite gate</td><td>{verdict}</td></tr>
-<tr><td>False accepts</td><td>{false_accepts}</td></tr>
-<tr><td>Parity mismatches</td><td>{parity_mismatches}</td></tr>
-<tr><td>Admission emitted / blocked</td><td>{online_emitted} / {online_blocked}</td></tr>
+<tr><td>Составной gate</td><td>{verdict}</td></tr>
+<tr><td>Ложные допуски</td><td>{false_accepts}</td></tr>
+<tr><td>Расхождения parity</td><td>{parity_mismatches}</td></tr>
+<tr><td>Допуск выдан / заблокирован</td><td>{online_emitted} / {online_blocked}</td></tr>
 </table></section>
 </div>
-<details id="technical-details" class="technical-console"><summary><span class="technical-toggle" aria-hidden="true"></span><span class="technical-summary-title">ДИАГНОСТИКА И ДОКАЗАТЕЛЬСТВА</span><span class="technical-summary-meta">LIVE SNAPSHOT · AUTO 15S</span></summary><div class="advanced">
-<div class="console-toolbar"><span class="console-path">nando://control/signal-map</span><span>model {model_label} · build {build_id} · {build_commit_short}</span></div>
+<details id="technical-details" class="technical-console"><summary><span class="technical-toggle" aria-hidden="true"></span><span class="technical-summary-title">ДИАГНОСТИКА И ДОКАЗАТЕЛЬСТВА</span><span class="technical-summary-meta">ЖИВОЙ СНИМОК · ОБНОВЛЕНИЕ 15 С</span></summary><div class="advanced">
+<div class="console-toolbar"><span class="console-path">nando://control/signal-map</span><span>модель {model_label} · сборка {build_id} · {build_commit_short}</span></div>
 <div class="proof-console">{research_architecture}</div>
 <div class="technical-layout">
-<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> systemctl <span class="console-arg">--scope nando</span></h2><table class="console-table">{service_rows}</table></section>
-	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> admission inspect <span class="console-arg">--strict</span></h2><table class="console-table">
-<tr><td>Composite gate</td><td>{verdict}</td></tr>
-<tr><td>Future eligibility</td><td>{eligible}</td></tr>
-<tr><td>Evidence fresh</td><td>{fresh}</td></tr>
-<tr><td>Runtime route ready</td><td>{route_ready}</td></tr>
+<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> службы Nando</h2><table class="console-table">{service_rows}</table></section>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> независимый допуск <span class="console-arg">строгая проверка</span></h2><table class="console-table">
+<tr><td>Составной gate</td><td>{verdict}</td></tr>
+<tr><td>Допуск по future</td><td>{eligible}</td></tr>
+<tr><td>Свежесть evidence</td><td>{fresh}</td></tr>
+<tr><td>Готовность runtime-маршрута</td><td>{route_ready}</td></tr>
 	</table></section>
-	<section class="console-panel wide"><h2 class="console-command"><span class="console-prompt">$</span> miner status <span class="console-arg">--live --proof</span></h2><table class="console-table">
-	<tr><td>Состояние / возраст snapshot</td><td>{online_status} / {online_age} с</td></tr>
+	<section class="console-panel wide"><h2 class="console-command"><span class="console-prompt">$</span> состояние майнера <span class="console-arg">живой поток + доказательства</span></h2><table class="console-table">
+	<tr><td>Состояние / возраст снимка</td><td>{online_status} / {online_age} с</td></tr>
 	<tr><td>Очередь / ёмкость</td><td>{worker_queue}</td></tr>
-	<tr><td>Обработано / ошибок worker</td><td>{worker_processed}</td></tr>
-	<tr><td>Задержка synthesis</td><td>{worker_synthesis_latency}</td></tr>
-	<tr><td>Checkpoint policy</td><td>{worker_checkpoint_policy}</td></tr>
+	<tr><td>Обработано / ошибок worker-процесса</td><td>{worker_processed}</td></tr>
+	<tr><td>Задержка синтеза</td><td>{worker_synthesis_latency}</td></tr>
+	<tr><td>Политика checkpoint</td><td>{worker_checkpoint_policy}</td></tr>
 	<tr><td>Последний checkpoint / всего</td><td>{worker_checkpoint_latency}</td></tr>
-	<tr><td>Teacher transitions / pools</td><td>{online_transitions} / {online_teacher_pools}</td></tr>
-	<tr><td>Teacher programs</td><td>{online_teacher_programs}</td></tr>
-	<tr><td>CEGIS cohorts / winners / exact checks</td><td>{online_cegis_cohorts} / {online_cegis_winners} / {online_exact_checks}</td></tr>
-	<tr><td>Candidates / admission-ready</td><td>{online_candidates} / {online_admission_ready}</td></tr>
-	<tr><td>Admission emitted / blocked / accounting</td><td>{online_emitted} / {online_blocked} / {online_admission_accounting}</td></tr>
-	<tr><td>Точный admission blocker</td><td>{online_admission_blockers}</td></tr>
-	<tr><td>Лучшее frozen generation</td><td>{online_generation}</td></tr>
+	<tr><td>Teacher-переходы / пулы</td><td>{online_transitions} / {online_teacher_pools}</td></tr>
+	<tr><td>Teacher-программы</td><td>{online_teacher_programs}</td></tr>
+	<tr><td>CEGIS: когорты / победители / точные проверки</td><td>{online_cegis_cohorts} / {online_cegis_winners} / {online_exact_checks}</td></tr>
+	<tr><td>Кандидаты / готовы к допуску</td><td>{online_candidates} / {online_admission_ready}</td></tr>
+	<tr><td>Допуск выдан / заблокирован / учтено</td><td>{online_emitted} / {online_blocked} / {online_admission_accounting}</td></tr>
+	<tr><td>Точный блокер допуска</td><td>{online_admission_blockers}</td></tr>
+	<tr><td>Лучшее замороженное поколение</td><td>{online_generation}</td></tr>
 	<tr><td>Горячее состояние</td><td>{online_warm_bytes} Б</td></tr>
-	<tr><td>False accepts / parity failures</td><td>{online_false_accepts} / {online_parity_failures}</td></tr>
-	<tr><td>Текущее verified-окно</td><td>{online_product_window}</td></tr>
+	<tr><td>Ложные допуски / ошибки parity</td><td>{online_false_accepts} / {online_parity_failures}</td></tr>
+	<tr><td>Текущее проверенное окно</td><td>{online_product_window}</td></tr>
 	</table></section>
-	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> registry status <span class="console-arg">--actors</span></h2><table class="console-table">
-	<tr><td>ACTIVE / QUARANTINE</td><td>{response_active} / {response_quarantine}</td></tr>
-	<tr><td>ACTIVE package</td><td>{active_response_id}</td></tr>
-	<tr><td>ACTIVE program</td><td>{active_response_program}</td></tr>
-	<tr><td>Доказательство ACTIVE</td><td>{active_response_progress}</td></tr>
-	<tr><td>Execution p99</td><td>{execution_p99}</td></tr>
-	<tr><td>Размер transition packages</td><td>{package_bytes} Б</td></tr>
-	<tr><td>Чистые active future rows</td><td>{active_future_rows}</td></tr>
-	<tr><td>Shadow executions</td><td>{shadow_executions}</td></tr>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> реестр операторов</h2><table class="console-table">
+	<tr><td>Активные / карантин</td><td>{response_active} / {response_quarantine}</td></tr>
+	<tr><td>Активный пакет</td><td>{active_response_id}</td></tr>
+	<tr><td>Активная программа</td><td>{active_response_program}</td></tr>
+	<tr><td>Доказательство активного пакета</td><td>{active_response_progress}</td></tr>
+	<tr><td>Исполнение p99</td><td>{execution_p99}</td></tr>
+	<tr><td>Размер пакетов переходов</td><td>{package_bytes} Б</td></tr>
+	<tr><td>Чистые активные future-строки</td><td>{active_future_rows}</td></tr>
+	<tr><td>Исполнения в SHADOW</td><td>{shadow_executions}</td></tr>
 	</table></section>
-	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> collection status <span class="console-arg">--synthesis</span></h2><table class="console-table">
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> синтез коллекции</h2><table class="console-table">
 	<tr><td>Наблюдения</td><td>{collection_observations}</td></tr>
-	<tr><td>Exact / semantic / accounted executable</td><td>{collection_exact} / {collection_semantic} / {collection_executable}</td></tr>
-	<tr><td>Ambiguous / irreducible</td><td>{collection_ambiguous} / {collection_irreducible}</td></tr>
-	<tr><td>Accounting identity</td><td>{collection_accounting}</td></tr>
-	<tr><td>Frozen / QUARANTINE / future receipts</td><td>{collection_frozen} / {collection_quarantine} / {collection_future_receipts}</td></tr>
-	<tr><td>Candidate emitted / blocked / accounting</td><td>{collection_candidate_progress}</td></tr>
-	<tr><td>Точные blockers</td><td>{collection_blockers}</td></tr>
+	<tr><td>Точные / семантические / учтённые исполнимые</td><td>{collection_exact} / {collection_semantic} / {collection_executable}</td></tr>
+	<tr><td>Неоднозначные / неразложимые</td><td>{collection_ambiguous} / {collection_irreducible}</td></tr>
+	<tr><td>Тождество учёта</td><td>{collection_accounting}</td></tr>
+	<tr><td>Замороженные / карантин / future-квитанции</td><td>{collection_frozen} / {collection_quarantine} / {collection_future_receipts}</td></tr>
+	<tr><td>Кандидат выдан / заблокирован / учтён</td><td>{collection_candidate_progress}</td></tr>
+	<tr><td>Точные блокеры</td><td>{collection_blockers}</td></tr>
 	<tr><td>Отозванные / ошибочные гипотезы</td><td>{collection_revoked} / {collection_rejected_wrong_candidates}</td></tr>
 	</table></section>
-	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> economics status <span class="console-arg">--verified</span></h2><table class="console-table">
-	<tr><td>Активные transition-профили</td><td>{active_profiles}</td></tr>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> экономика <span class="console-arg">проверенные данные</span></h2><table class="console-table">
+	<tr><td>Активные профили переходов</td><td>{active_profiles}</td></tr>
 	<tr><td>LLM-вызовов предотвращено</td><td>{avoided_calls}</td></tr>
 	<tr><td>Входных токенов сэкономлено</td><td>{tokens_saved}</td></tr>
-	<tr><td>Наблюдаемых provider-запросов</td><td>{total_requests}</td></tr>
+	<tr><td>Наблюдаемых запросов провайдера</td><td>{total_requests}</td></tr>
 	<tr><td>Доля обычного трафика на CPU</td><td>{cpu_share}</td></tr>
 	<tr><td>Экономия входных токенов</td><td>{token_share}</td></tr>
 	<tr><td>Покрытие независимой проверкой</td><td>{verification_coverage}</td></tr>
-	<tr><td>Economics snapshot</td><td>{economics_status}</td></tr>
-	<tr><td>False accepts</td><td>{false_accepts}</td></tr>
-	<tr><td>Runtime parity mismatches</td><td>{parity_mismatches}</td></tr>
-	<tr><td>Promotion policy</td><td>{policy_version}</td></tr>
+	<tr><td>Снимок экономики</td><td>{economics_status}</td></tr>
+	<tr><td>Ложные допуски</td><td>{false_accepts}</td></tr>
+	<tr><td>Расхождения runtime parity</td><td>{parity_mismatches}</td></tr>
+	<tr><td>Политика продвижения</td><td>{policy_version}</td></tr>
 	</table></section>
-	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> economics denominator <span class="console-arg">--m1</span></h2><table class="console-table">
-	<tr><td>Учитываемые / исключённые intents</td><td>{eligible_intents} / {excluded_intents}</td></tr>
-	<tr><td>Входные токены denominator</td><td>{global_input_tokens}</td></tr>
-	<tr><td>Local / independently verified</td><td>{actual_local_accepts} / {verified_local_accepts}</td></tr>
-	<tr><td>Неразрешённые исходы / отсутствующие receipts</td><td>{unresolved_local} / {missing_receipts}</td></tr>
-	<tr><td>Economics hard gate</td><td>{hard_gate}</td></tr>
-	<tr><td>Product M1</td><td>{product_m1}</td></tr>
-	<tr><td>До M1: intents / avoided calls</td><td>{m1_intent_gap} / {m1_avoided_gap}</td></tr>
-	<tr><td>Возраст economics snapshot</td><td>{economics_age_text}</td></tr>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> знаменатель экономики <span class="console-arg">M1</span></h2><table class="console-table">
+	<tr><td>Учитываемые / исключённые запросы</td><td>{eligible_intents} / {excluded_intents}</td></tr>
+	<tr><td>Входные токены знаменателя</td><td>{global_input_tokens}</td></tr>
+	<tr><td>Локальные / независимо проверенные</td><td>{actual_local_accepts} / {verified_local_accepts}</td></tr>
+	<tr><td>Неразрешённые исходы / отсутствующие квитанции</td><td>{unresolved_local} / {missing_receipts}</td></tr>
+	<tr><td>Жёсткий gate экономики</td><td>{hard_gate}</td></tr>
+	<tr><td>Продуктовая метрика M1</td><td>{product_m1}</td></tr>
+	<tr><td>До M1: запросов / предотвращённых вызовов</td><td>{m1_intent_gap} / {m1_avoided_gap}</td></tr>
+	<tr><td>Возраст снимка экономики</td><td>{economics_age_text}</td></tr>
 	</table></section>
-	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> opportunity upper-bound <span class="console-arg">--m3</span></h2><table class="console-table">
-	<tr><td>Authoritative окно</td><td>{opportunity_intents} intents / {opportunity_tokens} tokens</td></tr>
-	<tr><td>Optimistic executable upper bound</td><td>{upper_bound_tokens} tokens / {upper_bound_share}</td></tr>
-	<tr><td>Irreducible / unresolved tokens</td><td>{irreducible_tokens} / {unresolved_tokens}</td></tr>
-	<tr><td>Upper-bound accounting</td><td>{upper_bound_accounting}</td></tr>
+	<section class="console-panel"><h2 class="console-command"><span class="console-prompt">$</span> верхняя граница возможностей <span class="console-arg">M3</span></h2><table class="console-table">
+	<tr><td>Авторитетное окно</td><td>{opportunity_intents} запросов / {opportunity_tokens} токенов</td></tr>
+	<tr><td>Оптимистичная исполнимая граница</td><td>{upper_bound_tokens} токенов / {upper_bound_share}</td></tr>
+	<tr><td>Неразложимые / неразрешённые токены</td><td>{irreducible_tokens} / {unresolved_tokens}</td></tr>
+	<tr><td>Учёт верхней границы</td><td>{upper_bound_accounting}</td></tr>
 	<tr><td>M3 достижим в этом окне</td><td>{m3_upper_bound_reachable}</td></tr>
 	</table></section>
-	<section class="console-panel wide manifest"><h2 class="console-command"><span class="console-prompt">$</span> build manifest <span class="console-arg">--modules</span></h2><table class="console-table">{module_version_rows}</table></section>
+	<section class="console-panel wide manifest"><h2 class="console-command"><span class="console-prompt">$</span> манифест сборки <span class="console-arg">модули</span></h2><table class="console-table">{module_version_rows}</table></section>
 </div>
 </div></details>
 <section class="band"><h2>Граница</h2><p class="note">{reason}. Кнопка BYPASS останавливает Nando-наблюдение и майнер, но Nginx продолжает передавать Codex-трафик в OpenAI.</p></section>
@@ -1033,14 +1044,14 @@ fn teacher_programs_text(discovery: &Value) -> String {
 
 fn module_version_rows(manifest: &Value) -> String {
     let Some(modules) = manifest.get("modules").and_then(Value::as_array) else {
-        return "<tr><td>Manifest</td><td class=\"off\">MISSING</td></tr>".to_owned();
+        return "<tr><td>Манифест</td><td class=\"off\">ОТСУТСТВУЕТ</td></tr>".to_owned();
     };
     modules
         .iter()
         .map(|module| {
-            let name = metric_str(module, "name", "unknown");
-            let version = metric_str(module, "version", "MISSING");
-            let contract = metric_str(module, "contract", "MISSING");
+            let name = metric_str(module, "name", "неизвестно");
+            let version = metric_str(module, "version", "ОТСУТСТВУЕТ");
+            let contract = metric_str(module, "contract", "ОТСУТСТВУЕТ");
             let sha = metric_str(module, "sha256", "");
             let short_sha = sha.get(..12).unwrap_or(sha);
             let value = if short_sha.is_empty() {
@@ -1115,7 +1126,7 @@ fn authorized(state: &AppState, key: &str) -> bool {
 }
 
 fn yes_no(value: bool) -> &'static str {
-    if value { "YES" } else { "NO" }
+    if value { "ДА" } else { "НЕТ" }
 }
 
 fn html_escape(value: &str) -> String {

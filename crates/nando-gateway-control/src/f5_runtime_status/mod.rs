@@ -176,18 +176,18 @@ mod tests {
         ] {
             assert!(html.contains(&format!("data-rd-stage=\"{stage}\"")));
         }
-        assert!(html.contains("FULL CONTROLLED F5 TO F7 PROOF PATH CONFIRMED"));
-        assert!(html.contains("F6 COMPLETE"));
-        assert!(html.contains("F7 COMPLETE"));
-        assert!(html.contains("F8 COMPLETE"));
+        assert!(html.contains("ПОЛНЫЙ КОНТРОЛИРУЕМЫЙ ПУТЬ ДОКАЗАТЕЛЬСТВА F5-F7 ПОДТВЕРЖДЁН"));
+        assert!(html.contains("F6 ЗАВЕРШЁН"));
+        assert!(html.contains("F7 ЗАВЕРШЁН"));
+        assert!(html.contains("F8 ЗАВЕРШЁН"));
         assert!(html.contains("SHADOW_READY"));
         assert!(html.contains("ACTIVE=0 · authority=false"));
         assert!(html.contains("WATCH_NO_SEARCH_GAIN"));
         assert!(!html.contains("live capture producer missing"));
-        assert!(html.contains("F5 conservative RSS 49631232 / target 16777216 B WATCH"));
-        assert!(html.contains("production-policy RSS 10723328 / target 16777216 B"));
-        assert!(html.contains("p99 no-match/matched 195340/648010 ns"));
-        assert!(!html.contains("production end-to-end confirmed"));
+        assert!(html.contains("консервативный RSS F5 49631232 / цель 16777216 Б · НАБЛЮДЕНИЕ"));
+        assert!(html.contains("RSS production-политики 10723328 / цель 16777216 Б"));
+        assert!(html.contains("p99 без совпадения/с совпадением 195340/648010 нс"));
+        assert!(!html.contains("полный production-маршрут подтверждён"));
     }
 
     #[test]
@@ -200,9 +200,9 @@ mod tests {
         });
 
         assert!(html.contains("data-research-status=\"unavailable\""));
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
-        assert!(html.contains("F8 LOCKED"));
-        assert!(!html.contains("FULL CONTROLLED F5 TO F7 PROOF PATH CONFIRMED"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
+        assert!(html.contains("F8 ЗАКРЫТ"));
+        assert!(!html.contains("ПОЛНЫЙ КОНТРОЛИРУЕМЫЙ ПУТЬ ДОКАЗАТЕЛЬСТВА F5-F7 ПОДТВЕРЖДЁН"));
     }
 
     #[test]
@@ -214,8 +214,8 @@ mod tests {
             ..embedded_sources()
         });
 
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
-        assert!(!html.contains("F5 COMPLETE"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
+        assert!(!html.contains("F5 ЗАВЕРШЁН"));
     }
 
     #[test]
@@ -226,8 +226,8 @@ mod tests {
             ..embedded_sources()
         });
 
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
-        assert!(!html.contains("F6 COMPLETE"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
+        assert!(!html.contains("F6 ЗАВЕРШЁН"));
     }
 
     #[test]
@@ -238,8 +238,8 @@ mod tests {
             ..embedded_sources()
         });
 
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
-        assert!(!html.contains("F7 COMPLETE"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
+        assert!(!html.contains("F7 ЗАВЕРШЁН"));
     }
 
     #[test]
@@ -251,8 +251,8 @@ mod tests {
             ..embedded_sources()
         });
 
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
-        assert!(!html.contains("F8-0 PASS"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
+        assert!(!html.contains("8-0 ПРОЙДЕНО"));
     }
 
     #[test]
@@ -267,8 +267,8 @@ mod tests {
             ..embedded_sources()
         });
 
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
-        assert!(!html.contains("F8 COMPLETE"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
+        assert!(!html.contains("F8 ЗАВЕРШЁН"));
     }
 
     #[test]
@@ -279,7 +279,7 @@ mod tests {
             ..embedded_sources()
         });
 
-        assert!(html.contains("R&amp;D STATUS UNAVAILABLE"));
+        assert!(html.contains("СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН"));
         assert!(!html.contains("SHADOW_READY"));
     }
 }

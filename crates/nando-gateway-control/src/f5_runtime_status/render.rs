@@ -15,240 +15,244 @@ pub(super) fn verified_panel(
     stages.push_str(&stage(
         "f5-a",
         "5A",
-        "Executable operator artifact",
-        "OperatorArtifactV1 owns the immutable effect law and compiled program.",
-        "artifact",
-        "PASS",
+        "Исполнимый артефакт оператора",
+        "OperatorArtifactV1 владеет неизменяемым законом эффекта и скомпилированной программой.",
+        "артефакт",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("typed artifact + proof roots"));
+    stages.push_str(&edge("типизированный артефакт + корни доказательства"));
     stages.push_str(&stage(
         "f5-b",
         "5B",
-        "Canonical runtime context",
-        "Normalizes the incoming surface without granting execution authority.",
-        "context",
-        "PASS",
+        "Канонический runtime-контекст",
+        "Нормализует входящую поверхность без выдачи execution authority.",
+        "контекст",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("canonical structural surface"));
+    stages.push_str(&edge("каноническая структурная поверхность"));
     stages.push_str(&stage(
         "f5-c",
         "5C",
-        "Structural dispatch + role binding",
-        "Selects bounded structural candidates and resolves runtime roles fail-closed.",
-        "binding",
-        "PASS",
+        "Структурная маршрутизация и связывание ролей",
+        "Выбирает ограниченный набор структурных кандидатов и строго разрешает runtime-роли.",
+        "связывание",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("unique role environment"));
+    stages.push_str(&edge("единственное окружение ролей"));
     stages.push_str(&stage(
         "f5-d",
         "5D",
-        "Capability and action grounding",
-        "Binds the semantic mode to an advertised physical capability and action.",
-        "grounding",
-        "PASS",
+        "Связывание capability и действия",
+        "Связывает семантический режим с объявленной физической capability и действием.",
+        "связывание",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("winner-owned physical action"));
+    stages.push_str(&edge("физическое действие, принадлежащее победителю"));
     stages.push_str(&stage(
         "f5-e",
         "5E",
-        "Actor + Operator VM shadow",
-        "Executes the compiled mode in shadow and proves actor/VM parity.",
-        "VM shadow",
-        "PASS",
+        "Actor и Operator VM в SHADOW",
+        "Исполняет скомпилированный режим в SHADOW и доказывает parity actor/VM.",
+        "VM в SHADOW",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("phase-ranked bounded candidates"));
+    stages.push_str(&edge("ограниченные кандидаты, ранжированные фазой"));
     stages.push_str(&stage(
         "f5-f",
         "5F",
-        "Phase integration",
-        "Phase ranking preserves safety; this corpus did not yet prove search reduction.",
+        "Интеграция фазы",
+        "Фазовое ранжирование сохраняет безопасность; этот корпус пока не доказал сокращение поиска.",
         &status.phase_search_gain,
-        "WATCH",
+        "НАБЛЮДЕНИЕ",
         "wait",
     ));
-    stages.push_str(&edge("traffic projection + pinned generations"));
+    stages.push_str(&edge("проекция трафика + закреплённые поколения"));
     stages.push_str(&stage(
         "f5-g",
         "5G",
-        "Incoming traffic shadow",
-        "Accounts the ordinary window and enforces the hard traffic ceiling without local accepts.",
+        "Входящий трафик в SHADOW",
+        "Учитывает обычное окно и соблюдает жёсткий потолок трафика без локальных допусков.",
         &format!(
-            "{} / {} ordinary",
+            "{} / {} обычных",
             status.accounted_rows, status.ordinary_rows
         ),
-        "WATCH",
+        "НАБЛЮДЕНИЕ",
         "wait",
     ));
     stages.push_str(&facts(status));
     stages.push_str(
-        r#"<div class="research-boundary" data-edge="f5-to-f6"><span class="tree-glyph">│</span><strong>FULL CONTROLLED F5 SIGNAL TO F6 INPUT CONFIRMED</strong><span>not a production end-to-end claim</span></div>"#,
+        r#"<div class="research-boundary" data-edge="f5-to-f6"><span class="tree-glyph">│</span><strong>ПОЛНЫЙ КОНТРОЛИРУЕМЫЙ СИГНАЛ F5 ДО ВХОДА F6 ПОДТВЕРЖДЁН</strong><span>это не заявление о полном production-маршруте</span></div>"#,
     );
     stages.push_str(&stage(
         "f6",
         "F6",
-        "Independent verifier",
-        "Independently rebuilds the request scene, roles, capability, action and expected output.",
+        "Независимый верификатор",
+        "Независимо восстанавливает сцену запроса, роли, capability, действие и ожидаемый результат.",
         &format!(
-            "{} adversarial · p99 {} ns",
+            "состязательных {} · p99 {} нс",
             status.f6_integration_pass, status.f6_matched_p99_ns
         ),
-        "PASS",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("opaque verifier receipt · authority=false"));
+    stages.push_str(&edge(
+        "непрозрачная квитанция верификатора · authority=false",
+    ));
     stages.push_str(
-        r#"<div class="research-boundary" data-edge="f6-to-f7"><span class="tree-glyph">│</span><strong>FULL CONTROLLED F5 TO F6 PROOF PATH CONFIRMED</strong><span>generation authority remains false</span></div>"#,
+        r#"<div class="research-boundary" data-edge="f6-to-f7"><span class="tree-glyph">│</span><strong>ПОЛНЫЙ КОНТРОЛИРУЕМЫЙ ПУТЬ ДОКАЗАТЕЛЬСТВА F5-F6 ПОДТВЕРЖДЁН</strong><span>authority поколения остаётся false</span></div>"#,
     );
     stages.push_str(&stage(
         "f7-a",
         "7A",
-        "Generation identity + restart bundle",
-        "One canonical generation ID binds immutable artifacts and reconstructed dispatch.",
-        "canonical restart",
-        "PASS",
+        "Идентичность поколения и restart-пакет",
+        "Один канонический ID поколения связывает неизменяемые артефакты и восстановленную маршрутизацию.",
+        "канонический перезапуск",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("generation-owned partitions"));
+    stages.push_str(&edge("разделы, принадлежащие поколению"));
     stages.push_str(&stage(
         "f7-b",
         "7B",
-        "Support / frozen-future ledger",
-        "Separates support, future, censored outcomes and the post-freeze watermark.",
-        "cross-partition reuse blocked",
-        "PASS",
+        "Журнал support и frozen-future",
+        "Разделяет support, future, цензурированные исходы и watermark после заморозки.",
+        "повтор между разделами запрещён",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("generation + lineage + request root"));
+    stages.push_str(&edge("поколение + lineage + корень запроса"));
     stages.push_str(&stage(
         "f7-c",
         "7C",
-        "Generation-bound verifier receipt",
-        "Binds the independent F6 verdict to one generation and exact capture identity.",
-        "tamper / relabel blocked",
-        "PASS",
+        "Квитанция верификатора, связанная с поколением",
+        "Связывает независимый вердикт F6 с одним поколением и точной идентичностью capture.",
+        "подмена и переименование запрещены",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("self-validating checkpoint"));
+    stages.push_str(&edge("самопроверяемый checkpoint"));
     stages.push_str(&stage(
         "f7-d",
         "7D",
-        "Atomic persistence + recovery",
-        "Publishes alternating generation slots and restores only monotonic byte-identical state.",
-        "fsync + rename + recovery",
-        "PASS",
+        "Атомарное хранение и восстановление",
+        "Публикует чередующиеся слоты поколений и восстанавливает только монотонное байт-идентичное состояние.",
+        "fsync + rename + восстановление",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("exact provider-request capture join"));
+    stages.push_str(&edge("точное соединение с capture запроса провайдера"));
     stages.push_str(&stage(
         "f7-e",
         "7E",
-        "Controlled generation shadow",
-        "Loads after HTTP bind, pins the generation before enqueue, runs F5 and independently verifies through F6.",
+        "Контролируемое поколение в SHADOW",
+        "Загружается после привязки HTTP, закрепляет поколение до постановки в очередь, запускает F5 и независимо проверяет через F6.",
         &format!(
-            "queue <= {} · p99 {} ns",
+            "очередь <= {} · p99 {} нс",
             status.f7_queue_max, status.f7_matched_p99_ns
         ),
-        "PASS",
+        "ПРОЙДЕНО",
         "pass",
     ));
     stages.push_str(&f7_facts(status));
     stages.push_str(
-        r#"<div class="research-boundary" data-edge="f7-to-f8"><span class="tree-glyph">│</span><strong>FULL CONTROLLED F5 TO F7 PROOF PATH CONFIRMED</strong><span>live producer, admission and authority are not claimed</span></div>"#,
+        r#"<div class="research-boundary" data-edge="f7-to-f8"><span class="tree-glyph">│</span><strong>ПОЛНЫЙ КОНТРОЛИРУЕМЫЙ ПУТЬ ДОКАЗАТЕЛЬСТВА F5-F7 ПОДТВЕРЖДЁН</strong><span>живой producer, допуск и authority не заявлены</span></div>"#,
     );
     stages.push_str(&stage(
         "f8-0",
         "8-0",
-        "Production allocator resource truth",
-        "Separates compiler retention from the retained hot registry under the already deployed allocator policy.",
+        "Реальные ресурсы production-аллокатора",
+        "Отделяет удержание компилятора от сохранённого горячего реестра при уже развёрнутой политике аллокатора.",
         &format!(
-            "production-policy RSS {} / target {} B · {} runs",
+            "RSS production-политики {} / цель {} Б · запусков {}",
             resource.max_peak_rss_delta_bytes,
             resource.rss_target_bytes,
             resource.resource_observations,
         ),
-        "PASS",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("hash-only provider request receipt"));
+    stages.push_str(&edge("квитанция запроса провайдера только с хешами"));
     stages.push_str(&stage(
         "f8-a",
         "8-A",
-        "Live provider capture owner",
-        "Persists bounded request provenance without retaining or rehashing raw provider payloads.",
-        &format!("{} durable records", final_status.provider_records),
-        "PASS",
+        "Владелец живого capture провайдера",
+        "Сохраняет ограниченную provenance запроса без удержания или повторного хеширования сырого payload провайдера.",
+        &format!("устойчивых записей {}", final_status.provider_records),
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("generation-owned verified receipt"));
+    stages.push_str(&edge("проверенная квитанция, принадлежащая поколению"));
     stages.push_str(&stage(
         "f8-b",
         "8-B",
-        "Durable shadow ledger",
-        "Joins capture, generation, actor and independent verifier receipts without semantic authority.",
-        &format!("{} verified receipts", final_status.verified_receipts),
-        "PASS",
+        "Устойчивый журнал SHADOW",
+        "Соединяет квитанции capture, поколения, actor и независимого верификатора без semantic authority.",
+        &format!("проверенных квитанций {}", final_status.verified_receipts),
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("immutable reconstruction inputs"));
+    stages.push_str(&edge("неизменяемые входы реконструкции"));
     stages.push_str(&stage(
         "f8-c",
         "8-C",
-        "External admission reconstruction",
-        "Rebuilds one candidate from immutable checkpoint, capture index and shadow ledger bytes.",
+        "Реконструкция внешнего допуска",
+        "Восстанавливает одного кандидата из неизменяемого checkpoint, индекса capture и байтов журнала SHADOW.",
         &final_status.external_verdict,
-        "PASS",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("runtime-owned phase evidence"));
+    stages.push_str(&edge("фазовое evidence, принадлежащее runtime"));
     stages.push_str(&stage(
         "f8-d",
         "8-D",
-        "Causal controls + traffic budgets",
-        "Recomputes full and ablated phase outcomes from the exact durable traffic receipt set.",
+        "Причинный контроль и бюджеты трафика",
+        "Повторно вычисляет полные и аблированные фазовые исходы по точному устойчивому набору квитанций трафика.",
         &format!(
-            "applicability gain {} · search gain {}",
+            "прирост применимости {} · прирост поиска {}",
             final_status.full_phase_gain, final_status.search_gain
         ),
-        "PASS",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("restart-exact controlled live shadow"));
+    stages.push_str(&edge(
+        "точный после перезапуска контролируемый живой SHADOW",
+    ));
     stages.push_str(&stage(
         "f8-e",
         "8-E",
-        "Controlled live shadow",
-        "Crosses the real Rust HTTP service and independently reconstructs SHADOW_READY after restart.",
+        "Контролируемый живой SHADOW",
+        "Проходит через реальный Rust HTTP-сервис и независимо восстанавливает SHADOW_READY после перезапуска.",
         &format!(
-            "{}/{} verified",
+            "проверено {}/{}",
             final_status.verified_receipts, final_status.verified_receipts
         ),
-        "PASS",
+        "ПРОЙДЕНО",
         "pass",
     ));
-    stages.push_str(&edge("separate authority lease required"));
+    stages.push_str(&edge("требуется отдельная лицензия authority"));
     stages.push_str(&stage(
         "cpu",
         "CPU",
-        "ACTIVE execution",
-        "Controlled evidence cannot grant production authority or claim natural operator coverage.",
+        "Активное исполнение",
+        "Контролируемое evidence не может выдать production authority или заявить покрытие естественным оператором.",
         "ACTIVE=0 · authority=false",
-        "LOCKED",
+        "ЗАКРЫТО",
         "locked",
     ));
 
     format!(
         r#"<section class="architecture research-architecture" data-research-status="stop-f8-pass-authority-false">
 <div class="architecture-head">
-<div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>artifact -&gt; grounding -&gt; VM -&gt; verifier -&gt; generation -&gt; F8 admission</p></div>
-<div class="architecture-state"><span class="state-chip pass">F5 COMPLETE</span><span class="state-chip pass">F6 COMPLETE</span><span class="state-chip pass">F7 COMPLETE</span><span class="state-chip pass">F8 COMPLETE</span><span class="state-chip locked">AUTHORITY OFF</span><span class="architecture-meta">F5 {} · F7 receipt {}</span></div>
+<div class="architecture-title"><h2>ИССЛЕДОВАТЕЛЬСКИЙ КОНТУР ОПЕРАТОРА</h2><p>артефакт -&gt; связывание -&gt; VM -&gt; верификатор -&gt; поколение -&gt; допуск F8</p></div>
+<div class="architecture-state"><span class="state-chip pass">F5 ЗАВЕРШЁН</span><span class="state-chip pass">F6 ЗАВЕРШЁН</span><span class="state-chip pass">F7 ЗАВЕРШЁН</span><span class="state-chip pass">F8 ЗАВЕРШЁН</span><span class="state-chip locked">AUTHORITY ВЫКЛЮЧЕНА</span><span class="architecture-meta">F5 {} · квитанция F7 {}</span></div>
 </div>
 <div class="flow-tree">{}</div>
-<div class="terminal-rule">controlled F5 -&gt; F8 shadow path confirmed | p99 no-match/matched {}/{} ns | hard max {} ns | hot RSS {} B | natural operator NOT EVALUATED | authority false</div>
+<div class="terminal-rule">контролируемый путь F5 -&gt; F8 в SHADOW подтверждён | p99 без совпадения/с совпадением {}/{} нс | жёсткий максимум {} нс | горячий RSS {} Б | естественный оператор НЕ ОЦЕНЕН | authority=false</div>
 </section>"#,
         escape(commit),
         escape(&status.f7_receipt_date),
@@ -263,7 +267,7 @@ pub(super) fn verified_panel(
 fn facts(status: &PipelineStatus) -> String {
     format!(
         r#"<div class="research-facts">
-<span>projection {}/{}</span><span>organic replay {}</span><span>F5 no-match p99 {} / target {} ns</span><span>F5 matched p99 {} / target {} ns</span><span>F5 hard ceiling {} ns PASS</span><span>RSS {} / target {} B</span><span>F6 no-match p99 {} ns</span><span>F6 matched p99 {} ns</span><span>F6 max {} ns</span>
+<span>проекция {}/{}</span><span>естественный replay {}</span><span>F5 без совпадения p99 {} / цель {} нс</span><span>F5 с совпадением p99 {} / цель {} нс</span><span>жёсткий потолок F5 {} нс ПРОЙДЕН</span><span>RSS {} / цель {} Б</span><span>F6 без совпадения p99 {} нс</span><span>F6 с совпадением p99 {} нс</span><span>максимум F6 {} нс</span>
 </div>"#,
         status.projection_controls_passed,
         status.projection_controls_total,
@@ -284,7 +288,7 @@ fn facts(status: &PipelineStatus) -> String {
 fn f7_facts(status: &PipelineStatus) -> String {
     format!(
         r#"<div class="research-facts">
-<span>capture join exact</span><span>request generation pinned</span><span>raw persisted 0 B</span><span>local accepts 0</span><span>F7 no-match p99 {} ns</span><span>F7 matched p99 {} ns</span><span>F7 max {} ns</span><span>F5 conservative RSS {} / target {} B WATCH</span>
+<span>точное соединение capture</span><span>поколение запроса закреплено</span><span>сохранено сырых данных 0 Б</span><span>локальных допусков 0</span><span>F7 без совпадения p99 {} нс</span><span>F7 с совпадением p99 {} нс</span><span>максимум F7 {} нс</span><span>консервативный RSS F5 {} / цель {} Б · НАБЛЮДЕНИЕ</span>
 </div>"#,
         status.f7_no_match_p99_ns,
         status.f7_matched_p99_ns,
@@ -331,11 +335,11 @@ pub(super) fn unavailable_panel(error: &str) -> String {
     format!(
         r#"<section class="architecture research-architecture" data-research-status="unavailable">
 <div class="architecture-head">
-<div class="architecture-title"><h2>R&amp;D OPERATOR PIPELINE</h2><p>receipt-backed status unavailable</p></div>
-<div class="architecture-state"><span class="state-chip block">R&amp;D STATUS UNAVAILABLE</span><span class="state-chip locked">F8 LOCKED</span></div>
+<div class="architecture-title"><h2>ИССЛЕДОВАТЕЛЬСКИЙ КОНТУР ОПЕРАТОРА</h2><p>статус по доказательным квитанциям недоступен</p></div>
+<div class="architecture-state"><span class="state-chip block">СТАТУС ИССЛЕДОВАНИЯ НЕДОСТУПЕН</span><span class="state-chip locked">F8 ЗАКРЫТ</span></div>
 </div>
-<div class="flow-tree"><div class="terminal-line terminal-failure"><span class="tree-glyph">└─</span><strong>FAIL-CLOSED</strong><span>{}</span></div></div>
-<div class="terminal-rule">no receipt = no PASS claim | authority remains false</div>
+<div class="flow-tree"><div class="terminal-line terminal-failure"><span class="tree-glyph">└─</span><strong>СТРОГИЙ ОТКАЗ</strong><span>{}</span></div></div>
+<div class="terminal-rule">нет квитанции = нет заявления об успехе | authority остаётся false</div>
 </section>"#,
         escape(error)
     )

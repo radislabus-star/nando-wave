@@ -22,6 +22,10 @@ pub(crate) struct LiveSignalView<'a> {
     pub(crate) admission_future_rows: u64,
     pub(crate) admission_runtime_parity_cases: u64,
     pub(crate) active_packages: u64,
+    pub(crate) active_transition_profiles: u64,
+    pub(crate) verified_local_accepts: u64,
+    pub(crate) call_saving_share_milli: u64,
+    pub(crate) input_token_saving_share_milli: u64,
     pub(crate) online_ready: bool,
     pub(crate) capture_phase: &'a str,
     pub(crate) capture_records: u64,
@@ -39,6 +43,7 @@ pub(crate) struct LiveSignalView<'a> {
 #[derive(Clone, Copy)]
 enum RouteState {
     Live,
+    Work,
     Proven,
     Wait,
     Block,
@@ -49,6 +54,7 @@ impl RouteState {
     const fn class(self) -> &'static str {
         match self {
             Self::Live => "live",
+            Self::Work => "work",
             Self::Proven => "proven",
             Self::Wait => "wait",
             Self::Block => "block",
@@ -58,16 +64,17 @@ impl RouteState {
 
     const fn label(self) -> &'static str {
         match self {
-            Self::Live => "LIVE FLOW",
-            Self::Proven => "PROOF ONLY",
-            Self::Wait => "WAIT",
-            Self::Block => "BLOCK",
-            Self::Locked => "LOCKED",
+            Self::Live => "ЖИВОЙ ПОТОК",
+            Self::Work => "РАБОТАЕТ",
+            Self::Proven => "ТОЛЬКО ДОКАЗАТЕЛЬСТВО",
+            Self::Wait => "ОЖИДАНИЕ",
+            Self::Block => "БЛОК",
+            Self::Locked => "ЗАКРЫТО",
         }
     }
 
     const fn live_flow(self) -> bool {
-        matches!(self, Self::Live)
+        matches!(self, Self::Live | Self::Work)
     }
 }
 
@@ -98,6 +105,8 @@ pub(crate) fn render(
         .and_then(Value::as_str)
         .unwrap_or("MISSING");
     let natural_operator_live = live.active_packages > 0;
+    let transition_cpu_working =
+        live.active_transition_profiles > 0 && live.verified_local_accepts > 0;
     let proof_state = if proof.verified {
         RouteState::Proven
     } else {
@@ -109,14 +118,14 @@ pub(crate) fn render(
         proof_state
     };
     let capture_error = if live.capture_last_error.is_empty() {
-        "none"
+        "нет"
     } else {
         live.capture_last_error
     };
 
     let proof_boundary = if proof.verified {
         format!(
-            "STOP-F8 {} / {} verified / {} / commit {}",
+            "STOP-F8 {} / проверено {} / {} / дата {}",
             proof.f8_external_verdict,
             proof.f8_verified_receipts,
             compact(&proof.f5_commit),
@@ -124,56 +133,62 @@ pub(crate) fn render(
         )
     } else {
         format!(
-            "proof receipts unavailable: {}",
+            "доказательные квитанции недоступны: {}",
             proof
                 .failure
                 .as_deref()
-                .unwrap_or("unknown validation failure")
+                .unwrap_or("неизвестная ошибка проверки")
         )
     };
     let (current_stage, current_blocker, current_reason) = if !proof.verified {
         (
             "PROOF",
-            "PROOF RECEIPT VALIDATION",
-            "Controlled capability receipts failed closed validation. Downstream modules cannot display PROOF until their canonical bytes validate.".to_owned(),
+            "ПРОВЕРКА ДОКАЗАТЕЛЬНЫХ КВИТАНЦИЙ",
+            "Квитанции контролируемого доказательства не прошли строгую проверку. Нижние модули не могут показывать доказанный статус, пока не проверены их канонические байты.".to_owned(),
         )
     } else if !natural_operator_live {
         (
             "L3",
-            "L3 NATURAL OPERATOR DISCOVERY",
+            "L3 ОТКРЫТИЕ ЕСТЕСТВЕННОГО ОПЕРАТОРА",
             format!(
-                "Ordinary traces reach learning, but no natural OperatorPackage exists: support {}/32, future {}/32, routed {}, blocker {}. STOP-F8 proves downstream plumbing only; its controlled seed is not natural evidence.",
+                "Обычные трассы доходят до обучения, но естественного OperatorPackage пока нет: support {}/32, future {}/32, маршрутизировано {}, блокер {}. STOP-F8 доказывает только нижнюю техническую цепочку; его контролируемый seed не является естественным evidence.",
                 live.support, live.future, live.routed, live.blocker,
             ),
         )
     } else {
         (
             "L11",
-            "L11 PRODUCTION AUTHORITY",
-            "A natural package exists, but admission still requires an independent authority lease before CPU execution.".to_owned(),
+            "L11 ПРОИЗВОДСТВЕННЫЙ ДОПУСК",
+            "Естественный пакет существует, но перед исполнением на CPU независимый допуск всё ещё должен выдать отдельную лицензию authority.".to_owned(),
         )
     };
 
     let stages = vec![
         PipelineStage {
             id: "L1",
-            title: "Provider request ingress",
+            title: "Приём запроса провайдера",
             owner: "nando-nginx-gateway".into(),
-            input: format!("Codex request / model {model_label}"),
-            live: "HTTPS streaming is active; provider fallback remains available".into(),
-            proof: "transport health is observed independently from operator authority".into(),
-            diagnostic: format!("build {build_id} / mode SHADOW / local CPU disabled"),
-            output: "request envelope + eventual completed trace".into(),
+            input: format!("запрос Codex / модель {model_label}"),
+            live: "поток HTTPS активен; резервный маршрут к провайдеру доступен".into(),
+            proof: "здоровье транспорта наблюдается независимо от authority оператора".into(),
+            diagnostic: format!(
+                "сборка {build_id} / режим SHADOW / новый локальный CPU-допуск выключен"
+            ),
+            output: "конверт запроса + завершённая трасса".into(),
             state: RouteState::Live,
         },
         PipelineStage {
             id: "L2",
-            title: "Trace and hash evidence capture",
+            title: "Сбор трасс и хеш-доказательств",
             owner: "nando-transition-serving".into(),
-            input: "provider boundary + completed session trace".into(),
+            input: "граница провайдера + завершённая трасса сессии".into(),
             live: format!(
-                "observer {} / {} transitions; capture {} / current captured {} / censored {}",
-                if live.online_ready { "READY" } else { "WAIT" },
+                "наблюдатель {} / переходов {}; сбор {} / получено сейчас {} / цензурировано {}",
+                if live.online_ready {
+                    "ГОТОВ"
+                } else {
+                    "ОЖИДАНИЕ"
+                },
                 live.transitions,
                 live.capture_phase,
                 live.capture_captured,
@@ -181,17 +196,17 @@ pub(crate) fn render(
             ),
             proof: if proof.verified {
                 format!(
-                    "hash-only capture PASS / {} durable controlled records / raw payload 0 B",
+                    "сбор только хешей ПРОЙДЕН / устойчивых контролируемых записей {} / сырой payload 0 Б",
                     proof.f8_provider_records.max(live.capture_records)
                 )
             } else {
-                "hash-only capture proof unavailable".into()
+                "доказательство сбора только хешей недоступно".into()
             },
             diagnostic: format!(
-                "publish {} / error {} / process counters may reset, durable index does not",
+                "публикация {} / ошибка {} / счётчики процесса могут сбрасываться, устойчивый индекс нет",
                 live.capture_publish_sequence, capture_error,
             ),
-            output: "relation fragments + immutable request receipt".into(),
+            output: "фрагменты отношений + неизменяемая квитанция запроса".into(),
             state: if live.online_ready {
                 RouteState::Live
             } else {
@@ -200,20 +215,19 @@ pub(crate) fn render(
         },
         PipelineStage {
             id: "L3",
-            title: "Natural operator discovery",
+            title: "Открытие естественного оператора",
             owner: "nando-operator-learning".into(),
-            input: "relation fragments + completed-trace teacher evidence".into(),
+            input: "фрагменты отношений + teacher-evidence завершённой трассы".into(),
             live: format!(
-                "support {}/32 / future {}/32 / matching {} in {} sessions / independent {}",
+                "support {}/32 / future {}/32 / совпадений {} в {} сессиях / независимых {}",
                 live.support, live.future, live.matching, live.matching_sessions, live.independent,
             ),
-            proof: "NOT_EVALUATED by STOP-F8; controlled seed is injected after this boundary"
-                .into(),
+            proof: "НЕ ОЦЕНЕНО в STOP-F8; контролируемый seed вводится после этой границы".into(),
             diagnostic: format!(
-                "watermark {} / consistent {} / routed {} / blocker {}",
+                "watermark {} / согласованных {} / маршрутизировано {} / блокер {}",
                 live.after_watermark, live.consistent, live.routed, live.blocker,
             ),
-            output: "natural circuit-attractor + typed OperatorPackage".into(),
+            output: "естественный circuit-attractor + типизированный OperatorPackage".into(),
             state: if natural_operator_live {
                 RouteState::Live
             } else {
@@ -222,123 +236,125 @@ pub(crate) fn render(
         },
         PipelineStage {
             id: "L4",
-            title: "Operator crystallizer",
+            title: "Кристаллизатор оператора",
             owner: "nando-operator-learning".into(),
-            input: "phase-coherent circuit-attractor".into(),
-            live: live_downstream_text(natural_operator_live, "natural circuit"),
+            input: "фазово-когерентный circuit-attractor".into(),
+            live: live_downstream_text(natural_operator_live, "естественный circuit"),
             proof: if proof.verified {
-                "controlled circuit compiled into bounded operator data".into()
+                "контролируемый circuit скомпилирован в ограниченные данные оператора".into()
             } else {
-                "controlled crystallization proof unavailable".into()
+                "доказательство контролируемой кристаллизации недоступно".into()
             },
             diagnostic:
-                "whole-circuit coherence required; selected fragments alone are insufficient".into(),
-            output: "versioned immutable OperatorPackage".into(),
+                "нужна когерентность полного circuit; одних выбранных фрагментов недостаточно"
+                    .into(),
+            output: "версионированный неизменяемый OperatorPackage".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L5",
-            title: "Generation persistence",
+            title: "Хранение поколения",
             owner: "nando-operator-persistence".into(),
-            input: "immutable OperatorPackage generation".into(),
-            live: live_downstream_text(natural_operator_live, "natural generation"),
+            input: "неизменяемое поколение OperatorPackage".into(),
+            live: live_downstream_text(natural_operator_live, "естественное поколение"),
             proof: if proof.verified {
                 format!(
-                    "pinned generation PASS / queue <= {} / restart parity PASS",
+                    "закреплённое поколение ПРОЙДЕНО / очередь <= {} / parity после перезапуска ПРОЙДЕНА",
                     proof.f7_queue_max
                 )
             } else {
-                "generation proof unavailable".into()
+                "доказательство поколения недоступно".into()
             },
             diagnostic: format!(
-                "live lineage partition.v{} / generation {}",
+                "живая lineage partition.v{} / поколение {}",
                 live.partition, live.generation
             ),
-            output: "restart-stable dispatch generation".into(),
+            output: "устойчивое к перезапуску поколение маршрутизации".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L6",
-            title: "Phase Router",
+            title: "Фазовый маршрутизатор",
             owner: "nando-operator-runtime".into(),
-            input: "runtime relation state + candidate generation".into(),
-            live: live_downstream_text(natural_operator_live, "ordinary request routing"),
+            input: "runtime-состояние отношений + поколение кандидатов".into(),
+            live: live_downstream_text(natural_operator_live, "маршрутизация обычных запросов"),
             proof: if proof.verified {
                 format!(
-                    "full phase selected {0}/{0}; ablations selected 0; applicability gain {1}",
+                    "полная фаза выбрала {0}/{0}; абляции выбрали 0; прирост применимости {1}",
                     proof.f8_verified_receipts, proof.f8_full_phase_gain,
                 )
             } else {
-                "phase-control proof unavailable".into()
+                "доказательство фазового контроля недоступно".into()
             },
             diagnostic: format!(
-                "search gain {} / F7 no-match p99 {} ns / F8 no-match p99 max {} ns",
+                "прирост поиска {} / F7 без совпадения p99 {} нс / F8 максимум p99 без совпадения {} нс",
                 proof.f8_search_gain, proof.f7_no_match_p99_ns, proof.f8_no_match_p99_max_ns,
             ),
-            output: "one operator candidate with coherence margin | ABSTAIN".into(),
+            output: "один кандидат оператора с запасом когерентности | ABSTAIN".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L7",
-            title: "Runtime Role Grounder",
+            title: "Связывание ролей во время исполнения",
             owner: "nando-operator-runtime".into(),
-            input: "selected operator + current structural surface".into(),
-            live: live_downstream_text(natural_operator_live, "ordinary role binding"),
+            input: "выбранный оператор + текущая структурная поверхность".into(),
+            live: live_downstream_text(natural_operator_live, "связывание ролей обычного запроса"),
             proof: if proof.verified {
-                "controlled winner-owned role binding PASS".into()
+                "контролируемое связывание ролей владельцем-победителем ПРОЙДЕНО".into()
             } else {
-                "role-grounding proof unavailable".into()
+                "доказательство связывания ролей недоступно".into()
             },
-            diagnostic: "ambiguous or missing structural role always returns ABSTAIN".into(),
-            output: "unique BoundRoleEnvironment | ABSTAIN".into(),
+            diagnostic:
+                "неоднозначная или отсутствующая структурная роль всегда возвращает ABSTAIN".into(),
+            output: "единственная BoundRoleEnvironment | ABSTAIN".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L8",
-            title: "Operator VM",
+            title: "Виртуальная машина оператора",
             owner: "nando-operator-runtime".into(),
-            input: "bound roles + versioned operator program".into(),
-            live: live_downstream_text(natural_operator_live, "ordinary VM execution"),
+            input: "связанные роли + версионированная программа оператора".into(),
+            live: live_downstream_text(natural_operator_live, "исполнение обычного запроса в VM"),
             proof: if proof.verified {
-                "controlled actor execution PASS / execution authority false".into()
+                "контролируемое исполнение actor ПРОЙДЕНО / execution authority=false".into()
             } else {
-                "VM proof unavailable".into()
+                "доказательство VM недоступно".into()
             },
             diagnostic: format!(
-                "F7 matched p99 {} ns / F8 matched p99 max {} ns / hard max {} ns",
+                "F7 с совпадением p99 {} нс / F8 максимум p99 с совпадением {} нс / жёсткий максимум {} нс",
                 proof.f7_matched_p99_ns, proof.f8_matched_p99_max_ns, proof.f8_hard_max_ns,
             ),
-            output: "candidate result + actor receipt".into(),
+            output: "результат кандидата + квитанция actor".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L9",
-            title: "Independent Verifier",
+            title: "Независимый верификатор",
             owner: "nando-operator-proof".into(),
-            input: "candidate result + immutable expected contract".into(),
-            live: live_downstream_text(natural_operator_live, "ordinary candidate verification"),
+            input: "результат кандидата + неизменяемый ожидаемый контракт".into(),
+            live: live_downstream_text(natural_operator_live, "проверка обычного кандидата"),
             proof: if proof.verified {
                 format!(
-                    "{0}/{0} controlled receipts verified",
+                    "проверено {0}/{0} контролируемых квитанций",
                     proof.f8_verified_receipts
                 )
             } else {
-                "verifier proof unavailable".into()
+                "доказательство верификатора недоступно".into()
             },
             diagnostic: format!(
-                "parity mismatches {} / false accepts 0",
+                "расхождений parity {} / ложных допусков 0",
                 live.shadow_parity_mismatches,
             ),
-            output: "VerifiedDeltaReceipt | verifier reject".into(),
+            output: "VerifiedDeltaReceipt | отказ верификатора".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L10",
-            title: "Generation-owned receipt ledger",
+            title: "Журнал квитанций поколения",
             owner: "nando-operator-learning".into(),
-            input: "actor receipt + independent verifier receipt".into(),
+            input: "квитанция actor + квитанция независимого верификатора".into(),
             live: format!(
-                "process {} / submitted {} / evaluated {} / verified {}",
+                "процесс {} / отправлено {} / оценено {} / проверено {}",
                 live.shadow_phase,
                 live.shadow_submitted,
                 live.shadow_evaluated,
@@ -346,50 +362,50 @@ pub(crate) fn render(
             ),
             proof: if proof.verified {
                 format!(
-                    "{} durable controlled receipts / restart append PASS",
+                    "устойчивых контролируемых квитанций {} / добавление после перезапуска ПРОЙДЕНО",
                     proof.f8_verified_receipts
                 )
             } else {
-                "durable ledger proof unavailable".into()
+                "доказательство устойчивого журнала недоступно".into()
             },
             diagnostic: format!(
-                "hot RSS {} / {} B / precursor max {} B over {} observations / raw payload 0 B",
+                "горячий RSS {} / {} Б / максимум precursor {} Б на {} наблюдениях / сырой payload 0 Б",
                 proof.f8_hot_rss_bytes,
                 proof.f8_rss_target_bytes,
                 proof.f8_rss_bytes,
                 proof.f8_resource_observations,
             ),
-            output: "immutable evidence set for external admission".into(),
+            output: "неизменяемый набор evidence для внешнего допуска".into(),
             state: downstream_state,
         },
         PipelineStage {
             id: "L11",
-            title: "External Admission",
+            title: "Независимый допуск",
             owner: "nando-operator-admission".into(),
-            input: "generation + capture + ledger + causal-control commitments".into(),
+            input: "поколение + capture + журнал + обязательства причинного контроля".into(),
             live: format!(
-                "ordinary controller {} / candidate future {}/32 / parity cases {}",
+                "обычный контроллер {} / future кандидата {}/32 / случаев parity {}",
                 live.admission_verdict,
                 live.admission_future_rows,
                 live.admission_runtime_parity_cases,
             ),
             proof: if proof.verified {
                 format!(
-                    "{} / commitments {} / authority=false",
+                    "{} / обязательства {} / authority=false",
                     proof.f8_external_verdict,
                     compact(&proof.f8_commitments_sha256),
                 )
             } else {
-                "external reconstruction proof unavailable".into()
+                "доказательство внешней реконструкции недоступно".into()
             },
             diagnostic: format!(
-                "{} / {} / relation candidates {} / snapshot age {} s",
+                "{} / {} / кандидатов отношений {} / возраст снимка {} с",
                 live.admission_blocker_stage,
                 live.admission_blocker,
                 live.admission_relation_candidates,
                 live.admission_age_seconds,
             ),
-            output: "signed authority lease | SHADOW_READY | reject".into(),
+            output: "подписанная лицензия authority | SHADOW_READY | отказ".into(),
             state: downstream_state,
         },
     ];
@@ -405,9 +421,9 @@ pub(crate) fn render(
                 stage.id,
                 next,
                 if natural_operator_live || index < 2 {
-                    "typed live handoff"
+                    "типизированная передача живого сигнала"
                 } else {
-                    "controlled proof handoff only"
+                    "только передача контролируемого доказательства"
                 },
                 natural_operator_live || index < 2,
             ));
@@ -416,15 +432,26 @@ pub(crate) fn render(
     pipeline.push_str(&authority_boundary(proof));
     pipeline.push_str(&render_stage(&PipelineStage {
         id: "CPU",
-        title: "ACTIVE CPU execution",
+        title: "Активное исполнение на CPU",
         owner: "nando-transition-serving".into(),
-        input: "admission-authorized immutable operator generation".into(),
-        live: format!("{} ACTIVE response packages", live.active_packages),
-        proof: "STOP-F8 controlled candidate has no execution authority".into(),
-        diagnostic: "local accept disabled / provider fallback remains active".into(),
-        output: "verified local response | OpenAI fallback".into(),
-        state: if natural_operator_live {
-            RouteState::Live
+        input: "допущенные transition-профили; естественным операторам нужна отдельная лицензия"
+            .into(),
+        live: format!(
+            "проверенных локальных исполнений {} / активных transition-профилей {} / обычный трафик на CPU {} / экономия токенов {}",
+            live.verified_local_accepts,
+            live.active_transition_profiles,
+            format_ratio_milli(live.call_saving_share_milli),
+            format_ratio_milli(live.input_token_saving_share_milli),
+        ),
+        proof: format!(
+            "Естественный кандидат STOP-F8 остаётся authority=false / естественных ACTIVE response-пакетов {}",
+            live.active_packages,
+        ),
+        diagnostic: "существующий проверенный transition-маршрут активен; линия естественного response-оператора остаётся ЗАКРЫТА"
+            .into(),
+        output: "проверенный локальный ответ | резервный ответ OpenAI".into(),
+        state: if transition_cpu_working {
+            RouteState::Work
         } else {
             RouteState::Locked
         },
@@ -433,14 +460,14 @@ pub(crate) fn render(
     format!(
         r#"<section class="architecture signal-pipeline" data-pipeline-route="single" data-current-stage="{}" data-proof-verified="{}">
 <div class="architecture-head">
-<div class="architecture-title"><h2>NANDO MACHINE · SIGNAL PIPELINE</h2><p>один вход, один текущий owner на каждом этапе, один fail-closed handoff до CPU</p></div>
-<div class="architecture-state"><span class="state-chip live">ORDINARY INPUT</span><span class="state-chip proven">CONTROLLED PROOF</span><span class="state-chip locked">AUTHORITY OFF</span></div>
+<div class="architecture-title"><h2>NANDO MACHINE · МАРШРУТ СИГНАЛА</h2><p>один вход, один текущий владелец на каждом этапе, одна строгая передача до CPU</p></div>
+<div class="architecture-state"><span class="state-chip live">ОБЫЧНЫЙ ВХОД</span><span class="state-chip proven">КОНТРОЛИРУЕМОЕ ДОКАЗАТЕЛЬСТВО</span><span class="state-chip locked">AUTHORITY ВЫКЛЮЧЕНА</span></div>
 </div>
-<div class="identity-line"><span><b>MODEL</b> {}</span><span><b>DEPLOYED</b> {} · {}</span><span><b>LIVE LINEAGE</b> partition.v{} · generation {}</span><span><b>PROOF</b> {}</span></div>
-<div class="pipeline-legend"><span><b>LIVE</b> ordinary traffic crosses the stage</span><span><b>PROOF ONLY</b> controlled evidence proves capability, not live coverage</span><span><b>BLOCK</b> ordinary signal stops</span><span><b>LOCKED</b> no authority</span></div>
-<div class="current-blocker"><span class="blocker-label">CURRENT BLOCKER</span><strong>{}</strong><p>{}</p></div>
+<div class="identity-line"><span><b>МОДЕЛЬ</b> {}</span><span><b>РАЗВЁРНУТО</b> {} · {}</span><span><b>ЖИВАЯ LINEAGE</b> partition.v{} · поколение {}</span><span><b>ДОКАЗАТЕЛЬСТВО</b> {}</span></div>
+<div class="pipeline-legend"><span><b>ЖИВОЙ ПОТОК</b> обычный трафик проходит этап</span><span><b>РАБОТАЕТ</b> проверенный transition-маршрут исполняется на CPU</span><span><b>ТОЛЬКО ДОКАЗАТЕЛЬСТВО</b> способность доказана без живого покрытия</span><span><b>БЛОК</b> обычный сигнал остановлен</span><span><b>ЗАКРЫТО</b> authority отсутствует</span></div>
+<div class="current-blocker"><span class="blocker-label">ТЕКУЩИЙ БЛОКЕР</span><strong>{}</strong><p>{}</p></div>
 <div class="pipeline-stack">{}</div>
-<div class="terminal-rule">one stage = one owner | ownership moves only through typed receipts | only External Admission may grant authority | missing evidence = ABSTAIN</div>
+<div class="terminal-rule">один этап = один владелец | владение передаётся только через типизированные квитанции | authority выдаёт только независимый допуск | нет evidence = ABSTAIN</div>
 </section>"#,
         escape(current_stage),
         proof.verified,
@@ -458,22 +485,22 @@ pub(crate) fn render(
 
 fn live_downstream_text(natural_operator_live: bool, operation: &str) -> String {
     if natural_operator_live {
-        format!("{operation} is receiving ordinary traffic")
+        format!("{operation} получает обычный трафик")
     } else {
-        format!("no {operation}: live signal stopped at L3")
+        format!("{operation} не работает: живой сигнал остановлен на L3")
     }
 }
 
 fn render_stage(stage: &PipelineStage) -> String {
     format!(
         r#"<article class="pipeline-stage {}" data-stage="{}" data-owner="{}" data-live-flow="{}">
-<div class="pipeline-stage-head"><span class="pipeline-index">{}</span><div><h3>{}</h3><p class="stage-owner"><b>OWNER</b> {}</p></div><span class="state-chip {}">{}</span></div>
+<div class="pipeline-stage-head"><span class="pipeline-index">{}</span><div><h3>{}</h3><p class="stage-owner"><b>ВЛАДЕЛЕЦ</b> {}</p></div><span class="state-chip {}">{}</span></div>
 <dl class="pipeline-diagnostics">
-<div class="diagnostic-row input"><dt>IN</dt><dd>{}</dd></div>
-<div class="diagnostic-row live"><dt>LIVE</dt><dd>{}</dd></div>
-<div class="diagnostic-row proof"><dt>PROOF</dt><dd>{}</dd></div>
-<div class="diagnostic-row diagnostic"><dt>DIAG</dt><dd>{}</dd></div>
-<div class="diagnostic-row output"><dt>OUT</dt><dd>{}</dd></div>
+<div class="diagnostic-row input"><dt>ВХОД</dt><dd>{}</dd></div>
+<div class="diagnostic-row live"><dt>ЖИВОЙ</dt><dd>{}</dd></div>
+<div class="diagnostic-row proof"><dt>ДОКАЗ</dt><dd>{}</dd></div>
+<div class="diagnostic-row diagnostic"><dt>ДИАГ</dt><dd>{}</dd></div>
+<div class="diagnostic-row output"><dt>ВЫХОД</dt><dd>{}</dd></div>
 </dl>
 </article>"#,
         stage.state.class(),
@@ -505,7 +532,7 @@ fn handoff(from: &str, to: &str, label: &str, live: bool) -> String {
 
 fn live_signal_break(live: &LiveSignalView<'_>) -> String {
     format!(
-        r#"<div class="pipeline-break" data-blocker-stage="L3"><strong>LIVE SIGNAL STOPS HERE</strong><span>Natural OperatorPackage is missing: future {}/32, routed {}, blocker {}.</span><span>Below this edge the blue route is controlled STOP-F8 proof only.</span></div>"#,
+        r#"<div class="pipeline-break" data-blocker-stage="L3"><strong>ЖИВОЙ СИГНАЛ ОСТАНОВЛЕН ЗДЕСЬ</strong><span>Естественный OperatorPackage отсутствует: future {}/32, маршрутизировано {}, блокер {}.</span><span>Ниже этой границы синий маршрут показывает только контролируемое доказательство STOP-F8.</span></div>"#,
         live.future,
         live.routed,
         escape(live.blocker),
@@ -514,14 +541,18 @@ fn live_signal_break(live: &LiveSignalView<'_>) -> String {
 
 fn authority_boundary(proof: &ProofSummary) -> String {
     let detail = if proof.verified {
-        "SHADOW_READY is a controlled candidate. It cannot authorize itself; natural evidence and a separate authority lease are required."
+        "SHADOW_READY является контролируемым кандидатом и не может допустить себя сам. Нужны естественное evidence и отдельная лицензия authority."
     } else {
-        "Authority remains locked because controlled proof receipts are unavailable."
+        "Authority остаётся закрытой, потому что квитанции контролируемого доказательства недоступны."
     };
     format!(
-        r#"<div class="authority-boundary" data-authority="false"><strong>AUTHORITY BOUNDARY</strong><span>{}</span></div>"#,
+        r#"<div class="authority-boundary" data-authority="false"><strong>ГРАНИЦА AUTHORITY ЕСТЕСТВЕННОГО ОПЕРАТОРА</strong><span>{}</span></div>"#,
         escape(detail),
     )
+}
+
+fn format_ratio_milli(value: u64) -> String {
+    format!("{}.{:01}%", value / 10, value % 10)
 }
 
 fn compact(value: &str) -> String {
@@ -591,6 +622,10 @@ mod tests {
             admission_future_rows: 11,
             admission_runtime_parity_cases: 22,
             active_packages: 0,
+            active_transition_profiles: 5,
+            verified_local_accepts: 38,
+            call_saving_share_milli: 4,
+            input_token_saving_share_milli: 7,
             online_ready: true,
             capture_phase: "ready_hash_only",
             capture_records: 4,
@@ -647,13 +682,13 @@ mod tests {
             "data-stage=\"L3\" data-owner=\"nando-operator-learning\" data-live-flow=\"false\""
         ));
         assert!(html.contains("data-blocker-stage=\"L3\""));
-        assert_eq!(html.matches("LIVE SIGNAL STOPS HERE").count(), 1);
-        assert!(html.contains("controlled STOP-F8 proof only"));
+        assert_eq!(html.matches("ЖИВОЙ СИГНАЛ ОСТАНОВЛЕН ЗДЕСЬ").count(), 1);
+        assert!(html.contains("контролируемое доказательство STOP-F8"));
         assert!(html.contains(
             "data-stage=\"L4\" data-owner=\"nando-operator-learning\" data-live-flow=\"false\""
         ));
         assert!(html.contains(
-            "data-stage=\"CPU\" data-owner=\"nando-transition-serving\" data-live-flow=\"false\""
+            "data-stage=\"CPU\" data-owner=\"nando-transition-serving\" data-live-flow=\"true\""
         ));
     }
 
@@ -662,11 +697,39 @@ mod tests {
         let html = render(&live(), &proof(true), &manifest(), "gpt-test");
 
         assert!(html.contains("STOP-F8 SHADOW_READY"));
-        assert!(html.contains("NOT_EVALUATED by STOP-F8"));
+        assert!(html.contains("НЕ ОЦЕНЕНО в STOP-F8"));
         assert!(html.contains("data-authority=\"false\""));
-        assert!(html.contains("controlled candidate has no execution authority"));
+        assert!(html.contains("Естественный кандидат STOP-F8 остаётся authority=false"));
+        assert!(html.contains("естественных ACTIVE response-пакетов 0"));
         assert!(!html.contains(
             "data-stage=\"L4\" data-owner=\"nando-operator-learning\" data-live-flow=\"true\""
+        ));
+    }
+
+    #[test]
+    fn verified_transition_route_is_work_while_natural_authority_stays_locked() {
+        let html = render(&live(), &proof(true), &manifest(), "gpt-test");
+
+        assert!(html.contains(
+            "class=\"pipeline-stage work\" data-stage=\"CPU\" data-owner=\"nando-transition-serving\" data-live-flow=\"true\""
+        ));
+        assert!(html.contains("class=\"state-chip work\">РАБОТАЕТ"));
+        assert!(html.contains("проверенных локальных исполнений 38"));
+        assert!(html.contains("активных transition-профилей 5"));
+        assert!(html.contains("обычный трафик на CPU 0.4%"));
+        assert!(html.contains("экономия токенов 0.7%"));
+        assert!(html.contains("ГРАНИЦА AUTHORITY ЕСТЕСТВЕННОГО ОПЕРАТОРА"));
+        assert!(html.contains("data-authority=\"false\""));
+    }
+
+    #[test]
+    fn cpu_route_stays_locked_without_verified_transition_work() {
+        let mut live = live();
+        live.verified_local_accepts = 0;
+        let html = render(&live, &proof(true), &manifest(), "gpt-test");
+
+        assert!(html.contains(
+            "class=\"pipeline-stage locked\" data-stage=\"CPU\" data-owner=\"nando-transition-serving\" data-live-flow=\"false\""
         ));
     }
 
@@ -675,7 +738,7 @@ mod tests {
         let html = render(&live(), &proof(false), &manifest(), "gpt-test");
 
         assert!(html.contains("data-current-stage=\"PROOF\""));
-        assert!(html.contains("PROOF RECEIPT VALIDATION"));
+        assert!(html.contains("ПРОВЕРКА ДОКАЗАТЕЛЬНЫХ КВИТАНЦИЙ"));
         assert!(html.contains(
             "data-stage=\"L4\" data-owner=\"nando-operator-learning\" data-live-flow=\"false\""
         ));
