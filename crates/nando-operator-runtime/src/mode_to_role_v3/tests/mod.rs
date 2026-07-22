@@ -100,8 +100,46 @@ fn topology_commitment_uses_all_256_bits_and_rejects_a_changed_word() {
     )])
     .expect("changed topology index");
     let wrong_dispatch = wrong_index.dispatch(&request);
+    assert_eq!(wrong_dispatch.matched_mode_count(), 0);
     let wrong_binding = bind_structural_modes_v3(&wrong_index, &request, &wrong_dispatch);
-    assert!(wrong_binding.mode_reports()[0].mappings().is_empty());
+    assert!(wrong_binding.mode_reports().is_empty());
+}
+
+#[test]
+fn dispatch_requires_current_capability_shape_and_observed_selector_values() {
+    let index = compile_structural_dispatch_index_v3(&[artifact(6, mentioned_string_selector())])
+        .expect("capability-aware index");
+    let payload = request_payload(json!({"handle": "CellA17"}));
+    let unmentioned = runtime_context("continue another handle", &payload);
+    assert_eq!(index.dispatch(&unmentioned).matched_mode_count(), 0);
+
+    let mut missing_capability = payload;
+    missing_capability["tools"] = json!([]);
+    let missing_capability = runtime_context("continue CellA17", &missing_capability);
+    assert_eq!(index.dispatch(&missing_capability).matched_mode_count(), 0);
+}
+
+#[test]
+fn wildcard_selector_remains_visible_when_a_specific_selector_does_not_match() {
+    let wildcard = artifact(
+        7,
+        vec![BindingPredicateV1::ValueType {
+            value: BindingValueTypeV1::String,
+        }],
+    );
+    let wildcard_mode = wildcard.source_mode_set().modes[0].mode_id_sha256.clone();
+    let specific = artifact(8, mentioned_string_selector());
+    let index = compile_structural_dispatch_index_v3(&[specific, wildcard])
+        .expect("wildcard structural index");
+    let payload = request_payload(json!({"handle": "CellA17"}));
+    let request = runtime_context("continue another handle", &payload);
+    let dispatch = index.dispatch(&request);
+
+    assert_eq!(dispatch.matched_mode_count(), 1);
+    assert_eq!(
+        index.modes()[dispatch.mode_indices()[0]].mode_id_sha256(),
+        wildcard_mode
+    );
 }
 
 #[test]
@@ -141,7 +179,7 @@ fn package_order_cannot_change_index_or_dispatch_order() {
 
 #[test]
 fn overfull_dispatch_bucket_abstains_without_package_order_truncation() {
-    let artifacts = (10..43)
+    let artifacts = (10..80)
         .map(|seed| artifact(seed, mentioned_string_selector()))
         .collect::<Vec<_>>();
     let index = compile_structural_dispatch_index_v3(&artifacts).expect("overfull index");
@@ -149,7 +187,7 @@ fn overfull_dispatch_bucket_abstains_without_package_order_truncation() {
     let request = runtime_context("continue CellA17", &payload);
     let dispatch = index.dispatch(&request);
 
-    assert_eq!(dispatch.matched_mode_count(), 33);
+    assert_eq!(dispatch.matched_mode_count(), 70);
     assert!(dispatch.mode_indices().is_empty());
     assert_eq!(
         dispatch.verdict(),

@@ -2,6 +2,7 @@ mod binding;
 mod compiler;
 mod constraint;
 mod dispatch;
+mod dispatch_index;
 mod encoding;
 mod feature_codec;
 mod report;
@@ -9,14 +10,13 @@ mod report;
 pub use binding::bind_structural_modes_v3;
 pub use compiler::compile_structural_dispatch_index_v3;
 
-use std::collections::BTreeMap;
-
 use nando_core::wave::{OperatorCircuit, RoleGraph};
 use nando_operator_kernel::{
     BindingValueTypeV1, ProtocolCapabilityKindV3, RuntimeCapabilityKindV3,
 };
 
 use self::constraint::CompiledConstraintV3;
+use self::dispatch_index::StructuralDispatchBitIndexV3;
 
 pub const F5C_MAX_INDEXED_MODES_V3: usize = 2_048;
 pub const F5C_MAX_DISPATCHED_MODES_V3: usize = 32;
@@ -70,7 +70,7 @@ pub struct CompiledProtocolModeV3 {
 pub struct StructuralDispatchIndexV3 {
     index_sha256: String,
     modes: Box<[CompiledProtocolModeV3]>,
-    source_type_buckets: BTreeMap<BindingValueTypeV1, Box<[usize]>>,
+    dispatch_bits: StructuralDispatchBitIndexV3,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

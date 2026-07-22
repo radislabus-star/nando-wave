@@ -6,7 +6,7 @@ use nando_core::wave::{
 use nando_operator_kernel::{BindingValueTypeV1, CanonicalStructuralRoleV3, ProtocolModeV2};
 use sha2::{Digest, Sha256};
 
-use super::constraint::{CompiledConstraintV3, compile_constraints_v3};
+use super::constraint::{CompiledConstraintV3, compile_constraints_v3, observed_constraints_v3};
 use super::feature_codec::value_type_tag_v3;
 use super::{CompiledProtocolModeV3, ModeToRoleErrorV3};
 
@@ -51,8 +51,12 @@ pub(super) fn runtime_candidate_bundle_v3(
         candidate.features.value_type,
         planes,
     ));
+    let observed_constraints = observed_constraints_v3(&candidate.features)?;
     for constraint in &mode.constraints {
-        let observed = constraint.observed(&candidate.features)?;
+        let observed = observed_constraints
+            .iter()
+            .find(|observed| observed.kind == constraint.kind && observed.slot == constraint.slot)
+            .ok_or(ModeToRoleErrorV3::InvalidGraph)?;
         roles.push(observed.signature());
     }
     let relations = constraint_relations_v3(&mode.constraints)?;

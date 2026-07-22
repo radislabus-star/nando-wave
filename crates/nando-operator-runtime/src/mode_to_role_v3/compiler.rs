@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use nando_operator_kernel::{
     ExecutableProtocolModeArtifactV3, canonical_json_sha256,
@@ -6,6 +6,7 @@ use nando_operator_kernel::{
 };
 use serde::Serialize;
 
+use super::dispatch_index::StructuralDispatchBitIndexV3;
 use super::encoding::compile_mode_graph_v3;
 use super::{
     CompiledProtocolModeV3, F5C_MAX_INDEXED_MODES_V3, ModeToRoleErrorV3, StructuralDispatchIndexV3,
@@ -83,21 +84,12 @@ pub fn compile_structural_dispatch_index_v3(
         }
     }
 
-    let mut source_type_buckets = BTreeMap::<_, Vec<usize>>::new();
-    for (index, mode) in modes.iter().enumerate() {
-        source_type_buckets
-            .entry(mode.source_value_type)
-            .or_default()
-            .push(index);
-    }
     let index_sha256 = index_digest(&modes)?;
+    let dispatch_bits = StructuralDispatchBitIndexV3::build(&modes);
     Ok(StructuralDispatchIndexV3 {
         index_sha256,
         modes: modes.into_boxed_slice(),
-        source_type_buckets: source_type_buckets
-            .into_iter()
-            .map(|(key, indices)| (key, indices.into_boxed_slice()))
-            .collect(),
+        dispatch_bits,
     })
 }
 

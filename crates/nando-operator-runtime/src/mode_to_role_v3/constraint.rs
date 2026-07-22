@@ -30,6 +30,25 @@ pub(super) struct CompiledConstraintV3 {
     pub expected: u32,
 }
 
+pub(super) const DISPATCH_DIMENSIONS_V3: [(CompiledConstraintKindV3, u8); 16] = [
+    (CompiledConstraintKindV3::SourceEventClass, 0),
+    (CompiledConstraintKindV3::CallLineage, 0),
+    (CompiledConstraintKindV3::CapabilityClass, 0),
+    (CompiledConstraintKindV3::TemporalDistance, 0),
+    (CompiledConstraintKindV3::CompletionState, 0),
+    (CompiledConstraintKindV3::EventCandidateCardinality, 0),
+    (CompiledConstraintKindV3::ValueType, 0),
+    (CompiledConstraintKindV3::RequestRelation, 0),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 0),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 1),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 2),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 3),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 4),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 5),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 6),
+    (CompiledConstraintKindV3::TopologyNeighborhood, 7),
+];
+
 pub(super) fn compile_constraints_v3(
     mode: &ProtocolModeV2,
 ) -> Result<Vec<CompiledConstraintV3>, ModeToRoleErrorV3> {
@@ -139,41 +158,35 @@ impl CompiledConstraintV3 {
             vec![self.plane()],
         )
     }
+}
 
-    pub(super) fn observed(
-        &self,
-        features: &StructuralCandidateFeaturesV3,
-    ) -> Result<Self, ModeToRoleErrorV3> {
-        let expected = match self.kind {
-            CompiledConstraintKindV3::SourceEventClass => {
-                u32::from(source_event_tag_v3(features.source_event_class))
-            }
-            CompiledConstraintKindV3::CallLineage => {
-                u32::from(call_lineage_tag_v3(features.call_lineage))
-            }
-            CompiledConstraintKindV3::CapabilityClass => {
-                u32::from(capability_class_tag_v3(features.capability_class))
-            }
-            CompiledConstraintKindV3::TemporalDistance => u32::from(features.temporal_distance),
-            CompiledConstraintKindV3::CompletionState => {
-                u32::from(completion_state_tag_v3(features.completion_state))
-            }
-            CompiledConstraintKindV3::EventCandidateCardinality => {
-                u32::from(features.event_candidate_cardinality)
-            }
-            CompiledConstraintKindV3::ValueType => {
-                u32::from(value_type_tag_v3(features.value_type))
-            }
-            CompiledConstraintKindV3::RequestRelation => {
-                u32::from(request_relation_tag_v3(features.request_relation))
-            }
-            CompiledConstraintKindV3::TopologyNeighborhood => {
-                digest_words_v3(&features.topology_neighborhood_root_sha256)?
-                    [usize::from(self.slot)]
-            }
-        };
-        Ok(Self { expected, ..*self })
-    }
+pub(super) fn observed_constraints_v3(
+    features: &StructuralCandidateFeaturesV3,
+) -> Result<[CompiledConstraintV3; 16], ModeToRoleErrorV3> {
+    let topology = digest_words_v3(&features.topology_neighborhood_root_sha256)?;
+    let expected = [
+        u32::from(source_event_tag_v3(features.source_event_class)),
+        u32::from(call_lineage_tag_v3(features.call_lineage)),
+        u32::from(capability_class_tag_v3(features.capability_class)),
+        u32::from(features.temporal_distance),
+        u32::from(completion_state_tag_v3(features.completion_state)),
+        u32::from(features.event_candidate_cardinality),
+        u32::from(value_type_tag_v3(features.value_type)),
+        u32::from(request_relation_tag_v3(features.request_relation)),
+        topology[0],
+        topology[1],
+        topology[2],
+        topology[3],
+        topology[4],
+        topology[5],
+        topology[6],
+        topology[7],
+    ];
+    Ok(std::array::from_fn(|index| CompiledConstraintV3 {
+        kind: DISPATCH_DIMENSIONS_V3[index].0,
+        slot: DISPATCH_DIMENSIONS_V3[index].1,
+        expected: expected[index],
+    }))
 }
 
 impl CompiledConstraintKindV3 {
