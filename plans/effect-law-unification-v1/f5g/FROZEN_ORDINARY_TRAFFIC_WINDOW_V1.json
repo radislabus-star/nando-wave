@@ -1,0 +1,294 @@
+{
+  "schema": "nando.f5g-frozen-ordinary-traffic-window.v1",
+  "status": "FROZEN_METADATA_ONLY",
+  "source": {
+    "path": "/var/lib/nando-wave/transition/economics-terminal.jsonl",
+    "sha256": "cf6de0789fc363957d79ffc207f93a7f5c542edd2892dd87a86c705f8af07e60",
+    "total_rows": 222,
+    "ordinary_rows": 25
+  },
+  "privacy": {
+    "raw_request_text_present": false,
+    "raw_provider_payload_present": false,
+    "client_intent_id_present": false,
+    "replay_authority": false,
+    "execution_authority": false
+  },
+  "rows": [
+    {
+      "ordinal": 0,
+      "timestamp_unix": 1783836711,
+      "request_sha256": "ebf36eac0f13dd72d79167917c1d843720d5e331d5905b90e449d8000b34a8e2",
+      "input_tokens": 17620,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 1,
+      "timestamp_unix": 1783914457,
+      "request_sha256": "27655157520b853522727fe73aa638a311b3018f7ee8affde5ed21d70dcfc174",
+      "input_tokens": 113,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 2,
+      "timestamp_unix": 1783914467,
+      "request_sha256": "5c375e579e6bd69c1a1b2d5f1f2ac706af5aeaad24af77fdc22b7c21abe0add6",
+      "input_tokens": 115,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 3,
+      "timestamp_unix": 1783932458,
+      "request_sha256": "79707a1001fdd4ea015f08691ec7cd4a7518347e66545c6b60e32bcf38b0a536",
+      "input_tokens": 185838,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 4,
+      "timestamp_unix": 1783932587,
+      "request_sha256": "eae5b2e0bf30bbf75f34d097a3a6d07d983a343bf6accc36a618cb2ac00c6ac0",
+      "input_tokens": 193511,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 5,
+      "timestamp_unix": 1783932671,
+      "request_sha256": "d18c72ef8c60e6156a570e8d0b17a998bb1a50be74c302c98b1cc9122c0132b5",
+      "input_tokens": 199879,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 6,
+      "timestamp_unix": 1783932717,
+      "request_sha256": "3d8f6a15292b7620a75cf29eca0c866072aef9a42a28dc5229df077629fc3cc0",
+      "input_tokens": 202190,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 7,
+      "timestamp_unix": 1783933562,
+      "request_sha256": "70114f2fbea815919c91f39102b2c0a60a65293af2ab6cb0d386dc84bf6b81b9",
+      "input_tokens": 230774,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 8,
+      "timestamp_unix": 1783933688,
+      "request_sha256": "348fca1439861f366274e89dd7897c02e45d9fb825298fc859af0372a68ec0db",
+      "input_tokens": 234048,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 9,
+      "timestamp_unix": 1783936840,
+      "request_sha256": "8d95906fd5d627f9691a303f122bebd28e2ad80dec40045db0c7382eb01c599d",
+      "input_tokens": 156685,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 10,
+      "timestamp_unix": 1783937117,
+      "request_sha256": "ea467aa5d6e72f5aee66bfa888209dd9273387a9956514af53506a9aa6af8c85",
+      "input_tokens": 194359,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 11,
+      "timestamp_unix": 1783956255,
+      "request_sha256": "5647ad9ca8e3aa8d801debe90db21dbfbe5313bb51f0e8e127b17c0812a95747",
+      "input_tokens": 237172,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 12,
+      "timestamp_unix": 1783956361,
+      "request_sha256": "69cb5d9f0087dab720f91075172951e36730164246b6b03a4a527d5720393a17",
+      "input_tokens": 245928,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 13,
+      "timestamp_unix": 1783959924,
+      "request_sha256": "44a6c14aac88aceb0b2a29feaeee06faf8a95fb659c5c05d228f2149d9072edd",
+      "input_tokens": 191481,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 14,
+      "timestamp_unix": 1783959954,
+      "request_sha256": "506c1a0587a89f39e49a9fca8c2b50743da443e8cda793c16ac99f23ff015d1c",
+      "input_tokens": 191559,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 15,
+      "timestamp_unix": 1783959984,
+      "request_sha256": "293b6b3cd840c538708948dda35bbd44c2a2cbbe1717a3a91a3b74d6fcd376da",
+      "input_tokens": 191636,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 16,
+      "timestamp_unix": 1783963036,
+      "request_sha256": "93353f4f2bc9a53656d4d04b169f0deb3792a882838deee7d2e51bdbbc51c583",
+      "input_tokens": 122879,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 17,
+      "timestamp_unix": 1783968537,
+      "request_sha256": "7193c0affe576cc9b6e1b5994971102a339dccaae9678766c3faeb694e3f8554",
+      "input_tokens": 266126,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 18,
+      "timestamp_unix": 1783968826,
+      "request_sha256": "dcfb6e849b584c3d893b696c811bcd89c93348ad114d97e161c8142a0eee6fe3",
+      "input_tokens": 66310,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 19,
+      "timestamp_unix": 1783971271,
+      "request_sha256": "bb09f0315200871e4db52d6252a0c2eb5c410e80c46341a1fba6501b396c61eb",
+      "input_tokens": 79683,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 20,
+      "timestamp_unix": 1783978167,
+      "request_sha256": "9d82f0c518be63d4db12779c39c66b5c64177c1312a67b87dea4d20f483f9de7",
+      "input_tokens": 134837,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 21,
+      "timestamp_unix": 1783978280,
+      "request_sha256": "cff058ad479fd9a504004669e71a10330dcc5a8cd04d706314c6c7fe9580e64d",
+      "input_tokens": 137731,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 22,
+      "timestamp_unix": 1784030710,
+      "request_sha256": "03ec93b3803245afb1b0e2d4068d3cd03fbd23563832c2b0415f41d8baf15f12",
+      "input_tokens": 185988,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 23,
+      "timestamp_unix": 1784031415,
+      "request_sha256": "fd242f1e504a4817aa3ed9fa415b2c78fb939c8a140d79a5d9f5d47960cd1c86",
+      "input_tokens": 235388,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    },
+    {
+      "ordinal": 24,
+      "timestamp_unix": 1784046902,
+      "request_sha256": "0bc6e99a0631bebd2c9b198d2cbdcfe43d7252cc7a4ea143be30fae8778f9f08",
+      "input_tokens": 18241,
+      "terminal_state": "delivered",
+      "verification_status": "verified",
+      "upstream_socket_opened": false,
+      "intent_dedupe_eligible": true,
+      "input_token_accounting": "byte_estimate_v1"
+    }
+  ]
+}

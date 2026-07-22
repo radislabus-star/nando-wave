@@ -9,6 +9,7 @@ mod routing;
 mod runtime;
 mod runtime_context_v3;
 mod selector_candidates;
+mod traffic_shadow_v3;
 
 pub use artifact::*;
 pub use capability_grounding_v3::*;
@@ -22,6 +23,7 @@ pub use routing::*;
 pub use runtime::*;
 pub use runtime_context_v3::*;
 pub use selector_candidates::*;
+pub use traffic_shadow_v3::*;
 
 #[cfg(test)]
 mod runtime_context_v3_tests;

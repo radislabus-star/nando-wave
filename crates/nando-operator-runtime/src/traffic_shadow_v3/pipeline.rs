@@ -1,0 +1,163 @@
+use std::sync::Arc;
+
+use nando_operator_kernel::{RuntimeContextExtractionVerdictV3, RuntimeProjectionV3};
+
+use super::receipt::TrafficShadowReceiptBuilderV3;
+use super::{
+    TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowReceiptV3, TrafficShadowVerdictV3,
+};
+use crate::{
+    CapabilityGroundingVerdictV3, OperatorShadowVerdictV3, PhaseControlV3, PhaseSelectionVerdictV3,
+    RuntimeContextBudgetV3, RuntimeContextErrorV3, StructuralBindingVerdictV3,
+    StructuralDispatchVerdictV3, bind_structural_modes_v3, evaluate_phase_ranking_v3,
+    execute_bound_protocol_shadow_v3, extract_canonical_runtime_request_v3,
+    ground_protocol_actions_v3,
+};
+
+#[must_use]
+pub fn execute_traffic_shadow_v3(
+    generation: Arc<TrafficShadowGenerationV3>,
+    input: TrafficShadowInputV3<'_>,
+    budget: RuntimeContextBudgetV3,
+) -> TrafficShadowReceiptV3 {
+    let mut receipt = TrafficShadowReceiptBuilderV3::new(&generation, &input);
+    let Some((request_text, provider_payload)) = input.runtime_payload() else {
+        return receipt.finish(TrafficShadowVerdictV3::CensoredPayloadUnavailable);
+    };
+    let Some(projection) = supported_projection(input.projection()) else {
+        return receipt.finish(TrafficShadowVerdictV3::AbstainUnsupportedProjection);
+    };
+    let extraction = match extract_canonical_runtime_request_v3(
+        input.request_sha256(),
+        request_text,
+        projection,
+        provider_payload,
+        budget,
+    ) {
+        Ok(extraction) => extraction,
+        Err(error) => return receipt.finish(context_error_verdict(error)),
+    };
+    receipt.set_extraction_receipt(&extraction.receipt().receipt_sha256);
+    if extraction.receipt().verdict != RuntimeContextExtractionVerdictV3::Complete {
+        return receipt.finish(match extraction.receipt().verdict {
+            RuntimeContextExtractionVerdictV3::AbstainBudgetExhausted => {
+                TrafficShadowVerdictV3::AbstainContextBudget
+            }
+            RuntimeContextExtractionVerdictV3::AbstainInvalidRequest => {
+                TrafficShadowVerdictV3::AbstainContextExtraction
+            }
+            RuntimeContextExtractionVerdictV3::Complete => {
+                TrafficShadowVerdictV3::RejectInvariantMismatch
+            }
+        });
+    }
+    let Some(context) = extraction.into_context() else {
+        return receipt.finish(TrafficShadowVerdictV3::RejectInvariantMismatch);
+    };
+
+    let dispatch = generation.index().dispatch(&context);
+    if dispatch.verdict() != StructuralDispatchVerdictV3::Complete
+        || dispatch.mode_indices().is_empty()
+    {
+        return receipt.finish(TrafficShadowVerdictV3::AbstainDispatch);
+    }
+    let binding = bind_structural_modes_v3(generation.index(), &context, &dispatch);
+    if binding.verdict() != StructuralBindingVerdictV3::Complete {
+        return receipt.finish(binding_verdict(binding.verdict()));
+    }
+    let Some(binding) = binding.into_complete() else {
+        return receipt.finish(TrafficShadowVerdictV3::RejectInvariantMismatch);
+    };
+
+    let grounded = ground_protocol_actions_v3(generation.index(), &context, &binding);
+    let phase = evaluate_phase_ranking_v3(&grounded);
+    receipt.set_phase_report(phase.report_sha256());
+    if grounded.verdict() != CapabilityGroundingVerdictV3::Complete {
+        return receipt.finish(grounding_verdict(grounded.verdict()));
+    }
+    let full_phase = phase
+        .controls()
+        .iter()
+        .find(|control| control.control() == PhaseControlV3::Full);
+    let Some(actions) = grounded.into_complete() else {
+        return receipt.finish(TrafficShadowVerdictV3::RejectInvariantMismatch);
+    };
+    if full_phase.is_none_or(|control| {
+        control.verdict() != PhaseSelectionVerdictV3::Selected
+            || control.selected_physical_action_sha256()
+                != Some(actions.action().physical_action_sha256())
+    }) {
+        return receipt.finish(TrafficShadowVerdictV3::AbstainPhase);
+    }
+
+    let shadow = execute_bound_protocol_shadow_v3(actions.action());
+    receipt.set_operator_shadow_receipt(shadow.receipt().receipt_sha256());
+    receipt.finish(match shadow.receipt().verdict() {
+        OperatorShadowVerdictV3::Complete => TrafficShadowVerdictV3::CompleteShadow,
+        OperatorShadowVerdictV3::ParityMismatch => TrafficShadowVerdictV3::ActorVmParityMismatch,
+        _ => TrafficShadowVerdictV3::AbstainActorVm,
+    })
+}
+
+const fn supported_projection(
+    projection: Option<RuntimeProjectionV3>,
+) -> Option<RuntimeProjectionV3> {
+    match projection {
+        Some(
+            projection @ (RuntimeProjectionV3::Responses | RuntimeProjectionV3::ChatCompletions),
+        ) => Some(projection),
+        None | Some(RuntimeProjectionV3::TransitionApi) => None,
+    }
+}
+
+const fn context_error_verdict(error: RuntimeContextErrorV3) -> TrafficShadowVerdictV3 {
+    match error {
+        RuntimeContextErrorV3::InvalidBudget => TrafficShadowVerdictV3::AbstainContextBudget,
+        RuntimeContextErrorV3::InvalidRequestDigest
+        | RuntimeContextErrorV3::Structural
+        | RuntimeContextErrorV3::Serialization => TrafficShadowVerdictV3::AbstainContextExtraction,
+    }
+}
+
+const fn binding_verdict(verdict: StructuralBindingVerdictV3) -> TrafficShadowVerdictV3 {
+    match verdict {
+        StructuralBindingVerdictV3::RejectIndexMismatch => {
+            TrafficShadowVerdictV3::RejectInvariantMismatch
+        }
+        StructuralBindingVerdictV3::AbstainDispatchExhausted => {
+            TrafficShadowVerdictV3::AbstainDispatch
+        }
+        StructuralBindingVerdictV3::AbstainBudgetExhausted => {
+            TrafficShadowVerdictV3::AbstainRuntimeBudget
+        }
+        StructuralBindingVerdictV3::Complete
+        | StructuralBindingVerdictV3::AbstainBindingExhausted => {
+            TrafficShadowVerdictV3::AbstainBinding
+        }
+    }
+}
+
+const fn grounding_verdict(verdict: CapabilityGroundingVerdictV3) -> TrafficShadowVerdictV3 {
+    match verdict {
+        CapabilityGroundingVerdictV3::RejectIndexMismatch => {
+            TrafficShadowVerdictV3::RejectInvariantMismatch
+        }
+        CapabilityGroundingVerdictV3::AbstainMissingCapability => {
+            TrafficShadowVerdictV3::AbstainMissingCapability
+        }
+        CapabilityGroundingVerdictV3::AbstainAmbiguousCapability => {
+            TrafficShadowVerdictV3::AbstainAmbiguousCapability
+        }
+        CapabilityGroundingVerdictV3::AbstainAmbiguousAction => {
+            TrafficShadowVerdictV3::AbstainAmbiguousAction
+        }
+        CapabilityGroundingVerdictV3::AbstainRoleValue => TrafficShadowVerdictV3::AbstainRoleValue,
+        CapabilityGroundingVerdictV3::AbstainBudgetExhausted => {
+            TrafficShadowVerdictV3::AbstainRuntimeBudget
+        }
+        CapabilityGroundingVerdictV3::Complete
+        | CapabilityGroundingVerdictV3::AbstainNoStructuralMapping => {
+            TrafficShadowVerdictV3::AbstainBinding
+        }
+    }
+}
