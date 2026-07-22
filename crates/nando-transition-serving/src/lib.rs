@@ -27,14 +27,18 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use nando_expression_runtime::ExpressionRuntime;
+use nando_operator_admission::finalize_post_verifier_receipt;
+use nando_operator_kernel::RelationFrame;
+use nando_operator_learning::{
+    EvidencePolicyV1, OnlineCollectionConfig, OnlineCollectionStatus, ReducibilityClass,
+    is_source_neutral_relation_frame,
+};
+use nando_operator_proof::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
+use nando_operator_runtime::{ResponseExecutionStatus, provider_tool_capability_atom_ids};
 use nando_response_actor::{
-    CpuDecidability, CpuDecidabilityClass, EvidencePolicyV1,
     ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1, OnlineAdmissionCandidateBundle,
-    OnlineCollectionConfig, OnlineCollectionMiner, OnlineCollectionStatus,
-    OnlineResponseMinerReport, OnlineResponseStream, OnlineResponseTailConfig, ReducibilityClass,
-    RelationFrame, ResponseExecutionStatus, ResponseExecutor, classify_cpu_decidability,
-    finalize_post_verifier_receipt, is_source_neutral_relation_frame,
-    provider_tool_capability_atom_ids, response_runtime_contract_sha256,
+    OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
+    OnlineResponseTailConfig, ResponseExecutor, response_runtime_contract_sha256,
 };
 use nando_transition_inducer::{
     LIVE_GROUNDED_TRACE_SCHEMA, LIVE_TRANSITION_REQUEST_SCHEMA, LiveTransitionExecutor,
@@ -585,16 +589,15 @@ fn spawn_miner_warmup(state: AppState) -> Result<(), String> {
             };
             if let Some(miner) = response.as_ref()
                 && let Ok(miner) = miner.lock()
+                && let Ok(mut warmup) = state.miner_warmup.write()
             {
-                if let Ok(mut warmup) = state.miner_warmup.write() {
-                    warmup.checkpoint_restored = miner.checkpoint_restored();
-                    warmup.source_offset = miner.source_offset();
-                    warmup.source_lines = miner.source_lines();
-                    warmup.replay_support_after_open = miner.replay_support_parity_cases_total();
-                    warmup.checkpoint_sha256_after_open =
-                        sha256_file_streaming(&state.config.response_online_checkpoint_path)
-                            .unwrap_or_default();
-                }
+                warmup.checkpoint_restored = miner.checkpoint_restored();
+                warmup.source_offset = miner.source_offset();
+                warmup.source_lines = miner.source_lines();
+                warmup.replay_support_after_open = miner.replay_support_parity_cases_total();
+                warmup.checkpoint_sha256_after_open =
+                    sha256_file_streaming(&state.config.response_online_checkpoint_path)
+                        .unwrap_or_default();
             }
             let collection = match OnlineCollectionMiner::open(
                 state.config.online_collection_checkpoint_path.clone(),
@@ -4575,7 +4578,6 @@ mod tests {
             .read()
             .expect("response cache")
             .input_fingerprint
-            .clone()
             .expect("negative fingerprint");
         refresh_response_executor(&state);
         let unchanged = state.response_cache.read().expect("response cache");
@@ -4587,9 +4589,10 @@ mod tests {
         assert!(!unchanged.last_error.is_empty());
         drop(unchanged);
 
+        // Size must change as well: some filesystems coalesce rapid mtime updates.
         write_json(
             &state.config.admission_path,
-            &json!({"schema": "invalid-admission-v2"}),
+            &json!({"schema": "invalid-admission-v2-expanded"}),
         );
         refresh_response_executor(&state);
         let changed = state.response_cache.read().expect("response cache");

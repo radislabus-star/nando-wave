@@ -4,10 +4,9 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use nando_response_actor::{
-    OnlineResponseStream, OnlineResponseTailConfig, RelationFrame, teacher_action_symbol,
-    teacher_program_signature,
-};
+use nando_operator_kernel::RelationFrame;
+use nando_operator_learning::{teacher_action_symbol, teacher_program_signature};
+use nando_response_actor::{OnlineResponseStream, OnlineResponseTailConfig};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 

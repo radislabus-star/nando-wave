@@ -7,18 +7,23 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 
 use memchr::memchr_iter;
-use nando_response_actor::{
-    AtomSource, AtomValueType, CanonicalEventGraph, CaptureEvidenceReceipt,
-    CaptureRecordCommitment, CollectionOutputRenderer, CompletedTurnExample,
+use nando_operator_kernel::{
+    AtomSource, AtomValueType, CollectionOutputRenderer, RELATION_FRAME_SCHEMA, RelationAtom,
+    RelationFrame, ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifierProgram,
+    sha256_bytes,
+};
+use nando_operator_learning::{
+    CanonicalEventGraph, CaptureEvidenceReceipt, CaptureRecordCommitment,
     DeterministicEvidenceGraphStore, DeterministicEvidenceLedger, EvidenceGraphBuilder,
-    EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, OnlineCollectionMiner,
-    OnlineCollectionObservation, RELATION_FRAME_SCHEMA, RawEvidenceEnvelope, RelationAtom,
-    RelationFrame, ResponseExecutionStatus, ResponseProgram, ResponseValueSelector,
-    RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION, TurnCompletionReason,
-    ValueProjectionFormat, VerifierProgram, evidence_session_id_sha256, execute_response,
-    provider_tool_capability_atom_ids, sha256_bytes, teacher_action_symbol,
-    teacher_program_signature, teacher_program_signature_from_action_atoms,
-    verify_response_independently,
+    EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, OnlineCollectionObservation,
+    RawEvidenceEnvelope, RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION,
+    evidence_session_id_sha256, teacher_action_symbol, teacher_program_signature,
+    teacher_program_signature_from_action_atoms,
+};
+use nando_operator_proof::verify_response_independently;
+use nando_operator_runtime::{ResponseExecutionStatus, provider_tool_capability_atom_ids};
+use nando_response_actor::{
+    CompletedTurnExample, OnlineCollectionMiner, TurnCompletionReason, execute_response,
 };
 use notify::event::ModifyKind;
 use notify::{EventKind, RecursiveMode, Watcher};
@@ -58,6 +63,10 @@ impl SessionEvidenceLedger for DeterministicEvidenceLedger {
     }
 }
 
+#[allow(
+    clippy::large_enum_variant,
+    reason = "the bounded bridge keeps frames inline to avoid a heap allocation per live event"
+)]
 enum PendingMinerInput {
     Frame(RelationFrame, Option<RuntimeParityCase>),
     Collection(OnlineCollectionObservation),
@@ -686,7 +695,7 @@ fn verified_write_stdin_training_cases_from_session_matching(
         let task_started = contains_bytes(prefix, b"\"type\":\"task_started\"");
         let task_complete = contains_bytes(prefix, b"\"type\":\"task_complete\"");
         if session_meta
-            && let Ok(row) = serde_json::from_slice::<Value>(&line)
+            && let Ok(row) = serde_json::from_slice::<Value>(line)
             && let Some(id) = row
                 .get("payload")
                 .and_then(|payload| payload.get("id"))
@@ -722,9 +731,9 @@ fn verified_write_stdin_training_cases_from_session_matching(
             || task_started
             || task_complete;
         let is_write_stdin_call = if (function_call || custom_tool_call)
-            && contains_bytes(&line, b"write_stdin")
+            && contains_bytes(line, b"write_stdin")
         {
-            let signatures = write_stdin_call_signatures(&line);
+            let signatures = write_stdin_call_signatures(line);
             !signatures.is_empty()
                 && target_signatures
                     .is_none_or(|targets| signatures.iter().any(|value| targets.contains(value)))
@@ -2795,9 +2804,8 @@ fn count_band(value: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nando_response_actor::{
-        EvidencePolicyV1, frame_matches_program_action_contract, synthesize_response_operator,
-    };
+    use nando_operator_learning::{EvidencePolicyV1, synthesize_response_operator};
+    use nando_response_actor::frame_matches_program_action_contract;
     use serde_json::json;
     use std::io::Write;
 

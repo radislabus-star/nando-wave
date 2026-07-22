@@ -1574,7 +1574,7 @@ impl OnlineResponseMiner {
         {
             self.routing_atom_cache.remove(&oldest);
         }
-        self.routing_atom_cache_order.push_back(key.clone());
+        self.routing_atom_cache_order.push_back(key);
         self.routing_atom_cache.insert(key, ids.clone());
         Ok(ids)
     }
@@ -1911,7 +1911,7 @@ impl OnlineResponseMiner {
             parity_case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
             self.future_runtime_parity_cases
                 .insert(canonical_runtime_parity_key(&frame), parity_case);
-            if self.rows_seen % 64 == 0 {
+            if self.rows_seen.is_multiple_of(64) {
                 self.prune_future_runtime_parity_cases();
             }
         }

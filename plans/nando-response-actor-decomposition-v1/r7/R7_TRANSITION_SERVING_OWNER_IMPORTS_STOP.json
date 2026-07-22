@@ -1,0 +1,46 @@
+{
+  "schema": "nando.decomposition.r7.transition-serving-owner-imports.v1",
+  "generated_at_utc": "2026-07-22T01:12:15Z",
+  "base_head": "125be31d389047c3844ed2b0d82357e34c731b2e",
+  "verdict": "PASS_WITH_FROZEN_BASELINE",
+  "scope": {
+    "direct_owner_crates": [
+      "nando-operator-admission",
+      "nando-operator-kernel",
+      "nando-operator-learning",
+      "nando-operator-proof",
+      "nando-operator-runtime"
+    ],
+    "response_facade_retained": true,
+    "production_behavior_changed": false
+  },
+  "remote_fast_gate": {
+    "worker_verdict": "PASS",
+    "compile_exit": 0,
+    "focused_test_exit": 0,
+    "compile_seconds": 3.448878701,
+    "overlay_scope_count": 16,
+    "overlay_patch_sha256": "4bec8b071972d6657439399a467ff1de5f90963b016826d763d78f28884b585a",
+    "new_background_build_processes": 0
+  },
+  "full_lib_baseline": {
+    "passed": 47,
+    "failed": 3,
+    "new_failures": 0,
+    "fixed_flaky_failures": 1,
+    "known_failures": [
+      "session_backfill::tests::historical_backfill_is_resumable_and_builds_generic_quarantine",
+      "session_stream::tests::completed_plan_transition_emits_typed_frame_only_after_explicit_success",
+      "session_stream::tests::runtime_parity_uses_latest_output_not_accumulated_collection_history"
+    ]
+  },
+  "clippy": {
+    "command": "cargo clippy -p nando-transition-serving --all-targets --no-deps -- -D warnings",
+    "exit": 0
+  },
+  "authority": {
+    "deploy": false,
+    "restart": false,
+    "apply_authority": false
+  }
+}

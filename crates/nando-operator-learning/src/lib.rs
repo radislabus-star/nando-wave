@@ -27,8 +27,8 @@ pub mod opportunity;
 pub mod protocol_mode;
 pub mod rollover;
 pub mod runtime_parity;
-pub mod semantic_alias;
 pub mod self_training_types;
+pub mod semantic_alias;
 pub mod synthesis;
 pub mod teacher_join;
 pub mod training_types;
@@ -59,8 +59,12 @@ pub use opportunity::*;
 pub use protocol_mode::*;
 pub use rollover::*;
 pub use runtime_parity::*;
-pub use semantic_alias::*;
 pub use self_training_types::*;
+pub use semantic_alias::*;
+pub use synthesis::{
+    SynthesisError, SynthesizedResponseOperator, partition_teacher_training_families,
+    synthesize_response_operator, verify_operator_structure,
+};
 pub use teacher_join::*;
 pub use training_types::*;
 pub use version_space::*;

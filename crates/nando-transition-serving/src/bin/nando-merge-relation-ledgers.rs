@@ -4,9 +4,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
-use nando_response_actor::{
-    RelationFrame, canonical_json_sha256, is_source_neutral_relation_frame,
-};
+use nando_operator_kernel::{RelationFrame, canonical_json_sha256};
+use nando_operator_learning::is_source_neutral_relation_frame;
 
 fn main() -> Result<(), String> {
     let mut args = env::args_os().skip(1);

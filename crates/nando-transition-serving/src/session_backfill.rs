@@ -6,14 +6,15 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use nando_response_actor::{
+use nando_operator_kernel::{canonical_json_bytes, sha256_bytes};
+use nando_operator_learning::{
     CanonicalEventGraph, CollectionSynthesisExample, DeterministicEvidenceGraphStore,
     DeterministicEvidenceLedger, EvidenceGraphBuilder, EvidenceGraphPolicy, EvidencePolicyV1,
     LegacyReplayRehydrationStats, OnlineCollectionBucketStatus,
-    OnlineCollectionConsensusDiagnostic, OnlineCollectionMiner, OnlineCollectionObservation,
-    RawEvidenceEnvelope, ResponsePackage, canonical_json_bytes, canonicalize_evidence_envelope,
-    sha256_bytes,
+    OnlineCollectionConsensusDiagnostic, OnlineCollectionObservation, RawEvidenceEnvelope,
+    canonicalize_evidence_envelope,
 };
+use nando_response_actor::{OnlineCollectionMiner, ResponsePackage};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::OffsetDateTime;
@@ -1173,9 +1174,11 @@ fn event_time(row: &Value) -> Option<u64> {
 
 fn session_files(root: &Path) -> Vec<PathBuf> {
     if root.is_file() {
-        return (root.extension().and_then(|value| value.to_str()) == Some("jsonl"))
-            .then(|| vec![root.to_owned()])
-            .unwrap_or_default();
+        return if root.extension().and_then(|value| value.to_str()) == Some("jsonl") {
+            vec![root.to_owned()]
+        } else {
+            Vec::new()
+        };
     }
     let mut output = Vec::new();
     let mut pending = vec![root.to_owned()];
@@ -1284,7 +1287,8 @@ fn persist_checkpoint(path: &Path, checkpoint: &BackfillCheckpoint) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nando_response_actor::{OnlineCollectionConfig, ResponsePackageState};
+    use nando_operator_learning::OnlineCollectionConfig;
+    use nando_response_actor::ResponsePackageState;
     use serde_json::json;
 
     #[test]
