@@ -177,14 +177,19 @@ impl StreamingSelfTrainingState {
                 if !seen.insert(canonical_key) {
                     return None;
                 }
-                by_canonical_key.get(&canonical_key).map(|case| {
-                    let mut case = (*case).clone();
-                    // Admission binds a receipt to the exact frozen frame
-                    // selected by the restored miner, not to an older
-                    // equivalent training-frame identifier.
-                    case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
-                    case
-                })
+                self.support_parity_case(&frame.frame_id_sha256)
+                    .or_else(|| {
+                        by_canonical_key
+                            .get(&canonical_key)
+                            .map(|case| (*case).clone())
+                    })
+                    .map(|mut case| {
+                        // Admission binds a receipt to the exact frozen frame
+                        // selected by the restored miner, not to an older
+                        // equivalent training-frame identifier.
+                        case.evidence_ref_sha256 = frame.frame_id_sha256.clone();
+                        case
+                    })
             })
             .collect()
     }
@@ -626,7 +631,6 @@ impl StreamingSelfTrainingState {
                 .cmp(&left.1.first().map_or(0, |row| row.1))
                 .then_with(|| left.0.cmp(&right.0))
         });
-
         let retained = signatures
             .into_iter()
             .take(MAX_PARITY_SIGNATURES)
@@ -659,6 +663,7 @@ impl StreamingSelfTrainingState {
                             .support
                             .get(frame_id)
                             .or_else(|| receipts.future.get(frame_id))
+                            .or_else(|| receipts.negatives.get(frame_id))
                     })
                     .cloned()
             })
@@ -697,7 +702,24 @@ impl StreamingSelfTrainingState {
                         .map(|receipt| (frame.frame_id_sha256.clone(), receipt))
                 })
                 .collect(),
+            negatives: BTreeMap::new(),
         }
+    }
+
+    fn negative_parity_receipts_for_generation(
+        &self,
+        winner: &CegisWinner,
+        pool: &TeacherPoolSnapshot,
+    ) -> BTreeMap<String, crate::RuntimeParityCase> {
+        pool.negatives
+            .iter()
+            .filter(|frame| frame.observed_at_unix_nanos > winner.repair_watermark_unix_nanos)
+            .filter_map(|frame| {
+                self.support_parity_case(&frame.frame_id_sha256)
+                    .map(|receipt| (frame.frame_id_sha256.clone(), receipt))
+            })
+            .take(MAX_PARITY_CASES_PER_SIGNATURE)
+            .collect()
     }
 
     /// Continues cold synthesis without requiring another event. The worker
@@ -2169,6 +2191,8 @@ impl StreamingSelfTrainingState {
             let Some(pool) = self.cohort_pool_snapshot(&derived) else {
                 continue;
             };
+            let negative_parity_receipts =
+                self.negative_parity_receipts_for_generation(winner, &pool);
             let generation_number = self
                 .generations
                 .get(&winner.cohort_id_sha256)
@@ -2283,6 +2307,20 @@ impl StreamingSelfTrainingState {
                 {
                     self.generation_parity_receipts
                         .remove(&previous_generation_id);
+                }
+            }
+            if let Some(generation) = self.generations.get(&winner.cohort_id_sha256)
+                && let Some(receipts) = self
+                    .generation_parity_receipts
+                    .get_mut(&generation.generation_id_sha256)
+            {
+                for (frame_id, receipt) in negative_parity_receipts {
+                    if receipts.negatives.len() >= MAX_PARITY_CASES_PER_SIGNATURE
+                        && !receipts.negatives.contains_key(&frame_id)
+                    {
+                        break;
+                    }
+                    receipts.negatives.insert(frame_id, receipt);
                 }
             }
         }

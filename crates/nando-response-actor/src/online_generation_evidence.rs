@@ -99,6 +99,8 @@ pub(super) fn semantic_program_covers_all_runtime_parity(
 pub(super) struct GenerationParityReceipts {
     pub(super) support: BTreeMap<String, crate::RuntimeParityCase>,
     pub(super) future: BTreeMap<String, crate::RuntimeParityCase>,
+    #[serde(default)]
+    pub(super) negatives: BTreeMap<String, crate::RuntimeParityCase>,
 }
 
 pub(super) fn rekey_parity_to_canonical_frames(

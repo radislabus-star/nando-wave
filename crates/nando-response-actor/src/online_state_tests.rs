@@ -240,7 +240,12 @@ fn generation_receipts_survive_candidate_eviction_and_restart() {
         state.runtime_parity_frames.insert(frame_id, frame);
     }
     state.enforce_parity_reservoir_limit();
-    let retained = state.parity_receipts_for_generation(&frozen);
+    let negative_frame = frame(96);
+    let negative_frame_id = negative_frame.frame_id_sha256.clone();
+    let mut retained = state.parity_receipts_for_generation(&frozen);
+    retained
+        .negatives
+        .insert(negative_frame_id.clone(), parity_case(96));
     state
         .generation_parity_receipts
         .insert(stable_generation_id.clone(), retained);
@@ -269,6 +274,14 @@ fn generation_receipts_survive_candidate_eviction_and_restart() {
     );
     assert_eq!(restored_receipts.support.len(), 32);
     assert_eq!(restored_receipts.future.len(), 32);
+    assert_eq!(restored_receipts.negatives.len(), 1);
+    assert_eq!(
+        restored
+            .runtime_parity_cases_for_frames([&negative_frame])
+            .len(),
+        1,
+        "generation-owned anti-wave parity must survive cache eviction and restart"
+    );
     assert!(generation_support_parity_complete(
         restored_generation,
         Some(restored_receipts),
