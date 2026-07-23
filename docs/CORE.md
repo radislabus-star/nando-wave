@@ -2,7 +2,7 @@
 
 Status: canonical current-core map.
 
-Current snapshot: 2026-07-21 Europe/Tallinn.
+Current snapshot: 2026-07-23 Europe/Tallinn.
 
 This document answers three questions in one place:
 
@@ -68,6 +68,28 @@ applicability boundary, transform, composition DAG, renderer, and verifier
 contract. The crystallizer then converts that proven attractor into immutable
 VM data. The stored cube/page is the result of grokking, not the grokking
 process itself.
+
+### Adaptive Identification
+
+Natural operator readiness is proof-driven, not row-count-driven:
+
+```text
+complete bounded candidate search
+-> semantic version space contains one executable class
+-> sealed candidate freeze
+-> independent post-freeze role binding
+-> actor/verifier parity
+-> adaptive proof basis
+-> narrow admission candidate
+```
+
+For a simple one-role law this route is proven in controlled tests with one
+support observation and one independent future observation. Rich laws require
+as many support observations as are needed to remove concrete ambiguity; the
+multi-role control currently needs a distinguishing 33rd support observation.
+The number of examples is an observed consequence of the version space, not an
+architectural threshold. Production authority remains a separate external
+decision.
 
 ## 3. Machine Of Truth
 
@@ -153,64 +175,64 @@ B1B controlled causal fixture                  CONTROLLED_FIXTURE_PASS
 physical trial / trust / adjudication owners    COMPLETE
 AcceptedBindingLawEvidence capability            CONTROLLED_ONLY
 F4R2 executable ProtocolMode compiler            CONTROLLED_STRUCTURAL_PASS
-real independent binding evidence                0 / NOT_EVALUATED
-F5 runtime convergence                           NOT_STARTED
-runtime role grounding                          LAB PASS / LIVE WATCH
-general Operator VM                             BLOCK
-response ACTIVE packages                        0
-verified input-token saving share               0.7%
+adaptive operator identification                 PASS
+durable capture/provenance                       PASS
+runtime role grounding                           LIVE PASS, narrow scalar law
+crystallized OperatorPage32                      PASS
+response ACTIVE packages                         1
+real local CPU execution                         PASS
+verified lifetime display-token saving share     0.716%
 false accepts                                    0
 runtime parity failures                          0
 M3                                               WATCH
-production authority                            false
+production authority                             true, narrow immutable lease
 ```
 
-The live numbers are the read-only composite-gate snapshot taken on
-2026-07-21. They are not timeless claims and must be refreshed before a product
-or economics statement.
+The live numbers are the read-only composite-gate and economics snapshot taken
+on 2026-07-23. They are not timeless claims and must be refreshed before a
+product or economics statement. One-shot identification of this package is not
+a scientific circuit-grokking claim.
 
-## 6. Exact Current Blocker
+## 6. Exact Current Product Boundary
 
-The proof-owner repair and F4R2 compiler are now complete on controlled,
-sealed evidence:
+The first complete live route is now closed:
 
 ```text
-PhysicalTrialReceiptV2
--> TrustedResolvedBindingRowsV2
--> AcceptedBindingLawEvidenceV2
--> CanonicalEffectLawV3
-+ FrozenCandidateRelationGraphV1 payloads
--> induced ProtocolSelectorProgramV2 candidates
--> selector execution over every frozen graph
--> label-scored mode/row matrix
--> bounded exact cover of safe modes
--> ProtocolModeSetV2 | ABSTAIN
+live request
+-> RequestEventId
+-> captured structural evidence
+-> adaptive semantic version space
+-> unique executable class
+-> immutable candidate freeze
+-> independent post-freeze transfer
+-> 4032-byte crystallized operator page
+-> external composite admission
+-> ACTIVE package
+-> role-bound actor
+-> independent verifier
+-> local CPU response
+-> verified economics receipt
 ```
 
-The compiler emits typed executable selector payloads, not only digest
-commitments. Direct and renamed/wrapped surfaces compile to the same
-label-free relation selector. Missing or tampered graph payloads are rejected;
-unresolved symmetric roles produce `ABSTAIN`; canonical restart is
-byte-identical and rejects selector mutation.
+The active package is
+`crystallized-scalar-2069a1d9b37eca4f`. Real `/v2/responses` requests have
+returned `local_accept=true` and emitted `wait(cell_id)` without an upstream
+LLM call. The external gate reports `eligible_for_local_accept=true`; false
+accepts and runtime parity mismatches remain zero.
 
-The exact blocker has moved one boundary downstream:
+The blocker is now breadth and economics, not signal connectivity:
 
 ```text
-ProtocolModeSetV2                         CONTROLLED PASS
--> production caller                     0
--> existing RuntimeRoleBinder            NOT CONNECTED
--> winner-owned actor                     NOT CONNECTED FROM F4R2
--> independent verifier                  NOT CONNECTED FROM F4R2
--> external admission                    BLOCK
--> ACTIVE response package               0
+one narrow scalar continuation law       ACTIVE
+additional status/count/filter/compose   NOT YET ACTIVE
+verified current-epoch CPU share         below M3 target
+completed M3 windows                     0 / 3
+M3                                       WATCH
 ```
 
-This is F5, not another reason to modify F4 search. Real independent binding
-evidence is also still absent, so controlled F4R2 success is not a natural-law
-or production-authority claim.
-
-The detailed hot/cold traffic, budget, failure, and STOP contract is
-`plans/effect-law-unification-v1/F5_RUNTIME_CONVERGENCE_V1.md`.
+Increasing coverage must come from additional independently proven operators,
+not from widening this package, weakening admission, or restoring fixed
+`32 + 32` readiness.
 
 ## 7. Completed Ownership Repair
 
@@ -263,17 +285,16 @@ all surviving covers action-equivalent
 
 Allowed now:
 
-> Nando has a controlled causal B1B fixture and an executable F4R2 structural
-> compiler. It induces selector programs from sealed graph evidence, executes
-> them across support/future and negatives, emits a bounded mode set only for a
-> complete safe cover, and otherwise abstains.
+> Nando has one narrow adaptively identified, crystallized, externally admitted
+> OperatorPackage executing verified live requests on CPU. Ambiguity, stale
+> authority, actor/verifier disagreement, and out-of-scope requests still
+> produce fallback or ABSTAIN.
 
 Not allowed now:
 
-- independently proven natural binding law;
-- F5 runtime convergence from ProtocolMode to the live role binder;
-- general learned VM program;
-- live Rich Operator authority;
+- general circuit-grokking claim for the one-shot scalar package;
+- broad Rich Operator authority;
+- status/count/filter/compose coverage without their own proof;
 - broad autonomous execution;
 - M3 or 50% verified savings.
 

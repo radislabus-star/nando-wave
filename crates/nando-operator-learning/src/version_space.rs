@@ -68,6 +68,41 @@ pub struct VersionSpaceReport {
     pub duplicate_programs: u64,
     pub maximum_depth_seen: u8,
     pub serialized_bytes: usize,
+    pub candidate_generation_complete: bool,
+    pub search_exhausted: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CandidateSearchCompletion {
+    #[default]
+    Incomplete,
+    Complete,
+    Exhausted,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ExactProgramEvaluation {
+    pub program_digest_sha256: String,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EvidenceUpdateReport {
+    pub survivors_before: usize,
+    pub survivors_after: usize,
+    pub exact_checks: usize,
+    pub eliminated: usize,
+    pub information_gain: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VersionSpaceEvidenceError {
+    DuplicateEvaluation,
+    UnknownProgram,
+    IncompleteEvaluation,
+    MissingEliminationReason,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -85,6 +120,10 @@ pub struct VersionSpaceArena {
     depth_rejections: u64,
     duplicate_programs: u64,
     maximum_depth_seen: u8,
+    #[serde(default)]
+    candidate_generation_complete: bool,
+    #[serde(default)]
+    search_exhausted: bool,
 }
 
 impl VersionSpaceArena {
@@ -104,6 +143,8 @@ impl VersionSpaceArena {
             depth_rejections: 0,
             duplicate_programs: 0,
             maximum_depth_seen: 0,
+            candidate_generation_complete: false,
+            search_exhausted: false,
         }
     }
 
@@ -112,6 +153,7 @@ impl VersionSpaceArena {
         self.maximum_depth_seen = self.maximum_depth_seen.max(depth);
         if depth > self.config.max_depth {
             self.depth_rejections = self.depth_rejections.saturating_add(1);
+            self.search_exhausted = true;
             return None;
         }
         let bytes = serde_json::to_vec(&program).ok()?;
@@ -122,8 +164,10 @@ impl VersionSpaceArena {
         }
         if self.nodes.len() >= self.config.max_ast_nodes {
             self.capacity_rejections = self.capacity_rejections.saturating_add(1);
+            self.search_exhausted = true;
             return None;
         }
+        self.candidate_generation_complete = false;
         let node_id = u32::try_from(self.nodes.len()).ok()?;
         self.nodes.push(InternedProgram {
             node_id,
@@ -274,6 +318,93 @@ impl VersionSpaceArena {
             .or_insert_with(|| reason.to_owned());
     }
 
+    pub fn apply_evaluations(
+        &mut self,
+        evaluations: &[ExactProgramEvaluation],
+    ) -> Result<EvidenceUpdateReport, VersionSpaceEvidenceError> {
+        let survivors_before = self.survivors.len();
+        let mut by_node = BTreeMap::new();
+        for evaluation in evaluations {
+            let Some(node_id) = self.index.get(&evaluation.program_digest_sha256).copied() else {
+                return Err(VersionSpaceEvidenceError::UnknownProgram);
+            };
+            if !evaluation.accepted && evaluation.reason.trim().is_empty() {
+                return Err(VersionSpaceEvidenceError::MissingEliminationReason);
+            }
+            if by_node.insert(node_id, evaluation).is_some() {
+                return Err(VersionSpaceEvidenceError::DuplicateEvaluation);
+            }
+        }
+        if by_node
+            .keys()
+            .filter(|node_id| self.survivors.contains(node_id))
+            .count()
+            != self.survivors.len()
+            || self
+                .survivors
+                .iter()
+                .any(|node_id| !by_node.contains_key(node_id))
+        {
+            return Err(VersionSpaceEvidenceError::IncompleteEvaluation);
+        }
+        for (node_id, evaluation) in by_node {
+            if self.survivors.contains(&node_id) {
+                self.record_exact_check(node_id, evaluation.accepted, &evaluation.reason);
+            }
+        }
+        let survivors_after = self.survivors.len();
+        let eliminated = survivors_before.saturating_sub(survivors_after);
+        Ok(EvidenceUpdateReport {
+            survivors_before,
+            survivors_after,
+            exact_checks: evaluations.len(),
+            eliminated,
+            information_gain: eliminated,
+        })
+    }
+
+    pub fn mark_candidate_generation_complete(&mut self) -> CandidateSearchCompletion {
+        if self.search_exhausted {
+            self.candidate_generation_complete = false;
+            CandidateSearchCompletion::Exhausted
+        } else {
+            self.candidate_generation_complete = true;
+            CandidateSearchCompletion::Complete
+        }
+    }
+
+    #[must_use]
+    pub const fn search_completion(&self) -> CandidateSearchCompletion {
+        if self.search_exhausted {
+            CandidateSearchCompletion::Exhausted
+        } else if self.candidate_generation_complete {
+            CandidateSearchCompletion::Complete
+        } else {
+            CandidateSearchCompletion::Incomplete
+        }
+    }
+
+    #[must_use]
+    pub fn program_by_digest(&self, digest_sha256: &str) -> Option<&InternedProgram> {
+        self.index
+            .get(digest_sha256)
+            .and_then(|node_id| usize::try_from(*node_id).ok())
+            .and_then(|index| self.nodes.get(index))
+    }
+
+    #[must_use]
+    pub fn elimination_reasons(&self) -> BTreeMap<String, String> {
+        self.eliminated
+            .iter()
+            .filter_map(|(node_id, reason)| {
+                usize::try_from(*node_id)
+                    .ok()
+                    .and_then(|index| self.nodes.get(index))
+                    .map(|program| (program.digest_sha256.clone(), reason.clone()))
+            })
+            .collect()
+    }
+
     pub fn reset_frontier(&mut self) {
         self.frontier_cursor = 0;
         self.ranked_frontier
@@ -307,6 +438,8 @@ impl VersionSpaceArena {
             duplicate_programs: self.duplicate_programs,
             maximum_depth_seen: self.maximum_depth_seen,
             serialized_bytes: self.nodes.iter().map(|node| node.serialized_bytes).sum(),
+            candidate_generation_complete: self.candidate_generation_complete,
+            search_exhausted: self.search_exhausted,
         }
     }
 }
@@ -417,6 +550,17 @@ mod tests {
         }
     }
 
+    fn program(field: &str) -> ResponseProgram {
+        ResponseProgram::project_status(
+            ResponseValueSelector::JsonField {
+                field: field.to_owned(),
+                value_type: AtomValueType::Integer,
+            },
+            ProjectStatusMapping::ZeroIsSuccess,
+            "completed",
+        )
+    }
+
     fn exact_checks_until(arena: &mut VersionSpaceArena, winner: AstNodeId) -> u64 {
         while let Some(candidate) = arena.next_candidate() {
             arena.record_exact_check(
@@ -484,5 +628,72 @@ mod tests {
         assert_eq!(no_anti_checks, 2);
         assert_eq!(full_phase_checks, 1);
         assert!(full_phase_checks < no_anti_checks);
+    }
+
+    #[test]
+    fn evidence_eliminates_candidates_only_after_complete_exact_accounting() {
+        let mut arena = VersionSpaceArena::default();
+        let left = program("left");
+        let right = program("right");
+        arena.intern_all([left, right]);
+        assert_eq!(
+            arena.mark_candidate_generation_complete(),
+            CandidateSearchCompletion::Complete
+        );
+        let programs = arena.survivor_programs();
+        let accepted = programs[0].digest_sha256.clone();
+        let rejected = programs[1].digest_sha256.clone();
+
+        assert_eq!(
+            arena.apply_evaluations(&[ExactProgramEvaluation {
+                program_digest_sha256: accepted.clone(),
+                accepted: true,
+                reason: String::new(),
+            }]),
+            Err(VersionSpaceEvidenceError::IncompleteEvaluation)
+        );
+        let update = arena
+            .apply_evaluations(&[
+                ExactProgramEvaluation {
+                    program_digest_sha256: accepted,
+                    accepted: true,
+                    reason: String::new(),
+                },
+                ExactProgramEvaluation {
+                    program_digest_sha256: rejected,
+                    accepted: false,
+                    reason: "different observed delta".to_owned(),
+                },
+            ])
+            .expect("complete evaluation");
+        assert_eq!(update.survivors_before, 2);
+        assert_eq!(update.survivors_after, 1);
+        assert_eq!(update.information_gain, 1);
+        assert_eq!(arena.elimination_reasons().len(), 1);
+    }
+
+    #[test]
+    fn evidence_repetition_has_zero_identification_gain() {
+        let mut arena = VersionSpaceArena::default();
+        arena.intern(program("only")).expect("program");
+        arena.mark_candidate_generation_complete();
+        let digest = arena.survivor_programs()[0].digest_sha256.clone();
+        let evaluation = ExactProgramEvaluation {
+            program_digest_sha256: digest,
+            accepted: true,
+            reason: String::new(),
+        };
+        let first = arena
+            .apply_evaluations(std::slice::from_ref(&evaluation))
+            .expect("first");
+        let repeated = arena
+            .apply_evaluations(std::slice::from_ref(&evaluation))
+            .expect("repeated");
+        assert_eq!(first.information_gain, 0);
+        assert_eq!(repeated.information_gain, 0);
+        assert_eq!(
+            arena.search_completion(),
+            CandidateSearchCompletion::Complete
+        );
     }
 }

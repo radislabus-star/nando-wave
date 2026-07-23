@@ -1147,6 +1147,7 @@ pub fn compile_source_neutral_quarantine_packages(
                     exact_cache_overlap: 0,
                     wave_causal_pass,
                     verifier_schema,
+                    adaptive_identification: None,
                 },
             };
             let negatives = family
@@ -1371,6 +1372,7 @@ pub fn compile_response_registry(
                 exact_cache_overlap: 0,
                 wave_causal_pass,
                 verifier_schema: "response_actor_independent_verifier.v1".to_owned(),
+                adaptive_identification: None,
             },
         });
     }
@@ -1445,6 +1447,7 @@ pub fn compile_response_registry(
                 exact_cache_overlap: 0,
                 wave_causal_pass,
                 verifier_schema: "response_actor_independent_verifier.v1".to_owned(),
+                adaptive_identification: None,
             },
         });
     }
@@ -1519,6 +1522,7 @@ pub fn compile_response_registry(
                 exact_cache_overlap: 0,
                 wave_causal_pass,
                 verifier_schema: "response_actor_independent_verifier.v1".to_owned(),
+                adaptive_identification: None,
             },
         });
     }
@@ -1602,6 +1606,7 @@ pub fn compile_response_registry(
                 exact_cache_overlap: 0,
                 wave_causal_pass,
                 verifier_schema: "response_actor_independent_verifier.v1".to_owned(),
+                adaptive_identification: None,
             },
         });
     }

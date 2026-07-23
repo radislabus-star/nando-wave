@@ -1,13 +1,14 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.23-b004";
+const DASHBOARD_BUILD: &str = "2026.07.23-b005";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
     pub(crate) total_tokens: u64,
     pub(crate) miner_tokens: u64,
     pub(crate) cpu_tokens: u64,
+    pub(crate) cpu_allowed: bool,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
@@ -112,6 +113,38 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
 }
 
 pub(crate) fn render(initial: InitialMetrics) -> String {
+    let (
+        pipeline_title,
+        cpu_note_class,
+        cpu_note,
+        admission_step_class,
+        admission_state,
+        cpu_step_class,
+        cpu_state,
+        blocker,
+    ) = if initial.cpu_allowed {
+        (
+            "МАРШРУТ ДО CPU",
+            "good",
+            "AUTHORITY OPEN",
+            "good",
+            "OPEN",
+            "good",
+            "ENABLED",
+            "маршрут до CPU открыт",
+        )
+    } else {
+        (
+            "ПОЧЕМУ CPU НЕ РАСТЁТ",
+            "watch",
+            "НЕ РАСТЁТ: AUTHORITY LOCKED",
+            "locked",
+            "LOCKED",
+            "muted",
+            "0 NEW",
+            "нет доказанного ACTIVE OperatorPackage",
+        )
+    };
     TEMPLATE
         .replace("__DASHBOARD_BUILD__", DASHBOARD_BUILD)
         .replace("__TOTAL__", &format_number(initial.total_tokens))
@@ -125,6 +158,14 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
             "__CPU_SHARE__",
             &format_percent(initial.cpu_tokens, initial.total_tokens, 3),
         )
+        .replace("__PIPELINE_TITLE__", pipeline_title)
+        .replace("__CPU_NOTE_CLASS__", cpu_note_class)
+        .replace("__CPU_NOTE__", cpu_note)
+        .replace("__ADMISSION_STEP_CLASS__", admission_step_class)
+        .replace("__ADMISSION_STATE__", admission_state)
+        .replace("__CPU_STEP_CLASS__", cpu_step_class)
+        .replace("__CPU_STATE__", cpu_state)
+        .replace("__BLOCKER__", blocker)
 }
 
 fn pointer_u64(value: &Value, pointer: &str) -> u64 {
@@ -253,7 +294,7 @@ const TEMPLATE: &str = r#"
     <div class="token-tracks">
       <article class="token-track"><div class="track-label">ВХОД NANDO</div><div class="track-value-row"><output id="total-token-count" class="track-value">__TOTAL__</output><span class="track-share">100%</span></div><div class="track-rail"><div id="total-bar" class="track-fill" style="width:100%"></div></div><div class="track-note">ПОЛНЫЙ ЗНАМЕНАТЕЛЬ</div></article>
       <article class="token-track track-miner"><div class="track-label">ВИДИТ МАЙНЕР</div><div class="track-value-row"><output id="miner-token-count" class="track-value">__MINER__</output><output id="miner-token-share" class="track-share">__MINER_SHARE__</output></div><div class="track-rail"><div id="miner-bar" class="track-fill"></div></div><div id="miner-epoch" class="track-note good">НОВЫЙ EPOCH: ЗАГРУЗКА</div></article>
-      <article class="token-track track-cpu"><div class="track-label">CPU</div><div class="track-value-row"><output id="cpu-token-count" class="track-value">__CPU__</output><output id="cpu-token-share" class="track-share">__CPU_SHARE__</output></div><div class="track-rail"><div id="cpu-bar" class="track-fill"></div></div><div id="cpu-note" class="track-note watch">НЕ РАСТЁТ: AUTHORITY LOCKED</div></article>
+      <article class="token-track track-cpu"><div class="track-label">CPU</div><div class="track-value-row"><output id="cpu-token-count" class="track-value">__CPU__</output><output id="cpu-token-share" class="track-share">__CPU_SHARE__</output></div><div class="track-rail"><div id="cpu-bar" class="track-fill"></div></div><div id="cpu-note" class="track-note __CPU_NOTE_CLASS__">__CPU_NOTE__</div></article>
     </div>
   </div></section>
   <div class="epoch-strip"><span>МОСТ: <b>opportunity seq <span id="bridge-pair">— / —</span></b> · токены <span id="bridge-tokens">—</span> · pending <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">STRUCTURE —</span></div>
@@ -262,7 +303,7 @@ const TEMPLATE: &str = r#"
     <div class="window-scroll"><div class="window-table"><div class="window-row header"><span>ОКНО</span><span>СЕССИЯ</span><span>КОНФИГ</span><span>СТАТУС</span><span>КОНЕЧНАЯ ТОЧКА</span></div><div id="window-rows"></div></div></div>
   </div></section>
   <section class="live-band"><div class="live-inner">
-    <h2 class="band-title">ПОЧЕМУ CPU НЕ РАСТЁТ</h2>
+    <h2 id="pipeline-title" class="band-title">__PIPELINE_TITLE__</h2>
     <div class="pipeline-scroll"><div class="pipeline">
       <div class="pipe-step"><div class="pipe-name">INGRESS</div><div class="pipe-state">PASS</div></div>
       <div class="pipe-step"><div class="pipe-name">LEARNING BRIDGE</div><div id="pipe-bridge" class="pipe-state">—</div></div>
@@ -271,11 +312,11 @@ const TEMPLATE: &str = r#"
       <div class="pipe-step watch"><div class="pipe-name">CANDIDATE INPUT</div><div id="pipe-candidate" class="pipe-state">0</div></div>
       <div class="pipe-step block"><div class="pipe-name">CRYSTALLIZER OUTPUT</div><div id="pipe-crystallizer" class="pipe-state">0</div></div>
       <div class="pipe-step block"><div class="pipe-name">OPERATOR PACKAGES</div><div id="pipe-package" class="pipe-state">NEW 0 · OLD 0</div></div>
-      <div class="pipe-step locked"><div class="pipe-name">ADMISSION</div><div id="pipe-admission" class="pipe-state">LOCKED</div></div>
-      <div class="pipe-step muted"><div class="pipe-name">CPU ACCEPT</div><div id="pipe-cpu" class="pipe-state">0 NEW</div></div>
+      <div id="pipe-admission-step" class="pipe-step __ADMISSION_STEP_CLASS__"><div class="pipe-name">ADMISSION</div><div id="pipe-admission" class="pipe-state">__ADMISSION_STATE__</div></div>
+      <div id="pipe-cpu-step" class="pipe-step __CPU_STEP_CLASS__"><div class="pipe-name">CPU ACCEPT</div><div id="pipe-cpu" class="pipe-state">__CPU_STATE__</div></div>
       <div class="break-line"></div><div class="break-label">ТЕКУЩИЙ РАЗРЫВ</div>
     </div></div>
-    <div id="blocker-text" class="blocker">нет доказанного ACTIVE OperatorPackage</div>
+    <div id="blocker-text" class="blocker">__BLOCKER__</div>
     <div class="activity"><span class="activity-label">ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
   </div></section>
   <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span class="next-route">relation evidence → circuit → future proof → admission</span></span><span>false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · bridge failures <b id="bridge-failures">0</b></span></div></footer>
@@ -290,6 +331,7 @@ const TEMPLATE: &str = r#"
   let lastSuccess = Date.now();
   const node = (id) => document.getElementById(id);
   const text = (id, value) => { const target = node(id); if (target) target.textContent = value; };
+  const stateClass = (id, value) => { const target = node(id); if (target) target.className = value; };
   const ratio = (part, total, digits) => total > 0 ? `${(part * 100 / total).toFixed(digits).replace(".", ",")}%` : `0,${"0".repeat(digits)}%`;
   const width = (id, part, total) => { const target = node(id); if (target) target.style.width = total > 0 ? `${Math.max(0.25, part * 100 / total)}%` : "0"; };
   const routeLabel = (window) => window.route === "nando" ? "NANDO" : window.route === "mixed" ? "СМЕШАННО" : window.route === "outside_nando" ? "ВНЕ NANDO" : "ОЖИДАНИЕ";
@@ -322,7 +364,8 @@ const TEMPLATE: &str = r#"
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
     text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", snapshot.controller_crystallized_candidates);
-    text("pipe-package", `NEW NATURAL ${snapshot.controller_crystallized_candidates} · OLD ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED");
+    text("pipe-package", `NEW NATURAL ${snapshot.controller_crystallized_candidates} · OLD ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED"); text("pipeline-title", snapshot.cpu_allowed ? "МАРШРУТ ДО CPU" : "ПОЧЕМУ CPU НЕ РАСТЁТ");
+    stateClass("cpu-note", `track-note ${snapshot.cpu_allowed ? "good" : "watch"}`); stateClass("pipe-admission-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "locked"}`); stateClass("pipe-cpu-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "muted"}`);
     text("blocker-text", controllerInput > 0 && snapshot.controller_crystallized_candidates === 0 ? `ТЕКУЩИЙ РАЗРЫВ: INPUT ${controllerInput} → CRYST 0. Legacy candidate: ${snapshot.controller_blocker}` : controllerInput === 0 ? `discovery → candidate export: ${snapshot.controller_blocker}` : snapshot.controller_crystallized_candidates > 0 && !snapshot.cpu_allowed ? `crystallized operator готов, admission закрыт: ${snapshot.controller_blocker}` : snapshot.cpu_allowed ? "маршрут до CPU открыт" : snapshot.controller_blocker);
     renderActivity(bridge.request_events); lastSuccess = Date.now();
   };
@@ -405,15 +448,34 @@ mod tests {
             total_tokens: 5_948_645_890,
             miner_tokens: 548_423_296,
             cpu_tokens: 42_515_297,
+            cpu_allowed: false,
         });
         assert!(html.contains("КУДА УШЛИ ТОКЕНЫ"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
         assert!(html.contains("CANDIDATE INPUT"));
         assert!(html.contains("CRYSTALLIZER OUTPUT"));
         assert!(html.contains("NEW 0 · OLD 0"));
-        assert!(html.contains("data-dashboard-build=\"2026.07.23-b004\""));
+        assert!(html.contains("data-dashboard-build=\"2026.07.23-b005\""));
         assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("9,22%"));
+    }
+
+    #[test]
+    fn admitted_cpu_route_is_rendered_open_before_the_first_refresh() {
+        let html = render(InitialMetrics {
+            total_tokens: 10_000,
+            miner_tokens: 2_000,
+            cpu_tokens: 100,
+            cpu_allowed: true,
+        });
+        assert!(html.contains("МАРШРУТ ДО CPU"));
+        assert!(html.contains("class=\"track-note good\">AUTHORITY OPEN"));
+        assert!(html.contains("class=\"pipe-step good\"><div class=\"pipe-name\">ADMISSION"));
+        assert!(html.contains("class=\"pipe-state\">OPEN"));
+        assert!(html.contains("маршрут до CPU открыт"));
+        assert!(!html.contains(
+            "<div id=\"cpu-note\" class=\"track-note watch\">НЕ РАСТЁТ: AUTHORITY LOCKED"
+        ));
     }
 }

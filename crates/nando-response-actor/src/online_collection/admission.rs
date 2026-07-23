@@ -147,6 +147,7 @@ impl OnlineCollectionMiner {
                 exact_cache_overlap: 0,
                 wave_causal_pass,
                 verifier_schema: verifier_schema.to_owned(),
+                adaptive_identification: None,
             },
         };
         package.validate().map_err(str::to_owned)?;

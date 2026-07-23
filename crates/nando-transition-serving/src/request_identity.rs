@@ -15,6 +15,8 @@ pub(crate) enum TurnIntentIdentitySourceV1 {
 pub(crate) struct ProviderRequestIdentityV1 {
     turn_intent_id: String,
     turn_intent_sha256: String,
+    request_event_id: String,
+    request_event_sha256: String,
     session_lineage_root: Sha256CommitmentV3,
     session_identity_sha256s: Vec<String>,
     source: TurnIntentIdentitySourceV1,
@@ -64,6 +66,8 @@ impl ProviderRequestIdentityV1 {
         Self {
             turn_intent_sha256: sha256_bytes(turn_intent_id.as_bytes()),
             turn_intent_id,
+            request_event_sha256: sha256_bytes(transport_request_id.as_bytes()),
+            request_event_id: transport_request_id.to_owned(),
             session_lineage_root,
             session_identity_sha256s,
             source,
@@ -76,6 +80,14 @@ impl ProviderRequestIdentityV1 {
 
     pub(crate) fn turn_intent_sha256(&self) -> &str {
         &self.turn_intent_sha256
+    }
+
+    pub(crate) fn request_event_id(&self) -> &str {
+        &self.request_event_id
+    }
+
+    pub(crate) fn request_event_sha256(&self) -> &str {
+        &self.request_event_sha256
     }
 
     pub(crate) const fn session_lineage_root(&self) -> Sha256CommitmentV3 {
@@ -127,6 +139,11 @@ mod tests {
 
         assert_eq!(identity.turn_intent_id(), "turn-a");
         assert_eq!(identity.turn_intent_sha256(), sha256_bytes(b"turn-a"));
+        assert_eq!(identity.request_event_id(), "nginx-event-a");
+        assert_eq!(
+            identity.request_event_sha256(),
+            sha256_bytes(b"nginx-event-a")
+        );
         assert!(identity.provider_bound_turn_identity());
         assert_eq!(identity.session_identity_sha256s().len(), 3);
         assert_ne!(
@@ -141,8 +158,25 @@ mod tests {
         let second = ProviderRequestIdentityV1::from_payload(&json!({}), "event-b");
 
         assert_ne!(first.turn_intent_id(), second.turn_intent_id());
+        assert_ne!(first.request_event_id(), second.request_event_id());
         assert_eq!(first.session_lineage_root(), second.session_lineage_root());
         assert!(first.session_identity_sha256s().is_empty());
         assert!(!first.provider_bound_turn_identity());
+    }
+
+    #[test]
+    fn one_turn_can_contain_multiple_independent_provider_requests() {
+        let payload = json!({
+            "client_metadata": {
+                "session_id": "session-a",
+                "turn_id": "turn-a"
+            }
+        });
+        let first = ProviderRequestIdentityV1::from_payload(&payload, "nginx-event-a");
+        let second = ProviderRequestIdentityV1::from_payload(&payload, "nginx-event-b");
+
+        assert_eq!(first.turn_intent_sha256(), second.turn_intent_sha256());
+        assert_ne!(first.request_event_sha256(), second.request_event_sha256());
+        assert_eq!(first.session_lineage_root(), second.session_lineage_root());
     }
 }

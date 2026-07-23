@@ -445,14 +445,18 @@ run_response_runtime() {
   jq -n \
     --slurpfile economics "${economics}" \
     --slurpfile profile "${PROFILE}" \
-    '($economics[0]) as $e
+    'def supported_economics_source:
+      (((.schema == "nando.economics-snapshot.v2")
+          or (.schema == "nando.economics-snapshot.v3"))
+        and (.source == "rust_streaming_economics_v2"))
+      or ((.schema == "nando.economics-snapshot.v4")
+        and (.source == "rust_streaming_economics_v3"));
+    ($economics[0]) as $e
     | ($profile[0].response_runtime) as $p
     | ($e.completed_m3_windows // []) as $windows
     | ($p.m3_required_consecutive_windows // 3) as $required
     | ($p.minimum_m3_input_token_saving_share_milli // 500) as $share
-    | ((($e.schema == "nando.economics-snapshot.v2")
-          or ($e.schema == "nando.economics-snapshot.v3"))
-        and ($e.source == "rust_streaming_economics_v2")
+    | (($e | supported_economics_source)
         and (($e.dedupe_conflicts // 0) == 0)
         and (($e.unresolved_local_outcomes // 0) == 0)
         and (($e.source_reconciliation.complete // false) == true)
@@ -516,15 +520,42 @@ run_response_runtime() {
     --slurpfile economics "${economics}" \
     --slurpfile health "${health}" \
     --slurpfile m3 "${m3_evaluation}" \
-    '.schema == "nando.response-registry.v6"
-      and all(.packages[] | select(.state == "active");
-        .origin == "grounded_synthesis"
-        and .verifier != null
-        and (.required_routing_atom_ids | length) > 0
+    'def valid_nonzero_sha256:
+        type == "string"
+        and test("^[0-9a-f]{64}$")
+        and test("[1-9a-f]");
+      def legacy_proof_basis:
+        (.required_routing_atom_ids | length) > 0
         and .proof.support_rows >= 32
         and .proof.future_rows >= 32
         and .proof.distinct_sessions >= 3
+        and .proof.distinct_surfaces >= 2;
+      def adaptive_proof_basis:
+        (.crystallized_operator.page_bytes | length) == 4032
+        and (.crystallized_operator.registry_cbor | length) > 0
+        and .proof.support_rows >= 1
+        and .proof.future_rows >= 1
+        and .proof.distinct_sessions >= 2
         and .proof.distinct_surfaces >= 2
+        and (.proof.adaptive_identification.schema
+          == "nando.adaptive-identification-proof.v1")
+        and (.proof.adaptive_identification.candidate_freeze_root_sha256
+          | valid_nonzero_sha256)
+        and (.proof.adaptive_identification.semantic_class_id_sha256
+          | valid_nonzero_sha256)
+        and (.proof.adaptive_identification.canonical_program_root_sha256
+          | valid_nonzero_sha256)
+        and (.proof.adaptive_identification.applicability_scope_root_sha256
+          | valid_nonzero_sha256)
+        and (.proof.adaptive_identification.transfer_proof_root_sha256
+          | valid_nonzero_sha256)
+        and (.proof.adaptive_identification.proof_root_sha256
+          | valid_nonzero_sha256);
+      .schema == "nando.response-registry.v6"
+      and all(.packages[] | select(.state == "active");
+        .origin == "grounded_synthesis"
+        and .verifier != null
+        and (legacy_proof_basis or adaptive_proof_basis)
         and .proof.wrong_accepts == 0
         and .proof.runtime_parity_failures == 0
         and .proof.exact_cache_overlap == 0

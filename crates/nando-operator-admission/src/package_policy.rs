@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use nando_operator_kernel::stable_atom_id;
+use nando_operator_kernel::{canonical_json_sha256, stable_atom_id, valid_nonzero_sha256};
 
 pub use nando_operator_kernel::{LearnedWaveRoute, LearnedWaveSubcenter};
 
@@ -82,6 +82,72 @@ pub struct ResponsePackageProof {
     pub exact_cache_overlap: usize,
     pub wave_causal_pass: bool,
     pub verifier_schema: String,
+    #[serde(default)]
+    pub adaptive_identification: Option<AdaptiveIdentificationProofV1>,
+}
+
+pub const ADAPTIVE_IDENTIFICATION_PROOF_SCHEMA_V1: &str = "nando.adaptive-identification-proof.v1";
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdaptiveIdentificationProofV1 {
+    schema: String,
+    candidate_freeze_root_sha256: String,
+    semantic_class_id_sha256: String,
+    canonical_program_root_sha256: String,
+    applicability_scope_root_sha256: String,
+    transfer_proof_root_sha256: String,
+    proof_root_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdaptiveIdentificationProofInputV1 {
+    pub candidate_freeze_root_sha256: String,
+    pub semantic_class_id_sha256: String,
+    pub canonical_program_root_sha256: String,
+    pub applicability_scope_root_sha256: String,
+    pub transfer_proof_root_sha256: String,
+}
+
+pub fn seal_adaptive_identification_proof_v1(
+    input: AdaptiveIdentificationProofInputV1,
+) -> Result<AdaptiveIdentificationProofV1, &'static str> {
+    validate_adaptive_identification_roots(&input)?;
+    let proof_root_sha256 = adaptive_identification_proof_root(&input)?;
+    Ok(AdaptiveIdentificationProofV1 {
+        schema: ADAPTIVE_IDENTIFICATION_PROOF_SCHEMA_V1.to_owned(),
+        candidate_freeze_root_sha256: input.candidate_freeze_root_sha256,
+        semantic_class_id_sha256: input.semantic_class_id_sha256,
+        canonical_program_root_sha256: input.canonical_program_root_sha256,
+        applicability_scope_root_sha256: input.applicability_scope_root_sha256,
+        transfer_proof_root_sha256: input.transfer_proof_root_sha256,
+        proof_root_sha256,
+    })
+}
+
+impl AdaptiveIdentificationProofV1 {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.schema != ADAPTIVE_IDENTIFICATION_PROOF_SCHEMA_V1 {
+            return Err("adaptive_identification_schema_invalid");
+        }
+        let input = AdaptiveIdentificationProofInputV1 {
+            candidate_freeze_root_sha256: self.candidate_freeze_root_sha256.clone(),
+            semantic_class_id_sha256: self.semantic_class_id_sha256.clone(),
+            canonical_program_root_sha256: self.canonical_program_root_sha256.clone(),
+            applicability_scope_root_sha256: self.applicability_scope_root_sha256.clone(),
+            transfer_proof_root_sha256: self.transfer_proof_root_sha256.clone(),
+        };
+        validate_adaptive_identification_roots(&input)?;
+        if self.proof_root_sha256 != adaptive_identification_proof_root(&input)? {
+            return Err("adaptive_identification_proof_root_mismatch");
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn proof_root_sha256(&self) -> &str {
+        &self.proof_root_sha256
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -100,6 +166,7 @@ pub struct PackageAdmissionFacts {
     pub verifier_schema_bound: bool,
     pub verifier_program_bound: bool,
     pub exact_guard_bound: bool,
+    pub adaptive_identification_bound: bool,
 }
 
 #[must_use]
@@ -112,13 +179,21 @@ pub const fn package_admission_candidate_blocker(
         Some("grounded_authority_missing")
     } else if !facts.package_active {
         Some("package_not_active")
-    } else if facts.support_rows < 32 {
+    } else if facts.adaptive_identification_bound && facts.support_rows == 0 {
+        Some("adaptive_support_missing")
+    } else if facts.adaptive_identification_bound && facts.future_rows == 0 {
+        Some("adaptive_future_missing")
+    } else if facts.adaptive_identification_bound && facts.distinct_sessions < 2 {
+        Some("adaptive_independent_session_missing")
+    } else if facts.adaptive_identification_bound && facts.distinct_surfaces < 2 {
+        Some("adaptive_surface_missing")
+    } else if !facts.adaptive_identification_bound && facts.support_rows < 32 {
         Some("support_rows_below_32")
-    } else if facts.future_rows < 32 {
+    } else if !facts.adaptive_identification_bound && facts.future_rows < 32 {
         Some("future_rows_below_32")
-    } else if facts.distinct_sessions < 3 {
+    } else if !facts.adaptive_identification_bound && facts.distinct_sessions < 3 {
         Some("future_sessions_below_3")
-    } else if facts.distinct_surfaces < 2 {
+    } else if !facts.adaptive_identification_bound && facts.distinct_surfaces < 2 {
         Some("surfaces_below_2")
     } else if facts.wrong_accepts != 0 {
         Some("wrong_accepts_nonzero")
@@ -137,6 +212,35 @@ pub const fn package_admission_candidate_blocker(
     } else {
         None
     }
+}
+
+fn validate_adaptive_identification_roots(
+    input: &AdaptiveIdentificationProofInputV1,
+) -> Result<(), &'static str> {
+    [
+        input.candidate_freeze_root_sha256.as_str(),
+        input.semantic_class_id_sha256.as_str(),
+        input.canonical_program_root_sha256.as_str(),
+        input.applicability_scope_root_sha256.as_str(),
+        input.transfer_proof_root_sha256.as_str(),
+    ]
+    .into_iter()
+    .all(valid_nonzero_sha256)
+    .then_some(())
+    .ok_or("adaptive_identification_root_invalid")
+}
+
+fn adaptive_identification_proof_root(
+    input: &AdaptiveIdentificationProofInputV1,
+) -> Result<String, &'static str> {
+    canonical_json_sha256(&(
+        ADAPTIVE_IDENTIFICATION_PROOF_SCHEMA_V1,
+        input.candidate_freeze_root_sha256.as_str(),
+        input.semantic_class_id_sha256.as_str(),
+        input.canonical_program_root_sha256.as_str(),
+        input.applicability_scope_root_sha256.as_str(),
+        input.transfer_proof_root_sha256.as_str(),
+    ))
 }
 
 #[cfg(test)]
@@ -159,6 +263,7 @@ mod tests {
             verifier_schema_bound: true,
             verifier_program_bound: true,
             exact_guard_bound: true,
+            adaptive_identification_bound: false,
         }
     }
 
@@ -176,6 +281,30 @@ mod tests {
         assert_eq!(
             package_admission_candidate_blocker(facts),
             Some("wrong_accepts_nonzero")
+        );
+    }
+
+    #[test]
+    fn adaptive_identification_uses_proof_progress_instead_of_fixed_rows() {
+        let mut facts = admitted();
+        facts.adaptive_identification_bound = true;
+        facts.support_rows = 1;
+        facts.future_rows = 1;
+        facts.distinct_sessions = 2;
+        facts.distinct_surfaces = 2;
+        assert_eq!(package_admission_candidate_blocker(facts), None);
+
+        facts.future_rows = 0;
+        assert_eq!(
+            package_admission_candidate_blocker(facts),
+            Some("adaptive_future_missing")
+        );
+
+        facts.future_rows = 1;
+        facts.distinct_surfaces = 1;
+        assert_eq!(
+            package_admission_candidate_blocker(facts),
+            Some("adaptive_surface_missing")
         );
     }
 }

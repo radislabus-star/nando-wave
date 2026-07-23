@@ -460,6 +460,7 @@ fn identical_pre_action_atoms_are_reported_as_unseparable() {
             exact_cache_overlap: 0,
             wave_causal_pass: false,
             verifier_schema: String::new(),
+            adaptive_identification: None,
         },
     };
     assert!(relation_frame_routes_to_package(&package, &frame));
@@ -501,6 +502,7 @@ fn runtime_registry_preserves_distinct_phase_profiles_for_the_same_actor() {
             exact_cache_overlap: 0,
             wave_causal_pass: true,
             verifier_schema: String::new(),
+            adaptive_identification: None,
         },
     };
     let mut distinct = base.clone();
@@ -640,6 +642,7 @@ fn package_evidence_is_partitioned_by_operator_family() {
                 exact_cache_overlap: 0,
                 wave_causal_pass: false,
                 verifier_schema: String::new(),
+                adaptive_identification: None,
             },
         }
     };
@@ -782,6 +785,7 @@ fn custom_tool_support_is_not_classified_as_its_own_negative() {
             exact_cache_overlap: 0,
             wave_causal_pass: false,
             verifier_schema: String::new(),
+            adaptive_identification: None,
         },
     };
     assert!(
@@ -995,6 +999,7 @@ fn quarantined_registry_package_has_no_execution_authority() {
             exact_cache_overlap: 0,
             wave_causal_pass: true,
             verifier_schema: String::new(),
+            adaptive_identification: None,
         },
     };
     let registry = compile_runtime_registry(4, vec![package]);

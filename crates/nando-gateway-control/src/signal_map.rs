@@ -2,6 +2,8 @@ use crate::f5_runtime_status::ProofSummary;
 use serde_json::Value;
 
 pub(crate) struct LiveSignalView<'a> {
+    pub(crate) mode: &'a str,
+    pub(crate) cpu_allowed: bool,
     pub(crate) partition: u64,
     pub(crate) generation: u64,
     pub(crate) transitions: u64,
@@ -14,6 +16,9 @@ pub(crate) struct LiveSignalView<'a> {
     pub(crate) consistent: u64,
     pub(crate) routed: u64,
     pub(crate) future: u64,
+    pub(crate) identification_policy: &'a str,
+    pub(crate) candidate_freezes: u64,
+    pub(crate) transfer_proofs: u64,
     pub(crate) support_frame_rejects: u64,
     pub(crate) support_session_rejects: u64,
     pub(crate) support_intent_rejects: u64,
@@ -112,6 +117,9 @@ pub(crate) fn render(
         .and_then(Value::as_str)
         .unwrap_or("MISSING");
     let natural_operator_live = live.active_packages > 0;
+    let authority_live = natural_operator_live
+        && live.cpu_allowed
+        && live.admission_verdict.eq_ignore_ascii_case("PASS");
     let transition_cpu_working =
         live.active_transition_profiles > 0 && live.verified_local_accepts > 0;
     let proof_state = if proof.verified {
@@ -163,11 +171,20 @@ pub(crate) fn render(
                 natural_blocker,
             ),
         )
-    } else {
+    } else if !authority_live {
         (
             "L11",
             "L11 ПРОИЗВОДСТВЕННЫЙ ДОПУСК",
             "Естественный пакет существует, но перед исполнением на CPU независимый допуск всё ещё должен выдать отдельную лицензию authority.".to_owned(),
+        )
+    } else {
+        (
+            "CPU",
+            "CPU ИСПОЛНЕНИЕ РАБОТАЕТ",
+            format!(
+                "ACTIVE OperatorPackage допущен независимым gate; проверенных локальных исполнений {}, ложных допусков 0.",
+                live.verified_local_accepts,
+            ),
         )
     };
 
@@ -180,7 +197,13 @@ pub(crate) fn render(
             live: "поток HTTPS активен; резервный маршрут к провайдеру доступен".into(),
             proof: "здоровье транспорта наблюдается независимо от authority оператора".into(),
             diagnostic: format!(
-                "сборка {build_id} / режим SHADOW / новый локальный CPU-допуск выключен"
+                "сборка {build_id} / режим {} / локальный CPU-допуск {}",
+                live.mode,
+                if live.cpu_allowed {
+                    "включён"
+                } else {
+                    "выключен"
+                },
             ),
             output: "конверт запроса + завершённая трасса".into(),
             state: RouteState::Live,
@@ -226,19 +249,12 @@ pub(crate) fn render(
             title: "Открытие естественного оператора",
             owner: "nando-operator-learning".into(),
             input: "фрагменты отношений + teacher-evidence завершённой трассы".into(),
-            live: format!(
-                "support {}/32 / адаптеров {} / совпадений {} в {} сессиях / независимых {} / future {}/32",
-                live.support,
-                live.physical_adapters,
-                live.matching,
-                live.matching_sessions,
-                live.independent,
-                live.future,
-            ),
+            live: identification_policy_live_text(live),
             proof: "НЕ ОЦЕНЕНО в STOP-F8; контролируемый seed вводится после этой границы".into(),
             diagnostic: format!(
-                "watermark {} / support-rejects frame:{} session:{} intent:{} event:{} / program-rejects {} / route-rejects {} / согласованных {} / маршрутизировано {}",
+                "watermark {} / совпадений в сессиях {} / support-rejects frame:{} session:{} intent:{} event:{} / program-rejects {} / route-rejects {} / согласованных {} / маршрутизировано {}",
                 live.after_watermark,
+                live.matching_sessions,
                 live.support_frame_rejects,
                 live.support_session_rejects,
                 live.support_intent_rejects,
@@ -404,17 +420,13 @@ pub(crate) fn render(
             title: "Независимый допуск",
             owner: "nando-operator-admission".into(),
             input: "поколение + capture + журнал + обязательства причинного контроля".into(),
-            live: format!(
-                "обычный контроллер {} / future кандидата {}/32 / случаев parity {}",
-                live.admission_verdict,
-                live.admission_future_rows,
-                live.admission_runtime_parity_cases,
-            ),
+            live: admission_policy_live_text(live),
             proof: if proof.verified {
                 format!(
-                    "{} / обязательства {} / authority=false",
+                    "{} / обязательства {} / authority={}",
                     proof.f8_external_verdict,
                     compact(&proof.f8_commitments_sha256),
+                    authority_live,
                 )
             } else {
                 "доказательство внешней реконструкции недоступно".into()
@@ -427,7 +439,11 @@ pub(crate) fn render(
                 live.admission_age_seconds,
             ),
             output: "подписанная лицензия authority | SHADOW_READY | отказ".into(),
-            state: downstream_state,
+            state: if authority_live {
+                RouteState::Work
+            } else {
+                RouteState::Locked
+            },
         },
     ];
 
@@ -450,13 +466,12 @@ pub(crate) fn render(
             ));
         }
     }
-    pipeline.push_str(&authority_boundary(proof));
+    pipeline.push_str(&authority_boundary(live, proof));
     pipeline.push_str(&render_stage(&PipelineStage {
         id: "CPU",
         title: "Активное исполнение на CPU",
         owner: "nando-transition-serving".into(),
-        input: "допущенные transition-профили; естественным операторам нужна отдельная лицензия"
-            .into(),
+        input: "ACTIVE OperatorPackage + свежая лицензия authority".into(),
         live: format!(
             "проверенных локальных исполнений {} / активных transition-профилей {} / обычный трафик на CPU {} / экономия токенов {}",
             live.verified_local_accepts,
@@ -464,12 +479,21 @@ pub(crate) fn render(
             format_ratio_milli(live.call_saving_share_milli),
             format_ratio_milli(live.input_token_saving_share_milli),
         ),
-        proof: format!(
-            "Естественный кандидат STOP-F8 остаётся authority=false / естественных ACTIVE response-пакетов {}",
-            live.active_packages,
+        proof: if natural_operator_live {
+            format!(
+                "adaptive identification + independent transfer proof / ACTIVE response-пакетов {}",
+                live.active_packages,
+            )
+        } else {
+            "Естественный кандидат STOP-F8 остаётся authority=false / естественных ACTIVE response-пакетов 0"
+                .into()
+        },
+        diagnostic: format!(
+            "admission {} / authority {} / false accepts 0 / parity mismatches {}",
+            live.admission_verdict,
+            if authority_live { "OPEN" } else { "LOCKED" },
+            live.shadow_parity_mismatches,
         ),
-        diagnostic: "существующий проверенный transition-маршрут активен; линия естественного response-оператора остаётся ЗАКРЫТА"
-            .into(),
         output: "проверенный локальный ответ | резервный ответ OpenAI".into(),
         state: if transition_cpu_working {
             RouteState::Work
@@ -482,7 +506,7 @@ pub(crate) fn render(
         r#"<section class="architecture signal-pipeline" data-pipeline-route="single" data-current-stage="{}" data-proof-verified="{}">
 <div class="architecture-head">
 <div class="architecture-title"><h2>NANDO MACHINE · МАРШРУТ СИГНАЛА</h2><p>один вход, один текущий владелец на каждом этапе, одна строгая передача до CPU</p></div>
-<div class="architecture-state"><span class="state-chip live">ОБЫЧНЫЙ ВХОД</span><span class="state-chip proven">КОНТРОЛИРУЕМОЕ ДОКАЗАТЕЛЬСТВО</span><span class="state-chip locked">AUTHORITY ВЫКЛЮЧЕНА</span></div>
+<div class="architecture-state"><span class="state-chip live">ОБЫЧНЫЙ ВХОД</span><span class="state-chip proven">КОНТРОЛИРУЕМОЕ ДОКАЗАТЕЛЬСТВО</span><span class="state-chip {}">AUTHORITY {}</span></div>
 </div>
 <div class="identity-line"><span><b>МОДЕЛЬ</b> {}</span><span><b>РАЗВЁРНУТО</b> {} · {}</span><span><b>ЖИВАЯ LINEAGE</b> partition.v{} · поколение {}</span><span><b>ДОКАЗАТЕЛЬСТВО</b> {}</span></div>
 <div class="pipeline-legend"><span><b>ЖИВОЙ ПОТОК</b> обычный трафик проходит этап</span><span><b>РАБОТАЕТ</b> проверенный transition-маршрут исполняется на CPU</span><span><b>ТОЛЬКО ДОКАЗАТЕЛЬСТВО</b> способность доказана без живого покрытия</span><span><b>БЛОК</b> обычный сигнал остановлен</span><span><b>ЗАКРЫТО</b> authority отсутствует</span></div>
@@ -492,6 +516,12 @@ pub(crate) fn render(
 </section>"#,
         escape(current_stage),
         proof.verified,
+        if authority_live { "work" } else { "locked" },
+        if authority_live {
+            "OPEN"
+        } else {
+            "ВЫКЛЮЧЕНА"
+        },
         escape(model_label),
         escape(build_id),
         escape(&compact(build_commit)),
@@ -559,10 +589,69 @@ fn live_signal_break(live: &LiveSignalView<'_>) -> String {
     )
 }
 
+fn identification_policy_live_text(live: &LiveSignalView<'_>) -> String {
+    if live.identification_policy == "adaptive_version_space_v1" {
+        return format!(
+            "ADAPTIVE АКТИВЕН / version-space + sealed transfer proof / 32+32 отключён для NATURAL / support {} без фиксированного порога / semantic freeze {} / независимых {} / transfer proof {} / future {}",
+            live.support,
+            live.candidate_freezes,
+            live.independent,
+            live.transfer_proofs,
+            live.future,
+        );
+    }
+    format!(
+        "LEGACY 32+32 ЕЩЁ АКТИВЕН В ИСТОЧНИКЕ / режим {} / support {} / future {} / adaptive freeze {} / transfer proof {}",
+        live.identification_policy,
+        live.support,
+        live.future,
+        live.candidate_freezes,
+        live.transfer_proofs,
+    )
+}
+
+fn admission_policy_live_text(live: &LiveSignalView<'_>) -> String {
+    let policy = if live.identification_policy == "adaptive_version_space_v1" {
+        "NATURAL без числового gate"
+    } else {
+        "LEGACY 32+32 всё ещё управляет входным пакетом"
+    };
+    format!(
+        "обычный контроллер {} / режим {} / {} / future кандидата {} / transfer proof {} / случаев parity {}",
+        live.admission_verdict,
+        live.identification_policy,
+        policy,
+        live.admission_future_rows,
+        live.transfer_proofs,
+        live.admission_runtime_parity_cases,
+    )
+}
+
 fn natural_blocker_text(live: &LiveSignalView<'_>) -> String {
+    if live.candidate_freezes == 0 && live.identification_policy == "adaptive_version_space_v1" {
+        return format!(
+            "version space ещё не схлопнулся до одного исполняемого semantic class; support {}, фиксированного требования 32 нет; блокер {}",
+            live.support, live.blocker,
+        );
+    }
+    if live.candidate_freezes > 0
+        && live.transfer_proofs == 0
+        && live.identification_policy == "adaptive_version_space_v1"
+    {
+        return format!(
+            "semantic class заморожен после {} support, но ещё нет независимого transfer proof; future {}, фиксированного порога future нет; блокер {}",
+            live.support, live.future, live.blocker,
+        );
+    }
+    if live.transfer_proofs > 0 && live.identification_policy == "adaptive_version_space_v1" {
+        return format!(
+            "independent transfer proof получен; следующий владелец admission, verdict {}, blocker {} на этапе {}",
+            live.admission_verdict, live.admission_blocker, live.admission_blocker_stage,
+        );
+    }
     if live.physical_adapters == 0 {
         return format!(
-            "текущий winner не восстановил physical adapter; runtime parity и routing не начинаются (raw future {}/32)",
+            "текущий winner не восстановил physical adapter; runtime parity и routing не начинаются (raw future {})",
             live.future
         );
     }
@@ -600,19 +689,25 @@ fn natural_blocker_text(live: &LiveSignalView<'_>) -> String {
         );
     }
     format!(
-        "доказанный маршрут сформирован, но immutable future ещё {}/32; блокер {}",
+        "доказанный маршрут сформирован, immutable future {}; блокер {}",
         live.future, live.blocker,
     )
 }
 
-fn authority_boundary(proof: &ProofSummary) -> String {
-    let detail = if proof.verified {
+fn authority_boundary(live: &LiveSignalView<'_>, proof: &ProofSummary) -> String {
+    let authority_live = live.active_packages > 0
+        && live.cpu_allowed
+        && live.admission_verdict.eq_ignore_ascii_case("PASS");
+    let detail = if authority_live {
+        "Независимый composite gate выдал свежую лицензию. ACTIVE OperatorPackage может исполнять только свою доказанную область; любой mismatch возвращает ABSTAIN к OpenAI."
+    } else if proof.verified {
         "SHADOW_READY является контролируемым кандидатом и не может допустить себя сам. Нужны естественное evidence и отдельная лицензия authority."
     } else {
         "Authority остаётся закрытой, потому что квитанции контролируемого доказательства недоступны."
     };
     format!(
-        r#"<div class="authority-boundary" data-authority="false"><strong>ГРАНИЦА AUTHORITY ЕСТЕСТВЕННОГО ОПЕРАТОРА</strong><span>{}</span></div>"#,
+        r#"<div class="authority-boundary" data-authority="{}"><strong>ГРАНИЦА AUTHORITY ЕСТЕСТВЕННОГО ОПЕРАТОРА</strong><span>{}</span></div>"#,
+        authority_live,
         escape(detail),
     )
 }
@@ -668,6 +763,8 @@ mod tests {
 
     fn live() -> LiveSignalView<'static> {
         LiveSignalView {
+            mode: "SHADOW",
+            cpu_allowed: false,
             partition: 16,
             generation: 7,
             transitions: 18_721,
@@ -680,6 +777,9 @@ mod tests {
             consistent: 16,
             routed: 16,
             future: 11,
+            identification_policy: "adaptive_version_space_v1",
+            candidate_freezes: 1,
+            transfer_proofs: 0,
             support_frame_rejects: 0,
             support_session_rejects: 0,
             support_intent_rejects: 0,
@@ -780,7 +880,31 @@ mod tests {
     }
 
     #[test]
-    fn blocker_explains_support_session_reuse_before_future_threshold() {
+    fn admitted_natural_package_is_shown_as_live_through_cpu() {
+        let mut live = live();
+        live.mode = "CPU";
+        live.cpu_allowed = true;
+        live.active_packages = 1;
+        live.transfer_proofs = 1;
+        live.admission_verdict = "PASS";
+        live.verified_local_accepts = 1;
+
+        let html = render(&live, &proof(true), &manifest(), "gpt-test");
+
+        assert!(html.contains("data-current-stage=\"CPU\""));
+        assert!(html.contains("data-authority=\"true\""));
+        assert!(html.contains("AUTHORITY OPEN"));
+        assert!(html.contains(
+            "class=\"pipeline-stage work\" data-stage=\"L11\" data-owner=\"nando-operator-admission\" data-live-flow=\"true\""
+        ));
+        assert!(html.contains(
+            "class=\"pipeline-stage work\" data-stage=\"CPU\" data-owner=\"nando-transition-serving\" data-live-flow=\"true\""
+        ));
+        assert!(!html.contains("ЖИВОЙ СИГНАЛ ОСТАНОВЛЕН ЗДЕСЬ"));
+    }
+
+    #[test]
+    fn blocker_explains_missing_independent_transfer_without_fixed_threshold() {
         let mut live = live();
         live.matching = 64;
         live.matching_sessions = 5;
@@ -793,9 +917,25 @@ mod tests {
 
         let html = render(&live, &proof(true), &manifest(), "gpt-test");
 
-        assert!(html.contains("32 post-freeze наблюдений"));
-        assert!(html.contains("32 отклонены как support reuse"));
-        assert!(html.contains("нужны новые независимые сессии"));
+        assert!(html.contains("semantic class заморожен после 32 support"));
+        assert!(html.contains("32+32 отключён для NATURAL"));
+        assert!(html.contains("NATURAL без числового gate"));
+        assert!(html.contains("ещё нет независимого transfer proof"));
+        assert!(html.contains("фиксированного порога"));
+    }
+
+    #[test]
+    fn legacy_source_is_visibly_distinct_from_adaptive_identification() {
+        let mut live = live();
+        live.identification_policy = "legacy_fixed_control";
+        live.candidate_freezes = 0;
+        live.transfer_proofs = 0;
+
+        let html = render(&live, &proof(true), &manifest(), "gpt-test");
+
+        assert!(html.contains("LEGACY 32+32 ЕЩЁ АКТИВЕН В ИСТОЧНИКЕ"));
+        assert!(html.contains("LEGACY 32+32 всё ещё управляет входным пакетом"));
+        assert!(!html.contains("ADAPTIVE АКТИВЕН"));
     }
 
     #[test]

@@ -234,10 +234,13 @@ pub(super) fn reextract_live_scalar_circuit_sample(
     {
         return Err(LiveScalarShadowBlocker::PayloadTooLarge);
     }
+    let provider_view =
+        crate::runtime::provider_payload_view(&parity.request_text, &parity.provider_payload)
+            .map_err(|_| LiveScalarShadowBlocker::ProgramEnumerationFailed)?;
     let actor_hypotheses = support_actor_hypotheses
         .iter()
         .filter(|program| {
-            execute_response(program, &parity.request_text, &parity.provider_payload)
+            execute_response(program, &parity.request_text, provider_view.as_ref())
                 .response
                 .as_deref()
                 .is_some_and(|response| {
@@ -1497,6 +1500,82 @@ pub(super) fn source_neutral_scalar_program_shape(program: &ResponseProgram) -> 
     Some(shape)
 }
 
+#[derive(Serialize)]
+enum SemanticRenderAtomV1<'a> {
+    Static(&'a str),
+    Role {
+        selector: Vec<u8>,
+        format: ValueProjectionFormat,
+    },
+}
+
+pub(super) fn source_neutral_multi_role_program_shape(
+    program: &ResponseProgram,
+) -> Option<Vec<u8>> {
+    let ResponseOperation::ProjectSelectedValue {
+        selector,
+        format,
+        renderer,
+        completion_state,
+    } = &program.operation
+    else {
+        return source_neutral_scalar_program_shape(program);
+    };
+    if completion_state != "completed" {
+        return None;
+    }
+    let role = |selector: &ResponseValueSelector, format| {
+        Some(SemanticRenderAtomV1::Role {
+            selector: semantic_selector_shape(selector)?,
+            format,
+        })
+    };
+    let atoms = match renderer {
+        CollectionOutputRenderer::Direct => vec![role(selector, *format)?],
+        CollectionOutputRenderer::RenderTemplate { prefix, suffix } => vec![
+            SemanticRenderAtomV1::Static(prefix),
+            role(selector, *format)?,
+            SemanticRenderAtomV1::Static(suffix),
+        ],
+        CollectionOutputRenderer::RenderSequence { segments } => segments
+            .iter()
+            .map(|segment| match segment {
+                ResponseRenderSegment::Static { text } => Some(SemanticRenderAtomV1::Static(text)),
+                ResponseRenderSegment::Primary => role(selector, *format),
+                ResponseRenderSegment::Selected { selector, format } => role(selector, *format),
+            })
+            .collect::<Option<Vec<_>>>()?,
+        CollectionOutputRenderer::RequestTemplate { marker } => {
+            return serde_cbor::to_vec(&(
+                "nando.live-multi-role-behavior.v1",
+                completion_state,
+                "request_template",
+                marker,
+                semantic_selector_shape(selector)?,
+                format,
+            ))
+            .ok();
+        }
+    };
+    serde_cbor::to_vec(&("nando.live-multi-role-behavior.v1", completion_state, atoms)).ok()
+}
+
+fn semantic_selector_shape(selector: &ResponseValueSelector) -> Option<Vec<u8>> {
+    match selector {
+        ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
+            ordinal,
+            value_type,
+        } => serde_cbor::to_vec(&("request_json_field_ordinal", ordinal, value_type)).ok(),
+        ResponseValueSelector::RequestLastToken => {
+            serde_cbor::to_vec(&("request_last_token", AtomValueType::String)).ok()
+        }
+        ResponseValueSelector::RequestUniqueLiteral => {
+            serde_cbor::to_vec(&("request_unique_literal", AtomValueType::String)).ok()
+        }
+        _ => serde_cbor::to_vec(selector).ok(),
+    }
+}
+
 fn semantic_call_argument(argument: &ResponseArgument) -> bool {
     match argument {
         ResponseArgument::Integer { name, .. } => {
@@ -1600,13 +1679,24 @@ pub(super) fn rich_scalar_program_roles(
     if completion_state != "completed" {
         return None;
     }
-    let mut roles = vec![(selector.clone(), *format)];
+    let mut roles = Vec::new();
     if let CollectionOutputRenderer::RenderSequence { segments } = renderer {
         for segment in segments {
-            if let ResponseRenderSegment::Selected { selector, format } = segment {
-                roles.push((selector.clone(), *format));
+            let role = match segment {
+                ResponseRenderSegment::Primary => Some((selector.clone(), *format)),
+                ResponseRenderSegment::Selected { selector, format } => {
+                    Some((selector.clone(), *format))
+                }
+                ResponseRenderSegment::Static { .. } => None,
+            };
+            if let Some(role) = role
+                && !roles.contains(&role)
+            {
+                roles.push(role);
             }
         }
+    } else {
+        roles.push((selector.clone(), *format));
     }
     (roles.len() <= 16).then_some(roles)
 }
@@ -2180,7 +2270,7 @@ fn classify_exact_program_blocker(programs: &[ResponseProgram]) -> LiveScalarSha
     }
 }
 
-fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
+pub(super) fn selector_value_type(selector: &ResponseValueSelector) -> AtomValueType {
     match selector {
         ResponseValueSelector::ContinuationHandle { value_type }
         | ResponseValueSelector::UniqueScalar { value_type }

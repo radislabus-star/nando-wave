@@ -142,7 +142,13 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let active_profiles = metric_u64(runtime_admission, "active_profile_count");
     let avoided_calls = metric_u64(&economics, "avoided_calls");
     let tokens_saved = metric_u64(&economics, "avoided_input_tokens");
-    let total_requests = metric_u64(&economics, "dedupe_eligible_client_intents");
+    let total_requests = metric_u64_any(
+        &economics,
+        &[
+            "dedupe_eligible_request_events",
+            "dedupe_eligible_client_intents",
+        ],
+    );
     let cpu_share = format_ratio_milli(metric_u64(&economics, "call_saving_share_milli"));
     let token_share = format_ratio_milli(metric_u64(&economics, "input_token_saving_share_milli"));
     let verification_coverage =
@@ -171,8 +177,20 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             .and_then(Value::as_bool)
             .unwrap_or(false),
     );
-    let eligible_intents = metric_u64(&economics, "dedupe_eligible_client_intents");
-    let excluded_intents = metric_u64(&economics, "dedupe_ineligible_client_intents");
+    let eligible_intents = metric_u64_any(
+        &economics,
+        &[
+            "dedupe_eligible_request_events",
+            "dedupe_eligible_client_intents",
+        ],
+    );
+    let excluded_intents = metric_u64_any(
+        &economics,
+        &[
+            "dedupe_ineligible_request_events",
+            "dedupe_ineligible_client_intents",
+        ],
+    );
     let global_input_tokens = metric_u64(&economics, "global_input_tokens");
     let actual_local_accepts = metric_u64(&economics, "actual_local_accepts");
     let verified_local_accepts = metric_u64(&economics, "verified_local_accepts");
@@ -272,6 +290,12 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .and_then(Value::as_array)
         .and_then(|generations| strongest_signal_generation(generations))
         .unwrap_or(&Value::Null);
+    let live_scalar_shadow = response_miner
+        .get("live_scalar_shadow")
+        .unwrap_or(&Value::Null);
+    let adaptive_identification_live = live_scalar_shadow.is_object()
+        && metric_str(live_scalar_shadow, "identification_policy", "")
+            == "adaptive_version_space_v1";
     let online_generation = format!(
         "support {} / future {} / sessions {} / wrong {} / parity {}",
         metric_u64(strongest_generation, "support_rows"),
@@ -282,17 +306,38 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     );
     let signal_partition = metric_u64(strongest_generation, "partition_version");
     let signal_generation = metric_u64(strongest_generation, "generation");
-    let signal_support = metric_u64(strongest_generation, "support_runtime_parity_rows");
+    let signal_support = if adaptive_identification_live {
+        metric_u64(live_scalar_shadow, "support_rows")
+    } else {
+        metric_u64(strongest_generation, "support_runtime_parity_rows")
+    };
     let signal_physical_adapters = metric_u64(strongest_generation, "physical_adapter_count");
     let signal_matching = metric_u64(strongest_generation, "matching_runtime_parity_rows");
     let signal_matching_sessions =
         metric_u64(strongest_generation, "matching_runtime_parity_sessions");
     let signal_after_watermark = metric_u64(strongest_generation, "after_future_watermark_rows");
-    let signal_independent = metric_u64(strongest_generation, "independent_future_rows");
+    let signal_independent = if adaptive_identification_live {
+        metric_u64(live_scalar_shadow, "future_rows")
+    } else {
+        metric_u64(strongest_generation, "independent_future_rows")
+    };
     let signal_consistent = metric_u64(strongest_generation, "program_consistent_future_rows");
     let signal_routed = metric_u64(strongest_generation, "routed_future_rows");
-    let signal_future = metric_u64(strongest_generation, "future_rows");
-    let signal_blocker = metric_str(strongest_generation, "blocker", "нет");
+    let signal_future = if adaptive_identification_live {
+        metric_u64(live_scalar_shadow, "future_rows")
+    } else {
+        metric_u64(strongest_generation, "future_rows")
+    };
+    let signal_blocker = if adaptive_identification_live {
+        live_scalar_shadow
+            .get("blockers")
+            .and_then(Value::as_object)
+            .and_then(|blockers| blockers.keys().next())
+            .map(String::as_str)
+            .unwrap_or("нет")
+    } else {
+        metric_str(strongest_generation, "blocker", "нет")
+    };
     let signal_admission_verdict = metric_str(&response_admission_controller, "verdict", "MISSING");
     let signal_admission_blocker = metric_str(
         &response_admission_controller,
@@ -434,8 +479,11 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
     let build_commit_short = build_commit.get(..12).unwrap_or(build_commit);
     let module_version_rows = module_version_rows(&build_manifest);
     let proof_summary = f5_runtime_status::proof_summary();
+    let current_mode = current.mode.to_string();
     let signal_architecture = signal_map::render(
         &signal_map::LiveSignalView {
+            mode: &current_mode,
+            cpu_allowed: admission.cpu_allowed,
             partition: signal_partition,
             generation: signal_generation,
             transitions: online_transitions,
@@ -448,6 +496,13 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
             consistent: signal_consistent,
             routed: signal_routed,
             future: signal_future,
+            identification_policy: metric_str(
+                live_scalar_shadow,
+                "identification_policy",
+                "legacy_fixed_control",
+            ),
+            candidate_freezes: metric_u64(live_scalar_shadow, "candidate_freezes"),
+            transfer_proofs: metric_u64(live_scalar_shadow, "transfer_proofs"),
             support_frame_rejects: metric_u64(strongest_generation, "support_frame_rejects"),
             support_session_rejects: metric_u64(strongest_generation, "support_session_rejects"),
             support_intent_rejects: metric_u64(strongest_generation, "support_intent_rejects"),
@@ -501,6 +556,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         total_tokens: visible_total_tokens,
         miner_tokens: visible_miner_tokens,
         cpu_tokens: visible_cpu_tokens,
+        cpu_allowed: admission.cpu_allowed,
     });
     let body = format!(
         r#"<!doctype html>
@@ -1121,6 +1177,12 @@ fn metric_u64(metrics: &Value, key: &str) -> u64 {
     metrics.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
 
+fn metric_u64_any(metrics: &Value, keys: &[&str]) -> u64 {
+    keys.iter()
+        .find_map(|key| metrics.get(*key).and_then(Value::as_u64))
+        .unwrap_or(0)
+}
+
 fn exact_token_totals(economics: &Value) -> Option<(u64, u64)> {
     let schema = economics.get("schema").and_then(Value::as_str)?;
     if !schema.starts_with("nando.economics-snapshot.v")
@@ -1131,8 +1193,20 @@ fn exact_token_totals(economics: &Value) -> Option<(u64, u64)> {
     {
         return None;
     }
-    let total = economics.get("global_input_tokens")?.as_u64()?;
-    let cpu = economics.get("avoided_input_tokens")?.as_u64()?;
+    let display_partitioned = economics
+        .get("display_input_token_accounting_partitioned")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let total = if display_partitioned {
+        economics.get("display_global_input_tokens")?.as_u64()?
+    } else {
+        economics.get("global_input_tokens")?.as_u64()?
+    };
+    let cpu = if display_partitioned {
+        economics.get("display_avoided_input_tokens")?.as_u64()?
+    } else {
+        economics.get("avoided_input_tokens")?.as_u64()?
+    };
     (cpu <= total).then_some((total, cpu))
 }
 
@@ -1438,6 +1512,17 @@ mod tests {
             "avoided_input_tokens": 125,
         });
         assert_eq!(exact_token_totals(&exact), Some((1_000, 125)));
+
+        let partitioned = json!({
+            "schema": "nando.economics-snapshot.v4",
+            "input_token_accounting_exact": true,
+            "global_input_tokens": 100,
+            "avoided_input_tokens": 5,
+            "display_input_token_accounting_partitioned": true,
+            "display_global_input_tokens": 1_100,
+            "display_avoided_input_tokens": 130,
+        });
+        assert_eq!(exact_token_totals(&partitioned), Some((1_100, 130)));
 
         let estimated = json!({
             "schema": "nando.economics-snapshot.v3",

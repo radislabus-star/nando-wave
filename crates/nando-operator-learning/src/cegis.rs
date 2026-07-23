@@ -198,6 +198,15 @@ struct ActiveEvaluation {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+struct AcceptedEvaluation {
+    program: crate::InternedProgram,
+    required_atom_ids: Vec<u64>,
+    anti_center_atom_sets: Vec<Vec<u64>>,
+    learned_wave_route: Option<crate::LearnedWaveRoute>,
+    phase_rank: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct CegisSearchState {
     cohort_id_sha256: String,
     teacher_signature_sha256: String,
@@ -212,6 +221,8 @@ struct CegisSearchState {
     safe_anti_center_candidates: Vec<Vec<u64>>,
     arena: VersionSpaceArena,
     active: Option<ActiveEvaluation>,
+    #[serde(default)]
+    accepted: BTreeMap<String, AcceptedEvaluation>,
     winner: Option<CegisWinner>,
     counterexamples: Vec<CegisCounterexample>,
     #[serde(default)]
@@ -338,6 +349,7 @@ impl CegisCoordinator {
             }
             let mut arena = VersionSpaceArena::new(self.version_space_config);
             arena.intern_all(cohort.programs);
+            arena.mark_candidate_generation_complete();
             arena.rank_for_phase_centers(&cohort.positives, &cohort.negatives);
             let candidate_invariants = candidate_invariants(
                 &cohort.invariants,
@@ -373,6 +385,7 @@ impl CegisCoordinator {
                     safe_anti_center_candidates: cohort.safe_anti_center_candidates,
                     arena,
                     active: None,
+                    accepted: BTreeMap::new(),
                     winner: None,
                     counterexamples,
                     generated_repair_programs: 0,
@@ -1465,7 +1478,7 @@ fn run_state_slice(
     while checks < budget {
         if state.active.is_none() {
             let Some(program) = state.arena.next_candidate() else {
-                state.blocker = Some("version_space_exhausted".to_owned());
+                finalize_cegis_version_space(state);
                 break;
             };
             state.active = Some(ActiveEvaluation {
@@ -1511,9 +1524,11 @@ fn run_state_slice(
             state.active = None;
             let inserted = state.arena.intern_all(repaired_programs);
             if inserted > 0 {
+                state.accepted.clear();
                 state.generated_repair_programs = state
                     .generated_repair_programs
                     .saturating_add(u64::try_from(inserted).unwrap_or(u64::MAX));
+                state.arena.mark_candidate_generation_complete();
                 state
                     .arena
                     .rank_for_phase_centers(&state.positives, &state.negatives);
@@ -1638,36 +1653,67 @@ fn run_state_slice(
                 (Vec::new(), learned)
             }
         };
-        state.winner = Some(CegisWinner {
-            cohort_id_sha256: state.cohort_id_sha256.clone(),
-            teacher_signature_sha256: state.teacher_signature_sha256.clone(),
-            action_symbol: state.action_symbol.clone(),
-            program: active.program.program.clone(),
-            required_atom_ids,
-            anti_center_atom_sets,
-            learned_wave_route,
-            positive_rows: state.positives.len(),
-            negative_rows: state.negatives.len(),
-            exact_checks: state.arena.report().exact_checks,
-            search_slices: state.arena.report().slices_completed,
-            phase_rank,
-            support_frame_ids: state
-                .positives
-                .iter()
-                .map(|frame| frame.frame_id_sha256.clone())
-                .collect(),
-            support_watermark_unix_nanos: state
-                .positives
-                .iter()
-                .map(|frame| frame.observed_at_unix_nanos)
-                .max()
-                .unwrap_or(0),
-            repair_watermark_unix_nanos: state.repair_watermark_unix_nanos,
-        });
+        state.arena.record_exact_check(
+            active.program.node_id,
+            true,
+            "complete_program_consistency",
+        );
+        state.accepted.insert(
+            active.program.digest_sha256.clone(),
+            AcceptedEvaluation {
+                program: active.program.clone(),
+                required_atom_ids,
+                anti_center_atom_sets,
+                learned_wave_route,
+                phase_rank,
+            },
+        );
         state.active = None;
-        break;
     }
     checks
+}
+
+fn finalize_cegis_version_space(state: &mut CegisSearchState) {
+    if state.arena.search_completion() != crate::CandidateSearchCompletion::Complete {
+        state.blocker = Some("version_space_search_incomplete".to_owned());
+        return;
+    }
+    let mut accepted = state.accepted.values();
+    let Some(candidate) = accepted.next() else {
+        state.blocker = Some("version_space_exhausted".to_owned());
+        return;
+    };
+    if accepted.next().is_some() {
+        state.blocker = Some("semantic_version_space_ambiguous".to_owned());
+        return;
+    }
+    state.winner = Some(CegisWinner {
+        cohort_id_sha256: state.cohort_id_sha256.clone(),
+        teacher_signature_sha256: state.teacher_signature_sha256.clone(),
+        action_symbol: state.action_symbol.clone(),
+        program: candidate.program.program.clone(),
+        required_atom_ids: candidate.required_atom_ids.clone(),
+        anti_center_atom_sets: candidate.anti_center_atom_sets.clone(),
+        learned_wave_route: candidate.learned_wave_route.clone(),
+        positive_rows: state.positives.len(),
+        negative_rows: state.negatives.len(),
+        exact_checks: state.arena.report().exact_checks,
+        search_slices: state.arena.report().slices_completed,
+        phase_rank: candidate.phase_rank,
+        support_frame_ids: state
+            .positives
+            .iter()
+            .map(|frame| frame.frame_id_sha256.clone())
+            .collect(),
+        support_watermark_unix_nanos: state
+            .positives
+            .iter()
+            .map(|frame| frame.observed_at_unix_nanos)
+            .max()
+            .unwrap_or(0),
+        repair_watermark_unix_nanos: state.repair_watermark_unix_nanos,
+    });
+    state.blocker = None;
 }
 
 fn repaired_program_candidates(

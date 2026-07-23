@@ -3,14 +3,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use nando_core::wave::{
     BlueprintBeamConfig, BlueprintFutureEvaluator, BlueprintFutureEvidence, BlueprintPhaseControl,
     BlueprintSynthesisBlockerCount, BlueprintSynthesisReport, BoundedCircuitBeam,
-    BoundedRoleAligner, FrozenOperatorBlueprintSet, LocalRelationFragment, OPERATOR_ROLE_NONE,
-    RoleAlignmentConfig, SearchCompletion, StructuralRoleSignature, SurfaceFragmentBundle,
-    TernaryRelationState, TypedProgramAtom, phase_vector_from_atoms,
+    BoundedRoleAligner, FrozenOperatorBlueprintSet, LocalRelationFragment,
+    OPERATOR_BLUEPRINT_MAX_BUNDLES, OPERATOR_ROLE_NONE, RoleAlignmentConfig, SearchCompletion,
+    StructuralRoleSignature, SurfaceFragmentBundle, TernaryRelationState, TypedProgramAtom,
+    phase_vector_from_atoms,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+mod identification;
 mod induction;
 mod state;
 
@@ -39,8 +41,7 @@ use crate::{
     source_neutral_verifier_for_program, synthesize_response_operator,
 };
 
-const LIVE_SCALAR_SUPPORT_ROWS: usize = 32;
-const LIVE_SCALAR_FUTURE_ROWS: usize = 32;
+const LIVE_SCALAR_MAX_EVIDENCE_ROWS: usize = 64;
 const TEACHER_CALL_SELECTOR_BUDGET: usize = 512;
 const COMMON_ACTOR_TOPOLOGY_BUDGET: usize = 64;
 // Session capture already bounds one active-turn provider envelope to 128 KiB.
@@ -162,7 +163,7 @@ struct LiveScalarLawState {
     future: Vec<TeacherTransition>,
     // Physical selectors are factored out of the semantic law and intersected
     // once as support arrives. Keeping this compact version set here prevents
-    // every report from repeating the full selector search over all 32 rows.
+    // every report from repeating the full selector search over bounded support.
     #[serde(default)]
     support_actor_hypotheses: Vec<ResponseProgram>,
     #[serde(default)]
@@ -178,6 +179,9 @@ struct CompetingBlueprintSet {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LiveScalarShadowReport {
+    pub identification_policy: String,
+    pub candidate_freezes: usize,
+    pub transfer_proofs: usize,
     pub observations: usize,
     pub executable: usize,
     pub duplicate_rows: usize,
@@ -257,7 +261,7 @@ fn evidence_partition_watermark(
         .map(|row| row.before.observed_at_unix_nanos)
         .min()
         .ok_or("crystallized_future_partition_empty")?;
-    if future_min < support_max {
+    if future_min <= support_max {
         return Err("crystallized_evidence_partition_reordered");
     }
     Ok(support_max)

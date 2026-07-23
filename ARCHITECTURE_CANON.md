@@ -1058,6 +1058,18 @@ composition DAG, renderer hypothesis, verifier obligations, and phase anchors.
 The actor and verifier engines are reused; circuit synthesis must not introduce
 a second execution language.
 
+Evidence readiness is adaptive. Natural operator identification freezes only
+when bounded candidate generation is complete and the semantic version space
+contains one executable class. A simple one-role law may therefore use one
+support witness. In that case a singleton role anchor only assigns canonical
+coordinates to the already identified class; it does not prove transfer and
+cannot grant authority. At least one independent post-freeze surface must still
+rebind the circuit, execute the actor, and pass the independent verifier.
+Ambiguous or structurally rich laws keep collecting distinguishing evidence
+until their version space collapses. The historical `32 support + 32 future`
+rule remains a legacy control policy and is forbidden as a natural readiness
+gate.
+
 The frozen set commits full 32-byte support lineages, its canonical candidate
 set, canonicalizer version, bounded synthesis configuration, and source operator
 generation. Receipt IDs are indexing aids and are never sufficient provenance.
@@ -1127,13 +1139,13 @@ independent Wave and self-training state. All of its support and future receipts
 must be captured after the archive boundary. Missing archive coverage yields
 BLOCK, never backfill, relabeling, or local authority.
 
-Support must satisfy its independence contract before the future partition
-opens. If a bounded 32-row support reservoir fills from fewer than three
-sessions, the first row from a missing session replaces one deterministic
-duplicate from the most represented session. The actor hypothesis set is
-recomputed from the resulting support rows. This is a support-only reservoir
-operation: a row already classified as future is never moved into support, and
-no replacement is allowed after the support independence gate is satisfied.
+Legacy fixed-reservoir controls must satisfy their independence contract before
+their future partition opens. Their historical 32-row reservoir behavior is
+not a natural-readiness rule and cannot be copied into adaptive identification.
+For those legacy controls only, a row from a missing session may replace one
+deterministic duplicate from the most represented session before freeze. A row
+already classified as future is never moved into support, and no replacement
+is allowed after the support independence gate is satisfied.
 
 Circuit ranking uses one contribution per lineage for each edge, then edge
 coherence, plane coherence, and whole-circuit closure. Raw sample frequency must
@@ -1931,6 +1943,11 @@ accept disabled and cannot grant itself runtime authority. The only forward
 boundary is an immutable candidate bundle followed by independent admission;
 verified execution receipts form the bounded feedback path. Splitting files or
 threads without splitting process memory does not satisfy this contract.
+
+The hot process may reload a valid external admission receipt when its cached
+lease reaches expiry. This is availability recovery, not authority ownership:
+the hot process cannot create a receipt, change its package set, widen its
+scope, or bypass independent validation.
 
 ## 12. Required Protocol Before Core Changes
 

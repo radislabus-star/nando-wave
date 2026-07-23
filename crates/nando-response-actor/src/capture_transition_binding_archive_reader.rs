@@ -46,14 +46,23 @@ impl CaptureTransitionBindingArchiveReader {
         frame_id_sha256: &str,
         receipt: &CaptureEvidenceReceipt,
     ) -> Result<(), String> {
+        let binding = receipt
+            .transition_binding
+            .as_ref()
+            .ok_or_else(|| "capture_transition_binding_missing".to_owned())?;
+        if binding.frame_id_sha256 != frame_id_sha256 {
+            return Err("capture_transition_binding_mismatch".to_owned());
+        }
+        self.verify_receipt(receipt)
+    }
+
+    pub fn verify_receipt(&mut self, receipt: &CaptureEvidenceReceipt) -> Result<(), String> {
         receipt.validate().map_err(str::to_owned)?;
         let binding = receipt
             .transition_binding
             .as_ref()
             .ok_or_else(|| "capture_transition_binding_missing".to_owned())?;
-        if binding.frame_id_sha256 != frame_id_sha256
-            || binding.sequence >= self.checkpoint.next_sequence
-        {
+        if binding.sequence >= self.checkpoint.next_sequence {
             return Err("capture_transition_binding_mismatch".to_owned());
         }
         self.file

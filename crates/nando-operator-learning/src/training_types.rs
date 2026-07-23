@@ -93,11 +93,7 @@ impl RuntimeFrame {
             .collect::<Vec<_>>();
         atoms.sort();
         atoms.dedup();
-        let frame_id_sha256 = digest_json(&(
-            RUNTIME_FRAME_SCHEMA_V1,
-            frame.frame_id_sha256.as_str(),
-            &atoms,
-        ));
+        let frame_id_sha256 = runtime_frame_id_from_capture_frame(&frame.frame_id_sha256, &atoms);
         Self {
             schema: RUNTIME_FRAME_SCHEMA_V1.to_owned(),
             frame_id_sha256,
@@ -132,6 +128,31 @@ impl RuntimeFrame {
     pub fn contains_teacher_atoms(&self) -> bool {
         self.atoms.iter().any(relation_atom_is_teacher_only)
     }
+
+    pub fn verify_capture_frame_id(
+        &self,
+        capture_frame_id_sha256: &str,
+    ) -> Result<(), &'static str> {
+        if self.schema != RUNTIME_FRAME_SCHEMA_V1
+            || self.frame_id_sha256
+                != runtime_frame_id_from_capture_frame(capture_frame_id_sha256, &self.atoms)
+        {
+            return Err("runtime_frame_capture_binding_mismatch");
+        }
+        Ok(())
+    }
+}
+
+#[must_use]
+pub fn runtime_frame_id_from_capture_frame(
+    capture_frame_id_sha256: &str,
+    observable_atoms: &[RelationAtom],
+) -> String {
+    digest_json(&(
+        RUNTIME_FRAME_SCHEMA_V1,
+        capture_frame_id_sha256,
+        observable_atoms,
+    ))
 }
 
 impl TeacherTransition {
@@ -145,13 +166,12 @@ impl TeacherTransition {
         atoms.dedup();
         RelationFrame {
             schema: RELATION_FRAME_SCHEMA.to_owned(),
-            frame_id_sha256: digest_json(&(
-                TEACHER_TRANSITION_SCHEMA_V1,
-                self.before.frame_id_sha256.as_str(),
-                self.outcome.action.signature_sha256.as_str(),
+            frame_id_sha256: training_relation_frame_id(
+                &self.before.frame_id_sha256,
+                &self.outcome.action.signature_sha256,
                 self.outcome.verifier.accepted,
                 &atoms,
-            )),
+            ),
             event_id_sha256: self.before.event_id_sha256.clone(),
             client_intent_id_sha256: self.before.client_intent_id_sha256.clone(),
             session_id_sha256: self.before.session_id_sha256.clone(),
@@ -166,6 +186,50 @@ impl TeacherTransition {
             evidence_ref_sha256: self.outcome.verifier.evidence_ref_sha256.clone(),
         }
     }
+
+    pub fn verify_capture_frame_id(
+        &self,
+        capture_frame_id_sha256: &str,
+    ) -> Result<(), &'static str> {
+        let captured_runtime_id =
+            runtime_frame_id_from_capture_frame(capture_frame_id_sha256, &self.before.atoms);
+        if self.before.frame_id_sha256 == captured_runtime_id {
+            return Ok(());
+        }
+
+        let mut training_atoms = self.before.atoms.clone();
+        training_atoms.extend(self.outcome.action.atoms.iter().cloned());
+        training_atoms.sort();
+        training_atoms.dedup();
+        let canonical_training_id = training_relation_frame_id(
+            &captured_runtime_id,
+            &self.outcome.action.signature_sha256,
+            self.outcome.verifier.accepted,
+            &training_atoms,
+        );
+        if self.before.frame_id_sha256
+            == runtime_frame_id_from_capture_frame(&canonical_training_id, &self.before.atoms)
+        {
+            return Ok(());
+        }
+        Err("teacher_transition_capture_binding_mismatch")
+    }
+}
+
+#[must_use]
+pub fn training_relation_frame_id(
+    runtime_frame_id_sha256: &str,
+    action_signature_sha256: &str,
+    accepted: bool,
+    atoms: &[RelationAtom],
+) -> String {
+    digest_json(&(
+        TEACHER_TRANSITION_SCHEMA_V1,
+        runtime_frame_id_sha256,
+        action_signature_sha256,
+        accepted,
+        atoms,
+    ))
 }
 
 /// Hashes only immutable learning semantics. Event time, token accounting,
@@ -225,3 +289,7 @@ fn digest_json<T: Serialize>(value: &T) -> String {
     let bytes = serde_json::to_vec(value).unwrap_or_default();
     format!("{:x}", Sha256::digest(bytes))
 }
+
+#[cfg(test)]
+#[path = "training_types_tests.rs"]
+mod tests;

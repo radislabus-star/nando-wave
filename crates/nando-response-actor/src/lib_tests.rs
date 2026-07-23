@@ -582,6 +582,7 @@ fn p2_transfers_completed_scalar_roles_and_abstains_on_ambiguity() {
         exact_cache_overlap: 0,
         wave_causal_pass: true,
         verifier_schema: SOURCE_VALUE_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+        adaptive_identification: None,
     };
     assert!(package.eligible_for_admission_candidate());
     let executor = ResponseExecutor::from_registry(ResponseRegistry {
@@ -737,6 +738,7 @@ fn p2_synthesizes_and_executes_typed_custom_tool_continuation() {
         exact_cache_overlap: 0,
         wave_causal_pass: true,
         verifier_schema: CUSTOM_TOOL_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+        adaptive_identification: None,
     };
     assert!(package.eligible_for_admission_candidate());
     let executor = ResponseExecutor::from_registry(ResponseRegistry {
@@ -1202,6 +1204,7 @@ fn p3_miner_learns_an_ordinal_guard_used_by_the_hot_runtime() {
         exact_cache_overlap: 0,
         wave_causal_pass: true,
         verifier_schema: "continue_handle_external_evidence.v1".to_owned(),
+        adaptive_identification: None,
     };
     let executor = ResponseExecutor::from_registry(ResponseRegistry {
         schema: "nando.response-registry.v5".to_owned(),
@@ -1564,6 +1567,7 @@ fn v5_external_registries_reject_private_selectors_but_allow_session_id() {
                     exact_cache_overlap: 0,
                     wave_causal_pass: true,
                     verifier_schema: "status_projection_external_evidence.v1".to_owned(),
+                    adaptive_identification: None,
                 },
             }],
         }
@@ -1699,6 +1703,7 @@ fn registry_excludes_fixture_and_unproven_packages() {
             exact_cache_overlap: 0,
             wave_causal_pass: true,
             verifier_schema: "continue_handle_external_evidence.v1".to_owned(),
+            adaptive_identification: None,
         },
     };
     let mut fixture = proven.clone();
@@ -1813,6 +1818,7 @@ fn legacy_templates_never_enter_l2_execution_router() {
                     exact_cache_overlap: 0,
                     wave_causal_pass: true,
                     verifier_schema: "response_actor_independent_verifier.v1".to_owned(),
+                    adaptive_identification: None,
                 },
             }
         })

@@ -51,16 +51,29 @@ pub fn verify_crystallized_capture_provenance_durable(
             return Err("crystallized_capture_partition_reordered".to_owned());
         }
         for transition in candidate.support.iter().chain(&candidate.future) {
-            let receipt = transition
+            let parity = transition
                 .runtime_parity_case
                 .as_ref()
-                .and_then(|case| case.capture_receipt.as_ref())
+                .ok_or_else(|| "crystallized_capture_receipt_missing".to_owned())?;
+            let receipt = parity
+                .capture_receipt
+                .as_ref()
                 .ok_or_else(|| "crystallized_capture_receipt_missing".to_owned())?;
             // The archive is authority for every fresh-generation receipt.
             // The rolling index is only a cache, but any cached disagreement
             // remains a hard provenance failure.
             verify_durable_receipt(&indexed, archive, receipt)?;
-            binding_archive.verify(&transition.before.frame_id_sha256, receipt)?;
+            let binding = receipt
+                .transition_binding
+                .as_ref()
+                .ok_or_else(|| "capture_transition_binding_missing".to_owned())?;
+            if parity.evidence_ref_sha256 != binding.frame_id_sha256 {
+                return Err("capture_parity_binding_mismatch".to_owned());
+            }
+            transition
+                .verify_capture_frame_id(&binding.frame_id_sha256)
+                .map_err(str::to_owned)?;
+            binding_archive.verify_receipt(receipt)?;
         }
     }
     Ok(())

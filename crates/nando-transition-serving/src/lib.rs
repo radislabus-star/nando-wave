@@ -950,6 +950,10 @@ async fn health(State(state): State<AppState>) -> Response {
     let (cache_ready, revision, active_profiles, cache_error) = cache_status(&state);
     let (response_ready, response_revision, response_profiles, response_error) =
         response_cache_status(&state);
+    let response_admission_expires_at_unix = state
+        .response_cache
+        .read()
+        .map_or(0, |cache| cache.admission_expires_at_unix);
     let (expression_ready, expression_package_sha256, expression_error) =
         expression_shadow_cache_status(&state);
     let response_miner = current_response_miner(&state);
@@ -1120,6 +1124,16 @@ async fn health(State(state): State<AppState>) -> Response {
         "observations": state.counters.observations.load(Ordering::Relaxed),
         "errors": state.counters.errors.load(Ordering::Relaxed),
     });
+    if let Some(object) = health.as_object_mut() {
+        object.insert(
+            "response_admission_expires_at_unix".to_owned(),
+            json!(response_admission_expires_at_unix),
+        );
+        object.insert(
+            "response_admission_seconds_remaining".to_owned(),
+            json!(response_admission_expires_at_unix.saturating_sub(unix_now())),
+        );
+    }
     if let Some(object) = health.as_object_mut() {
         object.insert(
             "response_runtime_contract_sha256".to_owned(),
@@ -1631,6 +1645,7 @@ async fn execute_transition(State(state): State<AppState>, body: Bytes) -> Respo
         &state,
         &request_hash,
         &request_hash,
+        &request_hash,
         LiveTransitionRequest {
             schema: LIVE_TRANSITION_REQUEST_SCHEMA.into(),
             before: request.before,
@@ -1835,7 +1850,8 @@ fn handle_openai(
         }
     };
     let request_identity = ProviderRequestIdentityV1::from_payload(&payload, &transport_request_id);
-    let client_intent_id = request_identity.turn_intent_id().to_owned();
+    let turn_intent_id = request_identity.turn_intent_id().to_owned();
+    let request_event_id = request_identity.request_event_id().to_owned();
     let request_text = extract_request_text(&payload);
     let body_token_estimate = u64::try_from(body.len().div_ceil(4)).unwrap_or(u64::MAX);
     let input_tokens = token_estimate(&request_text).max(body_token_estimate);
@@ -1895,7 +1911,7 @@ fn handle_openai(
         .unwrap_or("ordinary");
     observe_live_economics_request(
         &state,
-        &client_intent_id,
+        &request_event_id,
         body.clone(),
         input_tokens,
         traffic_source_dedupe_eligible(traffic_source),
@@ -1908,7 +1924,8 @@ fn handle_openai(
             "schema": "nando.transition-execution-event.v1",
             "timestamp_unix": unix_now(),
             "event": "bridge_request",
-            "client_intent_id": client_intent_id,
+            "client_intent_id": turn_intent_id.as_str(),
+            "request_event_id_sha256": request_identity.request_event_sha256(),
             "request_sha256": request_hash,
             "tokens": input_tokens,
             "traffic_source": traffic_source,
@@ -1927,7 +1944,8 @@ fn handle_openai(
     if let Some(actor_payload) = actor_payload
         && let Some(response) = try_response_actor(
             &state,
-            &client_intent_id,
+            &request_event_id,
+            &turn_intent_id,
             &request_hash,
             &request_text,
             actor_payload,
@@ -1942,7 +1960,7 @@ fn handle_openai(
         record_response_actor_fallback(
             &state,
             &request_hash,
-            &client_intent_id,
+            &request_event_id,
             "adapter",
             "request_shape_unsupported",
         );
@@ -1973,7 +1991,8 @@ fn handle_openai(
     record_expression_shadow_request(&state, &before, &action, input_tokens);
     execute_and_project(
         &state,
-        &client_intent_id,
+        &request_event_id,
+        &turn_intent_id,
         &request_hash,
         LiveTransitionRequest {
             schema: LIVE_TRANSITION_REQUEST_SCHEMA.into(),
@@ -2053,7 +2072,8 @@ fn submit_operator_generation_shadow(
 #[allow(clippy::too_many_arguments)]
 fn try_response_actor(
     state: &AppState,
-    client_intent_id: &str,
+    request_event_id: &str,
+    turn_intent_id: &str,
     request_hash: &str,
     request_text: &str,
     payload: &Value,
@@ -2064,11 +2084,12 @@ fn try_response_actor(
     if !projection.avoids_upstream_llm_call() {
         return None;
     }
+    refresh_response_authority_at_hot_expiry(state);
     if !response_local_accept_enabled(state) {
         record_response_actor_fallback(
             state,
             request_hash,
-            client_intent_id,
+            request_event_id,
             "admission",
             "response_local_accept_disabled",
         );
@@ -2081,7 +2102,7 @@ fn try_response_actor(
                 record_runtime_parity_failure(
                     state,
                     request_hash,
-                    client_intent_id,
+                    request_event_id,
                     "response_authority_cache_poisoned",
                 );
                 return None;
@@ -2091,7 +2112,7 @@ fn try_response_actor(
             record_response_actor_fallback(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "admission",
                 "response_admission_expired",
             );
@@ -2101,7 +2122,7 @@ fn try_response_actor(
             record_response_actor_fallback(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "admission",
                 "response_executor_unavailable",
             );
@@ -2111,7 +2132,7 @@ fn try_response_actor(
             record_response_actor_fallback(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "admission",
                 "runtime_build_digest_missing",
             );
@@ -2125,7 +2146,7 @@ fn try_response_actor(
         record_response_actor_fallback_with_decidability(
             state,
             request_hash,
-            client_intent_id,
+            request_event_id,
             response_actor_fallback_stage(&execution.reason),
             &execution.reason,
             decidability,
@@ -2136,7 +2157,7 @@ fn try_response_actor(
         record_response_actor_fallback(
             state,
             request_hash,
-            client_intent_id,
+            request_event_id,
             "actor",
             "actor_response_missing",
         );
@@ -2146,7 +2167,7 @@ fn try_response_actor(
         record_response_actor_fallback(
             state,
             request_hash,
-            client_intent_id,
+            request_event_id,
             "actor",
             "actor_package_id_missing",
         );
@@ -2189,7 +2210,7 @@ fn try_response_actor(
             record_response_actor_fallback(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "adapter",
                 "custom_tool_chat_projection_unsupported",
             );
@@ -2219,7 +2240,7 @@ fn try_response_actor(
             record_response_actor_fallback(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "adapter",
                 "response_actor_transition_projection_unsupported",
             );
@@ -2232,7 +2253,7 @@ fn try_response_actor(
             record_runtime_parity_failure(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "projector_digest_failed",
             );
             return None;
@@ -2242,7 +2263,7 @@ fn try_response_actor(
         record_runtime_parity_failure(
             state,
             request_hash,
-            client_intent_id,
+            request_event_id,
             "verifier_schema_missing",
         );
         return None;
@@ -2264,7 +2285,7 @@ fn try_response_actor(
             record_runtime_parity_failure(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "runtime_receipt_finalize_failed",
             );
             return None;
@@ -2282,7 +2303,7 @@ fn try_response_actor(
             record_runtime_parity_failure(
                 state,
                 request_hash,
-                client_intent_id,
+                request_event_id,
                 "post_verifier_receipt_finalize_failed",
             );
             return None;
@@ -2317,7 +2338,8 @@ fn try_response_actor(
         json!({
             "schema": "nando.economics-terminal.v1",
             "timestamp_unix": unix_now(),
-            "client_intent_id": client_intent_id,
+            "client_intent_id": turn_intent_id,
+            "request_event_id": request_event_id,
             "intent_dedupe_eligible": intent_dedupe_eligible,
             "provider_attempt_id": Value::Null,
             "request_sha256": request_hash,
@@ -2340,7 +2362,7 @@ fn try_response_actor(
             "verifier_schema": verifier_schema,
         }),
     );
-    observe_live_economics_verified_accept(state, client_intent_id, input_tokens);
+    observe_live_economics_verified_accept(state, request_event_id, input_tokens);
     Some(match projection {
         Projection::Responses if stream => sse_response(responses_sse(&projected)),
         Projection::ChatCompletions if stream => sse_response(chat_sse(&projected)),
@@ -2361,6 +2383,20 @@ fn response_local_accept_enabled(state: &AppState) -> bool {
         && state.config.client_allow_local_accept
         && state.config.route_ready
         && !state.runtime_policy.kill_switch()
+}
+
+fn refresh_response_authority_at_hot_expiry(state: &AppState) {
+    let now = unix_now();
+    let refresh = state.response_cache.read().is_ok_and(|cache| {
+        cache.ready
+            && cache.executor.is_some()
+            && now.saturating_add(1) >= cache.admission_expires_at_unix
+    });
+    if refresh {
+        // The background controller remains the authority owner. This only
+        // reloads its immutable receipt before a valid hot lease goes dark.
+        refresh_response_executor(state);
+    }
 }
 
 fn refresh_response_authority(state: &AppState) {
@@ -2864,11 +2900,11 @@ fn response_actor_fallback_stage(reason: &str) -> &'static str {
 fn record_response_actor_fallback(
     state: &AppState,
     request_hash: &str,
-    client_intent_id: &str,
+    request_event_id: &str,
     stage: &str,
     reason: &str,
 ) {
-    let intent_sha256 = sha256_bytes(client_intent_id.as_bytes());
+    let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     if let Err(error) = state.live_economics.observe_fallback(
         intent_sha256.clone(),
         stage.to_owned(),
@@ -2899,12 +2935,12 @@ fn record_response_actor_fallback(
 fn record_response_actor_fallback_with_decidability(
     state: &AppState,
     request_hash: &str,
-    client_intent_id: &str,
+    request_event_id: &str,
     stage: &str,
     reason: &str,
     decidability: CpuDecidability,
 ) {
-    let intent_sha256 = sha256_bytes(client_intent_id.as_bytes());
+    let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     if let Err(error) = state.live_economics.observe_fallback(
         intent_sha256.clone(),
         stage.to_owned(),
@@ -2938,10 +2974,10 @@ fn record_response_actor_fallback_with_decidability(
 fn record_runtime_parity_failure(
     state: &AppState,
     request_hash: &str,
-    client_intent_id: &str,
+    request_event_id: &str,
     reason: &str,
 ) {
-    let intent_sha256 = sha256_bytes(client_intent_id.as_bytes());
+    let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     if let Err(error) = state
         .live_economics
         .observe_parity_failure(intent_sha256.clone())
@@ -2953,7 +2989,7 @@ fn record_runtime_parity_failure(
         OpportunityBridgeEventV1::parity_failure(intent_sha256),
         "parity_failure",
     );
-    record_response_actor_fallback(state, request_hash, client_intent_id, "verifier", reason);
+    record_response_actor_fallback(state, request_hash, request_event_id, "verifier", reason);
 }
 
 fn function_call_responses_projection(
@@ -3030,7 +3066,8 @@ impl Projection {
 #[allow(clippy::too_many_arguments)]
 fn execute_and_project(
     state: &AppState,
-    client_intent_id: &str,
+    request_event_id: &str,
+    turn_intent_id: &str,
     request_hash: &str,
     request: LiveTransitionRequest,
     projection: Projection,
@@ -3118,7 +3155,8 @@ fn execute_and_project(
             json!({
                 "schema": "nando.economics-terminal.v1",
                 "timestamp_unix": unix_now(),
-                "client_intent_id": client_intent_id,
+                "client_intent_id": turn_intent_id,
+                "request_event_id": request_event_id,
                 "intent_dedupe_eligible": true,
                 "provider_attempt_id": Value::Null,
                 "request_sha256": request_hash,
@@ -3136,7 +3174,7 @@ fn execute_and_project(
                 "verifier_schema": execution.verifier_schema,
             }),
         );
-        observe_live_economics_verified_accept(state, client_intent_id, input_tokens);
+        observe_live_economics_verified_accept(state, request_event_id, input_tokens);
     } else {
         write_event(
             state,
@@ -4466,12 +4504,12 @@ fn write_economics(state: &AppState, row: Value) {
 
 fn observe_live_economics_request(
     state: &AppState,
-    client_intent_id: &str,
+    request_event_id: &str,
     request_body: Bytes,
     input_tokens: u64,
     eligible: bool,
 ) {
-    let intent_sha256 = sha256_bytes(client_intent_id.as_bytes());
+    let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     let result =
         state
             .live_economics
@@ -4491,10 +4529,10 @@ fn observe_live_economics_request(
 
 fn observe_live_economics_verified_accept(
     state: &AppState,
-    client_intent_id: &str,
+    request_event_id: &str,
     input_tokens: u64,
 ) {
-    let intent_sha256 = sha256_bytes(client_intent_id.as_bytes());
+    let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     let result = state
         .live_economics
         .observe_verified(intent_sha256.clone(), input_tokens);
@@ -4772,6 +4810,7 @@ mod tests {
                 exact_cache_overlap: 0,
                 wave_causal_pass: true,
                 verifier_schema: STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+                adaptive_identification: None,
             },
         };
         ResponseRegistry {
@@ -5028,6 +5067,36 @@ mod tests {
         let changed = state.response_cache.read().expect("response cache");
         assert_ne!(changed.input_fingerprint.as_ref(), Some(&first_fingerprint));
         assert!(!changed.ready);
+        fs::remove_dir_all(&root).expect("cleanup test root");
+    }
+
+    #[test]
+    fn hot_request_refreshes_an_expiring_valid_response_lease() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-serving-hot-authority-renewal-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let state = project_status_test_state(&root, &registry_path);
+        {
+            let mut cache = state.response_cache.write().expect("response cache");
+            assert!(cache.ready);
+            cache.admission_expires_at_unix = unix_now();
+        }
+
+        refresh_response_authority_at_hot_expiry(&state);
+
+        let cache = state.response_cache.read().expect("response cache");
+        assert!(cache.ready);
+        assert!(cache.executor.is_some());
+        assert!(cache.admission_expires_at_unix > unix_now());
+        assert!(cache.last_error.is_empty());
         fs::remove_dir_all(&root).expect("cleanup test root");
     }
 

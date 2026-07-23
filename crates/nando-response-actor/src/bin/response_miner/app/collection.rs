@@ -551,6 +551,7 @@ pub(super) fn compile_collection_package(
             exact_cache_overlap: 0,
             wave_causal_pass: causal_pass,
             verifier_schema: COLLECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+            adaptive_identification: None,
         },
     })
 }

@@ -107,6 +107,12 @@ impl ResponsePackage {
                 return Err("crystallized_verifier_commitment_mismatch");
             }
         }
+        if let Some(proof) = &self.proof.adaptive_identification {
+            proof.validate()?;
+            if self.crystallized_operator.is_none() {
+                return Err("adaptive_identification_crystallized_operator_missing");
+            }
+        }
         if matches!(
             self.program.operation,
             ResponseOperation::ProjectStatus { .. }
@@ -251,6 +257,11 @@ impl ResponsePackage {
                 verifier_schema_bound: verifier_bound,
                 verifier_program_bound,
                 exact_guard_bound,
+                adaptive_identification_bound: self
+                    .proof
+                    .adaptive_identification
+                    .as_ref()
+                    .is_some_and(|proof| proof.validate().is_ok()),
             },
         )
     }
@@ -1628,6 +1639,7 @@ mod tests {
                 exact_cache_overlap: 0,
                 wave_causal_pass: true,
                 verifier_schema: VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+                adaptive_identification: None,
             },
         }
     }
@@ -1673,6 +1685,7 @@ mod tests {
                 exact_cache_overlap: 0,
                 wave_causal_pass: true,
                 verifier_schema: STATUS_PROJECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+                adaptive_identification: None,
             },
         }
     }
@@ -1743,6 +1756,7 @@ mod tests {
                 exact_cache_overlap: 0,
                 wave_causal_pass: false,
                 verifier_schema: "response_actor_independent_verifier.v1".to_owned(),
+                adaptive_identification: None,
             },
         }
     }

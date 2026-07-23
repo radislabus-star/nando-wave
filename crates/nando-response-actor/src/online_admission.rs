@@ -25,7 +25,6 @@ use crate::{
 };
 
 use crate::{LiveScalarAdmissionCandidate, LiveScalarShadowState};
-
 #[derive(Clone, Debug)]
 pub struct OnlineAdmissionSnapshot {
     pub registry: ResponseRegistry,
@@ -57,15 +56,18 @@ pub fn build_crystallized_admission_snapshot(
     let mut packages = Vec::new();
     let mut receipts = BTreeMap::new();
     for submitted in candidates {
-        if submitted.support.len() != 32 || submitted.future.len() != 32 {
+        if submitted.support.is_empty() || submitted.future.is_empty() {
             return Err("crystallized_admission_evidence_window_invalid");
         }
         submitted.verify_evidence_partition()?;
         // A deserialized candidate is only an evidence envelope. Rebuild the
-        // winner, causal controls, executable seals and package from the 64
-        // bounded rows so caller-provided proof counters never gain authority.
+        // winner, causal controls, executable seals and package from its
+        // committed partitions so caller-provided proof counters gain no authority.
         let mut replay = LiveScalarShadowState::default();
-        for row in submitted.support.iter().chain(&submitted.future) {
+        for row in &submitted.support {
+            replay.observe_historical_support(row);
+        }
+        for row in &submitted.future {
             replay.observe(row);
         }
         let rebuilt = replay.admission_candidates();
@@ -94,12 +96,19 @@ pub fn build_crystallized_admission_snapshot(
         )
         .map_err(|_| "crystallized_admission_resynthesis_mismatch")?;
         let mut package = candidate.package.clone();
+        let adaptive_identification = package
+            .proof
+            .adaptive_identification
+            .as_ref()
+            .is_some_and(|proof| proof.validate().is_ok());
         if candidate.support.len() != package.proof.support_rows
             || candidate.future.len() != package.proof.future_rows
-            || package.proof.support_rows < 32
-            || package.proof.future_rows < 32
-            || package.proof.distinct_sessions < 3
-            || package.proof.distinct_surfaces < 2
+            || package.proof.support_rows == 0
+            || package.proof.future_rows == 0
+            || (adaptive_identification && package.proof.distinct_sessions < 2)
+            || (!adaptive_identification && package.proof.distinct_sessions < 3)
+            || (adaptive_identification && package.proof.distinct_surfaces == 0)
+            || (!adaptive_identification && package.proof.distinct_surfaces < 2)
             || package.proof.wrong_accepts != 0
             || package.proof.runtime_parity_failures != 0
             || package.proof.exact_cache_overlap != 0
@@ -206,8 +215,9 @@ pub fn build_crystallized_admission_snapshot(
             || candidate.winner_seal_sha256 != commitment_hex(operator.winner_seal_sha256())
             || candidate.executable_parity_seal_sha256
                 != commitment_hex(operator.parity_seal().seal_sha256())
-            || operator.parity_seal().future_evidence_count() < 32
-            || operator.parity_seal().future_lineage_count() < 3
+            || operator.parity_seal().future_evidence_count() == 0
+            || (adaptive_identification && operator.parity_seal().future_lineage_count() == 0)
+            || (!adaptive_identification && operator.parity_seal().future_lineage_count() < 3)
             || operator.parity_seal().wrong_accepts() != 0
         {
             return Err("crystallized_admission_commitment_mismatch");

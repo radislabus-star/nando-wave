@@ -810,6 +810,47 @@ impl StructuralRoleCanonicalizer {
 }
 
 impl BoundedRoleAligner {
+    /// Anchors one already identified semantic class in canonical role space.
+    ///
+    /// This does not identify a law and must not be used as transfer evidence.
+    /// The caller must own a sealed singleton version-space proof; an
+    /// independent future surface still has to bind and verify the circuit.
+    #[must_use]
+    pub fn anchor_identified_singleton(
+        bundle: &SurfaceFragmentBundle,
+        config: RoleAlignmentConfig,
+    ) -> RoleAlignmentReport {
+        if config.max_hypotheses == 0
+            || config.max_hypotheses > OPERATOR_BLUEPRINT_MAX_ALIGNMENTS
+            || config.max_expansions == 0
+            || config.max_expansions > OPERATOR_BLUEPRINT_MAX_EXPANSIONS
+            || config.color_rounds == 0
+            || config.color_rounds > OPERATOR_ROLE_COLOR_ROUNDS
+        {
+            return blocked_alignment(RoleAlignmentBlocker::InvalidConfig);
+        }
+        let bindings = (0..bundle.roles.len())
+            .map(|role| RoleBinding {
+                bundle_index: 0,
+                local_role: role as u8,
+                canonical_role: role as u8,
+            })
+            .collect::<Vec<_>>();
+        let fingerprint_sha256 = alignment_commitment(&bindings, std::slice::from_ref(bundle));
+        RoleAlignmentReport {
+            hypotheses: vec![RoleAlignmentHypothesis {
+                bindings: bindings.into_boxed_slice(),
+                canonical_role_count: bundle.roles.len() as u8,
+                fingerprint_sha256,
+            }]
+            .into_boxed_slice(),
+            expansions: 0,
+            symmetric_branches: 0,
+            completion: SearchCompletion::Complete { explored: 0 },
+            blocker: None,
+        }
+    }
+
     #[must_use]
     pub fn align(
         bundles: &[SurfaceFragmentBundle],

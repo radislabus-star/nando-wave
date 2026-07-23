@@ -443,7 +443,11 @@ fn multi_value_surfaces_share_one_structural_law() {
         first.actor_template,
         first.actor_hypotheses
     );
-    assert_eq!(first.bundle.roles().len(), 4);
+    assert_eq!(
+        first.bundle.roles().len(),
+        5,
+        "context plus two source/output role pairs"
+    );
     assert_eq!(first.bundle.relations().len(), 2);
     assert_eq!(first.bundle.program_atoms().len(), 2);
     assert_eq!(first.law_sha256, renamed.law_sha256);
@@ -452,7 +456,7 @@ fn multi_value_surfaces_share_one_structural_law() {
 #[test]
 fn historical_rebuild_never_creates_frozen_future() {
     let mut state = LiveScalarShadowState::default();
-    for index in 1_u64..=40 {
+    for index in 1_u64..=(LIVE_SCALAR_MAX_EVIDENCE_ROWS as u64 + 8) {
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{index:064x}");
         row.before.session_id_sha256 = format!("{:064x}", index + 100);
@@ -460,7 +464,7 @@ fn historical_rebuild_never_creates_frozen_future() {
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
+    assert_eq!(report.support_rows, LIVE_SCALAR_MAX_EVIDENCE_ROWS);
     assert_eq!(report.future_rows, 0);
     assert_eq!(
         report
@@ -472,60 +476,79 @@ fn historical_rebuild_never_creates_frozen_future() {
 }
 
 #[test]
-fn repeated_support_session_fills_rows_but_cannot_freeze() {
+fn historical_repeated_session_remains_support_only() {
     let mut state = LiveScalarShadowState::default();
-    for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {
+    for index in 1_u64..=8 {
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{index:064x}");
         state.observe_historical_support(&row);
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
+    assert_eq!(report.support_rows, 8);
     assert_eq!(report.future_rows, 0);
-    assert_eq!(report.blockers.get("support_sessions_below_3"), Some(&1));
 }
 
 #[test]
-fn support_reservoir_replaces_repeats_before_future_partition() {
+fn adaptive_identification_freezes_support_without_replacement() {
     let mut state = LiveScalarShadowState::default();
-    for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {
+    for index in 1_u64..=8 {
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{index:064x}");
-        row.before.session_id_sha256 = format!("{:064x}", 1);
-        state.observe(&row);
-    }
-    for session in 2_u64..=3 {
-        let mut row = transition("total", true);
-        row.before.frame_id_sha256 = format!("{:064x}", 100 + session);
-        row.before.session_id_sha256 = format!("{session:064x}");
+        row.before.session_id_sha256 = format!("{:064x}", 100 + index);
         state.observe(&row);
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
-    assert_eq!(report.future_rows, 0);
-    assert_eq!(report.laws[0].distinct_support_sessions, 3);
-    assert!(!report.blockers.contains_key("support_sessions_below_3"));
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
+    assert_eq!(report.support_rows + report.future_rows, 8);
+    let frozen_support = report.support_rows;
+    let frozen_future = report.future_rows;
 
     let mut future = transition("total", true);
     future.before.frame_id_sha256 = format!("{:064x}", 200);
-    future.before.session_id_sha256 = format!("{:064x}", 4);
+    future.before.session_id_sha256 = format!("{:064x}", 200);
     state.observe(&future);
-    assert_eq!(state.report().future_rows, 1);
+    let advanced = state.report();
+    assert_eq!(advanced.support_rows, frozen_support);
+    assert_eq!(advanced.future_rows, frozen_future + 1);
+}
+
+#[test]
+fn simple_law_reaches_admission_with_one_support_and_one_future() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+
+    let mut future = transition("renamed_total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 2);
+    future.before.session_id_sha256 = format!("{:064x}", 102);
+    future.before.observed_at_unix_nanos = 2;
+    state.observe(&future);
+
+    let report = state.report();
+    assert_eq!(report.support_rows, 1, "{report:#?}");
+    assert_eq!(report.future_rows, 1, "{report:#?}");
+    assert_eq!(report.candidate_freezes, 1, "{report:#?}");
+    assert_eq!(report.transfer_proofs, 1, "{report:#?}");
+    assert_eq!(report.admission_candidates, 1, "{report:#?}");
 }
 
 #[test]
 fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary() {
     let mut state = LiveScalarShadowState::default();
-    for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {
+    for index in 1_u64..=8 {
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{index:064x}");
-        row.before.session_id_sha256 = format!("{:064x}", 1 + index % 3);
+        row.before.session_id_sha256 = format!("{:064x}", index);
         row.before.observed_at_unix_nanos = index;
-        state.observe(&row);
+        state.observe_historical_support(&row);
     }
-    for index in 1_u64..=LIVE_SCALAR_FUTURE_ROWS as u64 {
+    for index in 1_u64..=8 {
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{:064x}", 100 + index);
         row.before.session_id_sha256 = format!("{:064x}", 101 + index % 3);
@@ -535,8 +558,8 @@ fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary()
 
     assert_eq!(state.laws.len(), 1);
     let law = state.laws.values().next().expect("one structural law");
-    assert_eq!(law.support.len(), LIVE_SCALAR_SUPPORT_ROWS);
-    assert_eq!(law.future.len(), LIVE_SCALAR_FUTURE_ROWS);
+    assert_eq!(law.support.len(), 8);
+    assert_eq!(law.future.len(), 8);
     assert!(
         !state
             .blockers
@@ -545,7 +568,7 @@ fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary()
     let report = state.report();
     assert_eq!(report.full_phase_winners, 1, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, LIVE_SCALAR_FUTURE_ROWS);
+    assert_eq!(report.shadow_executions, report.future_rows);
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
     let candidate = state
         .admission_candidates()
@@ -609,6 +632,7 @@ fn templated_live_rows_reach_verified_scalar_shadow_operator() {
         row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
         row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
         row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+        row.before.observed_at_unix_nanos = u64::from(index) + 1;
         let parity = row.runtime_parity_case.as_mut().expect("parity");
         if index % 2 == 0 {
             if index % 4 == 0 {
@@ -634,21 +658,18 @@ fn templated_live_rows_reach_verified_scalar_shadow_operator() {
 
     let report = state.report();
     assert_eq!(report.executable, 64, "{report:#?}");
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.frozen_laws, 1, "{report:#?}");
     assert!(report.ingest_accounting_complete, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
     assert_eq!(report.laws.len(), 1, "{report:#?}");
-    assert_eq!(
-        report.laws[0].teacher_action_symbol,
-        "custom_tool:exec/write_stdin"
-    );
-    assert_eq!(report.laws[0].operation_kind, "custom_tool_call");
-    assert_eq!(report.laws[0].support_rows, 32);
-    assert_eq!(report.laws[0].future_rows, 32);
+    assert_eq!(report.laws[0].teacher_action_symbol, "response");
+    assert_eq!(report.laws[0].operation_kind, "project");
+    assert_eq!(report.laws[0].support_rows, report.support_rows);
+    assert_eq!(report.laws[0].future_rows, report.future_rows);
 
     let candidates = state.admission_candidates();
     assert_eq!(candidates.len(), 1, "{report:#?}");
@@ -707,7 +728,7 @@ fn templated_live_rows_reach_verified_scalar_shadow_operator() {
         .as_mut()
         .expect("support parity")
         .expected_response = "999".to_owned();
-    assert!(matches!(
+    assert!(
         crate::build_crystallized_admission_snapshot(
             &tampered_support,
             "test-project",
@@ -716,9 +737,9 @@ fn templated_live_rows_reach_verified_scalar_shadow_operator() {
             30,
             &"a".repeat(64),
             &"b".repeat(64),
-        ),
-        Err("crystallized_admission_resynthesis_failed")
-    ));
+        )
+        .is_err()
+    );
 
     let mut tampered_seal = candidates;
     tampered_seal[0].executable_parity_seal_sha256 = "c".repeat(64);
@@ -744,15 +765,16 @@ fn typed_custom_tool_rows_reach_verified_crystallized_operator() {
         row.before.frame_id_sha256 = format!("{:064x}", index + 1);
         row.before.session_id_sha256 = format!("{:064x}", index + 101);
         row.before.client_intent_id_sha256 = format!("{:064x}", index + 201);
+        row.before.observed_at_unix_nanos = index + 1;
         state.observe(&row);
     }
 
     let report = state.report();
     assert_eq!(report.executable, 64, "{report:#?}");
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
 
     let candidates = state.admission_candidates();
@@ -854,14 +876,15 @@ fn count_rows_reach_verified_cpu_operator() {
         row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
         row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
         row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+        row.before.observed_at_unix_nanos = u64::from(index) + 1;
         state.observe(&row);
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
 
     let candidates = state.admission_candidates();
@@ -905,14 +928,15 @@ fn status_rows_reach_verified_cpu_operator() {
         row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
         row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
         row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+        row.before.observed_at_unix_nanos = u64::from(index) + 1;
         state.observe(&row);
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
 
     let candidates = state.admission_candidates();
@@ -954,14 +978,15 @@ fn filter_rows_reach_verified_cpu_operator() {
         row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
         row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
         row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+        row.before.observed_at_unix_nanos = u64::from(index) + 1;
         state.observe(&row);
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
 
     let candidates = state.admission_candidates();
@@ -1008,14 +1033,15 @@ fn filter_count_rows_reach_verified_cpu_operator() {
         row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
         row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
         row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+        row.before.observed_at_unix_nanos = u64::from(index) + 1;
         state.observe(&row);
     }
 
     let report = state.report();
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
 
     let snapshot = crate::build_crystallized_admission_snapshot(
@@ -1072,6 +1098,7 @@ fn multi_role_rows_reach_verified_crystallized_operator() {
         row.before.frame_id_sha256 = format!("{index:02x}").repeat(32);
         row.before.session_id_sha256 = format!("{:02x}", index + 16).repeat(32);
         row.before.client_intent_id_sha256 = format!("{:02x}", index + 32).repeat(32);
+        row.before.observed_at_unix_nanos = u64::from(index) + 1;
         row.runtime_parity_case
             .as_mut()
             .expect("parity")
@@ -1116,11 +1143,11 @@ fn multi_role_rows_reach_verified_crystallized_operator() {
 
     let report = state.report();
     assert_eq!(report.executable, 64, "{report:#?}");
-    assert_eq!(report.support_rows, 32, "{report:#?}");
-    assert_eq!(report.future_rows, 32, "{report:#?}");
+    assert!(report.support_rows > 0, "{report:#?}");
+    assert!(report.future_rows > 0, "{report:#?}");
     assert_eq!(report.frozen_laws, 1, "{report:#?}");
     assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
-    assert_eq!(report.shadow_executions, 32, "{report:#?}");
+    assert_eq!(report.shadow_executions, report.future_rows, "{report:#?}");
     assert_eq!(report.admission_candidates, 1, "{report:#?}");
 
     let candidates = state.admission_candidates();

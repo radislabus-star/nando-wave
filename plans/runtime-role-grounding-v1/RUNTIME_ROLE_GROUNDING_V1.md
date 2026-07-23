@@ -180,7 +180,7 @@ parity mismatches zero, and every local accept independently verified.
 Implemented code path:
 
 ```text
-32 support + 32 future
+3 support + 3 fresh future
 -> LiveScalarAdmissionCandidate
 -> CBOR candidate bundle
 -> independent replay of all 64 traces
@@ -194,7 +194,7 @@ Implemented code path:
 Tampered support and parity seal are rejected before registry authority. The
 focused end-to-end proof reaches an ACTIVE registry and executes a renamed
 scalar surface. Live remains `WATCH` while the serving process is intentionally
-stopped and no real post-commit 32/32 window has accumulated.
+stopped and no real post-commit 3/3 window has accumulated.
 
 ## R8: Extend Operator Capacity
 

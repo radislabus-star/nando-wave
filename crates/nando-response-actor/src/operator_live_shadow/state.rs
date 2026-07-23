@@ -2,6 +2,7 @@
 //!
 //! Samples are compiled by `induction`; this owner only advances frozen state.
 
+use super::identification::identify_live_scalar_law_v1;
 use super::induction::{
     canonicalize_scalar_program_roles, commitment_hex, extract_live_scalar_circuit_sample,
     observed_rich_scalar_surface, parse_commitment, program_has_filter_count,
@@ -22,7 +23,7 @@ impl LiveScalarShadowState {
         };
         self.executable = self.executable.saturating_add(1);
         let law_key = commitment_hex(&sample.law_sha256);
-        let law = self.laws.entry(law_key).or_default();
+        let law = self.laws.entry(law_key.clone()).or_default();
         if law
             .support
             .iter()
@@ -32,21 +33,21 @@ impl LiveScalarShadowState {
             self.duplicate_rows = self.duplicate_rows.saturating_add(1);
             return;
         }
-        if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS {
+        if identify_live_scalar_law_v1(&law_key, law).is_err() || !live_scalar_support_compiles(law)
+        {
+            if law.support.len() >= LIVE_SCALAR_MAX_EVIDENCE_ROWS {
+                *self
+                    .blockers
+                    .entry(LiveScalarShadowBlocker::HistoricalSupportCapacityReached)
+                    .or_default() += 1;
+                return;
+            }
             if let Err(blocker) = update_support_actor_hypotheses(law, &sample.actor_hypotheses) {
                 *self.blockers.entry(blocker).or_default() += 1;
                 return;
             }
             law.support.push(transition.clone());
             return;
-        }
-        match replace_support_for_session_diversity(law, transition) {
-            Ok(true) => return,
-            Ok(false) => {}
-            Err(blocker) => {
-                *self.blockers.entry(blocker).or_default() += 1;
-                return;
-            }
         }
         if law
             .support
@@ -59,7 +60,7 @@ impl LiveScalarShadowState {
                 .or_default() += 1;
             return;
         }
-        if law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
+        if law.future.len() < LIVE_SCALAR_MAX_EVIDENCE_ROWS {
             law.future.push(transition.clone());
         } else {
             *self
@@ -91,7 +92,7 @@ impl LiveScalarShadowState {
             self.duplicate_rows = self.duplicate_rows.saturating_add(1);
             return;
         }
-        if law.support.len() >= LIVE_SCALAR_SUPPORT_ROWS {
+        if law.support.len() >= LIVE_SCALAR_MAX_EVIDENCE_ROWS {
             *self
                 .blockers
                 .entry(LiveScalarShadowBlocker::HistoricalSupportCapacityReached)
@@ -144,6 +145,7 @@ impl LiveScalarShadowState {
                 .then_with(|| left.law_sha256.cmp(&right.law_sha256))
         });
         let mut report = LiveScalarShadowReport {
+            identification_policy: "adaptive_version_space_v1".to_owned(),
             observations: self.observations,
             executable: self.executable,
             duplicate_rows: self.duplicate_rows,
@@ -164,8 +166,8 @@ impl LiveScalarShadowState {
             ..LiveScalarShadowReport::default()
         };
         let mut candidates = Vec::new();
-        for law in self.laws.values() {
-            evaluate_live_law(law, &mut report, &mut candidates);
+        for (law_key, law) in &self.laws {
+            evaluate_live_law(law_key, law, &mut report, &mut candidates);
         }
         report.admission_candidates = candidates.len();
         report
@@ -175,8 +177,8 @@ impl LiveScalarShadowState {
     pub fn admission_candidates(&self) -> Vec<LiveScalarAdmissionCandidate> {
         let mut report = LiveScalarShadowReport::default();
         let mut candidates = Vec::new();
-        for law in self.laws.values() {
-            evaluate_live_law(law, &mut report, &mut candidates);
+        for (law_key, law) in &self.laws {
+            evaluate_live_law(law_key, law, &mut report, &mut candidates);
         }
         candidates
     }
@@ -207,66 +209,7 @@ impl LiveScalarShadowState {
     }
 }
 
-fn replace_support_for_session_diversity(
-    law: &mut LiveScalarLawState,
-    transition: &TeacherTransition,
-) -> Result<bool, LiveScalarShadowBlocker> {
-    let session_counts =
-        law.support
-            .iter()
-            .fold(BTreeMap::<String, usize>::new(), |mut counts, row| {
-                *counts
-                    .entry(row.before.session_id_sha256.clone())
-                    .or_default() += 1;
-                counts
-            });
-    if session_counts.len() >= 3
-        || session_counts.contains_key(&transition.before.session_id_sha256)
-    {
-        return Ok(false);
-    }
-    let Some(victim_session) = session_counts
-        .iter()
-        .filter(|(_, count)| **count > 1)
-        .max_by(|left, right| left.1.cmp(right.1).then_with(|| right.0.cmp(left.0)))
-        .map(|(session, _)| session.clone())
-    else {
-        return Ok(false);
-    };
-    let Some(victim_index) = law
-        .support
-        .iter()
-        .enumerate()
-        .filter(|(_, row)| row.before.session_id_sha256 == victim_session)
-        .max_by(|(_, left), (_, right)| {
-            left.before
-                .observed_at_unix_nanos
-                .cmp(&right.before.observed_at_unix_nanos)
-                .then_with(|| {
-                    left.before
-                        .frame_id_sha256
-                        .cmp(&right.before.frame_id_sha256)
-                })
-        })
-        .map(|(index, _)| index)
-    else {
-        return Ok(false);
-    };
-
-    let mut support = law.support.clone();
-    support[victim_index] = transition.clone();
-    let mut rebuilt = LiveScalarLawState::default();
-    for row in &support {
-        let sample = extract_live_scalar_circuit_sample(row)?;
-        update_support_actor_hypotheses(&mut rebuilt, &sample.actor_hypotheses)?;
-    }
-    law.support = support;
-    law.support_actor_hypotheses = rebuilt.support_actor_hypotheses;
-    law.support_hypotheses_initialized = rebuilt.support_hypotheses_initialized;
-    Ok(true)
-}
-
-fn response_operation_kind(program: &ResponseProgram) -> &'static str {
+pub(super) fn response_operation_kind(program: &ResponseProgram) -> &'static str {
     match &program.operation {
         ResponseOperation::FunctionCallFromRoles { .. } => "function_call",
         ResponseOperation::CustomToolCallFromRoles { .. } => "custom_tool_call",
@@ -333,15 +276,59 @@ pub(super) fn update_support_actor_hypotheses(
     Ok(())
 }
 
+fn live_scalar_support_compiles(law: &LiveScalarLawState) -> bool {
+    let Ok(support) = law
+        .support
+        .iter()
+        .map(|transition| {
+            reextract_live_scalar_circuit_sample(transition, &law.support_actor_hypotheses)
+        })
+        .collect::<Result<Vec<_>, _>>()
+    else {
+        return false;
+    };
+    let Ok(competing) = build_competing_blueprint_set(&support) else {
+        return false;
+    };
+    FrozenOperatorBlueprintSet::freeze(
+        1,
+        &competing.support_bundles,
+        BlueprintBeamConfig::default(),
+        &competing.synthesis,
+    )
+    .is_ok()
+}
+
 fn evaluate_live_law(
+    law_key: &str,
     law: &LiveScalarLawState,
     report: &mut LiveScalarShadowReport,
     candidates: &mut Vec<LiveScalarAdmissionCandidate>,
 ) {
-    if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS {
-        increment_report_blocker(report, "support_below_32");
-        return;
+    let (proof_law, censored_support, censored_future) = match provenance_complete_law(law) {
+        Ok(result) => result,
+        Err(blocker) => {
+            increment_report_blocker(report, &blocker);
+            return;
+        }
+    };
+    if censored_support != 0 || censored_future != 0 {
+        increment_report_blocker(
+            report,
+            &format!(
+                "capture_lineage_censored:support={censored_support}:future={censored_future}"
+            ),
+        );
     }
+    let law = &proof_law;
+    let identification = match identify_live_scalar_law_v1(law_key, law) {
+        Ok(identification) => identification,
+        Err(blocker) => {
+            increment_report_blocker(report, &blocker);
+            return;
+        }
+    };
+    report.candidate_freezes = report.candidate_freezes.saturating_add(1);
     if law.support_actor_hypotheses.is_empty() {
         increment_report_blocker(report, "actor_hypotheses_no_common_version");
         return;
@@ -386,12 +373,39 @@ fn evaluate_live_law(
         }
     };
     report.frozen_laws = report.frozen_laws.saturating_add(1);
-    if law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
-        increment_report_blocker(report, "future_below_32");
+    if law.future.is_empty() {
+        increment_report_blocker(report, "independent_future_missing");
         return;
     }
-    let Ok(future) = law
+    let Some(support_watermark) = law
+        .support
+        .iter()
+        .map(|transition| transition.before.observed_at_unix_nanos)
+        .max()
+    else {
+        increment_report_blocker(report, "support_watermark_missing");
+        return;
+    };
+    // Old fixed-window checkpoints may contain rows labelled as future before
+    // a later support replacement. Preserve those rows as history, but never
+    // let them become post-freeze transfer authority.
+    let transfer_future = law
         .future
+        .iter()
+        .filter(|transition| transition.before.observed_at_unix_nanos > support_watermark)
+        .cloned()
+        .collect::<Vec<_>>();
+    if transfer_future.is_empty() {
+        increment_report_blocker(
+            report,
+            &format!(
+                "independent_future_after_freeze_missing:ignored={}",
+                law.future.len()
+            ),
+        );
+        return;
+    }
+    let Ok(future) = transfer_future
         .iter()
         .map(|transition| {
             reextract_live_scalar_circuit_sample(transition, &law.support_actor_hypotheses)
@@ -566,8 +580,11 @@ fn evaluate_live_law(
         Ok(operator) => {
             report.verified_shadow_operators = report.verified_shadow_operators.saturating_add(1);
             report.shadow_executions = report.shadow_executions.saturating_add(receipts.len());
-            match live_admission_candidate(law, &operator) {
-                Ok(candidate) => candidates.push(candidate),
+            match live_admission_candidate(law, &transfer_future, &operator, &identification) {
+                Ok(candidate) => {
+                    report.transfer_proofs = report.transfer_proofs.saturating_add(1);
+                    candidates.push(candidate);
+                }
                 Err(blocker) => increment_report_blocker(report, &blocker),
             }
         }
@@ -577,7 +594,69 @@ fn evaluate_live_law(
     }
 }
 
-fn build_competing_blueprint_set(
+fn provenance_complete_law(
+    law: &LiveScalarLawState,
+) -> Result<(LiveScalarLawState, usize, usize), String> {
+    let has_capture_receipts = law.support.iter().chain(&law.future).any(|transition| {
+        transition
+            .runtime_parity_case
+            .as_ref()
+            .and_then(|case| case.capture_receipt.as_ref())
+            .is_some()
+    });
+    if !has_capture_receipts {
+        return Ok((law.clone(), 0, 0));
+    }
+
+    let mut proof_law = LiveScalarLawState::default();
+    for transition in law
+        .support
+        .iter()
+        .filter(|transition| capture_lineage_is_reconstructible(transition))
+    {
+        let sample = extract_live_scalar_circuit_sample(transition)
+            .map_err(|blocker| format!("capture_support_reextract_{blocker:?}").to_lowercase())?;
+        update_support_actor_hypotheses(&mut proof_law, &sample.actor_hypotheses)
+            .map_err(|blocker| format!("capture_support_hypothesis_{blocker:?}").to_lowercase())?;
+        proof_law.support.push(transition.clone());
+    }
+    proof_law.future = law
+        .future
+        .iter()
+        .filter(|transition| capture_lineage_is_reconstructible(transition))
+        .cloned()
+        .collect();
+
+    let censored_support = law.support.len().saturating_sub(proof_law.support.len());
+    let censored_future = law.future.len().saturating_sub(proof_law.future.len());
+    if proof_law.support.is_empty() || proof_law.future.is_empty() {
+        return Err(format!(
+            "capture_lineage_evidence_empty:support={}:future={}",
+            proof_law.support.len(),
+            proof_law.future.len()
+        ));
+    }
+    Ok((proof_law, censored_support, censored_future))
+}
+
+fn capture_lineage_is_reconstructible(transition: &TeacherTransition) -> bool {
+    let Some(parity) = transition.runtime_parity_case.as_ref() else {
+        return false;
+    };
+    let Some(receipt) = parity.capture_receipt.as_ref() else {
+        return false;
+    };
+    let Some(binding) = receipt.transition_binding.as_ref() else {
+        return false;
+    };
+    receipt.validate().is_ok()
+        && parity.evidence_ref_sha256 == binding.frame_id_sha256
+        && transition
+            .verify_capture_frame_id(&binding.frame_id_sha256)
+            .is_ok()
+}
+
+pub(super) fn build_competing_blueprint_set(
     support: &[LiveScalarCircuitSample],
 ) -> Result<CompetingBlueprintSet, String> {
     let actors = common_support_actor_hypotheses(support)?;
@@ -633,7 +712,7 @@ fn build_competing_blueprint_set(
                 .map_err(|error| format!("actor_support_bundle_{error:?}").to_lowercase())
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let synthesis_bundles = actor_bundles
+        let available_synthesis_bundles = actor_bundles
             .iter()
             .fold(BTreeMap::new(), |mut lineages, bundle| {
                 lineages
@@ -642,27 +721,47 @@ fn build_competing_blueprint_set(
                 lineages
             })
             .into_values()
-            .take(3)
+            .take(OPERATOR_BLUEPRINT_MAX_BUNDLES)
             .collect::<Vec<_>>();
-        if synthesis_bundles.len() < 3 {
-            return Err("support_sessions_below_3".to_owned());
+        if available_synthesis_bundles.is_empty() {
+            return Err("support_sessions_empty".to_owned());
         }
-        let alignments =
-            BoundedRoleAligner::align(&synthesis_bundles, RoleAlignmentConfig::default());
-        if !alignments.completion.is_complete() {
-            return Err("role_alignment_exhausted".to_owned());
+        let mut completed_alignment = false;
+        let mut selected = None;
+        // A uniquely identified one-role law may crystallize from one support
+        // witness; its next independent lineage remains frozen future. Rich or
+        // symmetric laws still need more witnesses because alignment or beam
+        // synthesis cannot complete while their version space is ambiguous.
+        for witness_count in 1..=available_synthesis_bundles.len() {
+            let synthesis_bundles = &available_synthesis_bundles[..witness_count];
+            let alignments = if witness_count == 1 {
+                BoundedRoleAligner::anchor_identified_singleton(
+                    &synthesis_bundles[0],
+                    RoleAlignmentConfig::default(),
+                )
+            } else {
+                BoundedRoleAligner::align(synthesis_bundles, RoleAlignmentConfig::default())
+            };
+            if !alignments.completion.is_complete() {
+                continue;
+            }
+            completed_alignment = true;
+            let synthesis = BoundedCircuitBeam::synthesize(
+                synthesis_bundles,
+                &alignments,
+                BlueprintBeamConfig::default(),
+            );
+            if synthesis.completion.is_complete() && !synthesis.blueprints.is_empty() {
+                selected = Some((synthesis_bundles.to_vec(), synthesis));
+            }
         }
-        let synthesis = BoundedCircuitBeam::synthesize(
-            &synthesis_bundles,
-            &alignments,
-            BlueprintBeamConfig::default(),
-        );
-        if !synthesis.completion.is_complete() {
-            return Err("circuit_synthesis_exhausted".to_owned());
-        }
-        if synthesis.blueprints.is_empty() {
-            return Err("circuit_synthesis_no_blueprint".to_owned());
-        }
+        let Some((synthesis_bundles, synthesis)) = selected else {
+            return Err(if completed_alignment {
+                "circuit_synthesis_exhausted".to_owned()
+            } else {
+                "role_alignment_exhausted".to_owned()
+            });
+        };
         expansions = expansions.saturating_add(synthesis.expansions);
         for blocker in &synthesis.blockers {
             let count = blocker_counts.entry(blocker.blocker).or_insert(0_usize);
@@ -695,7 +794,7 @@ fn build_competing_blueprint_set(
         }
         // Alternatives from one lineage are committed but never counted as
         // independent evidence; FrozenOperatorBlueprintSet deduplicates lineage.
-        support_bundles.extend(actor_bundles);
+        support_bundles.extend(synthesis_bundles);
     }
 
     if blueprints.is_empty() {
@@ -779,7 +878,7 @@ pub(super) fn common_support_actor_hypotheses(
         .collect()
 }
 
-fn source_neutral_actor_topology(
+pub(super) fn source_neutral_actor_topology(
     program: &ResponseProgram,
     request_text: &str,
     provider_payload: &Value,
@@ -792,16 +891,18 @@ fn source_neutral_actor_topology(
         return source_neutral_scalar_program_shape(&canonical)
             .map(|shape| ([vec![0], shape].concat(), canonical));
     }
-    let encoded = serde_cbor::to_vec(&canonical).ok()?;
+    let encoded = super::induction::source_neutral_multi_role_program_shape(&canonical)?;
     Some(([vec![1], encoded].concat(), canonical))
 }
 
 fn live_admission_candidate(
     law: &LiveScalarLawState,
+    future: &[TeacherTransition],
     operator: &crate::VerifiedCrystallizedOperator,
+    identification: &super::identification::LiveScalarIdentificationV1,
 ) -> Result<LiveScalarAdmissionCandidate, String> {
-    if law.support.len() < LIVE_SCALAR_SUPPORT_ROWS || law.future.len() < LIVE_SCALAR_FUTURE_ROWS {
-        return Err("admission_rows_below_32".to_owned());
+    if law.support.is_empty() || future.is_empty() {
+        return Err("admission_evidence_empty".to_owned());
     }
     let program = operator
         .routing_program()
@@ -814,14 +915,14 @@ fn live_admission_candidate(
     let distinct_sessions = law
         .support
         .iter()
-        .chain(&law.future)
+        .chain(future)
         .map(|row| row.before.session_id_sha256.as_str())
         .collect::<std::collections::BTreeSet<_>>()
         .len();
     let distinct_surfaces = law
         .support
         .iter()
-        .chain(&law.future)
+        .chain(future)
         .map(|row| row.before.frame_id_sha256.as_str())
         .collect::<std::collections::BTreeSet<_>>()
         .len();
@@ -842,8 +943,7 @@ fn live_admission_candidate(
         .filter_map(&route_margin)
         .min()
         .ok_or_else(|| "admission_circuit_route_missing".to_owned())?;
-    if law
-        .future
+    if future
         .iter()
         .any(|row| route_margin(row).is_none_or(|margin| margin < wave_margin_micro))
     {
@@ -872,7 +972,7 @@ fn live_admission_candidate(
         ),
         proof: ResponsePackageProof {
             support_rows: law.support.len(),
-            future_rows: law.future.len(),
+            future_rows: future.len(),
             distinct_sessions,
             distinct_surfaces,
             wrong_accepts: 0,
@@ -880,6 +980,24 @@ fn live_admission_candidate(
             exact_cache_overlap: 0,
             wave_causal_pass: true,
             verifier_schema: verifier_schema.to_owned(),
+            adaptive_identification: Some(
+                nando_operator_admission::seal_adaptive_identification_proof_v1(
+                    nando_operator_admission::AdaptiveIdentificationProofInputV1 {
+                        candidate_freeze_root_sha256: identification.freeze_root_sha256.clone(),
+                        semantic_class_id_sha256: identification.semantic_class_id_sha256.clone(),
+                        canonical_program_root_sha256: identification
+                            .canonical_program_root_sha256
+                            .clone(),
+                        applicability_scope_root_sha256: identification
+                            .applicability_scope_root_sha256
+                            .clone(),
+                        transfer_proof_root_sha256: commitment_hex(
+                            operator.parity_seal().seal_sha256(),
+                        ),
+                    },
+                )
+                .map_err(str::to_owned)?,
+            ),
         },
     };
     package
@@ -888,7 +1006,7 @@ fn live_admission_candidate(
     let mut candidate = LiveScalarAdmissionCandidate {
         package,
         support: law.support.clone(),
-        future: law.future.clone(),
+        future: future.to_vec(),
         freeze_watermark_unix_nanos: 0,
         partition_commitment_sha256: String::new(),
         support_root_sha256: commitment_hex(operator.support_root_sha256()),

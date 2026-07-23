@@ -7,9 +7,9 @@ use nando_operator_learning::{FramedCborLedger, read_framed_cbor, write_atomic_c
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-const EVENT_SCHEMA: &str = "nando.live-economics-event.v3";
-const SNAPSHOT_SCHEMA: &str = "nando.economics-snapshot.v3";
-const CHECKPOINT_SCHEMA: &str = "nando.live-economics-checkpoint.v3";
+const EVENT_SCHEMA: &str = "nando.live-economics-event.v4";
+const SNAPSHOT_SCHEMA: &str = "nando.economics-snapshot.v4";
+const CHECKPOINT_SCHEMA: &str = "nando.live-economics-checkpoint.v4";
 const MINIMUM_M3_INTENTS: usize = 10_000;
 const MINIMUM_M3_SECONDS: u64 = 24 * 60 * 60;
 const REQUIRED_M3_WINDOWS: usize = 3;
@@ -57,6 +57,12 @@ struct EconomicsWindow {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct EconomicsCheckpoint {
     schema: String,
+    #[serde(default)]
+    prior_epoch_schema: String,
+    #[serde(default)]
+    prior_epoch_ordinary_tokens: u64,
+    #[serde(default)]
+    prior_epoch_verified_tokens: u64,
     epoch_started_at_unix: u64,
     eligible: BTreeMap<String, u64>,
     #[serde(default)]
@@ -84,6 +90,9 @@ pub struct LiveEconomicsLedger {
     journal: FramedCborLedger,
     checkpoint_path: PathBuf,
     snapshot_path: PathBuf,
+    prior_epoch_schema: String,
+    prior_epoch_ordinary_tokens: u64,
+    prior_epoch_verified_tokens: u64,
     epoch_started_at_unix: u64,
     eligible: BTreeMap<String, u64>,
     pending_opened_at: BTreeMap<String, u64>,
@@ -108,19 +117,35 @@ impl LiveEconomicsLedger {
     pub fn open(state_dir: &Path) -> Result<Self, String> {
         fs::create_dir_all(state_dir)
             .map_err(|error| format!("live_economics_dir:{}:{error}", state_dir.display()))?;
-        let ledger_dir = state_dir.join("economics-events-v3");
-        let checkpoint_path = state_dir.join("economics-live-v3.checkpoint");
+        // V3 used a user-turn identity for multiple provider calls. V4 keeps the
+        // old ledger immutable and starts the corrected request-event domain.
+        let ledger_dir = state_dir.join("economics-events-v4");
+        let checkpoint_path = state_dir.join("economics-live-v4.checkpoint");
         let snapshot_path = state_dir.join("economics-live.json");
         let checkpoint = fs::read(&checkpoint_path)
             .ok()
             .and_then(|bytes| serde_cbor::from_slice::<EconomicsCheckpoint>(&bytes).ok())
             .filter(|checkpoint| checkpoint.schema == CHECKPOINT_SCHEMA);
+        let prior_epoch = read_prior_epoch_totals(state_dir);
         let now = unix_now();
         let mut ledger = if let Some(checkpoint) = checkpoint {
+            let (prior_epoch_schema, prior_epoch_ordinary_tokens, prior_epoch_verified_tokens) =
+                if checkpoint.prior_epoch_schema.is_empty() {
+                    prior_epoch
+                } else {
+                    (
+                        checkpoint.prior_epoch_schema,
+                        checkpoint.prior_epoch_ordinary_tokens,
+                        checkpoint.prior_epoch_verified_tokens,
+                    )
+                };
             Self {
                 journal: FramedCborLedger::open(&ledger_dir, "economics")?,
                 checkpoint_path,
                 snapshot_path,
+                prior_epoch_schema,
+                prior_epoch_ordinary_tokens,
+                prior_epoch_verified_tokens,
                 epoch_started_at_unix: checkpoint.epoch_started_at_unix,
                 eligible: checkpoint.eligible,
                 pending_opened_at: checkpoint.pending_opened_at,
@@ -145,6 +170,9 @@ impl LiveEconomicsLedger {
                 journal: FramedCborLedger::open(&ledger_dir, "economics")?,
                 checkpoint_path,
                 snapshot_path,
+                prior_epoch_schema: prior_epoch.0,
+                prior_epoch_ordinary_tokens: prior_epoch.1,
+                prior_epoch_verified_tokens: prior_epoch.2,
                 epoch_started_at_unix: now,
                 eligible: BTreeMap::new(),
                 pending_opened_at: BTreeMap::new(),
@@ -392,6 +420,9 @@ impl LiveEconomicsLedger {
             &self.checkpoint_path,
             &EconomicsCheckpoint {
                 schema: CHECKPOINT_SCHEMA.to_owned(),
+                prior_epoch_schema: self.prior_epoch_schema.clone(),
+                prior_epoch_ordinary_tokens: self.prior_epoch_ordinary_tokens,
+                prior_epoch_verified_tokens: self.prior_epoch_verified_tokens,
                 epoch_started_at_unix: self.epoch_started_at_unix,
                 eligible: self.eligible.clone(),
                 pending_opened_at: self.pending_opened_at.clone(),
@@ -413,6 +444,12 @@ impl LiveEconomicsLedger {
 
     fn persist_snapshot(&self) -> Result<(), String> {
         let current = self.current_window(unix_now());
+        let display_global_input_tokens = self
+            .prior_epoch_ordinary_tokens
+            .saturating_add(current.ordinary_tokens);
+        let display_avoided_input_tokens = self
+            .prior_epoch_verified_tokens
+            .saturating_add(current.verified_tokens);
         let eligible_intents = self.eligible.len() as u64;
         let avoided_calls = self.verified.len() as u64;
         let terminal_fallbacks = self.fallback_by_intent.len() as u64;
@@ -431,16 +468,16 @@ impl LiveEconomicsLedger {
             && INPUT_TOKEN_ACCOUNTING_EXACT;
         let product_m3_pass = self.completed_windows.len() >= REQUIRED_M3_WINDOWS
             && self.completed_windows.iter().all(|window| window.pass);
-        let snapshot = json!({
+        let mut snapshot = json!({
             "schema": SNAPSHOT_SCHEMA,
-            "source": "rust_streaming_economics_v2",
+            "source": "rust_streaming_economics_v3",
             "generated_at_unix": unix_now(),
             "accounting_epoch_started_at_unix": self.epoch_started_at_unix,
-            "dedupe_eligible_client_intents": eligible_intents,
-            "terminal_client_intents": terminal_intents,
+            "dedupe_eligible_request_events": eligible_intents,
+            "terminal_request_events": terminal_intents,
             "in_flight_local_outcomes": in_flight_local_outcomes,
-            "dedupe_ineligible_client_intents": self.ineligible.len(),
-            "unique_client_intents": eligible_intents,
+            "dedupe_ineligible_request_events": self.ineligible.len(),
+            "unique_request_events": eligible_intents,
             "global_input_tokens": current.ordinary_tokens,
             "input_token_accounting": INPUT_TOKEN_ACCOUNTING_SCHEMA,
             "input_token_accounting_exact": INPUT_TOKEN_ACCOUNTING_EXACT,
@@ -484,8 +521,27 @@ impl LiveEconomicsLedger {
                     vec!["unresolved_or_conflicting_intents".to_owned()]
                 },
             },
-            "boundary": "terminal ordinary deduplicated provider requests; in-flight requests remain outside completed economics windows; exact o200k tokenization of recursively key-sorted JSON request payloads; finalized Rust verifier receipts only; counterfactual provider-billed usage for avoided calls is unavailable and is not claimed",
+            "identity_domain": "request_event.v1",
+            "boundary": "terminal ordinary provider request events; a user turn may contain multiple independently accounted model calls; in-flight requests remain outside completed economics windows; exact o200k tokenization of recursively key-sorted JSON request payloads; finalized Rust verifier receipts only; counterfactual provider-billed usage for avoided calls is unavailable and is not claimed",
         });
+        if let Some(object) = snapshot.as_object_mut() {
+            object.insert(
+                "display_global_input_tokens".to_owned(),
+                json!(display_global_input_tokens),
+            );
+            object.insert(
+                "display_avoided_input_tokens".to_owned(),
+                json!(display_avoided_input_tokens),
+            );
+            object.insert(
+                "display_input_token_accounting_partitioned".to_owned(),
+                json!(true),
+            );
+            object.insert(
+                "display_prior_epoch_schema".to_owned(),
+                json!(&self.prior_epoch_schema),
+            );
+        }
         atomic_json(&self.snapshot_path, &snapshot)
     }
 
@@ -572,6 +628,26 @@ impl LiveEconomicsLedger {
                 && self.dedupe_conflicts == 0,
         }
     }
+}
+
+fn read_prior_epoch_totals(state_dir: &Path) -> (String, u64, u64) {
+    let path = state_dir.join("economics-live-v3.checkpoint");
+    let Some(checkpoint) = fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_cbor::from_slice::<EconomicsCheckpoint>(&bytes).ok())
+        .filter(|checkpoint| checkpoint.schema == "nando.live-economics-checkpoint.v3")
+    else {
+        return (String::new(), 0, 0);
+    };
+    let verified_tokens = checkpoint.verified.values().copied().sum::<u64>();
+    let ordinary_tokens = verified_tokens.saturating_add(
+        checkpoint
+            .fallback_tokens_by_intent
+            .values()
+            .copied()
+            .sum::<u64>(),
+    );
+    (checkpoint.schema, ordinary_tokens, verified_tokens)
 }
 
 fn m3_blockers(
@@ -738,10 +814,92 @@ mod tests {
         )
         .expect("snapshot");
         assert_eq!(snapshot["in_flight_local_outcomes"], 1);
-        assert_eq!(snapshot["terminal_client_intents"], 0);
+        assert_eq!(snapshot["terminal_request_events"], 0);
         assert_eq!(snapshot["global_input_tokens"], 0);
         assert_eq!(snapshot["unresolved_local_outcomes"], 0);
         assert_eq!(snapshot["source_reconciliation"]["complete"], true);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn independent_request_events_do_not_conflict_inside_one_user_turn() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-live-economics-request-events-{}-{}",
+            std::process::id(),
+            unix_now()
+        ));
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open ledger");
+        ledger
+            .observe_request("request-event-a", 1_024, true)
+            .expect("first request");
+        ledger
+            .observe_request("request-event-b", 2_048, true)
+            .expect("second request");
+
+        assert_eq!(ledger.eligible.len(), 2);
+        assert_eq!(ledger.dedupe_conflicts, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn corrected_epoch_keeps_legacy_totals_only_for_dashboard_continuity() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-live-economics-partitioned-display-{}-{}",
+            std::process::id(),
+            unix_now()
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let legacy = EconomicsCheckpoint {
+            schema: "nando.live-economics-checkpoint.v3".to_owned(),
+            prior_epoch_schema: String::new(),
+            prior_epoch_ordinary_tokens: 0,
+            prior_epoch_verified_tokens: 0,
+            epoch_started_at_unix: unix_now(),
+            eligible: BTreeMap::new(),
+            pending_opened_at: BTreeMap::new(),
+            ineligible: BTreeSet::new(),
+            verified: BTreeMap::from([("legacy-local".to_owned(), 100)]),
+            fallback_by_intent: BTreeMap::from([(
+                "legacy-provider".to_owned(),
+                "provider:fallback".to_owned(),
+            )]),
+            fallback_tokens_by_intent: BTreeMap::from([(
+                "legacy-provider".to_owned(),
+                900,
+            )]),
+            fallback_reasons: BTreeMap::new(),
+            completed_windows: Vec::new(),
+            dedupe_conflicts: 0,
+            false_accepts: 0,
+            parity_failures: 0,
+            pipeline_dropped: 0,
+            false_accept_intents: BTreeSet::new(),
+            parity_failure_intents: BTreeSet::new(),
+        };
+        write_atomic_cbor(&root.join("economics-live-v3.checkpoint"), &legacy)
+            .expect("legacy checkpoint");
+
+        let mut ledger = LiveEconomicsLedger::open(&root).expect("open corrected epoch");
+        ledger
+            .observe_request("request-event-v4", 250, true)
+            .expect("request");
+        ledger
+            .observe_verified_accept("request-event-v4", 250)
+            .expect("verified");
+        ledger.persist_snapshot().expect("snapshot");
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("economics-live.json")).expect("read snapshot"),
+        )
+        .expect("snapshot");
+
+        assert_eq!(snapshot["global_input_tokens"], 250);
+        assert_eq!(snapshot["avoided_input_tokens"], 250);
+        assert_eq!(snapshot["display_global_input_tokens"], 1_250);
+        assert_eq!(snapshot["display_avoided_input_tokens"], 350);
+        assert_eq!(
+            snapshot["display_prior_epoch_schema"],
+            "nando.live-economics-checkpoint.v3"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }

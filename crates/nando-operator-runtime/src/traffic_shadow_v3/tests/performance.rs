@@ -2,16 +2,16 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::{env, fs};
 
-use nando_operator_kernel::{sha256_bytes, BindingPredicateV1, RuntimeProjectionV3};
-use serde_json::{json, Value};
+use nando_operator_kernel::{BindingPredicateV1, RuntimeProjectionV3, sha256_bytes};
+use serde_json::{Value, json};
 
 use super::root;
 use crate::mode_to_role_v3::tests::fixtures::{
     artifact, mentioned_string_selector, request_payload,
 };
 use crate::{
-    compile_structural_dispatch_index_v3, execute_traffic_shadow_v3, RuntimeContextBudgetV3,
-    TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowSourceV3,
+    RuntimeContextBudgetV3, TrafficShadowGenerationV3, TrafficShadowInputV3, TrafficShadowSourceV3,
+    compile_structural_dispatch_index_v3, execute_traffic_shadow_v3,
 };
 
 #[global_allocator]
@@ -44,9 +44,11 @@ fn production_allocator_hot_registry_resource_measurement() {
     let unmatched_input = PreparedInput::unmatched();
 
     for _ in 0..128 {
-        assert!(!matched_input
-            .execute(Arc::clone(&generation))
-            .execution_authority());
+        assert!(
+            !matched_input
+                .execute(Arc::clone(&generation))
+                .execution_authority()
+        );
         let receipt = unmatched_input.execute(Arc::clone(&generation));
         assert_ne!(
             receipt.verdict(),

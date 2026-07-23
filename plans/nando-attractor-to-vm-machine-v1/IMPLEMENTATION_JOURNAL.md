@@ -1947,3 +1947,81 @@ new regressions                              0
 copied-production diagnostic RSS           430.5 MiB
 copied-production diagnostic time          10.31 s
 ```
+
+### 2026-07-21: F2R3 sealed effect-law boundary
+
+The rejected F2R2 checksum observation was replaced by a separate shadow-only
+V3 route:
+
+```text
+TeacherTransition
+-> candidate with complete effect delta
+-> immutable capture + sealed parity resolution
+-> private SealedEffectObservationV3
+-> episode + surface + physical-program independence
+-> bounded physical-surface quotient
+-> joint topology/relation canonicalization
+-> one action class or ABSTAIN
+-> restart bundle with mappings and proof roots
+```
+
+The dangerous wait/terminate same-shape merge is closed. Completion state,
+response shape, output status, renderer/status mapping, temporal/cardinality
+contracts, constants, and preserved-frame evidence remain in the invariant.
+Only transport carrier atoms may be projected.
+
+Verification at STOP-F2R3:
+
+```text
+F2R3 focused matrix          24 / 24 PASS
+historical F2R2 matrix       15 / 15 PASS
+semantic baseline            22 PASS / 3 known FAIL
+NANDA local subgates          8 / 8 PASS
+live composite status gate   PASS
+execution_authority          false
+commit / push / deploy       NO / NO / NO
+F3                           NOT STARTED
+```
+
+Canonical receipt:
+
+```text
+plans/effect-law-unification-v1/STOP_F2R3_SEALED_EFFECT_LAW_CANDIDATE.md
+```
+
+### 2026-07-21: F2R4 externally rooted effect-law candidate
+
+F2R4 closed the final F2R3 review findings without starting F3. The trust
+manifest now requires an opaque externally supplied root capability; sealing
+executes the real actor, invokes the independent verifier, and compares the
+teacher claim with a separately committed observed effect state. Physical
+names and selectors remain in `ProtocolFacetV3`, while canonical law identity
+uses canonical nodes, argument ordinals, and bounded alpha-renaming. Restart
+rebinds all proof roots and recomputes episode, surface, and physical-program
+independence.
+
+Verification at STOP-F2R4:
+
+```text
+F2R4 focused matrix          28 / 28 PASS
+historical F2R2 matrix       15 / 15 PASS
+semantic baseline            22 PASS / 3 known FAIL
+cargo check                  PASS
+Clippy excluding 12 known
+  unrelated diagnostics      PASS
+NANDA local subgates          9 / 9 PASS
+Graphify                     23,673 nodes / 53,664 edges
+execution_authority          false
+commit / push / deploy       NO / NO / NO
+F3                           NOT STARTED
+```
+
+The first combined NANDA packets remain VETO evidence; the accepted proof tree
+uses one production owner per local route and treats tests only as evidence.
+The live service was read-only inspected and retained its original PID.
+
+Canonical receipt:
+
+```text
+plans/effect-law-unification-v1/STOP_F2R4_TRUSTED_EFFECT_LAW_CANDIDATE.md
+```
