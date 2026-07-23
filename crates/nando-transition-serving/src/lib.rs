@@ -4,16 +4,19 @@
 //! local response or HTTP 418, which the surrounding Nginx instance maps to
 //! the original upstream request.
 
+mod bridge_health;
 mod capture_transition_binding_archive;
 mod custom_tool_projection;
 mod economics_worker;
 pub mod generation_shadow;
 mod learning_evidence_bridge;
+mod learning_structure_bridge;
 mod live_economics;
 mod miner_worker;
 mod opportunity_bridge;
 mod provider_capture;
 mod request_identity;
+mod request_learning;
 mod runtime_policy;
 pub mod session_backfill;
 mod session_stream;
@@ -77,16 +80,16 @@ use generation_shadow::{
     GenerationShadowConfigV3, GenerationShadowIngressV3, GenerationShadowRuntimeV3,
 };
 use learning_evidence_bridge::LearningEvidenceBridgeRuntimeV1;
+use learning_structure_bridge::LearningStructureBridgeRuntimeV2;
 use miner_worker::{MinerWorkerHandle, spawn_miner_worker};
 use opportunity_bridge::OpportunityBridgeRuntime;
 use provider_capture::{
     ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
 };
 use request_identity::ProviderRequestIdentityV1;
+use request_learning::RequestLearningIndex;
 use runtime_policy::{RuntimePolicyCache, spawn_runtime_policy_watch};
-use session_stream::{
-    RequestLearningIndex, SessionMinerBridge, SessionStreamMetrics, spawn_session_stream,
-};
+use session_stream::{SessionMinerBridge, SessionStreamMetrics, spawn_session_stream};
 use stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
 
 const OBSERVATION_REQUEST_SCHEMA: &str = "nando.transition-observation.v1";
@@ -137,6 +140,10 @@ pub struct ServingConfig {
     pub learning_evidence_bridge_producer_enabled: bool,
     pub learning_evidence_bridge_consumer_enabled: bool,
     pub learning_evidence_bridge_queue_capacity: usize,
+    pub learning_structure_bridge_root_path: PathBuf,
+    pub learning_structure_bridge_producer_enabled: bool,
+    pub learning_structure_bridge_consumer_enabled: bool,
+    pub learning_structure_bridge_poll_ms: u64,
     pub provider_capture_enabled: bool,
     pub provider_capture_store_path: PathBuf,
     pub provider_capture_queue_capacity: usize,
@@ -289,6 +296,21 @@ impl ServingConfig {
             learning_evidence_bridge_queue_capacity: env_usize(
                 "NANDO_LEARNING_EVIDENCE_BRIDGE_QUEUE",
                 32,
+            ),
+            learning_structure_bridge_root_path: env_path_join(
+                "NANDO_LEARNING_STRUCTURE_BRIDGE_ROOT",
+                &state_dir,
+                "learning-structure-bridge-v2",
+            ),
+            learning_structure_bridge_producer_enabled: env_flag(
+                "NANDO_LEARNING_STRUCTURE_BRIDGE_PRODUCER_ENABLED",
+            ),
+            learning_structure_bridge_consumer_enabled: env_flag(
+                "NANDO_LEARNING_STRUCTURE_BRIDGE_CONSUMER_ENABLED",
+            ),
+            learning_structure_bridge_poll_ms: env_u64(
+                "NANDO_LEARNING_STRUCTURE_BRIDGE_POLL_MS",
+                100,
             ),
             provider_capture_enabled: env_flag("NANDO_PROVIDER_CAPTURE_ENABLED"),
             provider_capture_store_path: env_path_join(
@@ -483,6 +505,7 @@ struct AppState {
     provider_capture: Arc<ProviderCaptureRuntimeV3>,
     operator_generation_shadow: Arc<GenerationShadowRuntimeV3>,
     learning_evidence_bridge: LearningEvidenceBridgeRuntimeV1,
+    learning_structure_bridge: LearningStructureBridgeRuntimeV2,
     opportunity_bridge: OpportunityBridgeRuntime,
 }
 
@@ -574,6 +597,9 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     if config.learning_evidence_bridge_producer_enabled && !config.provider_capture_enabled {
         return Err("learning_evidence_bridge_producer_requires_capture".to_owned());
     }
+    if config.learning_structure_bridge_producer_enabled && !config.provider_capture_enabled {
+        return Err("learning_structure_bridge_producer_requires_capture".to_owned());
+    }
     ensure_parent(&config.trace_path)?;
     if config.legacy_json_audit_enabled {
         ensure_parent(&config.event_path)?;
@@ -616,6 +642,12 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         config.learning_evidence_bridge_consumer_enabled,
         config.learning_evidence_bridge_queue_capacity,
     )?;
+    let (learning_structure_bridge, request_learning) = LearningStructureBridgeRuntimeV2::open(
+        config.learning_structure_bridge_root_path.clone(),
+        config.learning_structure_bridge_producer_enabled,
+        config.learning_structure_bridge_consumer_enabled,
+        Duration::from_millis(config.learning_structure_bridge_poll_ms),
+    )?;
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -630,7 +662,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         })),
         session_stream_metrics: Arc::new(SessionStreamMetrics::default()),
         session_miner_bridge: Arc::new(SessionMinerBridge::new()),
-        request_learning: Arc::new(RequestLearningIndex::default()),
+        request_learning,
         runtime_policy,
         live_economics,
         authority_trigger: Arc::new(Mutex::new(None)),
@@ -639,6 +671,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         provider_capture,
         operator_generation_shadow,
         learning_evidence_bridge,
+        learning_structure_bridge,
         opportunity_bridge,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
@@ -652,6 +685,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     let max_body_bytes = state.config.max_body_bytes;
     let app = Router::new()
         .route("/health", get(health))
+        .route("/health/bridge", get(bridge_health))
         .route("/v2/miner/report", get(miner_report))
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
@@ -676,9 +710,13 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .map_err(|error| format!("bind:{}:{error}", state.config.bind))?;
     state.provider_capture.start_after_http_bind();
     state.operator_generation_shadow.start_after_http_bind()?;
+    state
+        .learning_structure_bridge
+        .start_consumer(Arc::clone(&state.request_learning))?;
     state.learning_evidence_bridge.start(
         Arc::clone(&state.operator_generation_shadow),
         Arc::clone(&state.request_learning),
+        state.config.learning_structure_bridge_consumer_enabled,
     )?;
     spawn_miner_warmup(state.clone())?;
     axum::serve(listener, app)
@@ -1132,6 +1170,26 @@ async fn health(State(state): State<AppState>) -> Response {
         );
     }
     json_response(StatusCode::OK, health)
+}
+
+async fn bridge_health(State(state): State<AppState>) -> Response {
+    let snapshot = bridge_health::snapshot(
+        &state.learning_evidence_bridge.status(),
+        &state.opportunity_bridge.status(),
+        &state.operator_generation_shadow.status(),
+        state.learning_structure_bridge.status(),
+        state.request_learning.status(),
+    );
+    json_response(
+        StatusCode::OK,
+        serde_json::to_value(snapshot).unwrap_or_else(|_| {
+            json!({
+                "schema": bridge_health::BRIDGE_HEALTH_SCHEMA_V2,
+                "ok": false,
+                "execution_authority": false,
+            })
+        }),
+    )
 }
 
 async fn miner_report(State(state): State<AppState>) -> Response {
@@ -1961,6 +2019,14 @@ fn submit_operator_generation_shadow(
     structure: LearningRequestStructureV1,
     request_text: &str,
 ) {
+    if state.learning_structure_bridge.producer_enabled()
+        && let Err(error) = state
+            .learning_structure_bridge
+            .submit(capture_receipt.clone(), structure.clone())
+    {
+        state.counters.errors.fetch_add(1, Ordering::Relaxed);
+        eprintln!("nando-learning-structure bridge: {error}");
+    }
     if state.learning_evidence_bridge.producer_enabled() {
         if let Err(error) =
             state
@@ -4839,6 +4905,10 @@ mod tests {
             learning_evidence_bridge_producer_enabled: false,
             learning_evidence_bridge_consumer_enabled: false,
             learning_evidence_bridge_queue_capacity: 8,
+            learning_structure_bridge_root_path: root.join("learning-structure-bridge-v2"),
+            learning_structure_bridge_producer_enabled: false,
+            learning_structure_bridge_consumer_enabled: false,
+            learning_structure_bridge_poll_ms: 100,
             provider_capture_enabled: false,
             provider_capture_store_path: root.join("provider-capture-v3-f8a"),
             provider_capture_queue_capacity: 8,
@@ -4871,6 +4941,13 @@ mod tests {
             8,
         )
         .expect("learning evidence bridge");
+        let (learning_structure_bridge, request_learning) = LearningStructureBridgeRuntimeV2::open(
+            config.learning_structure_bridge_root_path.clone(),
+            false,
+            false,
+            Duration::from_millis(100),
+        )
+        .expect("learning structure bridge");
         let state = AppState {
             config: Arc::new(config),
             cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -4885,7 +4962,7 @@ mod tests {
             })),
             session_stream_metrics: Arc::new(SessionStreamMetrics::default()),
             session_miner_bridge: Arc::new(SessionMinerBridge::new()),
-            request_learning: Arc::new(RequestLearningIndex::default()),
+            request_learning,
             runtime_policy: Arc::new(RuntimePolicyCache::load(
                 root.join("mode.json"),
                 root.join("kill-switch"),
@@ -4898,6 +4975,7 @@ mod tests {
             provider_capture,
             operator_generation_shadow,
             learning_evidence_bridge,
+            learning_structure_bridge,
             opportunity_bridge,
         };
         refresh_response_executor(&state);

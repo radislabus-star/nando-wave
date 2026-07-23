@@ -21,7 +21,7 @@ use nando_operator_proof::independent_verifier_v3::{
 use crate::generation_shadow::{
     GenerationShadowRequestV3, GenerationShadowRuntimeV3, GenerationShadowSubmitVerdictV3,
 };
-use crate::session_stream::RequestLearningIndex;
+use crate::request_learning::RequestLearningIndex;
 
 use super::{LearningEvidenceBridgeInnerV1, LearningEvidenceIngressV1, record_failure};
 
@@ -189,6 +189,7 @@ pub(super) fn start_consumer(
     inner: Arc<LearningEvidenceBridgeInnerV1>,
     generation_shadow: Arc<GenerationShadowRuntimeV3>,
     request_learning: Arc<RequestLearningIndex>,
+    structure_owned_by_v2: bool,
 ) -> Result<(), String> {
     if inner
         .consumer_started
@@ -200,7 +201,15 @@ pub(super) fn start_consumer(
     let listener = bind_private_listener(&inner.socket_path)?;
     thread::Builder::new()
         .name("nando-learning-evidence-consumer".to_owned())
-        .spawn(move || run_consumer(inner, generation_shadow, request_learning, listener))
+        .spawn(move || {
+            run_consumer(
+                inner,
+                generation_shadow,
+                request_learning,
+                structure_owned_by_v2,
+                listener,
+            )
+        })
         .map(|_| ())
         .map_err(|error| format!("learning_evidence_bridge_consumer_spawn:{error}"))
 }
@@ -209,6 +218,7 @@ fn run_consumer(
     inner: Arc<LearningEvidenceBridgeInnerV1>,
     generation_shadow: Arc<GenerationShadowRuntimeV3>,
     request_learning: Arc<RequestLearningIndex>,
+    structure_owned_by_v2: bool,
     listener: UnixListener,
 ) {
     for connection in listener.incoming() {
@@ -225,7 +235,9 @@ fn run_consumer(
         inner.consumer.received.fetch_add(1, Ordering::Relaxed);
         let ack = match read_frame(&mut stream).and_then(|frame| decode_learning_evidence(&frame)) {
             Ok(decoded) => {
-                if let Err(error) = request_learning.observe_structure(&decoded.structure) {
+                if !structure_owned_by_v2
+                    && let Err(error) = request_learning.observe_structure(&decoded.structure)
+                {
                     inner.consumer.invalid.fetch_add(1, Ordering::Relaxed);
                     inner.consumer.censored.fetch_add(1, Ordering::Relaxed);
                     record_failure(&inner.consumer, error);

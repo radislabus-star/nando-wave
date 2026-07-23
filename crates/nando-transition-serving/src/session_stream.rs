@@ -17,10 +17,9 @@ use nando_operator_learning::DeterministicEvidenceLedger;
 use nando_operator_learning::{
     CanonicalEventGraph, CaptureEvidenceReceipt, CaptureRecordCommitment,
     DeterministicEvidenceGraphStore, EvidenceGraphBuilder, EvidenceGraphPolicy,
-    EvidenceIngestOutcome, EvidencePolicyV1, LearningRequestStructureV1,
-    OnlineCollectionObservation, RawEvidenceEnvelope, RuntimeParityCase,
-    SOURCE_NEUTRAL_EXTRACTOR_VERSION, evidence_session_id_sha256, teacher_action_symbol,
-    teacher_program_signature, teacher_program_signature_from_action_atoms,
+    EvidenceIngestOutcome, EvidencePolicyV1, OnlineCollectionObservation, RawEvidenceEnvelope,
+    RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION, evidence_session_id_sha256,
+    teacher_action_symbol, teacher_program_signature, teacher_program_signature_from_action_atoms,
 };
 use nando_operator_proof::verify_response_independently;
 use nando_operator_runtime::ResponseExecutionStatus;
@@ -34,12 +33,16 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::miner_worker::MinerWorkerHandle;
+#[cfg(test)]
+use crate::request_learning::RequestLearningAtoms;
+use crate::request_learning::RequestLearningIndex;
 use crate::stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
+#[cfg(test)]
+use nando_operator_learning::LearningRequestStructureV1;
 
 const MAX_OBSERVATIONS: usize = 32;
 const MAX_TURN_EVIDENCE_EVENTS: usize = 64;
 const MAX_TURN_EVIDENCE_NODES: usize = 8_192;
-const MAX_REQUEST_LEARNING_IDENTITIES: usize = 4_096;
 const SESSION_REBUILD_TAIL_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
 const MAX_PENDING_RUNTIME_PARITY_CASES: usize = 1_024;
@@ -238,113 +241,6 @@ fn submit_miner_input(
         }
         PendingMinerInput::Collection(observation) => worker.submit_collection(observation),
     }
-}
-
-#[derive(Default)]
-struct RequestLearningState {
-    capability_by_session: BTreeMap<String, Vec<u64>>,
-    session_order: VecDeque<String>,
-    structure_by_turn: BTreeMap<String, RequestLearningAtoms>,
-    turn_order: VecDeque<String>,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct RequestLearningAtoms {
-    pub(crate) request_phase_atom_ids: Vec<u64>,
-    pub(crate) capability_atom_ids: Vec<u64>,
-}
-
-#[derive(Default)]
-pub struct RequestLearningIndex {
-    state: Mutex<RequestLearningState>,
-}
-
-impl RequestLearningIndex {
-    pub fn observe_structure(
-        &self,
-        structure: &LearningRequestStructureV1,
-    ) -> Result<(), &'static str> {
-        let session_keys = structure.session_identity_sha256s();
-        let capability_atoms = structure.capability_atom_ids();
-        if session_keys.len() > 4
-            || capability_atoms.len() > 64
-            || session_keys.iter().any(|key| !valid_sha256(key))
-            || !valid_sha256(structure.client_intent_id_sha256())
-            || !strictly_ordered(session_keys)
-            || !strictly_ordered(capability_atoms)
-        {
-            return Err("request_learning_structure_invalid");
-        }
-        let Ok(mut state) = self.state.lock() else {
-            return Err("request_learning_index_lock_poisoned");
-        };
-        if !capability_atoms.is_empty() {
-            for key in session_keys.iter().cloned() {
-                if !state.capability_by_session.contains_key(&key) {
-                    state.session_order.push_back(key.clone());
-                }
-                state
-                    .capability_by_session
-                    .insert(key, capability_atoms.to_vec());
-            }
-        }
-        if structure.provider_bound_turn_identity() {
-            let turn = structure.client_intent_id_sha256().to_owned();
-            if !state.structure_by_turn.contains_key(&turn) {
-                state.turn_order.push_back(turn.clone());
-            }
-            state.structure_by_turn.insert(
-                turn,
-                RequestLearningAtoms {
-                    request_phase_atom_ids: structure.request_phase_atom_ids().to_vec(),
-                    capability_atom_ids: capability_atoms.to_vec(),
-                },
-            );
-        }
-        while state.capability_by_session.len() > MAX_REQUEST_LEARNING_IDENTITIES {
-            let Some(key) = state.session_order.pop_front() else {
-                break;
-            };
-            state.capability_by_session.remove(&key);
-        }
-        while state.structure_by_turn.len() > MAX_REQUEST_LEARNING_IDENTITIES {
-            let Some(key) = state.turn_order.pop_front() else {
-                break;
-            };
-            state.structure_by_turn.remove(&key);
-        }
-        Ok(())
-    }
-
-    pub(crate) fn lookup(
-        &self,
-        session_id_sha256: &str,
-        turn_intent_sha256: &str,
-    ) -> RequestLearningAtoms {
-        let Ok(state) = self.state.lock() else {
-            return RequestLearningAtoms::default();
-        };
-        let mut atoms = state
-            .structure_by_turn
-            .get(turn_intent_sha256)
-            .cloned()
-            .unwrap_or_default();
-        if let Some(capabilities) = state.capability_by_session.get(session_id_sha256) {
-            atoms.capability_atom_ids.clone_from(capabilities);
-        }
-        atoms
-    }
-}
-
-fn strictly_ordered<T: Ord>(values: &[T]) -> bool {
-    values.windows(2).all(|pair| pair[0] < pair[1])
-}
-
-fn valid_sha256(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 #[derive(Default)]

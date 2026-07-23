@@ -121,7 +121,7 @@ impl LearningRequestStructureV1 {
         Ok(())
     }
 
-    fn canonical_bytes(&self) -> Result<Vec<u8>, LearningEvidenceEnvelopeErrorV1> {
+    pub fn canonical_cbor(&self) -> Result<Vec<u8>, LearningEvidenceEnvelopeErrorV1> {
         self.validate()?;
         serde_cbor::to_vec(&LearningRequestStructureWireV1(
             LEARNING_REQUEST_STRUCTURE_SCHEMA_V1.to_owned(),
@@ -137,7 +137,7 @@ impl LearningRequestStructureV1 {
         .map_err(|_| LearningEvidenceEnvelopeErrorV1::Serialization)
     }
 
-    fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, LearningEvidenceEnvelopeErrorV1> {
+    pub fn from_canonical_cbor(bytes: &[u8]) -> Result<Self, LearningEvidenceEnvelopeErrorV1> {
         let wire: LearningRequestStructureWireV1 = serde_cbor::from_slice(bytes)
             .map_err(|_| LearningEvidenceEnvelopeErrorV1::Serialization)?;
         if wire.0 != LEARNING_REQUEST_STRUCTURE_SCHEMA_V1 {
@@ -154,7 +154,7 @@ impl LearningRequestStructureV1 {
             provider_payload_bytes: wire.8,
         };
         structure.validate()?;
-        if structure.canonical_bytes()?.as_slice() != bytes {
+        if structure.canonical_cbor()?.as_slice() != bytes {
             return Err(LearningEvidenceEnvelopeErrorV1::InvalidStructure);
         }
         Ok(structure)
@@ -238,7 +238,7 @@ impl LearningEvidenceEnvelopeV1 {
             .capture_receipt
             .canonical_bytes()
             .map_err(|_| LearningEvidenceEnvelopeErrorV1::InvalidReceipt)?;
-        let structure = self.structure.canonical_bytes()?;
+        let structure = self.structure.canonical_cbor()?;
         let wire = LearningEvidenceEnvelopeWireV1(
             LEARNING_EVIDENCE_ENVELOPE_SCHEMA_V1.to_owned(),
             receipt.into_vec(),
@@ -264,7 +264,7 @@ impl LearningEvidenceEnvelopeV1 {
         }
         let capture_receipt = ProviderRequestCaptureReceiptV3::from_canonical_bytes(&wire.1)
             .map_err(|_| LearningEvidenceEnvelopeErrorV1::InvalidReceipt)?;
-        let structure = LearningRequestStructureV1::from_canonical_bytes(&wire.2)?;
+        let structure = LearningRequestStructureV1::from_canonical_cbor(&wire.2)?;
         let raw_provider_payload = wire.3.map(serde_bytes::ByteBuf::into_vec);
         if let Some(payload) = raw_provider_payload.as_deref() {
             if payload.is_empty() || payload.len() > F6_MAX_RAW_REQUEST_BYTES_V3 {

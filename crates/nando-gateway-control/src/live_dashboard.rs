@@ -8,16 +8,30 @@ pub(crate) struct InitialMetrics {
     pub(crate) cpu_tokens: u64,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
 pub(crate) struct BridgeView {
     pub(crate) hot_available: bool,
     pub(crate) cold_available: bool,
-    pub(crate) hot_accepted: u64,
-    pub(crate) cold_accepted: u64,
+    pub(crate) hot_instance: String,
+    pub(crate) cold_instance: String,
+    pub(crate) structural_epoch_match: bool,
+    pub(crate) structural_produced_sequence: u64,
+    pub(crate) structural_consumed_sequence: u64,
+    pub(crate) structural_pending: u64,
+    pub(crate) structural_sequence_gaps: u64,
+    pub(crate) structures_applied: u64,
+    pub(crate) join_attempts: u64,
+    pub(crate) join_hits: u64,
+    pub(crate) join_misses: u64,
+    pub(crate) opportunity_produced_sequence: u64,
+    pub(crate) opportunity_consumed_sequence: u64,
     pub(crate) request_events: u64,
     pub(crate) request_tokens: u64,
-    pub(crate) loss: u64,
-    pub(crate) queue: u64,
+    pub(crate) opportunity_pending: u64,
+    pub(crate) opportunity_inflight: u64,
+    pub(crate) raw_evaluated: u64,
+    pub(crate) raw_verified: u64,
+    pub(crate) raw_abstains: u64,
     pub(crate) failures: u64,
     pub(crate) false_accepts: u64,
     pub(crate) parity_mismatches: u64,
@@ -28,33 +42,45 @@ pub(crate) struct BridgeView {
 pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
     let hot_available = pointer_bool(hot, "/ok");
     let cold_available = pointer_bool(cold, "/ok");
-    let hot_accepted = pointer_u64(hot, "/learning_evidence_process_bridge/producer/accepted");
-    let cold_accepted = pointer_u64(cold, "/learning_evidence_process_bridge/consumer/accepted");
-    let hot_failures = pointer_u64(hot, "/learning_evidence_process_bridge/producer/failures");
-    let cold_failures = pointer_u64(cold, "/learning_evidence_process_bridge/consumer/failures");
+    let hot_failures = pointer_u64(hot, "/durable_structure/producer/failures");
+    let cold_failures = pointer_u64(cold, "/durable_structure/consumer/failures");
+    let hot_epoch = pointer_string(hot, "/durable_structure/bridge_epoch_sha256");
+    let cold_epoch = pointer_string(cold, "/durable_structure/bridge_epoch_sha256");
     BridgeView {
         hot_available,
         cold_available,
-        hot_accepted,
-        cold_accepted,
-        request_events: pointer_u64(hot, "/opportunity_process_bridge/producer/request_events"),
-        request_tokens: pointer_u64(
-            hot,
-            "/opportunity_process_bridge/producer/request_input_tokens",
+        hot_instance: pointer_string(hot, "/process/instance_id_sha256"),
+        cold_instance: pointer_string(cold, "/process/instance_id_sha256"),
+        structural_epoch_match: !hot_epoch.is_empty() && hot_epoch == cold_epoch,
+        structural_produced_sequence: pointer_u64(hot, "/durable_structure/producer/last_sequence"),
+        structural_consumed_sequence: pointer_u64(
+            cold,
+            "/durable_structure/consumer/last_sequence",
         ),
-        loss: if hot_available && cold_available {
-            hot_accepted.saturating_sub(cold_accepted)
-        } else {
-            0
-        },
-        queue: pointer_u64(hot, "/opportunity_process_bridge/pending_events").saturating_add(
-            pointer_u64(cold, "/opportunity_process_bridge/consumer_inflight_events"),
-        ),
-        failures: hot_failures.saturating_add(cold_failures),
-        false_accepts: pointer_u64(cold, "/operator_generation_shadow/false_accepts"),
-        parity_mismatches: pointer_u64(cold, "/operator_generation_shadow/parity_mismatches"),
+        structural_pending: pointer_u64(hot, "/durable_structure/pending_records")
+            .max(pointer_u64(cold, "/durable_structure/pending_records")),
+        structural_sequence_gaps: pointer_u64(cold, "/durable_structure/sequence_gaps"),
+        structures_applied: pointer_u64(cold, "/request_learning/structures_applied"),
+        join_attempts: pointer_u64(cold, "/request_learning/lookup_attempts"),
+        join_hits: pointer_u64(cold, "/request_learning/lookup_hits"),
+        join_misses: pointer_u64(cold, "/request_learning/lookup_misses"),
+        opportunity_produced_sequence: pointer_u64(hot, "/opportunity/producer_last_sequence"),
+        opportunity_consumed_sequence: pointer_u64(cold, "/opportunity/consumer_last_sequence"),
+        request_events: pointer_u64(hot, "/opportunity/producer_request_events"),
+        request_tokens: pointer_u64(hot, "/opportunity/producer_request_input_tokens"),
+        opportunity_pending: pointer_u64(hot, "/opportunity/pending_events"),
+        opportunity_inflight: pointer_u64(cold, "/opportunity/consumer_inflight_events"),
+        raw_evaluated: pointer_u64(cold, "/raw_replay/evaluated"),
+        raw_verified: pointer_u64(cold, "/raw_replay/verified"),
+        raw_abstains: pointer_u64(cold, "/raw_replay/runtime_abstains"),
+        failures: hot_failures
+            .saturating_add(cold_failures)
+            .saturating_add(pointer_u64(hot, "/opportunity/failures"))
+            .saturating_add(pointer_u64(cold, "/opportunity/failures")),
+        false_accepts: pointer_u64(cold, "/raw_replay/false_accepts"),
+        parity_mismatches: pointer_u64(cold, "/raw_replay/parity_mismatches"),
         execution_authority: cold
-            .pointer("/operator_generation_shadow/execution_authority")
+            .pointer("/raw_replay/execution_authority")
             .and_then(Value::as_bool)
             .unwrap_or(false),
         services_active: u64::from(hot_available)
@@ -87,6 +113,14 @@ fn pointer_bool(value: &Value, pointer: &str) -> bool {
         .pointer(pointer)
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn pointer_string(value: &Value, pointer: &str) -> String {
+    value
+        .pointer(pointer)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
 }
 
 fn format_number(value: u64) -> String {
@@ -199,7 +233,7 @@ const TEMPLATE: &str = r#"
       <article class="token-track track-cpu"><div class="track-label">CPU</div><div class="track-value-row"><output id="cpu-token-count" class="track-value">__CPU__</output><output id="cpu-token-share" class="track-share">__CPU_SHARE__</output></div><div class="track-rail"><div id="cpu-bar" class="track-fill"></div></div><div id="cpu-note" class="track-note watch">НЕ РАСТЁТ: AUTHORITY LOCKED</div></article>
     </div>
   </div></section>
-  <div class="epoch-strip"><span>ПОСЛЕ МОСТА: <b>hot → learner <span id="bridge-pair">— / —</span></b> · токены <span id="bridge-tokens">—</span> · потери <span id="bridge-loss">—</span> · очередь <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">ВИДИМОСТЬ НОВОГО ТРАФИКА —</span></div>
+  <div class="epoch-strip"><span>МОСТ: <b>opportunity seq <span id="bridge-pair">— / —</span></b> · токены <span id="bridge-tokens">—</span> · pending <span id="bridge-queue">—</span></span><span id="epoch-visibility" class="epoch-visibility">STRUCTURE —</span></div>
   <section class="live-band"><div class="live-inner">
     <div class="window-head"><h2 class="band-title">ЖИВЫЕ ОКНА</h2><div id="window-summary" class="window-summary">NANDO — / MIXED — / OUTSIDE — / IDLE —</div></div>
     <div class="window-scroll"><div class="window-table"><div class="window-row header"><span>ОКНО</span><span>СЕССИЯ</span><span>КОНФИГ</span><span>СТАТУС</span><span>КОНЕЧНАЯ ТОЧКА</span></div><div id="window-rows"></div></div></div>
@@ -258,11 +292,11 @@ const TEMPLATE: &str = r#"
     text("total-token-count", number.format(snapshot.total_input_tokens)); text("miner-token-count", number.format(snapshot.miner_input_tokens)); text("cpu-token-count", number.format(snapshot.cpu_input_tokens));
     text("miner-token-share", ratio(snapshot.miner_input_tokens, snapshot.total_input_tokens, 2)); text("cpu-token-share", ratio(snapshot.cpu_input_tokens, snapshot.total_input_tokens, 3));
     width("miner-bar", snapshot.miner_input_tokens, snapshot.total_input_tokens); width("cpu-bar", snapshot.cpu_input_tokens, snapshot.total_input_tokens);
-    const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const visibility = bridgeAvailable && bridge.hot_accepted > 0 ? bridge.cold_accepted * 100 / bridge.hot_accepted : 0;
-    text("miner-epoch", bridgeAvailable ? `НОВЫЙ EPOCH: ${visibility.toFixed(0)}% · ${bridge.cold_accepted}/${bridge.hot_accepted}` : "НОВЫЙ EPOCH: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.hot_accepted : "—"} / ${bridge.cold_available ? bridge.cold_accepted : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-loss", bridgeAvailable ? bridge.loss : "—"); text("bridge-queue", bridge.queue); text("epoch-visibility", bridgeAvailable ? `ВИДИМОСТЬ НОВОГО ТРАФИКА ${visibility.toFixed(0)}%` : "ВИДИМОСТЬ: HEALTH НЕДОСТУПЕН");
+    const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending + bridge.opportunity_inflight; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
+    text("miner-epoch", structureComparable ? `STRUCTURE SEQ ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : bridgeAvailable ? "STRUCTURE: EPOCH НЕ СОВПАДАЕТ" : "STRUCTURE: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
-    text("pipe-bridge", bridgeAvailable ? `${bridge.hot_accepted}/${bridge.cold_accepted} · LOSS ${bridge.loss}` : "HEALTH НЕДОСТУПЕН"); text("pipe-relation", bridgeAvailable && bridge.loss === 0 && bridge.failures === 0 ? "LIVE" : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-controller", `INPUT ${controllerInput} · CRYST ${snapshot.controller_crystallized_candidates}`);
+    text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-controller", `INPUT ${controllerInput} · CRYST ${snapshot.controller_crystallized_candidates}`);
     text("pipe-package", snapshot.response_package_count > 0 ? `PRESENT ${snapshot.response_package_count}` : "MISSING"); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED");
     text("blocker-text", controllerInput === 0 ? `cohort export → controller: ${snapshot.controller_blocker}` : snapshot.response_package_count === 0 ? "controller получил candidates, но Natural OperatorPackage ещё не выпущен" : snapshot.cpu_allowed ? "маршрут до CPU открыт" : "OperatorPackage существует, но authority остаётся закрыта");
     renderActivity(bridge.request_events); lastSuccess = Date.now();
@@ -284,17 +318,32 @@ mod tests {
 
     #[test]
     fn bridge_view_keeps_hot_and_cold_owners_separate() {
-        let hot = json!({"ok":true,"learning_evidence_process_bridge":{"producer":{"accepted":39,"failures":0}},"opportunity_process_bridge":{"pending_events":0,"producer":{"request_events":20,"request_input_tokens":6_876_562}}});
-        let cold = json!({"ok":true,"learning_evidence_process_bridge":{"consumer":{"accepted":39,"failures":0}},"opportunity_process_bridge":{"consumer_inflight_events":0},"operator_generation_shadow":{"execution_authority":false,"false_accepts":0,"parity_mismatches":0}});
+        let hot = json!({"ok":true,"process":{"instance_id_sha256":"hot"},"structural":{"producer_failures":0},"durable_structure":{"bridge_epoch_sha256":"epoch","pending_records":2,"producer":{"last_sequence":45}},"opportunity":{"producer_last_sequence":45,"pending_events":2,"producer_request_events":20,"producer_request_input_tokens":6_876_562,"failures":0}});
+        let cold = json!({"ok":true,"process":{"instance_id_sha256":"cold"},"structural":{"consumer_failures":0},"durable_structure":{"bridge_epoch_sha256":"epoch","pending_records":2,"sequence_gaps":0,"consumer":{"last_sequence":43}},"request_learning":{"structures_applied":43,"lookup_attempts":20,"lookup_hits":17,"lookup_misses":3},"opportunity":{"consumer_last_sequence":44,"consumer_inflight_events":1,"failures":0},"raw_replay":{"evaluated":12,"verified":3,"runtime_abstains":9,"execution_authority":false,"false_accepts":0,"parity_mismatches":0}});
         assert_eq!(
             bridge_view(&hot, &cold),
             BridgeView {
                 hot_available: true,
                 cold_available: true,
-                hot_accepted: 39,
-                cold_accepted: 39,
+                hot_instance: "hot".to_owned(),
+                cold_instance: "cold".to_owned(),
+                structural_epoch_match: true,
+                structural_produced_sequence: 45,
+                structural_consumed_sequence: 43,
+                structural_pending: 2,
+                structures_applied: 43,
+                join_attempts: 20,
+                join_hits: 17,
+                join_misses: 3,
+                opportunity_produced_sequence: 45,
+                opportunity_consumed_sequence: 44,
                 request_events: 20,
                 request_tokens: 6_876_562,
+                opportunity_pending: 2,
+                opportunity_inflight: 1,
+                raw_evaluated: 12,
+                raw_verified: 3,
+                raw_abstains: 9,
                 services_active: 3,
                 ..BridgeView::default()
             }
@@ -302,13 +351,14 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_health_does_not_report_bridge_loss() {
-        let hot =
-            json!({"ok":true,"learning_evidence_process_bridge":{"producer":{"accepted":39}}});
+    fn unavailable_health_does_not_invent_cross_epoch_loss() {
+        let hot = json!({"ok":true,"durable_structure":{"producer":{"last_sequence":39}}});
         let view = bridge_view(&hot, &Value::Null);
         assert!(view.hot_available);
         assert!(!view.cold_available);
-        assert_eq!(view.loss, 0);
+        assert_eq!(view.structural_produced_sequence, 39);
+        assert_eq!(view.structural_consumed_sequence, 0);
+        assert!(!view.structural_epoch_match);
     }
 
     #[test]

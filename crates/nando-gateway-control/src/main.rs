@@ -26,8 +26,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LIVE_MINER_REPORT_URL: &str = "http://127.0.0.1:18789/v2/miner/report";
-const HOT_SERVING_HEALTH_URL: &str = "http://127.0.0.1:18789/health";
-const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health";
+const HOT_SERVING_HEALTH_URL: &str = "http://127.0.0.1:18789/health/bridge";
+const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health/bridge";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
