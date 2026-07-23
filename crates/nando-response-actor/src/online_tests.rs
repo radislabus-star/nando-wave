@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
-    AtomSource, AtomValueType, RELATION_FRAME_SCHEMA, RelationAtom, ResponseValueSelector,
+    AtomSource, AtomValueType, CaptureEvidenceReceipt, CaptureRecordCommitment,
+    CaptureTransitionBinding, RELATION_FRAME_SCHEMA, RelationAtom, ResponseValueSelector,
     SOURCE_NEUTRAL_EXTRACTOR_VERSION,
 };
 
@@ -153,6 +154,71 @@ fn write_stdin_parity_case(index: usize, prefix: &str) -> crate::RuntimeParityCa
         })
         .to_string(),
     }
+}
+
+fn bind_parity_to_capture(
+    parity: &mut crate::RuntimeParityCase,
+    capture_frame_id_sha256: &str,
+    sequence: u64,
+) {
+    let record = CaptureRecordCommitment {
+        sequence,
+        record_sha256: format!("{:064x}", sequence + 100_000),
+    };
+    let mut receipt = CaptureEvidenceReceipt::new(vec![record]).expect("capture receipt");
+    let binding = CaptureTransitionBinding::new(sequence, capture_frame_id_sha256, &receipt)
+        .expect("binding");
+    receipt.bind_transition(binding).expect("bind transition");
+    parity.evidence_ref_sha256 = capture_frame_id_sha256.to_owned();
+    parity.capture_receipt = Some(receipt);
+}
+
+#[test]
+fn duplicate_frame_upgrades_only_durable_capture_provenance() {
+    let mut miner = OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("miner");
+    let completed = frame(777, "write_stdin", true);
+    let capture_frame_id_sha256 = completed.frame_id_sha256.clone();
+    let mut unbound =
+        crate::teacher_transition_from_completed(&completed, None).expect("unbound transition");
+    unbound.runtime_parity_case =
+        Some(write_stdin_parity_case(777, "Script running with cell ID "));
+    miner
+        .observe_teacher_transition(unbound.clone())
+        .expect("general frame");
+    assert_eq!(miner.report().live_scalar_shadow.support_rows, 1);
+
+    let mut bound = unbound;
+    bind_parity_to_capture(
+        bound.runtime_parity_case.as_mut().expect("parity"),
+        &capture_frame_id_sha256,
+        777,
+    );
+    let receipt = bound
+        .runtime_parity_case
+        .as_ref()
+        .and_then(|parity| parity.capture_receipt.as_ref())
+        .expect("bound receipt");
+    let binding = receipt.transition_binding.as_ref().expect("bound binding");
+    receipt.validate().expect("valid receipt");
+    bound
+        .verify_capture_frame_id(&binding.frame_id_sha256)
+        .expect("transition bound to capture frame");
+    miner
+        .observe_teacher_transition(bound)
+        .expect("bound duplicate");
+
+    let report = miner.report();
+    assert_eq!(report.rows_seen, 1, "{report:#?}");
+    assert_eq!(report.live_scalar_shadow.support_rows, 1, "{report:#?}");
+    assert_eq!(report.live_scalar_shadow.duplicate_rows, 1, "{report:#?}");
+    assert_eq!(
+        report
+            .live_scalar_shadow
+            .blockers
+            .get("capture_lineage_evidence_empty:support=1:future=0"),
+        Some(&1),
+        "{report:#?}"
+    );
 }
 
 #[test]

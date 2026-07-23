@@ -1194,3 +1194,22 @@ Reconstructing an old turn can help diagnostics, but it cannot create support,
 future, or a new frame binding. The bounded loss of one partial turn is
 preferable to rebinding an immutable frame or presenting restart replay as
 independent transfer evidence.
+
+## 26. Monotonic Capture Enrichment
+
+The low-latency bridge and durable session observer can see the same semantic
+frame at different proof strengths:
+
+```text
+fast semantic row without binding
+-> same frame and parity payload from capture owner
+-> attach verified binding
+-> keep one learning row
+```
+
+This is permitted only as monotonic provenance enrichment. It cannot replace
+the action, request, provider payload, expected response, or applicability
+scope. Adaptive identification consumes the original capture-owned transition;
+the general miner separately consumes its canonical reconstruction. On a
+representation-version change, the adaptive generation starts fresh while
+already admitted packages remain immutable.

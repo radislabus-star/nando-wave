@@ -70,6 +70,59 @@ impl LiveScalarShadowState {
         }
     }
 
+    /// Accepts only a monotonic provenance upgrade for a frame already owned
+    /// by the general miner. Learning semantics and physical action stay fixed.
+    pub(crate) fn observe_capture_bound_duplicate(&mut self, transition: &TeacherTransition) {
+        if !capture_lineage_is_reconstructible(transition) {
+            return;
+        }
+        let sample = match extract_live_scalar_circuit_sample(transition) {
+            Ok(sample) => sample,
+            Err(blocker) => {
+                *self.blockers.entry(blocker).or_default() += 1;
+                return;
+            }
+        };
+        let law_key = commitment_hex(&sample.law_sha256);
+        let existing = self.laws.get_mut(&law_key).and_then(|law| {
+            law.support
+                .iter_mut()
+                .chain(&mut law.future)
+                .find(|row| row.before.frame_id_sha256 == transition.before.frame_id_sha256)
+        });
+        let Some(existing) = existing else {
+            self.observe(transition);
+            return;
+        };
+
+        self.observations = self.observations.saturating_add(1);
+        self.executable = self.executable.saturating_add(1);
+        self.duplicate_rows = self.duplicate_rows.saturating_add(1);
+        if capture_lineage_is_reconstructible(existing) {
+            return;
+        }
+        let Some(incoming) = transition.runtime_parity_case.as_ref() else {
+            return;
+        };
+        match existing.runtime_parity_case.as_mut() {
+            Some(current)
+                if current.request_text == incoming.request_text
+                    && current.provider_payload == incoming.provider_payload
+                    && current.expected_response == incoming.expected_response =>
+            {
+                current.evidence_ref_sha256 = incoming.evidence_ref_sha256.clone();
+                current.capture_receipt = incoming.capture_receipt.clone();
+            }
+            None => existing.runtime_parity_case = Some(incoming.clone()),
+            Some(_) => {
+                *self
+                    .blockers
+                    .entry(LiveScalarShadowBlocker::CaptureProvenanceConflict)
+                    .or_default() += 1;
+            }
+        }
+    }
+
     /// Rebuilds bounded support after a strategy upgrade without reclassifying
     /// historical receipts as post-freeze future evidence.
     pub(crate) fn observe_historical_support(&mut self, transition: &TeacherTransition) {

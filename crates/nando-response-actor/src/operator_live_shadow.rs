@@ -146,6 +146,7 @@ pub enum LiveScalarShadowBlocker {
     SupportFutureSessionOverlap,
     FutureCapacityReached,
     HistoricalSupportCapacityReached,
+    CaptureProvenanceConflict,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

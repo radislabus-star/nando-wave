@@ -50,7 +50,7 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // live events.
 // Historical rows remain support-only; frozen future is never reconstructed.
 const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 97;
-const LIVE_SCALAR_GENERATION_VERSION: u8 = 3;
+const LIVE_SCALAR_GENERATION_VERSION: u8 = 4;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -796,6 +796,7 @@ impl OnlineResponseMiner {
         &mut self,
         transition: crate::TeacherTransition,
     ) -> Result<(), String> {
+        let capture_owned_transition = transition.clone();
         let mut frame = transition.as_training_relation_frame();
         let economics = transition.economics;
         let runtime_parity_case = transition.runtime_parity_case;
@@ -805,11 +806,13 @@ impl OnlineResponseMiner {
             .map_err(|error| format!("online_teacher_transition:{error:?}"))?;
         transition.runtime_parity_case = runtime_parity_case;
         if self.frame_disposition(&frame)? == FrameDisposition::Duplicate {
+            self.live_scalar_shadow
+                .observe_capture_bound_duplicate(&capture_owned_transition);
             self.self_training_v2
                 .observe_runtime_parity_case(&transition);
             return Ok(());
         }
-        self.live_scalar_shadow.observe(&transition);
+        self.live_scalar_shadow.observe(&capture_owned_transition);
         self.process_frame(frame, true, Some(transition), true)
     }
 

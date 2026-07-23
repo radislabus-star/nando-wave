@@ -1122,6 +1122,15 @@ the capture writer. This may sacrifice one partial turn of learning after a
 restart, but it preserves immutable frame ownership and prevents historical
 rows from masquerading as fresh transfer evidence.
 
+The fast learning bridge may observe a transition before the capture owner has
+synced its frame binding. A later byte-equivalent transition may therefore
+strengthen `unbound -> verified bound`, but it is not a second learning row.
+Only the original capture-owned transition enters adaptive proof state; the
+reconstructed canonical row belongs to the general miner. Request, provider
+payload, expected response, action, or frame disagreement is a hard conflict,
+not provenance enrichment. A representation change rotates the adaptive
+generation instead of mixing rows owned by the two routes.
+
 This ownership is structural, not conventional:
 
 ```text
