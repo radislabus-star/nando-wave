@@ -1,6 +1,8 @@
 use serde::Serialize;
 use serde_json::Value;
 
+const DASHBOARD_BUILD: &str = "2026.07.23-b004";
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
     pub(crate) total_tokens: u64,
@@ -111,6 +113,7 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
 
 pub(crate) fn render(initial: InitialMetrics) -> String {
     TEMPLATE
+        .replace("__DASHBOARD_BUILD__", DASHBOARD_BUILD)
         .replace("__TOTAL__", &format_number(initial.total_tokens))
         .replace("__MINER__", &format_number(initial.miner_tokens))
         .replace("__CPU__", &format_number(initial.cpu_tokens))
@@ -240,7 +243,7 @@ const TEMPLATE: &str = r#"
   .activity { grid-template-columns:1fr; gap:6px; }
 }
 </style>
-<main class="nando-live" aria-label="Nando live traffic control">
+<main class="nando-live" data-dashboard-build="__DASHBOARD_BUILD__" aria-label="Nando live traffic control">
   <header class="live-head"><div class="live-inner">
     <h1 class="live-title">NANDO / LIVE TRAFFIC CONTROL</h1>
     <div class="live-clock"><b>LIVE</b> · обновлено <span id="live-age">0</span> с назад · SERVICES <span id="services-count">—/3</span></div>
@@ -273,13 +276,14 @@ const TEMPLATE: &str = r#"
       <div class="break-line"></div><div class="break-label">ТЕКУЩИЙ РАЗРЫВ</div>
     </div></div>
     <div id="blocker-text" class="blocker">нет доказанного ACTIVE OperatorPackage</div>
-    <div class="activity"><span class="activity-label">ЗАПРОСЫ / 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
+    <div class="activity"><span class="activity-label">ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С</span><div id="activity-bars" class="activity-bars"></div></div>
   </div></section>
   <footer class="live-foot"><div class="live-inner"><span>СЛЕДУЮЩИЙ РУБЕЖ: <span class="next-route">relation evidence → circuit → future proof → admission</span></span><span>false accepts <b id="false-accepts">0</b> · parity <b id="parity-mismatches">0</b> · bridge failures <b id="bridge-failures">0</b></span></div></footer>
 </main>
 <script>
 (() => {
   const base = window.location.pathname.replace(/\/$/, "");
+  const dashboardBuild = document.querySelector(".nando-live")?.dataset.dashboardBuild || "";
   const number = new Intl.NumberFormat("ru-RU");
   const samples = [];
   let previousRequests = null;
@@ -325,8 +329,17 @@ const TEMPLATE: &str = r#"
   const refresh = async () => {
     try { const [tokensResponse, connectionsResponse] = await Promise.all([fetch(`${base}/tokens`, {cache:"no-store"}), fetch(`${base}/connections`, {cache:"no-store"})]); if (!tokensResponse.ok || !connectionsResponse.ok) return; renderTokens(await tokensResponse.json()); renderWindows(await connectionsResponse.json()); } catch (_) {}
   };
+  const refreshDocumentVersion = async () => {
+    try {
+      const response = await fetch(`${base}?dashboard-build=${encodeURIComponent(dashboardBuild)}`, {cache:"no-store"});
+      if (!response.ok) return;
+      const html = await response.text();
+      const current = html.match(/data-dashboard-build="([^"]+)"/)?.[1];
+      if (current && current !== dashboardBuild) window.location.reload();
+    } catch (_) {}
+  };
   window.setInterval(() => text("live-age", Math.floor((Date.now() - lastSuccess) / 1000)), 1000);
-  refresh(); window.setInterval(refresh, 2000);
+  refresh(); window.setInterval(refresh, 2000); window.setInterval(refreshDocumentVersion, 15000);
 })();
 </script>
 "#;
@@ -398,6 +411,8 @@ mod tests {
         assert!(html.contains("CANDIDATE INPUT"));
         assert!(html.contains("CRYSTALLIZER OUTPUT"));
         assert!(html.contains("NEW 0 · OLD 0"));
+        assert!(html.contains("data-dashboard-build=\"2026.07.23-b004\""));
+        assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("9,22%"));
     }
