@@ -1,3 +1,4 @@
+mod client_connections;
 mod f5_runtime_status;
 mod signal_map;
 
@@ -57,6 +58,7 @@ async fn main() {
         .route("/health", get(health))
         .route("/control/:key", get(control_page))
         .route("/control/:key/tokens", get(control_token_stats))
+        .route("/control/:key/connections", get(control_client_connections))
         .route("/control/:key/state", get(control_state))
         .route("/control/:key/mode", post(change_mode))
         .fallback(not_found)
@@ -877,6 +879,58 @@ td:last-child {{ text-align:right; font-weight:700; }}
   window.setInterval(refresh, 2000);
 }})();
 </script>
+<script>
+(() => {{
+  const dashboard = document.querySelector(".token-dashboard");
+  if (!dashboard) return;
+  const style = document.createElement("style");
+  style.textContent = `
+    .connection-line {{ white-space:normal; }}
+    .connection-summary {{ color:#f0f3f5; }}
+    .connection-detail {{ margin-top:7px; color:#aeb7bd; font-size:14px; font-weight:600; line-height:1.45; overflow-wrap:anywhere; }}
+    .connection-detail.nando {{ color:#66d98b; }}
+    .connection-detail.outside_nando {{ color:#ff756d; }}
+    .connection-detail.mixed {{ color:#f2c66d; }}
+    @media (max-width:680px) {{ .connection-detail {{ font-size:10px; }} }}
+  `;
+  document.head.appendChild(style);
+  const line = document.createElement("div");
+  line.className = "token-line connection-line";
+  const summary = document.createElement("div");
+  summary.className = "connection-summary";
+  summary.textContent = "- Окна Codex: проверка...";
+  const details = document.createElement("div");
+  line.append(summary, details);
+  dashboard.appendChild(line);
+  const endpoint = `${{window.location.pathname.replace(/\/$/, "")}}/connections`;
+  const routeLabel = (window) => {{
+    if (window.route === "nando") return "NANDO";
+    if (window.route === "mixed") return "СМЕШАННО";
+    if (window.route === "outside_nando" && window.configured_for_nando) return "ОБХОД NANDO";
+    if (window.route === "outside_nando") return "НАПРЯМУЮ";
+    return "ОЖИДАНИЕ";
+  }};
+  const refresh = async () => {{
+    try {{
+      const response = await fetch(endpoint, {{ cache: "no-store" }});
+      if (!response.ok) return;
+      const snapshot = await response.json();
+      summary.textContent = `- Окна Codex: Nando ${{snapshot.active_nando}} / смешанно ${{snapshot.active_mixed}} / вне Nando ${{snapshot.active_outside_nando}} / ожидание ${{snapshot.idle}}`;
+      details.replaceChildren();
+      for (const window of snapshot.windows.filter((item) => item.route !== "idle")) {{
+        const row = document.createElement("div");
+        row.className = `connection-detail ${{window.route}}`;
+        const session = window.session.startsWith("pid-") ? window.session : window.session.slice(0, 8);
+        const endpoints = window.remote_endpoints.length ? window.remote_endpoints.join(", ") : "нет сокета";
+        row.textContent = `${{window.project.toUpperCase()}} · ${{session}} · ${{routeLabel(window)}} · ${{endpoints}}`;
+        details.appendChild(row);
+      }}
+    }} catch (_) {{}}
+  }};
+  refresh();
+  window.setInterval(refresh, 2000);
+}})();
+</script>
 </body>
 </html>"#,
         mode = current.mode,
@@ -1014,6 +1068,20 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "miner_input_tokens": miner_input_tokens,
             "cpu_input_tokens": cpu_input_tokens,
         })),
+    )
+        .into_response()
+}
+
+async fn control_client_connections(
+    Path(key): Path<String>,
+    State(state): State<AppState>,
+) -> Response {
+    if !authorized(&state, &key) {
+        return not_found().await;
+    }
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(client_connections::snapshot()),
     )
         .into_response()
 }
