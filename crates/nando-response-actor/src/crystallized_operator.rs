@@ -562,6 +562,15 @@ impl VerifiedCrystallizedOperator {
     }
 
     #[must_use]
+    pub fn execution_equivalent(&self, other: &Self) -> bool {
+        self.operator
+            .runtime_artifact
+            .execution_equivalent(&other.operator.runtime_artifact)
+            && self.operator.actor_sha256 == other.operator.actor_sha256
+            && self.operator.verifier_sha256 == other.operator.verifier_sha256
+    }
+
+    #[must_use]
     pub fn verified_future_lineages(&self) -> &[Commitment256] {
         self.operator.verified_future_lineages()
     }

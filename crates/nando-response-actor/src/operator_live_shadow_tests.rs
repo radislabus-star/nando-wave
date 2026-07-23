@@ -539,6 +539,82 @@ fn simple_law_reaches_admission_with_one_support_and_one_future() {
 }
 
 #[test]
+fn additive_merge_keeps_active_crystallized_generation_when_only_evidence_grows() {
+    let mut state = LiveScalarShadowState::default();
+    let mut support = transition("total", true);
+    support.before.frame_id_sha256 = format!("{:064x}", 1);
+    support.before.session_id_sha256 = format!("{:064x}", 101);
+    support.before.observed_at_unix_nanos = 1;
+    state.observe(&support);
+
+    let mut future = transition("renamed_total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 2);
+    future.before.session_id_sha256 = format!("{:064x}", 102);
+    future.before.observed_at_unix_nanos = 2;
+    state.observe(&future);
+    let active = crate::build_crystallized_admission_snapshot(
+        &state.admission_candidates(),
+        "test-project",
+        1,
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("active admission")
+    .expect("active candidate");
+
+    for index in 3_u64..=8 {
+        let mut row = transition(&format!("surface_{index}"), true);
+        row.before.frame_id_sha256 = format!("{index:064x}");
+        row.before.event_id_sha256 = format!("{:064x}", index + 100);
+        row.before.client_intent_id_sha256 = format!("{:064x}", index + 200);
+        row.before.session_id_sha256 = format!("{:064x}", index + 300);
+        row.before.evidence_ref_sha256 = format!("{:064x}", index + 400);
+        row.before.observed_at_unix_nanos = index;
+        row.outcome.verifier.evidence_ref_sha256 = format!("{:064x}", index + 500);
+        row.runtime_parity_case
+            .as_mut()
+            .expect("parity")
+            .evidence_ref_sha256 = format!("{:064x}", index + 600);
+        state.observe(&row);
+    }
+    let candidate = crate::build_crystallized_admission_snapshot(
+        &state.admission_candidates(),
+        "test-project",
+        2,
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("updated admission")
+    .expect("updated candidate");
+    let active_package = active.registry.packages[0].clone();
+    let candidate_package = &candidate.registry.packages[0];
+    assert_eq!(active_package.package_id, candidate_package.package_id);
+    assert_ne!(active_package, *candidate_package);
+    assert!(
+        active_package
+            .execution_identity_matches(candidate_package)
+            .expect("runtime identity")
+    );
+
+    let merged = crate::merge_with_active_online_admission(
+        candidate,
+        active.registry,
+        active.admission,
+        "test-project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        30,
+    )
+    .expect("additive merge");
+    assert_eq!(merged.registry.packages, [active_package]);
+}
+
+#[test]
 fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary() {
     let mut state = LiveScalarShadowState::default();
     for index in 1_u64..=8 {

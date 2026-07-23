@@ -379,7 +379,7 @@ pub fn merge_online_admission_snapshots(
 
 #[allow(clippy::too_many_arguments)]
 pub fn merge_with_active_online_admission(
-    candidate: OnlineAdmissionSnapshot,
+    mut candidate: OnlineAdmissionSnapshot,
     existing_registry: ResponseRegistry,
     existing_admission: CompositeResponseAdmissionV2,
     project_id: &str,
@@ -407,27 +407,40 @@ pub fn merge_with_active_online_admission(
         max_age_seconds,
     )?;
 
-    let candidate_packages = candidate
-        .registry
+    let existing_packages = existing_registry
         .packages
         .iter()
         .map(|package| (package.package_id.as_str(), package))
         .collect::<BTreeMap<_, _>>();
-    let mut retained_packages = Vec::new();
-    for package in existing_registry.packages {
-        let Some(replacement) = candidate_packages.get(package.package_id.as_str()) else {
-            retained_packages.push(package);
-            continue;
-        };
-        if canonical_json_sha256(&package)? != canonical_json_sha256(*replacement)? {
-            return Err("active_generation_package_id_conflict");
+    let mut duplicate_ids = BTreeSet::new();
+    for package in &candidate.registry.packages {
+        if let Some(existing) = existing_packages.get(package.package_id.as_str()) {
+            if !existing.execution_identity_matches(package)? {
+                return Err("active_generation_package_id_conflict");
+            }
+            duplicate_ids.insert(package.package_id.clone());
         }
     }
-    if retained_packages.is_empty() {
-        return Ok(candidate);
+    if !duplicate_ids.is_empty() {
+        candidate
+            .registry
+            .packages
+            .retain(|package| !duplicate_ids.contains(&package.package_id));
+        candidate
+            .admission
+            .response_authority
+            .packages
+            .retain(|binding| !duplicate_ids.contains(&binding.package_id));
+    }
+    if candidate.registry.packages.is_empty() {
+        return Ok(OnlineAdmissionSnapshot {
+            registry: existing_registry,
+            admission: existing_admission,
+        });
     }
 
-    let retained_ids = retained_packages
+    let retained_ids = existing_registry
+        .packages
         .iter()
         .map(|package| package.package_id.as_str())
         .collect::<BTreeSet<_>>();
@@ -438,14 +451,14 @@ pub fn merge_with_active_online_admission(
         .filter(|binding| retained_ids.contains(binding.package_id.as_str()))
         .cloned()
         .collect::<Vec<_>>();
-    if retained_bindings.len() != retained_packages.len() {
+    if retained_bindings.len() != retained_ids.len() {
         return Err("active_generation_binding_count_mismatch");
     }
 
     // Only a fully revalidated active generation reaches this point. The merge
     // reissues one revision, so no previous authority lease is copied verbatim.
     let mut retained_registry = candidate.registry.clone();
-    retained_registry.packages = retained_packages;
+    retained_registry.packages = existing_registry.packages;
     let mut retained_admission = candidate.admission.clone();
     retained_admission.response_authority.packages = retained_bindings;
     merge_online_admission_snapshots(vec![

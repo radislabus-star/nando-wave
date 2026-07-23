@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use nando_core::wave::{
-    Commitment256, OPERATOR_PAGE32_BYTES, OperatorCircuit, OperatorCircuitRelation, OperatorPage32,
-    OperatorPage32Error, OperatorRelationCell, PhaseCenterCell, RoleGraph, StructuralRoleSignature,
-    TernaryRelationState, TransformOp8,
+    Commitment256, OPERATOR_PAGE32_BYTES, OPERATOR_PAGE32_HEADER_BYTES, OperatorCircuit,
+    OperatorCircuitRelation, OperatorPage32, OperatorPage32Error, OperatorRelationCell,
+    PhaseCenterCell, RoleGraph, StructuralRoleSignature, TernaryRelationState, TransformOp8,
 };
 use nando_operator_kernel::{CollectionOutputRenderer, ResponseProgram};
 use serde::{Deserialize, Serialize};
@@ -94,6 +94,34 @@ impl RuntimeOperatorArtifact {
             &self.actor_template,
             None,
         )
+    }
+
+    #[must_use]
+    pub fn execution_equivalent(&self, other: &Self) -> bool {
+        let (Ok(left_header), Ok(right_header)) = (self.page.header(), other.page.header()) else {
+            return false;
+        };
+        let stable_header_matches = left_header.schema_version == right_header.schema_version
+            && left_header.role_count == right_header.role_count
+            && left_header.relation_plane_count == right_header.relation_plane_count
+            && left_header.transform_count == right_header.transform_count
+            && left_header.composition_node_count == right_header.composition_node_count
+            && left_header.renderer_instruction_count == right_header.renderer_instruction_count
+            && left_header.flags == right_header.flags
+            && left_header.circuit_fingerprint64 == right_header.circuit_fingerprint64
+            && left_header.verifier_binding_fingerprint64
+                == right_header.verifier_binding_fingerprint64
+            && left_header.role_signature_fingerprint64
+                == right_header.role_signature_fingerprint64
+            && left_header.payload_fingerprint64 == right_header.payload_fingerprint64;
+        stable_header_matches
+            && self.page.as_bytes()[OPERATOR_PAGE32_HEADER_BYTES..]
+                == other.page.as_bytes()[OPERATOR_PAGE32_HEADER_BYTES..]
+            && self.relation_program == other.relation_program
+            && self.role_graph == other.role_graph
+            && self.transform_program == other.transform_program
+            && self.renderer == other.renderer
+            && self.actor_template == other.actor_template
     }
 }
 

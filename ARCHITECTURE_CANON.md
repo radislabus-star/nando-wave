@@ -918,11 +918,13 @@ oscillation, and gives every behavioral change a new evidence lineage.
 
 Registry generations are additive across unrelated operators. A newly admitted
 package creates a new registry generation from the fresh candidate plus only
-the byte-identical, unexpired packages revalidated against the current external
-admission receipt. Duplicate package IDs with different content fail closed.
-The merge reissues one content-derived registry revision and every authority
-binding; it never copies an old lease verbatim. Expired, revoked, invalid, or
-conflicting packages are not retained.
+the unexpired packages revalidated against the current external admission
+receipt. A repeated package ID with the same runtime identity preserves the
+byte-identical ACTIVE package even when later proof evidence has grown; a
+different actor, verifier, role graph, phase payload, or applicability contract
+under that ID fails closed. The merge reissues one content-derived registry
+revision and every authority binding; it never copies an old lease verbatim.
+Expired, revoked, invalid, or conflicting packages are not retained.
 
 ### Canonical matched-capacity experiment
 
