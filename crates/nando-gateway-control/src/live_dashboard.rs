@@ -12,6 +12,11 @@ pub(crate) struct InitialMetrics {
 pub(crate) struct BridgeView {
     pub(crate) hot_available: bool,
     pub(crate) cold_available: bool,
+    // Compatibility aliases for dashboard pages opened before bridge-health V2.
+    pub(crate) hot_accepted: u64,
+    pub(crate) cold_accepted: u64,
+    pub(crate) loss: u64,
+    pub(crate) queue: u64,
     pub(crate) hot_instance: String,
     pub(crate) cold_instance: String,
     pub(crate) structural_epoch_match: bool,
@@ -46,19 +51,34 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
     let cold_failures = pointer_u64(cold, "/durable_structure/consumer/failures");
     let hot_epoch = pointer_string(hot, "/durable_structure/bridge_epoch_sha256");
     let cold_epoch = pointer_string(cold, "/durable_structure/bridge_epoch_sha256");
+    let structural_epoch_match = !hot_epoch.is_empty() && hot_epoch == cold_epoch;
+    let structural_produced_sequence =
+        pointer_u64(hot, "/durable_structure/producer/last_sequence");
+    let structural_consumed_sequence =
+        pointer_u64(cold, "/durable_structure/consumer/last_sequence");
+    let structural_pending = pointer_u64(hot, "/durable_structure/pending_records")
+        .max(pointer_u64(cold, "/durable_structure/pending_records"));
+    let opportunity_pending = pointer_u64(hot, "/opportunity/pending_events");
+    let opportunity_inflight = pointer_u64(cold, "/opportunity/consumer_inflight_events");
     BridgeView {
         hot_available,
         cold_available,
+        hot_accepted: structural_produced_sequence,
+        cold_accepted: structural_consumed_sequence,
+        loss: if structural_epoch_match {
+            structural_pending
+        } else {
+            0
+        },
+        queue: structural_pending
+            .saturating_add(opportunity_pending)
+            .saturating_add(opportunity_inflight),
         hot_instance: pointer_string(hot, "/process/instance_id_sha256"),
         cold_instance: pointer_string(cold, "/process/instance_id_sha256"),
-        structural_epoch_match: !hot_epoch.is_empty() && hot_epoch == cold_epoch,
-        structural_produced_sequence: pointer_u64(hot, "/durable_structure/producer/last_sequence"),
-        structural_consumed_sequence: pointer_u64(
-            cold,
-            "/durable_structure/consumer/last_sequence",
-        ),
-        structural_pending: pointer_u64(hot, "/durable_structure/pending_records")
-            .max(pointer_u64(cold, "/durable_structure/pending_records")),
+        structural_epoch_match,
+        structural_produced_sequence,
+        structural_consumed_sequence,
+        structural_pending,
         structural_sequence_gaps: pointer_u64(cold, "/durable_structure/sequence_gaps"),
         structures_applied: pointer_u64(cold, "/request_learning/structures_applied"),
         join_attempts: pointer_u64(cold, "/request_learning/lookup_attempts"),
@@ -68,8 +88,8 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         opportunity_consumed_sequence: pointer_u64(cold, "/opportunity/consumer_last_sequence"),
         request_events: pointer_u64(hot, "/opportunity/producer_request_events"),
         request_tokens: pointer_u64(hot, "/opportunity/producer_request_input_tokens"),
-        opportunity_pending: pointer_u64(hot, "/opportunity/pending_events"),
-        opportunity_inflight: pointer_u64(cold, "/opportunity/consumer_inflight_events"),
+        opportunity_pending,
+        opportunity_inflight,
         raw_evaluated: pointer_u64(cold, "/raw_replay/evaluated"),
         raw_verified: pointer_u64(cold, "/raw_replay/verified"),
         raw_abstains: pointer_u64(cold, "/raw_replay/runtime_abstains"),
@@ -325,6 +345,10 @@ mod tests {
             BridgeView {
                 hot_available: true,
                 cold_available: true,
+                hot_accepted: 45,
+                cold_accepted: 43,
+                loss: 2,
+                queue: 5,
                 hot_instance: "hot".to_owned(),
                 cold_instance: "cold".to_owned(),
                 structural_epoch_match: true,
