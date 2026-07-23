@@ -276,7 +276,6 @@ fn run(started: Instant) -> Result<(), String> {
     let bundle: OnlineAdmissionCandidateBundle = serde_cbor::from_slice(&bytes)
         .map_err(|error| format!("candidate_bundle_decode:{error}"))?;
     bundle.validate().map_err(str::to_owned)?;
-    verify_capture_provenance(&bundle, &state_dir)?;
     let relation_max_future_rows = bundle
         .relation_candidates
         .iter()
@@ -301,6 +300,36 @@ fn run(started: Instant) -> Result<(), String> {
         .map(|candidate| candidate.runtime_parity_cases.len())
         .max()
         .unwrap_or(0);
+    if let Err(blocker) = verify_capture_provenance(&bundle, &state_dir) {
+        let preserved_active_packages = last_known_good_package_count(
+            &registry_path,
+            &controller_admission_path,
+            &authority_candidate_path,
+            &marker_path,
+        );
+        return write_report(
+            &report_path,
+            AdmissionControllerReport {
+                schema: "nando.response-admission-controller-report.v2",
+                generated_at_unix: unix_now(),
+                verdict: "BLOCK",
+                blocker: Some(blocker),
+                blocker_stage: Some("capture_provenance".to_owned()),
+                candidate_rejections: Vec::new(),
+                candidate_revision: bundle.revision,
+                relation_candidates: bundle.relation_candidates.len(),
+                collection_candidates: bundle.collection_candidates.len(),
+                crystallized_candidates: bundle.crystallized_candidates.len(),
+                relation_max_future_rows,
+                relation_max_runtime_parity_cases,
+                collection_max_future_rows,
+                collection_max_runtime_parity_cases,
+                active_packages: preserved_active_packages,
+                last_known_good_preserved: preserved_active_packages > 0,
+                elapsed_micros: elapsed_micros(started),
+            },
+        );
+    }
     let gate_sha256 = sha256_file(&gate_path, "gate_build")?;
     let runtime_sha256 = response_runtime_contract_sha256();
     let now_unix = unix_now();
