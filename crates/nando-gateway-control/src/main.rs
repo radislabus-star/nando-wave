@@ -1,5 +1,6 @@
 mod client_connections;
 mod f5_runtime_status;
+mod live_dashboard;
 mod signal_map;
 
 use axum::extract::{Form, Path, State};
@@ -25,7 +26,9 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LIVE_MINER_REPORT_URL: &str = "http://127.0.0.1:18789/v2/miner/report";
-const LIVE_MINER_REPORT_TIMEOUT: Duration = Duration::from_millis(250);
+const HOT_SERVING_HEALTH_URL: &str = "http://127.0.0.1:18789/health";
+const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health";
+const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
 struct AppState {
@@ -494,6 +497,11 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         &state.config.model_label,
     );
     let research_architecture = f5_runtime_status::panel_html();
+    let live_dashboard = live_dashboard::render(live_dashboard::InitialMetrics {
+        total_tokens: visible_total_tokens,
+        miner_tokens: visible_miner_tokens,
+        cpu_tokens: visible_cpu_tokens,
+    });
     let body = format!(
         r#"<!doctype html>
 <html lang="ru">
@@ -505,14 +513,6 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
 :root {{ color-scheme:dark; font-family:"DejaVu Sans Mono","Liberation Mono",ui-monospace,monospace; background:#111315; color:#d8dde2; }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; background:#111315; font-size:16px; line-height:1.5; }}
-.token-dashboard {{ width:min(1280px,100%); min-height:100vh; margin:0 auto; padding:72px 48px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-content:center; gap:0; }}
-.token-metric {{ min-width:0; padding:18px 38px; border-right:1px solid #3a4044; }}
-.token-metric:first-child {{ padding-left:0; }}
-.token-metric:last-child {{ padding-right:0; }}
-.token-label {{ margin-bottom:18px; color:#89939a; font-size:18px; font-weight:700; text-transform:uppercase; }}
-.token-value {{ display:block; max-width:100%; color:#f0f3f5; font-size:42px; font-weight:700; line-height:1.12; overflow-wrap:anywhere; }}
-.token-metric.miner .token-value {{ color:#82c7ff; }}
-.token-metric.cpu .token-value {{ color:#66d98b; }}
 header {{ background:#080a0b; color:#eef1f3; padding:11px 20px; border-bottom:1px solid #4a5055; }}
 .header-inner {{ width:min(1280px,100%); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:20px; }}
 .brand {{ display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 14px; min-width:0; }}
@@ -652,12 +652,6 @@ td:last-child {{ text-align:right; font-weight:700; }}
 .console-table td:first-child {{ width:46%; color:#89939a; }}
 .console-table td:last-child {{ color:#d8dde2; }}
 .console-panel.wide .console-table td:last-child {{ text-align:left; }}
-@media (max-width:900px) {{
-  .token-dashboard {{ grid-template-columns:1fr; padding:42px 22px; }}
-  .token-metric {{ padding:30px 0; border-right:0; border-bottom:1px solid #3a4044; }}
-  .token-metric:last-child {{ border-bottom:0; }}
-  .token-value {{ font-size:38px; }}
-}}
 @media (max-width:680px) {{
   .header-inner,.brand,.architecture-head {{ align-items:flex-start; flex-direction:column; }}
   .header-inner,.brand {{ gap:6px; }}
@@ -702,20 +696,7 @@ td:last-child {{ text-align:right; font-weight:700; }}
 </style>
 </head>
 <body>
-<main class="token-dashboard" aria-label="Живой учёт токенов Nando">
-<section class="token-metric">
-<div class="token-label">ПРОШЛО ЧЕРЕЗ NANDO</div>
-<output id="total-token-count" class="token-value">{visible_total_tokens}</output>
-</section>
-<section class="token-metric miner">
-<div class="token-label">УВИДЕЛ МАЙНЕР</div>
-<output id="miner-token-count" class="token-value">{visible_miner_tokens}</output>
-</section>
-<section class="token-metric cpu">
-<div class="token-label">ОБРАБОТАНО НА CPU</div>
-<output id="cpu-token-count" class="token-value">{visible_cpu_tokens}</output>
-</section>
-</main>
+{live_dashboard}
 <div class="legacy-dashboard" hidden aria-hidden="true">
 <header><div class="header-inner">
 <div class="brand"><h1>Nando Machine</h1><span class="model-id">{model_label}</span><span class="build">развёрнуто {build_id} · {build_commit_short}</span></div>
@@ -851,93 +832,11 @@ td:last-child {{ text-align:right; font-weight:700; }}
 }})();
 </script>
 </div>
-<script>
-(() => {{
-  const total = document.getElementById("total-token-count");
-  const miner = document.getElementById("miner-token-count");
-  const cpu = document.getElementById("cpu-token-count");
-  if (!total || !miner || !cpu) return;
-  const endpoint = `${{window.location.pathname.replace(/\/$/, "")}}/tokens`;
-  const format = new Intl.NumberFormat("ru-RU");
-  const render = (node, value) => {{
-    if (Number.isSafeInteger(value) && value >= 0) node.textContent = format.format(value);
-  }};
-  render(total, Number(total.textContent));
-  render(miner, Number(miner.textContent));
-  render(cpu, Number(cpu.textContent));
-  const refresh = async () => {{
-    try {{
-      const response = await fetch(endpoint, {{ cache: "no-store" }});
-      if (!response.ok) return;
-      const snapshot = await response.json();
-      render(total, snapshot.total_input_tokens);
-      render(miner, snapshot.miner_input_tokens);
-      render(cpu, snapshot.cpu_input_tokens);
-    }} catch (_) {{}}
-  }};
-  refresh();
-  window.setInterval(refresh, 2000);
-}})();
-</script>
-<script>
-(() => {{
-  const dashboard = document.querySelector(".token-dashboard");
-  if (!dashboard) return;
-  const style = document.createElement("style");
-  style.textContent = `
-    .connection-line {{ white-space:normal; }}
-    .connection-summary {{ color:#f0f3f5; }}
-    .connection-detail {{ margin-top:7px; color:#aeb7bd; font-size:14px; font-weight:600; line-height:1.45; overflow-wrap:anywhere; }}
-    .connection-detail.nando {{ color:#66d98b; }}
-    .connection-detail.outside_nando {{ color:#ff756d; }}
-    .connection-detail.mixed {{ color:#f2c66d; }}
-    @media (max-width:680px) {{ .connection-detail {{ font-size:10px; }} }}
-  `;
-  document.head.appendChild(style);
-  const line = document.createElement("div");
-  line.className = "token-line connection-line";
-  const summary = document.createElement("div");
-  summary.className = "connection-summary";
-  summary.textContent = "- Окна Codex: проверка...";
-  const details = document.createElement("div");
-  line.append(summary, details);
-  dashboard.appendChild(line);
-  const endpoint = `${{window.location.pathname.replace(/\/$/, "")}}/connections`;
-  const routeLabel = (window) => {{
-    if (window.route === "nando") return "NANDO";
-    if (window.route === "mixed") return "СМЕШАННО";
-    if (window.route === "outside_nando" && window.configured_for_nando) return "ОБХОД NANDO";
-    if (window.route === "outside_nando") return "НАПРЯМУЮ";
-    return "ОЖИДАНИЕ";
-  }};
-  const refresh = async () => {{
-    try {{
-      const response = await fetch(endpoint, {{ cache: "no-store" }});
-      if (!response.ok) return;
-      const snapshot = await response.json();
-      summary.textContent = `- Окна Codex: Nando ${{snapshot.active_nando}} / смешанно ${{snapshot.active_mixed}} / вне Nando ${{snapshot.active_outside_nando}} / ожидание ${{snapshot.idle}}`;
-      details.replaceChildren();
-      for (const window of snapshot.windows.filter((item) => item.route !== "idle")) {{
-        const row = document.createElement("div");
-        row.className = `connection-detail ${{window.route}}`;
-        const session = window.session.startsWith("pid-") ? window.session : window.session.slice(0, 8);
-        const endpoints = window.remote_endpoints.length ? window.remote_endpoints.join(", ") : "нет сокета";
-        row.textContent = `${{window.project.toUpperCase()}} · ${{session}} · ${{routeLabel(window)}} · ${{endpoints}}`;
-        details.appendChild(row);
-      }}
-    }} catch (_) {{}}
-  }};
-  refresh();
-  window.setInterval(refresh, 2000);
-}})();
-</script>
 </body>
 </html>"#,
         mode = current.mode,
         model_label = html_escape(&state.config.model_label),
-        visible_total_tokens = visible_total_tokens,
-        visible_miner_tokens = visible_miner_tokens,
-        visible_cpu_tokens = visible_cpu_tokens,
+        live_dashboard = live_dashboard,
         service_rows = service_rows,
         build_id = html_escape(build_id),
         build_commit_short = html_escape(build_commit_short),
@@ -1039,7 +938,12 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     }
     let fallback = read_json(&state.config.economics_path);
     let persisted_miner = read_json(&state.config.response_online_miner_report_path);
-    let live = read_live_miner_report().await;
+    let response_registry = read_json(&state.config.response_registry_path);
+    let (live, hot_health, cold_health) = tokio::join!(
+        read_live_miner_report(),
+        read_live_json(HOT_SERVING_HEALTH_URL),
+        read_live_json(COLD_LEARNING_HEALTH_URL),
+    );
     let economics = live
         .get("economics")
         .filter(|value| value.is_object())
@@ -1060,6 +964,16 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         )
             .into_response();
     };
+    let bridge = live_dashboard::bridge_view(&hot_health, &cold_health);
+    let admission = admission_status(&state.config);
+    let admission_ready_cohorts = persisted_miner
+        .pointer("/miner/admission_ready_cohorts")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let response_package_count = response_registry
+        .get("packages")
+        .and_then(Value::as_array)
+        .map_or(0, |packages| packages.len() as u64);
     (
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
@@ -1067,6 +981,10 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "total_input_tokens": total_input_tokens,
             "miner_input_tokens": miner_input_tokens,
             "cpu_input_tokens": cpu_input_tokens,
+            "bridge": bridge,
+            "admission_ready_cohorts": admission_ready_cohorts,
+            "response_package_count": response_package_count,
+            "cpu_allowed": admission.cpu_allowed,
         })),
     )
         .into_response()
@@ -1106,7 +1024,11 @@ async fn control_state(Path(key): Path<String>, State(state): State<AppState>) -
 }
 
 async fn read_live_miner_report() -> Value {
-    let Ok(uri) = LIVE_MINER_REPORT_URL.parse::<Uri>() else {
+    read_live_json(LIVE_MINER_REPORT_URL).await
+}
+
+async fn read_live_json(url: &str) -> Value {
+    let Ok(uri) = url.parse::<Uri>() else {
         return Value::Null;
     };
     let request = match Request::get(uri).body(Empty::<Bytes>::new()) {
@@ -1115,8 +1037,7 @@ async fn read_live_miner_report() -> Value {
     };
     let client: Client<HttpConnector, Empty<Bytes>> =
         Client::builder(TokioExecutor::new()).build_http();
-    let Ok(Ok(response)) =
-        tokio::time::timeout(LIVE_MINER_REPORT_TIMEOUT, client.request(request)).await
+    let Ok(Ok(response)) = tokio::time::timeout(LIVE_STATUS_TIMEOUT, client.request(request)).await
     else {
         return Value::Null;
     };
@@ -1124,7 +1045,7 @@ async fn read_live_miner_report() -> Value {
         return Value::Null;
     }
     let Ok(Ok(body)) =
-        tokio::time::timeout(LIVE_MINER_REPORT_TIMEOUT, response.into_body().collect()).await
+        tokio::time::timeout(LIVE_STATUS_TIMEOUT, response.into_body().collect()).await
     else {
         return Value::Null;
     };
