@@ -205,7 +205,7 @@ const TEMPLATE: &str = r#"
 .window-status.mixed { color:var(--amber); }
 .window-status.idle { color:var(--muted); }
 .pipeline-scroll { overflow-x:auto; padding-bottom:5px; }
-.pipeline { position:relative; display:grid; grid-template-columns:repeat(8,minmax(140px,1fr)); min-width:1200px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.pipeline { position:relative; display:grid; grid-template-columns:repeat(9,minmax(120px,1fr)); min-width:1215px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .pipe-step { position:relative; min-height:100px; padding:17px 18px; border-right:1px solid var(--line); }
 .pipe-step:last-child { border-right:0; }
 .pipe-step::after { content:"→"; position:absolute; right:-8px; top:37px; z-index:1; color:#c7cdd1; background:var(--bg); }
@@ -215,8 +215,8 @@ const TEMPLATE: &str = r#"
 .pipe-step.watch .pipe-state { color:var(--amber); }
 .pipe-step.block .pipe-state,.pipe-step.locked .pipe-state { color:var(--red); }
 .pipe-step.muted .pipe-state { color:var(--muted); }
-.break-line { position:absolute; left:50%; top:-29px; bottom:-34px; border-left:2px dashed var(--red); pointer-events:none; }
-.break-label { position:absolute; left:calc(50% - 112px); top:-28px; width:224px; color:var(--red); background:var(--bg); text-align:center; font-size:12px; font-weight:800; }
+.break-line { position:absolute; left:55.555%; top:-29px; bottom:-34px; border-left:2px dashed var(--red); pointer-events:none; }
+.break-label { position:absolute; left:calc(55.555% - 112px); top:-28px; width:224px; color:var(--red); background:var(--bg); text-align:center; font-size:12px; font-weight:800; }
 .blocker { margin-top:14px; color:var(--red); text-align:center; font-size:13px; }
 .activity { display:grid; grid-template-columns:150px minmax(0,1fr); gap:18px; align-items:end; margin-top:18px; }
 .activity-label { color:var(--muted); font-size:12px; font-weight:800; }
@@ -265,8 +265,9 @@ const TEMPLATE: &str = r#"
       <div class="pipe-step"><div class="pipe-name">LEARNING BRIDGE</div><div id="pipe-bridge" class="pipe-state">—</div></div>
       <div class="pipe-step"><div class="pipe-name">RELATION FRAMES</div><div id="pipe-relation" class="pipe-state">—</div></div>
       <div class="pipe-step watch"><div class="pipe-name">OPERATOR DISCOVERY</div><div id="pipe-discovery" class="pipe-state">WATCH</div></div>
-      <div class="pipe-step block"><div class="pipe-name">CANDIDATE BUNDLE</div><div id="pipe-controller" class="pipe-state">INPUT 0</div></div>
-      <div class="pipe-step block"><div class="pipe-name">NATURAL PACKAGE</div><div id="pipe-package" class="pipe-state">MISSING</div></div>
+      <div class="pipe-step watch"><div class="pipe-name">CANDIDATE INPUT</div><div id="pipe-candidate" class="pipe-state">0</div></div>
+      <div class="pipe-step block"><div class="pipe-name">CRYSTALLIZER OUTPUT</div><div id="pipe-crystallizer" class="pipe-state">0</div></div>
+      <div class="pipe-step block"><div class="pipe-name">OPERATOR PACKAGES</div><div id="pipe-package" class="pipe-state">NEW 0 · OLD 0</div></div>
       <div class="pipe-step locked"><div class="pipe-name">ADMISSION</div><div id="pipe-admission" class="pipe-state">LOCKED</div></div>
       <div class="pipe-step muted"><div class="pipe-name">CPU ACCEPT</div><div id="pipe-cpu" class="pipe-state">0 NEW</div></div>
       <div class="break-line"></div><div class="break-label">ТЕКУЩИЙ РАЗРЫВ</div>
@@ -316,9 +317,9 @@ const TEMPLATE: &str = r#"
     text("miner-epoch", structureComparable ? `STRUCTURE SEQ ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : bridgeAvailable ? "STRUCTURE: EPOCH НЕ СОВПАДАЕТ" : "STRUCTURE: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
-    text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-controller", `INPUT ${controllerInput} · CRYST ${snapshot.controller_crystallized_candidates}`);
-    text("pipe-package", snapshot.response_package_count > 0 ? `PRESENT ${snapshot.response_package_count}` : "MISSING"); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED");
-    text("blocker-text", controllerInput === 0 ? `cohort export → controller: ${snapshot.controller_blocker}` : snapshot.response_package_count === 0 ? "controller получил candidates, но Natural OperatorPackage ещё не выпущен" : snapshot.cpu_allowed ? "маршрут до CPU открыт" : "OperatorPackage существует, но authority остаётся закрыта");
+    text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", snapshot.controller_crystallized_candidates);
+    text("pipe-package", `NEW NATURAL ${snapshot.controller_crystallized_candidates} · OLD ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED");
+    text("blocker-text", controllerInput > 0 && snapshot.controller_crystallized_candidates === 0 ? `ТЕКУЩИЙ РАЗРЫВ: INPUT ${controllerInput} → CRYST 0. Legacy candidate: ${snapshot.controller_blocker}` : controllerInput === 0 ? `discovery → candidate export: ${snapshot.controller_blocker}` : snapshot.controller_crystallized_candidates > 0 && !snapshot.cpu_allowed ? `crystallized operator готов, admission закрыт: ${snapshot.controller_blocker}` : snapshot.cpu_allowed ? "маршрут до CPU открыт" : snapshot.controller_blocker);
     renderActivity(bridge.request_events); lastSuccess = Date.now();
   };
   const refresh = async () => {
@@ -394,7 +395,9 @@ mod tests {
         });
         assert!(html.contains("КУДА УШЛИ ТОКЕНЫ"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
-        assert!(html.contains("CANDIDATE BUNDLE"));
+        assert!(html.contains("CANDIDATE INPUT"));
+        assert!(html.contains("CRYSTALLIZER OUTPUT"));
+        assert!(html.contains("NEW 0 · OLD 0"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("9,22%"));
     }
