@@ -5,14 +5,16 @@ use std::time::Instant;
 use nando_operator_kernel::canonical_json_sha256;
 use nando_operator_learning::{
     CaptureCommitmentArchive, CaptureCommitmentIndex, CaptureEvidenceReceipt,
-    CaptureRecordCommitment, CaptureTransitionBinding, CaptureTransitionBindingArchive,
-    EVIDENCE_LEDGER_SCHEMA_V1, EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome,
-    EvidenceKey, EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger,
-    MAX_CAPTURE_COMMITMENT_INDEX_RECORDS, RawEvidenceEnvelope, canonicalize_evidence_envelope,
-    evidence_payload_sha256, read_framed_cbor, write_atomic_cbor,
+    CaptureRecordCommitment, CaptureTransitionBinding, EVIDENCE_LEDGER_SCHEMA_V1,
+    EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome, EvidenceKey,
+    EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
+    RawEvidenceEnvelope, canonicalize_evidence_envelope, evidence_payload_sha256, read_framed_cbor,
+    write_atomic_cbor,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+use crate::capture_transition_binding_archive::CaptureTransitionBindingArchive;
 
 const CHECKPOINT_SCHEMA: &str = "nando.streaming-evidence-checkpoint.v2";
 const CHECKPOINT_EVENTS: u64 = 64;

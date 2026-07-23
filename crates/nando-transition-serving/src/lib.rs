@@ -4,6 +4,7 @@
 //! local response or HTTP 418, which the surrounding Nginx instance maps to
 //! the original upstream request.
 
+mod capture_transition_binding_archive;
 mod custom_tool_projection;
 mod economics_worker;
 pub mod generation_shadow;

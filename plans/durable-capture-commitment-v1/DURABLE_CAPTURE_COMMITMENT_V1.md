@@ -123,6 +123,13 @@ Replay is idempotent by `frame_id`: the original byte-identical binding is
 returned without appending, while the same frame paired with a different
 receipt root is a hard `frame_rebound` failure.
 
+Writer ownership is enforced by the crate boundary. The mutable archive type
+and `open/append/seal` implementation are private to
+`nando-transition-serving`; `nando-operator-learning` exports only the
+receipt/binding wire contract, and response admission exports only a read-only
+archive verifier. A cross-crate compatibility test proves that the private
+writer produces the exact bytes accepted by the independent reader.
+
 Relation and collection candidate builders remain available for shadow
 diagnostics, but external admission no longer merges their snapshots into new
 authority. Only a crystallized candidate that passes the durable record archive

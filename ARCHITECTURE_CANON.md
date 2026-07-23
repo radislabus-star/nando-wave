@@ -1102,6 +1102,17 @@ both archives and rejects a different but otherwise valid archived receipt.
 The learner, crystallizer, actor, and admission controller cannot mint this
 binding.
 
+This ownership is structural, not conventional:
+
+```text
+nando-transition-serving  private archive writer: open + append + seal
+nando-operator-learning   immutable receipt and binding wire types
+response admission        read-only archive reader and verifier
+```
+
+The mutable writer is not exported from a shared crate. Writer/reader format
+parity is checked across the serving and admission crate boundary.
+
 Legacy relation and collection candidates remain shadow diagnostics. They are
 not merged into new authority snapshots. The only new response-authority input
 is a crystallized operator whose support and future transitions pass both

@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
+use nando_operator_learning::{CaptureEvidenceReceipt, CaptureRecordCommitment};
+use nando_response_actor::CaptureTransitionBindingArchiveReader;
+
 use super::*;
-use crate::CaptureRecordCommitment;
 
 fn root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -19,7 +21,7 @@ fn receipt(sequence: u64, byte: char) -> CaptureEvidenceReceipt {
 }
 
 #[test]
-fn archived_binding_rejects_a_different_valid_receipt_for_the_same_frame() {
+fn writer_and_reader_reject_receipt_substitution() {
     let directory = root("substitution");
     let _ = std::fs::remove_dir_all(&directory);
     let mut archive = CaptureTransitionBindingArchive::open(&directory).expect("archive");
@@ -51,7 +53,7 @@ fn archived_binding_rejects_a_different_valid_receipt_for_the_same_frame() {
 }
 
 #[test]
-fn binding_archive_rejects_tampered_chain() {
+fn reader_rejects_a_tampered_writer_chain() {
     let directory = root("tampered-chain");
     let _ = std::fs::remove_dir_all(&directory);
     let mut archive = CaptureTransitionBindingArchive::open(&directory).expect("archive");
@@ -69,7 +71,7 @@ fn binding_archive_rejects_tampered_chain() {
 }
 
 #[test]
-fn replay_returns_the_original_binding_and_rejects_frame_rebinding() {
+fn replay_is_idempotent_and_frame_rebinding_fails_closed() {
     let directory = root("replay");
     let _ = std::fs::remove_dir_all(&directory);
     let first_receipt = receipt(20, 'd');

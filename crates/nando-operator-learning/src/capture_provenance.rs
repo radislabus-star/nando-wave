@@ -153,10 +153,10 @@ impl CaptureTransitionBinding {
         {
             return Err("capture_transition_binding_invalid");
         }
-        self.validate_digest()
+        self.verify_digest()
     }
 
-    pub(crate) fn validate_digest(&self) -> Result<(), &'static str> {
+    pub fn verify_digest(&self) -> Result<(), &'static str> {
         let expected = canonical_json_sha256(&TransitionBindingDigest {
             schema: &self.schema,
             sequence: self.sequence,

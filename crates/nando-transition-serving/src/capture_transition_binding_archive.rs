@@ -1,4 +1,4 @@
-//! Capture-owned frame-to-receipt bindings used by external admission.
+//! Capture-owned writer for immutable frame-to-receipt bindings.
 
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
@@ -7,11 +7,11 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
+use nando_operator_learning::{
+    CaptureEvidenceReceipt, CaptureTransitionBinding, write_atomic_cbor,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-
-use crate::{CAPTURE_TRANSITION_BINDING_SCHEMA_V1, CaptureRecordCommitment};
-use crate::{CaptureEvidenceReceipt, CaptureTransitionBinding, write_atomic_cbor};
 
 const ARCHIVE_SCHEMA: &str = "nando.capture-transition-binding-archive.v1";
 const DATA_FILE: &str = "capture-transition-binding-archive-v1.bin";
@@ -25,20 +25,15 @@ struct BindingArchiveCheckpoint {
     chain_root_sha256: String,
 }
 
-pub struct CaptureTransitionBindingArchive {
+pub(crate) struct CaptureTransitionBindingArchive {
     checkpoint_path: PathBuf,
     file: File,
     checkpoint: BindingArchiveCheckpoint,
     by_frame: BTreeMap<String, CaptureTransitionBinding>,
 }
 
-pub struct CaptureTransitionBindingArchiveReader {
-    file: File,
-    checkpoint: BindingArchiveCheckpoint,
-}
-
 impl CaptureTransitionBindingArchive {
-    pub fn open(directory: &Path) -> Result<Self, String> {
+    pub(crate) fn open(directory: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(directory)
             .map_err(|error| format!("capture_binding_archive_dir:{error}"))?;
         let checkpoint_path = directory.join(CHECKPOINT_FILE);
@@ -83,7 +78,7 @@ impl CaptureTransitionBindingArchive {
         })
     }
 
-    pub fn append(
+    pub(crate) fn append(
         &mut self,
         frame_id_sha256: &str,
         receipt: &CaptureEvidenceReceipt,
@@ -111,54 +106,11 @@ impl CaptureTransitionBindingArchive {
         Ok(binding)
     }
 
-    pub fn seal(&mut self) -> Result<(), String> {
+    pub(crate) fn seal(&mut self) -> Result<(), String> {
         self.file
             .sync_data()
             .map_err(|error| format!("capture_binding_archive_sync:{error}"))?;
         write_atomic_cbor(&self.checkpoint_path, &self.checkpoint)
-    }
-}
-
-impl CaptureTransitionBindingArchiveReader {
-    pub fn open(directory: &Path) -> Result<Self, String> {
-        let bytes = std::fs::read(directory.join(CHECKPOINT_FILE))
-            .map_err(|error| format!("capture_binding_checkpoint_read:{error}"))?;
-        let checkpoint: BindingArchiveCheckpoint = serde_cbor::from_slice(&bytes)
-            .map_err(|error| format!("capture_binding_checkpoint_decode:{error}"))?;
-        let mut file = File::open(directory.join(DATA_FILE))
-            .map_err(|error| format!("capture_binding_archive_read_open:{error}"))?;
-        validate_chain(&mut file, &checkpoint)?;
-        Ok(Self { file, checkpoint })
-    }
-
-    pub fn verify(
-        &mut self,
-        frame_id_sha256: &str,
-        receipt: &CaptureEvidenceReceipt,
-    ) -> Result<(), String> {
-        receipt.validate().map_err(str::to_owned)?;
-        let binding = receipt
-            .transition_binding
-            .as_ref()
-            .ok_or_else(|| "capture_transition_binding_missing".to_owned())?;
-        if binding.frame_id_sha256 != frame_id_sha256
-            || binding.sequence >= self.checkpoint.next_sequence
-        {
-            return Err("capture_transition_binding_mismatch".to_owned());
-        }
-        self.file
-            .seek(SeekFrom::Start(
-                binding.sequence.saturating_mul(RECORD_BYTES),
-            ))
-            .map_err(|error| format!("capture_binding_archive_verify_seek:{error}"))?;
-        let mut bytes = [0_u8; RECORD_BYTES as usize];
-        self.file
-            .read_exact(&mut bytes)
-            .map_err(|error| format!("capture_binding_archive_verify_read:{error}"))?;
-        if bytes != encode_record(binding)? {
-            return Err("capture_transition_binding_archive_mismatch".to_owned());
-        }
-        Ok(())
     }
 }
 
@@ -187,7 +139,7 @@ fn validate_chain(
             return Err("capture_binding_archive_sequence_mismatch".to_owned());
         }
         let binding = decode_record(&bytes)?;
-        binding.validate_digest().map_err(str::to_owned)?;
+        binding.verify_digest().map_err(str::to_owned)?;
         if by_frame
             .insert(binding.frame_id_sha256.clone(), binding.clone())
             .is_some()
@@ -203,6 +155,8 @@ fn validate_chain(
 }
 
 fn decode_record(bytes: &[u8; RECORD_BYTES as usize]) -> Result<CaptureTransitionBinding, String> {
+    use nando_operator_learning::{CAPTURE_TRANSITION_BINDING_SCHEMA_V1, CaptureRecordCommitment};
+
     Ok(CaptureTransitionBinding {
         schema: CAPTURE_TRANSITION_BINDING_SCHEMA_V1.to_owned(),
         sequence: u64::from_le_bytes(bytes[..8].try_into().unwrap_or_default()),
