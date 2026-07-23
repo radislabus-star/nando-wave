@@ -50,7 +50,29 @@ archive unit tests                 PASS
 streaming ledger restart tests    PASS
 fresh generation migration test  PASS
 Clippy -D warnings                PASS
-production deployment            NOT RUN
-fresh support/future              NOT EVALUATED
+production deployment            PASS
+fresh support/future              25/0 at first post-restart snapshot
 authority                         false
 ```
+
+## Live Deployment Receipt
+
+```text
+commits                           297df6b + 104d121
+serving binary SHA-256           75f242b0...39098
+admission binary SHA-256         686f6d74...6dd11
+durable archive                  632 KiB and growing
+old scalar state                 219 support / 96 future
+fresh scalar state               25 support / 0 future
+crystallized candidates          0
+capture provenance blocker       cleared with fresh bundle
+hot serving restart              none
+hot serving InvocationID         2d1501b585a54be3bb315ca4fc42941e
+cold learner restart count       0
+execution authority              false
+```
+
+The first deployment exposed that a general bucket strategy version is not a
+reliable owner for scalar-generation rotation. The corrective deployment added
+the dedicated persisted generation version and the live state then rotated as
+specified. This failed first live assertion was not treated as PASS.
