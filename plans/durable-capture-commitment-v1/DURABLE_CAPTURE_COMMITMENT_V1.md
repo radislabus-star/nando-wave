@@ -119,6 +119,9 @@ The binding is synced before the parity case can leave capture ownership.
 Admission independently opens the binding archive and rejects substitution by
 another valid archived receipt. Existing archive-backed rows without this
 binding remain no-authority evidence and cannot be upgraded in place.
+Replay is idempotent by `frame_id`: the original byte-identical binding is
+returned without appending, while the same frame paired with a different
+receipt root is a hard `frame_rebound` failure.
 `live_scalar_generation_version=3` therefore starts with empty scalar
 support/future after deployment while preserving independent Wave and
 self-training state.

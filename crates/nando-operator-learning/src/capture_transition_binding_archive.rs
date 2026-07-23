@@ -1,5 +1,6 @@
 //! Capture-owned frame-to-receipt bindings used by external admission.
 
+use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
@@ -28,6 +29,7 @@ pub struct CaptureTransitionBindingArchive {
     checkpoint_path: PathBuf,
     file: File,
     checkpoint: BindingArchiveCheckpoint,
+    by_frame: BTreeMap<String, CaptureTransitionBinding>,
 }
 
 pub struct CaptureTransitionBindingArchiveReader {
@@ -60,7 +62,7 @@ impl CaptureTransitionBindingArchive {
             }
             Err(error) => return Err(format!("capture_binding_checkpoint_read:{error}")),
         };
-        validate_chain(&mut file, &checkpoint)?;
+        let by_frame = validate_chain(&mut file, &checkpoint)?;
         let committed_bytes = checkpoint.next_sequence.saturating_mul(RECORD_BYTES);
         if file
             .metadata()
@@ -77,6 +79,7 @@ impl CaptureTransitionBindingArchive {
             checkpoint_path,
             file,
             checkpoint,
+            by_frame,
         })
     }
 
@@ -86,6 +89,14 @@ impl CaptureTransitionBindingArchive {
         receipt: &CaptureEvidenceReceipt,
     ) -> Result<CaptureTransitionBinding, String> {
         receipt.validate().map_err(str::to_owned)?;
+        if let Some(existing) = self.by_frame.get(frame_id_sha256) {
+            if existing.records_root_sha256 != receipt.records_root_sha256
+                || !receipt.records.contains(&existing.source_record)
+            {
+                return Err("capture_transition_binding_frame_rebound".to_owned());
+            }
+            return Ok(existing.clone());
+        }
         let sequence = self.checkpoint.next_sequence;
         let binding = CaptureTransitionBinding::new(sequence, frame_id_sha256, receipt)
             .map_err(str::to_owned)?;
@@ -95,6 +106,8 @@ impl CaptureTransitionBindingArchive {
         self.checkpoint.chain_root_sha256 =
             next_root(&self.checkpoint.chain_root_sha256, &binding.record_sha256)?;
         self.checkpoint.next_sequence = self.checkpoint.next_sequence.saturating_add(1);
+        self.by_frame
+            .insert(frame_id_sha256.to_owned(), binding.clone());
         Ok(binding)
     }
 
@@ -149,7 +162,10 @@ impl CaptureTransitionBindingArchiveReader {
     }
 }
 
-fn validate_chain(file: &mut File, checkpoint: &BindingArchiveCheckpoint) -> Result<(), String> {
+fn validate_chain(
+    file: &mut File,
+    checkpoint: &BindingArchiveCheckpoint,
+) -> Result<BTreeMap<String, CaptureTransitionBinding>, String> {
     if checkpoint.schema != ARCHIVE_SCHEMA
         || file
             .metadata()
@@ -162,6 +178,7 @@ fn validate_chain(file: &mut File, checkpoint: &BindingArchiveCheckpoint) -> Res
     file.seek(SeekFrom::Start(0))
         .map_err(|error| format!("capture_binding_archive_seek:{error}"))?;
     let mut root = initial_root();
+    let mut by_frame = BTreeMap::new();
     for sequence in 0..checkpoint.next_sequence {
         let mut bytes = [0_u8; RECORD_BYTES as usize];
         file.read_exact(&mut bytes)
@@ -171,12 +188,18 @@ fn validate_chain(file: &mut File, checkpoint: &BindingArchiveCheckpoint) -> Res
         }
         let binding = decode_record(&bytes)?;
         binding.validate_digest().map_err(str::to_owned)?;
+        if by_frame
+            .insert(binding.frame_id_sha256.clone(), binding.clone())
+            .is_some()
+        {
+            return Err("capture_binding_archive_duplicate_frame".to_owned());
+        }
         root = next_root(&root, &binding.record_sha256)?;
     }
     if root != checkpoint.chain_root_sha256 {
         return Err("capture_binding_archive_root_mismatch".to_owned());
     }
-    Ok(())
+    Ok(by_frame)
 }
 
 fn decode_record(bytes: &[u8; RECORD_BYTES as usize]) -> Result<CaptureTransitionBinding, String> {

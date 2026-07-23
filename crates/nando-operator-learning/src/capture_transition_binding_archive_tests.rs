@@ -67,3 +67,35 @@ fn binding_archive_rejects_tampered_chain() {
     std::fs::write(&data_path, bytes).expect("tamper binding archive");
     assert!(CaptureTransitionBindingArchiveReader::open(&directory).is_err());
 }
+
+#[test]
+fn replay_returns_the_original_binding_and_rejects_frame_rebinding() {
+    let directory = root("replay");
+    let _ = std::fs::remove_dir_all(&directory);
+    let first_receipt = receipt(20, 'd');
+    let mut archive = CaptureTransitionBindingArchive::open(&directory).expect("archive");
+    let first = archive
+        .append(&"4".repeat(64), &first_receipt)
+        .expect("first binding");
+    archive.seal().expect("seal");
+    drop(archive);
+
+    let bytes_before = std::fs::metadata(directory.join(DATA_FILE))
+        .expect("binding metadata")
+        .len();
+    let mut restored = CaptureTransitionBindingArchive::open(&directory).expect("restore");
+    let replay = restored
+        .append(&"4".repeat(64), &first_receipt)
+        .expect("idempotent replay");
+    assert_eq!(replay, first);
+    assert_eq!(
+        std::fs::metadata(directory.join(DATA_FILE))
+            .expect("binding metadata")
+            .len(),
+        bytes_before
+    );
+    assert_eq!(
+        restored.append(&"4".repeat(64), &receipt(21, 'e')),
+        Err("capture_transition_binding_frame_rebound".to_owned())
+    );
+}
