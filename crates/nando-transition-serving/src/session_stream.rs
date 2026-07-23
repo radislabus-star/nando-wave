@@ -43,7 +43,6 @@ use nando_operator_learning::LearningRequestStructureV1;
 const MAX_OBSERVATIONS: usize = 32;
 const MAX_TURN_EVIDENCE_EVENTS: usize = 64;
 const MAX_TURN_EVIDENCE_NODES: usize = 8_192;
-const SESSION_REBUILD_TAIL_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
 const MAX_PENDING_RUNTIME_PARITY_CASES: usize = 1_024;
 const MAX_PENDING_MINER_INPUTS: usize = 4_096;
@@ -288,6 +287,10 @@ struct Observation {
 #[derive(Default)]
 struct SessionState {
     offset: u64,
+    // Restart aligns on the last committed row but never ingests it again.
+    replay_source_offset: Option<u64>,
+    // A partial turn cannot become proof evidence after process restart.
+    censor_until_turn_boundary: bool,
     session_identity_pinned: bool,
     session_id_sha256: String,
     calls: BTreeMap<String, CallShape>,
@@ -342,18 +345,21 @@ where
     let mut states = BTreeMap::new();
     for path in session_files(&root) {
         let source_stream_id = path.to_string_lossy().into_owned();
-        let offset = evidence
+        let resume_offset = evidence
             .lock()
             .map_err(|_| "evidence_ledger_lock_poisoned".to_owned())?
-            .resume_offset(&source_stream_id)
-            .map(|offset| offset.saturating_sub(SESSION_REBUILD_TAIL_BYTES))
-            .unwrap_or_else(|| {
-                fs::metadata(&path)
-                    .map(|metadata| metadata.len())
-                    .unwrap_or(0)
-            });
+            .resume_offset(&source_stream_id);
+        let offset = resume_offset.unwrap_or_else(|| {
+            fs::metadata(&path)
+                .map(|metadata| metadata.len())
+                .unwrap_or(0)
+        });
         match canonical_session_state(&path, offset) {
-            Ok(state) => {
+            Ok(mut state) => {
+                // Existing sessions resume without replaying an authority-bearing
+                // tail. At most the unfinished turn is sacrificed.
+                state.replay_source_offset = resume_offset;
+                state.censor_until_turn_boundary = true;
                 states.insert(path, state);
             }
             Err(error) => {
@@ -387,13 +393,12 @@ where
                     }
                     if !states.contains_key(&path) {
                         let source_stream_id = path.to_string_lossy().into_owned();
-                        let offset = evidence
+                        let resume_offset = evidence
                             .lock()
                             .ok()
-                            .and_then(|ledger| ledger.resume_offset(&source_stream_id))
-                            .map(|offset| offset.saturating_sub(SESSION_REBUILD_TAIL_BYTES))
-                            .unwrap_or(0);
-                        let state = match canonical_session_state(&path, offset) {
+                            .and_then(|ledger| ledger.resume_offset(&source_stream_id));
+                        let offset = resume_offset.unwrap_or(0);
+                        let mut state = match canonical_session_state(&path, offset) {
                             Ok(state) => state,
                             Err(_) => {
                                 // A create event can arrive before session_meta is fully written.
@@ -404,6 +409,8 @@ where
                                 continue;
                             }
                         };
+                        state.replay_source_offset = resume_offset;
+                        state.censor_until_turn_boundary = resume_offset.is_some();
                         states.insert(path.clone(), state);
                     }
                     let Some(state) = states.get_mut(&path) else {
@@ -1077,7 +1084,9 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         .map_err(|error| format!("session_metadata:{error}"))?
         .len();
     if state.offset > length {
-        *state = canonical_session_state(path, 0)?;
+        *state = canonical_session_state(path, length)?;
+        state.censor_until_turn_boundary = true;
+        return Ok(Vec::new());
     }
     let (mut reader, aligned_offset) = aligned_session_reader(file, state.offset)?;
     state.offset = aligned_offset;
@@ -1101,6 +1110,17 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         }
         state.offset = position.saturating_add(bytes as u64);
         let parsed = serde_json::from_str::<Value>(line.trim_end()).ok();
+        if state.replay_source_offset == Some(position) {
+            state.replay_source_offset = None;
+            continue;
+        }
+        if state.censor_until_turn_boundary {
+            if parsed.as_ref().is_some_and(is_authoritative_turn_boundary) {
+                state.censor_until_turn_boundary = false;
+            } else {
+                continue;
+            }
+        }
         if parsed.as_ref().is_some_and(is_turn_start)
             && let Some(observation) =
                 take_collection_observation(state, evidence_graphs, metrics, 0)?
@@ -2944,7 +2964,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_identity_survives_resume_beyond_rebuild_tail() {
+    fn canonical_identity_survives_a_large_resume_offset() {
         let root = identity_test_root("large-resume");
         let session_id = "019e6470-ba33-7840-9015-79a294d89a15";
         let path = root.join(format!("rollout-2026-05-26T16-19-29-{session_id}.jsonl"));
@@ -2954,7 +2974,7 @@ mod tests {
         )
         .expect("session meta");
 
-        let offset = SESSION_REBUILD_TAIL_BYTES * 128;
+        let offset = 8 * 1024 * 1024 * 128;
         let state = canonical_session_state(&path, offset).expect("canonical state");
         assert_eq!(state.offset, offset);
         assert_eq!(state.session_id, session_id);
@@ -2962,6 +2982,165 @@ mod tests {
         assert_ne!(
             state.session_id_sha256,
             sha256_bytes(path.to_string_lossy().as_bytes())
+        );
+        fs::remove_dir_all(root).expect("identity cleanup");
+    }
+
+    #[test]
+    fn resumed_capture_skips_the_committed_row_and_waits_for_a_fresh_turn() {
+        let root = identity_test_root("resume-censor");
+        let session_path = root.join("session.jsonl");
+        let evidence_root = root.join("evidence");
+        let first_turn = [
+            json!({"type":"session_meta","payload":{"id":"session-a"}}),
+            json!({"type":"turn_context","payload":{"turn_id":"turn-1"}}),
+            json!({"type":"event_msg","payload":{"type":"user_message","message":"continue"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"exec-1","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"exec-1","output":"Process running with session ID 101"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"wait-1","arguments":"{\"session_id\":101,\"yield_time_ms\":1000}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-1","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
+        ];
+        let mut session = File::create(&session_path).expect("session");
+        for row in &first_turn {
+            writeln!(session, "{row}").expect("first turn");
+        }
+        session.sync_all().expect("first turn sync");
+
+        let evidence = Arc::new(Mutex::new(
+            StreamingEvidenceLedger::open(&evidence_root, EvidencePolicyV1::streaming_bounded())
+                .expect("streaming evidence"),
+        ));
+        let metrics = Arc::new(SessionStreamMetrics::default());
+        let request_learning = Arc::new(RequestLearningIndex::default());
+        let mut initial = canonical_session_state(&session_path, 0).expect("initial state");
+        let first_frames = read_appended_frames(
+            &session_path,
+            &mut initial,
+            SessionReadContext {
+                evidence: &evidence,
+                evidence_graphs: None,
+                miner: None,
+                direct_collection_miner: None,
+                metrics: &metrics,
+                request_learning: &request_learning,
+            },
+        )
+        .expect("first capture");
+        assert_eq!(first_frames.len(), 1);
+
+        let (resume_offset, ingress_before_resume) = {
+            let ledger = evidence.lock().expect("evidence lock");
+            (
+                ledger
+                    .resume_offset(session_path.to_string_lossy().as_ref())
+                    .expect("resume offset"),
+                ledger.accounting().ingress_total,
+            )
+        };
+        let mut resumed =
+            canonical_session_state(&session_path, resume_offset).expect("resumed state");
+        resumed.replay_source_offset = Some(resume_offset);
+        resumed.censor_until_turn_boundary = true;
+        assert!(
+            read_appended_frames(
+                &session_path,
+                &mut resumed,
+                SessionReadContext {
+                    evidence: &evidence,
+                    evidence_graphs: None,
+                    miner: None,
+                    direct_collection_miner: None,
+                    metrics: &metrics,
+                    request_learning: &request_learning,
+                },
+            )
+            .expect("resume replay")
+            .is_empty()
+        );
+        assert_eq!(
+            evidence
+                .lock()
+                .expect("evidence lock")
+                .accounting()
+                .ingress_total,
+            ingress_before_resume
+        );
+
+        writeln!(
+            session,
+            "{}",
+            json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[]}})
+        )
+        .expect("partial turn");
+        session.sync_all().expect("partial sync");
+        assert!(
+            read_appended_frames(
+                &session_path,
+                &mut resumed,
+                SessionReadContext {
+                    evidence: &evidence,
+                    evidence_graphs: None,
+                    miner: None,
+                    direct_collection_miner: None,
+                    metrics: &metrics,
+                    request_learning: &request_learning,
+                },
+            )
+            .expect("partial resume")
+            .is_empty()
+        );
+        assert_eq!(
+            evidence
+                .lock()
+                .expect("evidence lock")
+                .accounting()
+                .ingress_total,
+            ingress_before_resume
+        );
+
+        let fresh_turn = [
+            json!({"type":"turn_context","payload":{"turn_id":"turn-2"}}),
+            json!({"type":"event_msg","payload":{"type":"user_message","message":"continue again"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"exec-2","arguments":"{}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"exec-2","output":"Process running with session ID 202"}}),
+            json!({"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"wait-2","arguments":"{\"session_id\":202,\"yield_time_ms\":1000}"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"wait-2","output":"accepted"}}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":321}}}}),
+        ];
+        for row in &fresh_turn {
+            writeln!(session, "{row}").expect("fresh turn");
+        }
+        session.sync_all().expect("fresh turn sync");
+        let fresh_frames = read_appended_frames(
+            &session_path,
+            &mut resumed,
+            SessionReadContext {
+                evidence: &evidence,
+                evidence_graphs: None,
+                miner: None,
+                direct_collection_miner: None,
+                metrics: &metrics,
+                request_learning: &request_learning,
+            },
+        )
+        .expect("fresh capture");
+        assert_eq!(fresh_frames.len(), 1);
+        assert_eq!(
+            evidence
+                .lock()
+                .expect("evidence lock")
+                .accounting()
+                .ingress_total,
+            ingress_before_resume + fresh_turn.len() as u64
+        );
+        assert!(
+            resumed
+                .runtime_parity_cases
+                .get(&fresh_frames[0].frame_id_sha256)
+                .and_then(|case| case.capture_receipt.as_ref())
+                .and_then(|receipt| receipt.transition_binding.as_ref())
+                .is_some()
         );
         fs::remove_dir_all(root).expect("identity cleanup");
     }

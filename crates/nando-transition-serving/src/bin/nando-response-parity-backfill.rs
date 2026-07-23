@@ -18,7 +18,6 @@ const DEFAULT_MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 const DEFAULT_CASES_PER_TEACHER: usize = 64;
 const DEFAULT_MAX_FILES: usize = 64;
 const DEFAULT_TARGET_TEACHERS: usize = 4;
-const REQUIRED_SUPPORT_ROWS: usize = 32;
 
 struct ParityCandidate {
     rank: String,
@@ -113,25 +112,21 @@ fn main() -> Result<(), String> {
     let checkpoint_open_millis = checkpoint_open_started.elapsed().as_millis();
     let baseline = stream.report();
     let rows_before = baseline.rows_seen;
-    let mut matching_parity = BTreeMap::<String, usize>::new();
-    for generation in &baseline.self_training_v2.generations {
-        matching_parity
-            .entry(generation.teacher_signature_sha256.clone())
-            .and_modify(|rows| *rows = (*rows).max(generation.matching_runtime_parity_rows))
-            .or_insert(generation.matching_runtime_parity_rows);
-    }
+    // This tool schedules high-value replay work only. Proof readiness belongs
+    // to adaptive identification and must never be inferred from a row count.
+    let transferred_actions = baseline
+        .live_scalar_shadow
+        .laws
+        .iter()
+        .filter(|law| law.future_rows > 0)
+        .map(|law| law.teacher_action_symbol.as_str())
+        .collect::<BTreeSet<_>>();
     let mut target_rank = baseline
         .self_training_v2
         .discovery
         .teacher_pools
         .iter()
-        .filter(|pool| {
-            matching_parity
-                .get(&pool.teacher_signature_sha256)
-                .copied()
-                .unwrap_or(0)
-                < REQUIRED_SUPPORT_ROWS
-        })
+        .filter(|pool| !transferred_actions.contains(pool.action_symbol.as_str()))
         .map(|pool| (pool.positive_tokens, pool.teacher_signature_sha256.clone()))
         .collect::<Vec<_>>();
     target_rank.sort_by(|left, right| right.cmp(left));

@@ -1176,3 +1176,21 @@ The singleton role anchor cannot identify a law and cannot grant authority. It
 only canonicalizes the already identified one-class support surface. The
 post-freeze future still has to rebind, execute, verify, and seal the transfer
 proof.
+
+## 25. Restart Capture Invariant
+
+An observer restart never replays an arbitrary session tail through the
+capture owner:
+
+```text
+last committed source offset
+-> skip the already committed row
+-> censor the unfinished turn
+-> next authoritative turn_context
+-> fresh capture and learning resume
+```
+
+Reconstructing an old turn can help diagnostics, but it cannot create support,
+future, or a new frame binding. The bounded loss of one partial turn is
+preferable to rebinding an immutable frame or presenting restart replay as
+independent transfer evidence.

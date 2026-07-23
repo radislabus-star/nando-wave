@@ -1114,6 +1114,14 @@ both archives and rejects a different but otherwise valid archived receipt.
 The learner, crystallizer, actor, and admission controller cannot mint this
 binding.
 
+Process restart must not create a second receipt for an already bound frame.
+The session observer resumes at the last committed source offset, consumes that
+one row only for reader alignment, and censors the unfinished turn until the
+next authoritative `turn_context`. It never rewinds a live session tail into
+the capture writer. This may sacrifice one partial turn of learning after a
+restart, but it preserves immutable frame ownership and prevents historical
+rows from masquerading as fresh transfer evidence.
+
 This ownership is structural, not conventional:
 
 ```text
