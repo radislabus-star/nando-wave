@@ -9,8 +9,8 @@ use nando_response_actor::{
     CaptureCommitmentArchiveReader, CaptureCommitmentIndex, CaptureTransitionBindingArchiveReader,
     OnlineAdmissionCandidateBundle, OnlineAdmissionCandidateRejection, ResponseExecutor,
     ResponseRegistry, build_crystallized_admission_snapshot, build_online_admission_evaluation,
-    build_online_collection_admission_snapshot, merge_online_admission_snapshots,
-    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance_durable,
+    build_online_collection_admission_snapshot, response_runtime_contract_sha256, sha256_bytes,
+    verify_crystallized_capture_provenance_durable,
 };
 use serde::Serialize;
 
@@ -327,8 +327,8 @@ fn run(started: Instant) -> Result<(), String> {
     )
     .map_err(str::to_owned)?;
     let relation_rejections = relation_evaluation.candidate_rejections;
-    let relation = relation_evaluation.snapshot;
-    let collection = build_online_collection_admission_snapshot(
+    let relation_shadow_ready = relation_evaluation.snapshot.is_some();
+    let collection_shadow_ready = build_online_collection_admission_snapshot(
         &bundle.collection_candidates,
         &bundle.project_id,
         bundle.revision,
@@ -337,7 +337,8 @@ fn run(started: Instant) -> Result<(), String> {
         &gate_sha256,
         &runtime_sha256,
     )
-    .map_err(str::to_owned)?;
+    .map_err(str::to_owned)?
+    .is_some();
     let crystallized = build_crystallized_admission_snapshot(
         &bundle.crystallized_candidates,
         &bundle.project_id,
@@ -348,13 +349,9 @@ fn run(started: Instant) -> Result<(), String> {
         &runtime_sha256,
     )
     .map_err(str::to_owned)?;
-    let snapshot = merge_online_admission_snapshots(
-        [relation, collection, crystallized]
-            .into_iter()
-            .flatten()
-            .collect(),
-    )
-    .map_err(str::to_owned)?;
+    // Legacy relation and collection routes remain observable controls. New
+    // authority has one owner: a provenance-bound crystallized operator.
+    let snapshot = crystallized;
     let Some(snapshot) = snapshot else {
         let primary_rejection = relation_rejections.first();
         let preserved_active_packages = last_known_good_package_count(
@@ -370,10 +367,19 @@ fn run(started: Instant) -> Result<(), String> {
                 generated_at_unix: unix_now(),
                 verdict: "BLOCK",
                 blocker: Some(primary_rejection.map_or_else(
-                    || "no_candidate_with_complete_runtime_parity".to_owned(),
+                    || {
+                        if relation_shadow_ready || collection_shadow_ready {
+                            "legacy_candidate_routes_shadow_only".to_owned()
+                        } else {
+                            "no_candidate_with_complete_runtime_parity".to_owned()
+                        }
+                    },
                     |rejection| rejection.blocker.clone(),
                 )),
-                blocker_stage: primary_rejection.map(|rejection| rejection.stage.to_owned()),
+                blocker_stage: primary_rejection
+                    .map(|rejection| rejection.stage.to_owned())
+                    .or((relation_shadow_ready || collection_shadow_ready)
+                        .then(|| "crystallized_authority_boundary".to_owned())),
                 candidate_rejections: relation_rejections,
                 candidate_revision: bundle.revision,
                 relation_candidates: bundle.relation_candidates.len(),

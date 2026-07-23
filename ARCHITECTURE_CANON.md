@@ -1102,6 +1102,12 @@ both archives and rejects a different but otherwise valid archived receipt.
 The learner, crystallizer, actor, and admission controller cannot mint this
 binding.
 
+Legacy relation and collection candidates remain shadow diagnostics. They are
+not merged into new authority snapshots. The only new response-authority input
+is a crystallized operator whose support and future transitions pass both
+capture archives. A previously active last-known-good package may be preserved
+fail-closed, but no legacy candidate can mint its successor.
+
 An archive introduced after a generation was collected cannot retroactively
 authorize that generation. A dedicated persisted scalar-generation version,
 separate from the Wave strategy version, starts the first archive-backed

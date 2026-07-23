@@ -12,10 +12,12 @@ use nando_operator_kernel::{
     RelationFrame, ResponseProgram, ResponseValueSelector, ValueProjectionFormat, VerifierProgram,
     sha256_bytes,
 };
+#[cfg(test)]
+use nando_operator_learning::DeterministicEvidenceLedger;
 use nando_operator_learning::{
     CanonicalEventGraph, CaptureEvidenceReceipt, CaptureRecordCommitment,
-    DeterministicEvidenceGraphStore, DeterministicEvidenceLedger, EvidenceGraphBuilder,
-    EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, LearningRequestStructureV1,
+    DeterministicEvidenceGraphStore, EvidenceGraphBuilder, EvidenceGraphPolicy,
+    EvidenceIngestOutcome, EvidencePolicyV1, LearningRequestStructureV1,
     OnlineCollectionObservation, RawEvidenceEnvelope, RuntimeParityCase,
     SOURCE_NEUTRAL_EXTRACTOR_VERSION, evidence_session_id_sha256, teacher_action_symbol,
     teacher_program_signature, teacher_program_signature_from_action_atoms,
@@ -43,6 +45,7 @@ const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
 const MAX_PENDING_RUNTIME_PARITY_CASES: usize = 1_024;
 const MAX_PENDING_MINER_INPUTS: usize = 4_096;
 
+#[cfg(test)]
 impl SessionEvidenceLedger for DeterministicEvidenceLedger {
     fn ingest_session_event(
         &mut self,

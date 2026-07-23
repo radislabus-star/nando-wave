@@ -122,6 +122,12 @@ binding remain no-authority evidence and cannot be upgraded in place.
 Replay is idempotent by `frame_id`: the original byte-identical binding is
 returned without appending, while the same frame paired with a different
 receipt root is a hard `frame_rebound` failure.
+
+Relation and collection candidate builders remain available for shadow
+diagnostics, but external admission no longer merges their snapshots into new
+authority. Only a crystallized candidate that passes the durable record archive
+and transition-binding archive may write a successor authority generation.
+The previous last-known-good package is preserved until that candidate exists.
 `live_scalar_generation_version=3` therefore starts with empty scalar
 support/future after deployment while preserving independent Wave and
 self-training state.
