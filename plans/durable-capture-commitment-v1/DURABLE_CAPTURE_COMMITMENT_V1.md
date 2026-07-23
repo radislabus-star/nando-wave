@@ -138,3 +138,26 @@ The previous last-known-good package is preserved until that candidate exists.
 `live_scalar_generation_version=3` therefore starts with empty scalar
 support/future after deployment while preserving independent Wave and
 self-training state.
+
+## Writer Ownership Deployment
+
+Commit `67e7ecd` moved the mutable transition-binding archive writer behind the
+private `nando-transition-serving` crate boundary. Remote cross-crate tests
+passed `3/3`, Clippy passed with `-D warnings`, and Graphify reported
+`28,532 nodes / 64,091 edges`.
+
+Only the read-only admission binary was deployed immediately:
+
+```text
+admission binary SHA-256         665a1d39...c1277
+admission one-shot               success
+crystallized candidates          0
+last-known-good packages         1 preserved
+hot serving PID                  2720213 unchanged
+hot serving InvocationID         2d1501b585a54be3bb315ca4fc42941e
+hot serving restarts             0
+```
+
+The live writer behavior and archive bytes did not change, so the hot serving
+process was not restarted for this ownership-only cut. The source-level writer
+boundary takes effect in serving at its next separately justified deployment.
