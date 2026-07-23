@@ -224,7 +224,7 @@ impl GenerationShadowRequestV3 {
         self.streaming
     }
 
-    pub(super) fn request_text(&self) -> &str {
+    pub(crate) fn request_text(&self) -> &str {
         &self.request_text
     }
 

@@ -1359,6 +1359,30 @@ scoped applicability proof, not natural circuit discovery or broad traffic
 coverage. Canonical receipts are `STOP_F8_D_CAUSAL_CONTROLS.md`,
 `STOP_F8_E_LIVE_SHADOW.md` and `STOP_F8.md`.
 
+#### Hot-to-cold learning process boundary
+
+The hot serving owner and cold learning owner remain separate processes. Two
+different bridges cross that boundary and must not be collapsed:
+
+```text
+every request -> durable hash-only OpportunityBridge -> denominator/outcomes
+every request -> compact LearningRequestStructureV1  -> phase/capability join
+bounded raw   -> optional GenerationShadow input     -> independent F8 replay
+```
+
+The raw F6/F8 request limit is not a learning-ingress limit. Requests above
+that limit omit raw bytes but still deliver bounded structural evidence to the
+cold `RequestLearningIndex`. Exact `TurnIntentId` joins request phase atoms;
+`SessionLineageId` joins advertised capabilities. The session observer remains
+the sole owner that lowers those atoms into `RelationFrame` evidence.
+
+`SessionLineageId`, `TurnIntentId` and provider capture `EventId` are separate
+identities. A transport request ID may be used only as a censored fallback; it
+cannot create independent future evidence. The Unix bridge persists no raw
+payload and grants no execution authority. Its full transport and restart
+contract is
+`plans/learning-evidence-process-bridge-v1/LEARNING_EVIDENCE_PROCESS_BRIDGE_V1.md`.
+
 `RuntimeSurfaceEvidence` supplied by a caller is a laboratory interface, never
 production authority. Live routing and parity verification must start from the
 raw pre-action request and provider payload, independently enumerate structural

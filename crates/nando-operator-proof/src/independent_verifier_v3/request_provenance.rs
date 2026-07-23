@@ -2,12 +2,12 @@ use nando_operator_kernel::RuntimeProjectionV3;
 use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum RequestTextErrorV3 {
+pub enum RequestTextErrorV3 {
     MissingOrInvalid,
     BudgetExhausted,
 }
 
-pub(super) fn derive_request_text_v3(
+pub fn derive_request_text_v3(
     payload: &Value,
     projection: RuntimeProjectionV3,
     max_bytes: usize,

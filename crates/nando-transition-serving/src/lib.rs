@@ -7,10 +7,12 @@
 mod custom_tool_projection;
 mod economics_worker;
 pub mod generation_shadow;
+mod learning_evidence_bridge;
 mod live_economics;
 mod miner_worker;
 mod opportunity_bridge;
 mod provider_capture;
+mod request_identity;
 mod runtime_policy;
 pub mod session_backfill;
 mod session_stream;
@@ -33,11 +35,15 @@ use nando_expression_runtime::ExpressionRuntime;
 use nando_operator_admission::finalize_post_verifier_receipt;
 use nando_operator_kernel::{RelationFrame, RuntimeProjectionV3, Sha256CommitmentV3};
 use nando_operator_learning::{
-    EvidencePolicyV1, OnlineCollectionConfig, OnlineCollectionStatus, OpportunityBridgeEventV1,
-    ReducibilityClass, is_source_neutral_relation_frame,
+    EvidencePolicyV1, LearningRequestStructureInputV1, LearningRequestStructureV1,
+    OnlineCollectionConfig, OnlineCollectionStatus, OpportunityBridgeEventV1, ReducibilityClass,
+    is_source_neutral_relation_frame,
 };
 use nando_operator_proof::{CpuDecidability, CpuDecidabilityClass, classify_cpu_decidability};
-use nando_operator_runtime::{ResponseExecutionStatus, provider_tool_capability_atom_ids};
+use nando_operator_runtime::{
+    ResponseExecutionStatus, provider_tool_capability_atom_ids, request_phase_atom_ids,
+    response_pre_action_context_atom_ids,
+};
 use nando_response_actor::{
     ONLINE_ADMISSION_CANDIDATE_BUNDLE_SCHEMA_V1, OnlineAdmissionCandidateBundle,
     OnlineCollectionMiner, OnlineResponseMinerReport, OnlineResponseStream,
@@ -69,14 +75,16 @@ use economics_worker::{EconomicsWorkerHandle, spawn_economics_worker};
 use generation_shadow::{
     GenerationShadowConfigV3, GenerationShadowIngressV3, GenerationShadowRuntimeV3,
 };
+use learning_evidence_bridge::LearningEvidenceBridgeRuntimeV1;
 use miner_worker::{MinerWorkerHandle, spawn_miner_worker};
 use opportunity_bridge::OpportunityBridgeRuntime;
 use provider_capture::{
     ProviderCaptureConfigV3, ProviderCaptureIngressV3, ProviderCaptureRuntimeV3,
 };
+use request_identity::ProviderRequestIdentityV1;
 use runtime_policy::{RuntimePolicyCache, spawn_runtime_policy_watch};
 use session_stream::{
-    RequestCapabilityIndex, SessionMinerBridge, SessionStreamMetrics, spawn_session_stream,
+    RequestLearningIndex, SessionMinerBridge, SessionStreamMetrics, spawn_session_stream,
 };
 use stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
 
@@ -124,6 +132,10 @@ pub struct ServingConfig {
     pub operator_generation_capture_index_path: PathBuf,
     pub operator_generation_shadow_queue_capacity: usize,
     pub operator_generation_shadow_poll_ms: u64,
+    pub learning_evidence_bridge_socket_path: PathBuf,
+    pub learning_evidence_bridge_producer_enabled: bool,
+    pub learning_evidence_bridge_consumer_enabled: bool,
+    pub learning_evidence_bridge_queue_capacity: usize,
     pub provider_capture_enabled: bool,
     pub provider_capture_store_path: PathBuf,
     pub provider_capture_queue_capacity: usize,
@@ -261,6 +273,21 @@ impl ServingConfig {
             operator_generation_shadow_poll_ms: env_u64(
                 "NANDO_OPERATOR_GENERATION_SHADOW_POLL_MS",
                 1_000,
+            ),
+            learning_evidence_bridge_socket_path: env_path_join(
+                "NANDO_LEARNING_EVIDENCE_BRIDGE_SOCKET",
+                &state_dir,
+                "learning-evidence-bridge-v1/bridge.sock",
+            ),
+            learning_evidence_bridge_producer_enabled: env_flag(
+                "NANDO_LEARNING_EVIDENCE_BRIDGE_PRODUCER_ENABLED",
+            ),
+            learning_evidence_bridge_consumer_enabled: env_flag(
+                "NANDO_LEARNING_EVIDENCE_BRIDGE_CONSUMER_ENABLED",
+            ),
+            learning_evidence_bridge_queue_capacity: env_usize(
+                "NANDO_LEARNING_EVIDENCE_BRIDGE_QUEUE",
+                32,
             ),
             provider_capture_enabled: env_flag("NANDO_PROVIDER_CAPTURE_ENABLED"),
             provider_capture_store_path: env_path_join(
@@ -446,7 +473,7 @@ struct AppState {
     miner_warmup: Arc<RwLock<MinerWarmupStatus>>,
     session_stream_metrics: Arc<SessionStreamMetrics>,
     session_miner_bridge: Arc<SessionMinerBridge>,
-    request_capabilities: Arc<RequestCapabilityIndex>,
+    request_learning: Arc<RequestLearningIndex>,
     runtime_policy: Arc<RuntimePolicyCache>,
     live_economics: EconomicsWorkerHandle,
     authority_trigger: Arc<Mutex<Option<SyncSender<()>>>>,
@@ -454,6 +481,7 @@ struct AppState {
     counters: Arc<ServingCounters>,
     provider_capture: Arc<ProviderCaptureRuntimeV3>,
     operator_generation_shadow: Arc<GenerationShadowRuntimeV3>,
+    learning_evidence_bridge: LearningEvidenceBridgeRuntimeV1,
     opportunity_bridge: OpportunityBridgeRuntime,
 }
 
@@ -542,6 +570,9 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
     if config.opportunity_bridge_consumer_enabled && !config.embedded_response_miner_enabled {
         return Err("opportunity_bridge_consumer_requires_embedded_miner".to_owned());
     }
+    if config.learning_evidence_bridge_producer_enabled && !config.provider_capture_enabled {
+        return Err("learning_evidence_bridge_producer_requires_capture".to_owned());
+    }
     ensure_parent(&config.trace_path)?;
     if config.legacy_json_audit_enabled {
         ensure_parent(&config.event_path)?;
@@ -578,6 +609,12 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         config.opportunity_bridge_consumer_enabled,
         Duration::from_millis(config.opportunity_bridge_poll_ms),
     )?;
+    let learning_evidence_bridge = LearningEvidenceBridgeRuntimeV1::new(
+        config.learning_evidence_bridge_socket_path.clone(),
+        config.learning_evidence_bridge_producer_enabled,
+        config.learning_evidence_bridge_consumer_enabled,
+        config.learning_evidence_bridge_queue_capacity,
+    )?;
     let state = AppState {
         config: Arc::new(config),
         cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -592,7 +629,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         })),
         session_stream_metrics: Arc::new(SessionStreamMetrics::default()),
         session_miner_bridge: Arc::new(SessionMinerBridge::new()),
-        request_capabilities: Arc::new(RequestCapabilityIndex::default()),
+        request_learning: Arc::new(RequestLearningIndex::default()),
         runtime_policy,
         live_economics,
         authority_trigger: Arc::new(Mutex::new(None)),
@@ -600,6 +637,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         counters: Arc::new(ServingCounters::default()),
         provider_capture,
         operator_generation_shadow,
+        learning_evidence_bridge,
         opportunity_bridge,
     };
     spawn_runtime_policy_watch(state.runtime_policy.clone())?;
@@ -637,6 +675,10 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .map_err(|error| format!("bind:{}:{error}", state.config.bind))?;
     state.provider_capture.start_after_http_bind();
     state.operator_generation_shadow.start_after_http_bind()?;
+    state.learning_evidence_bridge.start(
+        Arc::clone(&state.operator_generation_shadow),
+        Arc::clone(&state.request_learning),
+    )?;
     spawn_miner_warmup(state.clone())?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -825,7 +867,7 @@ fn spawn_evidence_runtime(state: AppState) -> Result<(), String> {
                 evidence.clone(),
                 state.session_miner_bridge.clone(),
                 state.session_stream_metrics.clone(),
-                state.request_capabilities.clone(),
+                state.request_learning.clone(),
             ) {
                 eprintln!("nando-evidence-cold-start session-stream: {error}");
             }
@@ -1080,6 +1122,10 @@ async fn health(State(state): State<AppState>) -> Response {
             json!(state.operator_generation_shadow.status()),
         );
         object.insert(
+            "learning_evidence_process_bridge".to_owned(),
+            json!(state.learning_evidence_bridge.status()),
+        );
+        object.insert(
             "opportunity_process_bridge".to_owned(),
             json!(state.opportunity_bridge.status()),
         );
@@ -1181,6 +1227,7 @@ async fn miner_report(State(state): State<AppState>) -> Response {
             "economics_worker": state.live_economics.status(),
             "provider_capture": state.provider_capture.status(),
             "operator_generation_shadow": state.operator_generation_shadow.status(),
+            "learning_evidence_process_bridge": state.learning_evidence_bridge.status(),
             "opportunity_process_bridge": state.opportunity_bridge.status(),
             "signal_tree": signal_tree,
             "claim_boundary": "in-memory Rust state and generated snapshots; only admission receipts grant execution authority",
@@ -1715,7 +1762,7 @@ fn handle_openai(
         .fetch_add(1, Ordering::Relaxed)
         .saturating_add(1);
     let request_hash = sha256_bytes(&body);
-    let client_intent_id = headers
+    let transport_request_id = headers
         .get("x-nando-request-id")
         .and_then(|value| value.to_str().ok())
         .filter(|value| !value.is_empty())
@@ -1728,22 +1775,52 @@ fn handle_openai(
             return fallback(&state, "request_json_unavailable");
         }
     };
-    state
-        .request_capabilities
-        .observe_provider_payload(&payload);
+    let request_identity = ProviderRequestIdentityV1::from_payload(&payload, &transport_request_id);
+    let client_intent_id = request_identity.turn_intent_id().to_owned();
     let request_text = extract_request_text(&payload);
+    let body_token_estimate = u64::try_from(body.len().div_ceil(4)).unwrap_or(u64::MAX);
+    let input_tokens = token_estimate(&request_text).max(body_token_estimate);
+    let capability_atom_ids = provider_tool_capability_atom_ids(&payload);
     let request_streaming = payload
         .get("stream")
         .and_then(Value::as_bool)
         .unwrap_or(false);
     if let Some(capture_receipt) = capture_provider_request(
         &state,
-        &client_intent_id,
+        request_identity.session_lineage_root(),
         &request_hash,
         projection,
         request_streaming,
     ) {
-        submit_operator_generation_shadow(&state, &body, capture_receipt, &request_text);
+        let structure = LearningRequestStructureV1::new(LearningRequestStructureInputV1 {
+            client_intent_id_sha256: request_identity.turn_intent_sha256().to_owned(),
+            session_identity_sha256s: request_identity.session_identity_sha256s().to_vec(),
+            request_phase_atom_ids: request_phase_atom_ids(&request_text),
+            pre_action_context_atom_ids: response_pre_action_context_atom_ids(&payload),
+            capability_atom_ids: capability_atom_ids.clone(),
+            provider_bound_turn_identity: request_identity.provider_bound_turn_identity(),
+            estimated_input_tokens: input_tokens,
+            provider_payload_bytes: u64::try_from(body.len()).unwrap_or(u64::MAX),
+        });
+        match structure {
+            Ok(structure) => {
+                if let Err(error) = state.request_learning.observe_structure(&structure) {
+                    state.counters.errors.fetch_add(1, Ordering::Relaxed);
+                    eprintln!("nando-request-learning index: {error}");
+                }
+                submit_operator_generation_shadow(
+                    &state,
+                    &body,
+                    capture_receipt,
+                    structure,
+                    &request_text,
+                );
+            }
+            Err(error) => {
+                state.counters.errors.fetch_add(1, Ordering::Relaxed);
+                eprintln!("nando-learning-evidence structure: {error:?}");
+            }
+        }
     }
     let traffic_source_header = headers
         .get("x-nando-traffic-source")
@@ -1757,8 +1834,6 @@ fn handle_openai(
                 .and_then(Value::as_str)
         })
         .unwrap_or("ordinary");
-    let body_token_estimate = u64::try_from(body.len().div_ceil(4)).unwrap_or(u64::MAX);
-    let input_tokens = token_estimate(&request_text).max(body_token_estimate);
     observe_live_economics_request(
         &state,
         &client_intent_id,
@@ -1766,7 +1841,8 @@ fn handle_openai(
         input_tokens,
         traffic_source_dedupe_eligible(traffic_source),
     );
-    let request_shape = provider_request_shape(&payload, projection, &request_text);
+    let request_shape =
+        provider_request_shape(&payload, projection, &request_text, &capability_atom_ids);
     write_event(
         &state,
         json!({
@@ -1854,7 +1930,7 @@ fn handle_openai(
 
 fn capture_provider_request(
     state: &AppState,
-    client_intent_id: &str,
+    session_lineage_root: Sha256CommitmentV3,
     request_sha256: &str,
     projection: Projection,
     streaming: bool,
@@ -1865,14 +1941,10 @@ fn capture_provider_request(
         Projection::TransitionApi => RuntimeProjectionV3::TransitionApi,
     };
     let request_root_sha256 = Sha256CommitmentV3::from_hex(request_sha256).ok()?;
-    let lineage_root_sha256 = Sha256CommitmentV3::digest_parts(
-        b"nando.provider-capture-lineage.v3.f8a",
-        &[client_intent_id.as_bytes()],
-    );
     state
         .provider_capture
         .try_capture(ProviderCaptureIngressV3 {
-            lineage_root_sha256,
+            lineage_root_sha256: session_lineage_root,
             request_root_sha256,
             projection,
             streaming,
@@ -1885,8 +1957,20 @@ fn submit_operator_generation_shadow(
     state: &AppState,
     body: &Bytes,
     capture_receipt: nando_operator_learning::ProviderRequestCaptureReceiptV3,
+    structure: LearningRequestStructureV1,
     request_text: &str,
 ) {
+    if state.learning_evidence_bridge.producer_enabled() {
+        if let Err(error) =
+            state
+                .learning_evidence_bridge
+                .submit(capture_receipt, structure, body.clone())
+        {
+            state.counters.errors.fetch_add(1, Ordering::Relaxed);
+            eprintln!("nando-learning-evidence bridge: {error}");
+        }
+        return;
+    }
     if !state.operator_generation_shadow.enabled() {
         return;
     }
@@ -3830,7 +3914,12 @@ fn latest_user_text(messages: &[Value]) -> Option<String> {
     user.or(fallback)
 }
 
-fn provider_request_shape(payload: &Value, projection: Projection, request_text: &str) -> Value {
+fn provider_request_shape(
+    payload: &Value,
+    projection: Projection,
+    request_text: &str,
+    capability_atom_ids: &[u64],
+) -> Value {
     let top_level_keys = sorted_object_keys(payload);
     let metadata_keys = payload
         .get("metadata")
@@ -3877,7 +3966,6 @@ fn provider_request_shape(payload: &Value, projection: Projection, request_text:
         .get("instructions")
         .and_then(Value::as_str)
         .unwrap_or("");
-    let capability_atom_ids = provider_tool_capability_atom_ids(payload);
     json!({
         "schema": "nando.provider-request-shape.v1",
         "endpoint": projection.endpoint(),
@@ -4745,6 +4833,11 @@ mod tests {
                 .join("operator-generation-capture-v3.cbor"),
             operator_generation_shadow_queue_capacity: 8,
             operator_generation_shadow_poll_ms: 1_000,
+            learning_evidence_bridge_socket_path: root
+                .join("learning-evidence-bridge-v1/bridge.sock"),
+            learning_evidence_bridge_producer_enabled: false,
+            learning_evidence_bridge_consumer_enabled: false,
+            learning_evidence_bridge_queue_capacity: 8,
             provider_capture_enabled: false,
             provider_capture_store_path: root.join("provider-capture-v3-f8a"),
             provider_capture_queue_capacity: 8,
@@ -4770,6 +4863,13 @@ mod tests {
             Duration::from_millis(100),
         )
         .expect("opportunity bridge");
+        let learning_evidence_bridge = LearningEvidenceBridgeRuntimeV1::new(
+            config.learning_evidence_bridge_socket_path.clone(),
+            false,
+            false,
+            8,
+        )
+        .expect("learning evidence bridge");
         let state = AppState {
             config: Arc::new(config),
             cache: Arc::new(RwLock::new(ExecutorCache::default())),
@@ -4784,7 +4884,7 @@ mod tests {
             })),
             session_stream_metrics: Arc::new(SessionStreamMetrics::default()),
             session_miner_bridge: Arc::new(SessionMinerBridge::new()),
-            request_capabilities: Arc::new(RequestCapabilityIndex::default()),
+            request_learning: Arc::new(RequestLearningIndex::default()),
             runtime_policy: Arc::new(RuntimePolicyCache::load(
                 root.join("mode.json"),
                 root.join("kill-switch"),
@@ -4796,6 +4896,7 @@ mod tests {
             counters: Arc::new(ServingCounters::default()),
             provider_capture,
             operator_generation_shadow,
+            learning_evidence_bridge,
             opportunity_bridge,
         };
         refresh_response_executor(&state);
@@ -5606,7 +5707,13 @@ mod tests {
                 "x-codex-installation-id":"private-installation"
             }
         });
-        let shape = provider_request_shape(&payload, Projection::Responses, "private prompt");
+        let capability_atom_ids = provider_tool_capability_atom_ids(&payload);
+        let shape = provider_request_shape(
+            &payload,
+            Projection::Responses,
+            "private prompt",
+            &capability_atom_ids,
+        );
         assert_eq!(shape.get("raw_text_stored"), Some(&Value::Bool(false)));
         assert_eq!(shape.get("request_text_bytes"), Some(&Value::from(14)));
         assert_eq!(

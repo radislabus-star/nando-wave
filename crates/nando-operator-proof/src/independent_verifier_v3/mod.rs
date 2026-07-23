@@ -12,6 +12,7 @@ pub use input::{
     IndependentVerifierInputErrorV3, IndependentVerifierInputV3,
 };
 pub use receipt::{INDEPENDENT_VERIFIER_RECEIPT_SCHEMA_V3, IndependentVerifierReceiptV3};
+pub use request_provenance::{RequestTextErrorV3, derive_request_text_v3};
 
 use nando_operator_kernel::{canonical_json_sha256, sha256_bytes};
 use serde::{Deserialize, Serialize};

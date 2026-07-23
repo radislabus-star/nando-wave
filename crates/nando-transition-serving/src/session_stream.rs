@@ -15,13 +15,13 @@ use nando_operator_kernel::{
 use nando_operator_learning::{
     CanonicalEventGraph, CaptureEvidenceReceipt, CaptureRecordCommitment,
     DeterministicEvidenceGraphStore, DeterministicEvidenceLedger, EvidenceGraphBuilder,
-    EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, OnlineCollectionObservation,
-    RawEvidenceEnvelope, RuntimeParityCase, SOURCE_NEUTRAL_EXTRACTOR_VERSION,
-    evidence_session_id_sha256, teacher_action_symbol, teacher_program_signature,
-    teacher_program_signature_from_action_atoms,
+    EvidenceGraphPolicy, EvidenceIngestOutcome, EvidencePolicyV1, LearningRequestStructureV1,
+    OnlineCollectionObservation, RawEvidenceEnvelope, RuntimeParityCase,
+    SOURCE_NEUTRAL_EXTRACTOR_VERSION, evidence_session_id_sha256, teacher_action_symbol,
+    teacher_program_signature, teacher_program_signature_from_action_atoms,
 };
 use nando_operator_proof::verify_response_independently;
-use nando_operator_runtime::{ResponseExecutionStatus, provider_tool_capability_atom_ids};
+use nando_operator_runtime::ResponseExecutionStatus;
 use nando_response_actor::{
     CompletedTurnExample, OnlineCollectionMiner, TurnCompletionReason, execute_response,
 };
@@ -37,7 +37,7 @@ use crate::stream_evidence::{SessionEvidenceLedger, StreamingEvidenceLedger};
 const MAX_OBSERVATIONS: usize = 32;
 const MAX_TURN_EVIDENCE_EVENTS: usize = 64;
 const MAX_TURN_EVIDENCE_NODES: usize = 8_192;
-const MAX_CAPABILITY_SESSIONS: usize = 4_096;
+const MAX_REQUEST_LEARNING_IDENTITIES: usize = 4_096;
 const SESSION_REBUILD_TAIL_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_SESSION_META_BYTES: u64 = 1024 * 1024;
 const MAX_PENDING_RUNTIME_PARITY_CASES: usize = 1_024;
@@ -225,58 +225,110 @@ fn submit_miner_input(
 }
 
 #[derive(Default)]
-struct RequestCapabilityState {
-    by_session: BTreeMap<String, Vec<u64>>,
-    insertion_order: VecDeque<String>,
+struct RequestLearningState {
+    capability_by_session: BTreeMap<String, Vec<u64>>,
+    session_order: VecDeque<String>,
+    structure_by_turn: BTreeMap<String, RequestLearningAtoms>,
+    turn_order: VecDeque<String>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct RequestLearningAtoms {
+    pub(crate) request_phase_atom_ids: Vec<u64>,
+    pub(crate) capability_atom_ids: Vec<u64>,
 }
 
 #[derive(Default)]
-pub struct RequestCapabilityIndex {
-    state: Mutex<RequestCapabilityState>,
+pub struct RequestLearningIndex {
+    state: Mutex<RequestLearningState>,
 }
 
-impl RequestCapabilityIndex {
-    pub fn observe_provider_payload(&self, payload: &Value) {
-        let atoms = provider_tool_capability_atom_ids(payload);
-        if atoms.is_empty() {
-            return;
+impl RequestLearningIndex {
+    pub fn observe_structure(
+        &self,
+        structure: &LearningRequestStructureV1,
+    ) -> Result<(), &'static str> {
+        let session_keys = structure.session_identity_sha256s();
+        let capability_atoms = structure.capability_atom_ids();
+        if session_keys.len() > 4
+            || capability_atoms.len() > 64
+            || session_keys.iter().any(|key| !valid_sha256(key))
+            || !valid_sha256(structure.client_intent_id_sha256())
+            || !strictly_ordered(session_keys)
+            || !strictly_ordered(capability_atoms)
+        {
+            return Err("request_learning_structure_invalid");
         }
-        let mut keys = ["session_id", "thread_id"]
-            .into_iter()
-            .filter_map(|key| {
-                payload
-                    .pointer(&format!("/client_metadata/{key}"))
-                    .and_then(Value::as_str)
-            })
-            .chain(payload.get("prompt_cache_key").and_then(Value::as_str))
-            .map(|value| sha256_bytes(value.as_bytes()))
-            .collect::<Vec<_>>();
-        keys.sort();
-        keys.dedup();
         let Ok(mut state) = self.state.lock() else {
-            return;
+            return Err("request_learning_index_lock_poisoned");
         };
-        for key in keys {
-            if !state.by_session.contains_key(&key) {
-                state.insertion_order.push_back(key.clone());
+        if !capability_atoms.is_empty() {
+            for key in session_keys.iter().cloned() {
+                if !state.capability_by_session.contains_key(&key) {
+                    state.session_order.push_back(key.clone());
+                }
+                state
+                    .capability_by_session
+                    .insert(key, capability_atoms.to_vec());
             }
-            state.by_session.insert(key, atoms.clone());
         }
-        while state.by_session.len() > MAX_CAPABILITY_SESSIONS {
-            let Some(key) = state.insertion_order.pop_front() else {
+        if structure.provider_bound_turn_identity() {
+            let turn = structure.client_intent_id_sha256().to_owned();
+            if !state.structure_by_turn.contains_key(&turn) {
+                state.turn_order.push_back(turn.clone());
+            }
+            state.structure_by_turn.insert(
+                turn,
+                RequestLearningAtoms {
+                    request_phase_atom_ids: structure.request_phase_atom_ids().to_vec(),
+                    capability_atom_ids: capability_atoms.to_vec(),
+                },
+            );
+        }
+        while state.capability_by_session.len() > MAX_REQUEST_LEARNING_IDENTITIES {
+            let Some(key) = state.session_order.pop_front() else {
                 break;
             };
-            state.by_session.remove(&key);
+            state.capability_by_session.remove(&key);
         }
+        while state.structure_by_turn.len() > MAX_REQUEST_LEARNING_IDENTITIES {
+            let Some(key) = state.turn_order.pop_front() else {
+                break;
+            };
+            state.structure_by_turn.remove(&key);
+        }
+        Ok(())
     }
 
-    fn lookup(&self, session_id_sha256: &str) -> Vec<u64> {
-        self.state
-            .lock()
-            .ok()
-            .and_then(|state| state.by_session.get(session_id_sha256).cloned())
-            .unwrap_or_default()
+    pub(crate) fn lookup(
+        &self,
+        session_id_sha256: &str,
+        turn_intent_sha256: &str,
+    ) -> RequestLearningAtoms {
+        let Ok(state) = self.state.lock() else {
+            return RequestLearningAtoms::default();
+        };
+        let mut atoms = state
+            .structure_by_turn
+            .get(turn_intent_sha256)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(capabilities) = state.capability_by_session.get(session_id_sha256) {
+            atoms.capability_atom_ids.clone_from(capabilities);
+        }
+        atoms
     }
+}
+
+fn strictly_ordered<T: Ord>(values: &[T]) -> bool {
+    values.windows(2).all(|pair| pair[0] < pair[1])
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 #[derive(Default)]
@@ -335,6 +387,7 @@ struct SessionState {
     message_count: u32,
     turn_index: u64,
     session_id: String,
+    turn_intent_id: String,
     turn_event_graphs: Vec<CanonicalEventGraph>,
     turn_event_nodes: usize,
     turn_graph_overflow: bool,
@@ -361,7 +414,7 @@ pub fn spawn_session_stream<L>(
     evidence: Arc<Mutex<L>>,
     miner: Arc<SessionMinerBridge>,
     metrics: Arc<SessionStreamMetrics>,
-    capabilities: Arc<RequestCapabilityIndex>,
+    request_learning: Arc<RequestLearningIndex>,
 ) -> Result<(), String>
 where
     L: SessionEvidenceLedger + Send + 'static,
@@ -453,7 +506,7 @@ where
                             miner: Some(miner.as_ref()),
                             direct_collection_miner: None,
                             metrics: &metrics,
-                            capabilities: &capabilities,
+                            request_learning: &request_learning,
                         },
                     ) {
                         Ok(frames) => frames,
@@ -553,6 +606,7 @@ fn training_cases_from_session_range(
         let Ok(row) = serde_json::from_str::<Value>(line.trim_end()) else {
             continue;
         };
+        begin_turn_identity(&row, &mut state);
         observe_row(&row, &mut state, &mut emitted);
     }
     flush_pending(&mut state, 0, &mut emitted);
@@ -592,7 +646,7 @@ pub fn verified_collection_observations_from_session(
         )?));
         let collector = CollectionObservationCollector::default();
         let metrics = Arc::new(SessionStreamMetrics::default());
-        let capabilities = Arc::new(RequestCapabilityIndex::default());
+        let request_learning = Arc::new(RequestLearningIndex::default());
         let mut state = canonical_session_state(path, 0)?;
         read_appended_frames(
             path,
@@ -603,7 +657,7 @@ pub fn verified_collection_observations_from_session(
                 miner: Some(&collector),
                 direct_collection_miner: None,
                 metrics: &metrics,
-                capabilities: &capabilities,
+                request_learning: &request_learning,
             },
         )?;
         collector
@@ -1089,7 +1143,7 @@ struct SessionReadContext<'a, L> {
     miner: Option<&'a dyn SessionMinerSink>,
     direct_collection_miner: Option<&'a Arc<Mutex<OnlineCollectionMiner>>>,
     metrics: &'a Arc<SessionStreamMetrics>,
-    capabilities: &'a Arc<RequestCapabilityIndex>,
+    request_learning: &'a Arc<RequestLearningIndex>,
 }
 
 fn read_appended_frames<L: SessionEvidenceLedger>(
@@ -1103,7 +1157,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         miner,
         direct_collection_miner,
         metrics,
-        capabilities,
+        request_learning,
     } = context;
     let file = File::open(path).map_err(|error| format!("session_open:{error}"))?;
     let length = file
@@ -1141,9 +1195,12 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
         {
             submit_collection_observation(observation, miner, direct_collection_miner)?;
         }
-        if parsed.as_ref().is_some_and(is_authoritative_turn_boundary) {
+        if let Some(turn_boundary) = parsed
+            .as_ref()
+            .filter(|row| is_authoritative_turn_boundary(row))
+        {
             finalize_turn_evidence_graph(state, evidence_graphs, metrics)?;
-            state.turn_index = state.turn_index.saturating_add(1);
+            begin_turn_identity(turn_boundary, state);
         }
         if let Some(session_id) = parsed.as_ref().and_then(session_id_from_meta) {
             if state.session_identity_pinned && state.session_id != session_id {
@@ -1163,8 +1220,8 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             source_offset: position,
             event_id,
             session_id: state.session_id.clone(),
-            client_intent_id: (state.turn_index > 0)
-                .then(|| format!("{}:turn:{}", state.session_id, state.turn_index)),
+            client_intent_id: (!state.turn_intent_id.is_empty())
+                .then(|| state.turn_intent_id.clone()),
             call_id: parsed.as_ref().and_then(call_id_from_row),
             output_ordinal: parsed
                 .as_ref()
@@ -1214,9 +1271,19 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             }
         }
         let Some(row) = parsed else { continue };
-        let capability_atoms = capabilities.lookup(&state.session_id_sha256);
-        if !capability_atoms.is_empty() {
-            state.capability_atom_ids = capability_atoms;
+        let learning_atoms = request_learning.lookup(
+            &state.session_id_sha256,
+            &state.turn_client_intent_id_sha256,
+        );
+        if !learning_atoms.request_phase_atom_ids.is_empty() {
+            state
+                .request_phase_atom_ids
+                .extend(learning_atoms.request_phase_atom_ids);
+            state.request_phase_atom_ids.sort_unstable();
+            state.request_phase_atom_ids.dedup();
+        }
+        if !learning_atoms.capability_atom_ids.is_empty() {
+            state.capability_atom_ids = learning_atoms.capability_atom_ids;
         }
         observe_row(&row, state, &mut emitted);
         if is_token_count(&row)
@@ -1399,6 +1466,26 @@ fn session_id_from_meta(row: &Value) -> Option<&str> {
     (row.get("type").and_then(Value::as_str) == Some("session_meta"))
         .then(|| row.get("payload")?.get("id")?.as_str())
         .flatten()
+}
+
+fn turn_intent_id_from_context(row: &Value) -> Option<&str> {
+    (row.get("type").and_then(Value::as_str) == Some("turn_context"))
+        .then(|| row.get("payload")?.get("turn_id")?.as_str())
+        .flatten()
+        .filter(|value| !value.is_empty() && value.len() <= 256)
+}
+
+fn begin_turn_identity(row: &Value, state: &mut SessionState) {
+    if !is_authoritative_turn_boundary(row) {
+        return;
+    }
+    state.turn_index = state.turn_index.saturating_add(1);
+    state.turn_intent_id = turn_intent_id_from_context(row)
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("{}:turn:{}", state.session_id, state.turn_index));
+    state.turn_client_intent_id_sha256 = sha256_bytes(state.turn_intent_id.as_bytes());
+    state.turn_session_id_sha256 = state.session_id_sha256.clone();
+    state.turn_event_time_unix_nanos = event_time_unix_nanos(row);
 }
 
 fn event_id_from_row(row: &Value) -> Option<String> {
@@ -1585,9 +1672,6 @@ fn reset_turn(state: &mut SessionState) {
     state.latest_plan_call_item = None;
     state.request_phase_atom_ids.clear();
     state.capability_atom_ids.clear();
-    state.turn_client_intent_id_sha256.clear();
-    state.turn_session_id_sha256.clear();
-    state.turn_event_time_unix_nanos = None;
     state.runtime_request_text = String::new();
     // The user-message row was already committed before observe_row called
     // reset_turn. Preserve that one record as the first commitment of the new
@@ -2867,7 +2951,9 @@ fn count_band(value: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nando_operator_learning::{EvidencePolicyV1, synthesize_response_operator};
+    use nando_operator_learning::{
+        EvidencePolicyV1, LearningRequestStructureInputV1, synthesize_response_operator,
+    };
     use nando_response_actor::frame_matches_program_action_contract;
     use serde_json::json;
     use std::io::Write;
@@ -3041,15 +3127,29 @@ mod tests {
     }
 
     #[test]
-    fn provider_capabilities_join_by_hashed_session_without_raw_payload_storage() {
-        let index = RequestCapabilityIndex::default();
-        index.observe_provider_payload(&json!({
-            "client_metadata":{"session_id":"session-a"},
-            "tools":[{"type":"function","name":"wait"}]
-        }));
-        let atoms = index.lookup(&sha256_bytes(b"session-a"));
-        assert_eq!(atoms.len(), 1);
-        assert!(index.lookup(&sha256_bytes(b"session-b")).is_empty());
+    fn compact_request_structure_joins_by_turn_and_session_without_raw_payload_storage() {
+        let index = RequestLearningIndex::default();
+        let structure = LearningRequestStructureV1::new(LearningRequestStructureInputV1 {
+            client_intent_id_sha256: sha256_bytes(b"turn-a"),
+            session_identity_sha256s: vec![sha256_bytes(b"session-a")],
+            request_phase_atom_ids: vec![7, 9],
+            pre_action_context_atom_ids: vec![11],
+            capability_atom_ids: vec![17],
+            provider_bound_turn_identity: true,
+            estimated_input_tokens: 23,
+            provider_payload_bytes: 29,
+        })
+        .expect("learning structure");
+        index
+            .observe_structure(&structure)
+            .expect("compact learning evidence");
+        let atoms = index.lookup(&sha256_bytes(b"session-a"), &sha256_bytes(b"turn-a"));
+        assert_eq!(atoms.request_phase_atom_ids, vec![7, 9]);
+        assert_eq!(atoms.capability_atom_ids, vec![17]);
+        assert_eq!(
+            index.lookup(&sha256_bytes(b"session-b"), &sha256_bytes(b"turn-b")),
+            RequestLearningAtoms::default()
+        );
     }
 
     #[test]
@@ -3354,8 +3454,10 @@ mod tests {
                 .unwrap_or_default()
                 .as_nanos()
         ));
+        let turn_id = "019f8c37-675d-7211-8034-af56fb7d5da5";
         let rows = [
             json!({"type":"session_meta","payload":{"id":"relation-backfill-session"}}),
+            json!({"type":"turn_context","payload":{"turn_id":turn_id}}),
             json!({"type":"event_msg","payload":{"type":"user_message","message":"submit the observed count"}}),
             json!({"type":"response_item","payload":{"type":"function_call","name":"lookup","call_id":"1","arguments":"{}"}}),
             json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"1","output":"{\"count\":7}"}}),
@@ -3372,6 +3474,10 @@ mod tests {
         fs::remove_file(&path).ok();
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0].estimated_input_tokens, 123);
+        assert_eq!(
+            frames[0].client_intent_id_sha256,
+            sha256_bytes(turn_id.as_bytes())
+        );
         let encoded = serde_json::to_string(&frames[0]).expect("frame json");
         assert!(!encoded.contains("submit the observed count"));
         assert!(
@@ -3436,7 +3542,7 @@ mod tests {
                 miner: None,
                 direct_collection_miner: None,
                 metrics: &metrics,
-                capabilities: &Arc::new(RequestCapabilityIndex::default()),
+                request_learning: &Arc::new(RequestLearningIndex::default()),
             },
         )
         .expect("capture");
@@ -3789,7 +3895,7 @@ mod tests {
                 miner: None,
                 direct_collection_miner: Some(&collection_miner),
                 metrics: &metrics,
-                capabilities: &Arc::new(RequestCapabilityIndex::default()),
+                request_learning: &Arc::new(RequestLearningIndex::default()),
             },
         )
         .expect("capture");
@@ -3887,7 +3993,7 @@ mod tests {
                 miner: None,
                 direct_collection_miner: Some(&collection_miner),
                 metrics: &metrics,
-                capabilities: &Arc::new(RequestCapabilityIndex::default()),
+                request_learning: &Arc::new(RequestLearningIndex::default()),
             },
         )
         .expect("capture");
