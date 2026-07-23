@@ -60,6 +60,7 @@ pub fn build_crystallized_admission_snapshot(
         if submitted.support.len() != 32 || submitted.future.len() != 32 {
             return Err("crystallized_admission_evidence_window_invalid");
         }
+        submitted.verify_evidence_partition()?;
         // A deserialized candidate is only an evidence envelope. Rebuild the
         // winner, causal controls, executable seals and package from the 64
         // bounded rows so caller-provided proof counters never gain authority.
@@ -71,6 +72,12 @@ pub fn build_crystallized_admission_snapshot(
         let [candidate] = rebuilt.as_slice() else {
             return Err("crystallized_admission_resynthesis_failed");
         };
+        candidate.verify_evidence_partition()?;
+        if submitted.freeze_watermark_unix_nanos != candidate.freeze_watermark_unix_nanos
+            || submitted.partition_commitment_sha256 != candidate.partition_commitment_sha256
+        {
+            return Err("crystallized_admission_partition_resynthesis_mismatch");
+        }
         let candidate_commitments = |candidate: &LiveScalarAdmissionCandidate| {
             Ok(nando_operator_admission::AdmissionCandidateCommitments {
                 package_sha256: canonical_json_sha256(&candidate.package)?,

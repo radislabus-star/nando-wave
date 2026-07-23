@@ -30,9 +30,11 @@ streaming evidence ledger
 - An unsealed complete or partial tail is discarded on writer restart.
 - Journal replay of an already sealed sequence is accepted only when its digest
   is byte-identical.
+- Admission recomputes the complete sealed chain root before reading any
+  candidate-owned receipt.
 - Gaps, altered digests, truncated committed data, and invalid roots fail closed.
-- Admission falls back to the archive only when a receipt is absent from the
-  rolling index, never when the receipt or indexed digest is invalid.
+- Every fresh-generation receipt must exist inside the archive boundary. The
+  rolling index is only a cache; a cached digest disagreement fails closed.
 
 ## Fresh Generation
 
@@ -48,6 +50,12 @@ Version 2 also fixes the support-diversity deadlock found by fresh traffic. A
 a repeated support row when a missing session first appears. It does not relabel
 future evidence, and future collection starts only after support diversity is
 valid.
+
+The support/future split is sealed separately. The candidate carries a freeze
+watermark and a commitment over the support/future proof roots. Admission
+re-synthesizes this boundary and additionally requires every support capture
+sequence to precede every future capture sequence. Archive membership therefore
+cannot be used to relabel a valid record into the other partition.
 
 ## Status
 
@@ -83,3 +91,15 @@ The first deployment exposed that a general bucket strategy version is not a
 reliable owner for scalar-generation rotation. The corrective deployment added
 the dedicated persisted generation version and the live state then rotated as
 specified. This failed first live assertion was not treated as PASS.
+
+## Post-deployment Audit
+
+A separate read-only audit found three authority gaps before the first natural
+candidate reached admission:
+
+1. the admission reader checked offsets but not the complete archive chain;
+2. the rolling-index fast path could accept a pre-archive receipt;
+3. support/future membership was not independently sealed.
+
+All three are now fail-closed in code. The audit did not find a path by which
+the support-diversity reservoir moves an existing future row back into support.

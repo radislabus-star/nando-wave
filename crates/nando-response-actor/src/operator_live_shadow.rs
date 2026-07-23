@@ -213,11 +213,64 @@ pub struct LiveScalarAdmissionCandidate {
     pub package: ResponsePackage,
     pub support: Vec<TeacherTransition>,
     pub future: Vec<TeacherTransition>,
+    #[serde(default)]
+    pub freeze_watermark_unix_nanos: u64,
+    #[serde(default)]
+    pub partition_commitment_sha256: String,
     pub support_root_sha256: String,
     pub future_evidence_root_sha256: String,
     pub future_lineage_root_sha256: String,
     pub winner_seal_sha256: String,
     pub executable_parity_seal_sha256: String,
+}
+
+impl LiveScalarAdmissionCandidate {
+    pub(crate) fn seal_evidence_partition(&mut self) -> Result<(), &'static str> {
+        self.freeze_watermark_unix_nanos = evidence_partition_watermark(self)?;
+        self.partition_commitment_sha256 = evidence_partition_commitment(self);
+        Ok(())
+    }
+
+    pub fn verify_evidence_partition(&self) -> Result<(), &'static str> {
+        if self.freeze_watermark_unix_nanos == 0
+            || self.freeze_watermark_unix_nanos != evidence_partition_watermark(self)?
+            || self.partition_commitment_sha256 != evidence_partition_commitment(self)
+        {
+            return Err("crystallized_evidence_partition_mismatch");
+        }
+        Ok(())
+    }
+}
+
+fn evidence_partition_watermark(
+    candidate: &LiveScalarAdmissionCandidate,
+) -> Result<u64, &'static str> {
+    let support_max = candidate
+        .support
+        .iter()
+        .map(|row| row.before.observed_at_unix_nanos)
+        .max()
+        .ok_or("crystallized_support_partition_empty")?;
+    let future_min = candidate
+        .future
+        .iter()
+        .map(|row| row.before.observed_at_unix_nanos)
+        .min()
+        .ok_or("crystallized_future_partition_empty")?;
+    if future_min < support_max {
+        return Err("crystallized_evidence_partition_reordered");
+    }
+    Ok(support_max)
+}
+
+fn evidence_partition_commitment(candidate: &LiveScalarAdmissionCandidate) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"nando.live-scalar-evidence-partition.v1");
+    hasher.update(candidate.freeze_watermark_unix_nanos.to_le_bytes());
+    hasher.update(candidate.support_root_sha256.as_bytes());
+    hasher.update(candidate.future_evidence_root_sha256.as_bytes());
+    hasher.update(candidate.future_lineage_root_sha256.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 #[cfg(test)]

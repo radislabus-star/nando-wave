@@ -1775,6 +1775,10 @@ core. Never turn discovery into selection among a few pre-named programs.
 20. A controlled proof fixture cannot manufacture compiler authority. Physical
     truth, trusted label resolution, causal adjudication, protocol compilation,
     runtime grounding, verification, and admission have separate owners.
+21. Durable capture existence is not partition authority. Admission must
+    authenticate the complete archive chain, require every natural candidate
+    receipt to be inside that archive boundary, and independently reconstruct
+    the frozen support/future watermark before granting authority.
 
 Accounting identities must have no silent loss:
 

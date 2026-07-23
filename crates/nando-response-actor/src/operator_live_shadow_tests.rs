@@ -522,12 +522,14 @@ fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary()
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{index:064x}");
         row.before.session_id_sha256 = format!("{:064x}", 1 + index % 3);
+        row.before.observed_at_unix_nanos = index;
         state.observe(&row);
     }
     for index in 1_u64..=LIVE_SCALAR_FUTURE_ROWS as u64 {
         let mut row = transition("total", true);
         row.before.frame_id_sha256 = format!("{:064x}", 100 + index);
         row.before.session_id_sha256 = format!("{:064x}", 101 + index % 3);
+        row.before.observed_at_unix_nanos = 100 + index;
         state.observe(&row);
     }
 
@@ -550,6 +552,20 @@ fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary()
         .into_iter()
         .next()
         .expect("repeated future sessions retain per-surface parity");
+    let mut relabeled = candidate.clone();
+    std::mem::swap(&mut relabeled.support[0], &mut relabeled.future[0]);
+    assert!(matches!(
+        crate::build_crystallized_admission_snapshot(
+            &[relabeled],
+            "test-project",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        ),
+        Err("crystallized_evidence_partition_reordered")
+    ));
     let snapshot = crate::build_crystallized_admission_snapshot(
         &[candidate],
         "test-project",

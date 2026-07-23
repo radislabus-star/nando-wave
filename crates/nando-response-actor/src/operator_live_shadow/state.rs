@@ -885,16 +885,20 @@ fn live_admission_candidate(
     package
         .validate()
         .map_err(|error| format!("admission_package_{error}"))?;
-    Ok(LiveScalarAdmissionCandidate {
+    let mut candidate = LiveScalarAdmissionCandidate {
         package,
         support: law.support.clone(),
         future: law.future.clone(),
+        freeze_watermark_unix_nanos: 0,
+        partition_commitment_sha256: String::new(),
         support_root_sha256: commitment_hex(operator.support_root_sha256()),
         future_evidence_root_sha256: commitment_hex(operator.future_evidence_root_sha256()),
         future_lineage_root_sha256: commitment_hex(operator.future_lineage_root_sha256()),
         winner_seal_sha256: commitment_hex(operator.winner_seal_sha256()),
         executable_parity_seal_sha256: commitment_hex(operator.parity_seal().seal_sha256()),
-    })
+    };
+    candidate.seal_evidence_partition().map_err(str::to_owned)?;
+    Ok(candidate)
 }
 
 fn increment_report_blocker(report: &mut LiveScalarShadowReport, blocker: &str) {

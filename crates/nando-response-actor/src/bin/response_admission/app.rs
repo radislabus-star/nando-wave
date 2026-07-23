@@ -10,8 +10,7 @@ use nando_response_actor::{
     OnlineAdmissionCandidateRejection, ResponseExecutor, ResponseRegistry,
     build_crystallized_admission_snapshot, build_online_admission_evaluation,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
-    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance,
-    verify_crystallized_capture_provenance_durable,
+    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance_durable,
 };
 use serde::Serialize;
 
@@ -515,22 +514,16 @@ fn verify_capture_provenance(
     })?;
     let index: CaptureCommitmentIndex = serde_cbor::from_slice(&bytes)
         .map_err(|error| format!("capture_commitment_index_decode:{error}"))?;
-    match verify_crystallized_capture_provenance(&bundle.crystallized_candidates, &index) {
-        Ok(()) => Ok(()),
-        Err("capture_receipt_record_not_indexed") => {
-            let mut archive = CaptureCommitmentArchiveReader::open(
-                capture_index_path
-                    .parent()
-                    .ok_or_else(|| "capture_archive_parent_missing".to_owned())?,
-            )?;
-            verify_crystallized_capture_provenance_durable(
-                &bundle.crystallized_candidates,
-                &index,
-                &mut archive,
-            )
-        }
-        Err(error) => Err(error.to_owned()),
-    }
+    let mut archive = CaptureCommitmentArchiveReader::open(
+        capture_index_path
+            .parent()
+            .ok_or_else(|| "capture_archive_parent_missing".to_owned())?,
+    )?;
+    verify_crystallized_capture_provenance_durable(
+        &bundle.crystallized_candidates,
+        &index,
+        &mut archive,
+    )
 }
 
 fn write_report(path: &Path, report: AdmissionControllerReport) -> Result<(), String> {

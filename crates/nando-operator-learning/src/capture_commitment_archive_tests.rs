@@ -42,9 +42,10 @@ fn sealed_archive_verifies_evicted_receipts_and_rejects_tampering() {
     file.seek(SeekFrom::Start(8)).expect("seek archive data");
     file.write_all(&[0xff]).expect("tamper archive data");
     drop(file);
-    let mut reader = CaptureCommitmentArchiveReader::open(&root).expect("reader after tamper");
-    let original = CaptureEvidenceReceipt::new(records[..2].to_vec()).expect("original receipt");
-    assert!(reader.verify_receipt(&original).is_err());
+    assert!(matches!(
+        CaptureCommitmentArchiveReader::open(&root),
+        Err(error) if error == "capture_archive_root_mismatch"
+    ));
     let _ = std::fs::remove_dir_all(root);
 }
 

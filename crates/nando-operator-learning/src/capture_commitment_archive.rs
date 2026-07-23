@@ -150,9 +150,11 @@ impl CaptureCommitmentArchiveReader {
             .map_err(|error| format!("capture_archive_checkpoint_read:{error}"))?;
         let checkpoint: ArchiveCheckpoint = serde_cbor::from_slice(&bytes)
             .map_err(|error| format!("capture_archive_checkpoint_decode:{error}"))?;
-        let file = File::open(directory.join(DATA_FILE))
+        let mut file = File::open(directory.join(DATA_FILE))
             .map_err(|error| format!("capture_archive_read_open:{error}"))?;
-        validate_checkpoint_metadata(&file, &checkpoint)?;
+        // Admission must authenticate the sealed chain, not only individual
+        // offsets supplied by the candidate receipt.
+        validate_checkpoint_chain(&mut file, &checkpoint)?;
         Ok(Self { file, checkpoint })
     }
 
@@ -181,6 +183,21 @@ impl CaptureCommitmentArchiveReader {
             }
         }
         Ok(())
+    }
+
+    #[must_use]
+    pub fn base_sequence(&self) -> u64 {
+        self.checkpoint.base_sequence
+    }
+
+    #[must_use]
+    pub fn next_sequence(&self) -> u64 {
+        self.checkpoint.next_sequence
+    }
+
+    #[must_use]
+    pub fn chain_root_sha256(&self) -> &str {
+        &self.checkpoint.chain_root_sha256
     }
 }
 
