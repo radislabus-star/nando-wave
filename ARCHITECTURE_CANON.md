@@ -916,6 +916,14 @@ ACTIVE generation g                         immutable
 This firewall preserves the proof for generation `g`, prevents feedback
 oscillation, and gives every behavioral change a new evidence lineage.
 
+Registry generations are additive across unrelated operators. A newly admitted
+package creates a new registry generation from the fresh candidate plus only
+the byte-identical, unexpired packages revalidated against the current external
+admission receipt. Duplicate package IDs with different content fail closed.
+The merge reissues one content-derived registry revision and every authority
+binding; it never copies an old lease verbatim. Expired, revoked, invalid, or
+conflicting packages are not retained.
+
 ### Canonical matched-capacity experiment
 
 The system core is accepted only through five frozen contours:

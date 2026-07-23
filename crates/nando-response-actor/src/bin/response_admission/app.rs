@@ -7,10 +7,11 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use nando_response_actor::{
     CaptureCommitmentArchiveReader, CaptureCommitmentIndex, CaptureTransitionBindingArchiveReader,
-    OnlineAdmissionCandidateBundle, OnlineAdmissionCandidateRejection, ResponseExecutor,
-    ResponseRegistry, build_crystallized_admission_snapshot, build_online_admission_evaluation,
-    build_online_collection_admission_snapshot, response_runtime_contract_sha256, sha256_bytes,
-    verify_crystallized_capture_provenance_durable,
+    CompositeResponseAdmissionV2, OnlineAdmissionCandidateBundle,
+    OnlineAdmissionCandidateRejection, OnlineAdmissionSnapshot, ResponseExecutor, ResponseRegistry,
+    build_crystallized_admission_snapshot, build_online_admission_evaluation,
+    build_online_collection_admission_snapshot, merge_with_active_online_admission,
+    response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance_durable,
 };
 use serde::Serialize;
 
@@ -234,6 +235,8 @@ fn run(started: Instant) -> Result<(), String> {
         &state_dir,
         "response-admission-controller.json",
     );
+    let active_admission_path =
+        env_path_join("NANDO_TRANSITION_ADMISSION", &state_dir, "admission.json");
     let authority_candidate_path = env_path_join(
         "NANDO_RESPONSE_AUTHORITY_CANDIDATE",
         &state_dir,
@@ -351,7 +354,20 @@ fn run(started: Instant) -> Result<(), String> {
     .map_err(str::to_owned)?;
     // Legacy relation and collection routes remain observable controls. New
     // authority has one owner: a provenance-bound crystallized operator.
-    let snapshot = crystallized;
+    let snapshot = crystallized
+        .map(|candidate| {
+            merge_with_active_generation_files(
+                candidate,
+                &registry_path,
+                &active_admission_path,
+                &bundle.project_id,
+                &gate_sha256,
+                &runtime_sha256,
+                now_unix,
+                max_age_seconds,
+            )
+        })
+        .transpose()?;
     let Some(snapshot) = snapshot else {
         let primary_rejection = relation_rejections.first();
         let preserved_active_packages = last_known_good_package_count(
@@ -596,6 +612,42 @@ fn last_known_good_package_count(
         .and_then(|bytes| serde_json::from_slice::<ResponseRegistry>(&bytes).ok())
         .filter(|registry| registry.validate().is_ok())
         .map_or(0, |registry| registry.packages.len())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn merge_with_active_generation_files(
+    candidate: nando_response_actor::OnlineAdmissionSnapshot,
+    registry_path: &Path,
+    active_admission_path: &Path,
+    project_id: &str,
+    gate_sha256: &str,
+    runtime_sha256: &str,
+    now_unix: u64,
+    max_age_seconds: u64,
+) -> Result<OnlineAdmissionSnapshot, String> {
+    if !registry_path.is_file() || !active_admission_path.is_file() {
+        return Ok(candidate);
+    }
+    let existing: ResponseRegistry = serde_json::from_slice(
+        &fs::read(registry_path).map_err(|error| format!("active_registry_read:{error}"))?,
+    )
+    .map_err(|error| format!("active_registry_decode:{error}"))?;
+    let active_admission: CompositeResponseAdmissionV2 = serde_json::from_slice(
+        &fs::read(active_admission_path)
+            .map_err(|error| format!("active_admission_read:{error}"))?,
+    )
+    .map_err(|error| format!("active_admission_decode:{error}"))?;
+    merge_with_active_online_admission(
+        candidate,
+        existing,
+        active_admission,
+        project_id,
+        gate_sha256,
+        runtime_sha256,
+        now_unix,
+        max_age_seconds,
+    )
+    .map_err(str::to_owned)
 }
 
 fn active_generation_is_immutable(

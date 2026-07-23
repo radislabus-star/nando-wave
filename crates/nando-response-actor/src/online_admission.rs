@@ -12,9 +12,9 @@ use crate::{
     OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
     RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
     RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
-    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseExecutionStatus, ResponsePackage,
-    ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram, ResponseRegistry,
-    VerifiedCrystallizedOperator, canonical_json_sha256,
+    RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1, ResponseExecutionStatus, ResponseExecutor,
+    ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram,
+    ResponseRegistry, VerifiedCrystallizedOperator, canonical_json_sha256,
     compile_source_neutral_quarantine_packages, evaluate_grounded_wave_causality, execute_response,
     frame_matches_program_action_contract, online_collection_future_manifest_digest,
     online_collection_support_manifest_digest, relation_frame_routes_to_package,
@@ -375,6 +375,87 @@ pub fn merge_online_admission_snapshots(
         registry,
         admission,
     }))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn merge_with_active_online_admission(
+    candidate: OnlineAdmissionSnapshot,
+    existing_registry: ResponseRegistry,
+    existing_admission: CompositeResponseAdmissionV2,
+    project_id: &str,
+    gate_build_sha256: &str,
+    runtime_build_sha256: &str,
+    now_unix: u64,
+    max_age_seconds: u64,
+) -> Result<OnlineAdmissionSnapshot, &'static str> {
+    ResponseExecutor::from_registry_with_admission(
+        candidate.registry.clone(),
+        candidate.admission.clone(),
+        project_id,
+        gate_build_sha256,
+        runtime_build_sha256,
+        now_unix,
+        max_age_seconds,
+    )?;
+    ResponseExecutor::from_registry_with_admission(
+        existing_registry.clone(),
+        existing_admission.clone(),
+        project_id,
+        gate_build_sha256,
+        runtime_build_sha256,
+        now_unix,
+        max_age_seconds,
+    )?;
+
+    let candidate_packages = candidate
+        .registry
+        .packages
+        .iter()
+        .map(|package| (package.package_id.as_str(), package))
+        .collect::<BTreeMap<_, _>>();
+    let mut retained_packages = Vec::new();
+    for package in existing_registry.packages {
+        let Some(replacement) = candidate_packages.get(package.package_id.as_str()) else {
+            retained_packages.push(package);
+            continue;
+        };
+        if canonical_json_sha256(&package)? != canonical_json_sha256(*replacement)? {
+            return Err("active_generation_package_id_conflict");
+        }
+    }
+    if retained_packages.is_empty() {
+        return Ok(candidate);
+    }
+
+    let retained_ids = retained_packages
+        .iter()
+        .map(|package| package.package_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let retained_bindings = existing_admission
+        .response_authority
+        .packages
+        .iter()
+        .filter(|binding| retained_ids.contains(binding.package_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if retained_bindings.len() != retained_packages.len() {
+        return Err("active_generation_binding_count_mismatch");
+    }
+
+    // Only a fully revalidated active generation reaches this point. The merge
+    // reissues one revision, so no previous authority lease is copied verbatim.
+    let mut retained_registry = candidate.registry.clone();
+    retained_registry.packages = retained_packages;
+    let mut retained_admission = candidate.admission.clone();
+    retained_admission.response_authority.packages = retained_bindings;
+    merge_online_admission_snapshots(vec![
+        candidate,
+        OnlineAdmissionSnapshot {
+            registry: retained_registry,
+            admission: retained_admission,
+        },
+    ])?
+    .ok_or("active_generation_merge_empty")
 }
 
 fn authority_content_revision(

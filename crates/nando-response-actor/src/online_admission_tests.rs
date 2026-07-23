@@ -265,6 +265,128 @@ fn merged_authority_revision_depends_on_active_content_not_candidate_revision() 
     );
 }
 
+fn frames_for_function(
+    range: std::ops::Range<usize>,
+    function_name: &str,
+    argument_name: &str,
+) -> Vec<RelationFrame> {
+    range
+        .map(|index| {
+            let mut row = frame(index);
+            for atom in &mut row.atoms {
+                match atom {
+                    RelationAtom::ActionFunction { value } => {
+                        *value = function_name.to_owned();
+                    }
+                    RelationAtom::ActionRoleArgument { name, .. } => {
+                        *name = argument_name.to_owned();
+                    }
+                    RelationAtom::ClientCapabilityAtom { atom_id } => {
+                        *atom_id = crate::package::stable_atom_id(&format!(
+                            "client_capability:function:{function_name}"
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            row
+        })
+        .collect()
+}
+
+fn admission_snapshot_for_function(
+    offset: usize,
+    function_name: &str,
+    argument_name: &str,
+    now_unix: u64,
+) -> OnlineAdmissionSnapshot {
+    let support = frames_for_function(offset..offset + 32, function_name, argument_name);
+    let future = frames_for_function(offset + 32..offset + 64, function_name, argument_name);
+    build_online_admission_snapshot(
+        &[candidate(support, future)],
+        "project",
+        offset as u64 + 1,
+        now_unix,
+        60,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("admission evaluation")
+    .expect("complete candidate")
+}
+
+#[test]
+fn active_admission_merge_preserves_distinct_operator_packages() {
+    let active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    let candidate = admission_snapshot_for_function(100, "write_stdin", "session_id", 100);
+    let merged = merge_with_active_online_admission(
+        candidate,
+        active.registry,
+        active.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        60,
+    )
+    .expect("additive admission");
+
+    assert_eq!(merged.registry.packages.len(), 2);
+    let executor = crate::ResponseExecutor::from_registry_with_admission(
+        merged.registry,
+        merged.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        60,
+    )
+    .expect("merged authority");
+    assert_eq!(executor.active_package_count(), 2);
+}
+
+#[test]
+fn active_admission_merge_deduplicates_identical_package() {
+    let active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    let candidate = active.clone();
+    let merged = merge_with_active_online_admission(
+        candidate,
+        active.registry,
+        active.admission,
+        "project",
+        &"a".repeat(64),
+        &"b".repeat(64),
+        100,
+        60,
+    )
+    .expect("deduplicated admission");
+
+    assert_eq!(merged.registry.packages.len(), 1);
+    assert_eq!(
+        merged.admission.response_authority.packages.len(),
+        merged.registry.packages.len()
+    );
+}
+
+#[test]
+fn active_admission_merge_rejects_expired_authority() {
+    let active = admission_snapshot_for_function(0, "wait", "cell_id", 100);
+    let candidate = admission_snapshot_for_function(100, "write_stdin", "session_id", 200);
+    assert!(
+        merge_with_active_online_admission(
+            candidate,
+            active.registry,
+            active.admission,
+            "project",
+            &"a".repeat(64),
+            &"b".repeat(64),
+            200,
+            60,
+        )
+        .is_err()
+    );
+}
+
 #[test]
 fn semantic_law_binding_preserves_consensus_actor_and_independent_verifier() {
     let first = (0..32).map(frame).collect::<Vec<_>>();

@@ -285,6 +285,7 @@ pub use online_admission::{
     build_crystallized_admission_snapshot, build_durable_runtime_parity_receipt,
     build_online_admission_evaluation, build_online_admission_snapshot,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
+    merge_with_active_online_admission,
 };
 pub use online_checkpoint::{
     FramedCborLedger, FramedLedgerStatus, FramedRecordRef, read_framed_cbor, write_atomic_cbor,
