@@ -106,6 +106,7 @@ pub struct RuntimeRestartParitySealData {
     pub verifier_sha256: Commitment256,
     pub binding_receipts_root: Commitment256,
     pub execution_receipts_root: Commitment256,
+    pub future_evidence_count: u32,
     pub future_lineage_count: u32,
     pub wrong_accepts: u32,
     pub seal_sha256: Commitment256,
@@ -219,6 +220,8 @@ struct RestartParitySeal {
     verifier_sha256: Commitment256,
     binding_receipts_root: Commitment256,
     execution_receipts_root: Commitment256,
+    #[serde(default)]
+    future_evidence_count: u32,
     future_lineage_count: u32,
     wrong_accepts: u32,
     seal_sha256: Commitment256,
@@ -374,6 +377,7 @@ impl From<&RuntimeRestartParitySealData> for RestartParitySeal {
             verifier_sha256: seal.verifier_sha256,
             binding_receipts_root: seal.binding_receipts_root,
             execution_receipts_root: seal.execution_receipts_root,
+            future_evidence_count: seal.future_evidence_count,
             future_lineage_count: seal.future_lineage_count,
             wrong_accepts: seal.wrong_accepts,
             seal_sha256: seal.seal_sha256,
@@ -383,12 +387,18 @@ impl From<&RuntimeRestartParitySealData> for RestartParitySeal {
 
 impl From<RestartParitySeal> for RuntimeRestartParitySealData {
     fn from(seal: RestartParitySeal) -> Self {
+        let future_evidence_count = if seal.future_evidence_count == 0 {
+            seal.future_lineage_count
+        } else {
+            seal.future_evidence_count
+        };
         Self {
             winner_seal_sha256: seal.winner_seal_sha256,
             actor_sha256: seal.actor_sha256,
             verifier_sha256: seal.verifier_sha256,
             binding_receipts_root: seal.binding_receipts_root,
             execution_receipts_root: seal.execution_receipts_root,
+            future_evidence_count,
             future_lineage_count: seal.future_lineage_count,
             wrong_accepts: seal.wrong_accepts,
             seal_sha256: seal.seal_sha256,

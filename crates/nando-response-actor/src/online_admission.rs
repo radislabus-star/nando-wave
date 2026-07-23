@@ -199,7 +199,8 @@ pub fn build_crystallized_admission_snapshot(
             || candidate.winner_seal_sha256 != commitment_hex(operator.winner_seal_sha256())
             || candidate.executable_parity_seal_sha256
                 != commitment_hex(operator.parity_seal().seal_sha256())
-            || operator.parity_seal().future_lineage_count() < 32
+            || operator.parity_seal().future_evidence_count() < 32
+            || operator.parity_seal().future_lineage_count() < 3
             || operator.parity_seal().wrong_accepts() != 0
         {
             return Err("crystallized_admission_commitment_mismatch");

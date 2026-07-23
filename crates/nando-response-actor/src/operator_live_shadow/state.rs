@@ -469,7 +469,7 @@ fn evaluate_live_law(
     report.causal_control_passes = report.causal_control_passes.saturating_add(1);
     let mut future_window = frozen.future_window();
     for sample in &future {
-        if future_window.admit_lineage(&sample.bundle).is_err() {
+        if future_window.admit_evidence(&sample.bundle).is_err() {
             increment_report_blocker(report, "future_lineage_rejected");
             return;
         }

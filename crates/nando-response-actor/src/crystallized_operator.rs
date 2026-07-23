@@ -56,6 +56,7 @@ pub struct ExecutableParitySeal {
     verifier_sha256: Commitment256,
     binding_receipts_root: Commitment256,
     execution_receipts_root: Commitment256,
+    future_evidence_count: u32,
     future_lineage_count: u32,
     wrong_accepts: u32,
     seal_sha256: Commitment256,
@@ -104,6 +105,7 @@ pub enum CrystallizedOperatorError {
     VerifierContractMismatch,
     EmptyFutureWindow,
     DuplicateParityLineage,
+    DuplicateParityEvidence,
     UnknownParityLineage,
     MissingParityReceipt,
     ActorDidNotExecute,
@@ -304,6 +306,7 @@ impl CrystallizedOperator {
             &verifier_sha256,
             &binding_receipts,
             &execution_receipts,
+            verified_future_lineages.len(),
         )?;
         let operator = Self {
             runtime_artifact: nando_operator_runtime::RuntimeOperatorArtifact::new(
@@ -615,6 +618,7 @@ impl VerifiedCrystallizedOperator {
             || verifier_digest != parity_seal.verifier_sha256
             || first_u64(&verifier_digest) != header.verifier_binding_fingerprint64
             || parity_seal.future_lineage_count as usize != metadata.verified_future_lineages.len()
+            || parity_seal.future_evidence_count < parity_seal.future_lineage_count
             || parity_seal.wrong_accepts != 0
         {
             return Err(CrystallizedOperatorError::RestartDigestMismatch);
@@ -709,6 +713,11 @@ impl ExecutableParitySeal {
     }
 
     #[must_use]
+    pub const fn future_evidence_count(&self) -> u32 {
+        self.future_evidence_count
+    }
+
+    #[must_use]
     pub const fn wrong_accepts(&self) -> u32 {
         self.wrong_accepts
     }
@@ -727,6 +736,7 @@ impl From<&ExecutableParitySeal> for nando_operator_runtime::RuntimeRestartParit
             verifier_sha256: seal.verifier_sha256,
             binding_receipts_root: seal.binding_receipts_root,
             execution_receipts_root: seal.execution_receipts_root,
+            future_evidence_count: seal.future_evidence_count,
             future_lineage_count: seal.future_lineage_count,
             wrong_accepts: seal.wrong_accepts,
             seal_sha256: seal.seal_sha256,
@@ -746,6 +756,7 @@ impl TryFrom<&nando_operator_runtime::RuntimeRestartParitySealData> for Executab
             &seal.verifier_sha256,
             &seal.binding_receipts_root,
             &seal.execution_receipts_root,
+            seal.future_evidence_count,
             seal.future_lineage_count,
             seal.wrong_accepts,
         );
@@ -758,6 +769,7 @@ impl TryFrom<&nando_operator_runtime::RuntimeRestartParitySealData> for Executab
             verifier_sha256: seal.verifier_sha256,
             binding_receipts_root: seal.binding_receipts_root,
             execution_receipts_root: seal.execution_receipts_root,
+            future_evidence_count: seal.future_evidence_count,
             future_lineage_count: seal.future_lineage_count,
             wrong_accepts: seal.wrong_accepts,
             seal_sha256: seal.seal_sha256,
@@ -1116,30 +1128,57 @@ fn verify_future_receipts(
     actor_template: &ResponseProgram,
     receipts: &[CrystallizationParityReceipt],
 ) -> Result<FutureParityProof, CrystallizedOperatorError> {
-    let expected = future_window.future_lineages_sha256();
-    if expected.is_empty() {
+    let expected_lineages = future_window.future_lineages_sha256();
+    let expected_surfaces = future_window.future_surfaces_sha256();
+    if expected_lineages.is_empty() || expected_surfaces.is_empty() {
         return Err(CrystallizedOperatorError::EmptyFutureWindow);
     }
-    let evidence_by_lineage = future_evidence
+    let evidence_by_surface = future_evidence
         .iter()
-        .map(|evidence| (*evidence.bundle().lineage_sha256(), evidence))
+        .map(|evidence| {
+            (
+                (
+                    *evidence.bundle().lineage_sha256(),
+                    *evidence.bundle().surface_sha256(),
+                ),
+                evidence,
+            )
+        })
         .collect::<std::collections::BTreeMap<_, _>>();
-    if evidence_by_lineage.len() != expected.len() || evidence_by_lineage.keys().ne(expected.iter())
+    if evidence_by_surface.len() != expected_surfaces.len()
+        || evidence_by_surface
+            .keys()
+            .map(|(_, surface)| surface)
+            .copied()
+            .collect::<BTreeSet<_>>()
+            != *expected_surfaces
+        || evidence_by_surface
+            .keys()
+            .map(|(lineage, _)| lineage)
+            .copied()
+            .collect::<BTreeSet<_>>()
+            != *expected_lineages
     {
         return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
     }
-    let mut seen = BTreeSet::new();
+    let mut seen_evidence = BTreeSet::new();
+    let mut seen_lineages = BTreeSet::new();
     let mut binding_receipts = Vec::with_capacity(receipts.len());
     let mut execution_receipts = Vec::with_capacity(receipts.len());
     for receipt in receipts {
-        if !expected.contains(&receipt.future_lineage_sha256) {
+        if !expected_lineages.contains(&receipt.future_lineage_sha256) {
             return Err(CrystallizedOperatorError::UnknownParityLineage);
         }
-        if !seen.insert(receipt.future_lineage_sha256) {
-            return Err(CrystallizedOperatorError::DuplicateParityLineage);
+        if !expected_surfaces.contains(&receipt.future_surface_sha256) {
+            return Err(CrystallizedOperatorError::FutureEvidenceMismatch);
         }
-        let evidence = evidence_by_lineage
-            .get(&receipt.future_lineage_sha256)
+        let evidence_key = (receipt.future_lineage_sha256, receipt.future_surface_sha256);
+        if !seen_evidence.insert(evidence_key) {
+            return Err(CrystallizedOperatorError::DuplicateParityEvidence);
+        }
+        seen_lineages.insert(receipt.future_lineage_sha256);
+        let evidence = evidence_by_surface
+            .get(&evidence_key)
             .ok_or(CrystallizedOperatorError::FutureEvidenceMismatch)?;
         if receipt.future_surface_sha256 != *evidence.bundle().surface_sha256()
             || receipt.future_bundle_sha256 != *evidence.bundle_sha256()
@@ -1195,11 +1234,11 @@ fn verify_future_receipts(
             ],
         ));
     }
-    if seen != *expected {
+    if seen_evidence.len() != expected_surfaces.len() || seen_lineages != *expected_lineages {
         return Err(CrystallizedOperatorError::MissingParityReceipt);
     }
     Ok(FutureParityProof {
-        lineages: seen.into_iter().collect(),
+        lineages: seen_lineages.into_iter().collect(),
         binding_receipts,
         execution_receipts,
     })
@@ -1211,6 +1250,7 @@ fn build_executable_parity_seal(
     verifier_sha256: &str,
     binding_receipts: &[Commitment256],
     execution_receipts: &[Commitment256],
+    future_lineage_count: usize,
 ) -> Result<ExecutableParitySeal, CrystallizedOperatorError> {
     if binding_receipts.is_empty() || binding_receipts.len() != execution_receipts.len() {
         return Err(CrystallizedOperatorError::MissingParityReceipt);
@@ -1221,7 +1261,9 @@ fn build_executable_parity_seal(
         commitment_root(b"nando.binding-receipts-root.v1", binding_receipts);
     let execution_receipts_root =
         commitment_root(b"nando.execution-receipts-root.v1", execution_receipts);
-    let future_lineage_count = u32::try_from(binding_receipts.len())
+    let future_evidence_count = u32::try_from(binding_receipts.len())
+        .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
+    let future_lineage_count = u32::try_from(future_lineage_count)
         .map_err(|_| CrystallizedOperatorError::DigestFailure)?;
     let wrong_accepts = 0_u32;
     let seal_sha256 = executable_parity_seal_digest(
@@ -1230,6 +1272,7 @@ fn build_executable_parity_seal(
         &verifier_sha256,
         &binding_receipts_root,
         &execution_receipts_root,
+        future_evidence_count,
         future_lineage_count,
         wrong_accepts,
     );
@@ -1239,6 +1282,7 @@ fn build_executable_parity_seal(
         verifier_sha256,
         binding_receipts_root,
         execution_receipts_root,
+        future_evidence_count,
         future_lineage_count,
         wrong_accepts,
         seal_sha256,
@@ -1252,17 +1296,19 @@ fn executable_parity_seal_digest(
     verifier_sha256: &Commitment256,
     binding_receipts_root: &Commitment256,
     execution_receipts_root: &Commitment256,
+    future_evidence_count: u32,
     future_lineage_count: u32,
     wrong_accepts: u32,
 ) -> Commitment256 {
     digest_parts(
-        b"nando.executable-parity-seal.v1",
+        b"nando.executable-parity-seal.v2",
         &[
             winner_seal_sha256,
             actor_sha256,
             verifier_sha256,
             binding_receipts_root,
             execution_receipts_root,
+            &future_evidence_count.to_le_bytes(),
             &future_lineage_count.to_le_bytes(),
             &wrong_accepts.to_le_bytes(),
         ],
@@ -1674,6 +1720,7 @@ mod tests {
         assert_eq!(operator.blueprint_sha256(), &winner);
         assert_eq!(operator.verified_future_lineages(), &[digest(3)]);
         assert_eq!(operator.page().as_bytes().len(), 4_032);
+        assert_eq!(operator.parity_seal().future_evidence_count(), 1);
         assert_eq!(operator.parity_seal().future_lineage_count(), 1);
         assert_eq!(operator.parity_seal().wrong_accepts(), 0);
         assert_eq!(
@@ -1687,7 +1734,7 @@ mod tests {
         );
         assert_eq!(
             format!("{:x}", Sha256::digest(restart_bundle.registry_cbor())),
-            "73942962ee22ed1d95326d1f0dbb0f55e855d8b7f4e9b2a3928bf1a714897965"
+            "99aba3b0f8113e40d1152b4207c31f86d268d0c31ac451fda3a5f4629c626b93"
         );
         assert_eq!(restart_bundle.page_bytes().len(), OPERATOR_PAGE32_BYTES);
         assert!(

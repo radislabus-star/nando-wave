@@ -255,6 +255,7 @@ pub enum FrozenBlueprintError {
 pub struct FrozenBlueprintFutureWindow {
     frozen: FrozenOperatorBlueprintSet,
     future_lineages_sha256: BTreeSet<Commitment256>,
+    future_surfaces_sha256: BTreeSet<Commitment256>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1415,6 +1416,7 @@ impl FrozenOperatorBlueprintSet {
         FrozenBlueprintFutureWindow {
             frozen: self.clone(),
             future_lineages_sha256: BTreeSet::new(),
+            future_surfaces_sha256: BTreeSet::new(),
         }
     }
 
@@ -1470,6 +1472,28 @@ impl FrozenBlueprintFutureWindow {
         if !self.future_lineages_sha256.insert(bundle.lineage_sha256) {
             return Err(FrozenBlueprintError::DuplicateFutureLineage);
         }
+        self.future_surfaces_sha256.insert(bundle.surface_sha256);
+        Ok(())
+    }
+
+    /// Admits a distinct future observation while retaining one phase vote per
+    /// lineage. Repeated surfaces are not independent evidence.
+    pub fn admit_evidence(
+        &mut self,
+        bundle: &SurfaceFragmentBundle,
+    ) -> Result<(), FrozenBlueprintError> {
+        if self
+            .frozen
+            .support_lineages_sha256
+            .binary_search(&bundle.lineage_sha256)
+            .is_ok()
+        {
+            return Err(FrozenBlueprintError::SupportLineageReused);
+        }
+        if !self.future_surfaces_sha256.insert(bundle.surface_sha256) {
+            return Err(FrozenBlueprintError::DuplicateFutureLineage);
+        }
+        self.future_lineages_sha256.insert(bundle.lineage_sha256);
         Ok(())
     }
 
@@ -1481,6 +1505,11 @@ impl FrozenBlueprintFutureWindow {
     #[must_use]
     pub fn future_lineages_sha256(&self) -> &BTreeSet<Commitment256> {
         &self.future_lineages_sha256
+    }
+
+    #[must_use]
+    pub fn future_surfaces_sha256(&self) -> &BTreeSet<Commitment256> {
+        &self.future_surfaces_sha256
     }
 }
 
@@ -1510,7 +1539,7 @@ impl BlueprintFutureEvaluator {
         }
         let mut window = frozen.future_window();
         for bundle in future_bundles {
-            match window.admit_lineage(bundle) {
+            match window.admit_evidence(bundle) {
                 Ok(()) => {}
                 Err(FrozenBlueprintError::SupportLineageReused) => {
                     return blocked_future(control, BlueprintFutureBlocker::SupportLineageReused);
@@ -2990,6 +3019,18 @@ mod tests {
         assert_eq!(future.admit_lineage(&independent), Ok(()));
         assert_eq!(
             future.admit_lineage(&independent),
+            Err(FrozenBlueprintError::DuplicateFutureLineage)
+        );
+
+        let mut evidence_window = frozen.future_window();
+        let same_lineage_first = symmetric_bundle(4, 14, true);
+        let same_lineage_second = symmetric_bundle(4, 15, true);
+        assert_eq!(evidence_window.admit_evidence(&same_lineage_first), Ok(()));
+        assert_eq!(evidence_window.admit_evidence(&same_lineage_second), Ok(()));
+        assert_eq!(evidence_window.future_lineages_sha256().len(), 1);
+        assert_eq!(evidence_window.future_surfaces_sha256().len(), 2);
+        assert_eq!(
+            evidence_window.admit_evidence(&same_lineage_second),
             Err(FrozenBlueprintError::DuplicateFutureLineage)
         );
     }

@@ -600,8 +600,9 @@ The fixed core budgets are:
 
 ```text
 one hot rich operator                    4032 B
-support evidence required                  32 independent rows
-frozen-future evidence required            32 independent rows
+support evidence required                  32 distinct verified surfaces
+frozen-future evidence required            32 distinct verified surfaces
+distinct sessions across the proof          3 minimum
 wrong accepts / parity mismatches            0
 competing alignment / blueprint beam        64
 maximum circuit depth                       12
@@ -1219,9 +1220,16 @@ actor program
 independent verifier program
 binding-receipt root
 execution-receipt root
-future lineage count
+future evidence count
+distinct future lineage count
 wrong accepts
 ```
+
+These counts are deliberately separate. Every one of the 32 future surfaces
+must pass actor/verifier parity, while repeated surfaces from one future-only
+session contribute one phase vote and one distinct lineage. Admission requires
+at least 32 verified future surfaces and at least three distinct future
+lineages; neither denominator may be inferred from the other.
 
 Scores are accumulated and compared in deterministic fixed-point arithmetic.
 Converting floating-point scores to integers only at seal time is forbidden,

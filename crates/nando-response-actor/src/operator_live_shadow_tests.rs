@@ -511,6 +511,27 @@ fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary()
             .blockers
             .contains_key(&LiveScalarShadowBlocker::SupportFutureSessionOverlap)
     );
+    let report = state.report();
+    assert_eq!(report.full_phase_winners, 1, "{report:#?}");
+    assert_eq!(report.verified_shadow_operators, 1, "{report:#?}");
+    assert_eq!(report.shadow_executions, LIVE_SCALAR_FUTURE_ROWS);
+    assert_eq!(report.admission_candidates, 1, "{report:#?}");
+    let candidate = state
+        .admission_candidates()
+        .into_iter()
+        .next()
+        .expect("repeated future sessions retain per-surface parity");
+    let snapshot = crate::build_crystallized_admission_snapshot(
+        &[candidate],
+        "test-project",
+        1,
+        100,
+        30,
+        &"a".repeat(64),
+        &"b".repeat(64),
+    )
+    .expect("external admission repeats all future surfaces");
+    assert!(snapshot.is_some());
 }
 
 #[test]
