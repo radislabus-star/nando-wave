@@ -67,6 +67,7 @@ pub struct ControlConfig {
     pub response_online_miner_report_path: PathBuf,
     pub build_manifest_path: PathBuf,
     pub admission_max_age_seconds: u64,
+    pub response_controller_report_max_age_seconds: u64,
     pub cpu_route_ready: bool,
 }
 
@@ -85,6 +86,11 @@ impl ControlConfig {
             .ok()
             .and_then(|value| value.parse().ok())
             .unwrap_or(900);
+        let response_controller_report_max_age_seconds =
+            env::var("NANDO_RESPONSE_CONTROLLER_REPORT_MAX_AGE_SECONDS")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(90);
 
         Ok(Self {
             bind: env::var("NANDO_GATEWAY_CONTROL_BIND")
@@ -141,6 +147,7 @@ impl ControlConfig {
                 }),
             ),
             admission_max_age_seconds,
+            response_controller_report_max_age_seconds,
             cpu_route_ready: env_flag("NANDO_GATEWAY_CPU_ROUTE_READY"),
         })
     }
@@ -513,6 +520,7 @@ mod tests {
             response_online_miner_report_path: root.join("response-online-miner-report.json"),
             build_manifest_path: root.join("build-manifest.json"),
             admission_max_age_seconds: 900,
+            response_controller_report_max_age_seconds: 90,
             cpu_route_ready: false,
         }
     }

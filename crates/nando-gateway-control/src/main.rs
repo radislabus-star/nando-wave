@@ -2,6 +2,7 @@ mod client_connections;
 mod f5_runtime_status;
 mod live_dashboard;
 mod signal_map;
+mod signal_path_api;
 
 use axum::extract::{Form, Path, State};
 use axum::http::{StatusCode, header};
@@ -27,6 +28,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LIVE_MINER_REPORT_URL: &str = "http://127.0.0.1:18789/v2/miner/report";
 const HOT_SERVING_HEALTH_URL: &str = "http://127.0.0.1:18789/health/bridge";
+const HOT_SERVING_RUNTIME_HEALTH_URL: &str = "http://127.0.0.1:18789/health";
 const COLD_LEARNING_HEALTH_URL: &str = "http://127.0.0.1:18790/health/bridge";
 const LIVE_STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -60,6 +62,10 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/control/:key", get(control_page))
+        .route(
+            "/control/:key/api/v1/signal-path",
+            get(signal_path_api::control_signal_path),
+        )
         .route("/control/:key/tokens", get(control_token_stats))
         .route("/control/:key/connections", get(control_client_connections))
         .route("/control/:key/state", get(control_state))
