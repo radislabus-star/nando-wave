@@ -1093,11 +1093,12 @@ may fall back from the rolling index only for `record_not_indexed`; malformed
 or mismatched receipts remain hard failures.
 
 An archive introduced after a generation was collected cannot retroactively
-authorize that generation. The first archive-backed generation starts with an
-empty live scalar support/future state while preserving the independent Wave
-and self-training state. All of its support and future receipts must be captured
-after the archive boundary. Missing archive coverage yields BLOCK, never
-backfill, relabeling, or local authority.
+authorize that generation. A dedicated persisted scalar-generation version,
+separate from the Wave strategy version, starts the first archive-backed
+generation with empty live scalar support/future while preserving the
+independent Wave and self-training state. All of its support and future receipts
+must be captured after the archive boundary. Missing archive coverage yields
+BLOCK, never backfill, relabeling, or local authority.
 
 Circuit ranking uses one contribution per lineage for each edge, then edge
 coherence, plane coherence, and whole-circuit closure. Raw sample frequency must

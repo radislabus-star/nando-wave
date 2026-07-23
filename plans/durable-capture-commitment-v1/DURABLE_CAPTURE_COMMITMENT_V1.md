@@ -36,10 +36,12 @@ streaming evidence ledger
 
 ## Fresh Generation
 
-Checkpoint strategy V97 preserves Wave and self-training state but starts the
-live scalar generation with empty support and future. This is required because
-pre-archive receipts cannot be retroactively placed under archive provenance.
-New traffic must build both partitions after the durable boundary.
+`live_scalar_generation_version=1` preserves Wave and self-training state but
+starts the live scalar generation with empty support and future. It is persisted
+separately from the general bucket strategy so historical strategy migrations
+cannot skip or repeat this rotation. This is required because pre-archive
+receipts cannot be retroactively placed under archive provenance. New traffic
+must build both partitions after the durable boundary.
 
 ## Status
 

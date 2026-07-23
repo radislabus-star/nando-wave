@@ -1047,6 +1047,7 @@ fn v96_migration_starts_fresh_archive_backed_scalar_generation() {
 
     let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
     checkpoint.bucket_strategy_version = 96;
+    checkpoint.live_scalar_generation_version = 0;
     let mut restored = OnlineResponseMiner::from_checkpoint(checkpoint).expect("migrated miner");
     let after = restored.report().live_scalar_shadow;
     assert_eq!(after.support_rows, 0, "{after:#?}");
@@ -1067,6 +1068,39 @@ fn v96_migration_starts_fresh_archive_backed_scalar_generation() {
     let fresh_report = restored.report().live_scalar_shadow;
     assert_eq!(fresh_report.support_rows, 1, "{fresh_report:#?}");
     assert_eq!(fresh_report.future_rows, 0, "{fresh_report:#?}");
+}
+
+#[test]
+fn current_strategy_checkpoint_rotates_scalar_generation_once() {
+    let mut miner =
+        OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");
+    for index in 0..40 {
+        let mut transition =
+            crate::teacher_transition_from_completed(&frame(index, "write_stdin", true), None)
+                .expect("teacher transition");
+        transition.before.session_id_sha256 = format!("{:064x}", index + 4_000);
+        transition.runtime_parity_case = Some(write_stdin_parity_case(
+            index,
+            "Script running with cell ID ",
+        ));
+        miner
+            .observe_teacher_transition(transition)
+            .expect("observe teacher transition");
+    }
+    let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+    checkpoint.bucket_strategy_version = ONLINE_BUCKET_STRATEGY_VERSION;
+    checkpoint.live_scalar_generation_version = 0;
+
+    let restored = OnlineResponseMiner::from_checkpoint(checkpoint).expect("rotated miner");
+    let report = restored.report().live_scalar_shadow;
+    assert_eq!(report.support_rows, 0, "{report:#?}");
+    assert_eq!(report.future_rows, 0, "{report:#?}");
+
+    let checkpoint = restored.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+    assert_eq!(
+        checkpoint.live_scalar_generation_version,
+        LIVE_SCALAR_GENERATION_VERSION
+    );
 }
 
 #[test]

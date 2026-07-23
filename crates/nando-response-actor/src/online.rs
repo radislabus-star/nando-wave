@@ -50,6 +50,7 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // live events.
 // Historical rows remain support-only; frozen future is never reconstructed.
 const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 97;
+const LIVE_SCALAR_GENERATION_VERSION: u8 = 1;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -403,6 +404,8 @@ struct OnlineResponseCheckpoint {
     self_training_v2: StreamingSelfTrainingState,
     #[serde(default)]
     live_scalar_shadow: crate::LiveScalarShadowState,
+    #[serde(default)]
+    live_scalar_generation_version: u8,
 }
 
 #[derive(Serialize)]
@@ -428,6 +431,7 @@ struct OnlineResponseCheckpointRef<'a> {
     subcenters: &'a OnlineSubcenterDiscovery,
     self_training_v2: &'a StreamingSelfTrainingState,
     live_scalar_shadow: &'a crate::LiveScalarShadowState,
+    live_scalar_generation_version: u8,
 }
 
 impl OnlineResponseMiner {
@@ -504,6 +508,7 @@ impl OnlineResponseMiner {
             subcenters: self.subcenters.clone(),
             self_training_v2: self.self_training_v2.clone(),
             live_scalar_shadow: self.live_scalar_shadow.clone(),
+            live_scalar_generation_version: LIVE_SCALAR_GENERATION_VERSION,
         })
     }
 
@@ -544,6 +549,7 @@ impl OnlineResponseMiner {
                 subcenters: &self.subcenters,
                 self_training_v2: &self.self_training_v2,
                 live_scalar_shadow: &self.live_scalar_shadow,
+                live_scalar_generation_version: LIVE_SCALAR_GENERATION_VERSION,
             })
             .map_err(|error| format!("online_checkpoint_encode:{error}"))?,
         );
@@ -555,6 +561,12 @@ impl OnlineResponseMiner {
             .config
             .reservoir_rows
             .clamp(1, OnlineResponseMinerConfig::default().reservoir_rows);
+        let restart_live_scalar_generation =
+            checkpoint.live_scalar_generation_version < LIVE_SCALAR_GENERATION_VERSION;
+        if restart_live_scalar_generation {
+            checkpoint.live_scalar_shadow = crate::LiveScalarShadowState::default();
+            checkpoint.live_scalar_generation_version = LIVE_SCALAR_GENERATION_VERSION;
+        }
         if checkpoint.bucket_strategy_version < ONLINE_BUCKET_STRATEGY_VERSION {
             checkpoint.config.min_bucket_events = checkpoint
                 .config
@@ -565,7 +577,6 @@ impl OnlineResponseMiner {
                 // V97 starts a capture-archive-backed scalar generation. Old
                 // scalar rows cannot cross that provenance boundary because
                 // their commitments predate the durable archive.
-                let restart_live_scalar_generation = checkpoint.bucket_strategy_version >= 96;
                 let preserved_shadow_support = if restart_live_scalar_generation {
                     Vec::new()
                 } else {
