@@ -151,7 +151,7 @@ const TEMPLATE: &str = r#"
 .window-status.mixed { color:var(--amber); }
 .window-status.idle { color:var(--muted); }
 .pipeline-scroll { overflow-x:auto; padding-bottom:5px; }
-.pipeline { position:relative; display:grid; grid-template-columns:repeat(7,minmax(140px,1fr)); min-width:1060px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.pipeline { position:relative; display:grid; grid-template-columns:repeat(8,minmax(140px,1fr)); min-width:1200px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .pipe-step { position:relative; min-height:100px; padding:17px 18px; border-right:1px solid var(--line); }
 .pipe-step:last-child { border-right:0; }
 .pipe-step::after { content:"→"; position:absolute; right:-8px; top:37px; z-index:1; color:#c7cdd1; background:var(--bg); }
@@ -161,8 +161,8 @@ const TEMPLATE: &str = r#"
 .pipe-step.watch .pipe-state { color:var(--amber); }
 .pipe-step.block .pipe-state,.pipe-step.locked .pipe-state { color:var(--red); }
 .pipe-step.muted .pipe-state { color:var(--muted); }
-.break-line { position:absolute; left:57.14%; top:-29px; bottom:-34px; border-left:2px dashed var(--red); pointer-events:none; }
-.break-label { position:absolute; left:calc(57.14% - 112px); top:-28px; width:224px; color:var(--red); background:var(--bg); text-align:center; font-size:12px; font-weight:800; }
+.break-line { position:absolute; left:50%; top:-29px; bottom:-34px; border-left:2px dashed var(--red); pointer-events:none; }
+.break-label { position:absolute; left:calc(50% - 112px); top:-28px; width:224px; color:var(--red); background:var(--bg); text-align:center; font-size:12px; font-weight:800; }
 .blocker { margin-top:14px; color:var(--red); text-align:center; font-size:13px; }
 .activity { display:grid; grid-template-columns:150px minmax(0,1fr); gap:18px; align-items:end; margin-top:18px; }
 .activity-label { color:var(--muted); font-size:12px; font-weight:800; }
@@ -211,6 +211,7 @@ const TEMPLATE: &str = r#"
       <div class="pipe-step"><div class="pipe-name">LEARNING BRIDGE</div><div id="pipe-bridge" class="pipe-state">—</div></div>
       <div class="pipe-step"><div class="pipe-name">RELATION FRAMES</div><div id="pipe-relation" class="pipe-state">—</div></div>
       <div class="pipe-step watch"><div class="pipe-name">OPERATOR DISCOVERY</div><div id="pipe-discovery" class="pipe-state">WATCH</div></div>
+      <div class="pipe-step block"><div class="pipe-name">CANDIDATE BUNDLE</div><div id="pipe-controller" class="pipe-state">INPUT 0</div></div>
       <div class="pipe-step block"><div class="pipe-name">NATURAL PACKAGE</div><div id="pipe-package" class="pipe-state">MISSING</div></div>
       <div class="pipe-step locked"><div class="pipe-name">ADMISSION</div><div id="pipe-admission" class="pipe-state">LOCKED</div></div>
       <div class="pipe-step muted"><div class="pipe-name">CPU ACCEPT</div><div id="pipe-cpu" class="pipe-state">0 NEW</div></div>
@@ -260,9 +261,10 @@ const TEMPLATE: &str = r#"
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const visibility = bridgeAvailable && bridge.hot_accepted > 0 ? bridge.cold_accepted * 100 / bridge.hot_accepted : 0;
     text("miner-epoch", bridgeAvailable ? `НОВЫЙ EPOCH: ${visibility.toFixed(0)}% · ${bridge.cold_accepted}/${bridge.hot_accepted}` : "НОВЫЙ EPOCH: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.hot_accepted : "—"} / ${bridge.cold_available ? bridge.cold_accepted : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-loss", bridgeAvailable ? bridge.loss : "—"); text("bridge-queue", bridge.queue); text("epoch-visibility", bridgeAvailable ? `ВИДИМОСТЬ НОВОГО ТРАФИКА ${visibility.toFixed(0)}%` : "ВИДИМОСТЬ: HEALTH НЕДОСТУПЕН");
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
-    text("pipe-bridge", bridgeAvailable ? `${bridge.hot_accepted}/${bridge.cold_accepted} · LOSS ${bridge.loss}` : "HEALTH НЕДОСТУПЕН"); text("pipe-relation", bridgeAvailable && bridge.loss === 0 && bridge.failures === 0 ? "LIVE" : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `CANDIDATE ${snapshot.admission_ready_cohorts}` : "WATCH");
+    const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
+    text("pipe-bridge", bridgeAvailable ? `${bridge.hot_accepted}/${bridge.cold_accepted} · LOSS ${bridge.loss}` : "HEALTH НЕДОСТУПЕН"); text("pipe-relation", bridgeAvailable && bridge.loss === 0 && bridge.failures === 0 ? "LIVE" : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-controller", `INPUT ${controllerInput} · CRYST ${snapshot.controller_crystallized_candidates}`);
     text("pipe-package", snapshot.response_package_count > 0 ? `PRESENT ${snapshot.response_package_count}` : "MISSING"); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED");
-    text("blocker-text", snapshot.response_package_count === 0 ? "нет доказанного ACTIVE OperatorPackage" : snapshot.cpu_allowed ? "маршрут до CPU открыт" : "OperatorPackage существует, но authority остаётся закрыта");
+    text("blocker-text", controllerInput === 0 ? `cohort export → controller: ${snapshot.controller_blocker}` : snapshot.response_package_count === 0 ? "controller получил candidates, но Natural OperatorPackage ещё не выпущен" : snapshot.cpu_allowed ? "маршрут до CPU открыт" : "OperatorPackage существует, но authority остаётся закрыта");
     renderActivity(bridge.request_events); lastSuccess = Date.now();
   };
   const refresh = async () => {
@@ -318,6 +320,7 @@ mod tests {
         });
         assert!(html.contains("КУДА УШЛИ ТОКЕНЫ"));
         assert!(html.contains("ПОЧЕМУ CPU НЕ РАСТЁТ"));
+        assert!(html.contains("CANDIDATE BUNDLE"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("9,22%"));
     }

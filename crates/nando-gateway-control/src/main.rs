@@ -939,6 +939,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
     let fallback = read_json(&state.config.economics_path);
     let persisted_miner = read_json(&state.config.response_online_miner_report_path);
     let response_registry = read_json(&state.config.response_registry_path);
+    let response_admission_controller =
+        read_json(&state.config.response_admission_controller_report_path);
     let (live, hot_health, cold_health) = tokio::join!(
         read_live_miner_report(),
         read_live_json(HOT_SERVING_HEALTH_URL),
@@ -974,6 +976,17 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         .get("packages")
         .and_then(Value::as_array)
         .map_or(0, |packages| packages.len() as u64);
+    let controller_relation_candidates =
+        metric_u64(&response_admission_controller, "relation_candidates");
+    let controller_collection_candidates =
+        metric_u64(&response_admission_controller, "collection_candidates");
+    let controller_crystallized_candidates =
+        metric_u64(&response_admission_controller, "crystallized_candidates");
+    let controller_blocker = metric_str(
+        &response_admission_controller,
+        "blocker",
+        "controller_report_missing",
+    );
     (
         [(header::CACHE_CONTROL, "no-store")],
         Json(json!({
@@ -983,6 +996,10 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "cpu_input_tokens": cpu_input_tokens,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
+            "controller_relation_candidates": controller_relation_candidates,
+            "controller_collection_candidates": controller_collection_candidates,
+            "controller_crystallized_candidates": controller_crystallized_candidates,
+            "controller_blocker": controller_blocker,
             "response_package_count": response_package_count,
             "cpu_allowed": admission.cpu_allowed,
         })),
