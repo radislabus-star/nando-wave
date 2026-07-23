@@ -415,7 +415,7 @@ pub fn merge_with_active_online_admission(
     let mut duplicate_ids = BTreeSet::new();
     for package in &candidate.registry.packages {
         if let Some(existing) = existing_packages.get(package.package_id.as_str()) {
-            if !existing.execution_identity_matches(package)? {
+            if !packages_have_same_execution_identity(existing, package)? {
                 return Err("active_generation_package_id_conflict");
             }
             duplicate_ids.insert(package.package_id.clone());
@@ -469,6 +469,45 @@ pub fn merge_with_active_online_admission(
         },
     ])?
     .ok_or("active_generation_merge_empty")
+}
+
+fn packages_have_same_execution_identity(
+    active: &ResponsePackage,
+    candidate: &ResponsePackage,
+) -> Result<bool, &'static str> {
+    if active.package_id != candidate.package_id
+        || active.schema != candidate.schema
+        || active.origin != candidate.origin
+        || active.state != candidate.state
+        || active.program != candidate.program
+        || active.verifier != candidate.verifier
+        || active.routing_predicates != candidate.routing_predicates
+        || active.required_routing_atom_ids != candidate.required_routing_atom_ids
+        || active.phase_centers != candidate.phase_centers
+        || active.anti_centers != candidate.anti_centers
+        || active.wave_margin_micro != candidate.wave_margin_micro
+        || active.learned_wave_route != candidate.learned_wave_route
+    {
+        return Ok(false);
+    }
+    match (
+        &active.crystallized_operator,
+        &candidate.crystallized_operator,
+    ) {
+        (None, None) => Ok(true),
+        (Some(active), Some(candidate)) => {
+            let active =
+                VerifiedCrystallizedOperator::restore(active.page_bytes(), active.registry_cbor())
+                    .map_err(|_| "active_generation_crystallized_restore_failed")?;
+            let candidate = VerifiedCrystallizedOperator::restore(
+                candidate.page_bytes(),
+                candidate.registry_cbor(),
+            )
+            .map_err(|_| "candidate_generation_crystallized_restore_failed")?;
+            Ok(active.execution_equivalent(&candidate))
+        }
+        _ => Ok(false),
+    }
 }
 
 fn authority_content_revision(

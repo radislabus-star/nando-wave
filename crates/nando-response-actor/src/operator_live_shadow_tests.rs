@@ -594,12 +594,6 @@ fn additive_merge_keeps_active_crystallized_generation_when_only_evidence_grows(
     let candidate_package = &candidate.registry.packages[0];
     assert_eq!(active_package.package_id, candidate_package.package_id);
     assert_ne!(active_package, *candidate_package);
-    assert!(
-        active_package
-            .execution_identity_matches(candidate_package)
-            .expect("runtime identity")
-    );
-
     let merged = crate::merge_with_active_online_admission(
         candidate,
         active.registry,

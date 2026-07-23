@@ -201,39 +201,6 @@ impl ResponsePackage {
         Ok(())
     }
 
-    pub fn execution_identity_matches(&self, other: &Self) -> Result<bool, &'static str> {
-        if self.package_id != other.package_id
-            || self.schema != other.schema
-            || self.origin != other.origin
-            || self.state != other.state
-            || self.program != other.program
-            || self.verifier != other.verifier
-            || self.routing_predicates != other.routing_predicates
-            || self.required_routing_atom_ids != other.required_routing_atom_ids
-            || self.phase_centers != other.phase_centers
-            || self.anti_centers != other.anti_centers
-            || self.wave_margin_micro != other.wave_margin_micro
-            || self.learned_wave_route != other.learned_wave_route
-        {
-            return Ok(false);
-        }
-        match (&self.crystallized_operator, &other.crystallized_operator) {
-            (None, None) => Ok(true),
-            (Some(left), Some(right)) => {
-                let left =
-                    VerifiedCrystallizedOperator::restore(left.page_bytes(), left.registry_cbor())
-                        .map_err(|_| "active_generation_crystallized_restore_failed")?;
-                let right = VerifiedCrystallizedOperator::restore(
-                    right.page_bytes(),
-                    right.registry_cbor(),
-                )
-                .map_err(|_| "candidate_generation_crystallized_restore_failed")?;
-                Ok(left.execution_equivalent(&right))
-            }
-            _ => Ok(false),
-        }
-    }
-
     #[must_use]
     pub fn eligible_for_admission_candidate(&self) -> bool {
         self.admission_candidate_blocker().is_none()
