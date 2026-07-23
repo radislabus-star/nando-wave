@@ -2,8 +2,10 @@
 
 use std::collections::BTreeMap;
 
-pub use nando_operator_learning::CaptureCommitmentArchiveReader;
 pub use nando_operator_learning::capture_provenance::*;
+pub use nando_operator_learning::{
+    CaptureCommitmentArchiveReader, CaptureTransitionBindingArchiveReader,
+};
 
 use crate::LiveScalarAdmissionCandidate;
 
@@ -31,6 +33,7 @@ pub fn verify_crystallized_capture_provenance_durable(
     candidates: &[LiveScalarAdmissionCandidate],
     index: &CaptureCommitmentIndex,
     archive: &mut CaptureCommitmentArchiveReader,
+    binding_archive: &mut CaptureTransitionBindingArchiveReader,
 ) -> Result<(), String> {
     index.validate().map_err(str::to_owned)?;
     let indexed = index
@@ -57,6 +60,7 @@ pub fn verify_crystallized_capture_provenance_durable(
             // The rolling index is only a cache, but any cached disagreement
             // remains a hard provenance failure.
             verify_durable_receipt(&indexed, archive, receipt)?;
+            binding_archive.verify(&transition.before.frame_id_sha256, receipt)?;
         }
     }
     Ok(())

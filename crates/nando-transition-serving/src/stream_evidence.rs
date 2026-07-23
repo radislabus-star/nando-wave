@@ -4,7 +4,8 @@ use std::time::Instant;
 
 use nando_operator_kernel::canonical_json_sha256;
 use nando_operator_learning::{
-    CaptureCommitmentArchive, CaptureCommitmentIndex, CaptureRecordCommitment,
+    CaptureCommitmentArchive, CaptureCommitmentIndex, CaptureEvidenceReceipt,
+    CaptureRecordCommitment, CaptureTransitionBinding, CaptureTransitionBindingArchive,
     EVIDENCE_LEDGER_SCHEMA_V1, EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome,
     EvidenceKey, EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger,
     MAX_CAPTURE_COMMITMENT_INDEX_RECORDS, RawEvidenceEnvelope, canonicalize_evidence_envelope,
@@ -63,6 +64,11 @@ pub trait SessionEvidenceLedger {
     fn resume_offset(&self, source_stream_id: &str) -> Option<u64>;
     fn accounting(&self) -> EvidenceAccounting;
     fn recovered_partial_tail_bytes(&self) -> u64;
+    fn bind_transition(
+        &mut self,
+        frame_id_sha256: &str,
+        receipt: &CaptureEvidenceReceipt,
+    ) -> Result<CaptureTransitionBinding, String>;
 }
 
 pub struct StreamingEvidenceLedger {
@@ -78,6 +84,7 @@ pub struct StreamingEvidenceLedger {
     recent_order: VecDeque<StreamEvidenceKey>,
     recent_record_commitments: VecDeque<CaptureRecordCommitment>,
     commitment_archive: CaptureCommitmentArchive,
+    transition_binding_archive: CaptureTransitionBindingArchive,
     events_since_checkpoint: u64,
     last_checkpoint: Instant,
     recovered_partial_tail_bytes: u64,
@@ -120,6 +127,7 @@ impl StreamingEvidenceLedger {
             .as_ref()
             .map_or(0, |checkpoint| checkpoint.next_sequence);
         let commitment_archive = CaptureCommitmentArchive::open(directory, archive_base_sequence)?;
+        let transition_binding_archive = CaptureTransitionBindingArchive::open(directory)?;
         let mut state = if let Some(checkpoint) = checkpoint {
             let recent = checkpoint
                 .recent
@@ -140,6 +148,7 @@ impl StreamingEvidenceLedger {
                 recent_order,
                 recent_record_commitments,
                 commitment_archive,
+                transition_binding_archive,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 recovered_partial_tail_bytes: 0,
@@ -158,6 +167,7 @@ impl StreamingEvidenceLedger {
                 recent_order: VecDeque::new(),
                 recent_record_commitments,
                 commitment_archive,
+                transition_binding_archive,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 recovered_partial_tail_bytes: 0,
@@ -360,6 +370,7 @@ impl StreamingEvidenceLedger {
         // Seal capture-owner truth first. If a later checkpoint write fails,
         // journal replay is idempotent against the already committed archive.
         self.commitment_archive.seal()?;
+        self.transition_binding_archive.seal()?;
         write_atomic_cbor(&self.checkpoint_path, &checkpoint)?;
         let capture_index =
             CaptureCommitmentIndex::new(self.recent_record_commitments.iter().cloned().collect())
@@ -408,6 +419,19 @@ impl SessionEvidenceLedger for StreamingEvidenceLedger {
 
     fn recovered_partial_tail_bytes(&self) -> u64 {
         self.recovered_partial_tail_bytes
+    }
+
+    fn bind_transition(
+        &mut self,
+        frame_id_sha256: &str,
+        receipt: &CaptureEvidenceReceipt,
+    ) -> Result<CaptureTransitionBinding, String> {
+        let binding = self
+            .transition_binding_archive
+            .append(frame_id_sha256, receipt)?;
+        // A parity case must never outrun its capture-owned binding on crash.
+        self.transition_binding_archive.seal()?;
+        Ok(binding)
     }
 }
 

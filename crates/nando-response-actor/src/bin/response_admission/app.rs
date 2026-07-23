@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use nando_response_actor::{
-    CaptureCommitmentArchiveReader, CaptureCommitmentIndex, OnlineAdmissionCandidateBundle,
-    OnlineAdmissionCandidateRejection, ResponseExecutor, ResponseRegistry,
-    build_crystallized_admission_snapshot, build_online_admission_evaluation,
+    CaptureCommitmentArchiveReader, CaptureCommitmentIndex, CaptureTransitionBindingArchiveReader,
+    OnlineAdmissionCandidateBundle, OnlineAdmissionCandidateRejection, ResponseExecutor,
+    ResponseRegistry, build_crystallized_admission_snapshot, build_online_admission_evaluation,
     build_online_collection_admission_snapshot, merge_online_admission_snapshots,
     response_runtime_contract_sha256, sha256_bytes, verify_crystallized_capture_provenance_durable,
 };
@@ -519,10 +519,16 @@ fn verify_capture_provenance(
             .parent()
             .ok_or_else(|| "capture_archive_parent_missing".to_owned())?,
     )?;
+    let mut binding_archive = CaptureTransitionBindingArchiveReader::open(
+        capture_index_path
+            .parent()
+            .ok_or_else(|| "capture_binding_archive_parent_missing".to_owned())?,
+    )?;
     verify_crystallized_capture_provenance_durable(
         &bundle.crystallized_candidates,
         &index,
         &mut archive,
+        &mut binding_archive,
     )
 }
 

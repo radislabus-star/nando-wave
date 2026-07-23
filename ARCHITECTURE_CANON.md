@@ -1078,6 +1078,8 @@ canonical capture record
         |
         `-> append-only commitment archive  durable capture-owner truth
                     |
+                    +-> frame/receipt binding archive
+                    |
                     v
              support + frozen future receipts
                     |
@@ -1091,6 +1093,14 @@ discards only an unsealed crash tail, and accepts byte-identical journal replay
 idempotently. Admission performs direct sequence-and-digest verification and
 may fall back from the rolling index only for `record_not_indexed`; malformed
 or mismatched receipts remain hard failures.
+
+Archive membership alone is not transition provenance. The capture owner also
+seals a compact append-only binding
+`frame_id -> receipt_root -> exact source record`. A parity case cannot leave
+the capture owner before that binding is synced. External admission verifies
+both archives and rejects a different but otherwise valid archived receipt.
+The learner, crystallizer, actor, and admission controller cannot mint this
+binding.
 
 An archive introduced after a generation was collected cannot retroactively
 authorize that generation. A dedicated persisted scalar-generation version,

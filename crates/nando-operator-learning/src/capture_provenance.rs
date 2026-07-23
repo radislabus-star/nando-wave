@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use nando_operator_kernel::canonical_json_sha256;
 
 pub const CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1: &str = "nando.capture-evidence-receipt.v1";
+pub const CAPTURE_TRANSITION_BINDING_SCHEMA_V1: &str = "nando.capture-transition-binding.v1";
 pub const CAPTURE_COMMITMENT_INDEX_SCHEMA_V1: &str = "nando.capture-commitment-index.v1";
 pub const MAX_CAPTURE_RECEIPT_RECORDS: usize = 512;
 pub const MAX_CAPTURE_COMMITMENT_INDEX_RECORDS: usize = 16_384;
@@ -16,10 +17,22 @@ pub struct CaptureRecordCommitment {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CaptureTransitionBinding {
+    pub schema: String,
+    pub sequence: u64,
+    pub frame_id_sha256: String,
+    pub records_root_sha256: String,
+    pub source_record: CaptureRecordCommitment,
+    pub record_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CaptureEvidenceReceipt {
     pub schema: String,
     pub records: Vec<CaptureRecordCommitment>,
     pub records_root_sha256: String,
+    #[serde(default)]
+    pub transition_binding: Option<CaptureTransitionBinding>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -33,6 +46,16 @@ pub struct CaptureCommitmentIndex {
 struct ReceiptDigest<'a> {
     schema: &'a str,
     records: &'a [CaptureRecordCommitment],
+}
+
+#[derive(Serialize)]
+struct TransitionBindingDigest<'a> {
+    schema: &'a str,
+    sequence: u64,
+    frame_id_sha256: &'a str,
+    records_root_sha256: &'a str,
+    source_record_sequence: u64,
+    source_record_sha256: &'a str,
 }
 
 #[derive(Serialize)]
@@ -53,6 +76,7 @@ impl CaptureEvidenceReceipt {
             schema: CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1.to_owned(),
             records,
             records_root_sha256,
+            transition_binding: None,
         })
     }
 
@@ -68,6 +92,82 @@ impl CaptureEvidenceReceipt {
         .map_err(|_| "capture_receipt_digest_failed")?;
         if expected != self.records_root_sha256 {
             return Err("capture_receipt_digest_mismatch");
+        }
+        if let Some(binding) = &self.transition_binding {
+            binding.validate(self)?;
+        }
+        Ok(())
+    }
+
+    pub fn bind_transition(
+        &mut self,
+        binding: CaptureTransitionBinding,
+    ) -> Result<(), &'static str> {
+        binding.validate(self)?;
+        self.transition_binding = Some(binding);
+        Ok(())
+    }
+}
+
+impl CaptureTransitionBinding {
+    pub fn new(
+        sequence: u64,
+        frame_id_sha256: &str,
+        receipt: &CaptureEvidenceReceipt,
+    ) -> Result<Self, &'static str> {
+        receipt.validate()?;
+        let source_record = receipt
+            .records
+            .last()
+            .cloned()
+            .ok_or("capture_binding_source_record_missing")?;
+        let record_sha256 = canonical_json_sha256(&TransitionBindingDigest {
+            schema: CAPTURE_TRANSITION_BINDING_SCHEMA_V1,
+            sequence,
+            frame_id_sha256,
+            records_root_sha256: &receipt.records_root_sha256,
+            source_record_sequence: source_record.sequence,
+            source_record_sha256: &source_record.record_sha256,
+        })
+        .map_err(|_| "capture_transition_binding_digest_failed")?;
+        let binding = Self {
+            schema: CAPTURE_TRANSITION_BINDING_SCHEMA_V1.to_owned(),
+            sequence,
+            frame_id_sha256: frame_id_sha256.to_owned(),
+            records_root_sha256: receipt.records_root_sha256.clone(),
+            source_record,
+            record_sha256,
+        };
+        binding.validate(receipt)?;
+        Ok(binding)
+    }
+
+    pub fn validate(&self, receipt: &CaptureEvidenceReceipt) -> Result<(), &'static str> {
+        if self.schema != CAPTURE_TRANSITION_BINDING_SCHEMA_V1
+            || !valid_sha256(&self.frame_id_sha256)
+            || !valid_sha256(&self.records_root_sha256)
+            || !valid_sha256(&self.source_record.record_sha256)
+            || !valid_sha256(&self.record_sha256)
+            || self.records_root_sha256 != receipt.records_root_sha256
+            || !receipt.records.contains(&self.source_record)
+        {
+            return Err("capture_transition_binding_invalid");
+        }
+        self.validate_digest()
+    }
+
+    pub(crate) fn validate_digest(&self) -> Result<(), &'static str> {
+        let expected = canonical_json_sha256(&TransitionBindingDigest {
+            schema: &self.schema,
+            sequence: self.sequence,
+            frame_id_sha256: &self.frame_id_sha256,
+            records_root_sha256: &self.records_root_sha256,
+            source_record_sequence: self.source_record.sequence,
+            source_record_sha256: &self.source_record.record_sha256,
+        })
+        .map_err(|_| "capture_transition_binding_digest_failed")?;
+        if expected != self.record_sha256 {
+            return Err("capture_transition_binding_digest_mismatch");
         }
         Ok(())
     }
@@ -121,6 +221,10 @@ impl CaptureCommitmentIndex {
     }
 }
 
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn validate_records(
     records: &[CaptureRecordCommitment],
     limit: usize,
@@ -131,11 +235,7 @@ fn validate_records(
     }
     let mut previous = None;
     for record in records {
-        if record.record_sha256.len() != 64
-            || !record
-                .record_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
+        if !valid_sha256(&record.record_sha256)
             || previous.is_some_and(|sequence| sequence >= record.sequence)
         {
             return Err("capture_record_invalid");

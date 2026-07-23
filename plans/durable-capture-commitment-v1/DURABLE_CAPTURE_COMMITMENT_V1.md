@@ -103,3 +103,22 @@ candidate reached admission:
 
 All three are now fail-closed in code. The audit did not find a path by which
 the support-diversity reservoir moves an existing future row back into support.
+
+A post-freeze audit then found a fourth gap: archive membership did not bind a
+valid receipt to the transition that claimed it. This is now closed by a second
+capture-owned append-only journal:
+
+```text
+frame_id
+-> turn receipt root
+-> exact source record
+-> sealed transition-binding record
+```
+
+The binding is synced before the parity case can leave capture ownership.
+Admission independently opens the binding archive and rejects substitution by
+another valid archived receipt. Existing archive-backed rows without this
+binding remain no-authority evidence and cannot be upgraded in place.
+`live_scalar_generation_version=3` therefore starts with empty scalar
+support/future after deployment while preserving independent Wave and
+self-training state.

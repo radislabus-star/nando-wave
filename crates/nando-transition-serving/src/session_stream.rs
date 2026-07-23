@@ -62,6 +62,19 @@ impl SessionEvidenceLedger for DeterministicEvidenceLedger {
     fn recovered_partial_tail_bytes(&self) -> u64 {
         DeterministicEvidenceLedger::recovered_partial_tail_bytes(self)
     }
+
+    fn bind_transition(
+        &mut self,
+        frame_id_sha256: &str,
+        receipt: &CaptureEvidenceReceipt,
+    ) -> Result<nando_response_actor::CaptureTransitionBinding, String> {
+        nando_response_actor::CaptureTransitionBinding::new(
+            receipt.records.last().map_or(0, |record| record.sequence),
+            frame_id_sha256,
+            receipt,
+        )
+        .map_err(str::to_owned)
+    }
 }
 
 #[allow(
@@ -1286,6 +1299,7 @@ fn read_appended_frames<L: SessionEvidenceLedger>(
             state.capability_atom_ids = learning_atoms.capability_atom_ids;
         }
         observe_row(&row, state, &mut emitted);
+        bind_pending_runtime_parity_cases(state, evidence)?;
         if is_token_count(&row)
             && let Some(observation) = take_collection_observation(
                 state,
@@ -1466,6 +1480,39 @@ fn session_id_from_meta(row: &Value) -> Option<&str> {
     (row.get("type").and_then(Value::as_str) == Some("session_meta"))
         .then(|| row.get("payload")?.get("id")?.as_str())
         .flatten()
+}
+
+fn bind_pending_runtime_parity_cases<L: SessionEvidenceLedger>(
+    state: &mut SessionState,
+    evidence: &Arc<Mutex<L>>,
+) -> Result<(), String> {
+    let pending = state
+        .runtime_parity_cases
+        .iter()
+        .filter_map(|(frame_id, parity)| {
+            let receipt = parity.capture_receipt.as_ref()?;
+            receipt
+                .transition_binding
+                .is_none()
+                .then(|| (frame_id.clone(), receipt.clone()))
+        })
+        .collect::<Vec<_>>();
+    for (frame_id, receipt) in pending {
+        // Only the capture owner may bind a runtime case to archived evidence.
+        // Learning and admission can carry or verify this receipt, never mint it.
+        let binding = evidence
+            .lock()
+            .map_err(|_| "evidence_ledger_lock_poisoned".to_owned())?
+            .bind_transition(&frame_id, &receipt)?;
+        state
+            .runtime_parity_cases
+            .get_mut(&frame_id)
+            .and_then(|case| case.capture_receipt.as_mut())
+            .ok_or_else(|| "runtime_parity_capture_receipt_disappeared".to_owned())?
+            .bind_transition(binding)
+            .map_err(str::to_owned)?;
+    }
+    Ok(())
 }
 
 fn turn_intent_id_from_context(row: &Value) -> Option<&str> {
@@ -3555,7 +3602,11 @@ mod tests {
                 .is_some_and(|case| {
                     case.evidence_ref_sha256 == frame.frame_id_sha256
                         && case.capture_receipt.as_ref().is_some_and(|receipt| {
-                            receipt.validate().is_ok() && !receipt.records.is_empty()
+                            receipt.validate().is_ok()
+                                && !receipt.records.is_empty()
+                                && receipt.transition_binding.as_ref().is_some_and(|binding| {
+                                    binding.frame_id_sha256 == frame.frame_id_sha256
+                                })
                         })
                 })
         }));
