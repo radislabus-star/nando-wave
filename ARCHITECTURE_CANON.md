@@ -1065,6 +1065,40 @@ Future evidence must have lineages absent from support. Structural equivalence
 to support is allowed and required for transfer; byte-identical evidence lineage
 reuse is forbidden.
 
+### Durable capture commitment boundary
+
+The bounded capture commitment index is a recent-record cache, not durable
+proof storage. Admission may use it for the fast path, but index eviction must
+never destroy the capture-owner evidence required by an operator generation.
+
+```text
+canonical capture record
+        |
+        +-> rolling commitment index        bounded fast path
+        |
+        `-> append-only commitment archive  durable capture-owner truth
+                    |
+                    v
+             support + frozen future receipts
+                    |
+                    v
+             external admission provenance
+```
+
+The durable archive stores only `sequence + record_sha256`, never raw payload
+or corpus text. Its writer validates the complete rolling chain on restart,
+discards only an unsealed crash tail, and accepts byte-identical journal replay
+idempotently. Admission performs direct sequence-and-digest verification and
+may fall back from the rolling index only for `record_not_indexed`; malformed
+or mismatched receipts remain hard failures.
+
+An archive introduced after a generation was collected cannot retroactively
+authorize that generation. The first archive-backed generation starts with an
+empty live scalar support/future state while preserving the independent Wave
+and self-training state. All of its support and future receipts must be captured
+after the archive boundary. Missing archive coverage yields BLOCK, never
+backfill, relabeling, or local authority.
+
 Circuit ranking uses one contribution per lineage for each edge, then edge
 coherence, plane coherence, and whole-circuit closure. Raw sample frequency must
 not let one common relation drown a weak mandatory edge. Crystallization requires

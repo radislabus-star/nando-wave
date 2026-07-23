@@ -141,9 +141,10 @@ pub use binding_evidence_preregistration::{
     resolve_trusted_binding_label_set_v1,
 };
 pub use capture_provenance::{
-    CAPTURE_COMMITMENT_INDEX_SCHEMA_V1, CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1, CaptureCommitmentIndex,
-    CaptureEvidenceReceipt, CaptureRecordCommitment, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
-    MAX_CAPTURE_RECEIPT_RECORDS, verify_crystallized_capture_provenance,
+    CAPTURE_COMMITMENT_INDEX_SCHEMA_V1, CAPTURE_EVIDENCE_RECEIPT_SCHEMA_V1,
+    CaptureCommitmentArchiveReader, CaptureCommitmentIndex, CaptureEvidenceReceipt,
+    CaptureRecordCommitment, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS, MAX_CAPTURE_RECEIPT_RECORDS,
+    verify_crystallized_capture_provenance, verify_crystallized_capture_provenance_durable,
 };
 pub use causal::{
     GroundedWaveCausalReport, evaluate_grounded_wave_causality,

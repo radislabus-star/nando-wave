@@ -1024,6 +1024,52 @@ fn v74_migration_preserves_shadow_support_without_future_claims() {
 }
 
 #[test]
+fn v96_migration_starts_fresh_archive_backed_scalar_generation() {
+    let mut miner =
+        OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");
+    for index in 0..40 {
+        let mut transition =
+            crate::teacher_transition_from_completed(&frame(index, "write_stdin", true), None)
+                .expect("teacher transition");
+        transition.before.session_id_sha256 = format!("{:064x}", index + 3_000);
+        transition.runtime_parity_case = Some(write_stdin_parity_case(
+            index,
+            "Script running with cell ID ",
+        ));
+        miner
+            .observe_teacher_transition(transition)
+            .expect("observe teacher transition");
+    }
+    let before = miner.report().live_scalar_shadow;
+    assert_eq!(before.support_rows, 32, "{before:#?}");
+    assert_eq!(before.future_rows, 8, "{before:#?}");
+    let teacher_pools_before = miner.self_training_v2.teacher_pool_count();
+
+    let mut checkpoint = miner.checkpoint(0, 0, 0, 0, 0).expect("checkpoint");
+    checkpoint.bucket_strategy_version = 96;
+    let mut restored = OnlineResponseMiner::from_checkpoint(checkpoint).expect("migrated miner");
+    let after = restored.report().live_scalar_shadow;
+    assert_eq!(after.support_rows, 0, "{after:#?}");
+    assert_eq!(after.future_rows, 0, "{after:#?}");
+    assert_eq!(
+        restored.self_training_v2.teacher_pool_count(),
+        teacher_pools_before
+    );
+
+    let mut fresh =
+        crate::teacher_transition_from_completed(&frame(100, "write_stdin", true), None)
+            .expect("fresh transition");
+    fresh.before.session_id_sha256 = format!("{:064x}", 9_000);
+    fresh.runtime_parity_case = Some(write_stdin_parity_case(100, "Script running with cell ID "));
+    restored
+        .observe_teacher_transition(fresh)
+        .expect("observe fresh transition");
+    let fresh_report = restored.report().live_scalar_shadow;
+    assert_eq!(fresh_report.support_rows, 1, "{fresh_report:#?}");
+    assert_eq!(fresh_report.future_rows, 0, "{fresh_report:#?}");
+}
+
+#[test]
 fn v95_numeric_handle_migration_preserves_frozen_generations() {
     let mut miner =
         OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("online miner");

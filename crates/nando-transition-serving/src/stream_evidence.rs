@@ -4,11 +4,11 @@ use std::time::Instant;
 
 use nando_operator_kernel::canonical_json_sha256;
 use nando_operator_learning::{
-    CaptureCommitmentIndex, CaptureRecordCommitment, EVIDENCE_LEDGER_SCHEMA_V1,
-    EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome, EvidenceKey,
-    EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger, MAX_CAPTURE_COMMITMENT_INDEX_RECORDS,
-    RawEvidenceEnvelope, canonicalize_evidence_envelope, evidence_payload_sha256, read_framed_cbor,
-    write_atomic_cbor,
+    CaptureCommitmentArchive, CaptureCommitmentIndex, CaptureRecordCommitment,
+    EVIDENCE_LEDGER_SCHEMA_V1, EVIDENCE_POLICY_VERSION, EvidenceAccounting, EvidenceIngestOutcome,
+    EvidenceKey, EvidenceLedgerRecord, EvidencePolicyV1, FramedCborLedger,
+    MAX_CAPTURE_COMMITMENT_INDEX_RECORDS, RawEvidenceEnvelope, canonicalize_evidence_envelope,
+    evidence_payload_sha256, read_framed_cbor, write_atomic_cbor,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -77,6 +77,7 @@ pub struct StreamingEvidenceLedger {
     recent: BTreeMap<StreamEvidenceKey, String>,
     recent_order: VecDeque<StreamEvidenceKey>,
     recent_record_commitments: VecDeque<CaptureRecordCommitment>,
+    commitment_archive: CaptureCommitmentArchive,
     events_since_checkpoint: u64,
     last_checkpoint: Instant,
     recovered_partial_tail_bytes: u64,
@@ -115,6 +116,10 @@ impl StreamingEvidenceLedger {
                 return Err(format!("streaming_evidence_checkpoint_read:{error}"));
             }
         };
+        let archive_base_sequence = checkpoint
+            .as_ref()
+            .map_or(0, |checkpoint| checkpoint.next_sequence);
+        let commitment_archive = CaptureCommitmentArchive::open(directory, archive_base_sequence)?;
         let mut state = if let Some(checkpoint) = checkpoint {
             let recent = checkpoint
                 .recent
@@ -134,6 +139,7 @@ impl StreamingEvidenceLedger {
                 recent,
                 recent_order,
                 recent_record_commitments,
+                commitment_archive,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 recovered_partial_tail_bytes: 0,
@@ -151,6 +157,7 @@ impl StreamingEvidenceLedger {
                 recent: BTreeMap::new(),
                 recent_order: VecDeque::new(),
                 recent_record_commitments,
+                commitment_archive,
                 events_since_checkpoint: 0,
                 last_checkpoint: Instant::now(),
                 recovered_partial_tail_bytes: 0,
@@ -224,7 +231,7 @@ impl StreamingEvidenceLedger {
             record_sha256,
         };
         self.journal.append(&record)?;
-        self.apply_new(record.clone(), stream_key, payload_sha256);
+        self.apply_new(record.clone(), stream_key, payload_sha256)?;
         self.events_since_checkpoint = self.events_since_checkpoint.saturating_add(1);
         if self.events_since_checkpoint >= CHECKPOINT_EVENTS
             || self.last_checkpoint.elapsed().as_secs() >= 5
@@ -239,8 +246,8 @@ impl StreamingEvidenceLedger {
         record: EvidenceLedgerRecord,
         key: StreamEvidenceKey,
         payload_sha256: String,
-    ) {
-        self.remember_record_commitment(&record);
+    ) -> Result<(), String> {
+        self.remember_record_commitment(&record)?;
         self.apply_accounting_and_offset(&record);
         if !matches!(
             record.outcome,
@@ -251,6 +258,7 @@ impl StreamingEvidenceLedger {
             self.recent_order.push_back(key);
             self.trim_recent();
         }
+        Ok(())
     }
 
     fn apply_replayed(&mut self, record: EvidenceLedgerRecord) -> Result<(), String> {
@@ -270,7 +278,7 @@ impl StreamingEvidenceLedger {
         if record.record_sha256 != expected {
             return Err("streaming_evidence_record_digest_mismatch".to_owned());
         }
-        self.remember_record_commitment(&record);
+        self.remember_record_commitment(&record)?;
         let key = outcome_key(&record.outcome);
         let payload_sha256 = outcome_payload_sha256(&record.outcome);
         self.apply_accounting_and_offset(&record);
@@ -298,20 +306,22 @@ impl StreamingEvidenceLedger {
         }
     }
 
-    fn remember_record_commitment(&mut self, record: &EvidenceLedgerRecord) {
+    fn remember_record_commitment(&mut self, record: &EvidenceLedgerRecord) -> Result<(), String> {
         if self
             .recent_record_commitments
             .back()
             .is_some_and(|current| current.sequence >= record.sequence)
         {
-            return;
+            return Ok(());
         }
-        self.recent_record_commitments
-            .push_back(CaptureRecordCommitment {
-                sequence: record.sequence,
-                record_sha256: record.record_sha256.clone(),
-            });
+        let commitment = CaptureRecordCommitment {
+            sequence: record.sequence,
+            record_sha256: record.record_sha256.clone(),
+        };
+        self.commitment_archive.append(&commitment)?;
+        self.recent_record_commitments.push_back(commitment);
         self.trim_recent();
+        Ok(())
     }
 
     fn apply_accounting_and_offset(&mut self, record: &EvidenceLedgerRecord) {
@@ -347,6 +357,9 @@ impl StreamingEvidenceLedger {
             checkpoint_sha256: String::new(),
         };
         checkpoint.checkpoint_sha256 = checkpoint_digest(&checkpoint)?;
+        // Seal capture-owner truth first. If a later checkpoint write fails,
+        // journal replay is idempotent against the already committed archive.
+        self.commitment_archive.seal()?;
         write_atomic_cbor(&self.checkpoint_path, &checkpoint)?;
         let capture_index =
             CaptureCommitmentIndex::new(self.recent_record_commitments.iter().cloned().collect())

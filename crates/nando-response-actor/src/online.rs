@@ -49,7 +49,7 @@ const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // request-independent rows receive the same source-neutral extraction as new
 // live events.
 // Historical rows remain support-only; frozen future is never reconstructed.
-const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 96;
+const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 97;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
 // Admission needs 32 independent future rows; larger full-frame reservoirs only
@@ -562,9 +562,17 @@ impl OnlineResponseMiner {
                 .max(RESTORED_CORE_MIN_BUCKET_EVENTS);
             let mut migrated = Self::new(checkpoint.config)?;
             if checkpoint.self_training_v2.teacher_pool_count() > 0 {
-                let preserved_shadow_support = checkpoint
-                    .live_scalar_shadow
-                    .historical_support_transitions();
+                // V97 starts a capture-archive-backed scalar generation. Old
+                // scalar rows cannot cross that provenance boundary because
+                // their commitments predate the durable archive.
+                let restart_live_scalar_generation = checkpoint.bucket_strategy_version >= 96;
+                let preserved_shadow_support = if restart_live_scalar_generation {
+                    Vec::new()
+                } else {
+                    checkpoint
+                        .live_scalar_shadow
+                        .historical_support_transitions()
+                };
                 let mut preserved_self_training = checkpoint.self_training_v2;
                 if checkpoint.bucket_strategy_version < 33 {
                     preserved_self_training.prepare_strategy_migration();
@@ -594,14 +602,17 @@ impl OnlineResponseMiner {
                     .into_iter()
                     .map(|transition| (transition.before.frame_id_sha256.clone(), transition))
                     .collect::<BTreeMap<_, _>>();
-                for frame in &support_frames {
-                    if let Some(parity_case) = parity_cases.get(&frame.frame_id_sha256)
-                        && let Ok(mut transition) = teacher_transition_from_completed(frame, None)
-                    {
-                        transition.runtime_parity_case = Some(parity_case.clone());
-                        shadow_support
-                            .entry(transition.before.frame_id_sha256.clone())
-                            .or_insert(transition);
+                if !restart_live_scalar_generation {
+                    for frame in &support_frames {
+                        if let Some(parity_case) = parity_cases.get(&frame.frame_id_sha256)
+                            && let Ok(mut transition) =
+                                teacher_transition_from_completed(frame, None)
+                        {
+                            transition.runtime_parity_case = Some(parity_case.clone());
+                            shadow_support
+                                .entry(transition.before.frame_id_sha256.clone())
+                                .or_insert(transition);
+                        }
                     }
                 }
                 let mut shadow_support = shadow_support.into_values().collect::<Vec<_>>();
