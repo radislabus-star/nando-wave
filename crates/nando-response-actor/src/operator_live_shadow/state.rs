@@ -40,6 +40,14 @@ impl LiveScalarShadowState {
             law.support.push(transition.clone());
             return;
         }
+        match replace_support_for_session_diversity(law, transition) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(blocker) => {
+                *self.blockers.entry(blocker).or_default() += 1;
+                return;
+            }
+        }
         if law
             .support
             .iter()
@@ -197,6 +205,65 @@ impl LiveScalarShadowState {
         });
         support
     }
+}
+
+fn replace_support_for_session_diversity(
+    law: &mut LiveScalarLawState,
+    transition: &TeacherTransition,
+) -> Result<bool, LiveScalarShadowBlocker> {
+    let session_counts =
+        law.support
+            .iter()
+            .fold(BTreeMap::<String, usize>::new(), |mut counts, row| {
+                *counts
+                    .entry(row.before.session_id_sha256.clone())
+                    .or_default() += 1;
+                counts
+            });
+    if session_counts.len() >= 3
+        || session_counts.contains_key(&transition.before.session_id_sha256)
+    {
+        return Ok(false);
+    }
+    let Some(victim_session) = session_counts
+        .iter()
+        .filter(|(_, count)| **count > 1)
+        .max_by(|left, right| left.1.cmp(right.1).then_with(|| right.0.cmp(left.0)))
+        .map(|(session, _)| session.clone())
+    else {
+        return Ok(false);
+    };
+    let Some(victim_index) = law
+        .support
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| row.before.session_id_sha256 == victim_session)
+        .max_by(|(_, left), (_, right)| {
+            left.before
+                .observed_at_unix_nanos
+                .cmp(&right.before.observed_at_unix_nanos)
+                .then_with(|| {
+                    left.before
+                        .frame_id_sha256
+                        .cmp(&right.before.frame_id_sha256)
+                })
+        })
+        .map(|(index, _)| index)
+    else {
+        return Ok(false);
+    };
+
+    let mut support = law.support.clone();
+    support[victim_index] = transition.clone();
+    let mut rebuilt = LiveScalarLawState::default();
+    for row in &support {
+        let sample = extract_live_scalar_circuit_sample(row)?;
+        update_support_actor_hypotheses(&mut rebuilt, &sample.actor_hypotheses)?;
+    }
+    law.support = support;
+    law.support_actor_hypotheses = rebuilt.support_actor_hypotheses;
+    law.support_hypotheses_initialized = rebuilt.support_hypotheses_initialized;
+    Ok(true)
 }
 
 fn response_operation_kind(program: &ResponseProgram) -> &'static str {

@@ -487,6 +487,35 @@ fn repeated_support_session_fills_rows_but_cannot_freeze() {
 }
 
 #[test]
+fn support_reservoir_replaces_repeats_before_future_partition() {
+    let mut state = LiveScalarShadowState::default();
+    for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {
+        let mut row = transition("total", true);
+        row.before.frame_id_sha256 = format!("{index:064x}");
+        row.before.session_id_sha256 = format!("{:064x}", 1);
+        state.observe(&row);
+    }
+    for session in 2_u64..=3 {
+        let mut row = transition("total", true);
+        row.before.frame_id_sha256 = format!("{:064x}", 100 + session);
+        row.before.session_id_sha256 = format!("{session:064x}");
+        state.observe(&row);
+    }
+
+    let report = state.report();
+    assert_eq!(report.support_rows, LIVE_SCALAR_SUPPORT_ROWS);
+    assert_eq!(report.future_rows, 0);
+    assert_eq!(report.laws[0].distinct_support_sessions, 3);
+    assert!(!report.blockers.contains_key("support_sessions_below_3"));
+
+    let mut future = transition("total", true);
+    future.before.frame_id_sha256 = format!("{:064x}", 200);
+    future.before.session_id_sha256 = format!("{:064x}", 4);
+    state.observe(&future);
+    assert_eq!(state.report().future_rows, 1);
+}
+
+#[test]
 fn distinct_future_frames_may_share_sessions_without_crossing_support_boundary() {
     let mut state = LiveScalarShadowState::default();
     for index in 1_u64..=LIVE_SCALAR_SUPPORT_ROWS as u64 {

@@ -36,12 +36,18 @@ streaming evidence ledger
 
 ## Fresh Generation
 
-`live_scalar_generation_version=1` preserves Wave and self-training state but
+`live_scalar_generation_version=2` preserves Wave and self-training state but
 starts the live scalar generation with empty support and future. It is persisted
 separately from the general bucket strategy so historical strategy migrations
 cannot skip or repeat this rotation. This is required because pre-archive
 receipts cannot be retroactively placed under archive provenance. New traffic
 must build both partitions after the durable boundary.
+
+Version 2 also fixes the support-diversity deadlock found by fresh traffic. A
+32-row support reservoir collected from fewer than three sessions now replaces
+a repeated support row when a missing session first appears. It does not relabel
+future evidence, and future collection starts only after support diversity is
+valid.
 
 ## Status
 
@@ -51,7 +57,7 @@ streaming ledger restart tests    PASS
 fresh generation migration test  PASS
 Clippy -D warnings                PASS
 production deployment            PASS
-fresh support/future              25/0 at first post-restart snapshot
+fresh support/future              0/0 at corrective post-restart baseline
 authority                         false
 ```
 
@@ -63,7 +69,8 @@ serving binary SHA-256           75f242b0...39098
 admission binary SHA-256         686f6d74...6dd11
 durable archive                  632 KiB and growing
 old scalar state                 219 support / 96 future
-fresh scalar state               25 support / 0 future
+first incomplete rotation        25 support / 0 future
+corrective fresh scalar state    0 support / 0 future
 crystallized candidates          0
 capture provenance blocker       cleared with fresh bundle
 hot serving restart              none

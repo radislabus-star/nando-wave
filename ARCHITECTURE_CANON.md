@@ -1100,6 +1100,14 @@ independent Wave and self-training state. All of its support and future receipts
 must be captured after the archive boundary. Missing archive coverage yields
 BLOCK, never backfill, relabeling, or local authority.
 
+Support must satisfy its independence contract before the future partition
+opens. If a bounded 32-row support reservoir fills from fewer than three
+sessions, the first row from a missing session replaces one deterministic
+duplicate from the most represented session. The actor hypothesis set is
+recomputed from the resulting support rows. This is a support-only reservoir
+operation: a row already classified as future is never moved into support, and
+no replacement is allowed after the support independence gate is satisfied.
+
 Circuit ranking uses one contribution per lineage for each edge, then edge
 coherence, plane coherence, and whole-circuit closure. Raw sample frequency must
 not let one common relation drown a weak mandatory edge. Crystallization requires
