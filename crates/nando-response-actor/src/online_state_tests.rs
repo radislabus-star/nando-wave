@@ -788,6 +788,42 @@ fn semantic_law_cohort_combines_two_verified_physical_adapters() {
         SemanticEvidenceOutcome::HardContradiction,
         "same-law parity mismatch must remain visible"
     );
+    let mut foreign_law_frame = same_law_frame.clone();
+    foreign_law_frame.frame_id_sha256 = "f".repeat(64);
+    foreign_law_frame
+        .atoms
+        .push(crate::RelationAtom::ActionStringArgument {
+            name: "chars".to_owned(),
+            value: "foreign-effect".to_owned(),
+        });
+    assert_ne!(
+        crate::teacher_semantic_law_signature(&foreign_law_frame).as_deref(),
+        Some(semantic.law_signature_sha256.as_str()),
+        "fixture must represent a different effect law"
+    );
+    let mut foreign_parity = state
+        .runtime_parity_cases
+        .get(&same_law_frame.frame_id_sha256)
+        .expect("same-law parity fixture")
+        .clone();
+    foreign_parity.evidence_ref_sha256 = foreign_law_frame.frame_id_sha256.clone();
+    foreign_parity.expected_response =
+        r#"{"name":"wait","arguments":{"cell_id":"handle-1000","chars":"foreign-effect"}}"#
+            .to_owned();
+    state
+        .runtime_parity_cases
+        .insert(foreign_law_frame.frame_id_sha256.clone(), foreign_parity);
+    state.runtime_parity_frames.insert(
+        foreign_law_frame.frame_id_sha256.clone(),
+        foreign_law_frame.clone(),
+    );
+    assert_eq!(
+        state
+            .classify_semantic_frame(&semantic, &foreign_law_frame, false)
+            .0,
+        SemanticEvidenceOutcome::ApplicabilityNegative,
+        "a different effect law with the same protocol shape must not poison the member law"
+    );
     state
         .runtime_parity_cases
         .get_mut(&same_law_frame.frame_id_sha256)

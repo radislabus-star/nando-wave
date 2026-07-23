@@ -623,9 +623,24 @@ impl StreamingSelfTrainingState {
         let mut frames = BTreeMap::<String, crate::RelationFrame>::new();
         for signature in &member_signatures {
             if let Some(pool) = self.pool_snapshot_with_parity(signature) {
-                for frame in pool.positives {
+                for frame in pool.positives.into_iter().chain(pool.negatives) {
                     frames.insert(frame.frame_id_sha256.clone(), frame);
                 }
+            }
+        }
+        for cohort in self.admission_cohorts().into_iter().filter(|cohort| {
+            cohort
+                .physical_members
+                .iter()
+                .any(|member| requested_signatures.contains(&member.teacher_signature_sha256))
+        }) {
+            for frame in cohort
+                .generation
+                .support
+                .into_iter()
+                .chain(cohort.generation.future)
+            {
+                frames.insert(frame.frame_id_sha256.clone(), frame);
             }
         }
 
@@ -723,7 +738,6 @@ impl StreamingSelfTrainingState {
                 insert_actor(program, "canonical_continuation", member);
             }
         }
-
         let mut actors = actor_candidates
             .into_iter()
             .map(|(actor_program_sha256, actor)| {

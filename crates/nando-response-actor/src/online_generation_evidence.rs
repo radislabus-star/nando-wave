@@ -45,19 +45,26 @@ pub(super) struct DerivedWinnerCohort {
     pub(super) members: Vec<CegisWinner>,
     pub(super) member_signatures: BTreeSet<String>,
     pub(super) physical_adapter_count: usize,
+    pub(super) law_signature_sha256: String,
 }
 
 pub(super) fn semantic_member_action_matches(
     members: &[CegisWinner],
+    law_signature_sha256: &str,
     frame_signature: Option<&str>,
     frame: &crate::RelationFrame,
 ) -> bool {
-    members.iter().any(|member| {
-        (frame_signature == Some(member.teacher_signature_sha256.as_str())
-            && crate::synthesis::program_is_consistent(&member.program, frame)
-            && crate::cegis::winner_routes_frame(member, frame))
-            || crate::frame_matches_program_action_contract(&member.program, frame)
-    })
+    // Physical teacher signatures may span several effect laws. The broader
+    // action contract can join adapters only after semantic-law ownership.
+    let same_effect_law =
+        crate::teacher_semantic_law_signature(frame).as_deref() == Some(law_signature_sha256);
+    same_effect_law
+        && members.iter().any(|member| {
+            (frame_signature == Some(member.teacher_signature_sha256.as_str())
+                && crate::synthesis::program_is_consistent(&member.program, frame)
+                && crate::cegis::winner_routes_frame(member, frame))
+                || crate::frame_matches_program_action_contract(&member.program, frame)
+        })
 }
 
 pub(super) fn semantic_program_matches_runtime_parity(

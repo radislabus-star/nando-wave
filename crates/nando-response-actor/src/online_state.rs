@@ -1084,23 +1084,37 @@ impl StreamingSelfTrainingState {
                 Some(Ok(derived)) => cohorts.push(derived),
                 Some(Err(blocker)) => {
                     *blockers.entry(blocker).or_default() += 1;
-                    cohorts.extend(members.into_iter().map(|winner| DerivedWinnerCohort {
-                        member_signatures: BTreeSet::from([
-                            winner.teacher_signature_sha256.clone(),
-                        ]),
-                        physical_adapter_count: 1,
-                        members: vec![winner.clone()],
-                        winner,
+                    cohorts.extend(members.into_iter().map(|winner| {
+                        let law_signature_sha256 = self
+                            .discovery
+                            .semantic_law_signature(&winner.teacher_signature_sha256)
+                            .unwrap_or_else(|| law.clone());
+                        DerivedWinnerCohort {
+                            member_signatures: BTreeSet::from([winner
+                                .teacher_signature_sha256
+                                .clone()]),
+                            physical_adapter_count: 1,
+                            members: vec![winner.clone()],
+                            law_signature_sha256,
+                            winner,
+                        }
                     }));
                 }
                 None => {
-                    cohorts.extend(members.into_iter().map(|winner| DerivedWinnerCohort {
-                        member_signatures: BTreeSet::from([
-                            winner.teacher_signature_sha256.clone(),
-                        ]),
-                        physical_adapter_count: 1,
-                        members: vec![winner.clone()],
-                        winner,
+                    cohorts.extend(members.into_iter().map(|winner| {
+                        let law_signature_sha256 = self
+                            .discovery
+                            .semantic_law_signature(&winner.teacher_signature_sha256)
+                            .unwrap_or_else(|| law.clone());
+                        DerivedWinnerCohort {
+                            member_signatures: BTreeSet::from([winner
+                                .teacher_signature_sha256
+                                .clone()]),
+                            physical_adapter_count: 1,
+                            members: vec![winner.clone()],
+                            law_signature_sha256,
+                            winner,
+                        }
                     }));
                 }
             }
@@ -1118,6 +1132,23 @@ impl StreamingSelfTrainingState {
         law_signature: &str,
         members: &[CegisWinner],
     ) -> Result<DerivedWinnerCohort, String> {
+        let discovered_laws = members
+            .iter()
+            .filter_map(|winner| {
+                self.discovery
+                    .semantic_law_signature(&winner.teacher_signature_sha256)
+            })
+            .collect::<BTreeSet<_>>();
+        if discovered_laws.len() > 1 {
+            return Err(format!(
+                "semantic_law_members_cross_multiple_laws:{}",
+                discovered_laws.len()
+            ));
+        }
+        let canonical_law_signature = discovered_laws
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| law_signature.to_owned());
         let member_signatures = members
             .iter()
             .map(|winner| winner.teacher_signature_sha256.clone())
@@ -1148,6 +1179,11 @@ impl StreamingSelfTrainingState {
                 continue;
             };
             for frame in pool.positives {
+                if crate::teacher_semantic_law_signature(&frame).as_deref()
+                    != Some(canonical_law_signature.as_str())
+                {
+                    continue;
+                }
                 let Some(case) = self.support_parity_case(&frame.frame_id_sha256) else {
                     continue;
                 };
@@ -1168,7 +1204,12 @@ impl StreamingSelfTrainingState {
         let member_parity_rows = parity_rows
             .iter()
             .filter(|(signature, frame, _)| {
-                semantic_member_action_matches(members, Some(signature.as_str()), frame)
+                semantic_member_action_matches(
+                    members,
+                    &canonical_law_signature,
+                    Some(signature.as_str()),
+                    frame,
+                )
             })
             .collect::<Vec<_>>();
         if member_parity_rows.len() != parity_rows.len() {
@@ -1514,6 +1555,7 @@ impl StreamingSelfTrainingState {
             members: members.to_vec(),
             member_signatures,
             physical_adapter_count,
+            law_signature_sha256: canonical_law_signature,
         })
     }
 
@@ -2260,8 +2302,12 @@ impl StreamingSelfTrainingState {
         claimed_positive: bool,
     ) -> (SemanticEvidenceOutcome, &'static str) {
         let frame_signature = crate::teacher_program_signature(frame);
-        let member_action_matches =
-            semantic_member_action_matches(&cohort.members, frame_signature.as_deref(), frame);
+        let member_action_matches = semantic_member_action_matches(
+            &cohort.members,
+            &cohort.law_signature_sha256,
+            frame_signature.as_deref(),
+            frame,
+        );
         let Some(parity) = self.support_parity_case(&frame.frame_id_sha256) else {
             return (
                 SemanticEvidenceOutcome::CensoredUnknown,
@@ -2293,7 +2339,11 @@ impl StreamingSelfTrainingState {
                 "member_law_runtime_parity_mismatch",
             );
         }
-        if claimed_positive {
+        let same_effect_law = crate::teacher_semantic_law_signature(frame).as_deref()
+            == Some(cohort.law_signature_sha256.as_str());
+        // A positive label belongs to the physical adapter pool. It becomes a
+        // contradiction for this cohort only when the effect law also matches.
+        if claimed_positive && same_effect_law {
             return (
                 SemanticEvidenceOutcome::HardContradiction,
                 "claimed_positive_outside_member_law",
