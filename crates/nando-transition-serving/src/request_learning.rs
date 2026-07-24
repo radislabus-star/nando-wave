@@ -160,6 +160,7 @@ impl RequestLearningIndex {
             rows,
             evictions: self.counters.evictions.load(Ordering::Relaxed),
             stored_turns: u64::try_from(state.structure_by_turn.len()).unwrap_or(u64::MAX),
+            stored_topologies: u64::try_from(state.topology_by_turn.len()).unwrap_or(u64::MAX),
             provider_bound_by_construction: true,
             pre_action_context_persisted: !state.topology_by_turn.is_empty(),
         })

@@ -185,6 +185,8 @@ fn censored(reason: &str) -> PreActionMultiSourceTopologyV1 {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use serde_json::json;
 
     use super::*;
@@ -225,5 +227,28 @@ mod tests {
             MultiSourceExtractionStatusV1::Censored { .. }
         ));
         assert!(topology.roles.is_empty());
+    }
+
+    #[test]
+    fn bounded_extractor_p99_stays_inside_hot_budget() {
+        let payload = json!({"input":[
+            {"type":"function_call_output","output":"{\"left\":7,\"right\":9}"},
+            {"type":"function_call_output","output":"{\"status\":\"ready\"}"}
+        ]});
+        let mut micros = Vec::with_capacity(4_096);
+        for _ in 0..4_096 {
+            let started = Instant::now();
+            let topology =
+                extract_pre_action_multi_source_topology_v1(&payload, "combine 7 and ready");
+            assert!(matches!(
+                topology.extraction_status,
+                MultiSourceExtractionStatusV1::Complete
+            ));
+            micros.push(started.elapsed().as_micros());
+        }
+        micros.sort_unstable();
+        let p99 = micros[micros.len() * 99 / 100];
+        eprintln!("multi_source_extractor_p99_us={p99}");
+        assert!(p99 <= 250, "extractor p99 {p99}us exceeds 250us");
     }
 }

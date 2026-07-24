@@ -13,7 +13,7 @@ MS1-B pure pre-action extractor           PASS
 MS1-C pre-action shadow commitment        PASS
 MS1-C durable V2 bridge publication       PASS
 MS1-D V3 checkpoint/restart               PASS
-MS1-E live deployment                     NOT STARTED
+MS1-E live deployment                     PASS
 production authority change               0
 ```
 
@@ -106,8 +106,27 @@ online::stream public re-export regression       NOT PRESENT
 authority                                        false
 ```
 
+Live shadow after deployment:
+
+```text
+ordinary provider captures                         8
+V3 topologies retained after checkpoint ACK        1
+producer/consumer sequence gaps                     0
+pending records                                     0
+bridge failures                                     0
+request-learning evictions                          0
+raw payloads persisted                              0
+extractor debug-build p99                          12 us
+ACTIVE packages preserved                           2
+false accepts                                       0
+runtime parity failures                             0
+composite live gate                              PASS
+deployed binary SHA-256
+bfbb49c590a255beb4081cd449dc27ee7345949c66f9097290dab9d7cebdbc37
+```
+
 ## Next
 
-MS1-E must deploy V3 in shadow, prove privacy/accounting/latency on ordinary
-traffic, and freeze the fresh structural evidence epoch. Only after that gate
-may MS2 consume topology.
+Freeze the fresh structural evidence epoch at the first V3 capture sequence,
+then implement the MS2 blind-then-reveal join. Historical rows remain
+unjoinable unless a separately sealed raw provider archive is proven.
