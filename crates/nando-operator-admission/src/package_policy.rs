@@ -188,6 +188,7 @@ pub struct PackageAdmissionFacts {
     pub verifier_program_bound: bool,
     pub exact_guard_bound: bool,
     pub adaptive_identification_bound: bool,
+    pub semantic_applicability_guard_bound: bool,
 }
 
 #[must_use]
@@ -200,6 +201,8 @@ pub const fn package_admission_candidate_blocker(
         Some("grounded_authority_missing")
     } else if !facts.package_active {
         Some("package_not_active")
+    } else if !facts.semantic_applicability_guard_bound {
+        Some("semantic_applicability_guard_missing")
     } else if facts.adaptive_identification_bound && facts.support_rows == 0 {
         Some("adaptive_support_missing")
     } else if facts.adaptive_identification_bound && facts.future_rows == 0 {
@@ -285,6 +288,7 @@ mod tests {
             verifier_program_bound: true,
             exact_guard_bound: true,
             adaptive_identification_bound: false,
+            semantic_applicability_guard_bound: true,
         }
     }
 
@@ -326,6 +330,17 @@ mod tests {
         assert_eq!(
             package_admission_candidate_blocker(facts),
             Some("adaptive_surface_missing")
+        );
+    }
+
+    #[test]
+    fn semantic_applicability_is_required_before_proof_counts() {
+        let mut facts = admitted();
+        facts.semantic_applicability_guard_bound = false;
+        facts.support_rows = 0;
+        assert_eq!(
+            package_admission_candidate_blocker(facts),
+            Some("semantic_applicability_guard_missing")
         );
     }
 }

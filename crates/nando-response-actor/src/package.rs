@@ -231,18 +231,22 @@ impl ResponsePackage {
             response_program_verifier_matches(&self.program, self.verifier.as_ref());
         let verifier_bound = response_program_external_verifier_schema(&self.program)
             .is_some_and(|schema| self.proof.verifier_schema == schema);
+        let adaptive_identification_bound = self
+            .proof
+            .adaptive_identification
+            .as_ref()
+            .is_some_and(|proof| proof.validate().is_ok());
+        let semantic_applicability_guard_bound =
+            !nando_operator_kernel::response_program_requires_semantic_applicability_guard(
+                &self.program,
+            ) || (adaptive_identification_bound && !self.anti_centers.is_empty());
         let required_atoms = response_program_required_routing_atom_ids(&self.program);
         let exact_guard_bound = if let Some(bundle) = &self.crystallized_operator {
-            // Crystallized applicability is the sealed RoleGraph/RelationProgram,
-            // not the legacy selector atoms derived from the compiled actor.
-            self.required_routing_atom_ids.is_empty()
-                && VerifiedCrystallizedOperator::restore(
-                    bundle.page_bytes(),
-                    bundle.registry_cbor(),
-                )
-                .is_ok_and(|operator| {
-                    self.phase_centers == [operator.relation_program().fingerprint64()]
-                })
+            // Runtime always takes the crystallized branch first. Legacy phase
+            // atoms may remain as frozen learning evidence, but they cannot
+            // route around the sealed RoleGraph and RelationProgram.
+            VerifiedCrystallizedOperator::restore(bundle.page_bytes(), bundle.registry_cbor())
+                .is_ok()
         } else {
             !required_atoms.is_empty()
                 && required_atoms
@@ -265,11 +269,8 @@ impl ResponsePackage {
                 verifier_schema_bound: verifier_bound,
                 verifier_program_bound,
                 exact_guard_bound,
-                adaptive_identification_bound: self
-                    .proof
-                    .adaptive_identification
-                    .as_ref()
-                    .is_some_and(|proof| proof.validate().is_ok()),
+                adaptive_identification_bound,
+                semantic_applicability_guard_bound,
             },
         )
     }
@@ -836,15 +837,27 @@ impl ResponseExecutor {
             }
             predicate_matches = predicate_matches.saturating_add(1);
             if let Some(operator) = self.crystallized_operators.get(&package.package_id) {
-                // A crystallized package is applicable only when its learned
-                // RoleGraph and RelationProgram bind to the observed pre-action
-                // surface. Generic phase atoms must not route around the circuit.
                 let Ok(bound) = operator.bind_pre_action(request_text, provider_payload) else {
                     continue;
                 };
                 grounded_matches = grounded_matches.saturating_add(1);
+                let structural_margin = operator.runtime_route_margin(&bound);
+                let margin =
+                    if nando_operator_kernel::response_program_requires_semantic_applicability_guard(
+                        &package.program,
+                    ) {
+                        let Some(applicability_margin) = runtime_applicability_margin_micro(
+                            package,
+                            request_text,
+                            provider_payload,
+                        ) else {
+                            continue;
+                        };
+                        structural_margin.min(applicability_margin)
+                    } else {
+                        structural_margin
+                    };
                 guard_matches = guard_matches.saturating_add(1);
-                let margin = operator.runtime_route_margin(&bound);
                 if margin > best_margin {
                     best_margin = margin;
                     best_threshold = package.wave_margin_micro;
@@ -1289,6 +1302,66 @@ fn package_phase_margin_micro(package: &ResponsePackage, query_atoms: Vec<u64>) 
     phase_margin_to_micro(margin).ok()
 }
 
+fn runtime_applicability_margin_micro(
+    package: &ResponsePackage,
+    request_text: &str,
+    provider_payload: &Value,
+) -> Option<i64> {
+    if package.anti_centers.is_empty() {
+        return None;
+    }
+
+    let mut observed_atoms = request_phase_atom_ids(request_text);
+    observed_atoms.extend(response_pre_action_context_atom_ids(provider_payload));
+    observed_atoms.extend(
+        package
+            .routing_predicates
+            .iter()
+            .map(ResponseRoutingPredicate::phase_atom_id),
+    );
+    observed_atoms.sort_unstable();
+    observed_atoms.dedup();
+
+    let mut vocabulary = package
+        .learned_wave_route
+        .as_ref()
+        .filter(|route| !route.query_atom_ids.is_empty())
+        .map_or_else(
+            || {
+                package
+                    .phase_centers
+                    .iter()
+                    .chain(&package.anti_centers)
+                    .copied()
+                    .collect::<Vec<_>>()
+            },
+            |route| route.query_atom_ids.clone(),
+        );
+    vocabulary.sort_unstable();
+    vocabulary.dedup();
+    if !observed_atoms
+        .iter()
+        .any(|atom| vocabulary.binary_search(atom).is_ok())
+    {
+        return None;
+    }
+
+    let mut query_atoms = observed_atoms;
+    query_atoms.extend(response_program_required_routing_atom_ids(&package.program));
+    query_atoms.retain(|atom| vocabulary.binary_search(atom).is_ok());
+    query_atoms.sort_unstable();
+    query_atoms.dedup();
+    if query_atoms.is_empty()
+        || !package
+            .required_routing_atom_ids
+            .iter()
+            .all(|atom| query_atoms.binary_search(atom).is_ok())
+    {
+        return None;
+    }
+    package_phase_margin_micro(package, query_atoms)
+}
+
 fn insert_top_response_candidate<'a>(
     ranked: &mut [Option<(i64, &'a ResponsePackage)>; 8],
     candidate: (i64, &'a ResponsePackage),
@@ -1696,6 +1769,106 @@ mod tests {
                 adaptive_identification: None,
             },
         }
+    }
+
+    fn adaptive_request_last_token_package() -> ResponsePackage {
+        let selector = ResponseValueSelector::RequestLastToken;
+        let program = ResponseProgram::project_selected_value(
+            selector.clone(),
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        let program_root = nando_operator_kernel::response_program_version_root_sha256(&program)
+            .expect("program root");
+        let proof = nando_operator_admission::seal_adaptive_identification_proof_v1(
+            nando_operator_admission::AdaptiveIdentificationProofInputV1 {
+                candidate_freeze_root_sha256: "11".repeat(32),
+                semantic_class_id_sha256: "22".repeat(32),
+                canonical_program_root_sha256: program_root,
+                applicability_scope_root_sha256: "33".repeat(32),
+                transfer_proof_root_sha256: "44".repeat(32),
+            },
+        )
+        .expect("adaptive proof");
+        let required_routing_atom_ids = response_program_required_routing_atom_ids(&program);
+        ResponsePackage {
+            schema: "nando.response-package.v1".to_owned(),
+            package_id: "request-last-token-package".to_owned(),
+            origin: ResponsePackageOrigin::GroundedSynthesis,
+            state: ResponsePackageState::Active,
+            program,
+            verifier: Some(VerifierProgram::ProjectSelectedValue {
+                selector,
+                format: ValueProjectionFormat::PlainText,
+                renderer: crate::CollectionOutputRenderer::Direct,
+                completion_state: "completed".to_owned(),
+                require_unique_value: true,
+            }),
+            routing_predicates: Vec::new(),
+            phase_centers: required_routing_atom_ids.clone(),
+            required_routing_atom_ids,
+            anti_centers: Vec::new(),
+            wave_margin_micro: 1,
+            learned_wave_route: None,
+            crystallized_operator: None,
+            proof: ResponsePackageProof {
+                support_rows: 1,
+                future_rows: 1,
+                distinct_sessions: 2,
+                distinct_surfaces: 2,
+                wrong_accepts: 0,
+                runtime_parity_failures: 0,
+                exact_cache_overlap: 0,
+                wave_causal_pass: true,
+                verifier_schema: VALUE_PROJECTION_EXTERNAL_VERIFIER_SCHEMA.to_owned(),
+                adaptive_identification: Some(proof),
+            },
+        }
+    }
+
+    #[test]
+    fn request_last_token_cannot_gain_authority_without_applicability_negatives() {
+        let mut package = adaptive_request_last_token_package();
+        assert_eq!(
+            package.admission_candidate_blocker(),
+            Some("semantic_applicability_guard_missing")
+        );
+        assert_eq!(
+            runtime_applicability_margin_micro(
+                &package,
+                "Explain why this answer is broken",
+                &serde_json::json!({"input":[]}),
+            ),
+            None
+        );
+
+        package.anti_centers = vec![stable_atom_id("intent:ordinary_question")];
+        assert_eq!(package.admission_candidate_blocker(), None);
+    }
+
+    #[test]
+    fn registry_drops_request_last_token_without_applicability_authority() {
+        let executor = ResponseExecutor::from_registry(ResponseRegistry {
+            schema: "nando.response-registry.v6".to_owned(),
+            revision: 1,
+            packages: vec![adaptive_request_last_token_package()],
+        })
+        .expect("valid quarantine registry");
+        let execution = executor.execute_shadow(
+            "Explain why this answer is broken",
+            &serde_json::json!({
+                "input": [{
+                    "role": "user",
+                    "content": "Explain why this answer is broken"
+                }]
+            }),
+        );
+        assert_eq!(execution.status, ResponseExecutionStatus::Abstain);
+        assert!(
+            execution
+                .reason
+                .starts_with("no_phase_routed_profile:packages=0")
+        );
     }
 
     #[test]

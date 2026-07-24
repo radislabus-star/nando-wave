@@ -332,6 +332,85 @@ pub enum ResponseOperation {
     },
 }
 
+#[must_use]
+pub const fn response_value_selector_reads_request(selector: &ResponseValueSelector) -> bool {
+    matches!(
+        selector,
+        ResponseValueSelector::RequestReferencedJsonField { .. }
+            | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
+            | ResponseValueSelector::RequestLastToken
+            | ResponseValueSelector::RequestUniqueLiteral
+    )
+}
+
+#[must_use]
+pub const fn response_value_selector_requires_semantic_applicability_guard(
+    selector: &ResponseValueSelector,
+) -> bool {
+    matches!(
+        selector,
+        ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral
+    )
+}
+
+#[must_use]
+pub fn response_program_requires_semantic_applicability_guard(program: &ResponseProgram) -> bool {
+    match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => variants.iter().any(|variant| {
+            response_program_requires_semantic_applicability_guard(&variant.program)
+        }),
+        ResponseOperation::FunctionCallFromRoles {
+            selector,
+            arguments,
+            ..
+        }
+        | ResponseOperation::CustomToolCallFromRoles {
+            selector,
+            arguments,
+            ..
+        } => {
+            response_value_selector_requires_semantic_applicability_guard(selector)
+                || arguments.iter().any(|argument| {
+                    matches!(
+                        argument,
+                        ResponseArgument::String { value, .. } if !value.is_empty()
+                    )
+                })
+        }
+        ResponseOperation::ProjectSelectedValue {
+            selector, renderer, ..
+        }
+        | ResponseOperation::ProjectStatus {
+            selector, renderer, ..
+        } => {
+            response_value_selector_requires_semantic_applicability_guard(selector)
+                || renderer_requires_semantic_applicability_guard(renderer)
+        }
+        ResponseOperation::ComposeCollection { .. } => false,
+        ResponseOperation::TestResultSummary { .. } => false,
+        ResponseOperation::AdvancePlan { .. }
+        | ResponseOperation::CopyAfterPrefix { .. }
+        | ResponseOperation::WaitOnYieldedCell { .. }
+        | ResponseOperation::WaitOnAnyYieldedCell { .. }
+        | ResponseOperation::WaitOnYieldedSurfaces { .. } => false,
+    }
+}
+
+fn renderer_requires_semantic_applicability_guard(renderer: &CollectionOutputRenderer) -> bool {
+    match renderer {
+        CollectionOutputRenderer::RequestTemplate { .. } => false,
+        CollectionOutputRenderer::RenderSequence { segments } => {
+            segments.iter().any(|segment| match segment {
+                ResponseRenderSegment::Selected { selector, .. } => {
+                    response_value_selector_requires_semantic_applicability_guard(selector)
+                }
+                ResponseRenderSegment::Static { .. } | ResponseRenderSegment::Primary => false,
+            })
+        }
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RenderTemplate { .. } => false,
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ResponseProgram {
     pub schema: String,
@@ -1388,6 +1467,65 @@ mod tests {
             prefix: prefix.to_owned(),
             suffix: suffix.to_owned(),
         })
+    }
+
+    #[test]
+    fn request_derived_programs_require_semantic_applicability() {
+        let request_projection = ResponseProgram::project_selected_value(
+            ResponseValueSelector::RequestLastToken,
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        assert!(response_program_requires_semantic_applicability_guard(
+            &request_projection
+        ));
+
+        let request_filtered_collection = ResponseProgram::compose_collection(
+            vec![CollectionProgramStep::FilterUniqueFieldEqualsRequestValue {
+                value_type: CollectionScalarType::String,
+            }],
+            ValueProjectionFormat::CanonicalJson,
+            "completed",
+        );
+        assert!(!response_program_requires_semantic_applicability_guard(
+            &request_filtered_collection
+        ));
+
+        let provider_projection = ResponseProgram::project_selected_value(
+            ResponseValueSelector::UniqueScalar {
+                value_type: AtomValueType::String,
+            },
+            ValueProjectionFormat::PlainText,
+            "completed",
+        );
+        assert!(!response_program_requires_semantic_applicability_guard(
+            &provider_projection
+        ));
+        assert!(!response_program_requires_semantic_applicability_guard(
+            &ResponseProgram::wait_on_yielded_cell()
+        ));
+
+        let mutating_literal = ResponseProgram::function_call_from_roles(
+            "write_stdin",
+            ResponseValueSelector::ContentLinePrefix {
+                prefix: "Process running with session ID ".to_owned(),
+                value_type: AtomValueType::Identifier,
+            },
+            vec![
+                ResponseArgument::Role {
+                    name: "session_id".to_owned(),
+                    role: SemanticRole::ContinuationHandle,
+                    value_type: Some(AtomValueType::Integer),
+                },
+                ResponseArgument::String {
+                    name: "chars".to_owned(),
+                    value: "\u{3}".to_owned(),
+                },
+            ],
+        );
+        assert!(response_program_requires_semantic_applicability_guard(
+            &mutating_literal
+        ));
     }
 
     #[test]

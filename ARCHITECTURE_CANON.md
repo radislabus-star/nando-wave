@@ -1879,6 +1879,14 @@ core. Never turn discovery into selection among a few pre-named programs.
     authenticate the complete archive chain, require every natural candidate
     receipt to be inside that archive boundary, and independently reconstruct
     the frozen support/future watermark before granting authority.
+22. Two programs that bind the same runtime scope but produce different action
+    effects cannot both be ACTIVE without a proven distinguishing guard. A
+    non-empty literal action argument is semantic intent, not a neutral filler,
+    and requires applicability evidence. An unguarded sibling remains a
+    candidate; it must not block an independently safe operator.
+23. A runtime false accept revokes the exact execution identity durably. Later
+    evidence may repair it only through a separately frozen generation; restart
+    or admission refresh cannot silently restore the revoked payload.
 
 Accounting identities must have no silent loss:
 

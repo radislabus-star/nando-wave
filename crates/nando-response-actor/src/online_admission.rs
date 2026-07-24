@@ -225,6 +225,11 @@ pub fn build_crystallized_admission_snapshot(
         }
         package.validate()?;
         package.state = ResponsePackageState::Active;
+        match package.admission_candidate_blocker() {
+            None => {}
+            Some("semantic_applicability_guard_missing") => continue,
+            Some(_) => return Err("crystallized_admission_package_ineligible"),
+        }
         let support_manifest_sha256 = canonical_json_sha256(&(
             RESPONSE_SUPPORT_MANIFEST_SCHEMA_V1,
             candidate
