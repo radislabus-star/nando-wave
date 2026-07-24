@@ -105,6 +105,22 @@ Authorized response registry revision:
 6010694863419298382
 ```
 
+## Sustained Observation
+
+After the initial proof, the same live Lay session continued without a route
+change:
+
+```text
+ordinary CPU accepts          68
+ordinary CPU input tokens     5714577
+current process CPU share     10.8469%
+current accounting epoch      17.9814%
+lifetime CPU share             1.5501%
+false accepts                  0
+runtime parity failures        0
+signal-path verdict            PASS
+```
+
 ## Next Product Step
 
 Do not increase proof counts or relax routing. Raise CPU coverage by inducing
