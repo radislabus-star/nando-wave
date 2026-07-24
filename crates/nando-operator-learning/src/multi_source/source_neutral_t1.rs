@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use nando_operator_kernel::{
     AtomSource, AtomValueType, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1, RelationAtom,
-    RelationFrame, ResponseOperation, ResponseProgram, ResponseRenderSegment,
-    ResponseValueSelector, response_program_version_root_sha256,
+    RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ResponseValueSelector, SemanticRole, response_program_version_root_sha256,
 };
 
 use super::BlindThenRevealJoinedTransitionV1;
@@ -193,7 +193,25 @@ fn replace_t1_selector(
         }
         _ => return None,
     }
+    if matches!(structural, ResponseValueSelector::ContinuationHandle { .. }) {
+        normalize_continuation_argument_roles(program);
+    }
     Some(())
+}
+
+fn normalize_continuation_argument_roles(program: &mut ResponseProgram) {
+    let arguments = match &mut program.operation {
+        ResponseOperation::FunctionCallFromRoles { arguments, .. }
+        | ResponseOperation::CustomToolCallFromRoles { arguments, .. } => arguments,
+        _ => return,
+    };
+    for argument in arguments {
+        if let ResponseArgument::Role { role, .. } = argument
+            && *role == SemanticRole::SourceValue
+        {
+            *role = SemanticRole::ContinuationHandle;
+        }
+    }
 }
 
 fn witness_for_program<'a>(

@@ -10,7 +10,7 @@ use super::{
     MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
     MultiSourceT1IdentificationV3, PreActionShapeClassV1, RequestStructureAuditSnapshotV1,
     build_coverage_opportunity_snapshot_v1, factor_multi_source_row_v1,
-    identify_multi_source_t1_operator_v1,
+    identify_multi_source_t1_operator_with_active_protocols_v1,
 };
 
 pub const LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3: &str =
@@ -61,9 +61,24 @@ pub struct LiveMultiSourceDiscoverySnapshotV3 {
 
 #[must_use]
 pub fn build_live_multi_source_discovery_snapshot_v3(
+    opportunities: Vec<OpportunityIntentAuditRowV1>,
+    requests: RequestStructureAuditSnapshotV1,
+    frames: Vec<RelationFrame>,
+) -> LiveMultiSourceDiscoverySnapshotV3 {
+    build_live_multi_source_discovery_snapshot_with_active_protocols_v3(
+        opportunities,
+        requests,
+        frames,
+        &BTreeSet::new(),
+    )
+}
+
+#[must_use]
+pub fn build_live_multi_source_discovery_snapshot_with_active_protocols_v3(
     mut opportunities: Vec<OpportunityIntentAuditRowV1>,
     mut requests: RequestStructureAuditSnapshotV1,
     mut frames: Vec<RelationFrame>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> LiveMultiSourceDiscoverySnapshotV3 {
     let relevant_intents = requests
         .topologies
@@ -168,10 +183,11 @@ pub fn build_live_multi_source_discovery_snapshot_v3(
         evidence_epoch_sha256.clone(),
     );
     let join = ledger.report();
-    let t1_identification = identify_multi_source_t1_operator_v1(
+    let t1_identification = identify_multi_source_t1_operator_with_active_protocols_v1(
         &ledger.rows(),
         &frames,
         &active_intents,
+        active_protocol_mode_roots_sha256,
         evidence_epoch_sha256.clone(),
     );
     let blocker = if requests.topologies.is_empty() {

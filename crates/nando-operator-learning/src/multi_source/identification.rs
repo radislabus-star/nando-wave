@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{
     MultiSourceExtractionStatusV1, OperatorGenerationComponentRootsV3, ProgramSemanticClassIdV1,
-    ProgramSemanticClassInputV1, RelationFrame, ResponseProgram, canonical_json_sha256,
+    ProgramSemanticClassInputV1, RelationFrame, ResponseArgument, ResponseOperation,
+    ResponseProgram, ResponseValueSelector, SemanticRole, canonical_json_sha256,
     response_program_required_routing_atom_ids, response_program_version_root_sha256,
     seal_operator_generation_manifest_v3, seal_program_semantic_class_v1, valid_nonzero_sha256,
 };
@@ -142,6 +143,23 @@ pub fn identify_multi_source_t1_operator_v1(
     active_intents: &BTreeSet<String>,
     evidence_epoch_sha256: String,
 ) -> MultiSourceT1IdentificationV3 {
+    identify_multi_source_t1_operator_with_active_protocols_v1(
+        joined_rows,
+        frames,
+        active_intents,
+        &BTreeSet::new(),
+        evidence_epoch_sha256,
+    )
+}
+
+#[must_use]
+pub fn identify_multi_source_t1_operator_with_active_protocols_v1(
+    joined_rows: &[BlindThenRevealJoinedTransitionV1],
+    frames: &[RelationFrame],
+    active_intents: &BTreeSet<String>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
+    evidence_epoch_sha256: String,
+) -> MultiSourceT1IdentificationV3 {
     let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
@@ -152,6 +170,7 @@ pub fn identify_multi_source_t1_operator_v1(
         .collect::<BTreeMap<_, _>>();
     let mut cohorts = BTreeMap::<T1CohortKey, Vec<EligibleT1Row>>::new();
     let mut eligible_rows = Vec::new();
+    let mut active_duplicate_tokens = 0u64;
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(joined);
@@ -202,6 +221,13 @@ pub fn identify_multi_source_t1_operator_v1(
                 continue;
             }
         };
+        if active_protocol_mode_roots_sha256.contains(&protocol_mode_root_sha256) {
+            if joined.accepted {
+                active_duplicate_tokens =
+                    active_duplicate_tokens.saturating_add(joined.input_tokens);
+            }
+            continue;
+        }
         let row = EligibleT1Row {
             joined: joined.clone(),
             frame: frame.clone(),
@@ -234,6 +260,13 @@ pub fn identify_multi_source_t1_operator_v1(
                 tokens,
                 MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty,
                 blocker,
+            );
+        }
+        if active_duplicate_tokens > 0 {
+            return terminal_report(
+                evidence_epoch_sha256,
+                MultiSourceT1IdentificationStateV1::NoEligibleCohort,
+                "all_supported_t1_protocol_modes_already_active",
             );
         }
         return terminal_report(
@@ -630,6 +663,46 @@ pub fn identify_multi_source_t1_operator_v1(
         blocker,
         execution_authority: false,
     })
+}
+
+#[must_use]
+pub fn active_t1_protocol_mode_root_v1(program: &ResponseProgram) -> Option<String> {
+    let mut canonical = program.clone();
+    match &mut canonical.operation {
+        ResponseOperation::FunctionCallFromRoles {
+            selector,
+            arguments,
+            ..
+        }
+        | ResponseOperation::CustomToolCallFromRoles {
+            selector,
+            arguments,
+            ..
+        } if arguments.iter().any(|argument| {
+            matches!(
+                argument,
+                ResponseArgument::Role {
+                    role: SemanticRole::ContinuationHandle,
+                    ..
+                }
+            )
+        }) =>
+        {
+            let value_type = match selector {
+                ResponseValueSelector::ContentLinePrefix { value_type, .. }
+                | ResponseValueSelector::ContinuationHandle { value_type } => *value_type,
+                _ => return None,
+            };
+            *selector = ResponseValueSelector::ContinuationHandle { value_type };
+        }
+        ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. }
+        | ResponseOperation::ProjectSelectedValue { .. } => {}
+        _ => return None,
+    }
+    canonical.validate().ok()?;
+    let root = response_program_version_root_sha256(&canonical).ok()?;
+    t1_protocol_mode_root(&BTreeMap::from([(root, canonical)])).ok()
 }
 
 fn select_highest_marginal_cohort(

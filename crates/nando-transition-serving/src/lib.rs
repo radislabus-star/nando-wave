@@ -1513,19 +1513,25 @@ fn spawn_multi_source_snapshot_runtime(state: AppState) -> Result<(), String> {
                     let evidence = current_miner_worker(&state)
                         .and_then(|worker| worker.multi_source_evidence());
                     let requests = state.request_learning.audit_snapshot_v1();
-                    match (evidence, requests) {
-                        (Some(evidence), Ok(requests)) => multi_source_live::build_snapshot(
-                            evidence.opportunities,
-                            requests,
-                            evidence.frames,
-                        )
-                        .and_then(|snapshot| {
-                            multi_source_live::write_snapshot(
-                                &state.config.multi_source_snapshot_path,
-                                &snapshot,
-                            )?;
-                            Ok(snapshot)
-                        }),
+                    let active_protocols = multi_source_live::active_protocol_mode_roots(
+                        &state.config.response_registry_path,
+                    );
+                    match (evidence, requests, active_protocols) {
+                        (Some(evidence), Ok(requests), Ok(active_protocols)) => {
+                            multi_source_live::build_snapshot(
+                                evidence.opportunities,
+                                requests,
+                                evidence.frames,
+                                &active_protocols,
+                            )
+                            .and_then(|snapshot| {
+                                multi_source_live::write_snapshot(
+                                    &state.config.multi_source_snapshot_path,
+                                    &snapshot,
+                                )?;
+                                Ok(snapshot)
+                            })
+                        }
                         _ => Err("live_multi_source_snapshot_inputs_pending".to_owned()),
                     }
                 } else {
@@ -6297,18 +6303,19 @@ mod tests {
             .ordinary_response_local_accept_input_tokens
             .load(Ordering::Relaxed);
         assert!(accepted_input_tokens > 0);
-        let package_counters = state
-            .counters
-            .response_cpu_by_package
-            .lock()
-            .expect("package cpu counters");
-        let status_counters = package_counters
-            .get("serving-project-status")
-            .expect("status package counters");
-        assert_eq!(status_counters.accepts, 5);
-        assert_eq!(status_counters.ordinary_accepts, 5);
-        assert_eq!(status_counters.ordinary_input_tokens, accepted_input_tokens);
-        drop(package_counters);
+        {
+            let package_counters = state
+                .counters
+                .response_cpu_by_package
+                .lock()
+                .expect("package cpu counters");
+            let status_counters = package_counters
+                .get("serving-project-status")
+                .expect("status package counters");
+            assert_eq!(status_counters.accepts, 5);
+            assert_eq!(status_counters.ordinary_accepts, 5);
+            assert_eq!(status_counters.ordinary_input_tokens, accepted_input_tokens);
+        }
         assert_eq!(jsonl(&state.config.economics_path).len(), 5);
 
         let mut admission = read_json(&state.config.admission_path).expect("admission");

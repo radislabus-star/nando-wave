@@ -1,10 +1,12 @@
 use nando_operator_learning::multi_source::{
     LiveMultiSourceDiscoverySnapshotV3, RequestStructureAuditSnapshotV1,
-    build_live_multi_source_discovery_snapshot_v3,
+    active_t1_protocol_mode_root_v1,
+    build_live_multi_source_discovery_snapshot_with_active_protocols_v3,
 };
 use nando_operator_learning::opportunity::OpportunityIntentAuditRowV1;
 use nando_operator_learning::write_atomic_cbor;
-use nando_response_actor::RelationFrame;
+use nando_response_actor::{RelationFrame, ResponsePackageState, ResponseRegistry};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 pub(crate) const LIVE_MULTI_SOURCE_SNAPSHOT_MAX_BYTES: usize = 1024 * 1024;
@@ -13,8 +15,14 @@ pub(crate) fn build_snapshot(
     opportunities: Vec<OpportunityIntentAuditRowV1>,
     requests: RequestStructureAuditSnapshotV1,
     frames: Vec<RelationFrame>,
+    active_protocol_mode_roots_sha256: &BTreeSet<String>,
 ) -> Result<LiveMultiSourceDiscoverySnapshotV3, String> {
-    let snapshot = build_live_multi_source_discovery_snapshot_v3(opportunities, requests, frames);
+    let snapshot = build_live_multi_source_discovery_snapshot_with_active_protocols_v3(
+        opportunities,
+        requests,
+        frames,
+        active_protocol_mode_roots_sha256,
+    );
     if !snapshot.validate() {
         return Err("live_multi_source_snapshot_invalid".to_owned());
     }
@@ -24,6 +32,30 @@ pub(crate) fn build_snapshot(
         return Err("live_multi_source_snapshot_budget".to_owned());
     }
     Ok(snapshot)
+}
+
+pub(crate) fn active_protocol_mode_roots(registry_path: &Path) -> Result<BTreeSet<String>, String> {
+    let bytes = match std::fs::read(registry_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(error) => {
+            return Err(format!(
+                "multi_source_active_registry_read:{}:{error}",
+                registry_path.display()
+            ));
+        }
+    };
+    let registry = serde_json::from_slice::<ResponseRegistry>(&bytes)
+        .map_err(|error| format!("multi_source_active_registry_decode:{error}"))?;
+    registry
+        .validate()
+        .map_err(|error| format!("multi_source_active_registry_invalid:{error}"))?;
+    Ok(registry
+        .packages
+        .iter()
+        .filter(|package| package.state == ResponsePackageState::Active)
+        .filter_map(|package| active_t1_protocol_mode_root_v1(&package.program))
+        .collect())
 }
 
 pub(crate) fn write_snapshot(
@@ -78,7 +110,8 @@ mod tests {
             std::process::id()
         ));
         let path = root.join("snapshot.cbor");
-        let snapshot = build_snapshot(Vec::new(), empty_requests(), Vec::new()).expect("snapshot");
+        let snapshot = build_snapshot(Vec::new(), empty_requests(), Vec::new(), &BTreeSet::new())
+            .expect("snapshot");
 
         write_snapshot(&path, &snapshot).expect("write");
         let restored = read_snapshot(&path).expect("read");
@@ -96,7 +129,8 @@ mod tests {
         ));
         let path = root.join("snapshot.cbor");
         let mut snapshot =
-            build_snapshot(Vec::new(), empty_requests(), Vec::new()).expect("snapshot");
+            build_snapshot(Vec::new(), empty_requests(), Vec::new(), &BTreeSet::new())
+                .expect("snapshot");
         snapshot.snapshot_root_sha256 = "0".repeat(64);
         std::fs::create_dir_all(&root).expect("root");
         std::fs::write(&path, serde_cbor::to_vec(&snapshot).expect("encode")).expect("write");

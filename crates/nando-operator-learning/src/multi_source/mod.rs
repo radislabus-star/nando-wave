@@ -21,7 +21,9 @@ pub use factorizer::{
 pub use identification::{
     MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V3, MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
     MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV3, MultiSourceT1ProofBasisV1,
-    PassiveT1ProbeContractV1, identify_multi_source_t1_operator_v1,
+    PassiveT1ProbeContractV1, active_t1_protocol_mode_root_v1,
+    identify_multi_source_t1_operator_v1,
+    identify_multi_source_t1_operator_with_active_protocols_v1,
 };
 pub use join::{
     BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
@@ -31,6 +33,7 @@ pub use join::{
 pub use live_snapshot::{
     LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3, LiveMultiSourceDiscoveryBlockerV1,
     LiveMultiSourceDiscoverySnapshotV3, build_live_multi_source_discovery_snapshot_v3,
+    build_live_multi_source_discovery_snapshot_with_active_protocols_v3,
 };
 pub use marginal::{
     COVERAGE_OPPORTUNITY_MAX_ROWS_V1, COVERAGE_OPPORTUNITY_SNAPSHOT_SCHEMA_V1,

@@ -10,7 +10,8 @@ use nando_operator_kernel::{
     MultiSourceRelationEdgeV1, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
     PreActionMultiSourceTopologyV1, PreActionTopologyCommitV1, RELATION_FRAME_SCHEMA, RelationAtom,
-    RelationFrame, ResponseOperation, ResponseProgram, ResponseValueSelector, sha256_bytes,
+    RelationFrame, ResponseArgument, ResponseOperation, ResponseProgram, ResponseValueSelector,
+    SemanticRole, sha256_bytes,
 };
 
 use super::*;
@@ -707,6 +708,63 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
 }
 
 #[test]
+fn active_physical_continuation_program_is_removed_from_t1_discovery() {
+    let topologies = vec![
+        t1_continuation_topology_row("turn-a", "request-a", "session-a", 1, 1_000, false),
+        t1_continuation_topology_row("turn-b", "request-b", "session-b", 2, 2_000, false),
+    ];
+    let frames = vec![
+        t1_continuation_frame("turn-a", "action-a", "session-a", 1_500, "surface A "),
+        t1_continuation_frame("turn-b", "action-b", "session-b", 2_500, "surface B "),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let baseline = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("active protocol baseline"),
+    );
+    let mut physical = baseline
+        .canonical_program
+        .clone()
+        .expect("canonical program");
+    let ResponseOperation::FunctionCallFromRoles { selector, .. } = &mut physical.operation else {
+        panic!("function program expected");
+    };
+    let ResponseValueSelector::ContinuationHandle { value_type } = selector else {
+        panic!("continuation selector expected");
+    };
+    *selector = ResponseValueSelector::ContentLinePrefix {
+        prefix: "physical surface ".to_owned(),
+        value_type: *value_type,
+    };
+    let active_root = active_t1_protocol_mode_root_v1(&physical).expect("active protocol root");
+    assert_eq!(
+        Some(active_root.as_str()),
+        baseline.selected_protocol_mode_root_sha256.as_deref(),
+        "physical normalization diverged: {physical:#?}\n{baseline:#?}"
+    );
+
+    let report = identify_multi_source_t1_operator_with_active_protocols_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        &BTreeSet::from([active_root]),
+        root("active protocol filtered"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::NoEligibleCohort
+    );
+    assert_eq!(
+        report.blocker.as_deref(),
+        Some("all_supported_t1_protocol_modes_already_active")
+    );
+}
+
+#[test]
 fn t1_projection_can_select_one_role_from_a_multi_scalar_state() {
     let topologies = vec![
         topology_row("turn-a", "request-a", "session-a", 1, 1_000),
@@ -1081,6 +1139,7 @@ fn t1_continuation_surface_compiles_to_semantic_handle_role() {
         operation:
             ResponseOperation::FunctionCallFromRoles {
                 selector: ResponseValueSelector::ContinuationHandle { .. },
+                arguments,
                 ..
             },
         ..
@@ -1088,6 +1147,15 @@ fn t1_continuation_surface_compiles_to_semantic_handle_role() {
     else {
         panic!("semantic continuation program missing: {report:#?}");
     };
+    assert!(arguments.iter().any(|argument| {
+        matches!(
+            argument,
+            ResponseArgument::Role {
+                role: SemanticRole::ContinuationHandle,
+                ..
+            }
+        )
+    }));
     let encoded = serde_json::to_string(&report).expect("report");
     assert!(!encoded.contains("surface A"));
     assert!(!encoded.contains("surface B"));
