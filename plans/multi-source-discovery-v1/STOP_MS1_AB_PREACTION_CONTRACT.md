@@ -1,0 +1,94 @@
+# STOP-MS1-A/B: Pre-Action Contract And Pure Extractor
+
+Date: 2026-07-24 Europe/Tallinn
+
+Status:
+
+```text
+MS0-R-A archive inventory                 PASS
+historical raw provider bytes             0 proven
+historical authority                      false
+MS1-A kernel contract                     PASS
+MS1-B pure pre-action extractor           PASS
+MS1-C dual live publication               NOT STARTED
+production authority change               0
+```
+
+## Historical inventory
+
+The live provider capture store is provenance-rich but hash-only. It contains
+request roots, lineage roots, capture sequences and immutable receipts, but no
+provider payload bytes. The bounded request-learning checkpoint stores phase
+and capability atoms, not the original provider request. Codex session JSONL
+files are append-only session traces, but no checked contract currently proves
+that their bytes equal the exact provider request presented at the learning
+boundary.
+
+Therefore the historical population remains:
+
+```text
+RECOVERY_UNAUDITED_MULTI_SOURCE
+-> LEGACY_UNJOINABLE_MULTI_SOURCE until a separate sealed archive proves bytes
+```
+
+No historical row becomes support or future through this inventory.
+
+## New kernel boundary
+
+`LearningRequestStructureV2` owns:
+
+```text
+provider-bound TurnIntentId
+session lineage roots
+existing request/context/capability atoms
+provider request root
+bounded source-neutral topology
+```
+
+`PreActionTopologyCommitV1` seals the topology before action/outcome reveal.
+Neither type contains teacher output, post-action state, raw request text,
+field names or scalar values.
+
+The extractor receives only the pre-action provider payload and request text.
+It emits typed local roles and source-neutral relations. Exceeding a topology
+budget censors the whole topology instead of publishing a truncated graph.
+
+## Fixed evidence gates
+
+The audit found two distinct routes:
+
+```text
+adaptive natural route
+  semantic version-space collapse
+  -> immutable freeze
+  -> at least one independent post-freeze transfer
+  -> crystallized candidate
+  -> external admission
+
+legacy relation/subcenter control
+  fixed 32 support + 32 future
+  -> shadow report only
+```
+
+The external controller merges only provenance-bound crystallized candidates.
+Legacy relation and uncrystallized collection snapshots remain observable
+controls and cannot enter the ACTIVE registry. The number 32 remains legal as
+a bounded legacy reservoir/control denominator, never as proof that a natural
+operator has been identified.
+
+## Verification
+
+```text
+renamed/reordered fields preserve topology       PASS
+oversized topology is wholly censored            PASS
+focused extractor tests                          2/2 PASS
+nando-response-actor all-target compile          PASS
+online::stream public re-export regression       NOT PRESENT
+authority                                        false
+```
+
+## Next
+
+MS1-C must publish V1 and V2 from the same request owner and TurnIntentId.
+MS1-D then persists V2 and topology commitments with restart parity. Only
+after those gates may MS0-R-B or MS2 consume topology.

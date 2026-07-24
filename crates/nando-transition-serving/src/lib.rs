@@ -14,6 +14,7 @@ mod learning_structure_bridge;
 mod live_economics;
 mod miner_worker;
 pub mod multi_source_audit;
+mod multi_source_capture;
 mod opportunity_bridge;
 mod provider_capture;
 mod request_identity;
@@ -2049,6 +2050,9 @@ fn handle_openai(
     let body_token_estimate = u64::try_from(body.len().div_ceil(4)).unwrap_or(u64::MAX);
     let input_tokens = token_estimate(&request_text).max(body_token_estimate);
     let capability_atom_ids = provider_tool_capability_atom_ids(&payload);
+    let _multi_source_topology_shadow = natural_evidence_eligible.then(|| {
+        multi_source_capture::extract_pre_action_multi_source_topology_v1(&payload, &request_text)
+    });
     let request_streaming = payload
         .get("stream")
         .and_then(Value::as_bool)
