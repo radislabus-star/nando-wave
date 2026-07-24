@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
 use nando_operator_kernel::{
-    AtomSource, AtomValueType, MultiSourceRoleNodeV1, MultiSourceRoleWitnessV1,
-    MultiSourceTemporalClassV1, MultiSourceTypeClassV1, RelationAtom, RelationFrame,
-    ResponseOperation, ResponseProgram, ResponseRenderSegment, ResponseValueSelector,
-    response_program_version_root_sha256,
+    AtomSource, AtomValueType, MultiSourceRelationKindV1, MultiSourceRoleNodeV1,
+    MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1, RelationAtom,
+    RelationFrame, ResponseOperation, ResponseProgram, ResponseRenderSegment,
+    ResponseValueSelector, response_program_version_root_sha256,
 };
 
 use super::BlindThenRevealJoinedTransitionV1;
@@ -74,7 +74,15 @@ fn source_neutralize_t1_program(
     if !role_type_matches(role.type_class, selected_value_type) {
         return None;
     }
-    let selector = if let Some(ordinal) = witness.request_reference_ordinal {
+    let selector = if role_has_relation(
+        joined,
+        role.local_role_id,
+        MultiSourceRelationKindV1::ContinuationHandle,
+    ) {
+        ResponseValueSelector::ContinuationHandle {
+            value_type: selected_value_type,
+        }
+    } else if let Some(ordinal) = witness.request_reference_ordinal {
         ResponseValueSelector::RequestReferencedJsonFieldOrdinal {
             ordinal,
             value_type: selected_value_type,
@@ -203,8 +211,32 @@ fn witness_for_program<'a>(
                     && role_type_matches(role.type_class, *value_type)
             })
         }),
+        ResponseValueSelector::ContinuationHandle { value_type } => {
+            unique_matching_witness(joined, |witness| {
+                role_for_witness(joined, witness).is_some_and(|role| {
+                    role_type_matches(role.type_class, *value_type)
+                        && role_has_relation(
+                            joined,
+                            role.local_role_id,
+                            MultiSourceRelationKindV1::ContinuationHandle,
+                        )
+                })
+            })
+        }
         _ => None,
     }
+}
+
+fn role_has_relation(
+    joined: &BlindThenRevealJoinedTransitionV1,
+    role_id: u16,
+    relation: MultiSourceRelationKindV1,
+) -> bool {
+    joined.topology.relations.iter().any(|edge| {
+        edge.relation == relation
+            && edge.source_role_id == role_id
+            && edge.target_role_id == role_id
+    })
 }
 
 fn unique_matching_witness(

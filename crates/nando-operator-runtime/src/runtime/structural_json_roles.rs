@@ -2,7 +2,8 @@ use nando_operator_kernel::AtomValueType;
 use serde_json::Value;
 
 use super::selection::{
-    identifier_tokens, observed_json_path_digest, request_identifier_positions,
+    continuation_handle_scalar, identifier_tokens, observed_json_path_digest,
+    request_identifier_positions,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,6 +31,22 @@ pub fn observed_json_scalar_roles(
     let mut roles = Vec::new();
     collect_json_scalar_roles(output, &request_tokens, &mut path, 0, None, &mut roles)?;
     Ok(roles)
+}
+
+/// Exposes the semantic continuation role to pre-action topology capture. The
+/// protocol parser remains runtime-owned; learning sees only type and hashes.
+#[doc(hidden)]
+pub fn observed_continuation_handle_role(
+    payload: &Value,
+) -> Result<ObservedJsonScalarRole, &'static str> {
+    let scalar = continuation_handle_scalar(payload, AtomValueType::Identifier)?;
+    Ok(ObservedJsonScalarRole {
+        request_position: None,
+        json_path_sha256: observed_json_path_digest(&["semantic:continuation_handle".to_owned()]),
+        value_sha256: nando_operator_kernel::canonical_json_sha256(&scalar.value)?,
+        value_type: AtomValueType::Identifier,
+        depth_bucket: 1,
+    })
 }
 
 fn collect_json_scalar_roles(

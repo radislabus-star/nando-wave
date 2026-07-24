@@ -69,6 +69,7 @@ pub enum MultiSourceRelationKindV1 {
     Precedes,
     SameOutput,
     LatestOutput,
+    ContinuationHandle,
     RequestReferencesRole,
     CapabilityPermitsRole,
 }

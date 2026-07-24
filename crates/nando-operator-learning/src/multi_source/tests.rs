@@ -777,6 +777,50 @@ fn witnessless_legacy_mass_cannot_hide_a_smaller_fresh_identifiable_cohort() {
     assert_eq!(report.independent_future_rows, 1);
 }
 
+#[test]
+fn unmatched_legacy_witness_cannot_starve_a_fresh_identifiable_cohort() {
+    let mut legacy = t1_value_topology_row("legacy", "request-legacy", "legacy-session", 1, 1_000);
+    legacy.structure.topology.role_witnesses[0].value_sha256 = root("unmatched legacy value");
+    legacy.commit = PreActionTopologyCommitV1::seal(
+        &legacy.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        1,
+    )
+    .expect("legacy commit");
+    let mut legacy_frame =
+        t1_completed_value_projection_frame("legacy", "action-legacy", "legacy-session", 1_500);
+    legacy_frame.estimated_input_tokens = 50_000;
+    let topologies = vec![
+        legacy,
+        t1_value_topology_row("turn-a", "request-a", "session-a", 2, 2_000),
+        t1_value_topology_row("turn-b", "request-b", "session-b", 3, 3_000),
+    ];
+    let frames = vec![
+        legacy_frame,
+        t1_completed_value_projection_frame("turn-a", "action-a", "session-a", 2_500),
+        t1_completed_value_projection_frame("turn-b", "action-b", "session-b", 3_500),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("unmatched legacy witness epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.selected_marginal_input_tokens, 200);
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+}
+
 fn set_observed_json_field(frame: &mut RelationFrame, field: &str) {
     for atom in &mut frame.atoms {
         if let RelationAtom::ObservationSelector { selector, .. } = atom {
@@ -893,6 +937,90 @@ fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
     else {
         panic!("latest-output ordinal program missing: {report:#?}");
     };
+}
+
+#[test]
+fn t1_continuation_surface_compiles_to_semantic_handle_role() {
+    let make_topology = |intent, request, session, sequence, captured_at| {
+        let mut row = t1_topology_row(intent, request, session, sequence, captured_at);
+        row.structure.topology.roles[0].type_class = MultiSourceTypeClassV1::String;
+        row.structure.topology.role_witnesses[0].request_reference_ordinal = None;
+        row.structure.topology.relations.clear();
+        row.structure
+            .topology
+            .relations
+            .push(MultiSourceRelationEdgeV1 {
+                relation: MultiSourceRelationKindV1::ContinuationHandle,
+                source_role_id: 0,
+                target_role_id: 0,
+            });
+        row.commit = PreActionTopologyCommitV1::seal(
+            &row.structure,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            root("extractor"),
+            root("config"),
+            sequence,
+        )
+        .expect("continuation topology");
+        row
+    };
+    let make_frame = |intent, event, session, observed_at, prefix: &str| {
+        let mut frame = t1_completed_frame(intent, event, session, observed_at);
+        for atom in &mut frame.atoms {
+            match atom {
+                RelationAtom::TypedSlot { value_type, .. } => {
+                    *value_type = AtomValueType::Identifier;
+                }
+                RelationAtom::ObservationSelector { selector, .. } => {
+                    *selector = ResponseValueSelector::ContentLinePrefix {
+                        prefix: prefix.to_owned(),
+                        value_type: AtomValueType::Identifier,
+                    };
+                }
+                RelationAtom::ActionRoleArgument { value_type, .. } => {
+                    *value_type = Some(AtomValueType::Identifier);
+                }
+                _ => {}
+            }
+        }
+        frame
+    };
+    let topologies = vec![
+        make_topology("turn-a", "request-a", "session-a", 1, 1_000),
+        make_topology("turn-b", "request-b", "session-b", 2, 2_000),
+    ];
+    let frames = vec![
+        make_frame("turn-a", "action-a", "session-a", 1_500, "surface A "),
+        make_frame("turn-b", "action-b", "session-b", 2_500, "surface B "),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("continuation T1 epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    let Some(ResponseProgram {
+        operation:
+            ResponseOperation::FunctionCallFromRoles {
+                selector: ResponseValueSelector::ContinuationHandle { .. },
+                ..
+            },
+        ..
+    }) = report.canonical_program.as_ref()
+    else {
+        panic!("semantic continuation program missing: {report:#?}");
+    };
+    let encoded = serde_json::to_string(&report).expect("report");
+    assert!(!encoded.contains("surface A"));
+    assert!(!encoded.contains("surface B"));
 }
 
 #[test]

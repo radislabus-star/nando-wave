@@ -5,7 +5,9 @@ use nando_operator_kernel::{
     MultiSourceRoleWitnessV1, MultiSourceTemporalClassV1, MultiSourceTypeClassV1,
     PreActionMultiSourceTopologyV1,
 };
-use nando_operator_runtime::{ObservedJsonScalarRole, observed_json_scalar_roles};
+use nando_operator_runtime::{
+    ObservedJsonScalarRole, observed_continuation_handle_role, observed_json_scalar_roles,
+};
 use serde_json::Value;
 
 const FLAG_REQUEST_REFERENCED: u16 = 1;
@@ -17,6 +19,7 @@ struct CollectedRole {
     request_position: Option<u16>,
     request_reference_ordinal: Option<u16>,
     json_path_sha256: [u8; 32],
+    continuation_handle: bool,
 }
 
 pub(crate) fn extract_pre_action_multi_source_topology_v1(
@@ -24,10 +27,18 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
     request_text: &str,
 ) -> PreActionMultiSourceTopologyV1 {
     let outputs = select_relevant_outputs(provider_outputs(payload), request_text);
-    let outputs = match outputs {
+    let mut outputs = match outputs {
         Ok(outputs) => outputs,
         Err(reason) => return censored(reason),
     };
+    let continuation_role = observed_continuation_handle_role(payload).ok();
+    if let (Some((_, latest_roles)), Some(role)) = (outputs.last_mut(), continuation_role.as_ref())
+        && !latest_roles
+            .iter()
+            .any(|candidate| candidate.value_sha256 == role.value_sha256)
+    {
+        latest_roles.push(role.clone());
+    }
     let mut collected = Vec::new();
     for (source_ordinal, (_, output_roles)) in outputs.iter().enumerate() {
         for (value_ordinal, role) in output_roles.iter().enumerate() {
@@ -42,6 +53,9 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
                 request_position: role.request_position,
                 request_reference_ordinal: None,
                 json_path_sha256: role.json_path_sha256,
+                continuation_handle: continuation_role
+                    .as_ref()
+                    .is_some_and(|candidate| candidate.json_path_sha256 == role.json_path_sha256),
             });
         }
         if collected.len() > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
@@ -68,6 +82,7 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
             role.node.container_class,
             role.node.cardinality_class,
             role.node.structural_flags,
+            role.continuation_handle,
             role.request_reference_ordinal,
             role.node.value_ordinal,
             role.json_path_sha256,
@@ -109,6 +124,15 @@ pub(crate) fn extract_pre_action_multi_source_topology_v1(
                 relation: MultiSourceRelationKindV1::LatestOutput,
                 source_role_id: role.local_role_id,
                 target_role_id: role.local_role_id,
+            });
+        }
+    }
+    for role in &collected {
+        if role.continuation_handle {
+            relations.push(MultiSourceRelationEdgeV1 {
+                relation: MultiSourceRelationKindV1::ContinuationHandle,
+                source_role_id: role.node.local_role_id,
+                target_role_id: role.node.local_role_id,
             });
         }
     }
@@ -311,6 +335,34 @@ mod tests {
         for forbidden in ["alpha", "beta", "gamma", "\"ok\"", "\"7\"", "\"9\""] {
             assert!(!persisted.contains(forbidden));
         }
+    }
+
+    #[test]
+    fn continuation_handle_is_a_pre_action_structural_role() {
+        let payload = json!({"input":[{
+            "type":"function_call_output",
+            "output":"Script running with cell ID abc-123"
+        }]});
+        let topology = extract_pre_action_multi_source_topology_v1(&payload, "continue");
+
+        topology.validate().expect("valid topology");
+        let continuation = topology
+            .relations
+            .iter()
+            .find(|edge| edge.relation == MultiSourceRelationKindV1::ContinuationHandle)
+            .expect("continuation relation");
+        let witness = topology
+            .role_witnesses
+            .iter()
+            .find(|witness| witness.local_role_id == continuation.source_role_id)
+            .expect("continuation witness");
+        assert_eq!(
+            witness.value_sha256,
+            nando_operator_kernel::canonical_json_sha256(&json!("abc-123")).expect("hash")
+        );
+        let encoded = serde_json::to_string(&topology).expect("encode");
+        assert!(!encoded.contains("abc-123"));
+        assert!(!encoded.contains("Script running"));
     }
 
     #[test]

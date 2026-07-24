@@ -26,7 +26,9 @@ use selection::{
     active_turn_output_value, identifier_tokens, immediate_selected_scalar_with_request,
     request_mentions_identifier, runtime_embedded_json_objects,
 };
-pub use structural_json_roles::{ObservedJsonScalarRole, observed_json_scalar_roles};
+pub use structural_json_roles::{
+    ObservedJsonScalarRole, observed_continuation_handle_role, observed_json_scalar_roles,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResponseExecutionStatus {

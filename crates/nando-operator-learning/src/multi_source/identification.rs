@@ -92,6 +92,7 @@ struct EligibleT1Row {
     joined: BlindThenRevealJoinedTransitionV1,
     frame: RelationFrame,
     factorized: FactorizedMultiSourceRowV1,
+    seed_programs: BTreeMap<String, ResponseProgram>,
 }
 
 #[derive(Serialize)]
@@ -137,6 +138,7 @@ pub fn identify_multi_source_t1_operator_v1(
         })
         .collect::<BTreeMap<_, _>>();
     let mut cohorts = BTreeMap::<String, Vec<EligibleT1Row>>::new();
+    let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(joined);
         if !matches!(
@@ -161,6 +163,19 @@ pub fn identify_multi_source_t1_operator_v1(
                 "joined_frame_missing",
             );
         };
+        let seed_programs =
+            match super::source_neutral_t1::enumerate_source_neutral_t1_candidates(joined, frame) {
+                Ok(programs) => programs,
+                Err(blocker) => {
+                    let blocked_tokens = candidate_generation_blocks
+                        .entry((factorized.applicability_shape_root_sha256.clone(), blocker))
+                        .or_default();
+                    if joined.accepted {
+                        *blocked_tokens = blocked_tokens.saturating_add(joined.input_tokens);
+                    }
+                    continue;
+                }
+            };
         cohorts
             .entry(factorized.applicability_shape_root_sha256.clone())
             .or_default()
@@ -168,9 +183,27 @@ pub fn identify_multi_source_t1_operator_v1(
                 joined: joined.clone(),
                 frame: frame.clone(),
                 factorized,
+                seed_programs,
             });
     }
     let Some((shape_root, mut cohort)) = select_highest_marginal_cohort(cohorts) else {
+        if let Some(((shape_root, blocker), tokens)) =
+            candidate_generation_blocks.into_iter().max_by(
+                |((left_root, _), left_tokens), ((right_root, _), right_tokens)| {
+                    left_tokens
+                        .cmp(right_tokens)
+                        .then_with(|| right_root.cmp(left_root))
+                },
+            )
+        {
+            return selected_terminal_report(
+                evidence_epoch_sha256,
+                shape_root,
+                tokens,
+                MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty,
+                blocker,
+            );
+        }
         return terminal_report(
             evidence_epoch_sha256,
             MultiSourceT1IdentificationStateV1::NoEligibleCohort,
@@ -205,21 +238,7 @@ pub fn identify_multi_source_t1_operator_v1(
         );
     };
 
-    let candidate_programs = match super::source_neutral_t1::enumerate_source_neutral_t1_candidates(
-        &seed.joined,
-        &seed.frame,
-    ) {
-        Ok(programs) => programs,
-        Err(blocker) => {
-            return selected_terminal_report(
-                evidence_epoch_sha256,
-                shape_root,
-                selected_marginal_input_tokens,
-                MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty,
-                blocker,
-            );
-        }
-    };
+    let candidate_programs = seed.seed_programs.clone();
     let manifest = match generation_manifest(&shape_root, &candidate_programs) {
         Ok(manifest) => manifest,
         Err(blocker) => {

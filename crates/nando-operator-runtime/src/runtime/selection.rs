@@ -414,7 +414,7 @@ pub(super) fn immediate_selected_scalar_with_request(
     }
 }
 
-fn continuation_handle_scalar(
+pub(super) fn continuation_handle_scalar(
     provider_payload: &Value,
     value_type: AtomValueType,
 ) -> Result<ExtractedScalar, &'static str> {
