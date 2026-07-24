@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nando Operator Machine: реальная архитектура и бюджет ядра</title>
+<style>
+@page { size: A4; margin: 10mm 11mm 11mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  color: #101418;
+  background: #fff;
+  font-family: "Ubuntu Mono", "DejaVu Sans Mono", monospace;
+  font-size: 9.35pt;
+  line-height: 1.28;
+}
+.page {
+  break-before: page;
+  page-break-before: always;
+}
+.page:first-child {
+  break-before: auto;
+  page-break-before: auto;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8mm;
+  align-items: flex-start;
+  border-top: 2.5px solid #101418;
+  border-bottom: 1px solid #101418;
+  padding: 3mm 0 3.2mm;
+  margin-bottom: 4mm;
+}
+.brand {
+  font-weight: 700;
+  font-size: 16pt;
+}
+.meta {
+  text-align: right;
+  font-size: 7.8pt;
+  color: #44505a;
+}
+h1, h2, h3 {
+  margin: 0;
+  letter-spacing: 0;
+}
+h1 {
+  font-size: 21pt;
+  line-height: 1.05;
+  margin: 0 0 2mm;
+}
+h2 {
+  font-size: 12.5pt;
+  border-bottom: 1px solid #101418;
+  padding-bottom: 1.5mm;
+  margin: 5mm 0 3mm;
+}
+h3 {
+  font-size: 9.6pt;
+  margin: 3mm 0 1.5mm;
+}
+p { margin: 0 0 2.5mm; }
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.27;
+}
+.lead {
+  font-size: 11pt;
+  line-height: 1.3;
+  max-width: 175mm;
+  margin-bottom: 4mm;
+}
+.band {
+  border-left: 4px solid #245f8f;
+  padding: 2.3mm 3mm;
+  margin: 3mm 0;
+  background: #f4f7f9;
+  break-inside: avoid;
+}
+.band strong { color: #174a72; }
+.tree {
+  border-top: 1px solid #8d99a3;
+  border-bottom: 1px solid #8d99a3;
+  padding: 3mm 1mm;
+  margin: 2mm 0 4mm;
+  break-inside: avoid;
+}
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #101418;
+  border-left: 1px solid #101418;
+  margin: 3mm 0 4mm;
+  break-inside: avoid;
+}
+.status {
+  min-height: 19mm;
+  border-right: 1px solid #101418;
+  border-bottom: 1px solid #101418;
+  padding: 2mm;
+}
+.status .label {
+  display: block;
+  color: #5b6670;
+  font-size: 7.2pt;
+  margin-bottom: 1mm;
+}
+.status .value {
+  display: block;
+  font-size: 12pt;
+  font-weight: 700;
+}
+.ok { color: #087b45; }
+.watch { color: #a66200; }
+.held { color: #b32a24; }
+.info { color: #176ba0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2mm 0 4mm;
+  font-size: 8.25pt;
+}
+th, td {
+  border-bottom: 1px solid #a8b0b7;
+  padding: 1.5mm 1.4mm;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  border-top: 1.5px solid #101418;
+  border-bottom: 1.5px solid #101418;
+  font-weight: 700;
+}
+tr { break-inside: avoid; }
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5mm;
+}
+.rule {
+  border-top: 1px solid #101418;
+  padding-top: 2mm;
+  margin-top: 3mm;
+}
+.small { font-size: 7.7pt; color: #4f5b64; }
+.footer {
+  border-top: 1px solid #101418;
+  margin-top: 5mm;
+  padding-top: 2mm;
+  font-size: 7.2pt;
+  color: #56616a;
+}
+.avoid { break-inside: avoid; }
+code { font-family: inherit; font-weight: 700; }
+@media screen {
+  body {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 10mm 11mm;
+  }
+  .page { margin-top: 14mm; }
+}
+@media (max-width: 760px) {
+  body { padding: 18px; font-size: 9pt; }
+  header, .cols { display: block; }
+  .meta { text-align: left; margin-top: 8px; }
+  .status-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<section class="page">
+  <header>
+    <div class="brand">NANDO / OPERATOR MACHINE</div>
+    <div class="meta">
+      Реальная архитектура и byte budget<br>
+      Снимок: 2026-07-24 13:15 EEST<br>
+      Git: 945c32a864b9
+    </div>
+  </header>
+
+  <h1>От живого трафика<br>до проверенного CPU-оператора</h1>
+  <p class="lead">
+    Nando превращает завершённый опыт в компактные типизированные программы.
+    Новый навык должен становиться данными и bytecode, а не новой веткой Rust.
+    Wave открывает и консолидирует закон; VM исполняет; независимый verifier
+    устанавливает факт; только admission выдаёт authority.
+  </p>
+
+  <div class="band">
+    <strong>Точная формула:</strong>
+    LLM или реальный опыт обучает → Wave обнаруживает закон →
+    crystallizer компилирует → Operator VM действует →
+    verifier подтверждает → admission разрешает → CPU исполняет.
+  </div>
+
+  <h2>Текущая живая линия</h2>
+  <div class="tree"><pre>OpenAI-compatible request
+│
+├─ Nginx gateway / provider fallback
+│
+├─ nando-transition-serving                 HOT INGRESS
+│  ├─ request digest + hash-only capture
+│  ├─ compact structural evidence
+│  └─ admitted registry lookup
+│
+├─ hot → cold bridges                       PASS, LOSS 0
+│  ├─ OpportunityBridge       полный denominator
+│  ├─ LearningStructureBridge relation/capability atoms
+│  └─ bounded raw shadow      только proof/eval
+│
+├─ nando-operator-learning                  COLD LEARNER
+│  ├─ relation frames + teacher join
+│  ├─ semantic version space
+│  ├─ adaptive identification / CEGIS
+│  └─ immutable candidate bundle
+│
+├─ crystallizer                             3 INPUT
+│  ├─ 2 admissible
+│  └─ 1 HELD: semantic applicability guard отсутствует
+│
+├─ external admission                       OPEN
+│  ├─ independent reconstruction
+│  ├─ proof / future / negatives / parity
+│  └─ immutable registry generation
+│
+└─ nando-transition-serving                 HOT CPU
+   ├─ Phase Router
+   ├─ Runtime Role Grounder
+   ├─ Operator VM
+   ├─ independent Verifier
+   └─ ACCEPT или fallback / ABSTAIN</pre></div>
+
+  <div class="status-grid">
+    <div class="status">
+      <span class="label">ACTIVE PACKAGES</span>
+      <span class="value ok">2</span>
+    </div>
+    <div class="status">
+      <span class="label">HELD CANDIDATES</span>
+      <span class="value held">1</span>
+    </div>
+    <div class="status">
+      <span class="label">FALSE ACCEPTS</span>
+      <span class="value ok">0</span>
+    </div>
+    <div class="status">
+      <span class="label">PARITY FAILURES</span>
+      <span class="value ok">0</span>
+    </div>
+  </div>
+
+  <h2>Что реально исполняется</h2>
+  <table>
+    <thead>
+      <tr><th>Пакет</th><th>Эффект</th><th>Состояние</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>crystallized-scalar-a40ca964f20c4b67</code></td>
+        <td>Пассивное продолжение через <code>write_stdin(session_id)</code></td>
+        <td class="ok">ACTIVE</td>
+      </tr>
+      <tr>
+        <td><code>crystallized-scalar-e35441ca7863327d</code></td>
+        <td>Продолжение cell через <code>wait(cell_id)</code></td>
+        <td class="ok">ACTIVE</td>
+      </tr>
+      <tr>
+        <td><code>write_stdin(chars="\u0003")</code></td>
+        <td>Активная отмена; pre-action поверхность пока не отличает её безопасно</td>
+        <td class="held">HELD</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Главный сдвиг относительно старого документа: F5-A больше не конечная точка.
+    Полный узкий маршрут до CPU замкнут. Текущий блокер — ширина библиотеки,
+    а не отсутствие signal connectivity.
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <div class="brand">01 / MACHINE OF TRUTH</div>
+    <div class="meta">Один владелец на каждый вид истины</div>
+  </header>
+
+  <h1>Власть разделена намеренно</h1>
+  <p class="lead">
+    Сложность здесь покупает одну вещь: ни learner, ни actor, ни отчёт не могут
+    сами объявить собственный результат истинным и включить CPU.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Владелец</th><th>Что он имеет право утверждать</th><th>Чего он не может</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Evidence Kernel</td><td>Переход и provenance наблюдались</td><td>Выбирать закон или action</td></tr>
+      <tr><td>2</td><td>Semantic Law Kernel</td><td>Поверхности имеют общий effect identity</td><td>Связывать runtime-роли</td></tr>
+      <tr><td>3</td><td>Binding Evidence</td><td>Version space, ties, insufficient evidence</td><td>Выбирать selector при tie</td></tr>
+      <tr><td>4</td><td>Physical Trial</td><td>Actor реально выдал наблюдаемый delta</td><td>Считать expected law истиной</td></tr>
+      <tr><td>5</td><td>Trusted Resolver</td><td>Labels связаны с frozen rows и roots</td><td>Перестраивать frozen graph</td></tr>
+      <tr><td>6</td><td>Causal Adjudicator</td><td>H0/H1 accepted или insufficient</td><td>Создавать ProtocolMode</td></tr>
+      <tr><td>7</td><td>Protocol Compiler</td><td>Закон выразим bounded-программами</td><td>Выдавать runtime authority</td></tr>
+      <tr><td>8</td><td>Runtime Grounder</td><td>Роли однозначно связаны сейчас</td><td>Угадывать при ambiguity</td></tr>
+      <tr><td>9</td><td>Actor + Verifier</td><td>Action выполнен и независимо совпал</td><td>Самостоятельно активировать пакет</td></tr>
+      <tr><td>10</td><td>External Admission</td><td>Immutable generation получает lease</td><td>Ослаблять proof задним числом</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Владение по crate</h2>
+  <div class="tree"><pre>nando-operator-kernel
+├─ immutable EffectLaw / ProtocolMode / VM contracts
+├─ structural language / semantic classes
+└─ не знает filesystem, HTTP и authority
+
+nando-operator-learning
+├─ evidence, quotient, version space, CEGIS
+├─ phase synthesis, BackwardWave, crystallizer input
+└─ может создать candidate, но не выполнить hot request
+
+nando-operator-runtime
+├─ canonical request context
+├─ role grounding + action equivalence
+├─ OperatorPage restart / dispatch / VM
+└─ ambiguous или exhausted → ABSTAIN
+
+nando-operator-proof
+├─ independent physical trial
+├─ verifier derivation и VerifiedDeltaReceipt
+└─ не использует actor output как собственную истину
+
+nando-operator-persistence
+├─ crash-safe immutable stores
+└─ не классифицирует, не исполняет, не допускает
+
+nando-operator-admission
+├─ independent reconstruction + package policy
+├─ parity / revocation / authority lease
+└─ единственный владелец ACTIVE
+
+nando-response-actor
+└─ response-specific facade и cross-owner orchestration
+
+nando-transition-serving
+└─ hot HTTP ingress, registry route, CPU accept, fallback
+
+nando-gateway-control
+└─ read-only observability; отчёт никогда не authority</pre></div>
+
+  <h2>Направление зависимости</h2>
+  <div class="cols">
+    <div class="avoid">
+      <h3>Разрешённый смысл</h3>
+      <pre>kernel
+  ↑
+learning / runtime / proof
+  ↑
+persistence / admission
+  ↑
+response facade / serving</pre>
+    </div>
+    <div class="avoid">
+      <h3>Запрещённые обратные связи</h3>
+      <pre>fixture  ─X→ runtime truth
+report   ─X→ authority
+actor    ─X→ verifier oracle
+learner  ─X→ ACTIVE
+ACTIVE g ─X→ mutation in place</pre>
+    </div>
+  </div>
+
+  <div class="band">
+    <strong>Главный invariant:</strong>
+    evidence заканчивается capability
+    <code>AcceptedBindingLawEvidence</code>; compiler начинает только с неё;
+    runtime authority начинается только после внешнего admission.
+  </div>
+
+  <div class="footer">
+    <code>nando-response-actor</code> всё ещё велик: 62 490 строк Rust.
+    Декомпозиция уже вынесла владельцев в отдельные crates, но facade остаётся
+    переходным интеграционным слоем, а не желаемым конечным ядром.
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <div class="brand">02 / WHERE GROKKING LIVES</div>
+    <div class="meta">Learning field ≠ stored page ≠ VM</div>
+  </header>
+
+  <h1>Что именно должно грокнуться</h1>
+  <p class="lead">
+    Грокается не cell, не threshold и не 4 KiB-страница. Грокается полный
+    связный операторный circuit: роли, отношения, guard, transform,
+    composition, renderer и verifier contract.
+  </p>
+
+  <div class="tree"><pre>частичные relation fragments из независимых surfaces
+        │
+        v
+Dynamic Candidate Operator Field                 COLD
+├─ competing RoleGraph hypotheses
+├─ relation-plane hypotheses
+├─ transform / composition / renderer hypotheses
+├─ positive phase centers
+└─ anti-centers / counter-waves
+        │
+        v
+cross-plane constructive / destructive interference
+        │
+        v
+один connected circuit получает coherence margin
+        │
+        v
+exact episode authority удаляется
+        │
+        v
+тот же circuit переносится на independent future
+        │
+        v
+CircuitAttractor                                GROKKED LAW
+├─ RoleGraph
+├─ RelationProgram
+├─ ApplicabilityBoundary
+├─ TransformProgram
+├─ CompositionDag
+├─ RendererProgram
+└─ VerifierContract
+        │
+        v
+Crystallizer / Operator Compiler
+        │
+        v
+OperatorPage32 + versioned VM program           HOT SNAPSHOT</pre></div>
+
+  <h2>Два разных пути, которые нельзя путать</h2>
+  <table>
+    <thead>
+      <tr><th></th><th>Adaptive identification</th><th>Circuit grokking</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Вход</td><td>Bounded candidate program space</td><td>Частичные relation fragments</td></tr>
+      <tr><td>Момент решения</td><td>Остаётся один executable class</td><td>Возникает новый coherent connected circuit</td></tr>
+      <tr><td>Новый topology</td><td>Не обязателен</td><td>Обязателен для сильного claim</td></tr>
+      <tr><td>Proof basis</td><td>Столько evidence, сколько снимает ambiguity</td><td>Independent surfaces + transfer + phase ablations</td></tr>
+      <tr><td>Текущий live статус</td><td class="ok">PASS, 2 узких ACTIVE</td><td class="watch">LAB PASS / broad live NOT PROVEN</td></tr>
+    </tbody>
+  </table>
+
+  <div class="band">
+    <strong>Почему больше нет 32 + 32:</strong>
+    readiness задаёт не число строк, а version space. Простой одноролевой закон
+    может потребовать 1 support + 1 distinguishing future. Богатый закон
+    запрашивает следующий пример только пока существуют разные исполняемые
+    объяснения.
+  </div>
+
+  <h2>Generation model</h2>
+  <div class="tree"><pre>ACTIVE generation g
+│
+├─ VerifiedPass
+│    └─ усиливает candidate field поколения g+1
+├─ ApplicabilityNegative
+│    └─ строит counter-wave / сужает basin в g+1
+├─ HardContradiction
+│    └─ residual localization → split / repair / revoke
+└─ CensoredUnknown
+     └─ uncertainty only; semantic field не меняется
+
+candidate generation g+1
+    -> complete proof
+    -> external admission
+    -> atomic registry generation
+
+ACTIVE generation g никогда не мутирует на месте.</pre></div>
+
+  <h2>Текущий живой generation delta</h2>
+  <div class="status-grid">
+    <div class="status"><span class="label">CRYSTALLIZED INPUT</span><span class="value info">3</span></div>
+    <div class="status"><span class="label">ADMISSIBLE</span><span class="value ok">2</span></div>
+    <div class="status"><span class="label">HELD</span><span class="value held">1</span></div>
+    <div class="status"><span class="label">GENERATION DELTA</span><span class="value">0</span></div>
+  </div>
+
+  <p>
+    <code>active_generation_immutable</code> здесь не авария. Это означает:
+    кандидатная реконструкция совпала с уже активной generation; новых
+    доказанных пакетов нет, поэтому registry правильно не переписывается.
+  </p>
+
+  <div class="footer">
+    Следующий настоящий growth event: новый independently proven operator
+    создаёт <code>generation delta &gt; 0</code>. Удержанный Ctrl-C не может
+    попасть туда, пока pre-action evidence не отделит активную отмену от
+    пассивного polling.
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <div class="brand">03 / HOT OPERATOR PAGE</div>
+    <div class="meta">Квантованный снимок закона</div>
+  </header>
+
+  <h1>4 032 байта на оператор</h1>
+  <p class="lead">
+    OperatorPage32 — компактная горячая форма уже кристаллизованного закона.
+    Она не хранит corpus, search frontier или proof receipts.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Секция</th><th>Байты</th><th>Назначение</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Header</td><td>64</td><td>Schema, generation, fingerprints, counts, flags</td></tr>
+      <tr><td>Phase profile</td><td>1 024</td><td>Route / coherence state</td></tr>
+      <tr><td>Structural roles</td><td>512</td><td>32 роли × 16 B</td></tr>
+      <tr><td>Ternary relation cube</td><td>2 048</td><td>8 planes × 32 × 32 × 2 bits</td></tr>
+      <tr><td>Transform program</td><td>128</td><td>16 инструкций × 8 B</td></tr>
+      <tr><td>Composition</td><td>128</td><td>Bounded ordering / DAG</td></tr>
+      <tr><td>Renderer</td><td>128</td><td>Bounded output program</td></tr>
+      <tr><th>Итого</th><th>4 032</th><th>Одна компактная hot page</th></tr>
+    </tbody>
+  </table>
+
+  <div class="cols">
+    <div class="avoid">
+      <h2>Hot</h2>
+      <pre>OperatorPage32
+dispatch index
+bounded request context
+role/value/type/cardinality atoms
+advertised capabilities
+VM stack и scratch
+revocation/lease snapshot</pre>
+    </div>
+    <div class="avoid">
+      <h2>Cold</h2>
+      <pre>exact episodes
+relation-frame ledger
+Wave reservoirs
+candidate search frontier
+capture/parity receipts
+CBOR/JSON reports
+restart and proof archives</pre>
+    </div>
+  </div>
+
+  <h2>Hot registry target</h2>
+  <div class="tree"><pre>2 048 operators × 4 032 B
+  = 8 257 536 B
+  = 7.875 MiB operator pages
+
+total hot operator budget
+  = 16 MiB
+
+remaining for dispatch / metadata / scratch
+  = 8.125 MiB</pre></div>
+
+  <h2>Текущие измеренные bytes</h2>
+  <table>
+    <thead>
+      <tr><th>Объект</th><th>Размер</th><th>Комментарий</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Live response registry</td><td>178 015 B</td><td>2 ACTIVE + proof-bound package data</td></tr>
+      <tr><td>Admission candidate CBOR</td><td>2 896 249 B</td><td>Cold reconstruction input</td></tr>
+      <tr><td>Controller admission</td><td>4 031 B</td><td>Authority decision envelope</td></tr>
+      <tr><td>Authority candidate</td><td>3 737 B</td><td>Cold candidate, не self-authority</td></tr>
+      <tr><td>Controller report</td><td>823 B</td><td>Observability only</td></tr>
+      <tr><td>Current learner checkpoint</td><td>156 866 363 B</td><td>Cold mutable learning state</td></tr>
+      <tr><td>Transition data tree</td><td>2.4 GiB</td><td>Включает исторические backups/tmp</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Текущий измеренный RSS</h2>
+  <table>
+    <thead>
+      <tr><th>Процесс</th><th>RSS</th><th>Роль</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>nando-transition-serving</td><td>≈ 131.3 MiB</td><td>Hot serving + registry + protocol runtime</td></tr>
+      <tr><td>nando-response-learning</td><td>≈ 572.7 MiB</td><td>Cold learner / evidence / candidate state</td></tr>
+      <tr><td>nando-gateway-control</td><td>≈ 59.4 MiB</td><td>Read-only dashboard/API</td></tr>
+    </tbody>
+  </table>
+
+  <div class="band">
+    <strong>Честная граница:</strong>
+    16 MiB — target для hot operator pages/index, а не всего serving-процесса.
+    Текущий serving RSS включает HTTP, provider protocol, registries, buffers
+    и остальную runtime-обвязку.
+  </div>
+
+  <div class="footer">
+    Старые Cell32, SymbolCell8, Stage2Organ и Organ128 исключены из активной
+    схемы. Они остаются legacy/control lineages и не определяют текущую
+    Nando Operator Machine.
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <div class="brand">04 / REQUEST HOT PATH</div>
+    <div class="meta">Bounded execution, fail-closed</div>
+  </header>
+
+  <h1>Один запрос, один структурный язык</h1>
+  <p class="lead">
+    Frozen evidence и live provider request обязаны сходиться в одном
+    canonical structural view. Ни runtime adapter, ни learner adapter не
+    имеют права изобретать отдельную relation-семантику.
+  </p>
+
+  <div class="tree"><pre>HTTP body
+  -> parse once
+  -> CanonicalRuntimeRequestV3
+  -> bounded JSON walk
+  -> structural dispatch
+  -> candidate ProtocolModes
+  -> Role CSP
+       type / cardinality / temporal constraints
+       exact relation constraints
+       complete bounded mappings
+  -> fixed-point phase ranking
+  -> canonical action for each mapping
+  -> action-equivalence collapse
+       one class      -> BoundRoleEnvironment
+       multiple       -> ABSTAIN
+       exhausted      -> ABSTAIN
+  -> Operator VM
+  -> candidate output
+  -> independent verifier repeats derivation
+  -> verified match   -> local ACCEPT
+       mismatch       -> ABSTAIN + fallback</pre></div>
+
+  <h2>Hard runtime budgets</h2>
+  <table>
+    <thead>
+      <tr><th>Budget</th><th>Ceiling</th><th>Failure</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Indexed modes</td><td>2 048</td><td>Reject artifact/index</td></tr>
+      <tr><td>Dispatched modes</td><td>32</td><td>ABSTAIN</td></tr>
+      <tr><td>Mappings per mode</td><td>64</td><td>Exhausted → ABSTAIN</td></tr>
+      <tr><td>Total mapping evaluations</td><td>2 048</td><td>Exhausted → ABSTAIN</td></tr>
+      <tr><td>Runtime JSON nodes</td><td>4 096</td><td>ABSTAIN</td></tr>
+      <tr><td>Runtime role candidates</td><td>64</td><td>ABSTAIN</td></tr>
+      <tr><td>Executable modes per set</td><td>32</td><td>Invalid artifact</td></tr>
+      <tr><td>Operator page roles</td><td>32</td><td>Invalid page</td></tr>
+      <tr><td>Relation planes</td><td>8</td><td>Invalid page</td></tr>
+      <tr><td>Transform instructions</td><td>16</td><td>Invalid page</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Latency proof targets</h2>
+  <div class="status-grid">
+    <div class="status">
+      <span class="label">NO-MATCH P99</span>
+      <span class="value">≤ 250 µs</span>
+    </div>
+    <div class="status">
+      <span class="label">MATCHED SHADOW P99</span>
+      <span class="value">≤ 1 ms</span>
+    </div>
+    <div class="status">
+      <span class="label">HARD CEILING</span>
+      <span class="value">≤ 2 ms</span>
+    </div>
+    <div class="status">
+      <span class="label">HOT-PATH IO</span>
+      <span class="value ok">0</span>
+    </div>
+  </div>
+
+  <h2>Независимый verifier</h2>
+  <div class="cols">
+    <div class="avoid">
+      <h3>Actor получает</h3>
+      <pre>admitted OperatorPage
+current request
+BoundRoleEnvironment
+VM budgets</pre>
+    </div>
+    <div class="avoid">
+      <h3>Verifier заново выводит</h3>
+      <pre>request provenance
+structural roles
+relation satisfaction
+physical action class
+reference effect
+preserved frame</pre>
+    </div>
+  </div>
+
+  <div class="band">
+    <strong>Ключевой causal invariant:</strong>
+    изменение bound source value обязано менять actor result.
+    Verifier не читает выбранное actor-ом значение как expected truth.
+  </div>
+
+  <h2>Fallback — часть архитектуры</h2>
+  <div class="tree"><pre>unknown opcode
+or malformed page
+or missing role
+or relation mismatch
+or ambiguous mapping
+or low route margin
+or revoked/expired lease
+or verifier mismatch
+or exhausted budget
+        │
+        v
+      ABSTAIN
+        │
+        v
+official provider / upstream LLM fallback</pre></div>
+
+  <div class="footer">
+    CPU execution не заменяет upstream целиком. Оно постепенно расширяет
+    доказанную область; всё вне неё остаётся у LLM.
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <div class="brand">05 / LIVE ECONOMICS</div>
+    <div class="meta">Read-only API snapshot; значения меняются</div>
+  </header>
+
+  <h1>Что система делает сейчас</h1>
+  <p class="lead">
+    Это измеренный live-снимок, а не обещание и не fixture. Источник —
+    локальный <code>/control/&lt;key&gt;/tokens</code> API и immutable response registry.
+  </p>
+
+  <div class="status-grid">
+    <div class="status">
+      <span class="label">ПРОШЛО ЧЕРЕЗ NANDO</span>
+      <span class="value">6.387B</span>
+    </div>
+    <div class="status">
+      <span class="label">УВИДЕЛ МАЙНЕР</span>
+      <span class="value info">872.2M</span>
+    </div>
+    <div class="status">
+      <span class="label">ИСПОЛНЕНО НА CPU</span>
+      <span class="value ok">180.0M</span>
+    </div>
+    <div class="status">
+      <span class="label">ACTIVE</span>
+      <span class="value ok">2</span>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Метрика</th><th>Текущее значение</th><th>Смысл</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Lifetime miner visibility</td><td>13.657%</td><td>Доля общего denominator, увиденная miner-ом</td></tr>
+      <tr><td>Lifetime CPU share</td><td>2.819%</td><td>Весь исторический трафик, включая период до ACTIVE</td></tr>
+      <tr><td>Current epoch CPU share</td><td>32.370%</td><td>137.5M / 424.9M после текущего epoch boundary</td></tr>
+      <tr><td>Structural bridge</td><td>2 374 / 2 374</td><td>Pending 0, sequence gaps 0</td></tr>
+      <tr><td>Relation joins</td><td>15 690 / 39 888</td><td>Остальное — реальные misses, не transport loss</td></tr>
+      <tr><td>Ready cohorts</td><td>28</td><td>Ещё не равно admitted operators</td></tr>
+      <tr><td>Candidate input</td><td>3</td><td>2 admissible, 1 HELD</td></tr>
+      <tr><td>Bridge loss</td><td>0</td><td>Hot/cold delivery intact</td></tr>
+      <tr><td>False accepts / parity</td><td>0 / 0</td><td>Safety gate сохраняется</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Где находится реальный разрыв</h2>
+  <div class="tree"><pre>входящий трафик                         PASS
+  -> structural bridge                 PASS
+  -> relation frames                   LIVE
+  -> operator discovery                28 cohorts
+  -> candidate export                  3
+  -> crystallizer                      2 admitted / 1 held
+  -> immutable registry                2 ACTIVE
+  -> admission                         OPEN
+  -> CPU                               ENABLED
+
+ТЕКУЩАЯ ПРОБЛЕМА:
+  библиотека ACTIVE-операторов слишком узкая,
+  поэтому общий lifetime CPU share всё ещё 2.819%.
+
+НЕ ПРОБЛЕМА:
+  signal connectivity, bridge delivery или authority wiring.</pre></div>
+
+  <h2>Путь к 50%</h2>
+  <table>
+    <thead>
+      <tr><th>Шаг</th><th>Что должно появиться</th><th>Что запрещено</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Больше high-volume relation frames</td><td>Считать raw traffic authority</td></tr>
+      <tr><td>2</td><td>Source-neutral operator families</td><td>Ручные function-name profiles как закон</td></tr>
+      <tr><td>3</td><td>Distinguishing evidence только для реальных ties</td><td>Возвращать универсальные 32 + 32</td></tr>
+      <tr><td>4</td><td>Новые immutable packages</td><td>Расширять scope старого ACTIVE</td></tr>
+      <tr><td>5</td><td>Status/count/filter/compose и rich multi-role laws</td><td>Понижать verifier/admission</td></tr>
+      <tr><td>6</td><td>Три завершённых M3 windows ≥ 50%</td><td>Подменять current epoch lifetime-метрикой</td></tr>
+    </tbody>
+  </table>
+
+  <div class="band">
+    <strong>Главный продуктовый рычаг:</strong>
+    не ускорять два уже ACTIVE оператора, а увеличивать объём трафика,
+    покрытый новыми независимо доказанными operator packages.
+  </div>
+
+  <div class="footer">
+    Lifetime CPU share растёт медленнее current epoch share, потому что его
+    denominator включает миллиарды токенов, прошедших до включения нынешних
+    пакетов. Для M3 нужны три последовательных проверенных окна, а не один пик.
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <div class="brand">06 / ARCHITECT CHECKLIST</div>
+    <div class="meta">Что сохранять при следующих изменениях</div>
+  </header>
+
+  <h1>Ядро нельзя снова склеить</h1>
+
+  <h2>Non-negotiable invariants</h2>
+  <div class="tree"><pre>[ ] completed-trace teacher labels остаются только learning evidence
+[ ] runtime не читает future action или teacher response
+[ ] proof fixture никогда не становится runtime authority
+[ ] Wave формирует целый circuit, а не таблицу per-cell rules
+[ ] TernaryOperatorCube хранит результат; он не объявляется grokking
+[ ] structure проверяется до phase ranking
+[ ] multiple action classes всегда дают ABSTAIN
+[ ] actor и verifier выводят expected result независимо
+[ ] admission остаётся внешним владельцем ACTIVE
+[ ] ACTIVE generation не мутирует на месте
+[ ] censored outcomes не обновляют semantic field
+[ ] fallback сохраняется для каждого неизвестного случая
+[ ] false accepts = 0
+[ ] runtime parity mismatches = 0
+[ ] coverage публикуется с глобальным denominator</pre></div>
+
+  <h2>Перед изменением core</h2>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Обязательное действие</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Нарисовать затронутый signal path и точный blocker</td></tr>
+      <tr><td>2</td><td>Снять live baseline: coverage, CPU, candidates, ACTIVE, safety, RSS, disk</td></tr>
+      <tr><td>3</td><td>Назвать одного владельца изменения</td></tr>
+      <tr><td>4</td><td>Не смешивать refactor и learning/scoring change</td></tr>
+      <tr><td>5</td><td>Сохранить verifier, admission и provider fallback</td></tr>
+      <tr><td>6</td><td>Focused tests → release build → composite gate → live check</td></tr>
+      <tr><td>7</td><td>Проверить authority files и registry generation</td></tr>
+      <tr><td>8</td><td>Сделать узкий commit и обновить canonical docs при изменении архитектуры</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Что является PASS</h2>
+  <div class="cols">
+    <div class="avoid">
+      <h3>Достаточно для scoped claim</h3>
+      <pre>real denominator
+independent support/future
+negative evidence
+phase / anti ablations
+actor/verifier parity
+restart parity
+false accepts 0
+immutable receipt
+fresh live execution</pre>
+    </div>
+    <div class="avoid">
+      <h3>Недостаточно</h3>
+      <pre>fixture only
+high phase score
+candidate package exists
+report says READY
+threshold crossed
+one memorized surface
+manual registry edit
+self-issued authority
+CPU flag without accept</pre>
+    </div>
+  </div>
+
+  <h2>Текущая карта результата</h2>
+  <div class="tree"><pre>Capture / provenance                         PASS
+Hot-to-cold structural bridge               PASS
+Adaptive version-space identification       PASS
+Protocol compiler                           PASS, bounded
+Runtime role grounding                      PASS, narrow laws
+OperatorPage32 + restart                     PASS
+Independent verifier                        PASS
+External admission                          PASS
+Live ACTIVE CPU execution                    PASS, 2 packages
+Broad rich multi-role operator              WATCH
+Natural circuit-attractor in broad live      NOT PROVEN
+BackwardWave broad self-correction           PARTIAL / next generations
+M3: ≥50% for 3 verified windows              WATCH
+
+Current engineering objective:
+  more independently proven operators
+  -> generation delta > 0
+  -> wider verified CPU coverage
+  -> safety counters remain zero</pre></div>
+
+  <h2>Canonical sources</h2>
+  <pre class="small">/home/ubu/projects/nando-wave/ARCHITECTURE_CANON.md
+/home/ubu/projects/nando-wave/docs/CORE.md
+/home/ubu/projects/nando-wave/crates/nando-core/src/wave/operator_page.rs
+/home/ubu/projects/nando-wave/crates/nando-operator-kernel/
+/home/ubu/projects/nando-wave/crates/nando-operator-learning/
+/home/ubu/projects/nando-wave/crates/nando-operator-runtime/
+/home/ubu/projects/nando-wave/crates/nando-operator-proof/
+/home/ubu/projects/nando-wave/crates/nando-operator-admission/
+/var/lib/nando-wave/transition/response-registry.json
+/var/lib/nando-wave/transition/response-admission-controller-report.json</pre>
+
+  <div class="band">
+    <strong>Суть текущей архитектуры:</strong>
+    холодное поле учится и строит кандидатов; горячая VM только исполняет;
+    verifier независимо проверяет; admission единолично разрешает;
+    каждое новое доказанное поколение расширяет CPU, не переписывая ядро Rust.
+  </div>
+
+  <div class="footer">
+    Документ заменяет старый F5-A/Cell32 byte-budget snapshot.
+    Live-цифры — снимок 2026-07-24 и должны обновляться перед внешним claim.
+  </div>
+</section>
+
+</body>
+</html>
