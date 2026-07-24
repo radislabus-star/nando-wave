@@ -33,6 +33,7 @@ pub(crate) struct RequestLearningStatusV2 {
     pub(crate) lookup_misses: u64,
     pub(crate) stored_sessions: u64,
     pub(crate) stored_turns: u64,
+    #[serde(default)]
     pub(crate) stored_topologies: u64,
 }
 
@@ -485,4 +486,68 @@ fn valid_sha256(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Serialize)]
+    struct LegacyStatus {
+        structures_applied: u64,
+        session_inserts: u64,
+        session_updates: u64,
+        turn_inserts: u64,
+        turn_updates: u64,
+        evictions: u64,
+        lookup_attempts: u64,
+        lookup_hits: u64,
+        lookup_misses: u64,
+        stored_sessions: u64,
+        stored_turns: u64,
+    }
+
+    #[derive(Serialize)]
+    struct LegacyWire {
+        schema: String,
+        bridge_epoch_sha256: String,
+        last_sequence: u64,
+        last_record_sha256: String,
+        capability_by_session: BTreeMap<String, Vec<u64>>,
+        session_order: Vec<String>,
+        structure_by_turn: BTreeMap<String, RequestLearningAtoms>,
+        turn_order: Vec<String>,
+        status: LegacyStatus,
+    }
+
+    #[test]
+    fn pre_v3_checkpoint_without_topology_counter_still_decodes() {
+        let wire = LegacyWire {
+            schema: REQUEST_LEARNING_CHECKPOINT_SCHEMA_V2.to_owned(),
+            bridge_epoch_sha256: "1".repeat(64),
+            last_sequence: 0,
+            last_record_sha256: String::new(),
+            capability_by_session: BTreeMap::new(),
+            session_order: Vec::new(),
+            structure_by_turn: BTreeMap::new(),
+            turn_order: Vec::new(),
+            status: LegacyStatus {
+                structures_applied: 0,
+                session_inserts: 0,
+                session_updates: 0,
+                turn_inserts: 0,
+                turn_updates: 0,
+                evictions: 0,
+                lookup_attempts: 0,
+                lookup_hits: 0,
+                lookup_misses: 0,
+                stored_sessions: 0,
+                stored_turns: 0,
+            },
+        };
+        let bytes = serde_cbor::to_vec(&wire).expect("legacy checkpoint");
+        let (index, _) =
+            RequestLearningIndex::from_checkpoint_cbor(&bytes).expect("backward decode");
+        assert_eq!(index.status().stored_topologies, 0);
+    }
 }
