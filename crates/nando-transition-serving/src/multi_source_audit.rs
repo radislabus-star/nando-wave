@@ -39,6 +39,7 @@ pub struct MultiSourceDiscoveryAuditV2 {
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct T1EligibilityAuditV1 {
+    pub captured_continuation_topology_rows: u64,
     pub shape_and_effect_rows: u64,
     pub extraction_complete_rows: u64,
     pub witness_complete_rows: u64,
@@ -120,8 +121,22 @@ pub fn run_multi_source_discovery_audit_v2(
         .iter()
         .map(factor_multi_source_row_v1)
         .collect::<Vec<_>>();
+    let captured_continuation_topology_rows = request_snapshot
+        .topologies
+        .iter()
+        .filter(|row| {
+            row.structure
+                .topology
+                .relations
+                .iter()
+                .any(|edge| edge.relation == MultiSourceRelationKindV1::ContinuationHandle)
+        })
+        .count() as u64;
     let t1_eligibility = join_ledger.rows().iter().zip(&factorized).fold(
-        T1EligibilityAuditV1::default(),
+        T1EligibilityAuditV1 {
+            captured_continuation_topology_rows,
+            ..T1EligibilityAuditV1::default()
+        },
         |mut audit, (joined, row)| {
             let shape_and_effect = matches!(
                 row.pre_action_shape,
