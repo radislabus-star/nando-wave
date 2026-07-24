@@ -79,6 +79,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+const RESPONSE_PACKAGE_CPU_COUNTER_CAPACITY: usize = 2_048;
+
 use custom_tool_projection::{
     parse_actor_custom_tool_call, responses_projection as custom_tool_responses_projection,
 };
@@ -421,6 +423,8 @@ struct ServingCounters {
     local_accepts: AtomicU64,
     ordinary_response_local_accepts: AtomicU64,
     ordinary_response_local_accept_input_tokens: AtomicU64,
+    response_cpu_by_package: Mutex<BTreeMap<String, ResponsePackageCpuCounters>>,
+    response_cpu_by_package_overflow: AtomicU64,
     observations: AtomicU64,
     errors: AtomicU64,
     expression_shadow_requests: AtomicU64,
@@ -431,6 +435,13 @@ struct ServingCounters {
     expression_shadow_abstains: AtomicU64,
     expression_shadow_cache_unavailable: AtomicU64,
     expression_shadow_potential_input_tokens: AtomicU64,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+struct ResponsePackageCpuCounters {
+    accepts: u64,
+    ordinary_accepts: u64,
+    ordinary_input_tokens: u64,
 }
 
 struct ObservationStore {
@@ -1147,7 +1158,31 @@ async fn health(State(state): State<AppState>) -> Response {
         "observations": state.counters.observations.load(Ordering::Relaxed),
         "errors": state.counters.errors.load(Ordering::Relaxed),
     });
+    let response_cpu_by_package_overflow = state
+        .counters
+        .response_cpu_by_package_overflow
+        .load(Ordering::Relaxed);
+    let (response_cpu_by_package_lock_valid, response_cpu_by_package) = state
+        .counters
+        .response_cpu_by_package
+        .lock()
+        .map(|counters| (true, counters.clone()))
+        .unwrap_or_else(|_| (false, BTreeMap::new()));
+    let response_cpu_by_package_valid =
+        response_cpu_by_package_lock_valid && response_cpu_by_package_overflow == 0;
     if let Some(object) = health.as_object_mut() {
+        object.insert(
+            "response_cpu_by_package_valid".to_owned(),
+            json!(response_cpu_by_package_valid),
+        );
+        object.insert(
+            "response_cpu_by_package".to_owned(),
+            json!(response_cpu_by_package),
+        );
+        object.insert(
+            "response_cpu_by_package_overflow".to_owned(),
+            json!(response_cpu_by_package_overflow),
+        );
         object.insert(
             "response_runtime_revocation_state_valid".to_owned(),
             json!(runtime_revocations.valid),
@@ -2655,6 +2690,24 @@ fn try_response_actor(
     };
     let receipt = &post_verifier.receipt_sha256;
     state.counters.local_accepts.fetch_add(1, Ordering::Relaxed);
+    if let Ok(mut counters) = state.counters.response_cpu_by_package.lock() {
+        if counters.contains_key(package_id)
+            || counters.len() < RESPONSE_PACKAGE_CPU_COUNTER_CAPACITY
+        {
+            let package = counters.entry(package_id.to_owned()).or_default();
+            package.accepts = package.accepts.saturating_add(1);
+            if intent_dedupe_eligible {
+                package.ordinary_accepts = package.ordinary_accepts.saturating_add(1);
+                package.ordinary_input_tokens =
+                    package.ordinary_input_tokens.saturating_add(input_tokens);
+            }
+        } else {
+            state
+                .counters
+                .response_cpu_by_package_overflow
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
     if intent_dedupe_eligible {
         state
             .counters
@@ -6189,6 +6242,18 @@ mod tests {
             .ordinary_response_local_accept_input_tokens
             .load(Ordering::Relaxed);
         assert!(accepted_input_tokens > 0);
+        let package_counters = state
+            .counters
+            .response_cpu_by_package
+            .lock()
+            .expect("package cpu counters");
+        let status_counters = package_counters
+            .get("serving-project-status")
+            .expect("status package counters");
+        assert_eq!(status_counters.accepts, 5);
+        assert_eq!(status_counters.ordinary_accepts, 5);
+        assert_eq!(status_counters.ordinary_input_tokens, accepted_input_tokens);
+        drop(package_counters);
         assert_eq!(jsonl(&state.config.economics_path).len(), 5);
 
         let mut admission = read_json(&state.config.admission_path).expect("admission");

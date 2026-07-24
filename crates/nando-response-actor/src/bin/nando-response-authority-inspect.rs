@@ -4,10 +4,11 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use nando_response_actor::{
-    RESPONSE_AUTHORITY_SCHEMA_V2, ResponseExecutor, ResponsePackageAuthorityBindingV2,
-    ResponseRegistry, response_actor_program_digest, response_execution_payload_digest,
-    response_independent_verifier_program_digest, response_package_digest,
-    response_proof_receipts_digest, response_registry_digest, sha256_bytes,
+    RESPONSE_AUTHORITY_SCHEMA_V2, ResponseExecutionStatus, ResponseExecutor,
+    ResponsePackageAuthorityBindingV2, ResponseRegistry, response_actor_program_digest,
+    response_execution_payload_digest, response_independent_verifier_program_digest,
+    response_package_digest, response_proof_receipts_digest, response_registry_digest,
+    sha256_bytes,
 };
 
 fn main() {
@@ -39,9 +40,24 @@ fn main() {
         }
         return;
     }
+    if args.len() == 4 && args[0] == "--execute-shadow" {
+        match execute_shadow(
+            Path::new(&args[1]),
+            Path::new(&args[2]),
+            Path::new(&args[3]),
+        ) {
+            Ok(report) => println!("{report}"),
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if args.len() != 5 {
         eprintln!(
-            "usage: nando-response-authority-inspect REGISTRY ADMISSION PROJECT_ID GATE_BUILD RUNTIME_BUILD"
+            "usage: nando-response-authority-inspect REGISTRY ADMISSION PROJECT_ID GATE_BUILD RUNTIME_BUILD\n\
+             or: nando-response-authority-inspect --execute-shadow REGISTRY REQUEST_TEXT_FILE PROVIDER_PAYLOAD_FILE"
         );
         std::process::exit(2);
     }
@@ -82,6 +98,40 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+fn execute_shadow(
+    registry_path: &Path,
+    request_text_path: &Path,
+    provider_payload_path: &Path,
+) -> Result<serde_json::Value, String> {
+    let executor = ResponseExecutor::load(registry_path)?;
+    let request_text = fs::read_to_string(request_text_path)
+        .map_err(|error| format!("request_text_read:{error}"))?;
+    let provider_payload: serde_json::Value = serde_json::from_slice(
+        &fs::read(provider_payload_path)
+            .map_err(|error| format!("provider_payload_read:{error}"))?,
+    )
+    .map_err(|error| format!("provider_payload_parse:{error}"))?;
+    let execution = executor.execute_shadow(&request_text, &provider_payload);
+    let status = match execution.status {
+        ResponseExecutionStatus::Executed => "EXECUTED",
+        ResponseExecutionStatus::Abstain => "ABSTAIN",
+        ResponseExecutionStatus::VerifyFailed => "VERIFY_FAILED",
+    };
+    Ok(serde_json::json!({
+        "schema": "nando.response-execution-diagnostic.v1",
+        "authority": false,
+        "status": status,
+        "reason": execution.reason,
+        "package_id": execution.package_id,
+        "response": execution.response,
+        "verification_receipt_id": execution.verification_receipt_id,
+        "verifier_schema": execution.verifier_schema,
+        "phase_candidates": execution.phase_candidates,
+        "exact_actor_checks": execution.exact_actor_checks,
+        "phase_margin_micro": execution.phase_margin_micro,
+    }))
 }
 
 fn refresh_candidate(
