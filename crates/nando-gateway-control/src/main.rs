@@ -124,6 +124,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .unwrap_or(&economics);
     let (visible_total_tokens, visible_cpu_tokens) =
         exact_token_totals(live_economics).unwrap_or((0, 0));
+    let (current_epoch_total_tokens, current_epoch_cpu_tokens) =
+        exact_current_epoch_token_totals(live_economics).unwrap_or((0, 0));
     let build_manifest = read_json(&state.config.build_manifest_path);
     let admission_receipt = read_json(&state.config.admission_path);
     let runtime_admission = admission_receipt
@@ -562,6 +564,8 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         total_tokens: visible_total_tokens,
         miner_tokens: visible_miner_tokens,
         cpu_tokens: visible_cpu_tokens,
+        current_epoch_total_tokens,
+        current_epoch_cpu_tokens,
         cpu_allowed: admission.cpu_allowed,
     });
     let body = format!(
@@ -1020,6 +1024,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
         )
             .into_response();
     };
+    let (current_epoch_total_input_tokens, current_epoch_cpu_input_tokens) =
+        exact_current_epoch_token_totals(economics).unwrap_or((0, 0));
     let Some(miner_input_tokens) = exact_miner_observed_tokens(&live, &persisted_miner) else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -1056,6 +1062,8 @@ async fn control_token_stats(Path(key): Path<String>, State(state): State<AppSta
             "total_input_tokens": total_input_tokens,
             "miner_input_tokens": miner_input_tokens,
             "cpu_input_tokens": cpu_input_tokens,
+            "current_epoch_total_input_tokens": current_epoch_total_input_tokens,
+            "current_epoch_cpu_input_tokens": current_epoch_cpu_input_tokens,
             "bridge": bridge,
             "admission_ready_cohorts": admission_ready_cohorts,
             "controller_relation_candidates": controller_relation_candidates,
@@ -1213,6 +1221,21 @@ fn exact_token_totals(economics: &Value) -> Option<(u64, u64)> {
     } else {
         economics.get("avoided_input_tokens")?.as_u64()?
     };
+    (cpu <= total).then_some((total, cpu))
+}
+
+fn exact_current_epoch_token_totals(economics: &Value) -> Option<(u64, u64)> {
+    let schema = economics.get("schema").and_then(Value::as_str)?;
+    if !schema.starts_with("nando.economics-snapshot.v")
+        || economics
+            .get("input_token_accounting_exact")
+            .and_then(Value::as_bool)
+            != Some(true)
+    {
+        return None;
+    }
+    let total = economics.get("global_input_tokens")?.as_u64()?;
+    let cpu = economics.get("avoided_input_tokens")?.as_u64()?;
     (cpu <= total).then_some((total, cpu))
 }
 
@@ -1518,6 +1541,7 @@ mod tests {
             "avoided_input_tokens": 125,
         });
         assert_eq!(exact_token_totals(&exact), Some((1_000, 125)));
+        assert_eq!(exact_current_epoch_token_totals(&exact), Some((1_000, 125)));
 
         let partitioned = json!({
             "schema": "nando.economics-snapshot.v4",
@@ -1529,6 +1553,10 @@ mod tests {
             "display_avoided_input_tokens": 130,
         });
         assert_eq!(exact_token_totals(&partitioned), Some((1_100, 130)));
+        assert_eq!(
+            exact_current_epoch_token_totals(&partitioned),
+            Some((100, 5))
+        );
 
         let estimated = json!({
             "schema": "nando.economics-snapshot.v3",
@@ -1537,6 +1565,7 @@ mod tests {
             "avoided_input_tokens": 125,
         });
         assert_eq!(exact_token_totals(&estimated), None);
+        assert_eq!(exact_current_epoch_token_totals(&estimated), None);
 
         let impossible = json!({
             "schema": "nando.economics-snapshot.v3",
@@ -1545,6 +1574,7 @@ mod tests {
             "avoided_input_tokens": 101,
         });
         assert_eq!(exact_token_totals(&impossible), None);
+        assert_eq!(exact_current_epoch_token_totals(&impossible), None);
     }
 
     #[test]

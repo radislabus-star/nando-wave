@@ -863,10 +863,7 @@ mod tests {
                 "legacy-provider".to_owned(),
                 "provider:fallback".to_owned(),
             )]),
-            fallback_tokens_by_intent: BTreeMap::from([(
-                "legacy-provider".to_owned(),
-                900,
-            )]),
+            fallback_tokens_by_intent: BTreeMap::from([("legacy-provider".to_owned(), 900)]),
             fallback_reasons: BTreeMap::new(),
             completed_windows: Vec::new(),
             dedupe_conflicts: 0,

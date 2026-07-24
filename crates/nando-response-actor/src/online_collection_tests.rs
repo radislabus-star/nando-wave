@@ -1,6 +1,13 @@
 use super::*;
 use serde_json::json;
 
+fn legacy_default_config() -> OnlineCollectionConfig {
+    OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
+        ..OnlineCollectionConfig::default()
+    }
+}
+
 #[test]
 fn mixed_support_blockers_trigger_program_subcenter_split() {
     for blocker in [
@@ -28,6 +35,7 @@ fn teacher_mismatch_never_attaches_empty_program_receipt() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -70,6 +78,7 @@ fn unfrozen_matching_is_bounded_by_wave_route_budget() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 32,
         future_rows: 32,
         max_buckets: 32,
@@ -133,6 +142,7 @@ fn support_program_subcenter_survives_restart_without_parent_remerge() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -171,6 +181,7 @@ fn support_program_subcenter_survives_restart_without_parent_remerge() {
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -219,6 +230,7 @@ fn renderer_variants_form_one_law_subcenter_and_survive_restart() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -307,6 +319,7 @@ fn renderer_variants_form_one_law_subcenter_and_survive_restart() {
         runtime_examples,
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -425,6 +438,7 @@ fn maximal_decidable_subcenter_keeps_32_clean_rows_and_excludes_ambiguous_layout
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -526,6 +540,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -553,7 +568,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
     ));
     fs::create_dir_all(&root).expect("root");
     let path = root.join("collection.checkpoint");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut legacy = OnlineCollectionMiner::open(&path, config).expect("legacy shell");
     legacy.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V31;
     legacy.checkpoint.buckets = vec![bucket];
@@ -563,7 +578,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
     let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v32");
     assert_eq!(
         migrated.checkpoint.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert_eq!(migrated.status().frozen_buckets_total, 1);
     fs::remove_dir_all(root).expect("cleanup");
@@ -620,6 +635,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -645,7 +661,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
     ));
     fs::create_dir_all(&root).expect("root");
     let path = root.join("collection.checkpoint");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut left = subcenters[0].clone();
     left.bucket_id = "3".repeat(64);
     left.archetype_id = "4".repeat(64);
@@ -661,7 +677,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
     let migrated = OnlineCollectionMiner::open(&path, config).expect("migrate v34");
     assert_eq!(
         migrated.checkpoint.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert_eq!(migrated.checkpoint.buckets.len(), 1);
     assert_eq!(migrated.checkpoint.buckets[0].bucket_id, "3".repeat(64));
@@ -748,6 +764,7 @@ fn clean_pre_action_atoms_recover_32_rows_from_one_ambiguous_layout() {
         runtime_examples,
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -821,6 +838,7 @@ fn runtime_example_compaction_preserves_independent_authority() {
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -905,6 +923,7 @@ fn runtime_reservoir_preserves_top_law_under_byte_pressure() {
         runtime_examples,
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -1043,6 +1062,7 @@ fn unguarded_consensus_unifies_equivalent_selectors_and_abstains_on_disagreement
         runtime_examples,
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -1329,6 +1349,7 @@ fn phase_ranked_adapter_selects_unique_physical_role_and_abstains_on_tie() {
         runtime_examples,
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -1374,6 +1395,7 @@ fn phase_ranked_adapter_selects_unique_physical_role_and_abstains_on_tie() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -1555,6 +1577,7 @@ fn different_teacher_surfaces_converge_to_one_canonical_program() {
     let mut miner = OnlineCollectionMiner::open(
         root.join("checkpoint.cbor"),
         OnlineCollectionConfig {
+            proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
             support_rows: 4,
             future_rows: 4,
             max_buckets: 8,
@@ -1622,6 +1645,7 @@ fn version_space_restart_preserves_privacy_safe_runtime_parity_receipts() {
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.json");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -1703,7 +1727,7 @@ fn v6_rebuilds_exact_renderer_candidates_without_claiming_evidence() {
     ));
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut miner = OnlineCollectionMiner::open(&path, config).expect("miner");
     let evidence_id = "f".repeat(64);
     let example = CollectionSynthesisExample {
@@ -1739,6 +1763,7 @@ fn v6_rebuilds_exact_renderer_candidates_without_claiming_evidence() {
         runtime_examples: BTreeMap::from([(evidence_id, example.clone())]),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -1753,7 +1778,7 @@ fn v6_rebuilds_exact_renderer_candidates_without_claiming_evidence() {
     let status = migrated.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert_eq!(status.renderer_consensus_migrated_examples_total, 1);
     assert_eq!(status.support_receipts_unique_total, 0);
@@ -1780,6 +1805,7 @@ fn v21_restart_resynthesizes_retained_support_without_creating_future() {
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 32,
@@ -1852,7 +1878,7 @@ fn v21_restart_resynthesizes_retained_support_without_creating_future() {
     let status = restored.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert_eq!(status.future_receipts_unique_total, 0);
     assert_eq!(status.wrong_accepts_total, 0);
@@ -1884,6 +1910,7 @@ fn semantic_program_pool_survives_field_renames_and_collects_future() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 32,
@@ -1926,7 +1953,7 @@ fn semantic_count_inside_teacher_prose_reaches_external_admission() {
     ));
     fs::create_dir_all(&root).expect("root");
     let checkpoint_path = root.join("checkpoint.cbor");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut miner = OnlineCollectionMiner::open(&checkpoint_path, config).expect("miner");
     for index in 1..=32 {
         miner
@@ -2051,11 +2078,9 @@ fn multi_output_semantic_program_reaches_external_admission() {
             .as_nanos()
     ));
     fs::create_dir_all(&root).expect("root");
-    let mut miner = OnlineCollectionMiner::open(
-        root.join("checkpoint.cbor"),
-        OnlineCollectionConfig::default(),
-    )
-    .expect("miner");
+    let mut miner =
+        OnlineCollectionMiner::open(root.join("checkpoint.cbor"), legacy_default_config())
+            .expect("miner");
     for index in 1..=32 {
         miner
             .observe(multi_output_observation(index))
@@ -2074,7 +2099,7 @@ fn multi_output_semantic_program_reaches_external_admission() {
     let status = miner.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert!(
         status
@@ -2168,6 +2193,7 @@ fn counterexample_learns_anti_center_then_revokes_only_when_unseparable() {
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.json");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -2205,3 +2231,6 @@ fn counterexample_learns_anti_center_then_revokes_only_when_unseparable() {
 
 #[path = "online_collection_tests/scored.rs"]
 mod scored;
+
+#[path = "online_collection_tests/adaptive.rs"]
+mod adaptive;

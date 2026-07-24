@@ -369,7 +369,6 @@ fn run(started: Instant) -> Result<(), String> {
         })
         .transpose()?;
     let Some(snapshot) = snapshot else {
-        let primary_rejection = relation_rejections.first();
         let preserved_active_packages = last_known_good_package_count(
             &registry_path,
             &controller_admission_path,
@@ -382,20 +381,12 @@ fn run(started: Instant) -> Result<(), String> {
                 schema: "nando.response-admission-controller-report.v2",
                 generated_at_unix: unix_now(),
                 verdict: "BLOCK",
-                blocker: Some(primary_rejection.map_or_else(
-                    || {
-                        if relation_shadow_ready || collection_shadow_ready {
-                            "legacy_candidate_routes_shadow_only".to_owned()
-                        } else {
-                            "no_candidate_with_complete_runtime_parity".to_owned()
-                        }
-                    },
-                    |rejection| rejection.blocker.clone(),
-                )),
-                blocker_stage: primary_rejection
-                    .map(|rejection| rejection.stage.to_owned())
-                    .or((relation_shadow_ready || collection_shadow_ready)
-                        .then(|| "crystallized_authority_boundary".to_owned())),
+                blocker: Some(if relation_shadow_ready || collection_shadow_ready {
+                    "legacy_candidate_routes_shadow_only".to_owned()
+                } else {
+                    "no_crystallized_authority_candidate".to_owned()
+                }),
+                blocker_stage: Some("crystallized_authority_boundary".to_owned()),
                 candidate_rejections: relation_rejections,
                 candidate_revision: bundle.revision,
                 relation_candidates: bundle.relation_candidates.len(),

@@ -12,8 +12,9 @@ use nando_core::wave::{phase_coherence, phase_margin_to_micro, phase_vector_from
 use nando_operator_learning::fit_adapter_wave_route;
 pub use nando_operator_learning::{
     LegacyReplayRehydrationStats, OnlineCollectionBucketStatus, OnlineCollectionConfig,
-    OnlineCollectionConsensusDiagnostic, OnlineCollectionObservation, OnlineCollectionReceipt,
-    OnlineCollectionRehydrationHint, OnlineCollectionStatus, OnlineCollectionWaveCausalReport,
+    OnlineCollectionConsensusDiagnostic, OnlineCollectionObservation, OnlineCollectionProofMode,
+    OnlineCollectionReceipt, OnlineCollectionRehydrationHint, OnlineCollectionStatus,
+    OnlineCollectionWaveCausalReport,
 };
 
 use crate::collection_synthesis::{
@@ -39,6 +40,7 @@ use crate::{
 
 mod admission;
 mod authority;
+mod identification;
 mod ingest;
 mod migration;
 mod status;
@@ -46,6 +48,7 @@ mod subcenter;
 
 // These bridges are visible only to sibling owner modules; none extends the crate API.
 use authority::*;
+use identification::*;
 use migration::*;
 use status::*;
 use subcenter::*;
@@ -84,6 +87,7 @@ const ONLINE_COLLECTION_POOLING_STRATEGY_V32: u32 = 32;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V33: u32 = 33;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V34: u32 = 34;
 const ONLINE_COLLECTION_POOLING_STRATEGY_V35: u32 = 35;
+const ONLINE_COLLECTION_POOLING_STRATEGY_V36: u32 = 36;
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V2: &[u8; 4] = b"NCO2";
 const ONLINE_COLLECTION_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NCO3";
 const MAX_PERSISTED_PARITY_BYTES_PER_BUCKET: usize = 2 * 1024 * 1024;
@@ -114,6 +118,12 @@ pub struct OnlineCollectionAdmissionCandidate {
     pub runtime_parity_cases: Vec<crate::RuntimeParityCase>,
     #[serde(default)]
     pub durable_runtime_parity_receipts: Vec<DurableRuntimeParityReceipt>,
+    #[serde(default)]
+    pub archetype_id: String,
+    #[serde(default)]
+    pub identification_programs: Vec<ResponseProgram>,
+    #[serde(default)]
+    pub candidate_freeze: Option<nando_operator_learning::CandidateFreezeReceiptV1>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -132,6 +142,8 @@ struct OnlineCollectionBucket {
     durable_adapter_phase_atoms: BTreeMap<String, BTreeMap<String, Vec<u64>>>,
     #[serde(default)]
     durable_runtime_parity_receipts: BTreeMap<String, DurableRuntimeParityReceipt>,
+    #[serde(default)]
+    adaptive_candidate_freeze: Option<nando_operator_learning::CandidateFreezeReceiptV1>,
     frozen_program_sha256: Option<String>,
     #[serde(default)]
     support_watermark_event_time_unix_nanos: Option<u64>,
@@ -297,6 +309,24 @@ pub fn online_collection_future_manifest_digest(
         receipts: &candidate.future_receipts,
     })
     .map_err(str::to_owned)
+}
+
+pub fn online_collection_adaptive_transfer_proof_digest(
+    candidate: &OnlineCollectionAdmissionCandidate,
+) -> Result<String, String> {
+    adaptive_transfer_proof_root(
+        &candidate.future_manifest_sha256,
+        &candidate.program_sha256,
+        &candidate.future_receipts,
+        &candidate.durable_runtime_parity_receipts,
+    )
+}
+
+pub fn online_collection_candidate_freeze(
+    candidate: &OnlineCollectionAdmissionCandidate,
+) -> Result<Option<nando_operator_learning::CandidateFreezeReceiptV1>, String> {
+    identify_collection_candidate(candidate)
+        .map(|identification| identification.map(|identified| identified.freeze))
 }
 
 #[cfg(test)]

@@ -61,25 +61,32 @@ pub fn classify_cpu_decidability(request_text: &str, provider_payload: &Value) -
             "no_post_user_grounded_observation",
         );
     };
-    if outputs.len() > 1 {
-        let distinct = outputs
-            .iter()
-            .filter_map(|item| item.get("call_id").and_then(Value::as_str))
-            .collect::<std::collections::BTreeSet<_>>();
-        if distinct.len() > 1 {
-            return decision(
-                CpuDecidabilityClass::UnexploredMultiSource,
-                "multiple_grounded_tool_observations",
-            );
-        }
-    }
     let Some(output) = latest.get("output") else {
         return decision(
             CpuDecidabilityClass::UnsupportedByCurrentDsl,
             "tool_output_missing",
         );
     };
-    classify_output(output)
+    let latest_decision = classify_output(output);
+    if outputs.len() > 1 {
+        let distinct = outputs
+            .iter()
+            .filter_map(|item| item.get("call_id").and_then(Value::as_str))
+            .collect::<std::collections::BTreeSet<_>>();
+        if distinct.len() > 1 {
+            if latest_decision.class == CpuDecidabilityClass::PotentiallyCpuExecutable {
+                return decision(
+                    CpuDecidabilityClass::PotentiallyCpuExecutable,
+                    "latest_grounded_observation_candidate",
+                );
+            }
+            return decision(
+                CpuDecidabilityClass::UnexploredMultiSource,
+                "multiple_grounded_tool_observations",
+            );
+        }
+    }
+    latest_decision
 }
 
 fn classify_output(output: &Value) -> CpuDecidability {
@@ -102,7 +109,9 @@ fn classify_output(output: &Value) -> CpuDecidability {
             );
         }
     };
-    if text.starts_with("Script running with cell ID ") {
+    if text.starts_with("Script running with cell ID ")
+        || text.starts_with("Process running with session ID ")
+    {
         return decision(
             CpuDecidabilityClass::PotentiallyCpuExecutable,
             "unique_continuation_handle",
@@ -214,15 +223,42 @@ mod tests {
     }
 
     #[test]
-    fn multiple_observations_are_unexplored_teacher_evidence() {
+    fn a_unique_latest_observation_is_a_bounded_multi_source_candidate() {
         let payload = json!({"input":[
             {"type":"message","role":"user","content":[]},
             {"type":"function_call_output","call_id":"one","output":"1"},
-            {"type":"function_call_output","call_id":"two","output":"2"}
+            {"type":"function_call_output","call_id":"two","output":"{\"count\":2}"}
+        ]});
+        let result = classify_cpu_decidability("", &payload);
+        assert_eq!(result.class, CpuDecidabilityClass::PotentiallyCpuExecutable);
+        assert_eq!(result.reason, "latest_grounded_observation_candidate");
+    }
+
+    #[test]
+    fn unresolved_latest_observation_remains_unexplored_multi_source() {
+        let payload = json!({"input":[
+            {"type":"message","role":"user","content":[]},
+            {"type":"function_call_output","call_id":"one","output":"1"},
+            {"type":"function_call_output","call_id":"two","output":"unstructured result"}
         ]});
         let result = classify_cpu_decidability("", &payload);
         assert_eq!(result.class, CpuDecidabilityClass::UnexploredMultiSource);
         assert_eq!(result.reason, "multiple_grounded_tool_observations");
+    }
+
+    #[test]
+    fn process_session_handle_is_a_miner_opportunity() {
+        let payload = json!({"input":[
+            {"type":"message","role":"user","content":[]},
+            {
+                "type":"function_call_output",
+                "call_id":"one",
+                "output":"Process running with session ID 4242"
+            }
+        ]});
+        let result = classify_cpu_decidability("", &payload);
+        assert_eq!(result.class, CpuDecidabilityClass::PotentiallyCpuExecutable);
+        assert_eq!(result.reason, "unique_continuation_handle");
     }
 
     #[test]

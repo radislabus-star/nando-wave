@@ -3,6 +3,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::contracts::{ResponseValueSelector, canonical_response_value_selector};
+use crate::program::ResponseProgram;
 
 pub fn canonical_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, &'static str> {
     let value = serde_json::to_value(value).map_err(|_| "canonical_json_serialize_failed")?;
@@ -13,6 +14,14 @@ pub fn canonical_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, &'static
 
 pub fn canonical_json_sha256<T: Serialize>(value: &T) -> Result<String, &'static str> {
     Ok(sha256_bytes(&canonical_json_bytes(value)?))
+}
+
+pub fn response_program_version_root_sha256(
+    program: &ResponseProgram,
+) -> Result<String, &'static str> {
+    serde_json::to_vec(program)
+        .map(|bytes| sha256_bytes(&bytes))
+        .map_err(|_| "response_program_version_root_failed")
 }
 
 #[must_use]

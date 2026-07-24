@@ -293,8 +293,9 @@ pub use online_checkpoint::{
 pub use online_collection::{
     LegacyReplayRehydrationStats, OnlineCollectionAdmissionCandidate, OnlineCollectionBucketStatus,
     OnlineCollectionConfig, OnlineCollectionConsensusDiagnostic, OnlineCollectionMiner,
-    OnlineCollectionObservation, OnlineCollectionReceipt, OnlineCollectionRehydrationHint,
-    OnlineCollectionStatus, OnlineCollectionWaveCausalReport,
+    OnlineCollectionObservation, OnlineCollectionProofMode, OnlineCollectionReceipt,
+    OnlineCollectionRehydrationHint, OnlineCollectionStatus, OnlineCollectionWaveCausalReport,
+    online_collection_adaptive_transfer_proof_digest, online_collection_candidate_freeze,
     online_collection_future_manifest_digest, online_collection_support_manifest_digest,
 };
 pub use online_state::{

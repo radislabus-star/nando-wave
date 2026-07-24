@@ -549,6 +549,102 @@ pub fn verified_training_cases_from_session(
     training_cases_from_session_at(path, 0)
 }
 
+#[derive(Debug, Default)]
+pub struct CaptureBoundTrainingCaseBatch {
+    pub cases: Vec<(RelationFrame, RuntimeParityCase)>,
+    pub files_scanned: usize,
+    pub censored_session_identities: BTreeMap<String, String>,
+}
+
+/// Replays selected immutable session files through the durable capture owner
+/// and returns only parity cases whose transition receipts were bound there.
+/// Callers must serialize access to `evidence_root` with the live capture
+/// process; this is an offline support-rehydration path, not a serving route.
+pub fn verified_capture_bound_training_cases_from_sessions(
+    paths: &[PathBuf],
+    evidence_root: &Path,
+) -> Result<CaptureBoundTrainingCaseBatch, String> {
+    let evidence = Arc::new(Mutex::new(StreamingEvidenceLedger::open(
+        evidence_root,
+        EvidencePolicyV1::streaming_bounded(),
+    )?));
+    let metrics = Arc::new(SessionStreamMetrics::default());
+    let request_learning = Arc::new(RequestLearningIndex::default());
+    let mut output = BTreeMap::<String, (RelationFrame, RuntimeParityCase)>::new();
+    let mut censored_session_identities = BTreeMap::new();
+    let mut paths = paths.to_vec();
+    paths.sort();
+    paths.dedup();
+    let files_scanned = paths.len();
+
+    for path in paths {
+        let mut state = match canonical_session_state(&path, 0) {
+            Ok(state) => state,
+            Err(error) if is_censored_session_identity_error(&error) => {
+                censored_session_identities.insert(path.display().to_string(), error);
+                continue;
+            }
+            Err(error) => return Err(format!("capture_bound_session:{}:{error}", path.display())),
+        };
+        let mut frames = match read_appended_frames(
+            &path,
+            &mut state,
+            SessionReadContext {
+                evidence: &evidence,
+                evidence_graphs: None,
+                miner: None,
+                direct_collection_miner: None,
+                metrics: &metrics,
+                request_learning: &request_learning,
+            },
+        ) {
+            Ok(frames) => frames,
+            Err(error) if is_censored_session_identity_error(&error) => {
+                censored_session_identities.insert(path.display().to_string(), error);
+                continue;
+            }
+            Err(error) => return Err(format!("capture_bound_session:{}:{error}", path.display())),
+        };
+        flush_pending(&mut state, 0, &mut frames);
+        bind_pending_runtime_parity_cases(&mut state, &evidence)?;
+        retain_relevant_runtime_parity_cases(&mut state, &frames);
+        for frame in frames {
+            let Some(parity) = state.runtime_parity_cases.remove(&frame.frame_id_sha256) else {
+                continue;
+            };
+            let Some(receipt) = parity.capture_receipt.as_ref() else {
+                continue;
+            };
+            let Some(binding) = receipt.transition_binding.as_ref() else {
+                continue;
+            };
+            receipt.validate().map_err(str::to_owned)?;
+            if parity.evidence_ref_sha256 != frame.frame_id_sha256
+                || binding.frame_id_sha256 != frame.frame_id_sha256
+            {
+                return Err("capture_bound_training_case_frame_mismatch".to_owned());
+            }
+            output
+                .entry(frame.frame_id_sha256.clone())
+                .or_insert((frame, parity));
+        }
+    }
+    Ok(CaptureBoundTrainingCaseBatch {
+        cases: output.into_values().collect(),
+        files_scanned,
+        censored_session_identities,
+    })
+}
+
+fn is_censored_session_identity_error(error: &str) -> bool {
+    matches!(
+        error,
+        "session_identity_changed"
+            | "session_identity_filename_mismatch"
+            | "session_identity_missing_meta"
+    )
+}
+
 pub fn verified_collection_observations_from_session(
     path: &Path,
 ) -> Result<Vec<OnlineCollectionObservation>, String> {
@@ -1703,23 +1799,39 @@ fn remember_output(payload: &serde_json::Map<String, Value>, state: &mut Session
     let Some(output) = payload.get("output") else {
         return;
     };
-    if !state.runtime_provider_payload_overflow {
-        match append_runtime_provider_output(
-            state.runtime_provider_payload.as_ref(),
+    let accumulated = (!state.runtime_provider_payload_overflow)
+        .then_some(state.runtime_provider_payload.as_ref())
+        .flatten();
+    let runtime_payload = append_runtime_provider_output(
+        accumulated,
+        state.collection_request_item.as_ref(),
+        state.latest_plan_call_item.as_ref(),
+        call_id,
+        &call,
+        output,
+    )
+    .or_else(|| {
+        // Scalar parity owns only the observation that grounds the pending
+        // action. If earlier outputs overflow its bounded window, rebuild from
+        // the current request and latest output; collection learning retains
+        // the complete multi-source history through its separate payload.
+        append_runtime_provider_output(
+            None,
             state.collection_request_item.as_ref(),
             state.latest_plan_call_item.as_ref(),
             call_id,
             &call,
             output,
-        ) {
-            Some(payload) => state.runtime_provider_payload = Some(payload),
-            None => {
-                // A partial turn would create false structural authority. Once
-                // the bounded view overflows, parity remains unavailable until
-                // reset_turn starts a complete new event-time partition.
-                state.runtime_provider_payload = None;
-                state.runtime_provider_payload_overflow = true;
-            }
+        )
+    });
+    match runtime_payload {
+        Some(payload) => {
+            state.runtime_provider_payload = Some(payload);
+            state.runtime_provider_payload_overflow = false;
+        }
+        None => {
+            state.runtime_provider_payload = None;
+            state.runtime_provider_payload_overflow = true;
         }
     }
     if let Some(mut collection_payload) = collection_provider_payload(output) {
@@ -1845,7 +1957,10 @@ fn append_runtime_provider_output(
             if let Some(request) = request {
                 input.push(request.clone());
             }
-            if let Some(plan) = latest_plan_call {
+            if latest_plan_call
+                .is_some_and(|plan| plan.get("call_id").and_then(Value::as_str) != Some(call_id))
+                && let Some(plan) = latest_plan_call
+            {
                 input.push(plan.clone());
             }
             input
@@ -1853,11 +1968,17 @@ fn append_runtime_provider_output(
     if input.len() > 126 {
         return None;
     }
-    input.push(serde_json::json!({
-        "type": call.shape,
-        "name": call.name,
-        "call_id": call_id,
-    }));
+    let call_item = latest_plan_call
+        .filter(|plan| plan.get("call_id").and_then(Value::as_str) == Some(call_id))
+        .cloned()
+        .unwrap_or_else(|| {
+            serde_json::json!({
+                "type": call.shape,
+                "name": call.name,
+                "call_id": call_id,
+            })
+        });
+    input.push(call_item);
     input.push(serde_json::json!({
         "type": output_type,
         "call_id": call_id,
@@ -3480,6 +3601,299 @@ mod tests {
                 .runtime_parity_cases
                 .contains_key(&emitted[0].frame_id_sha256)
         );
+    }
+
+    fn capture_structured_custom_continuation(
+        root: &Path,
+        evidence: &Arc<Mutex<DeterministicEvidenceLedger>>,
+        session_id: &str,
+        turn_id: &str,
+        session_value: u64,
+    ) -> (RelationFrame, RuntimeParityCase) {
+        let session_path = root.join(format!("{session_id}.jsonl"));
+        let action_timestamp = format!("2026-07-23T00:00:{:02}Z", session_value % 60);
+        let rows = [
+            json!({"type":"session_meta","payload":{"id":session_id}}),
+            json!({"type":"turn_context","payload":{"turn_id":turn_id}}),
+            json!({"type":"event_msg","payload":{"type":"user_message","message":"continue the pending command"}}),
+            json!({"type":"response_item","payload":{
+                "type":"custom_tool_call",
+                "name":"exec",
+                "call_id":"start",
+                "input":"const r=await tools.exec_command({\"cmd\":\"cargo check\"});text(JSON.stringify(r));"
+            }}),
+            json!({"type":"response_item","payload":{
+                "type":"custom_tool_call_output",
+                "call_id":"start",
+                "output":[
+                    {"type":"input_text","text":""},
+                    {"type":"input_text","text":format!(
+                        "{{\"chunk_id\":\"chunk-{session_value}\",\"session_id\":{session_value},\"output\":\"Compiling\"}}"
+                    )}
+                ]
+            }}),
+            json!({"timestamp":action_timestamp,"type":"response_item","payload":{
+                "type":"custom_tool_call",
+                "name":"exec",
+                "call_id":"continue",
+                "input":format!(
+                    "const r=await tools.write_stdin({{\"session_id\":{session_value},\"chars\":\"\",\"yield_time_ms\":1000}});text(r.output);"
+                )
+            }}),
+            json!({"type":"response_item","payload":{
+                "type":"custom_tool_call_output",
+                "call_id":"continue",
+                "output":[{"type":"input_text","text":"accepted"}]
+            }}),
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":123}}}}),
+        ];
+        let mut session = File::create(&session_path).expect("structured custom session");
+        for row in rows {
+            writeln!(session, "{row}").expect("structured custom row");
+        }
+        session.sync_all().expect("structured custom sync");
+
+        let metrics = Arc::new(SessionStreamMetrics::default());
+        let mut state = SessionState {
+            session_id: session_path.to_string_lossy().into_owned(),
+            ..SessionState::default()
+        };
+        let frames = read_appended_frames(
+            &session_path,
+            &mut state,
+            SessionReadContext {
+                evidence,
+                evidence_graphs: None,
+                miner: None,
+                direct_collection_miner: None,
+                metrics: &metrics,
+                request_learning: &Arc::new(RequestLearningIndex::default()),
+            },
+        )
+        .expect("capture structured custom continuation");
+        assert_eq!(frames.len(), 1, "{frames:#?}");
+        let frame = frames.into_iter().next().expect("captured frame");
+        let parity = state
+            .runtime_parity_cases
+            .remove(&frame.frame_id_sha256)
+            .expect("capture-bound runtime parity");
+        assert!(parity.capture_receipt.as_ref().is_some_and(|receipt| {
+            receipt.validate().is_ok()
+                && receipt
+                    .transition_binding
+                    .as_ref()
+                    .is_some_and(|binding| binding.frame_id_sha256 == frame.frame_id_sha256)
+        }));
+        (frame, parity)
+    }
+
+    fn replace_structured_session_output_with_ambiguous_roles(value: &mut Value) -> bool {
+        match value {
+            Value::String(text)
+                if text.contains("\"chunk_id\"") && text.contains("\"session_id\"") =>
+            {
+                *text = "{\"chunk_id\":\"ambiguous\",\"session_id\":93139,\"other\":{\"session_id\":94140},\"output\":\"Compiling\"}".to_owned();
+                true
+            }
+            Value::Array(values) => values
+                .iter_mut()
+                .any(replace_structured_session_output_with_ambiguous_roles),
+            Value::Object(values) => values
+                .values_mut()
+                .any(replace_structured_session_output_with_ambiguous_roles),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn offline_replay_returns_only_durable_capture_bound_cases() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-capture-bound-replay-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("capture-bound replay root");
+        let evidence = Arc::new(Mutex::new(
+            DeterministicEvidenceLedger::open(
+                root.join("fixture-evidence.jsonl"),
+                EvidencePolicyV1::default(),
+            )
+            .expect("fixture evidence"),
+        ));
+        let session_id = "capture-bound-session";
+        capture_structured_custom_continuation(
+            &root,
+            &evidence,
+            session_id,
+            "capture-bound-turn",
+            60_906,
+        );
+
+        let cases = verified_capture_bound_training_cases_from_sessions(
+            &[root.join(format!("{session_id}.jsonl"))],
+            &root.join("durable-evidence"),
+        )
+        .expect("capture-bound replay");
+        assert_eq!(cases.files_scanned, 1, "{cases:#?}");
+        assert!(cases.censored_session_identities.is_empty(), "{cases:#?}");
+        assert_eq!(cases.cases.len(), 1, "{cases:#?}");
+        let (frame, parity) = &cases.cases[0];
+        let receipt = parity.capture_receipt.as_ref().expect("capture receipt");
+        receipt.validate().expect("valid capture receipt");
+        assert_eq!(parity.evidence_ref_sha256, frame.frame_id_sha256);
+        assert_eq!(
+            receipt
+                .transition_binding
+                .as_ref()
+                .expect("transition binding")
+                .frame_id_sha256,
+            frame.frame_id_sha256
+        );
+
+        fs::remove_dir_all(root).expect("capture-bound replay cleanup");
+    }
+
+    #[test]
+    fn offline_replay_censors_mixed_session_identity_without_losing_batch() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-mixed-session-replay-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("mixed session root");
+        let mixed = root.join("mixed.jsonl");
+        let mut file = File::create(&mixed).expect("mixed session file");
+        writeln!(
+            file,
+            "{}",
+            json!({"type":"session_meta","payload":{"id":"session-a"}})
+        )
+        .expect("first session");
+        writeln!(
+            file,
+            "{}",
+            json!({"type":"session_meta","payload":{"id":"session-b"}})
+        )
+        .expect("second session");
+        file.sync_all().expect("mixed session sync");
+
+        let batch = verified_capture_bound_training_cases_from_sessions(
+            &[mixed.clone()],
+            &root.join("durable-evidence"),
+        )
+        .expect("censored batch");
+        assert!(batch.cases.is_empty(), "{batch:#?}");
+        assert_eq!(
+            batch
+                .censored_session_identities
+                .get(&mixed.display().to_string()),
+            Some(&"session_identity_changed".to_owned()),
+            "{batch:#?}"
+        );
+
+        fs::remove_dir_all(root).expect("mixed session cleanup");
+    }
+
+    #[test]
+    fn structured_custom_continuation_reaches_crystallized_cpu_operator() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-structured-custom-operator-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("structured custom root");
+        let evidence = Arc::new(Mutex::new(
+            DeterministicEvidenceLedger::open(
+                root.join("evidence.jsonl"),
+                EvidencePolicyV1::default(),
+            )
+            .expect("structured custom evidence"),
+        ));
+        let mut shadow = nando_response_actor::LiveScalarShadowState::default();
+        for (session, turn, value) in [
+            ("support-session", "support-turn", 60_906),
+            ("probe-session", "probe-turn", 71_017),
+            ("future-session", "future-turn", 82_128),
+        ] {
+            let (frame, parity) =
+                capture_structured_custom_continuation(&root, &evidence, session, turn, value);
+            let mut transition =
+                nando_response_actor::teacher_transition_from_completed(&frame, None)
+                    .expect("structured custom teacher transition");
+            transition.runtime_parity_case = Some(parity);
+            shadow.observe(&transition);
+        }
+
+        let report = shadow.report();
+        assert_eq!(report.support_rows, 1, "{report:#?}");
+        assert_eq!(report.future_rows, 2, "{report:#?}");
+        assert_eq!(report.admission_candidates, 1, "{report:#?}");
+        let snapshot = nando_response_actor::build_crystallized_admission_snapshot(
+            &shadow.admission_candidates(),
+            "structured-custom-test",
+            1,
+            100,
+            30,
+            &"a".repeat(64),
+            &"b".repeat(64),
+        )
+        .expect("structured custom admission")
+        .expect("structured custom registry");
+        let executor = nando_response_actor::ResponseExecutor::from_registry(snapshot.registry)
+            .expect("structured custom CPU executor");
+
+        let (_, unseen) = capture_structured_custom_continuation(
+            &root,
+            &evidence,
+            "unseen-session",
+            "unseen-turn",
+            93_139,
+        );
+        let execution = executor.execute_shadow(&unseen.request_text, &unseen.provider_payload);
+        assert_eq!(execution.status, ResponseExecutionStatus::Executed);
+        let actual = execution
+            .response
+            .as_deref()
+            .and_then(|response| serde_json::from_str::<Value>(response).ok())
+            .expect("executed custom response");
+        let expected =
+            serde_json::from_str::<Value>(&unseen.expected_response).expect("teacher response");
+        assert_eq!(actual.get("name"), expected.get("name"), "{execution:#?}");
+        let actual_arguments = actual
+            .get("input")
+            .and_then(Value::as_str)
+            .and_then(parse_custom_tool_source)
+            .map(|source| Value::Object(source.arguments))
+            .expect("executed custom arguments");
+        let expected_arguments = expected
+            .get("input")
+            .and_then(Value::as_str)
+            .and_then(parse_custom_tool_source)
+            .map(|source| Value::Object(source.arguments))
+            .expect("teacher custom arguments");
+        assert_eq!(
+            actual_arguments.get("session_id"),
+            expected_arguments.get("session_id"),
+            "{execution:#?}"
+        );
+
+        let mut ambiguous_payload = unseen.provider_payload;
+        assert!(
+            replace_structured_session_output_with_ambiguous_roles(&mut ambiguous_payload),
+            "{ambiguous_payload:#?}"
+        );
+        let ambiguous = executor.execute_shadow(&unseen.request_text, &ambiguous_payload);
+        assert_eq!(ambiguous.status, ResponseExecutionStatus::Abstain);
+        fs::remove_dir_all(root).expect("structured custom cleanup");
     }
 
     #[test]

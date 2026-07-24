@@ -105,6 +105,18 @@ pub(super) fn build(inputs: SignalPathInputs) -> SignalPathSnapshot {
         cpu_input_tokens: inputs.cpu_input_tokens,
         miner_share_ppm: ratio_ppm(inputs.miner_input_tokens, inputs.total_input_tokens),
         cpu_share_ppm: ratio_ppm(inputs.cpu_input_tokens, inputs.total_input_tokens),
+        accounting_epoch_nando_input_tokens: inputs.accounting_epoch_total_input_tokens,
+        accounting_epoch_cpu_input_tokens: inputs.accounting_epoch_cpu_input_tokens,
+        accounting_epoch_cpu_share_ppm: ratio_ppm(
+            inputs.accounting_epoch_cpu_input_tokens,
+            inputs.accounting_epoch_total_input_tokens,
+        ),
+        process_nando_input_tokens: inputs.process_nando_input_tokens,
+        process_miner_input_tokens: inputs.process_miner_input_tokens,
+        process_miner_share_ppm: ratio_ppm(
+            Some(inputs.process_miner_input_tokens),
+            Some(inputs.process_nando_input_tokens),
+        ),
         verified_local_accepts: inputs.verified_local_accepts,
         economics_age_seconds: inputs.economics_age_seconds,
     };

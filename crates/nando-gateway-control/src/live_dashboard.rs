@@ -1,13 +1,15 @@
 use serde::Serialize;
 use serde_json::Value;
 
-const DASHBOARD_BUILD: &str = "2026.07.23-b005";
+const DASHBOARD_BUILD: &str = "2026.07.23-b007";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitialMetrics {
     pub(crate) total_tokens: u64,
     pub(crate) miner_tokens: u64,
     pub(crate) cpu_tokens: u64,
+    pub(crate) current_epoch_total_tokens: u64,
+    pub(crate) current_epoch_cpu_tokens: u64,
     pub(crate) cpu_allowed: bool,
 }
 
@@ -35,6 +37,8 @@ pub(crate) struct BridgeView {
     pub(crate) opportunity_consumed_sequence: u64,
     pub(crate) request_events: u64,
     pub(crate) request_tokens: u64,
+    pub(crate) miner_request_events: u64,
+    pub(crate) miner_request_tokens: u64,
     pub(crate) opportunity_pending: u64,
     pub(crate) opportunity_inflight: u64,
     pub(crate) raw_evaluated: u64,
@@ -91,6 +95,8 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
         opportunity_consumed_sequence: pointer_u64(cold, "/opportunity/consumer_last_sequence"),
         request_events: pointer_u64(hot, "/opportunity/producer_request_events"),
         request_tokens: pointer_u64(hot, "/opportunity/producer_request_input_tokens"),
+        miner_request_events: pointer_u64(cold, "/opportunity/consumer_request_events"),
+        miner_request_tokens: pointer_u64(cold, "/opportunity/consumer_request_input_tokens"),
         opportunity_pending,
         opportunity_inflight,
         raw_evaluated: pointer_u64(cold, "/raw_replay/evaluated"),
@@ -113,6 +119,16 @@ pub(crate) fn bridge_view(hot: &Value, cold: &Value) -> BridgeView {
 }
 
 pub(crate) fn render(initial: InitialMetrics) -> String {
+    let current_epoch_cpu = format!(
+        "ЭПОХА {} / {} · {}",
+        format_number(initial.current_epoch_cpu_tokens),
+        format_number(initial.current_epoch_total_tokens),
+        format_percent(
+            initial.current_epoch_cpu_tokens,
+            initial.current_epoch_total_tokens,
+            1,
+        )
+    );
     let (
         pipeline_title,
         cpu_note_class,
@@ -126,7 +142,7 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         (
             "МАРШРУТ ДО CPU",
             "good",
-            "AUTHORITY OPEN",
+            current_epoch_cpu,
             "good",
             "OPEN",
             "good",
@@ -137,7 +153,7 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         (
             "ПОЧЕМУ CPU НЕ РАСТЁТ",
             "watch",
-            "НЕ РАСТЁТ: AUTHORITY LOCKED",
+            "НЕ РАСТЁТ: AUTHORITY LOCKED".to_owned(),
             "locked",
             "LOCKED",
             "muted",
@@ -160,7 +176,7 @@ pub(crate) fn render(initial: InitialMetrics) -> String {
         )
         .replace("__PIPELINE_TITLE__", pipeline_title)
         .replace("__CPU_NOTE_CLASS__", cpu_note_class)
-        .replace("__CPU_NOTE__", cpu_note)
+        .replace("__CPU_NOTE__", &cpu_note)
         .replace("__ADMISSION_STEP_CLASS__", admission_step_class)
         .replace("__ADMISSION_STATE__", admission_state)
         .replace("__CPU_STEP_CLASS__", cpu_step_class)
@@ -276,11 +292,30 @@ const TEMPLATE: &str = r#"
   .epoch-strip,.window-head,.live-foot .live-inner { align-items:flex-start; flex-direction:column; gap:8px; }
 }
 @media (max-width:560px) {
+  .nando-live { overflow-x:hidden; }
   .live-inner { padding:16px 12px; }
   .live-head .live-inner { align-items:flex-start; flex-direction:column; gap:7px; }
   .track-value { font-size:24px; }
   .track-share { font-size:14px; }
   .epoch-strip { padding:13px 12px; font-size:12px; }
+  .window-scroll,.pipeline-scroll { overflow-x:visible; }
+  .window-table,.pipeline { min-width:0; }
+  .window-row.header { display:none; }
+  .window-row { grid-template-columns:minmax(0,1fr); gap:3px; align-items:baseline; padding:10px 0; font-size:12px; }
+  .window-row span { min-width:0; overflow-wrap:anywhere; }
+  .window-row span:first-child { font-size:14px; font-weight:800; }
+  .window-row span:nth-child(2)::before { content:"SESSION "; color:var(--muted); }
+  .window-row span:nth-child(3)::before { content:"CONFIG "; color:var(--muted); }
+  .window-row span:nth-child(4)::before { content:"ROUTE "; color:var(--muted); }
+  .window-row span:nth-child(5) { color:var(--muted); }
+  .window-row span:nth-child(5)::before { content:"ENDPOINT "; }
+  .pipeline { grid-template-columns:1fr; }
+  .pipe-step { min-height:0; padding:11px 12px; border-right:0; border-bottom:1px solid var(--line); }
+  .pipe-step:last-of-type { border-bottom:0; }
+  .pipe-step::after { content:"↓"; right:12px; top:auto; bottom:-10px; }
+  .pipe-name,.pipe-state { display:inline; }
+  .pipe-state { margin:0 0 0 10px; }
+  .break-line,.break-label { display:none; }
   .activity { grid-template-columns:1fr; gap:6px; }
 }
 </style>
@@ -346,6 +381,10 @@ const TEMPLATE: &str = r#"
       values.forEach((value, index) => { const cell = document.createElement("span"); cell.textContent = value; if (index === 3) cell.className = `window-status ${window.route}`; row.appendChild(cell); });
       rows.appendChild(row);
     }
+    if (snapshot.active_nando === 0 && snapshot.active_mixed === 0 && snapshot.active_outside_nando > 0) {
+      text("pipeline-title", "ОКНА ИДУТ МИМО NANDO");
+      text("blocker-text", `${snapshot.active_outside_nando} активных окон подключены напрямую к upstream; CPU-маршрут готов, но не получает их запросы`);
+    }
   };
   const renderActivity = (requestEvents) => {
     if (previousRequests !== null) samples.push(Math.max(0, requestEvents - previousRequests));
@@ -360,11 +399,13 @@ const TEMPLATE: &str = r#"
     text("miner-token-share", ratio(snapshot.miner_input_tokens, snapshot.total_input_tokens, 2)); text("cpu-token-share", ratio(snapshot.cpu_input_tokens, snapshot.total_input_tokens, 3));
     width("miner-bar", snapshot.miner_input_tokens, snapshot.total_input_tokens); width("cpu-bar", snapshot.cpu_input_tokens, snapshot.total_input_tokens);
     const bridge = snapshot.bridge; const bridgeAvailable = bridge.hot_available && bridge.cold_available; const queue = bridge.opportunity_pending + bridge.opportunity_inflight; const structureComparable = bridgeAvailable && bridge.structural_epoch_match;
-    text("miner-epoch", structureComparable ? `STRUCTURE SEQ ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : bridgeAvailable ? "STRUCTURE: EPOCH НЕ СОВПАДАЕТ" : "STRUCTURE: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
+    const minerCurrentComplete = structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 && bridge.opportunity_produced_sequence === bridge.opportunity_consumed_sequence && queue === 0;
+    text("miner-epoch", minerCurrentComplete ? `ТЕКУЩИЙ МОСТ: 100% · ${number.format(bridge.request_tokens)} ТОКЕНОВ` : structureComparable ? `STRUCTURE SEQ ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : bridgeAvailable ? "STRUCTURE: EPOCH НЕ СОВПАДАЕТ" : "STRUCTURE: HEALTH НЕДОСТУПЕН"); text("bridge-pair", `${bridge.hot_available ? bridge.opportunity_produced_sequence : "—"} / ${bridge.cold_available ? bridge.opportunity_consumed_sequence : "—"}`); text("bridge-tokens", number.format(bridge.request_tokens)); text("bridge-queue", queue); text("epoch-visibility", structureComparable ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · MISS ${bridge.join_misses}` : "STRUCTURE: НЕТ ОБЩЕГО EPOCH");
+    const currentEpochTotal = snapshot.current_epoch_total_input_tokens || 0; const currentEpochCpu = snapshot.current_epoch_cpu_input_tokens || 0;
     text("services-count", `${bridge.services_active}/3`); text("false-accepts", bridge.false_accepts); text("parity-mismatches", bridge.parity_mismatches); text("bridge-failures", bridge.failures);
     const controllerInput = snapshot.controller_relation_candidates + snapshot.controller_collection_candidates;
     text("pipe-bridge", structureComparable ? `STRUCT ${bridge.structural_produced_sequence}/${bridge.structural_consumed_sequence} · PENDING ${bridge.structural_pending}` : "EPOCH/HEALTH BLOCK"); text("pipe-relation", structureComparable && bridge.structural_pending === 0 && bridge.structural_sequence_gaps === 0 && bridge.failures === 0 ? `JOIN ${bridge.join_hits}/${bridge.join_attempts} · RAW ${bridge.raw_evaluated}/${bridge.raw_verified}/${bridge.raw_abstains}` : "WATCH"); text("pipe-discovery", snapshot.admission_ready_cohorts > 0 ? `COHORTS ${snapshot.admission_ready_cohorts}` : "WATCH"); text("pipe-candidate", controllerInput); text("pipe-crystallizer", snapshot.controller_crystallized_candidates);
-    text("pipe-package", `NEW NATURAL ${snapshot.controller_crystallized_candidates} · OLD ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? "AUTHORITY OPEN" : "НЕ РАСТЁТ: AUTHORITY LOCKED"); text("pipeline-title", snapshot.cpu_allowed ? "МАРШРУТ ДО CPU" : "ПОЧЕМУ CPU НЕ РАСТЁТ");
+    text("pipe-package", `NEW NATURAL ${snapshot.controller_crystallized_candidates} · OLD ACTIVE ${snapshot.response_package_count}`); text("pipe-admission", snapshot.cpu_allowed ? "OPEN" : "LOCKED"); text("pipe-cpu", snapshot.cpu_allowed ? "ENABLED" : "0 NEW"); text("cpu-note", snapshot.cpu_allowed ? `ЭПОХА ${number.format(currentEpochCpu)} / ${number.format(currentEpochTotal)} · ${ratio(currentEpochCpu, currentEpochTotal, 1)}` : "НЕ РАСТЁТ: AUTHORITY LOCKED"); text("pipeline-title", snapshot.cpu_allowed ? "МАРШРУТ ДО CPU" : "ПОЧЕМУ CPU НЕ РАСТЁТ");
     stateClass("cpu-note", `track-note ${snapshot.cpu_allowed ? "good" : "watch"}`); stateClass("pipe-admission-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "locked"}`); stateClass("pipe-cpu-step", `pipe-step ${snapshot.cpu_allowed ? "good" : "muted"}`);
     text("blocker-text", controllerInput > 0 && snapshot.controller_crystallized_candidates === 0 ? `ТЕКУЩИЙ РАЗРЫВ: INPUT ${controllerInput} → CRYST 0. Legacy candidate: ${snapshot.controller_blocker}` : controllerInput === 0 ? `discovery → candidate export: ${snapshot.controller_blocker}` : snapshot.controller_crystallized_candidates > 0 && !snapshot.cpu_allowed ? `crystallized operator готов, admission закрыт: ${snapshot.controller_blocker}` : snapshot.cpu_allowed ? "маршрут до CPU открыт" : snapshot.controller_blocker);
     renderActivity(bridge.request_events); lastSuccess = Date.now();
@@ -448,6 +489,8 @@ mod tests {
             total_tokens: 5_948_645_890,
             miner_tokens: 548_423_296,
             cpu_tokens: 42_515_297,
+            current_epoch_total_tokens: 200_000_000,
+            current_epoch_cpu_tokens: 48_000_000,
             cpu_allowed: false,
         });
         assert!(html.contains("КУДА УШЛИ ТОКЕНЫ"));
@@ -455,7 +498,7 @@ mod tests {
         assert!(html.contains("CANDIDATE INPUT"));
         assert!(html.contains("CRYSTALLIZER OUTPUT"));
         assert!(html.contains("NEW 0 · OLD 0"));
-        assert!(html.contains("data-dashboard-build=\"2026.07.23-b005\""));
+        assert!(html.contains(&format!("data-dashboard-build=\"{DASHBOARD_BUILD}\"")));
         assert!(html.contains("ЖИВОЙ ТРАФИК · ПОСЛЕДНИЕ 60 С"));
         assert!(html.contains("5 948 645 890"));
         assert!(html.contains("9,22%"));
@@ -467,10 +510,12 @@ mod tests {
             total_tokens: 10_000,
             miner_tokens: 2_000,
             cpu_tokens: 100,
+            current_epoch_total_tokens: 1_000,
+            current_epoch_cpu_tokens: 240,
             cpu_allowed: true,
         });
         assert!(html.contains("МАРШРУТ ДО CPU"));
-        assert!(html.contains("class=\"track-note good\">AUTHORITY OPEN"));
+        assert!(html.contains("class=\"track-note good\">ЭПОХА 240 / 1 000 · 24,0%"));
         assert!(html.contains("class=\"pipe-step good\"><div class=\"pipe-name\">ADMISSION"));
         assert!(html.contains("class=\"pipe-state\">OPEN"));
         assert!(html.contains("маршрут до CPU открыт"));

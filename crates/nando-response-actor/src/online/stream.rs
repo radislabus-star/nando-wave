@@ -37,6 +37,7 @@ impl OnlineResponseStream {
             fs::create_dir_all(parent)
                 .map_err(|error| format!("online_checkpoint_dir:{}:{error}", parent.display()))?;
         }
+        let checkpoint_owner = acquire_online_checkpoint_owner(&config.checkpoint_path)?;
         let restored = decode_online_checkpoint(&config.checkpoint_path)?;
         let checkpoint_restored = restored.is_some();
         let checkpoint_needs_rewrite = restored.as_ref().is_some_and(|checkpoint| {
@@ -48,6 +49,7 @@ impl OnlineResponseStream {
         };
         let mut stream = Self {
             config,
+            _checkpoint_owner: checkpoint_owner,
             miner,
             source_device: 0,
             source_inode: 0,
@@ -76,6 +78,11 @@ impl OnlineResponseStream {
             fs::create_dir_all(parent)
                 .map_err(|error| format!("online_report_dir:{}:{error}", parent.display()))?;
         }
+        if let Some(parent) = config.checkpoint_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("online_checkpoint_dir:{}:{error}", parent.display()))?;
+        }
+        let checkpoint_owner = acquire_online_checkpoint_owner(&config.checkpoint_path)?;
         let source = OpenOptions::new()
             .create(true)
             .read(true)
@@ -143,6 +150,7 @@ impl OnlineResponseStream {
                 let source_prefix_hasher = hash_source_prefix(&config.input_path, position)?;
                 let mut stream = Self {
                     config,
+                    _checkpoint_owner: checkpoint_owner,
                     miner,
                     source_device,
                     source_inode,
@@ -286,6 +294,22 @@ impl OnlineResponseStream {
 
     pub fn persist_now(&mut self) -> Result<(), String> {
         self.persist()
+    }
+
+    #[must_use]
+    pub fn report_path(&self) -> &Path {
+        &self.config.report_path
+    }
+
+    /// Refreshes the liveness timestamp of an unchanged report without
+    /// rebuilding miner diagnostics or rewriting the semantic checkpoint.
+    pub fn refresh_report_heartbeat(&self) -> Result<(), String> {
+        refresh_online_report_heartbeat(&self.config.report_path)
+    }
+
+    /// Refreshes an already-persisted report without acquiring the miner lock.
+    pub fn refresh_report_heartbeat_at(path: &Path) -> Result<(), String> {
+        refresh_online_report_heartbeat(path)
     }
 
     pub fn observe_ordinary_request(
@@ -558,6 +582,11 @@ pub fn run_online_response_tail(config: OnlineResponseTailConfig) -> Result<(), 
         fs::create_dir_all(parent)
             .map_err(|error| format!("online_report_dir:{}:{error}", parent.display()))?;
     }
+    if let Some(parent) = config.checkpoint_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("online_checkpoint_dir:{}:{error}", parent.display()))?;
+    }
+    let _checkpoint_owner = acquire_online_checkpoint_owner(&config.checkpoint_path)?;
     let source = OpenOptions::new()
         .read(true)
         .open(&config.input_path)
@@ -679,12 +708,11 @@ fn write_online_report(
     checkpoint_restored: bool,
     miner: &OnlineResponseMiner,
 ) -> Result<(), String> {
+    let generated_at_unix_ms = unix_now_millis();
     let value = serde_json::json!({
         "schema": "nando.embedded-response-online-miner.v1",
-        "generated_at_unix_ms": SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis(),
+        "generated_at_unix_ms": generated_at_unix_ms,
+        "state_generated_at_unix_ms": generated_at_unix_ms,
         "source_lines": source_lines,
         "parse_errors": parse_errors,
         "source_offset": source_offset,
@@ -693,6 +721,37 @@ fn write_online_report(
         "execution_authority": false,
         "miner": miner.report(),
     });
+    write_online_report_value(path, &value)
+}
+
+fn refresh_online_report_heartbeat(path: &Path) -> Result<(), String> {
+    let bytes = fs::read(path).map_err(|error| format!("online_report_heartbeat_read:{error}"))?;
+    let mut value: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("online_report_heartbeat_decode:{error}"))?;
+    if value.get("schema").and_then(serde_json::Value::as_str)
+        != Some("nando.embedded-response-online-miner.v1")
+        || !value.get("miner").is_some_and(serde_json::Value::is_object)
+    {
+        return Err("online_report_heartbeat_invalid_snapshot".to_owned());
+    }
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| "online_report_heartbeat_not_object".to_owned())?;
+    let previous_generated_at = object
+        .get("generated_at_unix_ms")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!(0));
+    object
+        .entry("state_generated_at_unix_ms")
+        .or_insert(previous_generated_at);
+    object.insert(
+        "generated_at_unix_ms".to_owned(),
+        serde_json::json!(unix_now_millis()),
+    );
+    write_online_report_value(path, &value)
+}
+
+fn write_online_report_value(path: &Path, value: &serde_json::Value) -> Result<(), String> {
     let mut bytes = serde_json::to_vec_pretty(&value).map_err(|error| error.to_string())?;
     bytes.push(b'\n');
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
@@ -704,6 +763,13 @@ fn write_online_report(
         .map_err(|error| format!("online_report_sync:{error}"))?;
     fs::rename(&temporary, path).map_err(|error| format!("online_report_rename:{error}"))?;
     sync_parent_directory(path, "online_report_dir_sync")
+}
+
+fn unix_now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 
 fn load_online_checkpoint(
@@ -790,6 +856,29 @@ fn write_online_checkpoint(
         .map_err(|error| format!("online_checkpoint_sync:{error}"))?;
     fs::rename(&temporary, path).map_err(|error| format!("online_checkpoint_rename:{error}"))?;
     sync_parent_directory(path, "online_checkpoint_dir_sync")
+}
+
+fn acquire_online_checkpoint_owner(checkpoint_path: &Path) -> Result<File, String> {
+    let lock_path = checkpoint_path.with_extension("owner.lock");
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(&lock_path)
+        .map_err(|error| {
+            format!(
+                "online_checkpoint_owner_open:{}:{error}",
+                lock_path.display()
+            )
+        })?;
+    file.try_lock().map_err(|error| {
+        format!(
+            "online_checkpoint_owned:{}:{error}",
+            checkpoint_path.display()
+        )
+    })?;
+    Ok(file)
 }
 
 fn hash_source_prefix(path: &Path, prefix_len: u64) -> Result<Sha256, String> {

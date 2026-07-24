@@ -16,6 +16,7 @@ fn teacher_prose_trains_canonical_count_without_storing_static_text() {
     let mut miner = OnlineCollectionMiner::open(
         root.join("checkpoint.cbor"),
         OnlineCollectionConfig {
+            proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
             support_rows: 4,
             future_rows: 4,
             max_buckets: 8,
@@ -78,6 +79,7 @@ fn output_ordinal_surfaces_share_one_count_law_and_future() {
     let mut miner = OnlineCollectionMiner::open(
         root.join("checkpoint.cbor"),
         OnlineCollectionConfig {
+            proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
             support_rows: 4,
             future_rows: 4,
             max_buckets: 8,
@@ -119,6 +121,7 @@ fn converged_unfrozen_program_pools_merge_without_touching_frozen_pool() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 32,
         future_rows: 32,
         max_buckets: 64,
@@ -179,6 +182,7 @@ fn overlapping_unfrozen_version_spaces_merge_to_proven_intersection() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 32,
         future_rows: 32,
         max_buckets: 64,
@@ -224,6 +228,7 @@ fn prefreeze_support_receipts_survive_restart_without_raw_examples() {
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -283,6 +288,7 @@ fn v4_checkpoint_restarts_as_non_authoritative_teacher_history() {
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -301,7 +307,7 @@ fn v4_checkpoint_restarts_as_non_authoritative_teacher_history() {
     let status = migrated.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert_eq!(status.frozen_buckets_total, 0);
     assert_eq!(status.future_receipts_unique_total, 0);
@@ -331,7 +337,7 @@ fn v7_repairs_historical_variant_digest_and_revokes_invalid_freeze() {
     ));
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut miner = OnlineCollectionMiner::open(&path, config).expect("miner");
     let observation = observation(1, "3");
     let program = enumerate_source_neutral_response_programs(&observation.example)
@@ -361,6 +367,7 @@ fn v7_repairs_historical_variant_digest_and_revokes_invalid_freeze() {
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: Some(program_digest),
         support_watermark_event_time_unix_nanos: Some(1),
         support_manifest_sha256: Some("d".repeat(64)),
@@ -375,7 +382,7 @@ fn v7_repairs_historical_variant_digest_and_revokes_invalid_freeze() {
     let bucket = migrated.checkpoint.buckets.first().expect("bucket");
     assert_eq!(
         migrated.status().pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert!(bucket.rejected_program_sha256.contains(&historical_digest));
     assert!(bucket.learned_anti_atom_ids.is_empty());
@@ -399,6 +406,7 @@ fn typed_program_pool_reuses_across_rephrased_requests() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -441,6 +449,7 @@ fn latest_output_program_pool_reuses_across_different_output_ordinals() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -505,6 +514,7 @@ fn replay_training_freezes_support_but_never_claims_future() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -547,6 +557,7 @@ fn replay_training_rehydrates_discarded_support_without_double_accounting() {
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -607,6 +618,7 @@ fn v20_restart_preserves_support_without_bulk_revalidation() {
     fs::create_dir_all(&root).expect("root");
     let path = root.join("checkpoint.cbor");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -643,7 +655,7 @@ fn v20_restart_preserves_support_without_bulk_revalidation() {
     let status = restored.status();
     assert_eq!(
         status.pooling_strategy_version,
-        ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        ONLINE_COLLECTION_POOLING_STRATEGY_V36
     );
     assert_eq!(status.observations_total, observations);
     assert_eq!(status.support_receipts_unique_total, support);
@@ -669,6 +681,7 @@ fn legacy_rehydration_joins_unique_verified_receipt_across_identity_and_layout_v
     ));
     fs::create_dir_all(&root).expect("root");
     let config = OnlineCollectionConfig {
+        proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
         support_rows: 4,
         future_rows: 4,
         max_buckets: 8,
@@ -723,7 +736,7 @@ fn frozen_wave_center_uses_support_invariants_across_new_request_wording() {
             .as_nanos()
     ));
     fs::create_dir_all(&root).expect("root");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut miner =
         OnlineCollectionMiner::open(root.join("checkpoint.cbor"), config).expect("miner");
     let support_wordings = [
@@ -855,6 +868,7 @@ fn frozen_consensus_counterexample_creates_witness_successor() {
         runtime_examples: BTreeMap::new(),
         durable_adapter_phase_atoms: BTreeMap::new(),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: Some(consensus_digest.clone()),
         support_watermark_event_time_unix_nanos: Some(4),
         support_manifest_sha256: Some("b".repeat(64)),
@@ -905,7 +919,7 @@ fn collection_wave_ablation_builds_external_admission_after_frozen_future() {
             .as_nanos()
     ));
     fs::create_dir_all(&root).expect("root");
-    let config = OnlineCollectionConfig::default();
+    let config = legacy_default_config();
     let mut miner =
         OnlineCollectionMiner::open(root.join("checkpoint.json"), config).expect("miner");
     for index in 1..=32 {

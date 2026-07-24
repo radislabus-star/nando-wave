@@ -148,6 +148,27 @@ impl AdaptiveIdentificationProofV1 {
     pub fn proof_root_sha256(&self) -> &str {
         &self.proof_root_sha256
     }
+
+    #[must_use]
+    pub fn canonical_program_root_sha256(&self) -> &str {
+        &self.canonical_program_root_sha256
+    }
+
+    pub fn matches_input(
+        &self,
+        input: &AdaptiveIdentificationProofInputV1,
+    ) -> Result<bool, &'static str> {
+        self.validate()?;
+        validate_adaptive_identification_roots(input)?;
+        Ok(
+            self.candidate_freeze_root_sha256 == input.candidate_freeze_root_sha256
+                && self.semantic_class_id_sha256 == input.semantic_class_id_sha256
+                && self.canonical_program_root_sha256 == input.canonical_program_root_sha256
+                && self.applicability_scope_root_sha256 == input.applicability_scope_root_sha256
+                && self.transfer_proof_root_sha256 == input.transfer_proof_root_sha256
+                && self.proof_root_sha256 == adaptive_identification_proof_root(input)?,
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

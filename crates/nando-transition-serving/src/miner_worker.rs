@@ -24,6 +24,7 @@ const MAX_SYNTHESIS_SLICES_PER_BURST: u64 = 8;
 const MAX_SYNTHESIS_BURST: Duration = Duration::from_millis(5);
 const CHECKPOINT_EVENTS: u64 = 4_096;
 const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(60);
+const REPORT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 const EXPERIMENTAL_SELF_TRAINING_WORK_ENABLED: bool = true;
 
 #[derive(Default)]
@@ -32,6 +33,7 @@ struct MinerWorkerCounters {
     processed: AtomicU64,
     failed: AtomicU64,
     checkpoints: AtomicU64,
+    report_heartbeats: AtomicU64,
     synthesis_slices: AtomicU64,
     exact_checks: AtomicU64,
     replayed_records: AtomicU64,
@@ -76,6 +78,7 @@ pub struct MinerWorkerStatus {
     pub processed: u64,
     pub failed: u64,
     pub checkpoints: u64,
+    pub report_heartbeats: u64,
     pub synthesis_slices: u64,
     pub exact_checks: u64,
     pub replayed_records: u64,
@@ -117,6 +120,7 @@ pub struct MinerWorkerHandle {
     counters: Arc<MinerWorkerCounters>,
     response_report: Arc<std::sync::RwLock<Option<OnlineResponseMinerReport>>>,
     response_status: Arc<std::sync::RwLock<Option<OnlineResponseStreamStatus>>>,
+    _report_heartbeat_lifetime: Arc<()>,
 }
 
 enum MinerCommand {
@@ -301,6 +305,7 @@ impl MinerWorkerHandle {
             processed,
             failed,
             checkpoints: self.counters.checkpoints.load(Ordering::Relaxed),
+            report_heartbeats: self.counters.report_heartbeats.load(Ordering::Relaxed),
             synthesis_slices: self.counters.synthesis_slices.load(Ordering::Relaxed),
             exact_checks: self.counters.exact_checks.load(Ordering::Relaxed),
             replayed_records: self.counters.replayed_records.load(Ordering::Relaxed),
@@ -402,7 +407,28 @@ pub fn spawn_miner_worker(
     state_dir: PathBuf,
     authority_trigger: Option<SyncSender<()>>,
 ) -> Result<MinerWorkerHandle, String> {
+    spawn_miner_worker_with_report_heartbeat(
+        miner,
+        collection_miner,
+        state_dir,
+        authority_trigger,
+        REPORT_HEARTBEAT_INTERVAL,
+    )
+}
+
+fn spawn_miner_worker_with_report_heartbeat(
+    miner: Arc<Mutex<OnlineResponseStream>>,
+    collection_miner: Arc<Mutex<OnlineCollectionMiner>>,
+    state_dir: PathBuf,
+    authority_trigger: Option<SyncSender<()>>,
+    report_heartbeat_interval: Duration,
+) -> Result<MinerWorkerHandle, String> {
     let startup_started = Instant::now();
+    let report_path = miner
+        .lock()
+        .map_err(|_| "miner_worker_report_path_lock_poisoned".to_owned())?
+        .report_path()
+        .to_path_buf();
     let teacher_ledger_dir = state_dir.join("response-teacher-segments-v2");
     let collection_ledger_dir = state_dir.join("response-collection-segments-v2");
     let opportunity_ledger_dir = state_dir.join("response-opportunity-segments-v2");
@@ -459,6 +485,35 @@ pub fn spawn_miner_worker(
     let thread_counters = Arc::clone(&counters);
     let thread_response_report = Arc::clone(&response_report);
     let thread_response_status = Arc::clone(&response_status);
+    let report_heartbeat_lifetime = Arc::new(());
+    let weak_report_heartbeat_lifetime = Arc::downgrade(&report_heartbeat_lifetime);
+    let heartbeat_counters = Arc::clone(&counters);
+    let heartbeat_authority_trigger = authority_trigger.clone();
+    thread::Builder::new()
+        .name("nando-response-report-heartbeat".to_owned())
+        .spawn(move || {
+            loop {
+                thread::sleep(report_heartbeat_interval);
+                if weak_report_heartbeat_lifetime.upgrade().is_none() {
+                    break;
+                }
+                match OnlineResponseStream::refresh_report_heartbeat_at(&report_path) {
+                    Ok(()) => {
+                        heartbeat_counters
+                            .report_heartbeats
+                            .fetch_add(1, Ordering::Relaxed);
+                        if let Some(trigger) = &heartbeat_authority_trigger {
+                            let _ = trigger.try_send(());
+                        }
+                    }
+                    Err(error) => {
+                        heartbeat_counters.failed.fetch_add(1, Ordering::Relaxed);
+                        eprintln!("nando-response-miner-v2 report heartbeat: {error}");
+                    }
+                }
+            }
+        })
+        .map_err(|error| format!("miner_worker_report_heartbeat_spawn:{error}"))?;
     thread::Builder::new()
         .name("nando-response-miner-v2".to_owned())
         .spawn(move || {
@@ -901,6 +956,7 @@ pub fn spawn_miner_worker(
         counters,
         response_report,
         response_status,
+        _report_heartbeat_lifetime: report_heartbeat_lifetime,
     })
 }
 
@@ -1008,6 +1064,78 @@ mod tests {
                 .opportunity_ordinary_tokens,
             29
         );
+        drop(worker);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn idle_report_heartbeat_does_not_rewrite_semantic_checkpoint() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-miner-report-heartbeat-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let report_path = root.join("report.json");
+        let checkpoint_path = root.join("response.checkpoint");
+        let response = Arc::new(Mutex::new(
+            OnlineResponseStream::open_streaming(OnlineResponseTailConfig {
+                input_path: root.join("frames.jsonl"),
+                report_path: report_path.clone(),
+                checkpoint_path: checkpoint_path.clone(),
+                idle_sleep: Duration::from_millis(1),
+            })
+            .expect("response stream"),
+        ));
+        let checkpoint_before = fs::read(&checkpoint_path).expect("checkpoint before heartbeat");
+        let report_before: serde_json::Value =
+            serde_json::from_slice(&fs::read(&report_path).expect("report before heartbeat"))
+                .expect("report json before heartbeat");
+        let state_generated_at = report_before["state_generated_at_unix_ms"]
+            .as_u64()
+            .expect("state timestamp");
+        let collection = Arc::new(Mutex::new(
+            OnlineCollectionMiner::open(
+                root.join("collection.checkpoint"),
+                OnlineCollectionConfig::default(),
+            )
+            .expect("collection miner"),
+        ));
+        let worker = spawn_miner_worker_with_report_heartbeat(
+            response,
+            collection,
+            root.clone(),
+            None,
+            Duration::from_millis(20),
+        )
+        .expect("miner worker");
+
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while worker.status().report_heartbeats == 0 && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(worker.status().report_heartbeats > 0);
+        let report_after: serde_json::Value =
+            serde_json::from_slice(&fs::read(&report_path).expect("report after heartbeat"))
+                .expect("report json after heartbeat");
+        assert_eq!(
+            report_after["state_generated_at_unix_ms"].as_u64(),
+            Some(state_generated_at)
+        );
+        assert!(
+            report_after["generated_at_unix_ms"]
+                .as_u64()
+                .expect("heartbeat timestamp")
+                >= state_generated_at
+        );
+        assert_eq!(
+            fs::read(&checkpoint_path).expect("checkpoint after heartbeat"),
+            checkpoint_before
+        );
+
         drop(worker);
         let _ = fs::remove_dir_all(root);
     }

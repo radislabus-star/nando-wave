@@ -89,6 +89,7 @@ pub(super) fn support_program_subcenters(
                     &BTreeSet::from([program_sha256.clone()]),
                 ),
                 durable_runtime_parity_receipts: BTreeMap::new(),
+                adaptive_candidate_freeze: None,
                 frozen_program_sha256: None,
                 support_watermark_event_time_unix_nanos: None,
                 support_manifest_sha256: None,
@@ -236,6 +237,7 @@ pub(super) fn support_law_subcenters(
                     &selected_program_ids,
                 ),
                 durable_runtime_parity_receipts: BTreeMap::new(),
+                adaptive_candidate_freeze: None,
                 frozen_program_sha256: None,
                 support_watermark_event_time_unix_nanos: None,
                 support_manifest_sha256: None,
@@ -381,6 +383,7 @@ pub(super) fn support_subset_bucket(
             &bucket.programs.keys().cloned().collect(),
         ),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -678,6 +681,7 @@ pub(super) fn active_witness_decision(
             &survivor_ids,
         ),
         durable_runtime_parity_receipts: BTreeMap::new(),
+        adaptive_candidate_freeze: None,
         frozen_program_sha256: None,
         support_watermark_event_time_unix_nanos: None,
         support_manifest_sha256: None,
@@ -694,6 +698,7 @@ pub(super) fn active_witness_decision(
 
 pub(super) fn revoke_frozen_bucket(bucket: &mut OnlineCollectionBucket, program_sha256: &str) {
     let rejected = bucket_adapter_digests(bucket);
+    bucket.adaptive_candidate_freeze = None;
     bucket.frozen_program_sha256 = None;
     bucket.support_watermark_event_time_unix_nanos = None;
     bucket.support_manifest_sha256 = None;
@@ -799,6 +804,7 @@ pub(super) fn counterexample_subcenters(
                 &BTreeSet::from([program_sha256.to_owned()]),
             ),
             durable_runtime_parity_receipts: BTreeMap::new(),
+            adaptive_candidate_freeze: None,
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
             support_manifest_sha256: None,
@@ -815,7 +821,7 @@ pub(super) fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V35
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V36
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());
@@ -903,10 +909,12 @@ pub(super) fn migrate_collection_active_witness_pools(
         if bucket.frozen_program_sha256.is_some() && !frozen_valid {
             bucket.future.clear();
             bucket.durable_runtime_parity_receipts.clear();
+            bucket.adaptive_candidate_freeze = None;
             bucket.frozen_program_sha256 = None;
             bucket.support_watermark_event_time_unix_nanos = None;
             bucket.support_manifest_sha256 = None;
         } else if bucket.frozen_program_sha256.is_none() {
+            bucket.adaptive_candidate_freeze = None;
             bucket.support_manifest_sha256 = None;
         }
     }
@@ -999,6 +1007,7 @@ pub(super) fn migrate_collection_exact_receipts(
         }
         bucket.future.clear();
         bucket.durable_runtime_parity_receipts.clear();
+        bucket.adaptive_candidate_freeze = None;
         bucket.frozen_program_sha256 = None;
         bucket.support_watermark_event_time_unix_nanos = None;
         bucket.support_manifest_sha256 = None;
@@ -1222,8 +1231,27 @@ pub(super) fn invalid_collection_bucket_reason(bucket: &OnlineCollectionBucket) 
         {
             return Some("frozen_support_manifest_mismatch".to_owned());
         }
+        if let Some(freeze) = &bucket.adaptive_candidate_freeze
+            && (freeze.validate().is_err()
+                || nando_operator_kernel::response_program_version_root_sha256(
+                    bucket.programs.get(frozen_digest)?,
+                )
+                .ok()
+                .as_deref()
+                    != Some(freeze.canonical_program_root_sha256())
+                || identify_collection_bucket(bucket)
+                    .ok()
+                    .flatten()
+                    .map(|identification| identification.freeze)
+                    .as_ref()
+                    != Some(freeze))
+        {
+            return Some("adaptive_candidate_freeze_invalid".to_owned());
+        }
     } else if bucket.support_manifest_sha256.is_some() {
         return Some("unfrozen_bucket_has_support_manifest".to_owned());
+    } else if bucket.adaptive_candidate_freeze.is_some() {
+        return Some("unfrozen_bucket_has_adaptive_freeze".to_owned());
     }
     for (digest, program) in &bucket.programs {
         if canonical_json_sha256(program).ok().as_ref() != Some(digest) {

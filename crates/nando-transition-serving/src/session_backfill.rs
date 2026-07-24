@@ -1287,7 +1287,7 @@ fn persist_checkpoint(path: &Path, checkpoint: &BackfillCheckpoint) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nando_operator_learning::OnlineCollectionConfig;
+    use nando_operator_learning::{OnlineCollectionConfig, OnlineCollectionProofMode};
     use nando_response_actor::ResponsePackageState;
     use serde_json::json;
 
@@ -1421,6 +1421,7 @@ mod tests {
             OnlineCollectionMiner::open(
                 root.join("collection.json"),
                 OnlineCollectionConfig {
+                    proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
                     support_rows: 4,
                     future_rows: 4,
                     max_buckets: 8,
@@ -1440,7 +1441,17 @@ mod tests {
             .expect("packages");
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].state, ResponsePackageState::Quarantine);
-        assert!(packages[0].required_routing_atom_ids.len() > 2);
+        assert_eq!(
+            packages[0].required_routing_atom_ids,
+            nando_operator_kernel::response_program_required_routing_atom_ids(&packages[0].program)
+        );
+        assert!(!packages[0].required_routing_atom_ids.is_empty());
+        assert!(
+            packages[0]
+                .required_routing_atom_ids
+                .iter()
+                .all(|atom| packages[0].phase_centers.contains(atom))
+        );
         run_backfill(&sessions, &checkpoint, &evidence, &graphs, &collection).expect("resume");
         assert_eq!(collection.lock().expect("lock").status(), status);
         let accounting_before_generation_replay = evidence.lock().expect("ledger").accounting();
@@ -1448,6 +1459,7 @@ mod tests {
             OnlineCollectionMiner::open(
                 root.join("collection-v2.json"),
                 OnlineCollectionConfig {
+                    proof_mode: OnlineCollectionProofMode::LegacyFixedRows,
                     support_rows: 4,
                     future_rows: 4,
                     max_buckets: 8,

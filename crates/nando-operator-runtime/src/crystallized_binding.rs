@@ -1149,17 +1149,58 @@ pub fn runtime_selector_candidates<'a>(
     expected_type: AtomValueType,
     preferred: Option<&'a ResponseValueSelector>,
 ) -> impl Iterator<Item = ResponseValueSelector> + 'a {
-    let mut candidates = preferred.cloned().into_iter().collect::<Vec<_>>();
-    candidates.extend(if expected_type == AtomValueType::Collection {
+    let mut candidates = if let Some(preferred) = preferred {
+        let scope = runtime_selector_scope(preferred);
+        let mut candidates = crate::selector_candidates(provider_payload)
+            .into_iter()
+            .filter(|candidate| runtime_selector_scope(candidate) == scope)
+            .collect::<Vec<_>>();
+        candidates.push(preferred.clone());
+        candidates
+    } else if expected_type == AtomValueType::Collection {
         vec![ResponseValueSelector::UniqueScalar {
             value_type: AtomValueType::Collection,
         }]
     } else {
         crate::selector_candidates(provider_payload)
-    });
+    };
     candidates.sort();
     candidates.dedup();
     candidates.into_iter()
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RuntimeSelectorScope {
+    Request,
+    LatestOutput,
+    TurnOutput(u16),
+    TurnWide,
+}
+
+fn runtime_selector_scope(selector: &ResponseValueSelector) -> RuntimeSelectorScope {
+    match selector {
+        ResponseValueSelector::RequestLastToken | ResponseValueSelector::RequestUniqueLiteral => {
+            RuntimeSelectorScope::Request
+        }
+        ResponseValueSelector::TurnOutputLine { output_ordinal, .. }
+        | ResponseValueSelector::TurnOutputScalarOrdinal { output_ordinal, .. } => {
+            RuntimeSelectorScope::TurnOutput(*output_ordinal)
+        }
+        ResponseValueSelector::UniqueTurnScalar { .. }
+        | ResponseValueSelector::UniqueTurnJsonField { .. }
+        | ResponseValueSelector::UniqueActiveTurnJsonField { .. } => RuntimeSelectorScope::TurnWide,
+        ResponseValueSelector::ContinuationHandle { .. }
+        | ResponseValueSelector::UniqueScalar { .. }
+        | ResponseValueSelector::ContentLinePrefix { .. }
+        | ResponseValueSelector::JsonField { .. }
+        | ResponseValueSelector::JsonScalarOrdinal { .. }
+        | ResponseValueSelector::RequestReferencedJsonField { .. }
+        | ResponseValueSelector::RequestReferencedJsonFieldOrdinal { .. }
+        | ResponseValueSelector::LatestTurnOutputLine { .. }
+        | ResponseValueSelector::LatestTurnOutputScalarOrdinal { .. }
+        | ResponseValueSelector::LatestTurnOutputScalarFromEnd { .. }
+        | ResponseValueSelector::CommandOutputBody => RuntimeSelectorScope::LatestOutput,
+    }
 }
 
 #[doc(hidden)]

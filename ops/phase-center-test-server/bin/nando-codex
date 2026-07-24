@@ -68,7 +68,10 @@ build_nando_codex_args() {
     esac
     if is_codex_subcommand "${token}"; then
       if is_model_subcommand "${token}"; then
-        insert_at=$((index + 1))
+        # Provider selection is a global Codex option. Putting it after
+        # resume/exec looks plausible in argv but leaves the subcommand free
+        # to retain the provider from the resumed session.
+        insert_at="${index}"
         CODEX_ARGS=(
           "${original[@]:0:${insert_at}}"
           -c "${MODEL_PROVIDER_OVERRIDE}"

@@ -1810,6 +1810,24 @@ mod tests {
             .bind_pre_action(request, &payload)
             .expect("operator binds from pre-action payload");
         assert_eq!(automatically_bound.execute_verified().as_deref(), Ok("7"));
+        let payload_with_unrelated_history = json!({
+            "input": [
+                {
+                    "type": "function_call_output",
+                    "call_id": "old",
+                    "output": "{\"other\":99}"
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "current",
+                    "output": "{\"total\":7}"
+                }
+            ]
+        });
+        let history_bound = operator
+            .bind_pre_action(request, &payload_with_unrelated_history)
+            .expect("sealed selector ignores unrelated earlier outputs");
+        assert_eq!(history_bound.execute_verified().as_deref(), Ok("7"));
         let mut corrupted_registry = restart_bundle.registry_cbor().to_vec();
         let last = corrupted_registry.len() - 1;
         corrupted_registry[last] ^= 0x01;

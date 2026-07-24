@@ -103,8 +103,12 @@ pub(super) fn durable_pre_action_atom_ids(
 }
 
 pub(super) fn bucket_phase_center_atom_ids(bucket: &OnlineCollectionBucket) -> Vec<u64> {
-    let program_atoms = bucket_program_atom_ids(bucket);
-    let mut atoms = program_atoms.into_iter().collect::<Vec<_>>();
+    let mut atoms = bucket
+        .frozen_program_sha256
+        .as_ref()
+        .and_then(|digest| bucket.programs.get(digest))
+        .map(response_program_required_routing_atom_ids)
+        .unwrap_or_else(|| bucket_program_atom_ids(bucket).into_iter().collect());
     atoms.extend(bucket.common_request_atom_ids.iter().copied());
     atoms.sort_unstable();
     atoms.dedup();

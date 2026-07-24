@@ -362,6 +362,9 @@ pub struct OnlineResponseTailConfig {
 
 pub struct OnlineResponseStream {
     config: OnlineResponseTailConfig,
+    // Held for the stream lifetime: a second process must never persist a
+    // stale in-memory miner over the same checkpoint.
+    _checkpoint_owner: File,
     miner: OnlineResponseMiner,
     source_device: u64,
     source_inode: u64,
@@ -820,6 +823,7 @@ impl OnlineResponseMiner {
         &mut self,
         transition: crate::TeacherTransition,
     ) -> Result<Option<String>, String> {
+        let capture_owned_transition = transition.clone();
         let mut frame = transition.as_training_relation_frame();
         let economics = transition.economics;
         let runtime_parity_case = transition.runtime_parity_case;
@@ -829,6 +833,8 @@ impl OnlineResponseMiner {
             .map_err(|error| format!("online_migration_teacher_transition:{error:?}"))?;
         canonical_transition.runtime_parity_case = runtime_parity_case;
         let teacher_signature = crate::teacher_program_signature(&frame);
+        self.live_scalar_shadow
+            .observe_capture_bound_historical_support(&capture_owned_transition);
         if self.frame_disposition(&frame)? == FrameDisposition::Duplicate {
             self.self_training_v2
                 .observe_migration_transition(&canonical_transition)?;

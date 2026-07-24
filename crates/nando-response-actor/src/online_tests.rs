@@ -222,6 +222,70 @@ fn duplicate_frame_upgrades_only_durable_capture_provenance() {
 }
 
 #[test]
+fn replay_imports_only_capture_bound_rows_as_support_never_future() {
+    let mut miner = OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("miner");
+    let completed = frame(778, "write_stdin", true);
+    let frame_id_sha256 = completed.frame_id_sha256.clone();
+    let mut unbound =
+        crate::teacher_transition_from_completed(&completed, None).expect("unbound transition");
+    unbound.runtime_parity_case =
+        Some(write_stdin_parity_case(778, "Script running with cell ID "));
+
+    miner
+        .import_teacher_transition(unbound.clone())
+        .expect("unbound replay");
+    let unbound_report = miner.report().live_scalar_shadow;
+    assert_eq!(unbound_report.support_rows, 0, "{unbound_report:#?}");
+    assert_eq!(unbound_report.future_rows, 0, "{unbound_report:#?}");
+
+    let mut capture_bound = unbound;
+    bind_parity_to_capture(
+        capture_bound
+            .runtime_parity_case
+            .as_mut()
+            .expect("runtime parity"),
+        &frame_id_sha256,
+        778,
+    );
+    miner
+        .import_teacher_transition(capture_bound)
+        .expect("capture-bound replay");
+
+    let report = miner.report().live_scalar_shadow;
+    assert_eq!(report.support_rows, 1, "{report:#?}");
+    assert_eq!(report.future_rows, 0, "{report:#?}");
+    assert_eq!(report.transfer_proofs, 0, "{report:#?}");
+    assert_eq!(report.admission_candidates, 0, "{report:#?}");
+}
+
+#[test]
+fn online_checkpoint_has_one_process_owner() {
+    let root = std::env::temp_dir().join(format!(
+        "nando-online-checkpoint-owner-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    let config = OnlineResponseTailConfig {
+        input_path: root.join("relations.jsonl"),
+        report_path: root.join("report.json"),
+        checkpoint_path: root.join("miner.checkpoint"),
+        idle_sleep: Duration::from_millis(1),
+    };
+
+    let owner = OnlineResponseStream::open_streaming(config.clone()).expect("first owner");
+    let error = OnlineResponseStream::open_streaming(config.clone())
+        .err()
+        .expect("second owner must fail closed");
+    assert!(error.starts_with("online_checkpoint_owned:"), "{error}");
+
+    drop(owner);
+    OnlineResponseStream::open_streaming(config).expect("owner released after drop");
+}
+
+#[test]
 fn plan_teacher_frame_reaches_a_synthesizable_online_bucket() {
     let mut miner = OnlineResponseMiner::new(OnlineResponseMinerConfig::default()).expect("miner");
     miner

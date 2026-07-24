@@ -26,15 +26,15 @@ assert_argv() {
 
 assert_argv \
   "$(run_launcher exec --ephemeral probe)" \
-  '["exec","-c","model_provider=\"nando_nginx\"","--ephemeral","probe"]'
+  '["-c","model_provider=\"nando_nginx\"","exec","--ephemeral","probe"]'
 
 assert_argv \
   "$(run_launcher resume session-id probe)" \
-  '["resume","-c","model_provider=\"nando_nginx\"","session-id","probe"]'
+  '["-c","model_provider=\"nando_nginx\"","resume","session-id","probe"]'
 
 assert_argv \
   "$(run_launcher -m gpt-5.6-sol exec probe)" \
-  '["-m","gpt-5.6-sol","exec","-c","model_provider=\"nando_nginx\"","probe"]'
+  '["-m","gpt-5.6-sol","-c","model_provider=\"nando_nginx\"","exec","probe"]'
 
 assert_argv \
   "$(run_launcher probe)" \
@@ -42,13 +42,13 @@ assert_argv \
 
 assert_argv \
   "$(NANDO_CODEX_FORCE_DIRECT=1 run_launcher exec probe)" \
-  '["exec","probe"]'
+  '["-c","model_provider=\"openai\"","exec","probe"]'
 
 dry_run="$({ NANDO_CODEX_DRY_RUN=1 run_launcher exec probe; })"
 jq -e '
   .route_mode == "nando_nginx"
   and .config_override_scope == "exec"
-  and .config_override_insert_index == 1
+  and .config_override_insert_index == 0
   and .config_override_position_verified == true
 ' <<<"${dry_run}" >/dev/null
 

@@ -16,7 +16,8 @@ use crate::{
     ResponsePackage, ResponsePackageAuthorityBindingV2, ResponsePackageState, ResponseProgram,
     ResponseRegistry, VerifiedCrystallizedOperator, canonical_json_sha256,
     compile_source_neutral_quarantine_packages, evaluate_grounded_wave_causality, execute_response,
-    frame_matches_program_action_contract, online_collection_future_manifest_digest,
+    frame_matches_program_action_contract, online_collection_adaptive_transfer_proof_digest,
+    online_collection_candidate_freeze, online_collection_future_manifest_digest,
     online_collection_support_manifest_digest, relation_frame_routes_to_package,
     relation_frame_structural_family_id, response_program_authority_matches_example,
     response_program_required_routing_atom_ids, response_proof_receipts_digest,
@@ -623,6 +624,7 @@ fn validate_durable_runtime_parity(
     package: &ResponsePackage,
     durable_receipts: &[DurableRuntimeParityReceipt],
     allowed_evidence_refs: &BTreeSet<&str>,
+    minimum_receipts: usize,
 ) -> Result<Option<String>, &'static str> {
     let verifier = package
         .verifier
@@ -652,7 +654,7 @@ fn validate_durable_runtime_parity(
             execution_budget_normalized_match: false,
         });
     }
-    if receipts.len() < 32 {
+    if receipts.len() < minimum_receipts {
         return Ok(None);
     }
     canonical_json_sha256(&RuntimeParityReceiptSet {
@@ -668,6 +670,7 @@ fn execute_runtime_parity(
     package: &ResponsePackage,
     cases: &[crate::RuntimeParityCase],
     allowed_evidence_refs: &BTreeSet<&str>,
+    minimum_receipts: usize,
 ) -> Result<Option<String>, &'static str> {
     let verifier = package
         .verifier
@@ -745,7 +748,7 @@ fn execute_runtime_parity(
             );
         }
     }
-    if receipts.len() < 32 {
+    if receipts.len() < minimum_receipts {
         return Ok(None);
     }
     if failures != 0 {
@@ -1473,6 +1476,7 @@ pub fn build_online_admission_evaluation(
             &package,
             &candidate.runtime_parity_cases,
             &routed_future_refs,
+            32,
         )?
         else {
             record_candidate_rejection(
@@ -2096,6 +2100,54 @@ pub fn build_online_collection_admission_snapshot(
     let mut receipt_digests = BTreeMap::new();
     for candidate in candidates {
         let package = &candidate.package;
+        let adaptive = package.proof.adaptive_identification.is_some();
+        let adaptive_proof_valid = if let Some(proof) = &package.proof.adaptive_identification {
+            let Some(submitted_freeze) = &candidate.candidate_freeze else {
+                continue;
+            };
+            let rebuilt_freeze = online_collection_candidate_freeze(candidate)
+                .map_err(|_| "online_collection_admission_identification_rebuild_failed")?;
+            let Some(rebuilt_freeze) = rebuilt_freeze else {
+                continue;
+            };
+            if rebuilt_freeze != *submitted_freeze
+                || rebuilt_freeze.validate().is_err()
+                || canonical_json_sha256(&package.program).ok().as_deref()
+                    != Some(candidate.program_sha256.as_str())
+                || nando_operator_kernel::response_program_version_root_sha256(&package.program)
+                    .ok()
+                    .as_deref()
+                    != Some(rebuilt_freeze.canonical_program_root_sha256())
+            {
+                continue;
+            }
+            let transfer_proof_root_sha256 =
+                online_collection_adaptive_transfer_proof_digest(candidate)
+                    .map_err(|_| "online_collection_admission_transfer_proof_failed")?;
+            proof
+                .matches_input(
+                    &nando_operator_admission::AdaptiveIdentificationProofInputV1 {
+                        candidate_freeze_root_sha256: rebuilt_freeze
+                            .freeze_root_sha256()
+                            .to_owned(),
+                        semantic_class_id_sha256: rebuilt_freeze
+                            .semantic_class_id()
+                            .as_str()
+                            .to_owned(),
+                        canonical_program_root_sha256: rebuilt_freeze
+                            .canonical_program_root_sha256()
+                            .to_owned(),
+                        applicability_scope_root_sha256: rebuilt_freeze
+                            .applicability_scope_root_sha256()
+                            .to_owned(),
+                        transfer_proof_root_sha256,
+                    },
+                )
+                .unwrap_or(false)
+        } else {
+            candidate.candidate_freeze.is_none()
+        };
+        let minimum_receipts = if adaptive { 1 } else { 32 };
         if candidate.causal_report.verdict != "PASS"
             || candidate.causal_report.package_id != package.package_id
             || online_collection_support_manifest_digest(candidate)
@@ -2104,8 +2156,9 @@ pub fn build_online_collection_admission_snapshot(
             || online_collection_future_manifest_digest(candidate)
                 .map_err(|_| "online_collection_admission_future_manifest_encode_failed")?
                 != candidate.future_manifest_sha256
-            || candidate.support_receipts.len() < 32
-            || candidate.future_receipts.len() < 32
+            || !adaptive_proof_valid
+            || candidate.support_receipts.len() < minimum_receipts
+            || candidate.future_receipts.len() < minimum_receipts
             || candidate
                 .support_receipts
                 .iter()
@@ -2136,14 +2189,18 @@ pub fn build_online_collection_admission_snapshot(
             .iter()
             .map(|receipt| receipt.evidence_graph_sha256.as_str())
             .collect::<BTreeSet<_>>();
-        let parity_sha256 =
-            execute_runtime_parity(package, &candidate.runtime_parity_cases, &future_refs)?.or(
-                validate_durable_runtime_parity(
-                    package,
-                    &candidate.durable_runtime_parity_receipts,
-                    &future_refs,
-                )?,
-            );
+        let parity_sha256 = execute_runtime_parity(
+            package,
+            &candidate.runtime_parity_cases,
+            &future_refs,
+            minimum_receipts,
+        )?
+        .or(validate_durable_runtime_parity(
+            package,
+            &candidate.durable_runtime_parity_receipts,
+            &future_refs,
+            minimum_receipts,
+        )?);
         let Some(parity_sha256) = parity_sha256 else {
             continue;
         };

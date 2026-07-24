@@ -20,7 +20,7 @@ use super::*;
 pub(super) struct LiveScalarIdentificationV1 {
     pub freeze_root_sha256: String,
     pub semantic_class_id_sha256: String,
-    pub canonical_program_root_sha256: String,
+    pub member_program_roots_sha256: Vec<String>,
     pub applicability_scope_root_sha256: String,
 }
 
@@ -251,6 +251,7 @@ pub(super) fn identify_live_scalar_law_v1(
     };
     let semantic_class_id_sha256 = identified.semantic_class().class_id().as_str().to_owned();
     let canonical_program_root_sha256 = identified.canonical_program_root_sha256().to_owned();
+    let member_program_roots_sha256 = identified.semantic_class().member_program_sha256().to_vec();
     let scope_root_sha256 = canonical_json_sha256(&(
         "nando.live-scalar-applicability-scope.v1",
         law_key,
@@ -267,7 +268,7 @@ pub(super) fn identify_live_scalar_law_v1(
     Ok(LiveScalarIdentificationV1 {
         freeze_root_sha256: freeze.freeze_root_sha256().to_owned(),
         semantic_class_id_sha256,
-        canonical_program_root_sha256,
+        member_program_roots_sha256,
         applicability_scope_root_sha256: scope_root_sha256,
     })
 }

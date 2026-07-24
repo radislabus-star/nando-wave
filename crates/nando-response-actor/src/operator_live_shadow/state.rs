@@ -18,6 +18,13 @@ impl LiveScalarShadowState {
             Ok(sample) => sample,
             Err(blocker) => {
                 *self.blockers.entry(blocker).or_default() += 1;
+                let action = crate::teacher_action_symbol(&transition.as_training_relation_frame());
+                *self
+                    .extraction_blockers_by_action
+                    .entry(action)
+                    .or_default()
+                    .entry(blocker)
+                    .or_default() += 1;
                 return;
             }
         };
@@ -159,6 +166,18 @@ impl LiveScalarShadowState {
         law.support.push(transition.clone());
     }
 
+    /// Imports a replay row only when the capture owner can reconstruct its
+    /// immutable source lineage. Historical evidence can narrow the version
+    /// space, but it can never satisfy the post-freeze transfer proof.
+    pub(crate) fn observe_capture_bound_historical_support(
+        &mut self,
+        transition: &TeacherTransition,
+    ) {
+        if capture_lineage_is_reconstructible(transition) {
+            self.observe_historical_support(transition);
+        }
+    }
+
     #[must_use]
     pub fn report(&self) -> LiveScalarShadowReport {
         let support_rows = self.laws.values().map(|law| law.support.len()).sum();
@@ -215,6 +234,19 @@ impl LiveScalarShadowState {
                 .blockers
                 .iter()
                 .map(|(blocker, count)| (format!("{blocker:?}").to_lowercase(), *count))
+                .collect(),
+            extraction_blockers_by_action: self
+                .extraction_blockers_by_action
+                .iter()
+                .map(|(action, blockers)| {
+                    (
+                        action.clone(),
+                        blockers
+                            .iter()
+                            .map(|(blocker, count)| (format!("{blocker:?}").to_lowercase(), *count))
+                            .collect(),
+                    )
+                })
                 .collect(),
             ..LiveScalarShadowReport::default()
         };
@@ -960,6 +992,15 @@ fn live_admission_candidate(
     let program = operator
         .routing_program()
         .map_err(|_| "admission_routing_program_failed".to_owned())?;
+    let selected_program_root_sha256 =
+        nando_operator_kernel::response_program_version_root_sha256(&program)
+            .map_err(str::to_owned)?;
+    if !identification
+        .member_program_roots_sha256
+        .contains(&selected_program_root_sha256)
+    {
+        return Err("admission_routing_program_not_in_frozen_semantic_class".to_owned());
+    }
     let verifier = operator
         .routing_verifier()
         .map_err(|_| "admission_routing_verifier_failed".to_owned())?;
@@ -1038,9 +1079,10 @@ fn live_admission_candidate(
                     nando_operator_admission::AdaptiveIdentificationProofInputV1 {
                         candidate_freeze_root_sha256: identification.freeze_root_sha256.clone(),
                         semantic_class_id_sha256: identification.semantic_class_id_sha256.clone(),
-                        canonical_program_root_sha256: identification
-                            .canonical_program_root_sha256
-                            .clone(),
+                        // The freeze root still commits the canonical class
+                        // representative. This field binds the executable
+                        // member selected later by independent future parity.
+                        canonical_program_root_sha256: selected_program_root_sha256,
                         applicability_scope_root_sha256: identification
                             .applicability_scope_root_sha256
                             .clone(),

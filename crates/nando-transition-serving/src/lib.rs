@@ -22,6 +22,7 @@ pub mod session_backfill;
 mod session_stream;
 mod stream_evidence;
 pub use session_stream::{
+    verified_capture_bound_training_cases_from_sessions,
     verified_collection_observations_from_session, verified_relation_frames_from_session,
     verified_relation_frames_from_session_tail, verified_session_identity_sha256_candidates,
     verified_training_cases_from_session, verified_training_cases_from_session_head,
@@ -1655,6 +1656,7 @@ async fn execute_transition(State(state): State<AppState>, body: Bytes) -> Respo
         "",
         false,
         0,
+        false,
     )
 }
 
@@ -1849,6 +1851,8 @@ fn handle_openai(
             return fallback(&state, "request_json_unavailable");
         }
     };
+    let traffic_source = request_traffic_source(&headers, &payload);
+    let natural_evidence_eligible = traffic_source_natural_evidence_eligible(traffic_source);
     let request_identity = ProviderRequestIdentityV1::from_payload(&payload, &transport_request_id);
     let turn_intent_id = request_identity.turn_intent_id().to_owned();
     let request_event_id = request_identity.request_event_id().to_owned();
@@ -1860,13 +1864,16 @@ fn handle_openai(
         .get("stream")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    if let Some(capture_receipt) = capture_provider_request(
-        &state,
-        request_identity.session_lineage_root(),
-        &request_hash,
-        projection,
-        request_streaming,
-    ) {
+    // Controlled probes may exercise runtime, but must never become natural evidence.
+    if natural_evidence_eligible
+        && let Some(capture_receipt) = capture_provider_request(
+            &state,
+            request_identity.session_lineage_root(),
+            &request_hash,
+            projection,
+            request_streaming,
+        )
+    {
         let structure = LearningRequestStructureV1::new(LearningRequestStructureInputV1 {
             client_intent_id_sha256: request_identity.turn_intent_sha256().to_owned(),
             session_identity_sha256s: request_identity.session_identity_sha256s().to_vec(),
@@ -1897,18 +1904,6 @@ fn handle_openai(
             }
         }
     }
-    let traffic_source_header = headers
-        .get("x-nando-traffic-source")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned);
-    let traffic_source = traffic_source_header
-        .as_deref()
-        .or_else(|| {
-            payload
-                .pointer("/metadata/nando_traffic_source")
-                .and_then(Value::as_str)
-        })
-        .unwrap_or("ordinary");
     observe_live_economics_request(
         &state,
         &request_event_id,
@@ -1929,6 +1924,7 @@ fn handle_openai(
             "request_sha256": request_hash,
             "tokens": input_tokens,
             "traffic_source": traffic_source,
+            "natural_evidence_eligible": natural_evidence_eligible,
             "worker": "rust_transition_serving",
             "request_shape": request_shape,
         }),
@@ -1963,6 +1959,7 @@ fn handle_openai(
             &request_event_id,
             "adapter",
             "request_shape_unsupported",
+            natural_evidence_eligible,
         );
     }
     let Some((before, action)) = transition_envelope(&payload) else {
@@ -2003,6 +2000,7 @@ fn handle_openai(
         model,
         stream,
         input_tokens,
+        natural_evidence_eligible,
     )
 }
 
@@ -2084,6 +2082,14 @@ fn try_response_actor(
     if !projection.avoids_upstream_llm_call() {
         return None;
     }
+    let traffic_source = traffic_source_header
+        .or_else(|| {
+            payload
+                .pointer("/metadata/nando_traffic_source")
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("ordinary");
+    let natural_evidence_eligible = traffic_source_natural_evidence_eligible(traffic_source);
     refresh_response_authority_at_hot_expiry(state);
     if !response_local_accept_enabled(state) {
         record_response_actor_fallback(
@@ -2092,6 +2098,7 @@ fn try_response_actor(
             request_event_id,
             "admission",
             "response_local_accept_disabled",
+            natural_evidence_eligible,
         );
         return None;
     }
@@ -2104,6 +2111,7 @@ fn try_response_actor(
                     request_hash,
                     request_event_id,
                     "response_authority_cache_poisoned",
+                    natural_evidence_eligible,
                 );
                 return None;
             }
@@ -2115,6 +2123,7 @@ fn try_response_actor(
                 request_event_id,
                 "admission",
                 "response_admission_expired",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2125,6 +2134,7 @@ fn try_response_actor(
                 request_event_id,
                 "admission",
                 "response_executor_unavailable",
+                natural_evidence_eligible,
             );
             return None;
         };
@@ -2135,6 +2145,7 @@ fn try_response_actor(
                 request_event_id,
                 "admission",
                 "runtime_build_digest_missing",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2150,6 +2161,7 @@ fn try_response_actor(
             response_actor_fallback_stage(&execution.reason),
             &execution.reason,
             decidability,
+            natural_evidence_eligible,
         );
         return None;
     }
@@ -2160,6 +2172,7 @@ fn try_response_actor(
             request_event_id,
             "actor",
             "actor_response_missing",
+            natural_evidence_eligible,
         );
         return None;
     };
@@ -2170,6 +2183,7 @@ fn try_response_actor(
             request_event_id,
             "actor",
             "actor_package_id_missing",
+            natural_evidence_eligible,
         );
         return None;
     };
@@ -2182,13 +2196,6 @@ fn try_response_actor(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let route = format!("response_actor:{package_id}");
-    let traffic_source = traffic_source_header
-        .or_else(|| {
-            payload
-                .pointer("/metadata/nando_traffic_source")
-                .and_then(Value::as_str)
-        })
-        .unwrap_or("ordinary");
     let intent_dedupe_eligible = traffic_source_dedupe_eligible(traffic_source);
     let function_call = serde_json::from_str::<Value>(response_text)
         .ok()
@@ -2213,6 +2220,7 @@ fn try_response_actor(
                 request_event_id,
                 "adapter",
                 "custom_tool_chat_projection_unsupported",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2243,6 +2251,7 @@ fn try_response_actor(
                 request_event_id,
                 "adapter",
                 "response_actor_transition_projection_unsupported",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2255,6 +2264,7 @@ fn try_response_actor(
                 request_hash,
                 request_event_id,
                 "projector_digest_failed",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2265,6 +2275,7 @@ fn try_response_actor(
             request_hash,
             request_event_id,
             "verifier_schema_missing",
+            natural_evidence_eligible,
         );
         return None;
     };
@@ -2287,6 +2298,7 @@ fn try_response_actor(
                 request_hash,
                 request_event_id,
                 "runtime_receipt_finalize_failed",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2305,6 +2317,7 @@ fn try_response_actor(
                 request_hash,
                 request_event_id,
                 "post_verifier_receipt_finalize_failed",
+                natural_evidence_eligible,
             );
             return None;
         }
@@ -2362,7 +2375,12 @@ fn try_response_actor(
             "verifier_schema": verifier_schema,
         }),
     );
-    observe_live_economics_verified_accept(state, request_event_id, input_tokens);
+    observe_live_economics_verified_accept(
+        state,
+        request_event_id,
+        input_tokens,
+        natural_evidence_eligible,
+    );
     Some(match projection {
         Projection::Responses if stream => sse_response(responses_sse(&projected)),
         Projection::ChatCompletions if stream => sse_response(chat_sse(&projected)),
@@ -2903,21 +2921,24 @@ fn record_response_actor_fallback(
     request_event_id: &str,
     stage: &str,
     reason: &str,
+    natural_evidence_eligible: bool,
 ) {
     let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
-    if let Err(error) = state.live_economics.observe_fallback(
-        intent_sha256.clone(),
-        stage.to_owned(),
-        reason.to_owned(),
-    ) {
-        eprintln!("nando-live-economics fallback: {error}");
+    if natural_evidence_eligible {
+        if let Err(error) = state.live_economics.observe_fallback(
+            intent_sha256.clone(),
+            stage.to_owned(),
+            reason.to_owned(),
+        ) {
+            eprintln!("nando-live-economics fallback: {error}");
+        }
+        submit_opportunity_classification(
+            state,
+            intent_sha256,
+            fallback_reducibility(stage, reason),
+            reason,
+        );
     }
-    submit_opportunity_classification(
-        state,
-        intent_sha256,
-        fallback_reducibility(stage, reason),
-        reason,
-    );
     write_event(
         state,
         json!({
@@ -2939,21 +2960,24 @@ fn record_response_actor_fallback_with_decidability(
     stage: &str,
     reason: &str,
     decidability: CpuDecidability,
+    natural_evidence_eligible: bool,
 ) {
     let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
-    if let Err(error) = state.live_economics.observe_fallback(
-        intent_sha256.clone(),
-        stage.to_owned(),
-        reason.to_owned(),
-    ) {
-        eprintln!("nando-live-economics fallback: {error}");
+    if natural_evidence_eligible {
+        if let Err(error) = state.live_economics.observe_fallback(
+            intent_sha256.clone(),
+            stage.to_owned(),
+            reason.to_owned(),
+        ) {
+            eprintln!("nando-live-economics fallback: {error}");
+        }
+        submit_opportunity_classification(
+            state,
+            intent_sha256,
+            decidability_reducibility(decidability),
+            decidability.reason,
+        );
     }
-    submit_opportunity_classification(
-        state,
-        intent_sha256,
-        decidability_reducibility(decidability),
-        decidability.reason,
-    );
     write_event(
         state,
         json!({
@@ -2976,20 +3000,30 @@ fn record_runtime_parity_failure(
     request_hash: &str,
     request_event_id: &str,
     reason: &str,
+    natural_evidence_eligible: bool,
 ) {
     let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
-    if let Err(error) = state
-        .live_economics
-        .observe_parity_failure(intent_sha256.clone())
-    {
-        eprintln!("nando-live-economics parity: {error}");
+    if natural_evidence_eligible {
+        if let Err(error) = state
+            .live_economics
+            .observe_parity_failure(intent_sha256.clone())
+        {
+            eprintln!("nando-live-economics parity: {error}");
+        }
+        submit_opportunity_event(
+            state,
+            OpportunityBridgeEventV1::parity_failure(intent_sha256),
+            "parity_failure",
+        );
     }
-    submit_opportunity_event(
+    record_response_actor_fallback(
         state,
-        OpportunityBridgeEventV1::parity_failure(intent_sha256),
-        "parity_failure",
+        request_hash,
+        request_event_id,
+        "verifier",
+        reason,
+        natural_evidence_eligible,
     );
-    record_response_actor_fallback(state, request_hash, request_event_id, "verifier", reason);
 }
 
 fn function_call_responses_projection(
@@ -3074,6 +3108,7 @@ fn execute_and_project(
     model: &str,
     stream: bool,
     input_tokens: u64,
+    natural_evidence_eligible: bool,
 ) -> Response {
     let policy = policy_status(&state.config);
     if !policy.effective_local_accept {
@@ -3157,7 +3192,7 @@ fn execute_and_project(
                 "timestamp_unix": unix_now(),
                 "client_intent_id": turn_intent_id,
                 "request_event_id": request_event_id,
-                "intent_dedupe_eligible": true,
+                "intent_dedupe_eligible": natural_evidence_eligible,
                 "provider_attempt_id": Value::Null,
                 "request_sha256": request_hash,
                 "route": "local_actor",
@@ -3174,7 +3209,12 @@ fn execute_and_project(
                 "verifier_schema": execution.verifier_schema,
             }),
         );
-        observe_live_economics_verified_accept(state, request_event_id, input_tokens);
+        observe_live_economics_verified_accept(
+            state,
+            request_event_id,
+            input_tokens,
+            natural_evidence_eligible,
+        );
     } else {
         write_event(
             state,
@@ -4531,7 +4571,11 @@ fn observe_live_economics_verified_accept(
     state: &AppState,
     request_event_id: &str,
     input_tokens: u64,
+    natural_evidence_eligible: bool,
 ) {
+    if !natural_evidence_eligible {
+        return;
+    }
     let intent_sha256 = sha256_bytes(request_event_id.as_bytes());
     let result = state
         .live_economics
@@ -4652,6 +4696,22 @@ fn valid_sha256(value: &str) -> bool {
 
 fn token_estimate(text: &str) -> u64 {
     u64::try_from(text.len().div_ceil(4)).unwrap_or(u64::MAX)
+}
+
+fn request_traffic_source<'a>(headers: &'a HeaderMap, payload: &'a Value) -> &'a str {
+    headers
+        .get("x-nando-traffic-source")
+        .and_then(|value| value.to_str().ok())
+        .or_else(|| {
+            payload
+                .pointer("/metadata/nando_traffic_source")
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("ordinary")
+}
+
+fn traffic_source_natural_evidence_eligible(traffic_source: &str) -> bool {
+    traffic_source_dedupe_eligible(traffic_source)
 }
 
 fn traffic_source_dedupe_eligible(traffic_source: &str) -> bool {
@@ -5826,6 +5886,98 @@ mod tests {
         assert!(traffic_source_dedupe_eligible("ordinary"));
         assert!(traffic_source_dedupe_eligible("codex"));
         assert!(traffic_source_dedupe_eligible("unspecified"));
+    }
+
+    #[test]
+    fn controlled_sources_are_not_natural_learning_evidence() {
+        for source in [
+            "controlled_probe",
+            "dogfood_live_cell",
+            "smoke",
+            "fixture",
+            "audit",
+        ] {
+            assert!(
+                !traffic_source_natural_evidence_eligible(source),
+                "{source}"
+            );
+        }
+        for source in ["ordinary", "codex", "unspecified"] {
+            assert!(traffic_source_natural_evidence_eligible(source), "{source}");
+        }
+    }
+
+    #[test]
+    fn traffic_source_header_precedes_payload_metadata() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-nando-traffic-source",
+            "controlled_header".parse().expect("header value"),
+        );
+        let payload = json!({
+            "metadata": {"nando_traffic_source": "ordinary"}
+        });
+        assert_eq!(
+            request_traffic_source(&headers, &payload),
+            "controlled_header"
+        );
+        assert_eq!(
+            request_traffic_source(&HeaderMap::new(), &payload),
+            "ordinary"
+        );
+    }
+
+    #[tokio::test]
+    async fn controlled_request_does_not_enter_provider_capture() {
+        let root = std::env::temp_dir().join(format!(
+            "nando-serving-controlled-evidence-{}-{}",
+            std::process::id(),
+            PROJECT_STATUS_TEST_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("test root");
+        let registry_path = root.join("response-registry.json");
+        write_json(
+            &registry_path,
+            &serde_json::to_value(project_status_registry()).expect("registry"),
+        );
+        let mut state = project_status_test_state(&root, &registry_path);
+        state.opportunity_bridge = OpportunityBridgeRuntime::new(
+            root.join("controlled-opportunity-bridge"),
+            true,
+            false,
+            Duration::from_millis(100),
+        )
+        .expect("opportunity bridge");
+        let payload = json!({
+            "model": "test",
+            "input": [{
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "observe boundary"}]
+            }]
+        });
+        let body = Bytes::from(serde_json::to_vec(&payload).expect("request bytes"));
+        let mut controlled_headers = HeaderMap::new();
+        controlled_headers.insert(
+            "x-nando-traffic-source",
+            "controlled_probe".parse().expect("header value"),
+        );
+
+        let _ = handle_openai(
+            state.clone(),
+            controlled_headers,
+            body.clone(),
+            Projection::Responses,
+        );
+        assert_eq!(state.provider_capture.status().submitted, 0);
+        assert_eq!(state.opportunity_bridge.status().producer.events, 0);
+
+        let _ = handle_openai(state.clone(), HeaderMap::new(), body, Projection::Responses);
+        assert_eq!(state.provider_capture.status().submitted, 1);
+        let opportunity = state.opportunity_bridge.status();
+        assert_eq!(opportunity.producer.request_events, 1);
+        assert!(opportunity.producer.events >= 1);
+        fs::remove_dir_all(&root).expect("cleanup test root");
     }
 
     #[test]

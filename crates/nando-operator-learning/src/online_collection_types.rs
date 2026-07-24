@@ -6,15 +6,26 @@ use crate::CollectionSynthesisExample;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OnlineCollectionConfig {
+    #[serde(default)]
+    pub proof_mode: OnlineCollectionProofMode,
     pub support_rows: usize,
     pub future_rows: usize,
     pub max_buckets: usize,
     pub max_receipts_per_bucket: usize,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnlineCollectionProofMode {
+    #[default]
+    AdaptiveVersionSpace,
+    LegacyFixedRows,
+}
+
 impl Default for OnlineCollectionConfig {
     fn default() -> Self {
         Self {
+            proof_mode: OnlineCollectionProofMode::AdaptiveVersionSpace,
             support_rows: 32,
             future_rows: 32,
             max_buckets: 1_024,

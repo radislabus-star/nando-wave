@@ -173,6 +173,7 @@ pub(super) fn migrate_collection_archetype_pools(
             migrated.future.clear();
             migrated.runtime_examples.clear();
             migrated.durable_runtime_parity_receipts.clear();
+            migrated.adaptive_candidate_freeze = None;
             migrated.frozen_program_sha256 = None;
             migrated.support_watermark_event_time_unix_nanos = None;
             migrated.support_manifest_sha256 = None;
@@ -210,6 +211,7 @@ pub(super) fn migrate_collection_exact_authority_pools(
             migrated.future.clear();
             migrated.runtime_examples.clear();
             migrated.durable_runtime_parity_receipts.clear();
+            migrated.adaptive_candidate_freeze = None;
             migrated.frozen_program_sha256 = None;
             migrated.support_watermark_event_time_unix_nanos = None;
             migrated.support_manifest_sha256 = None;
@@ -315,6 +317,7 @@ pub(super) fn migrate_collection_renderer_consensus_pools(
             runtime_examples,
             durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
+            adaptive_candidate_freeze: None,
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
             support_manifest_sha256: None,

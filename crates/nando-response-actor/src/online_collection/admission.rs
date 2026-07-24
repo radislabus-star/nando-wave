@@ -80,6 +80,9 @@ impl OnlineCollectionMiner {
                 future_receipts: bucket.future.clone(),
                 runtime_parity_cases,
                 durable_runtime_parity_receipts,
+                archetype_id: bucket.archetype_id.clone(),
+                identification_programs: bucket.programs.values().cloned().collect(),
+                candidate_freeze: bucket.adaptive_candidate_freeze.clone(),
             });
         }
         candidates.sort_by(|left, right| left.package.package_id.cmp(&right.package.package_id));
@@ -117,6 +120,59 @@ impl OnlineCollectionMiner {
             canonical_json_sha256(&(&required_routing_atom_ids, &phase_centers, &anti_centers))
                 .map_err(str::to_owned)?;
         let wave_margin_micro = learned_wave_margin_micro(bucket, &phase_centers, &anti_centers);
+        let adaptive_identification =
+            bucket
+                .adaptive_candidate_freeze
+                .as_ref()
+                .and_then(|freeze| {
+                    let transfer_root = adaptive_transfer_proof_root(
+                        &future_manifest_sha256,
+                        program_sha256,
+                        &bucket.future,
+                        &bucket
+                            .future
+                            .iter()
+                            .filter_map(|receipt| {
+                                bucket
+                                    .durable_runtime_parity_receipts
+                                    .get(&receipt.evidence_graph_sha256)
+                                    .cloned()
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .ok()?;
+                    nando_operator_admission::seal_adaptive_identification_proof_v1(
+                        nando_operator_admission::AdaptiveIdentificationProofInputV1 {
+                            candidate_freeze_root_sha256: freeze.freeze_root_sha256().to_owned(),
+                            semantic_class_id_sha256: freeze
+                                .semantic_class_id()
+                                .as_str()
+                                .to_owned(),
+                            canonical_program_root_sha256: freeze
+                                .canonical_program_root_sha256()
+                                .to_owned(),
+                            applicability_scope_root_sha256: freeze
+                                .applicability_scope_root_sha256()
+                                .to_owned(),
+                            transfer_proof_root_sha256: transfer_root,
+                        },
+                    )
+                    .ok()
+                });
+        let distinct_sessions = bucket
+            .support
+            .iter()
+            .chain(&bucket.future)
+            .map(|receipt| receipt.session_id_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len();
+        let distinct_surfaces = bucket
+            .support
+            .iter()
+            .chain(&bucket.future)
+            .map(|receipt| receipt.evidence_graph_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len();
         let package = ResponsePackage {
             schema: "nando.response-package.v1".to_owned(),
             package_id: format!(
@@ -140,14 +196,14 @@ impl OnlineCollectionMiner {
             proof: ResponsePackageProof {
                 support_rows: bucket.support.len(),
                 future_rows: bucket.future.len(),
-                distinct_sessions: distinct_receipt_sessions(&bucket.future),
-                distinct_surfaces: distinct_receipt_layouts(&bucket.future),
+                distinct_sessions,
+                distinct_surfaces,
                 wrong_accepts: bucket.wrong_accepts,
                 runtime_parity_failures: 0,
                 exact_cache_overlap: 0,
                 wave_causal_pass,
                 verifier_schema: verifier_schema.to_owned(),
-                adaptive_identification: None,
+                adaptive_identification,
             },
         };
         package.validate().map_err(str::to_owned)?;
@@ -276,10 +332,33 @@ impl OnlineCollectionMiner {
             .max(1);
         let full_phase_exact_checks = full_phase_correct;
         let no_phase_exact_checks = bucket.future.len().saturating_mul(no_phase_candidates);
-        let pass = bucket.support.len() >= 32
-            && bucket.future.len() >= 32
-            && distinct_receipt_sessions(&bucket.future) >= 3
-            && distinct_receipt_layouts(&bucket.future) >= 2
+        let adaptive = bucket.adaptive_candidate_freeze.is_some();
+        let distinct_sessions = bucket
+            .support
+            .iter()
+            .chain(&bucket.future)
+            .map(|receipt| receipt.session_id_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len();
+        let distinct_surfaces = bucket
+            .support
+            .iter()
+            .chain(&bucket.future)
+            .map(|receipt| receipt.evidence_graph_sha256.as_str())
+            .collect::<BTreeSet<_>>()
+            .len();
+        let evidence_gate = if adaptive {
+            !bucket.support.is_empty()
+                && !bucket.future.is_empty()
+                && distinct_sessions >= 2
+                && distinct_surfaces >= 2
+        } else {
+            bucket.support.len() >= 32
+                && bucket.future.len() >= 32
+                && distinct_receipt_sessions(&bucket.future) >= 3
+                && distinct_receipt_layouts(&bucket.future) >= 2
+        };
+        let pass = evidence_gate
             && bucket.wrong_accepts == 0
             && full_phase_correct == bucket.future.len()
             && full_phase_exact_checks < no_phase_exact_checks
@@ -363,6 +442,7 @@ impl OnlineCollectionMiner {
             )]),
             durable_adapter_phase_atoms: BTreeMap::new(),
             durable_runtime_parity_receipts: BTreeMap::new(),
+            adaptive_candidate_freeze: None,
             frozen_program_sha256: None,
             support_watermark_event_time_unix_nanos: None,
             support_manifest_sha256: None,
@@ -372,6 +452,9 @@ impl OnlineCollectionMiner {
         });
         if let Some(bucket) = self.checkpoint.buckets.last_mut() {
             refresh_durable_adapter_phase_atoms(bucket);
+        }
+        if self.checkpoint.config.proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace {
+            self.maybe_freeze(self.checkpoint.buckets.len().saturating_sub(1))?;
         }
         Ok(())
     }
@@ -475,7 +558,11 @@ impl OnlineCollectionMiner {
         refresh_durable_adapter_phase_atoms(bucket);
         self.normalize_bucket_receipts(index);
         let support_rows = self.checkpoint.buckets[index].support.len();
-        if refresh_proof && support_rows >= self.checkpoint.config.support_rows {
+        if refresh_proof
+            && (self.checkpoint.config.proof_mode
+                == OnlineCollectionProofMode::AdaptiveVersionSpace
+                || support_rows >= self.checkpoint.config.support_rows)
+        {
             self.freeze_or_split(index)?;
         }
         Ok(())
@@ -735,6 +822,7 @@ impl OnlineCollectionMiner {
                     &routed_receipt,
                 )?);
                 bucket.wrong_accepts = bucket.wrong_accepts.saturating_add(1);
+                bucket.adaptive_candidate_freeze = None;
                 bucket.frozen_program_sha256 = None;
                 bucket.support_watermark_event_time_unix_nanos = None;
                 bucket.support_manifest_sha256 = None;
@@ -874,11 +962,14 @@ impl OnlineCollectionMiner {
     }
 
     pub(super) fn maybe_freeze(&mut self, index: usize) -> Result<(), String> {
+        let adaptive =
+            self.checkpoint.config.proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace;
         let Some(bucket) = self.checkpoint.buckets.get_mut(index) else {
             return Ok(());
         };
         refresh_durable_adapter_phase_atoms(bucket);
-        if bucket.support.len() >= self.checkpoint.config.support_rows
+        if !adaptive
+            && bucket.support.len() >= self.checkpoint.config.support_rows
             && bucket.frozen_program_sha256.is_none()
             && bucket.support.iter().all(|receipt| receipt.verifier_pass)
             && let SupportConsensusCandidate::Ready(candidate) =
@@ -893,7 +984,33 @@ impl OnlineCollectionMiner {
             }
             bucket.programs = BTreeMap::from([(digest, candidate)]);
         }
-        if bucket.support.len() >= self.checkpoint.config.support_rows
+        if adaptive
+            && bucket.frozen_program_sha256.is_none()
+            && let Some(identification) = identify_collection_bucket(bucket)?
+        {
+            let program_sha256 = identification.program_sha256;
+            let Some(program) = bucket.programs.get(&program_sha256) else {
+                return Err("online_collection_adaptive_program_missing".to_owned());
+            };
+            if !candidate_authority_verified_on_support(bucket, program)
+                || response_program_required_routing_atom_ids(program).is_empty()
+            {
+                return Err("online_collection_adaptive_support_authority_unproven".to_owned());
+            }
+            bucket.frozen_program_sha256 = Some(program_sha256);
+            bucket.support_watermark_event_time_unix_nanos = bucket
+                .support
+                .iter()
+                .filter_map(|receipt| receipt.event_time_unix_nanos)
+                .max();
+            bucket.adaptive_candidate_freeze = Some(identification.freeze);
+            bucket.support_manifest_sha256 = Some(collection_support_manifest_digest(bucket)?);
+            bucket.runtime_examples.clear();
+            bucket.durable_adapter_phase_atoms.clear();
+            return Ok(());
+        }
+        if !adaptive
+            && bucket.support.len() >= self.checkpoint.config.support_rows
             && bucket.programs.len() == 1
             && bucket.support.iter().all(|receipt| receipt.verifier_pass)
             // A singleton version space is still only a hypothesis until its
@@ -916,6 +1033,7 @@ impl OnlineCollectionMiner {
                 .filter_map(|receipt| receipt.event_time_unix_nanos)
                 .max();
             bucket.support_manifest_sha256 = Some(collection_support_manifest_digest(bucket)?);
+            bucket.adaptive_candidate_freeze = None;
             bucket.runtime_examples.clear();
             bucket.durable_adapter_phase_atoms.clear();
         }
@@ -923,6 +1041,9 @@ impl OnlineCollectionMiner {
     }
 
     pub(super) fn freeze_or_split(&mut self, index: usize) -> Result<(), String> {
+        if self.checkpoint.config.proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace {
+            return self.maybe_freeze(index);
+        }
         let law_subcenters = self
             .checkpoint
             .buckets

@@ -65,6 +65,10 @@ fn passing_inputs() -> SignalPathInputs {
         total_input_tokens: Some(1_000),
         miner_input_tokens: Some(400),
         cpu_input_tokens: Some(100),
+        accounting_epoch_total_input_tokens: Some(500),
+        accounting_epoch_cpu_input_tokens: Some(125),
+        process_nando_input_tokens: 250,
+        process_miner_input_tokens: 250,
         verified_local_accepts: 2,
         economics_age_seconds: Some(1),
         false_accepts: 0,
@@ -82,6 +86,11 @@ fn complete_path_requires_an_observed_cpu_accept() {
     assert_eq!(snapshot.first_non_pass, None);
     assert_eq!(snapshot.traffic.miner_share_ppm, Some(400_000));
     assert_eq!(snapshot.traffic.cpu_share_ppm, Some(100_000));
+    assert_eq!(
+        snapshot.traffic.accounting_epoch_cpu_share_ppm,
+        Some(250_000)
+    );
+    assert_eq!(snapshot.traffic.process_miner_share_ppm, Some(1_000_000));
 }
 
 #[test]

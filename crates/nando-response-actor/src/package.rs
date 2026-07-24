@@ -109,8 +109,16 @@ impl ResponsePackage {
         }
         if let Some(proof) = &self.proof.adaptive_identification {
             proof.validate()?;
-            if self.crystallized_operator.is_none() {
-                return Err("adaptive_identification_crystallized_operator_missing");
+            let program_root =
+                nando_operator_kernel::response_program_version_root_sha256(&self.program)
+                    .map_err(|_| "adaptive_identification_program_digest_failed")?;
+            if proof.canonical_program_root_sha256() != program_root {
+                return Err("adaptive_identification_program_root_mismatch");
+            }
+            if self.crystallized_operator.is_none()
+                && !response_program_verifier_matches(&self.program, self.verifier.as_ref())
+            {
+                return Err("adaptive_identification_verifier_not_bound");
             }
         }
         if matches!(

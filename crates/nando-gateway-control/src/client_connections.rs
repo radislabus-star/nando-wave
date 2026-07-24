@@ -17,6 +17,13 @@ pub(crate) enum ClientRoute {
     Idle,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProviderRouteContract {
+    Nando,
+    Direct,
+    Unknown,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(crate) struct CodexWindowConnection {
     pub(crate) project: String,
@@ -53,7 +60,14 @@ struct WindowAccumulator {
     session: String,
     pids: BTreeSet<u32>,
     configured_for_nando: bool,
+    route_contract: ProviderRouteContract,
     endpoints: BTreeSet<SocketEndpoint>,
+}
+
+impl Default for ProviderRouteContract {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 pub(crate) fn snapshot() -> ClientConnectionSnapshot {
@@ -82,14 +96,16 @@ pub(crate) fn snapshot() -> ClientConnectionSnapshot {
             .find(|argument| uuid_like(argument))
             .cloned()
             .unwrap_or_else(|| format!("pid-{pid}"));
-        let key = format!("{session}\u{1f}{project}");
+        // A resumed session may be open in two terminals with different
+        // startup transports. PID is therefore part of window identity.
+        let key = format!("{session}\u{1f}{project}\u{1f}{pid}");
         let accumulator = grouped.entry(key).or_default();
         accumulator.project = project;
         accumulator.session = session;
         accumulator.pids.insert(pid);
-        accumulator.configured_for_nando |= arguments.iter().any(|argument| {
-            argument.contains("model_provider") && argument.contains("nando_nginx")
-        });
+        accumulator.route_contract = provider_route_contract(&arguments);
+        accumulator.configured_for_nando =
+            accumulator.route_contract == ProviderRouteContract::Nando;
         accumulator
             .endpoints
             .extend(process_socket_endpoints(&root, &socket_table));
@@ -98,7 +114,7 @@ pub(crate) fn snapshot() -> ClientConnectionSnapshot {
     let mut windows = grouped
         .into_values()
         .map(|window| {
-            let route = classify_route(&window.endpoints);
+            let route = classify_route(&window.endpoints, window.route_contract);
             CodexWindowConnection {
                 project: window.project,
                 session: window.session,
@@ -180,6 +196,41 @@ fn codex_arguments(process_root: &Path) -> Option<Vec<String>> {
         return None;
     }
     Some(arguments)
+}
+
+fn provider_route_contract(arguments: &[String]) -> ProviderRouteContract {
+    let subcommand = arguments
+        .iter()
+        .position(|argument| matches!(argument.as_str(), "exec" | "review" | "resume" | "fork"))
+        .unwrap_or(arguments.len());
+    let mut index = 0;
+    while index < subcommand {
+        let argument = &arguments[index];
+        let value = if argument == "-c" || argument == "--config" {
+            arguments.get(index + 1).map(String::as_str)
+        } else {
+            argument
+                .strip_prefix("--config=")
+                .or_else(|| argument.strip_prefix("-c="))
+        };
+        if let Some(value) = value
+            && value.starts_with("model_provider=")
+        {
+            return if value.contains("nando_nginx") {
+                ProviderRouteContract::Nando
+            } else if value.contains("openai") {
+                ProviderRouteContract::Direct
+            } else {
+                ProviderRouteContract::Unknown
+            };
+        }
+        index += if matches!(argument.as_str(), "-c" | "--config") {
+            2
+        } else {
+            1
+        };
+    }
+    ProviderRouteContract::Unknown
 }
 
 fn project_label(cwd: &Path) -> String {
@@ -297,7 +348,18 @@ fn process_socket_endpoints(
     endpoints
 }
 
-fn classify_route(endpoints: &BTreeSet<SocketEndpoint>) -> ClientRoute {
+fn classify_route(
+    endpoints: &BTreeSet<SocketEndpoint>,
+    contract: ProviderRouteContract,
+) -> ClientRoute {
+    if contract == ProviderRouteContract::Nando {
+        // ChatGPT authentication may keep its own HTTPS socket open. The
+        // globally bound provider, not that auth channel, owns API routing.
+        return ClientRoute::Nando;
+    }
+    if contract == ProviderRouteContract::Direct {
+        return ClientRoute::OutsideNando;
+    }
     let nando = endpoints
         .iter()
         .any(|endpoint| endpoint.remote_loopback && endpoint.remote_port == NANDO_GATEWAY_PORT);
@@ -365,18 +427,76 @@ mod tests {
             remote_loopback: false,
         };
         assert_eq!(
-            classify_route(&BTreeSet::from([nando.clone()])),
+            classify_route(
+                &BTreeSet::from([nando.clone()]),
+                ProviderRouteContract::Unknown
+            ),
             ClientRoute::Nando
         );
         assert_eq!(
-            classify_route(&BTreeSet::from([direct.clone()])),
+            classify_route(
+                &BTreeSet::from([direct.clone()]),
+                ProviderRouteContract::Unknown
+            ),
             ClientRoute::OutsideNando
         );
         assert_eq!(
-            classify_route(&BTreeSet::from([nando, direct])),
+            classify_route(
+                &BTreeSet::from([nando, direct]),
+                ProviderRouteContract::Unknown
+            ),
             ClientRoute::Mixed
         );
-        assert_eq!(classify_route(&BTreeSet::new()), ClientRoute::Idle);
+        assert_eq!(
+            classify_route(&BTreeSet::new(), ProviderRouteContract::Unknown),
+            ClientRoute::Idle
+        );
+    }
+
+    #[test]
+    fn global_provider_contract_precedes_auth_socket_observation() {
+        let nando = vec![
+            "codex".to_owned(),
+            "-c".to_owned(),
+            "model_provider=\"nando_nginx\"".to_owned(),
+            "resume".to_owned(),
+            "session".to_owned(),
+        ];
+        let misplaced = vec![
+            "codex".to_owned(),
+            "resume".to_owned(),
+            "-c".to_owned(),
+            "model_provider=\"nando_nginx\"".to_owned(),
+            "session".to_owned(),
+        ];
+        let direct = SocketEndpoint {
+            display: "172.64.155.209:443".to_owned(),
+            remote_port: 443,
+            remote_loopback: false,
+        };
+
+        assert_eq!(
+            provider_route_contract(&nando),
+            ProviderRouteContract::Nando
+        );
+        assert_eq!(
+            classify_route(
+                &BTreeSet::from([direct.clone()]),
+                provider_route_contract(&nando)
+            ),
+            ClientRoute::Nando
+        );
+        assert_eq!(
+            provider_route_contract(&misplaced),
+            ProviderRouteContract::Unknown
+        );
+        assert_eq!(
+            classify_route(
+                &BTreeSet::from([direct]),
+                provider_route_contract(&misplaced)
+            ),
+            ClientRoute::OutsideNando
+        );
     }
 
     #[test]

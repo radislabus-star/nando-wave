@@ -24,7 +24,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V35,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V36,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -366,6 +366,11 @@ impl OnlineCollectionMiner {
             );
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V35;
         }
+        let adaptive_identification_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V36;
+        if adaptive_identification_migrated {
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V36;
+        }
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -398,7 +403,9 @@ impl OnlineCollectionMiner {
             || canonical_alignment_refresh_migrated
             || durable_phase_adapter_refresh_migrated
             || durable_law_subcenter_refresh_migrated
-            || exact_subcenter_dedup_migrated;
+            || exact_subcenter_dedup_migrated
+            || durable_adapter_phase_evidence_migrated
+            || adaptive_identification_migrated;
         if checkpoint_migrated {
             if exact_subcenter_dedup_migrated {
                 miner.deduplicate_exact_unfrozen_buckets()?;
@@ -406,7 +413,21 @@ impl OnlineCollectionMiner {
             if pre_v17_migrated {
                 miner.merge_converged_unfrozen_buckets()?;
             }
-            let migration_indices = if pre_v17_migrated {
+            let migration_indices = if adaptive_identification_migrated
+                && miner.checkpoint.config.proof_mode
+                    == OnlineCollectionProofMode::AdaptiveVersionSpace
+            {
+                miner
+                    .checkpoint
+                    .buckets
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, bucket)| {
+                        bucket.frozen_program_sha256.is_none() && !bucket.support.is_empty()
+                    })
+                    .map(|(index, _)| index)
+                    .collect::<Vec<_>>()
+            } else if pre_v17_migrated {
                 (0..miner.checkpoint.buckets.len()).collect::<Vec<_>>()
             } else if durable_phase_adapter_refresh_migrated
                 || durable_law_subcenter_refresh_migrated
@@ -446,7 +467,14 @@ impl OnlineCollectionMiner {
             };
             for index in migration_indices {
                 miner.normalize_bucket_receipts(index);
-                miner.freeze_or_split(index)?;
+                if adaptive_identification_migrated
+                    && miner.checkpoint.config.proof_mode
+                        == OnlineCollectionProofMode::AdaptiveVersionSpace
+                {
+                    miner.maybe_freeze(index)?;
+                } else {
+                    miner.freeze_or_split(index)?;
+                }
             }
             miner.persist()?;
         }
@@ -1196,7 +1224,13 @@ impl OnlineCollectionMiner {
             .checkpoint
             .buckets
             .iter()
-            .map(|bucket| bucket_status(bucket, self.checkpoint.config.support_rows))
+            .map(|bucket| {
+                bucket_status(
+                    bucket,
+                    self.checkpoint.config.proof_mode,
+                    self.checkpoint.config.support_rows,
+                )
+            })
             .collect::<Vec<_>>();
         buckets.sort_by(|left, right| left.bucket_id.cmp(&right.bucket_id));
         let frozen_buckets_total = buckets.iter().filter(|bucket| bucket.frozen).count();

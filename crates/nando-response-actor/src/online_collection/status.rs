@@ -108,6 +108,7 @@ pub(super) fn support_freeze_blocker(
 
 pub(super) fn bucket_status(
     bucket: &OnlineCollectionBucket,
+    proof_mode: OnlineCollectionProofMode,
     required_support_rows: usize,
 ) -> OnlineCollectionBucketStatus {
     let retained_runtime_examples = bucket.runtime_examples.len();
@@ -217,21 +218,45 @@ pub(super) fn bucket_status(
                     .contains_key(&receipt.evidence_graph_sha256)
         })
         .count();
+    let adaptive = bucket.adaptive_candidate_freeze.is_some();
+    let all_sessions = bucket
+        .support
+        .iter()
+        .chain(&bucket.future)
+        .map(|receipt| receipt.session_id_sha256.as_str())
+        .collect::<BTreeSet<_>>()
+        .len();
+    let all_surfaces = bucket
+        .support
+        .iter()
+        .chain(&bucket.future)
+        .map(|receipt| receipt.evidence_graph_sha256.as_str())
+        .collect::<BTreeSet<_>>()
+        .len();
     let admission_blocker = if bucket.frozen_program_sha256.is_none() {
         status_support_freeze_blocker(
             bucket,
+            proof_mode,
             required_support_rows,
             best_verified_law_support_rows,
         )
-    } else if bucket.future.len() < 32 {
+    } else if adaptive && bucket.future.is_empty() {
+        Some("adaptive_future_missing".to_owned())
+    } else if adaptive && all_sessions < 2 {
+        Some("adaptive_independent_session_missing".to_owned())
+    } else if adaptive && all_surfaces < 2 {
+        Some("adaptive_surface_missing".to_owned())
+    } else if adaptive && runtime_parity_cases < bucket.future.len() {
+        Some("adaptive_runtime_parity_incomplete".to_owned())
+    } else if !adaptive && bucket.future.len() < 32 {
         Some("future_rows_below_32".to_owned())
-    } else if future_sessions < 3 {
+    } else if !adaptive && future_sessions < 3 {
         Some("future_sessions_below_3".to_owned())
-    } else if future_layouts < 2 {
+    } else if !adaptive && future_layouts < 2 {
         Some("future_layouts_below_2".to_owned())
     } else if bucket.wrong_accepts > 0 {
         Some("wrong_accepts_nonzero".to_owned())
-    } else if runtime_parity_cases < 32 {
+    } else if !adaptive && runtime_parity_cases < 32 {
         Some("runtime_parity_cases_below_32".to_owned())
     } else {
         None
@@ -294,11 +319,32 @@ pub(super) fn bucket_status(
 
 pub(super) fn status_support_freeze_blocker(
     bucket: &OnlineCollectionBucket,
+    proof_mode: OnlineCollectionProofMode,
     required_support_rows: usize,
     verified_law_support_rows: usize,
 ) -> Option<String> {
     if bucket.wrong_accepts > 0 {
         return Some("support_wrong_accepts_nonzero".to_owned());
+    }
+    if proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace {
+        if bucket.support.is_empty() {
+            return Some("adaptive_support_missing".to_owned());
+        }
+        if bucket
+            .support
+            .iter()
+            .any(|receipt| !receipt.verifier_pass || receipt.matched_program_sha256.is_empty())
+        {
+            return Some("adaptive_support_verifier_incomplete".to_owned());
+        }
+        return match identify_collection_bucket(bucket) {
+            Ok(Some(_)) => Some("adaptive_freeze_ready_not_applied".to_owned()),
+            Ok(None) => Some(format!(
+                "adaptive_version_space_ambiguous_{}",
+                bucket.programs.len()
+            )),
+            Err(_) => Some("adaptive_identification_invalid".to_owned()),
+        };
     }
     if bucket.support.len() < required_support_rows {
         // The blocker is part of the operator-facing accounting contract, so

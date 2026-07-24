@@ -157,7 +157,8 @@ impl VersionSpaceArena {
             return None;
         }
         let bytes = serde_json::to_vec(&program).ok()?;
-        let digest_sha256 = crate::sha256_bytes(&bytes);
+        let digest_sha256 =
+            nando_operator_kernel::response_program_version_root_sha256(&program).ok()?;
         if let Some(node_id) = self.index.get(&digest_sha256) {
             self.duplicate_programs = self.duplicate_programs.saturating_add(1);
             return Some(*node_id);

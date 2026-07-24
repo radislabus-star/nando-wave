@@ -155,6 +155,8 @@ pub struct LiveScalarShadowState {
     executable: usize,
     duplicate_rows: usize,
     blockers: BTreeMap<LiveScalarShadowBlocker, usize>,
+    #[serde(default)]
+    extraction_blockers_by_action: BTreeMap<String, BTreeMap<LiveScalarShadowBlocker, usize>>,
     laws: BTreeMap<String, LiveScalarLawState>,
 }
 
@@ -200,6 +202,7 @@ pub struct LiveScalarShadowReport {
     pub ingest_accounting_complete: bool,
     pub laws: Vec<LiveScalarLawReport>,
     pub blockers: BTreeMap<String, usize>,
+    pub extraction_blockers_by_action: BTreeMap<String, BTreeMap<String, usize>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

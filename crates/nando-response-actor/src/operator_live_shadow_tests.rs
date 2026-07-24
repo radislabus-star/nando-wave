@@ -306,6 +306,23 @@ fn verified_scalar_trace_becomes_source_neutral_circuit_evidence() {
 }
 
 #[test]
+fn extraction_blockers_are_attributed_to_the_teacher_action() {
+    let mut row = custom_tool_transition(1);
+    row.runtime_parity_case = None;
+    let mut state = LiveScalarShadowState::default();
+    state.observe(&row);
+
+    let report = state.report();
+    assert_eq!(
+        report
+            .extraction_blockers_by_action
+            .get("custom_tool:exec/write_stdin")
+            .and_then(|blockers| blockers.get("missingparitycase")),
+        Some(&1)
+    );
+}
+
+#[test]
 fn verified_collection_count_trace_becomes_count_circuit_evidence() {
     let first_row = collection_count_transition("Count selected values", "Total values: ");
     let first = extract_live_scalar_circuit_sample(&first_row).expect("collection count trace");

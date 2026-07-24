@@ -9,7 +9,8 @@ use nando_operator_learning::{
 };
 use nando_response_actor::{OnlineResponseStream, OnlineResponseTailConfig};
 use nando_transition_serving::{
-    verified_training_cases_from_session_head, verified_training_cases_from_session_tail,
+    verified_capture_bound_training_cases_from_sessions, verified_training_cases_from_session_head,
+    verified_training_cases_from_session_tail,
     verified_write_stdin_training_cases_from_session_for_signatures,
 };
 use serde::Serialize;
@@ -18,6 +19,9 @@ const DEFAULT_MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 const DEFAULT_CASES_PER_TEACHER: usize = 64;
 const DEFAULT_MAX_FILES: usize = 64;
 const DEFAULT_TARGET_TEACHERS: usize = 4;
+const MAX_CAPTURE_BOUND_FILES: usize = 8;
+const MAX_CAPTURE_BOUND_SOURCE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_BACKFILL_WORK_SLICES: usize = 256;
 
 struct ParityCandidate {
     rank: String,
@@ -40,6 +44,12 @@ struct ParityBackfillReceipt {
     scan_only: bool,
     custom_full_scan: bool,
     custom_files_scanned: usize,
+    capture_bound_files_planned: usize,
+    capture_bound_files_scanned: usize,
+    capture_bound_source_bytes_planned: u64,
+    capture_bound_cases_seen: usize,
+    capture_bound_selected_cases: usize,
+    capture_bound_censored_session_identities: BTreeMap<String, String>,
     custom_prefilter_bytes: u64,
     custom_sparse_bytes: u64,
     target_teachers: usize,
@@ -51,8 +61,10 @@ struct ParityBackfillReceipt {
     imported_rows: usize,
     selected_by_action: BTreeMap<String, usize>,
     selected_by_signature: BTreeMap<String, usize>,
+    capture_bound_selected_by_action: BTreeMap<String, usize>,
     work_slices: usize,
     exact_checks: usize,
+    work_budget_exhausted: bool,
     max_future_rows: usize,
     max_runtime_parity_rows: usize,
     replay_economics: bool,
@@ -160,6 +172,7 @@ fn main() -> Result<(), String> {
     let mut custom_files_scanned = 0_usize;
     let mut custom_prefilter_bytes = 0_u64;
     let mut custom_sparse_bytes = 0_u64;
+    let mut custom_candidate_paths = BTreeMap::<PathBuf, BTreeSet<String>>::new();
     let mut seen_frames = BTreeSet::new();
     let mut pools = BTreeMap::<String, Vec<ParityCandidate>>::new();
     for path in &files {
@@ -187,6 +200,15 @@ fn main() -> Result<(), String> {
             if !custom_cases.is_empty() {
                 custom_files_scanned = custom_files_scanned.saturating_add(1);
                 custom_sparse_bytes = custom_sparse_bytes.saturating_add(length);
+                custom_candidate_paths
+                    .entry(path.clone())
+                    .or_default()
+                    .extend(
+                        custom_cases
+                            .iter()
+                            .filter_map(|(frame, _)| teacher_program_signature(frame))
+                            .filter(|signature| target_signatures.contains(signature)),
+                    );
                 cases.extend(custom_cases);
             }
         }
@@ -206,6 +228,59 @@ fn main() -> Result<(), String> {
             *verified_parity_seen_by_action
                 .entry(teacher_action_symbol(&frame))
                 .or_default() += 1;
+            let Some(signature) = teacher_program_signature(&frame) else {
+                continue;
+            };
+            if !target_signatures.contains(&signature) {
+                continue;
+            }
+            push_session_diverse(
+                pools.entry(signature).or_default(),
+                ParityCandidate {
+                    rank: frame.frame_id_sha256.clone(),
+                    frame,
+                    parity,
+                },
+                cases_per_teacher,
+            );
+        }
+    }
+    let mut capture_bound_cases_seen = 0_usize;
+    let mut capture_bound_files_scanned = 0_usize;
+    let mut capture_bound_censored_session_identities = BTreeMap::new();
+    let capture_bound_paths = select_capture_bound_paths(&custom_candidate_paths)?;
+    let capture_bound_source_bytes_planned =
+        capture_bound_paths.iter().try_fold(0_u64, |total, path| {
+            fs::metadata(path)
+                .map(|metadata| total.saturating_add(metadata.len()))
+                .map_err(|error| format!("capture_bound_metadata:{}:{error}", path.display()))
+        })?;
+    if !scan_only && custom_full_scan && !custom_candidate_paths.is_empty() {
+        let evidence_root = std::env::var_os("NANDO_STREAMING_EVIDENCE_DIR")
+            .map(PathBuf::from)
+            .ok_or_else(|| "NANDO_STREAMING_EVIDENCE_DIR is required for apply".to_owned())?;
+        let capture_bound = verified_capture_bound_training_cases_from_sessions(
+            &capture_bound_paths,
+            &evidence_root,
+        )?;
+        capture_bound_files_scanned = capture_bound.files_scanned;
+        capture_bound_cases_seen = capture_bound.cases.len();
+        capture_bound_censored_session_identities = capture_bound.censored_session_identities;
+        let bound_signatures = capture_bound
+            .cases
+            .iter()
+            .filter_map(|(frame, _)| teacher_program_signature(frame))
+            .filter(|signature| target_signatures.contains(signature))
+            .collect::<BTreeSet<_>>();
+        for signature in &bound_signatures {
+            // A target law must not mix durable capture receipts with the
+            // earlier parity-only replay candidates.
+            pools.remove(signature);
+        }
+        for (frame, parity) in capture_bound.cases {
+            if frame.verifier_label != Some(true) {
+                continue;
+            }
             let Some(signature) = teacher_program_signature(&frame) else {
                 continue;
             };
@@ -244,10 +319,21 @@ fn main() -> Result<(), String> {
     });
     let mut selected_by_action = BTreeMap::<String, usize>::new();
     let mut selected_by_signature = BTreeMap::<String, usize>::new();
+    let mut capture_bound_selected_by_action = BTreeMap::<String, usize>::new();
+    let mut capture_bound_selected_cases = 0_usize;
     for candidate in &selected {
-        *selected_by_action
-            .entry(teacher_action_symbol(&candidate.frame))
-            .or_default() += 1;
+        let action = teacher_action_symbol(&candidate.frame);
+        *selected_by_action.entry(action.clone()).or_default() += 1;
+        if candidate
+            .parity
+            .capture_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.transition_binding.as_ref())
+            .is_some()
+        {
+            capture_bound_selected_cases = capture_bound_selected_cases.saturating_add(1);
+            *capture_bound_selected_by_action.entry(action).or_default() += 1;
+        }
         if let Some(signature) = teacher_program_signature(&candidate.frame) {
             *selected_by_signature.entry(signature).or_default() += 1;
         }
@@ -274,6 +360,7 @@ fn main() -> Result<(), String> {
     let work_started = Instant::now();
     let mut work_slices = 0_usize;
     let mut exact_checks = 0_usize;
+    let mut work_budget_exhausted = false;
     while !scan_only && !selected_signatures.is_empty() {
         let checks = stream.run_self_training_work_slice_for_signatures(&selected_signatures);
         exact_checks = exact_checks.saturating_add(checks);
@@ -281,8 +368,10 @@ fn main() -> Result<(), String> {
         if checks == 0 && !stream.has_self_training_work_for_signatures(&selected_signatures) {
             break;
         }
-        if work_slices >= 4_096 {
-            return Err("parity_backfill_work_budget_exhausted".to_owned());
+        if work_slices >= MAX_BACKFILL_WORK_SLICES {
+            work_budget_exhausted =
+                stream.has_self_training_work_for_signatures(&selected_signatures);
+            break;
         }
     }
     let work_millis = work_started.elapsed().as_millis();
@@ -314,7 +403,7 @@ fn main() -> Result<(), String> {
         .max()
         .unwrap_or(0);
     let receipt = ParityBackfillReceipt {
-        schema: "nando.response-parity-backfill.v1",
+        schema: "nando.response-parity-backfill.v2",
         sessions_root: sessions_root.display().to_string(),
         relation_frames_path: relation_frames_path.display().to_string(),
         files_available,
@@ -327,6 +416,12 @@ fn main() -> Result<(), String> {
         scan_only,
         custom_full_scan,
         custom_files_scanned,
+        capture_bound_files_planned: capture_bound_paths.len(),
+        capture_bound_files_scanned,
+        capture_bound_source_bytes_planned,
+        capture_bound_cases_seen,
+        capture_bound_selected_cases,
+        capture_bound_censored_session_identities,
         custom_prefilter_bytes,
         custom_sparse_bytes,
         target_teachers: target_signatures.len(),
@@ -338,8 +433,10 @@ fn main() -> Result<(), String> {
         imported_rows,
         selected_by_action,
         selected_by_signature,
+        capture_bound_selected_by_action,
         work_slices,
         exact_checks,
+        work_budget_exhausted,
         max_future_rows,
         max_runtime_parity_rows,
         replay_economics: true,
@@ -398,6 +495,59 @@ fn push_session_diverse(
     }
 }
 
+fn select_capture_bound_paths(
+    candidates: &BTreeMap<PathBuf, BTreeSet<String>>,
+) -> Result<Vec<PathBuf>, String> {
+    let mut ranked = candidates
+        .iter()
+        .map(|(path, signatures)| {
+            let bytes = fs::metadata(path)
+                .map_err(|error| format!("capture_bound_metadata:{}:{error}", path.display()))?
+                .len();
+            Ok((bytes, path.clone(), signatures.clone()))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    ranked.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
+
+    let mut uncovered = candidates
+        .values()
+        .flat_map(|signatures| signatures.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let mut selected = Vec::new();
+    let mut selected_bytes = 0_u64;
+    for (bytes, path, signatures) in &ranked {
+        if signatures.is_disjoint(&uncovered) {
+            continue;
+        }
+        selected.push(path.clone());
+        selected_bytes = selected_bytes.saturating_add(*bytes);
+        uncovered.retain(|signature| !signatures.contains(signature));
+        if uncovered.is_empty() || selected.len() >= MAX_CAPTURE_BOUND_FILES {
+            break;
+        }
+    }
+    if !uncovered.is_empty() {
+        return Err("capture_bound_signature_coverage_incomplete".to_owned());
+    }
+    for (bytes, path, _) in ranked {
+        if selected.len() >= MAX_CAPTURE_BOUND_FILES {
+            break;
+        }
+        if selected.iter().any(|selected| selected == &path) {
+            continue;
+        }
+        if selected_bytes.saturating_add(bytes) > MAX_CAPTURE_BOUND_SOURCE_BYTES {
+            continue;
+        }
+        selected.push(path);
+        selected_bytes = selected_bytes.saturating_add(bytes);
+    }
+    if selected_bytes > MAX_CAPTURE_BOUND_SOURCE_BYTES && selected.len() > 1 {
+        return Err("capture_bound_source_budget_exhausted".to_owned());
+    }
+    Ok(selected)
+}
+
 fn collect_session_files(root: &Path, output: &mut Vec<PathBuf>) -> Result<(), String> {
     let mut pending = vec![root.to_path_buf()];
     while let Some(path) = pending.pop() {
@@ -436,5 +586,5 @@ fn persist_receipt(path: &Path, receipt: &ParityBackfillReceipt) -> Result<(), S
 }
 
 fn usage() -> String {
-    "usage: nando-response-parity-backfill <sessions-root> <relation-frames> <miner-report> <miner-checkpoint> <receipt> [max-file-bytes<=67108864] [cases-per-teacher<=64] [max-files<=1024] [target-teachers<=64] [scan-only] [custom-full-scan]".to_owned()
+    "usage: nando-response-parity-backfill <sessions-root> <relation-frames> <miner-report> <miner-checkpoint> <receipt> [max-file-bytes<=67108864] [cases-per-teacher<=64] [max-files<=1024] [target-teachers<=64] [scan-only] [custom-full-scan]; apply requires NANDO_STREAMING_EVIDENCE_DIR".to_owned()
 }
