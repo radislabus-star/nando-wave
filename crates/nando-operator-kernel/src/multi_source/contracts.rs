@@ -10,9 +10,9 @@ pub const PRE_ACTION_TOPOLOGY_COMMIT_SCHEMA_V1: &str = "nando.pre-action-topolog
 pub struct LearningRequestStructureV2 {
     pub schema: String,
     pub turn_intent_id_sha256: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub request_event_id_sha256: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub provider_bound_turn_identity: bool,
     pub session_lineage_roots_sha256: Vec<String>,
     pub request_phase_atom_ids: Vec<u64>,
@@ -143,4 +143,8 @@ impl PreActionTopologyCommitV1 {
 
 fn strictly_ordered<T: Ord>(values: &[T]) -> bool {
     values.windows(2).all(|pair| pair[0] < pair[1])
+}
+
+const fn is_false(value: &bool) -> bool {
+    !*value
 }

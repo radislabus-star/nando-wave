@@ -232,6 +232,21 @@ mod tests {
 
     use super::*;
 
+    #[derive(Serialize)]
+    struct LegacyStructureV2<'a> {
+        schema: &'a str,
+        turn_intent_id_sha256: &'a str,
+        session_lineage_roots_sha256: &'a [String],
+        request_phase_atom_ids: &'a [u64],
+        pre_action_context_atom_ids: &'a [u64],
+        capability_atom_ids: &'a [u64],
+        estimated_input_tokens: u64,
+        provider_payload_bytes: u64,
+        provider_capture_request_root_sha256: &'a str,
+        decidability_reason_code: &'a str,
+        topology: &'a PreActionMultiSourceTopologyV1,
+    }
+
     #[test]
     fn v3_record_roundtrip_binds_v1_v2_capture_and_commit() {
         let request_root = Sha256CommitmentV3::digest_bytes(b"request");
@@ -295,5 +310,89 @@ mod tests {
             LearningStructureRecordV3::from_canonical_cbor(&bytes).expect("decode"),
             record
         );
+    }
+
+    #[test]
+    fn v3_record_preserves_pre_provenance_structure_bytes() {
+        let request_root = Sha256CommitmentV3::digest_bytes(b"legacy-request");
+        let capture = seal_provider_request_capture_v3(ProviderRequestCaptureInputV3 {
+            capture_sequence: 8,
+            capture_epoch_root: Sha256CommitmentV3::digest_bytes(b"capture-epoch"),
+            lineage_root_sha256: Sha256CommitmentV3::digest_bytes(b"lineage"),
+            request_root_sha256: request_root,
+            projection: RuntimeProjectionV3::Responses,
+            streaming: true,
+            observed_at_unix_ms: 2,
+        })
+        .expect("capture");
+        let turn = sha256_bytes(b"legacy-turn");
+        let session = sha256_bytes(b"legacy-session");
+        let v1 = LearningRequestStructureV1::new(LearningRequestStructureInputV1 {
+            client_intent_id_sha256: turn.clone(),
+            session_identity_sha256s: vec![session.clone()],
+            request_phase_atom_ids: vec![1],
+            pre_action_context_atom_ids: vec![2],
+            capability_atom_ids: vec![3],
+            provider_bound_turn_identity: true,
+            estimated_input_tokens: 4,
+            provider_payload_bytes: 7,
+        })
+        .expect("v1");
+        let v2 = LearningRequestStructureV2 {
+            schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
+            turn_intent_id_sha256: turn,
+            request_event_id_sha256: String::new(),
+            provider_bound_turn_identity: false,
+            session_lineage_roots_sha256: vec![session],
+            request_phase_atom_ids: vec![1],
+            pre_action_context_atom_ids: vec![2],
+            capability_atom_ids: vec![3],
+            estimated_input_tokens: 4,
+            provider_payload_bytes: 7,
+            provider_capture_request_root_sha256: request_root.to_hex(),
+            decidability_reason_code: "pre_action_pending".to_owned(),
+            topology: PreActionMultiSourceTopologyV1 {
+                extraction_status: MultiSourceExtractionStatusV1::Complete,
+                grounded_output_count: 0,
+                output_part_count: 0,
+                roles: Vec::new(),
+                relations: Vec::new(),
+            },
+        };
+        let commit = PreActionTopologyCommitV1::seal(
+            &v2,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            sha256_bytes(b"extractor"),
+            sha256_bytes(b"config"),
+            capture.capture_sequence(),
+        )
+        .expect("commit");
+        let record =
+            LearningStructureRecordV3::new(sha256_bytes(b"bridge"), 2, capture, v1, v2, commit)
+                .expect("record");
+        let legacy = LegacyStructureV2 {
+            schema: &record.structure_v2.schema,
+            turn_intent_id_sha256: &record.structure_v2.turn_intent_id_sha256,
+            session_lineage_roots_sha256: &record.structure_v2.session_lineage_roots_sha256,
+            request_phase_atom_ids: &record.structure_v2.request_phase_atom_ids,
+            pre_action_context_atom_ids: &record.structure_v2.pre_action_context_atom_ids,
+            capability_atom_ids: &record.structure_v2.capability_atom_ids,
+            estimated_input_tokens: record.structure_v2.estimated_input_tokens,
+            provider_payload_bytes: record.structure_v2.provider_payload_bytes,
+            provider_capture_request_root_sha256: &record
+                .structure_v2
+                .provider_capture_request_root_sha256,
+            decidability_reason_code: &record.structure_v2.decidability_reason_code,
+            topology: &record.structure_v2.topology,
+        };
+        let mut wire = record.wire_without_digest().expect("wire");
+        wire.structure_v2 = canonical_json_bytes(&legacy).expect("legacy structure");
+        wire.record_sha256 = sha256_bytes(&serde_cbor::to_vec(&wire).expect("digest input"));
+        let bytes = serde_cbor::to_vec(&wire).expect("legacy record");
+        let restored =
+            LearningStructureRecordV3::from_canonical_cbor(&bytes).expect("backward decode");
+        assert!(restored.structure_v2.request_event_id_sha256.is_empty());
+        assert!(!restored.structure_v2.provider_bound_turn_identity);
+        assert_eq!(restored.canonical_cbor().expect("roundtrip"), bytes);
     }
 }
