@@ -371,7 +371,7 @@ fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
     assert!(forward.validate());
     assert_eq!(
         forward.blocker,
-        LiveMultiSourceDiscoveryBlockerV1::NoEligibleT1Cohort
+        LiveMultiSourceDiscoveryBlockerV1::T1CandidateGenerationBlocked
     );
     assert_eq!(forward.join.joined_rows, 2);
     assert_eq!(forward.opportunity.already_active.intents, 1);

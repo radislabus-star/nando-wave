@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nando_operator_kernel::{RelationFrame, canonical_json_sha256};
 use serde::{Deserialize, Serialize};
@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
 
 use super::{
-    CoverageOpportunitySnapshotV1, MultiSourceJoinLedgerV1, MultiSourceJoinReportV1,
-    MultiSourceT1IdentificationStateV1, MultiSourceT1IdentificationV1,
-    RequestStructureAuditSnapshotV1, build_coverage_opportunity_snapshot_v1,
-    factor_multi_source_row_v1, identify_multi_source_t1_operator_v1,
+    CompletedEffectFormV1, CoverageOpportunitySnapshotV1, MultiSourceJoinLedgerV1,
+    MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
+    MultiSourceT1IdentificationV1, PreActionShapeClassV1, RequestStructureAuditSnapshotV1,
+    build_coverage_opportunity_snapshot_v1, factor_multi_source_row_v1,
+    identify_multi_source_t1_operator_v1,
 };
 
 pub const LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2: &str =
@@ -32,6 +33,14 @@ pub enum LiveMultiSourceDiscoveryBlockerV1 {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FactorizedClassCountV1 {
+    pub reason: MultiSourceReasonV1,
+    pub pre_action_shape: PreActionShapeClassV1,
+    pub completed_effect: CompletedEffectFormV1,
+    pub rows: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LiveMultiSourceDiscoverySnapshotV2 {
     pub schema: String,
     pub snapshot_root_sha256: String,
@@ -40,6 +49,8 @@ pub struct LiveMultiSourceDiscoverySnapshotV2 {
     pub relation_frames: u64,
     pub join: MultiSourceJoinReportV1,
     pub factorized_rows: u64,
+    pub factorized_classes: Vec<FactorizedClassCountV1>,
+    pub active_intents: u64,
     pub opportunity: CoverageOpportunitySnapshotV1,
     pub t1_identification: MultiSourceT1IdentificationV1,
     pub blocker: LiveMultiSourceDiscoveryBlockerV1,
@@ -118,6 +129,34 @@ pub fn build_live_multi_source_discovery_snapshot_v2(
         .iter()
         .map(factor_multi_source_row_v1)
         .collect::<Vec<_>>();
+    let factorized_classes = factorized
+        .iter()
+        .fold(
+            BTreeMap::<
+                (
+                    MultiSourceReasonV1,
+                    PreActionShapeClassV1,
+                    CompletedEffectFormV1,
+                ),
+                u64,
+            >::new(),
+            |mut counts, row| {
+                *counts
+                    .entry((row.reason, row.pre_action_shape, row.completed_effect))
+                    .or_default() += 1;
+                counts
+            },
+        )
+        .into_iter()
+        .map(
+            |((reason, pre_action_shape, completed_effect), rows)| FactorizedClassCountV1 {
+                reason,
+                pre_action_shape,
+                completed_effect,
+                rows,
+            },
+        )
+        .collect::<Vec<_>>();
     let active_intents = opportunities
         .iter()
         .filter(|row| row.authority_observed && row.class == ReducibilityClass::CpuVerified)
@@ -182,6 +221,8 @@ pub fn build_live_multi_source_discovery_snapshot_v2(
         relation_frames: u64::try_from(frames.len()).unwrap_or(u64::MAX),
         join,
         factorized_rows: u64::try_from(factorized.len()).unwrap_or(u64::MAX),
+        factorized_classes,
+        active_intents: u64::try_from(active_intents.len()).unwrap_or(u64::MAX),
         opportunity,
         t1_identification,
         blocker,
@@ -203,6 +244,8 @@ impl LiveMultiSourceDiscoverySnapshotV2 {
             self.relation_frames,
             &self.join,
             self.factorized_rows,
+            &self.factorized_classes,
+            self.active_intents,
             &self.opportunity,
             &self.t1_identification,
             self.blocker,
