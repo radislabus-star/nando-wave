@@ -195,33 +195,7 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
         support_manifests.manifests.extend(new_manifests);
         atomic_write_json(&support_manifests_path, &support_manifests)?;
     }
-    let mut current_support_manifests =
-        latest_grounded_support_manifests(&support_manifests.manifests);
-    let collection_families = collection_families(&cold_collection_rows);
-    let mut collection_manifests = support_manifests
-        .manifests
-        .iter()
-        .filter(|manifest| manifest.package_id.starts_with("raw-phase-collection-"))
-        .map(|manifest| (manifest.package_id.clone(), manifest.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let mut new_collection_manifests = Vec::new();
-    for family in &collection_families {
-        let Some(preliminary) = compile_collection_quarantine_package(family) else {
-            continue;
-        };
-        if collection_manifests.contains_key(&preliminary.package_id) {
-            continue;
-        }
-        if let Some(manifest) = build_collection_support_manifest(family, &preliminary) {
-            collection_manifests.insert(manifest.package_id.clone(), manifest.clone());
-            new_collection_manifests.push(manifest);
-        }
-    }
-    if !new_collection_manifests.is_empty() {
-        support_manifests.manifests.extend(new_collection_manifests);
-        atomic_write_json(&support_manifests_path, &support_manifests)?;
-    }
-    current_support_manifests.extend(collection_manifests.values().cloned());
+    let current_support_manifests = latest_grounded_support_manifests(&support_manifests.manifests);
     let frozen_frame_ids = current_support_manifests
         .iter()
         .flat_map(|manifest| manifest.support_frame_ids.iter())
@@ -615,140 +589,6 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
     let mut routed_counterexamples_by_package = BTreeMap::<String, Vec<Value>>::new();
     let mut routed_counterexample_sessions_by_lineage =
         BTreeMap::<String, std::collections::BTreeSet<String>>::new();
-    let collection_packages = collection_families
-        .iter()
-        .filter_map(|family| {
-            let preliminary = compile_collection_quarantine_package(family)?;
-            let manifest = collection_manifests.get(&preliminary.package_id)?;
-            let package = compile_collection_package(family, Some(manifest))?;
-            Some((package, manifest, family))
-        })
-        .collect::<Vec<_>>();
-    for (package, manifest, family) in &collection_packages {
-        let mut package = package.clone();
-        let support_ids = manifest
-            .support_frame_ids
-            .iter()
-            .map(String::as_str)
-            .collect::<std::collections::BTreeSet<_>>();
-        let support_sessions = manifest
-            .support_session_ids
-            .iter()
-            .map(String::as_str)
-            .collect::<std::collections::BTreeSet<_>>();
-        let support_intents = manifest
-            .support_intent_ids
-            .iter()
-            .map(String::as_str)
-            .collect::<std::collections::BTreeSet<_>>();
-        let support_frames = relation_frames
-            .iter()
-            .filter(|frame| support_ids.contains(frame.frame_id_sha256.as_str()))
-            .cloned()
-            .collect::<Vec<_>>();
-        let future_cold = family
-            .iter()
-            .filter(|row| {
-                row.observed_at_unix_nanos > manifest.support_boundary_unix_nanos
-                    && !support_sessions.contains(row.session_id_sha256.as_str())
-                    && !support_intents.contains(row.client_intent_id_sha256.as_str())
-            })
-            .collect::<Vec<_>>();
-        let future_ids = future_cold
-            .iter()
-            .map(|row| row.frame_id_sha256.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        let future_frames_for_package = relation_frames
-            .iter()
-            .filter(|frame| future_ids.contains(frame.frame_id_sha256.as_str()))
-            .cloned()
-            .collect::<Vec<_>>();
-        causal_support_by_package.insert(package.package_id.clone(), support_frames);
-        causal_future_by_package.insert(package.package_id.clone(), future_frames_for_package);
-        missing_receipts_by_package.insert(package.package_id.clone(), 0);
-        let actor_sha256 = response_actor_program_digest(&package.program).unwrap_or_default();
-        let verifier_sha256 = package
-            .verifier
-            .as_ref()
-            .and_then(|verifier| response_independent_verifier_program_digest(verifier).ok())
-            .unwrap_or_default();
-        for row in future_cold {
-            let execution = execute_response(&package.program, "", &row.example.provider_payload);
-            let accepted = execution.status == ResponseExecutionStatus::Executed
-                && execution.response.as_deref() == Some(row.example.expected_response.as_str())
-                && package.verifier.as_ref().is_some_and(|verifier| {
-                    verify_response_independently(
-                        verifier,
-                        &row.example.provider_payload,
-                        execution.response.as_deref().unwrap_or_default(),
-                    )
-                    .is_ok()
-                });
-            verifier_receipts.push(serde_json::json!({
-                "schema": RESPONSE_FUTURE_VERIFIER_RECEIPT_SCHEMA_V2,
-                "package_id": package.package_id,
-                "registry_revision": revision,
-                "candidate_id_sha256": canonical_json_sha256(&package.program).unwrap_or_default(),
-                "frame_id_sha256": row.frame_id_sha256,
-                "session_id_sha256": row.session_id_sha256,
-                "client_intent_id_sha256": row.client_intent_id_sha256,
-                "verifier_id": "collection_program_external_evidence",
-                "verifier_version": "v1",
-                "actor_program_sha256": actor_sha256,
-                "independent_verifier_program_sha256": verifier_sha256,
-                "evidence_sha256": canonical_json_sha256(&row.example.provider_payload).unwrap_or_default(),
-                "output_sha256": execution.response.as_ref().and_then(|output| canonical_json_sha256(output).ok()).unwrap_or_default(),
-                "verified_at_unix_nanos": row.observed_at_unix_nanos,
-                "observed_label": "positive",
-                "accepted": accepted,
-            }));
-        }
-        let family_ids = family
-            .iter()
-            .map(|row| row.frame_id_sha256.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        let frames_by_id = relation_frames
-            .iter()
-            .map(|frame| (frame.frame_id_sha256.as_str(), frame))
-            .collect::<BTreeMap<_, _>>();
-        let background_wrong = cold_collection_rows
-            .iter()
-            .filter(|row| {
-                row.observed_at_unix_nanos > manifest.support_boundary_unix_nanos
-                    && !family_ids.contains(row.frame_id_sha256.as_str())
-                    && !support_sessions.contains(row.session_id_sha256.as_str())
-                    && !support_intents.contains(row.client_intent_id_sha256.as_str())
-            })
-            .filter_map(|row| {
-                let frame = frames_by_id.get(row.frame_id_sha256.as_str()).copied()?;
-                let winner = collection_packages
-                    .iter()
-                    .filter_map(|(candidate, _, _)| {
-                        relation_frame_phase_margin_micro(candidate, frame)
-                            .map(|margin| (margin, candidate.package_id.as_str()))
-                    })
-                    .max_by(|left, right| left.0.cmp(&right.0).then_with(|| right.1.cmp(left.1)))?;
-                (winner.1 == package.package_id).then_some((row, frame))
-            })
-            .filter(|(row, _)| {
-                let execution =
-                    execute_response(&package.program, "", &row.example.provider_payload);
-                execution.status == ResponseExecutionStatus::Executed
-                    && execution.response.as_deref() != Some(row.example.expected_response.as_str())
-            })
-            .map(|(_, frame)| frame)
-            .collect::<Vec<_>>();
-        package.proof.wrong_accepts = package
-            .proof
-            .wrong_accepts
-            .saturating_add(background_wrong.len());
-        future_wrong = future_wrong.saturating_add(background_wrong.len());
-        causal_negatives_by_package
-            .entry(package.package_id.clone())
-            .or_default()
-            .extend(background_wrong);
-        grounded_packages.push(package);
-    }
     for package in &mut grounded_packages {
         let support = causal_support_by_package
             .get(&package.package_id)
@@ -835,23 +675,15 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
             .get(&package.package_id)
             .copied()
             .unwrap_or_default();
-        let promotion_ready = package.proof.support_rows >= 32
-            && package.proof.future_rows >= 32
-            && package.proof.distinct_sessions >= 3
-            && package.proof.distinct_surfaces >= 2
-            && package.proof.wrong_accepts == 0
-            && package.proof.runtime_parity_failures == 0
-            && package.proof.exact_cache_overlap == 0
+        package.state = ResponsePackageState::Active;
+        let promotion_ready = package.admission_candidate_blocker().is_none()
             && package_missing == 0
             && hard_negative_accepts == 0
             && routing_indistinguishable == 0
             && relation_frame_conflicting_duplicate_ids == 0
             && wave_causal_pass
-            && package.proof.wave_causal_pass
             && exact_package_causal_pass
-            && package.verifier.is_some()
-            && response_program_external_verifier_schema(&package.program)
-                .is_some_and(|schema| package.proof.verifier_schema == schema);
+            && package.proof.wave_causal_pass;
         package.state = if promotion_ready {
             ResponsePackageState::Active
         } else {
@@ -1069,7 +901,7 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
                 .is_some_and(|current| evidence_refresh_improves(current, candidate));
             let new_policy_lineage = candidate.routing_refinement_version
                 == ROUTING_REFINEMENT_VERSION
-                && candidate.support_frame_ids.len() >= 32
+                && candidate.support_frame_ids.len() >= LEGACY_CONTROL_SUPPORT_ROWS
                 && !evidence_refresh_policy.only_lineages.is_empty()
                 && matching_current.is_none();
             !known_packages.contains(&candidate.package_id)
@@ -1187,20 +1019,10 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
                 .get(&package.package_id)
                 .copied()
                 .unwrap_or_default();
-            if package.proof.support_rows < 32 {
-                blockers.push("support_rows_below_32".to_owned());
-            }
-            if package.proof.future_rows < 32 {
-                blockers.push("future_rows_below_32".to_owned());
-            }
-            if package.proof.distinct_sessions < 3 {
-                blockers.push("future_sessions_below_3".to_owned());
-            }
-            if package.proof.distinct_surfaces < 2 {
-                blockers.push("future_surfaces_below_2".to_owned());
-            }
-            if package.proof.wrong_accepts != 0 {
-                blockers.push("future_wrong_accepts_nonzero".to_owned());
+            let mut admission_candidate = package.clone();
+            admission_candidate.state = ResponsePackageState::Active;
+            if let Some(blocker) = admission_candidate.admission_candidate_blocker() {
+                blockers.push(blocker.to_owned());
             }
             if package_missing_receipts != 0 {
                 blockers.push("missing_verifier_receipts".to_owned());
@@ -1273,12 +1095,7 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
             package.state == nando_response_actor::ResponsePackageState::Quarantine
                 && package.proof.wrong_accepts == 0
         })
-        .min_by_key(|package| {
-            32_usize.saturating_sub(package.proof.support_rows)
-                + 32_usize.saturating_sub(package.proof.future_rows)
-                + 3_usize.saturating_sub(package.proof.distinct_sessions)
-                + 2_usize.saturating_sub(package.proof.distinct_surfaces)
-        });
+        .min_by_key(promotion_debt);
     let nearest_grounded = registry
         .packages
         .iter()
@@ -1503,16 +1320,6 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
         "trigger": "quarantine_without_future_and_new_reservable_sessions",
         "authority_inherited": false,
     });
-    let live_collection_packages = registry
-        .packages
-        .iter()
-        .filter(|package| {
-            matches!(
-                package.program.operation,
-                ResponseOperation::ComposeCollection { .. }
-            )
-        })
-        .collect::<Vec<_>>();
     let mut status = serde_json::json!({
         "schema": "nando.response-miner-status.v1",
         "input_fingerprint_sha256": input_fingerprint_sha256,
@@ -1527,16 +1334,10 @@ pub(super) fn run_with_args(args: &[PathBuf]) -> Result<(), String> {
         "synthesis": synthesis_status,
         "collection_synthesis": {
             "cold_evidence_rows": cold_collection_rows.len(),
-            "discovered_families": collection_families.len(),
-            "candidate_present": !live_collection_packages.is_empty(),
-            "package_ids": live_collection_packages.iter().map(|package| package.package_id.as_str()).collect::<Vec<_>>(),
-            "operations": live_collection_packages.iter().map(|package| program_operation_name(&package.program.operation)).collect::<Vec<_>>(),
-            "support_rows": live_collection_packages.iter().map(|package| package.proof.support_rows).sum::<usize>(),
-            "future_rows": live_collection_packages.iter().map(|package| package.proof.future_rows).sum::<usize>(),
-            "future_wrong_accepts": live_collection_packages.iter().map(|package| package.proof.wrong_accepts).sum::<usize>(),
-            "distinct_sessions": live_collection_packages.iter().map(|package| package.proof.distinct_sessions).max().unwrap_or(0),
-            "distinct_surfaces": live_collection_packages.iter().map(|package| package.proof.distinct_surfaces).max().unwrap_or(0),
-            "wave_causal_pass": !live_collection_packages.is_empty() && live_collection_packages.iter().all(|package| package.proof.wave_causal_pass),
+            "authority_owner": "online_collection_miner",
+            "route": "version_space -> freeze -> independent_future -> external_admission",
+            "legacy_batch_builder_enabled": false,
+            "candidate_present": false,
             "execution_authority": false,
         },
         "support_manifests": current_support_manifests.len(),

@@ -1086,6 +1086,18 @@ are admitted only from a sealed semantic-class freeze and an independent
 post-freeze transfer proof. A raw support/future count can never upgrade an
 adaptive package.
 
+Collection-law authority has exactly one production owner:
+`OnlineCollectionMiner`, embedded in the cold learning serving process. It
+alone performs candidate generation, semantic version-space collapse, support
+freeze, independent future collection, transfer sealing, and candidate export
+to the external admission controller. The historical batch
+`nando-response-miner` may still read cold collection examples for diagnostics
+and parity reconstruction, but it cannot group them into collection families,
+write collection support manifests, construct collection packages, or promote
+them. Production deployment removes that obsolete service and binary. This
+prevents the fixed-row batch builder and the adaptive online learner from
+becoming two competing sources of authority.
+
 The frozen set commits full 32-byte support lineages, its canonical candidate
 set, canonicalizer version, bounded synthesis configuration, and source operator
 generation. Receipt IDs are indexing aids and are never sufficient provenance.

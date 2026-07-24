@@ -1008,125 +1008,9 @@ fn quarantined_registry_package_has_no_execution_authority() {
 }
 
 #[test]
-fn cold_collection_evidence_builds_generic_quarantine_without_authority() {
-    let mut rows = Vec::new();
-    for session in 0_u64..7 {
-        let (collection, predicate, projected) = if session % 2 == 0 {
-            ("rows", "kind", "value")
-        } else {
-            ("entries", "tag", "amount")
-        };
-        let count = if session < 4 { 10 } else { 11 };
-        for ordinal in 0..count {
-            let output = serde_json::json!({
-                (collection): [
-                    {(predicate):"keep", (projected):3},
-                    {(predicate):"drop", (projected):4},
-                    {(predicate):"keep", (projected):5}
-                ]
-            });
-            rows.push(ColdCollectionRow {
-                frame_id_sha256: sha256_text(format!("frame-{session}-{ordinal}")),
-                session_id_sha256: sha256_text(format!("session-{session}")),
-                client_intent_id_sha256: sha256_text(format!("intent-{session}-{ordinal}")),
-                observed_at_unix_nanos: session * 1_000 + ordinal,
-                surface_sha256: sha256_text(format!("{collection}:{predicate}:{projected}")),
-                phase_valid: true,
-                request_phase_atom_ids: Vec::new(),
-                example: CollectionSynthesisExample {
-                    provider_payload: serde_json::json!({
-                        "input":[{"type":"function_call_output","output":output.to_string()}]
-                    }),
-                    expected_response: "[3,5]".to_owned(),
-                },
-            });
-        }
-    }
-    let package = compile_collection_quarantine_package(&rows).expect("collection package");
-    assert_eq!(package.state, ResponsePackageState::Quarantine);
-    assert_eq!(package.proof.support_rows, 40);
-    assert_eq!(package.proof.future_rows, 33);
-    assert_eq!(package.proof.distinct_sessions, 3);
-    assert_eq!(package.proof.wrong_accepts, 0);
-    assert!(package.proof.wave_causal_pass);
-    assert!(matches!(
-        package.program.operation,
-        ResponseOperation::ComposeCollection { .. }
-    ));
-    assert!(!package.eligible_for_admission_candidate());
-    let mut mixed = rows.clone();
-    mixed.extend(rows.iter().cloned().map(|mut row| {
-        row.frame_id_sha256 = sha256_text(format!("drop:{}", row.frame_id_sha256));
-        row.client_intent_id_sha256 = sha256_text(format!("drop:{}", row.client_intent_id_sha256));
-        row.example.expected_response = "[4]".to_owned();
-        row
-    }));
-    let split = collection_families(&mixed);
-    assert_eq!(split.len(), 2);
-    assert!(split.iter().all(|family| family.len() == rows.len()));
-    let manifest = build_collection_support_manifest(&rows, &package).expect("manifest");
-    let future_package =
-        compile_collection_package(&rows, Some(&manifest)).expect("future package");
-    assert_eq!(future_package.state, ResponsePackageState::Active);
-    assert!(future_package.eligible_for_admission_candidate());
-    let relation_rows = rows
-        .iter()
-        .map(|row| RelationFrame {
-            schema: nando_response_actor::RELATION_FRAME_SCHEMA.to_owned(),
-            frame_id_sha256: row.frame_id_sha256.clone(),
-            event_id_sha256: sha256_text(format!("event:{}", row.frame_id_sha256)),
-            client_intent_id_sha256: row.client_intent_id_sha256.clone(),
-            session_id_sha256: row.session_id_sha256.clone(),
-            observed_at_unix_nanos: row.observed_at_unix_nanos,
-            estimated_input_tokens: 10,
-            extractor_version: nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION.to_owned(),
-            verifier_label: Some(true),
-            atoms: vec![
-                RelationAtom::CollectionShape {
-                    array_fields: 1,
-                    row_fields: 2,
-                },
-                RelationAtom::ResponseShape {
-                    value: "assistant_message".to_owned(),
-                },
-                RelationAtom::CompletionState {
-                    value: "completed".to_owned(),
-                },
-            ],
-            evidence_ref_sha256: sha256_text(format!("evidence:{}", row.frame_id_sha256)),
-        })
-        .collect::<Vec<_>>();
-    let support_ids = manifest
-        .support_frame_ids
-        .iter()
-        .collect::<std::collections::BTreeSet<_>>();
-    let causal_support = relation_rows
-        .iter()
-        .filter(|frame| support_ids.contains(&frame.frame_id_sha256))
-        .cloned()
-        .collect::<Vec<_>>();
-    let causal_future = relation_rows
-        .iter()
-        .filter(|frame| frame.observed_at_unix_nanos > manifest.support_boundary_unix_nanos)
-        .cloned()
-        .collect::<Vec<_>>();
-    let causal = nando_response_actor::evaluate_grounded_wave_causality(
-        &future_package,
-        &causal_support,
-        &causal_future,
-        &[],
-    );
-    assert_eq!(causal.verdict, "PASS", "{causal:?}");
-    let executor =
-        ResponseExecutor::from_registry(compile_runtime_registry(9, vec![future_package]))
-            .expect("diagnostic registry");
-    assert_eq!(executor.active_package_count(), 0);
-}
-
-#[test]
-fn miner_cycle_builds_collection_manifest_receipts_and_authority_candidate() {
+fn cold_response_miner_delegates_collection_authority_to_adaptive_owner() {
     let root = env::temp_dir().join(format!(
-        "nando-collection-miner-cycle-{}-{}",
+        "nando-collection-owner-delegation-{}-{}",
         std::process::id(),
         unix_now()
     ));
@@ -1159,239 +1043,52 @@ fn miner_cycle_builds_collection_manifest_receipts_and_authority_candidate() {
         }),
     )
     .expect("global causal");
-    let mut lines = String::new();
-    for session in 0_u64..7 {
-        let (collection, predicate, projected) = if session % 2 == 0 {
-            ("rows", "kind", "value")
-        } else {
-            ("entries", "tag", "amount")
-        };
-        let count = if session < 4 { 10 } else { 11 };
-        for ordinal in 0..count {
-            let first_value = 3 + session;
-            let middle_value = 4 + session;
-            let last_value = 5 + session;
-            let output = serde_json::json!({
-                (collection): [
-                    {(predicate):"keep", (projected):first_value},
-                    {(predicate):"drop", (projected):middle_value},
-                    {(predicate):"keep", (projected):last_value}
-                ]
-            });
-            let project_expected = format!("[{first_value},{last_value}]");
-            for (family, expected_response, request_atom) in [
-                (
-                    "project",
-                    project_expected.as_str(),
-                    13_665_181_768_394_347_299_u64,
-                ),
-                ("count", "2", 15_291_052_347_829_727_369_u64),
-            ] {
-                let provider_payload = serde_json::json!({
-                    "input":[{"type":"function_call_output","output":output.to_string()}]
-                });
-                let cold = ColdCollectionEvidence {
-                    schema: "nando.response-collection-synthesis-example.v1".to_owned(),
-                    provider_payload,
-                    expected_response: expected_response.to_owned(),
-                };
-                let frame_id = sha256_text(format!("cycle-{family}-frame-{session}-{ordinal}"));
-                let row = serde_json::json!({
-                    "schema": nando_response_actor::RELATION_FRAME_SCHEMA,
-                    "frame_id_sha256": frame_id,
-                    "event_id_sha256": sha256_text(format!("cycle-{family}-event-{session}-{ordinal}")),
-                    "client_intent_id_sha256": sha256_text(format!("cycle-{family}-intent-{session}-{ordinal}")),
-                    "session_id_sha256": sha256_text(format!("cycle-{family}-session-{session}")),
-                    "observed_at_unix_nanos": session * 10_000 + ordinal as u64 * 2 + u64::from(family == "count") + 1,
-                    "estimated_input_tokens": 100,
-                    "extractor_version": nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION,
-                    "verifier_label": true,
-                    "atoms": [
-                        {"kind":"collection_shape","array_fields":1,"row_fields":2},
-                        {"kind":"request_phase_atom","atom_id":request_atom},
-                        {"kind":"observation_call_shape","value":"function_call"},
-                        {"kind":"response_shape","value":"assistant_message"},
-                        {"kind":"completion_state","value":"completed"}
-                    ],
-                    "evidence_ref_sha256": canonical_json_sha256(&cold).expect("cold digest"),
-                    "cold_collection_example": cold,
-                });
-                lines.push_str(&serde_json::to_string(&row).expect("row"));
-                lines.push('\n');
-            }
-        }
-    }
-    fs::write(&args[5], lines).expect("frames");
-    run_with_args(&args).expect("miner cycle");
-    let registry: ResponseRegistry = read_json(&args[3]).expect("registry");
-    assert_eq!(registry.schema, RESPONSE_REGISTRY_SCHEMA_V6);
-    assert_eq!(registry.packages.len(), 2);
-    assert!(
-        registry
-            .packages
-            .iter()
-            .all(|package| package.state == ResponsePackageState::Active)
-    );
-    assert!(
-        registry
-            .packages
-            .iter()
-            .all(ResponsePackage::eligible_for_admission_candidate)
-    );
-    let manifests: ResponseSupportManifestSet = read_json(&args[6]).expect("manifests");
-    assert_eq!(manifests.manifests.len(), 2);
-    assert!(
-        manifests
-            .manifests
-            .iter()
-            .all(|manifest| manifest.support_frame_ids.len() == 40)
-    );
-    let status: Value = read_json(&args[4]).expect("status");
-    assert_eq!(status["collection_synthesis"]["future_rows"], 66);
-    assert_eq!(status["collection_synthesis"]["future_wrong_accepts"], 0);
-    let bindings: Vec<ResponsePackageAuthorityBindingV2> =
-        serde_json::from_value(status["response_authority_candidate"]["packages"].clone())
-            .expect("authority bindings");
-    assert_eq!(bindings.len(), 2);
-    let now = unix_now();
-    let gate_build = sha256_text("gate-build");
-    let runtime_build = sha256_text("runtime-build");
-    let admission = nando_response_actor::CompositeResponseAdmissionV2 {
-        schema: nando_response_actor::COMPOSITE_ADMISSION_SCHEMA_V2.to_owned(),
-        project_id: "nando-wave".to_owned(),
-        generated_at_unix: now,
-        expires_at_unix: now + 30,
-        verdict: "PASS".to_owned(),
-        eligible_for_local_accept: true,
-        response_authority: nando_response_actor::ResponseAuthorityV2 {
-            schema: RESPONSE_AUTHORITY_SCHEMA_V2.to_owned(),
-            registry_schema: registry.schema.clone(),
-            registry_revision: registry.revision,
-            registry_sha256: response_registry_digest(&registry).expect("registry digest"),
-            gate_build_sha256: gate_build.clone(),
-            runtime_build_sha256: runtime_build.clone(),
-            packages: bindings,
-        },
-    };
-    let executor = ResponseExecutor::from_registry_with_admission(
-        registry,
-        admission,
-        "nando-wave",
-        &gate_build,
-        &runtime_build,
-        now,
-        30,
-    )
-    .expect("authorized executor");
-    let heldout = serde_json::json!({
-        "input":[{"type":"function_call_output","output":serde_json::json!({
-            "records":[
-                {"marker":"keep","score":3},
-                {"marker":"drop","score":4},
-                {"marker":"keep","score":5}
-            ]
-        }).to_string()}]
-    });
-    let execution = executor.execute("project", &heldout);
-    assert_eq!(
-        execution.status,
-        ResponseExecutionStatus::Executed,
-        "{}",
-        execution.reason
-    );
-    assert_eq!(execution.response.as_deref(), Some("[3,5]"));
-    let count_execution = executor.execute("count", &heldout);
-    assert_eq!(
-        count_execution.status,
-        ResponseExecutionStatus::Executed,
-        "{}",
-        count_execution.reason
-    );
-    assert_eq!(count_execution.response.as_deref(), Some("2"));
-    let projected = serde_json::json!({"output_text":"[3,5]"});
-    let runtime_receipt = executor
-        .finalize_runtime_receipt(
-            &execution,
-            &sha256_text("heldout-request"),
-            "test-projector.v1",
-            &sha256_text("test-projector"),
-            &projected,
-        )
-        .expect("runtime receipt");
-    assert_eq!(
-        runtime_receipt.receipt.schema,
-        nando_response_actor::RESPONSE_RUNTIME_RECEIPT_SCHEMA_V2
-    );
-    let negative_output = serde_json::json!({
-        "records":[
-            {"marker":"keep","score":3},
-            {"marker":"drop","score":4},
-            {"marker":"keep","score":5}
-        ]
-    });
-    let negative_cold = ColdCollectionEvidence {
+    let cold = ColdCollectionEvidence {
         schema: "nando.response-collection-synthesis-example.v1".to_owned(),
         provider_payload: serde_json::json!({
-            "input":[{"type":"function_call_output","output":negative_output.to_string()}]
+            "input":[{"type":"function_call_output","output":"{\"rows\":[{\"value\":3}]}"}]
         }),
-        expected_response: "[999]".to_owned(),
+        expected_response: "[3]".to_owned(),
     };
-    let negative_row = serde_json::json!({
+    let row = serde_json::json!({
         "schema": nando_response_actor::RELATION_FRAME_SCHEMA,
-        "frame_id_sha256": sha256_text("drift-frame"),
-        "event_id_sha256": sha256_text("drift-event"),
-        "client_intent_id_sha256": sha256_text("drift-intent"),
-        "session_id_sha256": sha256_text("drift-session"),
-        "observed_at_unix_nanos": 100_000_u64,
+        "frame_id_sha256": sha256_text("collection-frame"),
+        "event_id_sha256": sha256_text("collection-event"),
+        "client_intent_id_sha256": sha256_text("collection-intent"),
+        "session_id_sha256": sha256_text("collection-session"),
+        "observed_at_unix_nanos": 1,
         "estimated_input_tokens": 100,
         "extractor_version": nando_response_actor::SOURCE_NEUTRAL_EXTRACTOR_VERSION,
         "verifier_label": true,
-        "atoms": [
-            {"kind":"collection_shape","array_fields":1,"row_fields":2},
-            {"kind":"request_phase_atom","atom_id":13_665_181_768_394_347_299_u64},
-            {"kind":"observation_call_shape","value":"function_call"},
-            {"kind":"response_shape","value":"assistant_message"},
-            {"kind":"completion_state","value":"completed"}
-        ],
-        "evidence_ref_sha256": canonical_json_sha256(&negative_cold).expect("negative digest"),
-        "cold_collection_example": negative_cold,
+        "atoms": [{"kind":"collection_shape","array_fields":1,"row_fields":1}],
+        "evidence_ref_sha256": canonical_json_sha256(&cold).expect("cold digest"),
+        "cold_collection_example": cold,
     });
-    let mut frame_file = fs::OpenOptions::new()
-        .append(true)
-        .open(&args[5])
-        .expect("frames append");
-    writeln!(
-        frame_file,
-        "{}",
-        serde_json::to_string(&negative_row).expect("negative row")
+    fs::write(
+        &args[5],
+        format!("{}\n", serde_json::to_string(&row).expect("row")),
     )
-    .expect("negative append");
-    run_with_args(&args).expect("drift miner cycle");
-    let drift_registry: ResponseRegistry = read_json(&args[3]).expect("drift registry");
+    .expect("frames");
+    run_with_args(&args).expect("miner cycle");
+    let registry: ResponseRegistry = read_json(&args[3]).expect("registry");
+    assert_eq!(registry.schema, RESPONSE_REGISTRY_SCHEMA_V6);
+    assert!(registry.packages.is_empty());
+    assert!(!args[6].exists());
+    let status: Value = read_json(&args[4]).expect("status");
+    assert_eq!(status["collection_synthesis"]["cold_evidence_rows"], 1);
     assert_eq!(
-        drift_registry
-            .packages
-            .iter()
-            .filter(|package| package.state == ResponsePackageState::Active)
-            .count(),
-        1
-    );
-    let demoted = drift_registry
-        .packages
-        .iter()
-        .find(|package| package.proof.wrong_accepts > 0)
-        .expect("demoted package");
-    assert_eq!(demoted.state, ResponsePackageState::Quarantine);
-    let drift_status: Value = read_json(&args[4]).expect("drift status");
-    assert_eq!(
-        drift_status["collection_synthesis"]["future_wrong_accepts"],
-        1
+        status["collection_synthesis"]["authority_owner"],
+        "online_collection_miner"
     );
     assert_eq!(
-        drift_status["response_authority_candidate"]["packages"]
+        status["collection_synthesis"]["legacy_batch_builder_enabled"],
+        false
+    );
+    assert_eq!(
+        status["response_authority_candidate"]["packages"]
             .as_array()
             .map(Vec::len),
-        Some(1)
+        Some(0)
     );
     fs::remove_dir_all(root).expect("cleanup");
 }

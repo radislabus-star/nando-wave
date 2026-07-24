@@ -530,7 +530,8 @@ pub(super) fn grounded_family_report(family_id: u64, frames: &[RelationFrame]) -
             .filter_map(|selector| serde_json::from_str::<Value>(&selector).ok())
             .collect::<Vec<_>>(),
         "observation_call_shapes": call_shapes,
-        "support_floor_reached": positive_rows >= 32,
+        "legacy_control_support_floor_reached":
+            positive_rows >= LEGACY_CONTROL_SUPPORT_ROWS,
     })
 }
 
@@ -608,7 +609,7 @@ pub(super) fn evidence_refresh_improves(
 ) -> bool {
     candidate.generation > current.generation
         && candidate.supersedes_package_id.as_deref() == Some(current.package_id.as_str())
-        && candidate.support_frame_ids.len() >= 32
+        && candidate.support_frame_ids.len() >= LEGACY_CONTROL_SUPPORT_ROWS
         && ((candidate.routing_refinement_version > current.routing_refinement_version)
             || (candidate.reserved_future_session_ids.len()
                 > current.reserved_future_session_ids.len()
@@ -632,8 +633,11 @@ pub(super) fn rollover_manifest_improves(
         != current.learned_anti_center_atom_ids
         || candidate.selected_routing_atom_ids != current.selected_routing_atom_ids
         || candidate.selected_routing_predicates != current.selected_routing_predicates;
-    let materially_more_support =
-        candidate.support_frame_ids.len() >= current.support_frame_ids.len().saturating_add(32);
+    let materially_more_support = candidate.support_frame_ids.len()
+        >= current
+            .support_frame_ids
+            .len()
+            .saturating_add(LEGACY_CONTROL_SUPPORT_ROWS);
     routing_contract_changed || materially_more_support
 }
 
