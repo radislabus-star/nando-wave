@@ -422,6 +422,12 @@ This is the required strategic step:
 UNEXPLORED_MULTI_SOURCE tokens   557,668,032
 ```
 
+The detailed implementation route is preregistered in:
+
+```text
+plans/multi-source-discovery-v1/MULTI_SOURCE_DISCOVERY_PLAN_V1.md
+```
+
 After ideal conversion of executable, verifier and current DSL classes, the
 remaining gap is:
 
