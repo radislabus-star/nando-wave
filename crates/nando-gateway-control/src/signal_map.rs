@@ -34,6 +34,9 @@ pub(crate) struct LiveSignalView<'a> {
     pub(crate) admission_future_rows: u64,
     pub(crate) admission_runtime_parity_cases: u64,
     pub(crate) active_packages: u64,
+    pub(crate) package_cpu_counters_valid: bool,
+    pub(crate) package_cpu_accepts: u64,
+    pub(crate) package_cpu_input_tokens: u64,
     pub(crate) active_transition_profiles: u64,
     pub(crate) verified_local_accepts: u64,
     pub(crate) call_saving_share_milli: u64,
@@ -120,8 +123,12 @@ pub(crate) fn render(
     let authority_live = natural_operator_live
         && live.cpu_allowed
         && live.admission_verdict.eq_ignore_ascii_case("PASS");
-    let transition_cpu_working =
-        live.active_transition_profiles > 0 && live.verified_local_accepts > 0;
+    let natural_package_cpu_working =
+        live.package_cpu_counters_valid && live.package_cpu_accepts > 0;
+    let transition_cpu_working = natural_package_cpu_working
+        || (!natural_operator_live
+            && live.active_transition_profiles > 0
+            && live.verified_local_accepts > 0);
     let proof_state = if proof.verified {
         RouteState::Proven
     } else {
@@ -473,7 +480,9 @@ pub(crate) fn render(
         owner: "nando-transition-serving".into(),
         input: "ACTIVE OperatorPackage + свежая лицензия authority".into(),
         live: format!(
-            "проверенных локальных исполнений {} / активных transition-профилей {} / обычный трафик на CPU {} / экономия токенов {}",
+            "этим поколением пакетов: {} исполнений / {} входных токенов; всего проверенных локальных исполнений {} / активных transition-профилей {} / обычный трафик на CPU {} / экономия токенов {}",
+            live.package_cpu_accepts,
+            live.package_cpu_input_tokens,
             live.verified_local_accepts,
             live.active_transition_profiles,
             format_ratio_milli(live.call_saving_share_milli),
@@ -795,6 +804,9 @@ mod tests {
             admission_future_rows: 11,
             admission_runtime_parity_cases: 22,
             active_packages: 0,
+            package_cpu_counters_valid: true,
+            package_cpu_accepts: 0,
+            package_cpu_input_tokens: 0,
             active_transition_profiles: 5,
             verified_local_accepts: 38,
             call_saving_share_milli: 4,
@@ -888,6 +900,8 @@ mod tests {
         live.transfer_proofs = 1;
         live.admission_verdict = "PASS";
         live.verified_local_accepts = 1;
+        live.package_cpu_accepts = 1;
+        live.package_cpu_input_tokens = 104;
 
         let html = render(&live, &proof(true), &manifest(), "gpt-test");
 

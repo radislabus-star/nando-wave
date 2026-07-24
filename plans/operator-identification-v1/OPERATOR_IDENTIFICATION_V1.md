@@ -1153,8 +1153,9 @@ architectural constant.
 
 ## 24. Implementation Snapshot
 
-Status: controlled implementation complete through adaptive admission
-candidate; production deployment and authority are not claimed.
+Status: the adaptive scalar route is deployed through external admission and a
+package-owned gateway CPU receipt. Rich multi-source identification remains the
+next breadth stage.
 
 ```text
 semantic quotient                         PASS
@@ -1168,8 +1169,10 @@ status/count/filter/composition/multi-role PASS
 adaptive package proof basis               PASS
 legacy 32+32 isolated as control           PASS
 live HTML policy observability             DEPLOYED
-running learner publishes adaptive policy  NO, legacy source visible
-production ACTIVE_NARROW                   NOT DEPLOYED
+running learner publishes adaptive policy  YES
+production ACTIVE_NARROW                   PASS
+package-owned gateway CPU receipt          PASS
+rich multi-source ACTIVE package           NOT YET
 ```
 
 The singleton role anchor cannot identify a law and cannot grant authority. It

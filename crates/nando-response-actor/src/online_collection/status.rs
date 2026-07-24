@@ -248,16 +248,16 @@ pub(super) fn bucket_status(
         Some("adaptive_surface_missing".to_owned())
     } else if adaptive && runtime_parity_cases < bucket.future.len() {
         Some("adaptive_runtime_parity_incomplete".to_owned())
-    } else if !adaptive && bucket.future.len() < 32 {
-        Some("future_rows_below_32".to_owned())
-    } else if !adaptive && future_sessions < 3 {
-        Some("future_sessions_below_3".to_owned())
-    } else if !adaptive && future_layouts < 2 {
-        Some("future_layouts_below_2".to_owned())
+    } else if !adaptive && bucket.future.len() < LEGACY_CONTROL_FUTURE_ROWS {
+        Some("legacy_control_future_rows_below_32".to_owned())
+    } else if !adaptive && future_sessions < LEGACY_CONTROL_MIN_SESSIONS {
+        Some("legacy_control_future_sessions_below_3".to_owned())
+    } else if !adaptive && future_layouts < LEGACY_CONTROL_MIN_SURFACES {
+        Some("legacy_control_future_layouts_below_2".to_owned())
     } else if bucket.wrong_accepts > 0 {
         Some("wrong_accepts_nonzero".to_owned())
-    } else if !adaptive && runtime_parity_cases < 32 {
-        Some("runtime_parity_cases_below_32".to_owned())
+    } else if !adaptive && runtime_parity_cases < LEGACY_CONTROL_FUTURE_ROWS {
+        Some("legacy_control_runtime_parity_cases_below_32".to_owned())
     } else {
         None
     };

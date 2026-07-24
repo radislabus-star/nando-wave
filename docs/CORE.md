@@ -219,8 +219,9 @@ live request
 The current immutable response generation contains:
 
 ```text
-crystallized-scalar-a40ca964f20c4b67
-crystallized-scalar-e35441ca7863327d
+crystallized-scalar-a40ca964f20c4b67   continuation: write_stdin
+crystallized-scalar-db6407c627296d8b   natural value projection
+crystallized-scalar-e35441ca7863327d   continuation: wait
 ```
 
 Real `/v2/responses` requests have returned `local_accept=true` without an
@@ -228,14 +229,22 @@ upstream LLM call. The external gate reports
 `eligible_for_local_accept=true`; false accepts and runtime parity mismatches
 remain zero.
 
-The blocker is now breadth and economics, not signal connectivity:
+On 2026-07-24 the adaptive value-projection package completed the entire live
+route through `127.0.0.1:8787`: the gateway returned its independently verified
+value with HTTP 200 and the serving process attributed `1 accept / 104 input
+tokens` to package `crystallized-scalar-db6407c627296d8b`. Package-owned
+counters are bounded diagnostics and grant no authority.
+
+The blocker is now breadth and mature-window economics, not signal
+connectivity:
 
 ```text
-two narrow scalar continuation laws      ACTIVE
+adaptive ACTIVE response packages        3
+natural package -> gateway -> CPU         PASS
 additional status/count/filter/compose   NOT YET ACTIVE
-verified current-epoch CPU share         41.661%, below M3 target
+latest cumulative verified token share   about 68%
 historical multi-source opportunity      571.2M tokens, recovery unaudited
-fresh multi-source structural epoch      NOT STARTED
+fresh multi-source structural epoch      NEXT
 completed M3 windows                     0 / 3
 M3                                       WATCH
 ```
@@ -244,11 +253,22 @@ Increasing coverage must come from additional independently proven operators,
 not from widening this package, weakening admission, or restoring fixed
 `32 + 32` readiness.
 
-The current execution route is:
+The completed narrow route and the next breadth route are:
 
 ```text
+adaptive support
+-> semantic version-space collapse
+-> immutable freeze
+-> independent post-freeze transfer
+-> crystallizer
+-> runtime role grounding
+-> external admission
+-> ACTIVE package
+-> gateway CPU accept                     PASS
+
+then:
+
 STOP-MS0 complete
--> MS0-R blind historical recovery audit
 -> MS1 pre-action topology capture
 -> MS2 factorization
 -> MS3/MS4 first natural multi-source ACTIVE package

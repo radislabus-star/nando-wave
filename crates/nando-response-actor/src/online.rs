@@ -17,11 +17,13 @@ use sha2::{Digest, Sha256};
 
 use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
-    ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, RelationAtom, RelationFrame, ResponseProgram,
-    SelfTrainingStateReport, StreamingSelfTrainingState, VerifierProgram, ground_roles,
-    is_source_neutral_relation_frame, relation_atom_is_teacher_only,
-    relation_frame_online_routing_atom_ids, synthesis::grounded_program_family_id,
-    synthesize_response_operator, teacher_program_signature, teacher_transition_from_completed,
+    ECONOMICS_RECEIPT_SCHEMA_V1, EconomicsReceipt, LEGACY_CONTROL_FUTURE_ROWS,
+    LEGACY_CONTROL_MIN_SESSIONS, LEGACY_CONTROL_MIN_SURFACES, LEGACY_CONTROL_SUPPORT_ROWS,
+    RelationAtom, RelationFrame, ResponseProgram, SelfTrainingStateReport,
+    StreamingSelfTrainingState, VerifierProgram, ground_roles, is_source_neutral_relation_frame,
+    relation_atom_is_teacher_only, relation_frame_online_routing_atom_ids,
+    synthesis::grounded_program_family_id, synthesize_response_operator, teacher_program_signature,
+    teacher_transition_from_completed,
 };
 
 use crate::online_subcenter::OnlineSubcenterDiscovery;
@@ -57,9 +59,9 @@ const ONLINE_BUCKET_STRATEGY_VERSION: u8 = 97;
 const LIVE_SCALAR_GENERATION_VERSION: u8 = 4;
 const RESTORED_CORE_MIN_BUCKET_EVENTS: usize = 20;
 const MAX_PINNED_FUTURE_PARITY_CASES: usize = 4_096;
-// Admission needs 32 independent future rows; larger full-frame reservoirs only
-// duplicate cold evidence without increasing execution authority.
-const MAX_FROZEN_FUTURE_ROWS_PER_BUCKET: usize = 32;
+// This capacity preserves the historical control route. Adaptive identification
+// owns natural readiness and may freeze after fewer distinguishing observations.
+const MAX_FROZEN_FUTURE_ROWS_PER_BUCKET: usize = LEGACY_CONTROL_FUTURE_ROWS;
 const ONLINE_ROUTING_ATOM_CACHE_ENTRIES: usize = 512;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1216,14 +1218,14 @@ impl OnlineResponseMiner {
                         wave_package.threshold_micro,
                     )
                 });
-            let admission_precheck = if bucket.positives.len() < 32 {
-                "support_rows_below_32".to_owned()
-            } else if bucket.future_positives.len() < 32 {
-                "future_rows_below_32".to_owned()
-            } else if frozen_future_sessions < 3 {
-                "future_sessions_below_3".to_owned()
-            } else if distinct_surfaces < 2 {
-                "surfaces_below_2".to_owned()
+            let admission_precheck = if bucket.positives.len() < LEGACY_CONTROL_SUPPORT_ROWS {
+                "legacy_control_support_rows_below_32".to_owned()
+            } else if bucket.future_positives.len() < LEGACY_CONTROL_FUTURE_ROWS {
+                "legacy_control_future_rows_below_32".to_owned()
+            } else if frozen_future_sessions < LEGACY_CONTROL_MIN_SESSIONS {
+                "legacy_control_future_sessions_below_3".to_owned()
+            } else if distinct_surfaces < LEGACY_CONTROL_MIN_SURFACES {
+                "legacy_control_surfaces_below_2".to_owned()
             } else if frozen_future_program_mismatches > 0 {
                 "future_program_mismatch".to_owned()
             } else {
@@ -1523,8 +1525,8 @@ impl OnlineResponseMiner {
         let mut blockers = Vec::new();
 
         for bucket in self.buckets.values() {
-            if bucket.positives.len() < 32
-                || bucket.future_positives.len() < 32
+            if bucket.positives.len() < LEGACY_CONTROL_SUPPORT_ROWS
+                || bucket.future_positives.len() < LEGACY_CONTROL_FUTURE_ROWS
                 || (bucket.negatives.is_empty() && bucket.future_negatives.is_empty())
             {
                 continue;
@@ -1576,11 +1578,13 @@ impl OnlineResponseMiner {
                 .collect::<BTreeSet<_>>();
             let (support, future, partition_required_atom_ids) =
                 clean_admission_partition_for_ids(bucket, &negatives, Some(&parity_eligible_ids));
-            if support.len() < 32 || future.len() < 32 {
+            if support.len() < LEGACY_CONTROL_SUPPORT_ROWS
+                || future.len() < LEGACY_CONTROL_FUTURE_ROWS
+            {
                 blockers.push(OnlineResponseAdmissionBlockerReport {
                     cohort_id_sha256,
                     blocker: format!(
-                        "receipt_backed_partition_below_32:support={}:future={}",
+                        "legacy_control_receipt_backed_partition_below_32:support={}:future={}",
                         support.len(),
                         future.len()
                     ),
@@ -1627,12 +1631,13 @@ impl OnlineResponseMiner {
                     runtime_parity_cases.push(parity_case);
                 }
             }
-            if receipt_backed_support.len() < 32 {
+            if receipt_backed_support.len() < LEGACY_CONTROL_SUPPORT_ROWS {
                 blockers.push(OnlineResponseAdmissionBlockerReport {
                     cohort_id_sha256,
                     blocker: format!(
-                        "receipt_backed_support_rows_below_32:{}/32",
-                        receipt_backed_support.len()
+                        "legacy_control_receipt_backed_support_rows_below_32:{}/{}",
+                        receipt_backed_support.len(),
+                        LEGACY_CONTROL_SUPPORT_ROWS
                     ),
                 });
                 continue;
@@ -1651,12 +1656,13 @@ impl OnlineResponseMiner {
                     runtime_parity_cases.push(parity_case);
                 }
             }
-            if receipt_backed_future.len() < 32 {
+            if receipt_backed_future.len() < LEGACY_CONTROL_FUTURE_ROWS {
                 blockers.push(OnlineResponseAdmissionBlockerReport {
                     cohort_id_sha256,
                     blocker: format!(
-                        "receipt_backed_future_rows_below_32:{}/32",
-                        receipt_backed_future.len()
+                        "legacy_control_receipt_backed_future_rows_below_32:{}/{}",
+                        receipt_backed_future.len(),
+                        LEGACY_CONTROL_FUTURE_ROWS
                     ),
                 });
                 continue;
@@ -1865,12 +1871,13 @@ impl OnlineResponseMiner {
             let future_runtime_parity_cases = self
                 .self_training_v2
                 .runtime_parity_cases_for_frames(candidate.future.iter());
-            if future_runtime_parity_cases.len() < 32 {
+            if future_runtime_parity_cases.len() < LEGACY_CONTROL_FUTURE_ROWS {
                 blockers.push(OnlineResponseAdmissionBlockerReport {
                     cohort_id_sha256,
                     blocker: format!(
-                        "semantic_future_runtime_parity_below_32:{}/32",
-                        future_runtime_parity_cases.len()
+                        "legacy_control_semantic_future_runtime_parity_below_32:{}/{}",
+                        future_runtime_parity_cases.len(),
+                        LEGACY_CONTROL_FUTURE_ROWS
                     ),
                 });
                 continue;

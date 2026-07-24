@@ -95,7 +95,7 @@ pub(crate) async fn control_signal_path(
         controller_active_packages: metric_u64(&controller, "active_packages"),
         controller_age_seconds,
         controller_max_age_seconds: state.config.response_controller_report_max_age_seconds,
-        operators: active_operator_summaries(&registry),
+        operators: active_operator_summaries(&registry, &runtime_health),
         total_input_tokens: token_totals.map(|(total, _)| total),
         miner_input_tokens: exact_miner_observed_tokens(&live, &persisted_miner),
         cpu_input_tokens: token_totals.map(|(_, cpu)| cpu),
@@ -126,7 +126,17 @@ pub(crate) async fn control_signal_path(
     ([(header::CACHE_CONTROL, "no-store")], Json(snapshot)).into_response()
 }
 
-pub(super) fn active_operator_summaries(registry: &Value) -> Vec<OperatorSummary> {
+pub(super) fn active_operator_summaries(
+    registry: &Value,
+    runtime_health: &Value,
+) -> Vec<OperatorSummary> {
+    let live_cpu_counters_valid = runtime_health
+        .get("response_cpu_by_package_valid")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let live_cpu_by_package = runtime_health
+        .get("response_cpu_by_package")
+        .and_then(Value::as_object);
     let mut operators = registry
         .get("packages")
         .and_then(Value::as_array)
@@ -142,6 +152,7 @@ pub(super) fn active_operator_summaries(registry: &Value) -> Vec<OperatorSummary
                 .and_then(Value::as_str)?
                 .to_owned();
             let proof = package.get("proof").unwrap_or(&Value::Null);
+            let live_cpu = live_cpu_by_package.and_then(|counters| counters.get(&package_id));
             Some(OperatorSummary {
                 package_id,
                 function_name,
@@ -152,6 +163,13 @@ pub(super) fn active_operator_summaries(registry: &Value) -> Vec<OperatorSummary
                 distinct_sessions: metric_u64(proof, "distinct_sessions"),
                 wrong_accepts: metric_u64(proof, "wrong_accepts"),
                 runtime_parity_failures: metric_u64(proof, "runtime_parity_failures"),
+                live_cpu_counters_valid,
+                live_cpu_accepts: live_cpu
+                    .map(|counters| metric_u64(counters, "ordinary_accepts"))
+                    .unwrap_or(0),
+                live_cpu_input_tokens: live_cpu
+                    .map(|counters| metric_u64(counters, "ordinary_input_tokens"))
+                    .unwrap_or(0),
             })
         })
         .collect::<Vec<_>>();

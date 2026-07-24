@@ -9,7 +9,8 @@ use crate::authority::validate_response_authority_material;
 use crate::teacher_join::action_schema_enriched_frame;
 use crate::{
     CollectionSynthesisExample, CompositeResponseAdmissionV2,
-    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt, LearnedWaveRoute,
+    DURABLE_RUNTIME_PARITY_RECEIPT_SCHEMA_V1, DurableRuntimeParityReceipt,
+    LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_SUPPORT_ROWS, LearnedWaveRoute,
     OnlineCollectionAdmissionCandidate, OnlineResponseAdmissionCandidate,
     RESPONSE_FUTURE_VERIFIER_RECEIPT_SET_SCHEMA_V2, RESPONSE_REGISTRY_SCHEMA_V6,
     RESPONSE_RUNTIME_PARITY_RECEIPT_SET_SCHEMA_V1, RESPONSE_SEMANTIC_ALIAS_PROOF_SCHEMA_V1,
@@ -1294,13 +1295,15 @@ pub fn build_online_admission_evaluation(
             );
             continue;
         }
-        if candidate.support.len() < 32 || candidate.future.len() < 32 {
+        if candidate.support.len() < LEGACY_CONTROL_SUPPORT_ROWS
+            || candidate.future.len() < LEGACY_CONTROL_FUTURE_ROWS
+        {
             record_candidate_rejection(
                 &mut candidate_rejections,
                 candidate,
                 "candidate_envelope",
                 format!(
-                    "rows_below_32 support={} future={}",
+                    "legacy_control_rows_below_32 support={} future={}",
                     candidate.support.len(),
                     candidate.future.len()
                 ),
@@ -1414,12 +1417,15 @@ pub fn build_online_admission_evaluation(
             .filter(|frame| crate::package::relation_frame_matches_package_guard(&package, frame))
             .cloned()
             .collect::<Vec<_>>();
-        if refined_support.len() < 32 {
+        if refined_support.len() < LEGACY_CONTROL_SUPPORT_ROWS {
             record_candidate_rejection(
                 &mut candidate_rejections,
                 candidate,
                 "package_guard",
-                format!("refined_support_below_32 rows={}", refined_support.len()),
+                format!(
+                    "legacy_control_refined_support_below_32 rows={}",
+                    refined_support.len()
+                ),
             );
             continue;
         }
@@ -1590,13 +1596,15 @@ pub fn build_online_admission_evaluation(
             &candidate.negatives,
         );
         refined_support = phase_support;
-        if refined_support.len() < 32 || phase_future.len() < 32 {
+        if refined_support.len() < LEGACY_CONTROL_SUPPORT_ROWS
+            || phase_future.len() < LEGACY_CONTROL_FUTURE_ROWS
+        {
             record_candidate_rejection(
                 &mut candidate_rejections,
                 candidate,
                 "phase_cleaning",
                 format!(
-                    "phase_clean_rows_below_32 support={} future={}",
+                    "legacy_control_phase_clean_rows_below_32 support={} future={}",
                     refined_support.len(),
                     phase_future.len()
                 ),
@@ -1608,12 +1616,15 @@ pub fn build_online_admission_evaluation(
             .filter(|frame| relation_frame_routes_to_package(&package, frame))
             .cloned()
             .collect::<Vec<_>>();
-        if routed_future.len() < 32 {
+        if routed_future.len() < LEGACY_CONTROL_FUTURE_ROWS {
             record_candidate_rejection(
                 &mut candidate_rejections,
                 candidate,
                 "future_routing",
-                format!("routed_future_below_32 rows={}", routed_future.len()),
+                format!(
+                    "legacy_control_routed_future_below_32 rows={}",
+                    routed_future.len()
+                ),
             );
             continue;
         }
@@ -2167,7 +2178,7 @@ pub(crate) fn calibrate_learned_route_threshold(
             .iter()
             .filter(|frame| crate::relation_frame_routes_to_package(package, frame))
             .count()
-            >= 32
+            >= LEGACY_CONTROL_SUPPORT_ROWS
             && negatives
                 .iter()
                 .all(|frame| !crate::relation_frame_routes_to_package(package, frame));

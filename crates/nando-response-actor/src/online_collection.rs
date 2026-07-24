@@ -23,11 +23,13 @@ use crate::collection_synthesis::{
 };
 use crate::{
     AstProgramKind, CollectionSynthesisExample, DurableRuntimeParityReceipt,
-    ResponseAdapterWaveConsensus, ResponseConsensusVariant, ResponseExecutionStatus,
-    ResponsePackage, ResponsePackageOrigin, ResponsePackageProof, ResponsePackageState,
-    ResponseProgram, build_durable_runtime_parity_receipt, canonical_json_sha256,
-    diagnose_response_dynamic_coverage, enumerate_source_neutral_response_programs,
-    execute_response, is_learned_bounded_response_program, is_privacy_safe_online_response_program,
+    LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_MIN_SESSIONS, LEGACY_CONTROL_MIN_SURFACES,
+    LEGACY_CONTROL_SUPPORT_ROWS, ResponseAdapterWaveConsensus, ResponseConsensusVariant,
+    ResponseExecutionStatus, ResponsePackage, ResponsePackageOrigin, ResponsePackageProof,
+    ResponsePackageState, ResponseProgram, build_durable_runtime_parity_receipt,
+    canonical_json_sha256, diagnose_response_dynamic_coverage,
+    enumerate_source_neutral_response_programs, execute_response,
+    is_learned_bounded_response_program, is_privacy_safe_online_response_program,
     is_source_neutral_response_program, is_transfer_bound_response_program,
     package::{
         request_phase_atom_ids, response_pre_action_context_atom_ids,

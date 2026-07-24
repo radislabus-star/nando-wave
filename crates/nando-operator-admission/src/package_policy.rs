@@ -4,6 +4,13 @@ use nando_operator_kernel::{canonical_json_sha256, stable_atom_id, valid_nonzero
 
 pub use nando_operator_kernel::{LearnedWaveRoute, LearnedWaveSubcenter};
 
+/// Historical fixed-row baseline. Natural packages must use an adaptive
+/// identification proof and never derive readiness from these floors.
+pub const LEGACY_CONTROL_SUPPORT_ROWS: usize = 32;
+pub const LEGACY_CONTROL_FUTURE_ROWS: usize = 32;
+pub const LEGACY_CONTROL_MIN_SESSIONS: usize = 3;
+pub const LEGACY_CONTROL_MIN_SURFACES: usize = 2;
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponsePackageOrigin {
@@ -211,14 +218,21 @@ pub const fn package_admission_candidate_blocker(
         Some("adaptive_independent_session_missing")
     } else if facts.adaptive_identification_bound && facts.distinct_surfaces < 2 {
         Some("adaptive_surface_missing")
-    } else if !facts.adaptive_identification_bound && facts.support_rows < 32 {
-        Some("support_rows_below_32")
-    } else if !facts.adaptive_identification_bound && facts.future_rows < 32 {
-        Some("future_rows_below_32")
-    } else if !facts.adaptive_identification_bound && facts.distinct_sessions < 3 {
-        Some("future_sessions_below_3")
-    } else if !facts.adaptive_identification_bound && facts.distinct_surfaces < 2 {
-        Some("surfaces_below_2")
+    } else if !facts.adaptive_identification_bound
+        && facts.support_rows < LEGACY_CONTROL_SUPPORT_ROWS
+    {
+        Some("legacy_control_support_rows_below_32")
+    } else if !facts.adaptive_identification_bound && facts.future_rows < LEGACY_CONTROL_FUTURE_ROWS
+    {
+        Some("legacy_control_future_rows_below_32")
+    } else if !facts.adaptive_identification_bound
+        && facts.distinct_sessions < LEGACY_CONTROL_MIN_SESSIONS
+    {
+        Some("legacy_control_future_sessions_below_3")
+    } else if !facts.adaptive_identification_bound
+        && facts.distinct_surfaces < LEGACY_CONTROL_MIN_SURFACES
+    {
+        Some("legacy_control_surfaces_below_2")
     } else if facts.wrong_accepts != 0 {
         Some("wrong_accepts_nonzero")
     } else if facts.runtime_parity_failures != 0 {
@@ -276,10 +290,10 @@ mod tests {
             validation_blocker: None,
             grounded_authority: true,
             package_active: true,
-            support_rows: 32,
-            future_rows: 32,
-            distinct_sessions: 3,
-            distinct_surfaces: 2,
+            support_rows: LEGACY_CONTROL_SUPPORT_ROWS,
+            future_rows: LEGACY_CONTROL_FUTURE_ROWS,
+            distinct_sessions: LEGACY_CONTROL_MIN_SESSIONS,
+            distinct_surfaces: LEGACY_CONTROL_MIN_SURFACES,
             wrong_accepts: 0,
             runtime_parity_failures: 0,
             exact_cache_overlap: 0,
@@ -300,9 +314,9 @@ mod tests {
         facts.wrong_accepts = 1;
         assert_eq!(
             package_admission_candidate_blocker(facts),
-            Some("support_rows_below_32")
+            Some("legacy_control_support_rows_below_32")
         );
-        facts.support_rows = 32;
+        facts.support_rows = LEGACY_CONTROL_SUPPORT_ROWS;
         assert_eq!(
             package_admission_candidate_blocker(facts),
             Some("wrong_accepts_nonzero")

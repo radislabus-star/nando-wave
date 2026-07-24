@@ -13,9 +13,9 @@ pub(super) fn repair_frozen_admission_guard(
     future: &[RelationFrame],
     negatives: &[RelationFrame],
 ) -> Result<RepairedAdmissionGuard, String> {
-    if support.len() < 32 || future.len() < 32 {
+    if support.len() < LEGACY_CONTROL_SUPPORT_ROWS || future.len() < LEGACY_CONTROL_FUTURE_ROWS {
         return Err(format!(
-            "guard_evidence_below_gate:support={}:future={}",
+            "legacy_control_guard_evidence_below_gate:support={}:future={}",
             support.len(),
             future.len()
         ));
@@ -104,8 +104,8 @@ pub(super) fn repair_frozen_admission_guard(
                         .all(|atom| observed.binary_search(atom).is_ok())
                 })
                 .count();
-            if support_rows < 32
-                || future_rows < 32
+            if support_rows < LEGACY_CONTROL_SUPPORT_ROWS
+                || future_rows < LEGACY_CONTROL_FUTURE_ROWS
                 || negative_atoms.iter().any(|observed| {
                     combined
                         .iter()
@@ -158,7 +158,10 @@ pub(super) fn build_subcenter_admission_candidate(
         &bucket.teacher_action_symbol,
         &bucket.teacher_signature_sha256,
     );
-    if support.len() < 32 || future.len() < 32 || negatives.is_empty() {
+    if support.len() < LEGACY_CONTROL_SUPPORT_ROWS
+        || future.len() < LEGACY_CONTROL_FUTURE_ROWS
+        || negatives.is_empty()
+    {
         trace_subcenter_build(parent_bucket_id, required_atom_ids, "evidence_below_gate");
         return Err(format!(
             "evidence_below_gate:support={}:future={}:negatives={}",
@@ -216,7 +219,7 @@ pub(super) fn build_subcenter_admission_candidate(
                 && crate::synthesis::program_is_consistent(&program, frame)
         })
         .collect::<Vec<_>>();
-    if future.len() < 32 {
+    if future.len() < LEGACY_CONTROL_FUTURE_ROWS {
         trace_subcenter_build(
             parent_bucket_id,
             required_atom_ids,
@@ -420,8 +423,11 @@ pub(super) fn online_admission_precheck(
         .filter(|frame| crate::package::relation_frame_matches_package_guard(package, frame))
         .cloned()
         .collect::<Vec<_>>();
-    if refined_support.len() < 32 {
-        return format!("refined_support_below_32:{}", refined_support.len());
+    if refined_support.len() < LEGACY_CONTROL_SUPPORT_ROWS {
+        return format!(
+            "legacy_control_refined_support_below_32:{}",
+            refined_support.len()
+        );
     }
     if let Some(route) = learned_wave_route {
         package.wave_margin_micro = route.threshold_micro;
@@ -444,9 +450,11 @@ pub(super) fn online_admission_precheck(
             &frozen_future,
             &negatives,
         );
-        if refined_support.len() < 32 || frozen_future.len() < 32 {
+        if refined_support.len() < LEGACY_CONTROL_SUPPORT_ROWS
+            || frozen_future.len() < LEGACY_CONTROL_FUTURE_ROWS
+        {
             return format!(
-                "phase_clean_rows_below_32:support={}:future={}",
+                "legacy_control_phase_clean_rows_below_32:support={}:future={}",
                 refined_support.len(),
                 frozen_future.len()
             );
@@ -457,8 +465,11 @@ pub(super) fn online_admission_precheck(
         .filter(|frame| crate::relation_frame_routes_to_package(package, frame))
         .cloned()
         .collect::<Vec<_>>();
-    if routed_future.len() < 32 {
-        return format!("routed_future_below_32:{}", routed_future.len());
+    if routed_future.len() < LEGACY_CONTROL_FUTURE_ROWS {
+        return format!(
+            "legacy_control_routed_future_below_32:{}",
+            routed_future.len()
+        );
     }
     let future_wrong = routed_future
         .iter()

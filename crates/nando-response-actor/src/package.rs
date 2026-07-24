@@ -28,8 +28,10 @@ use nando_operator_kernel::{
 };
 
 pub use nando_operator_admission::{
-    LearnedWaveRoute, LearnedWaveSubcenter, ResponsePackageOrigin, ResponsePackageProof,
-    ResponsePackageState, ResponseRoutingComparison, ResponseRoutingPredicate,
+    LEGACY_CONTROL_FUTURE_ROWS, LEGACY_CONTROL_MIN_SESSIONS, LEGACY_CONTROL_MIN_SURFACES,
+    LEGACY_CONTROL_SUPPORT_ROWS, LearnedWaveRoute, LearnedWaveSubcenter, ResponsePackageOrigin,
+    ResponsePackageProof, ResponsePackageState, ResponseRoutingComparison,
+    ResponseRoutingPredicate,
 };
 pub use nando_operator_kernel::{
     relation_frame_online_routing_atom_ids, relation_frame_phase_atom_ids,

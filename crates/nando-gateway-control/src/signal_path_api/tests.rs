@@ -36,6 +36,9 @@ fn active_operator() -> OperatorSummary {
         distinct_sessions: 2,
         wrong_accepts: 0,
         runtime_parity_failures: 0,
+        live_cpu_counters_valid: true,
+        live_cpu_accepts: 2,
+        live_cpu_input_tokens: 125,
     }
 }
 
@@ -228,9 +231,21 @@ fn active_operator_inventory_includes_function_and_vm_programs() {
         ]
     });
 
-    let operators = active_operator_summaries(&registry);
+    let runtime_health = json!({
+        "response_cpu_by_package_valid": true,
+        "response_cpu_by_package": {
+            "projection": {
+                "ordinary_accepts": 3,
+                "ordinary_input_tokens": 144
+            }
+        }
+    });
+    let operators = active_operator_summaries(&registry, &runtime_health);
 
     assert_eq!(operators.len(), 2);
     assert_eq!(operators[0].function_name, "wait");
     assert_eq!(operators[1].function_name, "project_selected_value");
+    assert_eq!(operators[0].live_cpu_accepts, 0);
+    assert_eq!(operators[1].live_cpu_accepts, 3);
+    assert_eq!(operators[1].live_cpu_input_tokens, 144);
 }

@@ -326,8 +326,8 @@ pub fn evaluate_grounded_wave_causality_refs(
     let random_causal_degradation = random_center_correct < full_phase_correct
         || random_center_negative_accepts > negative_accepts
         || full_margin_mean > random_margin_mean;
-    let pass = support.len() >= 32
-        && future.len() >= 32
+    let pass = support.len() >= crate::LEGACY_CONTROL_SUPPORT_ROWS
+        && future.len() >= crate::LEGACY_CONTROL_FUTURE_ROWS
         && full_phase_correct == future.len()
         && negative_accepts == 0
         && shuffled_causal_degradation

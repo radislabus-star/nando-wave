@@ -21,7 +21,7 @@ use nando_gateway_control::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -118,6 +118,7 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         read_json(&state.config.response_admission_controller_report_path);
     let online_miner = read_json(&state.config.response_online_miner_report_path);
     let live_miner = read_live_miner_report().await;
+    let response_runtime_health = read_live_json(HOT_SERVING_RUNTIME_HEALTH_URL).await;
     let live_economics = live_miner
         .get("economics")
         .filter(|value| value.is_object())
@@ -215,6 +216,36 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
         .iter()
         .filter(|package| package.get("state").and_then(Value::as_str) == Some("active"))
         .count() as u64;
+    let active_response_package_ids = response_packages
+        .iter()
+        .filter(|package| package.get("state").and_then(Value::as_str) == Some("active"))
+        .filter(|package| {
+            package
+                .pointer("/proof/adaptive_identification")
+                .is_some_and(Value::is_object)
+        })
+        .filter_map(|package| package.get("package_id").and_then(Value::as_str))
+        .collect::<BTreeSet<_>>();
+    let response_natural_active = active_response_package_ids.len() as u64;
+    let package_cpu_counters_valid = response_runtime_health
+        .get("response_cpu_by_package_valid")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let (package_cpu_accepts, package_cpu_input_tokens) = response_runtime_health
+        .get("response_cpu_by_package")
+        .and_then(Value::as_object)
+        .map(|counters| {
+            active_response_package_ids
+                .iter()
+                .filter_map(|package_id| counters.get(*package_id))
+                .fold((0_u64, 0_u64), |(accepts, tokens), package| {
+                    (
+                        accepts.saturating_add(metric_u64(package, "ordinary_accepts")),
+                        tokens.saturating_add(metric_u64(package, "ordinary_input_tokens")),
+                    )
+                })
+        })
+        .unwrap_or((0, 0));
     let response_quarantine = response_packages
         .iter()
         .filter(|package| package.get("state").and_then(Value::as_str) == Some("quarantine"))
@@ -534,7 +565,10 @@ async fn control_page(Path(key): Path<String>, State(state): State<AppState>) ->
                 &response_admission_controller,
                 "relation_max_runtime_parity_cases",
             ),
-            active_packages: response_active,
+            active_packages: response_natural_active,
+            package_cpu_counters_valid,
+            package_cpu_accepts,
+            package_cpu_input_tokens,
             active_transition_profiles: active_profiles,
             verified_local_accepts,
             call_saving_share_milli: metric_u64(&economics, "call_saving_share_milli"),

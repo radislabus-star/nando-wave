@@ -367,10 +367,10 @@ impl OnlineCollectionMiner {
                 && distinct_sessions >= 2
                 && distinct_surfaces >= 2
         } else {
-            bucket.support.len() >= 32
-                && bucket.future.len() >= 32
-                && distinct_receipt_sessions(&bucket.future) >= 3
-                && distinct_receipt_layouts(&bucket.future) >= 2
+            bucket.support.len() >= LEGACY_CONTROL_SUPPORT_ROWS
+                && bucket.future.len() >= LEGACY_CONTROL_FUTURE_ROWS
+                && distinct_receipt_sessions(&bucket.future) >= LEGACY_CONTROL_MIN_SESSIONS
+                && distinct_receipt_layouts(&bucket.future) >= LEGACY_CONTROL_MIN_SURFACES
         };
         let pass = evidence_gate
             && bucket.wrong_accepts == 0

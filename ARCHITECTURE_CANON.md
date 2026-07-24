@@ -1080,6 +1080,12 @@ until their version space collapses. The historical `32 support + 32 future`
 rule remains a legacy control policy and is forbidden as a natural readiness
 gate.
 
+The code names those historical floors `LEGACY_CONTROL_*`; every blocker
+emitted by that route carries the `legacy_control_` prefix. Adaptive packages
+are admitted only from a sealed semantic-class freeze and an independent
+post-freeze transfer proof. A raw support/future count can never upgrade an
+adaptive package.
+
 The frozen set commits full 32-byte support lineages, its canonical candidate
 set, canonicalizer version, bounded synthesis configuration, and source operator
 generation. Receipt IDs are indexing aids and are never sufficient provenance.
@@ -1165,6 +1171,19 @@ admission from the sealed inner candidate, and merges that snapshot with
 crystallized circuit candidates exactly once. A previously active
 last-known-good package may be preserved fail-closed, but no shadow candidate
 can mint its successor.
+
+### Package-owned CPU accounting
+
+After actor execution, independent verification, projection verification, and
+post-verifier finalization, serving may increment bounded diagnostics keyed by
+the admitted `package_id`. `/health.response_cpu_by_package` reports accepts and
+ordinary input tokens for at most 2,048 packages and exposes an explicit
+overflow counter. This map observes authority; it never creates, widens, or
+renews authority.
+
+The read-only authority inspector may execute the same registry in shadow and
+report the selected package, margin, exact checks, verifier schema, and abstain
+reason. Shadow execution is always marked `authority=false`.
 
 ```text
 live capture-owned collection observation

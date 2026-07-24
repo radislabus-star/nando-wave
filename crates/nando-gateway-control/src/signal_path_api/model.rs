@@ -23,6 +23,9 @@ pub(crate) struct OperatorSummary {
     pub(crate) distinct_sessions: u64,
     pub(crate) wrong_accepts: u64,
     pub(crate) runtime_parity_failures: u64,
+    pub(crate) live_cpu_counters_valid: bool,
+    pub(crate) live_cpu_accepts: u64,
+    pub(crate) live_cpu_input_tokens: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
