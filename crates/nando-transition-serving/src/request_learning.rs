@@ -376,34 +376,36 @@ impl RequestLearningIndex {
         &self,
         watermark: &RequestLearningWatermarkV2,
     ) -> Result<Vec<u8>, String> {
+        self.checkpoint_cbor_with_budget(watermark, REQUEST_LEARNING_CHECKPOINT_MAX_BYTES_V2)
+    }
+
+    fn checkpoint_cbor_with_budget(
+        &self,
+        watermark: &RequestLearningWatermarkV2,
+        max_bytes: usize,
+    ) -> Result<Vec<u8>, String> {
         if !valid_sha256(&watermark.bridge_epoch_sha256)
             || (watermark.last_sequence > 0 && !valid_sha256(&watermark.last_record_sha256))
         {
             return Err("request_learning_checkpoint_watermark_invalid".to_owned());
         }
-        let state = self
+        let mut state = self
             .state
             .lock()
             .map_err(|_| "request_learning_index_lock_poisoned".to_owned())?;
-        let wire = RequestLearningCheckpointWireV4 {
-            schema: REQUEST_LEARNING_CHECKPOINT_SCHEMA_V4.to_owned(),
-            bridge_epoch_sha256: watermark.bridge_epoch_sha256.clone(),
-            last_sequence: watermark.last_sequence,
-            last_record_sha256: watermark.last_record_sha256.clone(),
-            capability_by_session: state.capability_by_session.clone(),
-            session_order: state.session_order.iter().cloned().collect(),
-            structure_by_turn: state.structure_by_turn.clone(),
-            turn_order: state.turn_order.iter().cloned().collect(),
-            topology_by_commitment: state.topology_by_commitment.clone(),
-            topology_order: state.topology_order.iter().cloned().collect(),
-            status: self.status_without_state_lock(&state),
-        };
-        let bytes = serde_cbor::to_vec(&wire)
-            .map_err(|error| format!("request_learning_checkpoint_encode:{error}"))?;
-        if bytes.len() > REQUEST_LEARNING_CHECKPOINT_MAX_BYTES_V2 {
-            return Err("request_learning_checkpoint_budget".to_owned());
+        loop {
+            let bytes = encode_checkpoint_v4(self, &state, watermark)?;
+            if !bytes.is_empty() && bytes.len() <= max_bytes {
+                return Ok(bytes);
+            }
+            // Capacity is defined by the durable byte budget, not only row count.
+            let Some(oldest) = state.topology_order.pop_front() else {
+                return Err("request_learning_checkpoint_budget".to_owned());
+            };
+            if state.topology_by_commitment.remove(&oldest).is_some() {
+                self.counters.evictions.fetch_add(1, Ordering::Relaxed);
+            }
         }
-        Ok(bytes)
     }
 
     pub(crate) fn from_checkpoint_cbor(
@@ -464,6 +466,27 @@ impl RequestLearningIndex {
             ..RequestLearningStatusV2::default()
         }
     }
+}
+
+fn encode_checkpoint_v4(
+    index: &RequestLearningIndex,
+    state: &RequestLearningState,
+    watermark: &RequestLearningWatermarkV2,
+) -> Result<Vec<u8>, String> {
+    let wire = RequestLearningCheckpointWireV4 {
+        schema: REQUEST_LEARNING_CHECKPOINT_SCHEMA_V4.to_owned(),
+        bridge_epoch_sha256: watermark.bridge_epoch_sha256.clone(),
+        last_sequence: watermark.last_sequence,
+        last_record_sha256: watermark.last_record_sha256.clone(),
+        capability_by_session: state.capability_by_session.clone(),
+        session_order: state.session_order.iter().cloned().collect(),
+        structure_by_turn: state.structure_by_turn.clone(),
+        turn_order: state.turn_order.iter().cloned().collect(),
+        topology_by_commitment: state.topology_by_commitment.clone(),
+        topology_order: state.topology_order.iter().cloned().collect(),
+        status: index.status_without_state_lock(state),
+    };
+    serde_cbor::to_vec(&wire).map_err(|error| format!("request_learning_checkpoint_encode:{error}"))
 }
 
 fn validate_checkpoint_v2(wire: &RequestLearningCheckpointWireV2) -> Result<(), String> {
@@ -762,5 +785,93 @@ mod tests {
         let (index, _) =
             RequestLearningIndex::from_checkpoint_cbor(&bytes).expect("backward decode");
         assert_eq!(index.status().stored_topologies, 0);
+    }
+
+    #[test]
+    fn checkpoint_byte_budget_evicts_oldest_topology_and_keeps_newest() {
+        let index = RequestLearningIndex::default();
+        let bridge_epoch = digest(1);
+        let mut ordered_keys = Vec::new();
+        {
+            let mut state = index.state.lock().expect("request learning state");
+            for sequence in 1..=12 {
+                let turn = digest(100 + sequence);
+                let request = digest(200 + sequence);
+                let structure = LearningRequestStructureV2 {
+                    schema: nando_operator_kernel::LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
+                    turn_intent_id_sha256: turn,
+                    request_event_id_sha256: digest(300 + sequence),
+                    provider_bound_turn_identity: true,
+                    session_lineage_roots_sha256: vec![digest(400 + sequence)],
+                    request_phase_atom_ids: vec![sequence],
+                    pre_action_context_atom_ids: vec![sequence + 100],
+                    capability_atom_ids: vec![sequence + 200],
+                    estimated_input_tokens: 128,
+                    provider_payload_bytes: 512,
+                    provider_capture_request_root_sha256: request,
+                    decidability_reason_code: "test".to_owned(),
+                    topology: nando_operator_kernel::PreActionMultiSourceTopologyV1 {
+                        extraction_status:
+                            nando_operator_kernel::MultiSourceExtractionStatusV1::Complete,
+                        grounded_output_count: 0,
+                        output_part_count: 0,
+                        roles: Vec::new(),
+                        role_witnesses: Vec::new(),
+                        relations: Vec::new(),
+                    },
+                };
+                let commit = PreActionTopologyCommitV1::seal(
+                    &structure,
+                    nando_operator_kernel::MultiSourceEvidenceOriginV1::FreshLive,
+                    digest(500),
+                    digest(501),
+                    sequence,
+                )
+                .expect("topology commit");
+                let key = commit.commitment_root_sha256.clone();
+                ordered_keys.push(key.clone());
+                state.topology_order.push_back(key.clone());
+                state.topology_by_commitment.insert(
+                    key,
+                    RequestLearningTopologyV4 {
+                        bridge_epoch_sha256: bridge_epoch.clone(),
+                        bridge_sequence: Some(sequence),
+                        record_sha256: Some(digest(600 + sequence)),
+                        capture_epoch_sha256: Some(digest(700 + sequence)),
+                        capture_event_sha256: Some(digest(800 + sequence)),
+                        capture_receipt_sha256: Some(digest(900 + sequence)),
+                        captured_at_unix_ms: Some(1_000 + sequence),
+                        session_lineage_sha256: Some(digest(1_000 + sequence)),
+                        physical_order_proven: true,
+                        structure,
+                        commit,
+                    },
+                );
+            }
+        }
+        let watermark = RequestLearningWatermarkV2 {
+            bridge_epoch_sha256: bridge_epoch,
+            last_sequence: 12,
+            last_record_sha256: digest(612),
+        };
+
+        let bytes = index
+            .checkpoint_cbor_with_budget(&watermark, 8 * 1024)
+            .expect("bounded checkpoint");
+        assert!(bytes.len() <= 8 * 1024);
+        let (restored, _) =
+            RequestLearningIndex::from_checkpoint_cbor(&bytes).expect("restored checkpoint");
+        let state = restored.state.lock().expect("restored state");
+        assert!(!state.topology_by_commitment.contains_key(&ordered_keys[0]));
+        assert!(
+            state
+                .topology_by_commitment
+                .contains_key(ordered_keys.last().expect("newest key"))
+        );
+        assert!(restored.status_without_state_lock(&state).evictions > 0);
+    }
+
+    fn digest(value: u64) -> String {
+        format!("{value:064x}")
     }
 }

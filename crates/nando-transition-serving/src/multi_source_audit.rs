@@ -10,8 +10,9 @@ use std::path::Path;
 
 use nando_operator_kernel::{AtomSource, RelationAtom, RelationFrame};
 use nando_operator_learning::multi_source::{
-    CoverageOpportunitySnapshotV1, MultiSourceEvidenceAuditV1, MultiSourceJoinLedgerV1,
-    MultiSourceJoinReportV1, RelationEvidenceAuditV1, build_coverage_opportunity_snapshot_v1,
+    CompletedEffectFormV1, CoverageOpportunitySnapshotV1, MultiSourceEvidenceAuditV1,
+    MultiSourceJoinLedgerV1, MultiSourceJoinReportV1, PreActionShapeClassV1,
+    RelationEvidenceAuditV1, build_coverage_opportunity_snapshot_v1,
     build_multi_source_evidence_audit_v1, factor_multi_source_row_v1,
 };
 use nando_operator_learning::opportunity::ReducibilityClass;
@@ -27,9 +28,18 @@ pub struct MultiSourceDiscoveryAuditV2 {
     pub evidence: MultiSourceEvidenceAuditV1,
     pub join: MultiSourceJoinReportV1,
     pub factorized_rows: u64,
+    pub t1_eligibility: T1EligibilityAuditV1,
     pub opportunity: CoverageOpportunitySnapshotV1,
     pub restart_byte_parity: bool,
     pub authority_ready: bool,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct T1EligibilityAuditV1 {
+    pub shape_and_effect_rows: u64,
+    pub extraction_complete_rows: u64,
+    pub witness_complete_rows: u64,
+    pub eligible_rows: u64,
 }
 
 type RelationDataV1 = (
@@ -98,6 +108,36 @@ pub fn run_multi_source_discovery_audit_v2(
         .iter()
         .map(factor_multi_source_row_v1)
         .collect::<Vec<_>>();
+    let t1_eligibility = join_ledger.rows().iter().zip(&factorized).fold(
+        T1EligibilityAuditV1::default(),
+        |mut audit, (joined, row)| {
+            let shape_and_effect = matches!(
+                row.pre_action_shape,
+                PreActionShapeClassV1::SingleRoleProjection
+                    | PreActionShapeClassV1::OneOutputManyScalarRoles
+                    | PreActionShapeClassV1::ManyOutputsLatestRelevantRole
+            ) && row.completed_effect
+                == CompletedEffectFormV1::SingleRoleProjection;
+            if shape_and_effect {
+                audit.shape_and_effect_rows = audit.shape_and_effect_rows.saturating_add(1);
+            }
+            let extraction_complete = shape_and_effect
+                && matches!(
+                    joined.topology.extraction_status,
+                    nando_operator_kernel::MultiSourceExtractionStatusV1::Complete
+                );
+            if extraction_complete {
+                audit.extraction_complete_rows = audit.extraction_complete_rows.saturating_add(1);
+            }
+            let witness_complete = extraction_complete
+                && joined.topology.role_witnesses.len() == joined.topology.roles.len();
+            if witness_complete {
+                audit.witness_complete_rows = audit.witness_complete_rows.saturating_add(1);
+                audit.eligible_rows = audit.eligible_rows.saturating_add(1);
+            }
+            audit
+        },
+    );
     let evidence_epoch_sha256 = sha256_bytes(
         &serde_json::to_vec(&(
             evidence.opportunity_checkpoint_sha256.as_str(),
@@ -116,6 +156,7 @@ pub fn run_multi_source_discovery_audit_v2(
         evidence,
         join: join_ledger.report(),
         factorized_rows: u64::try_from(factorized.len()).unwrap_or(u64::MAX),
+        t1_eligibility,
         opportunity,
         restart_byte_parity: true,
         authority_ready: false,
