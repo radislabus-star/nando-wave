@@ -126,7 +126,11 @@ pub fn identify_multi_source_t1_operator_v1(
     let mut cohorts = BTreeMap::<String, Vec<EligibleT1Row>>::new();
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(joined);
-        if factorized.pre_action_shape != PreActionShapeClassV1::SingleRoleProjection
+        if !matches!(
+            factorized.pre_action_shape,
+            PreActionShapeClassV1::SingleRoleProjection
+                | PreActionShapeClassV1::OneOutputManyScalarRoles
+        )
             || factorized.completed_effect != CompletedEffectFormV1::SingleRoleProjection
             || !matches!(
                 joined.topology.extraction_status,
