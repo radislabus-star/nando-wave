@@ -32,6 +32,7 @@ pub(super) fn receipt(
             .into_iter()
             .collect(),
         matched_program_sha256: Vec::new(),
+        matched_program_dynamic_value_root_sha256: BTreeMap::new(),
         witness_class_commitment_sha256: None,
         witness_round: None,
         witness_candidates_before: None,
@@ -50,11 +51,19 @@ pub(super) fn receipt_with_program_atoms(
         .extend(common_program_atom_ids(programs));
     value.request_atom_ids.sort_unstable();
     value.request_atom_ids.dedup();
-    value.matched_program_sha256 = programs
-        .iter()
-        .filter(|(_, program)| independently_verified_teacher_match(program, &observation.example))
-        .map(|(digest, _)| digest.clone())
-        .collect();
+    for (digest, program) in programs {
+        if !independently_verified_teacher_match(program, &observation.example) {
+            continue;
+        }
+        value.matched_program_sha256.push(digest.clone());
+        if let Ok(Some(root)) =
+            response_program_dynamic_value_root_sha256(program, &observation.example)
+        {
+            value
+                .matched_program_dynamic_value_root_sha256
+                .insert(digest.clone(), root);
+        }
+    }
     Ok(value)
 }
 

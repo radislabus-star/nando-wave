@@ -61,6 +61,8 @@ pub struct OpportunityScanStatus {
     pub exact_program_potential_input_tokens: u64,
     pub policy_rejected_exact_examples: u64,
     pub policy_rejection_reasons: BTreeMap<String, u64>,
+    pub policy_rejected_examples_by_reason: BTreeMap<String, OpportunityClassStatus>,
+    pub policy_rejected_examples_by_reason_and_dynamic: BTreeMap<String, OpportunityClassStatus>,
     pub synthesis_errors: BTreeMap<String, u64>,
     pub scalar_overlap_examples: u64,
     pub unsupported_examples: u64,
@@ -366,7 +368,7 @@ fn finish_turn(turn: &mut TurnSample, status: &mut OpportunityScanStatus) -> Res
         provider_payload: serde_json::json!({"input": input}),
         expected_response,
     };
-    observe_dynamic_coverage(status, &example, turn.input_tokens);
+    let dynamic_coverage_class = observe_dynamic_coverage(status, &example, turn.input_tokens);
     let scalar_overlap = has_scalar_overlap(&example);
     let space = match enumerate_source_neutral_response_programs(&example) {
         Ok(space) => space,
@@ -408,8 +410,21 @@ fn finish_turn(turn: &mut TurnSample, status: &mut OpportunityScanStatus) -> Res
         status.policy_rejected_exact_examples =
             status.policy_rejected_exact_examples.saturating_add(1);
         for (reason, count) in space.policy_rejection_reasons {
-            let entry = status.policy_rejection_reasons.entry(reason).or_default();
+            let entry = status
+                .policy_rejection_reasons
+                .entry(reason.clone())
+                .or_default();
             *entry = entry.saturating_add(count as u64);
+            observe_class_status(
+                &mut status.policy_rejected_examples_by_reason,
+                reason.clone(),
+                turn.input_tokens,
+            );
+            observe_class_status(
+                &mut status.policy_rejected_examples_by_reason_and_dynamic,
+                format!("{reason}.{dynamic_coverage_class}"),
+                turn.input_tokens,
+            );
         }
     }
     if scalar_overlap {
@@ -431,7 +446,7 @@ fn observe_dynamic_coverage(
     status: &mut OpportunityScanStatus,
     example: &CollectionSynthesisExample,
     input_tokens: u64,
-) {
+) -> String {
     let diagnostic = diagnose_response_dynamic_coverage(example);
     let percent = diagnostic
         .dynamic_bytes
@@ -457,10 +472,21 @@ fn observe_dynamic_coverage(
     } else {
         "mixed"
     };
-    let entry = status
-        .dynamic_coverage_classes
-        .entry(format!("dynamic_{band}.{source}"))
-        .or_default();
+    let class = format!("dynamic_{band}.{source}");
+    observe_class_status(
+        &mut status.dynamic_coverage_classes,
+        class.clone(),
+        input_tokens,
+    );
+    class
+}
+
+fn observe_class_status(
+    classes: &mut BTreeMap<String, OpportunityClassStatus>,
+    class: String,
+    input_tokens: u64,
+) {
+    let entry = classes.entry(class).or_default();
     entry.examples = entry.examples.saturating_add(1);
     entry.potential_input_tokens = entry.potential_input_tokens.saturating_add(input_tokens);
 }

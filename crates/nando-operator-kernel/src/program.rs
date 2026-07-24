@@ -1022,7 +1022,6 @@ fn safe_collection_renderer(prefix: &str, suffix: &str) -> bool {
         || contains_windows_path(&combined)
         || contains_high_entropy_run(&combined)
         || contains_phone_like(&combined)
-        || (combined.contains('\n') && combined.chars().any(char::is_alphabetic))
     {
         return false;
     }
@@ -1372,6 +1371,10 @@ mod tests {
             Ok(())
         );
         assert_eq!(rendered_collection("Результат: ", ".").validate(), Ok(()));
+        assert_eq!(
+            rendered_collection("line one\nline two ", "").validate(),
+            Ok(())
+        );
         for (prefix, suffix) in [
             ("Authorization: Bearer AbC123", ""),
             ("email=user@example.com ", ""),
@@ -1379,7 +1382,6 @@ mod tests {
             ("source=C:\\private\\data.json ", ""),
             ("key=AbCdEfGhIjKlMnOpQrStUv123456 ", ""),
             ("digest=0123456789abcdef0123456789abcdef ", ""),
-            ("line one\nline two ", ""),
             ("Клиент Иван Иванов: ", ""),
             ("Телефон +7 999 123-45-67: ", ""),
             ("Адрес Невский проспект: ", ""),

@@ -163,10 +163,11 @@ pub use collection_synthesis::{
     diagnose_response_dynamic_coverage, enumerate_source_neutral_collection_programs,
     enumerate_source_neutral_response_programs, is_learned_bounded_response_program,
     is_privacy_safe_online_response_program, is_source_neutral_collection_program,
-    is_source_neutral_response_program, response_program_authority_matches_example,
+    is_source_neutral_response_program, is_transfer_bound_response_program,
+    response_program_authority_matches_example, response_program_dynamic_value_root_sha256,
     response_program_exactly_matches_example, response_program_matches_example,
-    source_neutral_verifier_for_program, synthesize_collection_program,
-    synthesize_unique_collection_program,
+    response_program_requires_static_frame_transfer, source_neutral_verifier_for_program,
+    synthesize_collection_program, synthesize_unique_collection_program,
 };
 pub use contracts::{
     AtomSource, AtomValueType, FrozenSplitError, GuardCandidate, INGRESS_EVENT_SCHEMA,

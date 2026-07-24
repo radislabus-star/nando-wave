@@ -23,6 +23,8 @@ pub(super) struct CollectionIdentificationV1 {
 pub(super) fn adaptive_transfer_proof_root(
     future_manifest_sha256: &str,
     program_sha256: &str,
+    program: &ResponseProgram,
+    support_receipts: &[OnlineCollectionReceipt],
     future_receipts: &[OnlineCollectionReceipt],
     parity_receipts: &[DurableRuntimeParityReceipt],
 ) -> Result<String, String> {
@@ -45,10 +47,32 @@ pub(super) fn adaptive_transfer_proof_root(
     {
         return Err("collection_adaptive_transfer_parity_incomplete".to_owned());
     }
+    let static_frame_transfer = if response_program_requires_static_frame_transfer(program) {
+        let support_roots = dynamic_value_roots(program_sha256, support_receipts)?;
+        let future_roots = dynamic_value_roots(program_sha256, future_receipts)?;
+        if support_roots.is_empty()
+            || future_roots.is_empty()
+            || future_roots.difference(&support_roots).next().is_none()
+        {
+            return Err("collection_static_frame_transfer_unproven".to_owned());
+        }
+        Some(
+            canonical_json_sha256(&(
+                "nando.collection-static-frame-transfer.v1",
+                program_sha256,
+                support_roots,
+                future_roots,
+            ))
+            .map_err(str::to_owned)?,
+        )
+    } else {
+        None
+    };
     canonical_json_sha256(&(
         "nando.collection-adaptive-transfer-proof.v1",
         future_manifest_sha256,
         program_sha256,
+        static_frame_transfer,
         parity
             .iter()
             .map(|receipt| {
@@ -60,6 +84,23 @@ pub(super) fn adaptive_transfer_proof_root(
             .collect::<Vec<_>>(),
     ))
     .map_err(str::to_owned)
+}
+
+fn dynamic_value_roots(
+    program_sha256: &str,
+    receipts: &[OnlineCollectionReceipt],
+) -> Result<BTreeSet<String>, String> {
+    receipts
+        .iter()
+        .map(|receipt| {
+            receipt
+                .matched_program_dynamic_value_root_sha256
+                .get(program_sha256)
+                .filter(|root| is_sha256(root))
+                .cloned()
+                .ok_or_else(|| "collection_static_frame_dynamic_root_missing".to_owned())
+        })
+        .collect()
 }
 
 pub(super) fn identify_collection_bucket(

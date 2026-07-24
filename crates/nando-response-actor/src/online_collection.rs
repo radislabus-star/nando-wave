@@ -28,14 +28,15 @@ use crate::{
     ResponseProgram, build_durable_runtime_parity_receipt, canonical_json_sha256,
     diagnose_response_dynamic_coverage, enumerate_source_neutral_response_programs,
     execute_response, is_learned_bounded_response_program, is_privacy_safe_online_response_program,
-    is_source_neutral_response_program,
+    is_source_neutral_response_program, is_transfer_bound_response_program,
     package::{
         request_phase_atom_ids, response_pre_action_context_atom_ids,
         response_program_external_verifier_schema,
     },
-    response_program_authority_matches_example, response_program_exactly_matches_example,
-    response_program_kind, response_program_required_routing_atom_ids, sha256_bytes,
-    source_neutral_verifier_for_program, verify_response_independently,
+    response_program_authority_matches_example, response_program_dynamic_value_root_sha256,
+    response_program_exactly_matches_example, response_program_kind,
+    response_program_required_routing_atom_ids, response_program_requires_static_frame_transfer,
+    sha256_bytes, source_neutral_verifier_for_program, verify_response_independently,
 };
 
 mod admission;
@@ -318,6 +319,8 @@ pub fn online_collection_adaptive_transfer_proof_digest(
     adaptive_transfer_proof_root(
         &candidate.future_manifest_sha256,
         &candidate.program_sha256,
+        &candidate.package.program,
+        &candidate.support_receipts,
         &candidate.future_receipts,
         &candidate.durable_runtime_parity_receipts,
     )

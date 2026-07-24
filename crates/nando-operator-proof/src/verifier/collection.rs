@@ -610,7 +610,6 @@ pub(super) fn independently_safe_collection_renderer(renderer: &CollectionOutput
         && !independently_contains_windows_path(&combined)
         && !independently_contains_high_entropy_run(&combined)
         && !independently_contains_phone_like(&combined)
-        && !(combined.contains('\n') && combined.chars().any(char::is_alphabetic))
 }
 
 fn independently_contains_phone_like(value: &str) -> bool {

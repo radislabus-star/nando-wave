@@ -422,6 +422,7 @@ fn maximal_decidable_subcenter_keeps_32_clean_rows_and_excludes_ambiguous_layout
             } else {
                 beta_digest.clone()
             }],
+            matched_program_dynamic_value_root_sha256: BTreeMap::new(),
             witness_class_commitment_sha256: None,
             witness_round: None,
             witness_candidates_before: None,
@@ -523,6 +524,7 @@ fn durable_pre_action_atoms_restore_phase_adapter_without_raw_examples() {
                 } else {
                     beta_digest.clone()
                 }],
+                matched_program_dynamic_value_root_sha256: BTreeMap::new(),
                 witness_class_commitment_sha256: None,
                 witness_round: None,
                 witness_candidates_before: None,
@@ -619,6 +621,7 @@ fn durable_law_subcenter_restores_verified_rows_without_raw_examples() {
             } else {
                 json_digest.clone()
             }],
+            matched_program_dynamic_value_root_sha256: BTreeMap::new(),
             witness_class_commitment_sha256: None,
             witness_round: None,
             witness_candidates_before: None,

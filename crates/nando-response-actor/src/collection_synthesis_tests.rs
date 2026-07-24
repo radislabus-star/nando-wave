@@ -808,6 +808,32 @@ fn policy_rejection_retains_exact_unsafe_sequence() {
 }
 
 #[test]
+fn benign_multiline_static_frame_enters_transfer_bound_version_space() {
+    let example = CollectionSynthesisExample {
+        provider_payload: json!({
+            "input":[{"type":"function_call_output","output":"{\"value\":7}"}]
+        }),
+        expected_response: "Result:\n7".to_owned(),
+    };
+    let space = enumerate_source_neutral_response_programs(&example).expect("space");
+    let program = space
+        .programs
+        .iter()
+        .find(|program| {
+            response_program_exactly_matches_example(program, &example)
+                && response_program_requires_static_frame_transfer(program)
+        })
+        .expect("transfer-bound static frame");
+    assert!(is_transfer_bound_response_program(program));
+    assert!(
+        response_program_dynamic_value_root_sha256(program, &example)
+            .expect("dynamic root")
+            .is_some()
+    );
+    assert!(!is_source_neutral_response_program(program));
+}
+
+#[test]
 fn unsafe_mixed_request_tool_surface_retains_canonical_dynamic_law() {
     let example = CollectionSynthesisExample {
         provider_payload: json!({

@@ -1174,6 +1174,28 @@ deterministic duplicate from the most represented session before freeze. A row
 already classified as future is never moved into support, and no replacement
 is allowed after the support independence gate is satisfied.
 
+Stable response prose is a transfer-bound VM frame, not automatically trusted
+text. `RenderSequence` may carry intrinsically safe static segments around
+typed dynamic roles, including multiline frames, but adaptive authority
+requires all of the following:
+
+```text
+support identifies one executable program
+-> freeze commits the exact frame and role program
+-> future rebinds the same roles
+-> actor and independent verifier reproduce the complete response
+-> at least one future dynamic-value root is new after freeze
+-> static frame remains byte-identical
+-> external admission recomputes the transfer root
+```
+
+Only SHA-256 roots of ordered dynamic values enter durable receipts; raw values
+are not added to proof state. A repeated value can verify parity but cannot by
+itself prove frame transfer. Static text that captures a dynamic value, contains
+private material, exceeds the output budget, or lacks an independent future
+remains non-authoritative. Legacy packages may prove the same class only through
+their separate fixed-row control contract.
+
 Circuit ranking uses one contribution per lineage for each edge, then edge
 coherence, plane coherence, and whole-circuit closure. Raw sample frequency must
 not let one common relation drown a weak mandatory edge. Crystallization requires

@@ -128,6 +128,8 @@ impl OnlineCollectionMiner {
                     let transfer_root = adaptive_transfer_proof_root(
                         &future_manifest_sha256,
                         program_sha256,
+                        &program,
+                        &bucket.support,
                         &bucket.future,
                         &bucket
                             .future

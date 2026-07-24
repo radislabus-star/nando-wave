@@ -1213,3 +1213,33 @@ scope. Adaptive identification consumes the original capture-owned transition;
 the general miner separately consumes its canonical reconstruction. On a
 representation-version change, the adaptive generation starts fresh while
 already admitted packages remain immutable.
+
+## 27. Transfer-Bound Static Response Frames
+
+Status: implemented in the adaptive collection route.
+
+```text
+safe static frame + typed dynamic roles
+-> singleton version-space freeze
+-> same-value future                    parity only, no authority
+-> new dynamic-value root after freeze
+-> exact actor/verifier parity
+-> sealed adaptive transfer proof
+-> external admission candidate
+```
+
+This is not a relaxation of renderer privacy policy. Secrets, URLs, paths,
+phone-like values, high-entropy material, oversized frames, and static capture
+of dynamic values remain rejected. Receipts store only per-program SHA-256
+roots of ordered dynamic role values. The transfer root is reconstructed by
+external admission from frozen support and future manifests.
+
+Controlled proof:
+
+```text
+benign multiline frame in version space              PASS
+same dynamic value cannot seal transfer              PASS
+new dynamic value seals transfer                     PASS
+checkpoint restart preserves proof                   PASS
+external admission recomputes and accepts candidate  PASS
+```

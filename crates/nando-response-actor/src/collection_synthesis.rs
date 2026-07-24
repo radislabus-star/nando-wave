@@ -613,7 +613,8 @@ fn response_program_has_structural_output_alignment(
     compose_render_sequence_candidates(example, &selectors, include_surface_renderer)
         .into_iter()
         .filter(|surface| {
-            surface.validate() == Err("unsafe_render_sequence_static_text")
+            (response_program_requires_static_frame_transfer(surface)
+                || surface.validate() == Err("unsafe_render_sequence_static_text"))
                 && render_policy_rejected_sequence(surface, example)
                     .is_some_and(|response| response == example.expected_response)
         })
@@ -1183,6 +1184,34 @@ pub fn is_source_neutral_response_program(program: &ResponseProgram) -> bool {
     }
 }
 
+/// Returns whether a learned program can enter transfer-bound identification.
+///
+/// A response frame may contain stable prose, but it remains surface-bound
+/// until adaptive future evidence proves the same frame over new dynamic
+/// values. This predicate grants no package or execution authority.
+#[must_use]
+pub fn is_transfer_bound_response_program(program: &ResponseProgram) -> bool {
+    if program.validate().is_err() || !is_learned_bounded_response_program(program) {
+        return false;
+    }
+    match &program.operation {
+        ResponseOperation::UniqueConsensus { variants, .. } => {
+            !variants.is_empty()
+                && variants
+                    .iter()
+                    .all(|variant| is_transfer_bound_response_program(&variant.program))
+        }
+        ResponseOperation::ProjectSelectedValue { selector, .. }
+        | ResponseOperation::ProjectStatus { selector, .. } => source_neutral_selector(selector),
+        ResponseOperation::ComposeCollection { .. } => {
+            is_source_neutral_collection_program(program)
+        }
+        ResponseOperation::FunctionCallFromRoles { .. }
+        | ResponseOperation::CustomToolCallFromRoles { .. } => true,
+        _ => false,
+    }
+}
+
 fn response_renderer_is_surface_neutral(renderer: &CollectionOutputRenderer) -> bool {
     match renderer {
         CollectionOutputRenderer::Direct | CollectionOutputRenderer::RequestTemplate { .. } => true,
@@ -1226,6 +1255,103 @@ fn response_program_static_renderer_captures_dynamic_value(
             |segment| matches!(segment, ResponseRenderSegment::Static { text } if captures(text)),
         ),
     }
+}
+
+#[must_use]
+pub fn response_program_requires_static_frame_transfer(program: &ResponseProgram) -> bool {
+    let renderer = match &program.operation {
+        ResponseOperation::ProjectSelectedValue { renderer, .. }
+        | ResponseOperation::ProjectStatus { renderer, .. }
+        | ResponseOperation::ComposeCollection { renderer, .. } => renderer,
+        ResponseOperation::UniqueConsensus { variants, .. } => {
+            return variants
+                .iter()
+                .any(|variant| response_program_requires_static_frame_transfer(&variant.program));
+        }
+        _ => return false,
+    };
+    match renderer {
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RequestTemplate { .. } => {
+            false
+        }
+        CollectionOutputRenderer::RenderTemplate { prefix, suffix } => prefix
+            .chars()
+            .chain(suffix.chars())
+            .any(char::is_alphanumeric),
+        CollectionOutputRenderer::RenderSequence { segments } => segments.iter().any(|segment| {
+            matches!(
+                segment,
+                ResponseRenderSegment::Static { text }
+                    if text.chars().any(char::is_alphanumeric)
+            )
+        }),
+    }
+}
+
+pub fn response_program_dynamic_value_root_sha256(
+    program: &ResponseProgram,
+    example: &CollectionSynthesisExample,
+) -> Result<Option<String>, &'static str> {
+    if !response_program_requires_static_frame_transfer(program) {
+        return Ok(None);
+    }
+    let renderer = match &program.operation {
+        ResponseOperation::ProjectSelectedValue { renderer, .. }
+        | ResponseOperation::ProjectStatus { renderer, .. }
+        | ResponseOperation::ComposeCollection { renderer, .. } => renderer,
+        ResponseOperation::UniqueConsensus { .. } => {
+            return Err("static_frame_consensus_requires_variant_proof");
+        }
+        _ => return Err("static_frame_program_kind"),
+    };
+    let mut direct = program.clone();
+    match &mut direct.operation {
+        ResponseOperation::ProjectSelectedValue { renderer, .. }
+        | ResponseOperation::ProjectStatus { renderer, .. }
+        | ResponseOperation::ComposeCollection { renderer, .. } => {
+            *renderer = CollectionOutputRenderer::Direct;
+        }
+        _ => return Err("static_frame_program_kind"),
+    }
+    let primary = execute_example(&direct, example)
+        .response
+        .ok_or("static_frame_primary_missing")?;
+    let mut dynamic_values = Vec::new();
+    match renderer {
+        CollectionOutputRenderer::RenderTemplate { .. } => dynamic_values.push(primary),
+        CollectionOutputRenderer::RenderSequence { segments } => {
+            for segment in segments {
+                match segment {
+                    ResponseRenderSegment::Static { .. } => {}
+                    ResponseRenderSegment::Primary => dynamic_values.push(primary.clone()),
+                    ResponseRenderSegment::Selected { selector, format } => {
+                        let selected = ResponseProgram::project_selected_value(
+                            selector.clone(),
+                            *format,
+                            "completed",
+                        );
+                        dynamic_values.push(
+                            execute_example(&selected, example)
+                                .response
+                                .ok_or("static_frame_selected_value_missing")?,
+                        );
+                    }
+                }
+            }
+        }
+        CollectionOutputRenderer::Direct | CollectionOutputRenderer::RequestTemplate { .. } => {
+            return Err("static_frame_renderer_missing");
+        }
+    }
+    if dynamic_values.is_empty() || dynamic_values.iter().any(String::is_empty) {
+        return Err("static_frame_dynamic_values_missing");
+    }
+    let observed = dynamic_values.iter().cloned().collect::<BTreeSet<_>>();
+    if response_program_static_renderer_captures_dynamic_value(program, &observed) {
+        return Err("static_frame_captures_dynamic_value");
+    }
+    crate::canonical_json_sha256(&("nando.static-frame-dynamic-values.v1", dynamic_values))
+        .map(Some)
 }
 
 fn static_renderer_text_is_surface_neutral(value: &str) -> bool {

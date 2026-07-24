@@ -24,6 +24,47 @@ fn adaptive_count_program() -> ResponseProgram {
     )
 }
 
+fn adaptive_static_frame_program() -> ResponseProgram {
+    ResponseProgram::project_selected_value(
+        crate::ResponseValueSelector::UniqueTurnScalar {
+            value_type: crate::AtomValueType::Integer,
+        },
+        crate::ValueProjectionFormat::PlainText,
+        "completed",
+    )
+    .with_value_renderer(crate::CollectionOutputRenderer::RenderSequence {
+        segments: vec![
+            crate::ResponseRenderSegment::Static {
+                text: "Result:\n".to_owned(),
+            },
+            crate::ResponseRenderSegment::Primary,
+        ],
+    })
+}
+
+fn adaptive_static_frame_observation(index: usize, value: i64) -> OnlineCollectionObservation {
+    OnlineCollectionObservation {
+        evidence_graph_sha256: format!("{index:064x}"),
+        client_intent_id_sha256: format!("{:064x}", index + 30_000),
+        session_id_sha256: format!("{:064x}", index + 40_000),
+        event_time_unix_nanos: Some(index as u64),
+        estimated_input_tokens: 100,
+        example: CollectionSynthesisExample {
+            provider_payload: serde_json::json!({
+                "input": [
+                    {"type":"message","role":"user","content":[{
+                        "type":"input_text","text":"Report the result"
+                    }]},
+                    {"type":"function_call_output","output":serde_json::json!({
+                        "value": value
+                    }).to_string()}
+                ]
+            }),
+            expected_response: format!("Result:\n{value}"),
+        },
+    }
+}
+
 fn adaptive_bucket(
     bucket_id: &str,
     archetype_id: &str,
@@ -329,6 +370,103 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
     )
     .expect("external admission")
     .expect("active snapshot");
+    assert_eq!(snapshot.registry.packages.len(), 1);
+    assert!(snapshot.admission.eligible_for_local_accept);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn adaptive_static_frame_requires_transfer_to_a_new_dynamic_value() {
+    let root = adaptive_root("static-frame-transfer");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = adaptive_static_frame_observation(101, 7);
+    let program = adaptive_static_frame_program();
+    program.validate().expect("intrinsically safe static frame");
+    assert!(response_program_requires_static_frame_transfer(&program));
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"f".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest, program.clone())]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("adaptive freeze");
+
+    let same_value = adaptive_static_frame_observation(102, 7);
+    assert!(
+        miner
+            .evaluate_frozen_candidates(&same_value)
+            .expect("same-value future")
+    );
+    let same_value_package = miner
+        .quarantine_packages()
+        .expect("same-value package")
+        .into_iter()
+        .next()
+        .expect("quarantine package");
+    assert!(same_value_package.proof.adaptive_identification.is_none());
+
+    let transferred = adaptive_static_frame_observation(103, 11);
+    assert!(
+        miner
+            .evaluate_frozen_candidates(&transferred)
+            .expect("transferred future")
+    );
+    let transferred_package = miner
+        .quarantine_packages()
+        .expect("transferred package")
+        .into_iter()
+        .next()
+        .expect("quarantine package");
+    transferred_package
+        .proof
+        .adaptive_identification
+        .as_ref()
+        .expect("static frame transfer proof")
+        .validate()
+        .expect("valid transfer proof");
+    miner.persist().expect("persist static frame proof");
+    drop(miner);
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("restart");
+    let restarted_package = miner
+        .quarantine_packages()
+        .expect("restarted package")
+        .into_iter()
+        .next()
+        .expect("restarted static frame package");
+    assert!(restarted_package.proof.adaptive_identification.is_some());
+    let mut alternative = adaptive_bucket(
+        &"e".repeat(64),
+        &archetype,
+        BTreeMap::from([(
+            canonical_json_sha256(&program).expect("alternative digest"),
+            program,
+        )]),
+        &support,
+    );
+    alternative.support.clear();
+    alternative.runtime_examples.clear();
+    miner.checkpoint.buckets.push(alternative);
+    let candidates = miner
+        .admission_candidates()
+        .expect("static frame admission candidates");
+    assert_eq!(candidates.len(), 1);
+    let snapshot = crate::build_online_collection_admission_snapshot(
+        &candidates,
+        "project",
+        1,
+        100,
+        60,
+        &"d".repeat(64),
+        &"e".repeat(64),
+    )
+    .expect("static frame external admission")
+    .expect("static frame active snapshot");
     assert_eq!(snapshot.registry.packages.len(), 1);
     assert!(snapshot.admission.eligible_for_local_accept);
     fs::remove_dir_all(root).expect("cleanup");

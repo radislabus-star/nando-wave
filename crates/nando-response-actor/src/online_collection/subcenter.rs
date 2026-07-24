@@ -20,7 +20,7 @@ pub(super) fn support_program_subcenters(
 ) -> Result<Vec<OnlineCollectionBucket>, String> {
     let mut ranked = Vec::new();
     for (program_sha256, program) in &bucket.programs {
-        if !is_source_neutral_response_program(program) {
+        if !is_transfer_bound_response_program(program) {
             continue;
         }
         let mut support = bucket

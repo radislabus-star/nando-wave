@@ -57,6 +57,8 @@ pub struct OnlineCollectionReceipt {
     pub request_atom_ids: Vec<u64>,
     #[serde(default)]
     pub matched_program_sha256: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub matched_program_dynamic_value_root_sha256: BTreeMap<String, String>,
     #[serde(default)]
     pub witness_class_commitment_sha256: Option<String>,
     #[serde(default)]
