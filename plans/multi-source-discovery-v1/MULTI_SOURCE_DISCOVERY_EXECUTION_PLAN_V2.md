@@ -1,6 +1,6 @@
 # Nando Multi-Source Discovery Execution Plan V2
 
-Status: `MS2_COMPLETE / MS3_IMPLEMENTED_AWAITING_NATURAL_JOIN / MS4_BLOCKED`
+Status: `MS2_COMPLETE / MS3_DEPLOYMENT_PENDING / MS4_BLOCKED`
 
 Date: 2026-07-24 Europe/Tallinn.
 
@@ -25,12 +25,27 @@ Current implementation checkpoint:
 ```text
 MS0-R / MS1 structural capture                 PASS
 MS2 blind join / factorizer / marginal API     PASS
-MS3 adaptive T1 identification code            PASS
-MS3 controlled 1 support + 1 future            PASS
+MS3 source-neutral role witness                CODE PASS
+MS3 sealed minimal proof basis                 CODE PASS
+MS3 existing crystallizer/admission binding    CODE PASS
 MS3 natural completed RelationFrame            NOT_EVALUATED
 MS3 runtime actor/verifier parity               NOT_EVALUATED
 MS4 natural package admission                   BLOCKED
 ```
+
+Stage closure is live-result-only:
+
+```text
+code present or tests PASS              implementation evidence only
+controlled fixture PASS                 causal control only
+deployed ordinary traffic result        required to close MS3-MS8
+ordinary CPU receipt + zero safety debt required to close MS4+
+three completed mature windows          required to close M3
+```
+
+No stage is marked complete because its types compile, its tests pass, its
+artifact exists or its service starts. The owning STOP packet must contain the
+specified live result from a deployed generation.
 
 The live route does not use a universal evidence-row threshold. Readiness is:
 

@@ -80,6 +80,38 @@ impl OnlineResponseStream {
             .bounded_relation_frames_for_multi_source_proof()
     }
 
+    #[must_use]
+    pub fn retained_teacher_transitions_for_multi_source_proof_v1(
+        &self,
+    ) -> Vec<crate::TeacherTransition> {
+        let frames = self.retained_relation_frames_v1();
+        let mut parity_by_frame = self
+            .miner
+            .self_training_v2
+            .runtime_parity_cases_for_frames(&frames)
+            .into_iter()
+            .map(|case| (case.evidence_ref_sha256.clone(), case))
+            .collect::<BTreeMap<_, _>>();
+        frames
+            .into_iter()
+            .filter_map(|frame| {
+                let parity = parity_by_frame.remove(&frame.frame_id_sha256)?;
+                let economics = (frame.estimated_input_tokens > 0).then(|| EconomicsReceipt {
+                    schema: ECONOMICS_RECEIPT_SCHEMA_V1.to_owned(),
+                    exact_input_tokens: frame.estimated_input_tokens,
+                    ordinary: true,
+                    controlled: false,
+                    replay: false,
+                    dedupe_eligible: true,
+                    provider_evidence_ref_sha256: frame.evidence_ref_sha256.clone(),
+                });
+                let mut transition = teacher_transition_from_completed(&frame, economics).ok()?;
+                transition.runtime_parity_case = Some(parity);
+                Some(transition)
+            })
+            .collect()
+    }
+
     /// Restores only the bounded miner checkpoint. Live V2 evidence arrives
     /// through framed worker segments, so production never scans the legacy
     /// relation JSON ledger during startup.

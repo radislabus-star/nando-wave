@@ -4,7 +4,7 @@ use nando_operator_kernel::{
     MultiSourceExtractionStatusV1, OperatorGenerationComponentRootsV3, ProgramSemanticClassIdV1,
     ProgramSemanticClassInputV1, RelationFrame, ResponseProgram, canonical_json_sha256,
     response_program_required_routing_atom_ids, response_program_version_root_sha256,
-    seal_operator_generation_manifest_v3, seal_program_semantic_class_v1,
+    seal_operator_generation_manifest_v3, seal_program_semantic_class_v1, valid_nonzero_sha256,
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,8 +21,11 @@ use super::{
     PreActionShapeClassV1, factor_multi_source_row_v1,
 };
 
-pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V1: &str =
-    "nando.multi-source-t1-identification.v1";
+pub const MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2: &str =
+    "nando.multi-source-t1-identification.v2";
+pub const MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1: &str = "nando.multi-source-t1-proof-basis.v1";
+const MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS: usize = 64;
+const MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS: usize = 12;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -49,7 +52,15 @@ pub struct PassiveT1ProbeContractV1 {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct MultiSourceT1IdentificationV1 {
+pub struct MultiSourceT1ProofBasisV1 {
+    pub schema: String,
+    pub basis_root_sha256: String,
+    pub support_capture_frame_ids_sha256: Vec<String>,
+    pub future_capture_frame_ids_sha256: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MultiSourceT1IdentificationV2 {
     pub schema: String,
     pub report_root_sha256: String,
     pub evidence_epoch_sha256: String,
@@ -67,6 +78,7 @@ pub struct MultiSourceT1IdentificationV1 {
     pub negative_accepts: usize,
     pub candidate_freeze: Option<CandidateFreezeReceiptV1>,
     pub canonical_program: Option<ResponseProgram>,
+    pub proof_basis: Option<MultiSourceT1ProofBasisV1>,
     pub passive_probe: Option<PassiveT1ProbeContractV1>,
     pub exact_transfer_parity: bool,
     pub runtime_actor_verifier_parity: bool,
@@ -100,6 +112,7 @@ struct T1IdentificationDigest<'a> {
     negative_accepts: usize,
     candidate_freeze: &'a Option<CandidateFreezeReceiptV1>,
     canonical_program: &'a Option<ResponseProgram>,
+    proof_basis: &'a Option<MultiSourceT1ProofBasisV1>,
     passive_probe: &'a Option<PassiveT1ProbeContractV1>,
     exact_transfer_parity: bool,
     runtime_actor_verifier_parity: bool,
@@ -114,7 +127,7 @@ pub fn identify_multi_source_t1_operator_v1(
     frames: &[RelationFrame],
     active_intents: &BTreeSet<String>,
     evidence_epoch_sha256: String,
-) -> MultiSourceT1IdentificationV1 {
+) -> MultiSourceT1IdentificationV2 {
     let frame_by_root = frames
         .iter()
         .filter_map(|frame| {
@@ -277,6 +290,7 @@ pub fn identify_multi_source_t1_operator_v1(
 
     let mut freeze = None;
     let mut canonical_program = None;
+    let mut support_capture_frame_ids_sha256 = Vec::new();
     let mut support_lineages = BTreeSet::new();
     let mut future_candidates = Vec::new();
     for row in accepted {
@@ -309,6 +323,16 @@ pub fn identify_multi_source_t1_operator_v1(
                 );
             }
         };
+        support_capture_frame_ids_sha256.push(row.frame.frame_id_sha256.clone());
+        if support_capture_frame_ids_sha256.len() > MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS {
+            return selected_terminal_report(
+                evidence_epoch_sha256,
+                shape_root,
+                selected_marginal_input_tokens,
+                MultiSourceT1IdentificationStateV1::SearchExhausted,
+                "support_proof_basis_budget_exhausted",
+            );
+        }
         match state {
             OperatorIdentificationStateV1::Identified { class } => {
                 let selected = registered
@@ -382,8 +406,8 @@ pub fn identify_multi_source_t1_operator_v1(
     let Some(candidate_freeze) = freeze else {
         let metrics = machine.metrics();
         let passive_probe = passive_probe(&shape_root, &machine, &registered, &class_by_program);
-        return finalize_report(MultiSourceT1IdentificationV1 {
-            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V1.to_owned(),
+        return finalize_report(MultiSourceT1IdentificationV2 {
+            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2.to_owned(),
             report_root_sha256: String::new(),
             evidence_epoch_sha256,
             selected_shape_root_sha256: Some(shape_root),
@@ -400,6 +424,7 @@ pub fn identify_multi_source_t1_operator_v1(
             negative_accepts: 0,
             candidate_freeze: None,
             canonical_program: None,
+            proof_basis: None,
             passive_probe,
             exact_transfer_parity: false,
             runtime_actor_verifier_parity: false,
@@ -411,6 +436,8 @@ pub fn identify_multi_source_t1_operator_v1(
     let selected_program = canonical_program.expect("freeze owns canonical program");
     let mut support_reuse_rows = 0usize;
     let mut wrong_role_bindings = 0usize;
+    let mut future_capture_frame_ids_sha256 = Vec::new();
+    let mut future_basis_lineages = BTreeSet::new();
     for row in future_candidates {
         if support_lineages.contains(&row.joined.session_lineage_sha256) {
             support_reuse_rows = support_reuse_rows.saturating_add(1);
@@ -425,6 +452,10 @@ pub fn identify_multi_source_t1_operator_v1(
         };
         if machine.apply_future(observation).is_err() {
             wrong_role_bindings = wrong_role_bindings.saturating_add(1);
+        } else if future_capture_frame_ids_sha256.len() < MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS
+            && future_basis_lineages.insert(row.joined.session_lineage_sha256.clone())
+        {
+            future_capture_frame_ids_sha256.push(row.frame.frame_id_sha256.clone());
         }
     }
     let accounting = machine
@@ -461,8 +492,20 @@ pub fn identify_multi_source_t1_operator_v1(
         _ => Some("independent_post_freeze_future_missing".to_owned()),
     };
     let metrics = machine.metrics();
-    finalize_report(MultiSourceT1IdentificationV1 {
-        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V1.to_owned(),
+    let Some(proof_basis) = seal_t1_proof_basis_v1(
+        support_capture_frame_ids_sha256,
+        future_capture_frame_ids_sha256,
+    ) else {
+        return selected_terminal_report(
+            evidence_epoch_sha256,
+            shape_root,
+            selected_marginal_input_tokens,
+            MultiSourceT1IdentificationStateV1::InvalidEvidence,
+            "proof_basis_seal_failed",
+        );
+    };
+    finalize_report(MultiSourceT1IdentificationV2 {
+        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2.to_owned(),
         report_root_sha256: String::new(),
         evidence_epoch_sha256,
         selected_shape_root_sha256: Some(shape_root),
@@ -479,6 +522,7 @@ pub fn identify_multi_source_t1_operator_v1(
         negative_accepts,
         candidate_freeze: Some(candidate_freeze),
         canonical_program: Some(selected_program),
+        proof_basis: Some(proof_basis),
         passive_probe: None,
         exact_transfer_parity,
         runtime_actor_verifier_parity: false,
@@ -700,9 +744,9 @@ fn terminal_report(
     evidence_epoch_sha256: String,
     state: MultiSourceT1IdentificationStateV1,
     blocker: impl Into<String>,
-) -> MultiSourceT1IdentificationV1 {
-    finalize_report(MultiSourceT1IdentificationV1 {
-        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V1.to_owned(),
+) -> MultiSourceT1IdentificationV2 {
+    finalize_report(MultiSourceT1IdentificationV2 {
+        schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2.to_owned(),
         report_root_sha256: String::new(),
         evidence_epoch_sha256,
         selected_shape_root_sha256: None,
@@ -719,6 +763,7 @@ fn terminal_report(
         negative_accepts: 0,
         candidate_freeze: None,
         canonical_program: None,
+        proof_basis: None,
         passive_probe: None,
         exact_transfer_parity: false,
         runtime_actor_verifier_parity: false,
@@ -734,23 +779,84 @@ fn selected_terminal_report(
     selected_marginal_input_tokens: u64,
     state: MultiSourceT1IdentificationStateV1,
     blocker: impl Into<String>,
-) -> MultiSourceT1IdentificationV1 {
+) -> MultiSourceT1IdentificationV2 {
     let mut report = terminal_report(evidence_epoch_sha256, state, blocker);
     report.selected_shape_root_sha256 = Some(shape_root);
     report.selected_marginal_input_tokens = selected_marginal_input_tokens;
     finalize_report(report)
 }
 
-fn finalize_report(mut report: MultiSourceT1IdentificationV1) -> MultiSourceT1IdentificationV1 {
+fn finalize_report(mut report: MultiSourceT1IdentificationV2) -> MultiSourceT1IdentificationV2 {
     report.report_root_sha256 = report.expected_root();
     report
 }
 
-impl MultiSourceT1IdentificationV1 {
+fn seal_t1_proof_basis_v1(
+    support_capture_frame_ids_sha256: Vec<String>,
+    future_capture_frame_ids_sha256: Vec<String>,
+) -> Option<MultiSourceT1ProofBasisV1> {
+    if support_capture_frame_ids_sha256.is_empty()
+        || support_capture_frame_ids_sha256.len() > MULTI_SOURCE_T1_MAX_SUPPORT_BASIS_ROWS
+        || future_capture_frame_ids_sha256.len() > MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS
+    {
+        return None;
+    }
+    let mut basis = MultiSourceT1ProofBasisV1 {
+        schema: MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1.to_owned(),
+        basis_root_sha256: String::new(),
+        support_capture_frame_ids_sha256,
+        future_capture_frame_ids_sha256,
+    };
+    if !basis.members_are_valid() {
+        return None;
+    }
+    basis.basis_root_sha256 = basis.expected_root();
+    Some(basis)
+}
+
+impl MultiSourceT1ProofBasisV1 {
+    fn members_are_valid(&self) -> bool {
+        let support = self
+            .support_capture_frame_ids_sha256
+            .iter()
+            .collect::<BTreeSet<_>>();
+        let future = self
+            .future_capture_frame_ids_sha256
+            .iter()
+            .collect::<BTreeSet<_>>();
+        !support.is_empty()
+            && support.len() == self.support_capture_frame_ids_sha256.len()
+            && future.len() == self.future_capture_frame_ids_sha256.len()
+            && support.is_disjoint(&future)
+            && support
+                .iter()
+                .chain(future.iter())
+                .all(|root| valid_nonzero_sha256(root))
+    }
+
+    #[must_use]
+    pub fn expected_root(&self) -> String {
+        canonical_json_sha256(&(
+            MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1,
+            &self.support_capture_frame_ids_sha256,
+            &self.future_capture_frame_ids_sha256,
+        ))
+        .expect("T1 proof basis serializes")
+    }
+
+    #[must_use]
+    pub fn validate(&self) -> bool {
+        self.schema == MULTI_SOURCE_T1_PROOF_BASIS_SCHEMA_V1
+            && self.members_are_valid()
+            && self.basis_root_sha256 == self.expected_root()
+    }
+}
+
+impl MultiSourceT1IdentificationV2 {
     #[must_use]
     pub fn expected_root(&self) -> String {
         canonical_json_sha256(&T1IdentificationDigest {
-            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V1,
+            schema: MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2,
             evidence_epoch_sha256: self.evidence_epoch_sha256.as_str(),
             selected_shape_root_sha256: self.selected_shape_root_sha256.as_deref(),
             selected_marginal_input_tokens: self.selected_marginal_input_tokens,
@@ -766,6 +872,7 @@ impl MultiSourceT1IdentificationV1 {
             negative_accepts: self.negative_accepts,
             candidate_freeze: &self.candidate_freeze,
             canonical_program: &self.canonical_program,
+            proof_basis: &self.proof_basis,
             passive_probe: &self.passive_probe,
             exact_transfer_parity: self.exact_transfer_parity,
             runtime_actor_verifier_parity: self.runtime_actor_verifier_parity,
@@ -778,13 +885,17 @@ impl MultiSourceT1IdentificationV1 {
 
     #[must_use]
     pub fn validate(&self) -> bool {
-        if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V1
+        if self.schema != MULTI_SOURCE_T1_IDENTIFICATION_SCHEMA_V2
             || self.execution_authority
             || self.report_root_sha256 != self.expected_root()
             || self
                 .candidate_freeze
                 .as_ref()
                 .is_some_and(|freeze| freeze.validate().is_err())
+            || self
+                .proof_basis
+                .as_ref()
+                .is_some_and(|basis| !basis.validate())
         {
             return false;
         }
@@ -800,6 +911,10 @@ impl MultiSourceT1IdentificationV1 {
             MultiSourceT1IdentificationStateV1::TransferReady => {
                 self.candidate_freeze.is_some()
                     && self.canonical_program.is_some()
+                    && self.proof_basis.as_ref().is_some_and(|basis| {
+                        !basis.support_capture_frame_ids_sha256.is_empty()
+                            && !basis.future_capture_frame_ids_sha256.is_empty()
+                    })
                     && self.support_rows > 0
                     && self.independent_future_rows > 0
                     && self.independent_future_lineages > 0
@@ -811,12 +926,18 @@ impl MultiSourceT1IdentificationV1 {
             MultiSourceT1IdentificationStateV1::FrozenAwaitingIndependentFuture => {
                 self.candidate_freeze.is_some()
                     && self.canonical_program.is_some()
+                    && self.proof_basis.as_ref().is_some_and(|basis| {
+                        !basis.support_capture_frame_ids_sha256.is_empty()
+                            && basis.future_capture_frame_ids_sha256.is_empty()
+                    })
                     && !self.exact_transfer_parity
             }
             MultiSourceT1IdentificationStateV1::Ambiguous => {
-                self.candidate_freeze.is_none() && self.canonical_program.is_none()
+                self.candidate_freeze.is_none()
+                    && self.canonical_program.is_none()
+                    && self.proof_basis.is_none()
             }
-            _ => !self.exact_transfer_parity,
+            _ => self.proof_basis.is_none() && !self.exact_transfer_parity,
         }
     }
 }

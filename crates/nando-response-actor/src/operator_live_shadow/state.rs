@@ -868,6 +868,120 @@ pub(super) fn source_neutral_actor_topology(
     Some(([vec![1], encoded].concat(), canonical))
 }
 
+pub fn crystallize_multi_source_t1_candidate_v1(
+    identification: &nando_operator_learning::multi_source::MultiSourceT1IdentificationV2,
+    transitions: &[TeacherTransition],
+) -> Result<LiveScalarAdmissionCandidate, String> {
+    use nando_operator_learning::multi_source::MultiSourceT1IdentificationStateV1;
+
+    if !identification.validate()
+        || identification.state != MultiSourceT1IdentificationStateV1::TransferReady
+        || !identification.exact_transfer_parity
+    {
+        return Err("multi_source_identification_not_transfer_ready".to_owned());
+    }
+    let freeze = identification
+        .candidate_freeze
+        .as_ref()
+        .ok_or_else(|| "multi_source_candidate_freeze_missing".to_owned())?;
+    let program = identification
+        .canonical_program
+        .clone()
+        .ok_or_else(|| "multi_source_canonical_program_missing".to_owned())?;
+    let proof_basis = identification
+        .proof_basis
+        .as_ref()
+        .filter(|basis| basis.validate())
+        .ok_or_else(|| "multi_source_proof_basis_missing".to_owned())?;
+    let support = select_multi_source_basis_transitions(
+        &proof_basis.support_capture_frame_ids_sha256,
+        transitions,
+    )?;
+    let future = select_multi_source_basis_transitions(
+        &proof_basis.future_capture_frame_ids_sha256,
+        transitions,
+    )?;
+    if support.is_empty() || future.is_empty() {
+        return Err("multi_source_runtime_basis_empty".to_owned());
+    }
+    let law = LiveScalarLawState {
+        support,
+        future,
+        support_actor_hypotheses: vec![program.clone()],
+        support_hypotheses_initialized: true,
+    };
+    let support_samples = law
+        .support
+        .iter()
+        .map(|transition| {
+            reextract_live_scalar_circuit_sample(transition, std::slice::from_ref(&program))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|blocker| format!("multi_source_support_reextract_{blocker:?}").to_lowercase())?;
+    let competing = build_competing_blueprint_set(&support_samples)?;
+    let frozen = FrozenOperatorBlueprintSet::freeze(
+        1,
+        &competing.support_bundles,
+        BlueprintBeamConfig::default(),
+        &competing.synthesis,
+    )
+    .map_err(|error| format!("multi_source_blueprint_freeze_{error:?}").to_lowercase())?;
+    let basis = crystallize_minimal_transfer_basis_v1(&frozen, &competing, &law.future)?;
+    let canonical_program_root_sha256 =
+        nando_operator_kernel::response_program_version_root_sha256(&program)
+            .map_err(str::to_owned)?;
+    let external_identification = super::identification::LiveScalarIdentificationV1 {
+        freeze_root_sha256: freeze.freeze_root_sha256().to_owned(),
+        semantic_class_id_sha256: freeze.semantic_class_id().as_str().to_owned(),
+        member_program_roots_sha256: vec![canonical_program_root_sha256],
+        applicability_scope_root_sha256: freeze.applicability_scope_root_sha256().to_owned(),
+    };
+    let mut candidate = live_admission_candidate(
+        &law,
+        &basis.transitions,
+        &basis.operator,
+        &external_identification,
+    )?;
+    candidate.multi_source_identification = Some(identification.clone());
+    candidate.seal_evidence_partition().map_err(str::to_owned)?;
+    Ok(candidate)
+}
+
+fn select_multi_source_basis_transitions(
+    capture_frame_ids: &[String],
+    transitions: &[TeacherTransition],
+) -> Result<Vec<TeacherTransition>, String> {
+    capture_frame_ids
+        .iter()
+        .map(|capture_frame_id| {
+            let mut matches = transitions.iter().filter(|transition| {
+                transition
+                    .runtime_parity_case
+                    .as_ref()
+                    .and_then(|case| case.capture_receipt.as_ref())
+                    .and_then(|receipt| receipt.transition_binding.as_ref())
+                    .is_some_and(|binding| {
+                        binding.frame_id_sha256 == *capture_frame_id
+                            && transition
+                                .before
+                                .verify_capture_frame_id(capture_frame_id)
+                                .is_ok()
+                    })
+            });
+            let transition = matches
+                .next()
+                .cloned()
+                .ok_or_else(|| format!("multi_source_runtime_case_missing:{capture_frame_id}"))?;
+            if matches.next().is_some() {
+                return Err(format!(
+                    "multi_source_runtime_case_ambiguous:{capture_frame_id}"
+                ));
+            }
+            Ok(transition)
+        })
+        .collect()
+}
+
 fn live_admission_candidate(
     law: &LiveScalarLawState,
     future: &[TeacherTransition],
@@ -990,6 +1104,7 @@ fn live_admission_candidate(
         package,
         support: law.support.clone(),
         future: future.to_vec(),
+        multi_source_identification: None,
         freeze_watermark_unix_nanos: 0,
         partition_commitment_sha256: String::new(),
         support_root_sha256: commitment_hex(operator.support_root_sha256()),

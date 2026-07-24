@@ -1,6 +1,6 @@
 use nando_operator_learning::multi_source::{
-    LiveMultiSourceDiscoverySnapshotV2, RequestStructureAuditSnapshotV1,
-    build_live_multi_source_discovery_snapshot_v2,
+    LiveMultiSourceDiscoverySnapshotV3, RequestStructureAuditSnapshotV1,
+    build_live_multi_source_discovery_snapshot_v3,
 };
 use nando_operator_learning::opportunity::OpportunityIntentAuditRowV1;
 use nando_operator_learning::write_atomic_cbor;
@@ -13,8 +13,8 @@ pub(crate) fn build_snapshot(
     opportunities: Vec<OpportunityIntentAuditRowV1>,
     requests: RequestStructureAuditSnapshotV1,
     frames: Vec<RelationFrame>,
-) -> Result<LiveMultiSourceDiscoverySnapshotV2, String> {
-    let snapshot = build_live_multi_source_discovery_snapshot_v2(opportunities, requests, frames);
+) -> Result<LiveMultiSourceDiscoverySnapshotV3, String> {
+    let snapshot = build_live_multi_source_discovery_snapshot_v3(opportunities, requests, frames);
     if !snapshot.validate() {
         return Err("live_multi_source_snapshot_invalid".to_owned());
     }
@@ -28,7 +28,7 @@ pub(crate) fn build_snapshot(
 
 pub(crate) fn write_snapshot(
     path: &Path,
-    snapshot: &LiveMultiSourceDiscoverySnapshotV2,
+    snapshot: &LiveMultiSourceDiscoverySnapshotV3,
 ) -> Result<(), String> {
     if !snapshot.validate() {
         return Err("live_multi_source_snapshot_invalid".to_owned());
@@ -41,13 +41,13 @@ pub(crate) fn write_snapshot(
     write_atomic_cbor(path, snapshot)
 }
 
-pub(crate) fn read_snapshot(path: &Path) -> Result<LiveMultiSourceDiscoverySnapshotV2, String> {
+pub(crate) fn read_snapshot(path: &Path) -> Result<LiveMultiSourceDiscoverySnapshotV3, String> {
     let bytes = std::fs::read(path)
         .map_err(|error| format!("live_multi_source_snapshot_read:{}:{error}", path.display()))?;
     if bytes.len() > LIVE_MULTI_SOURCE_SNAPSHOT_MAX_BYTES {
         return Err("live_multi_source_snapshot_budget".to_owned());
     }
-    let snapshot = serde_cbor::from_slice::<LiveMultiSourceDiscoverySnapshotV2>(&bytes)
+    let snapshot = serde_cbor::from_slice::<LiveMultiSourceDiscoverySnapshotV3>(&bytes)
         .map_err(|error| format!("live_multi_source_snapshot_decode:{error}"))?;
     if !snapshot.validate() {
         return Err("live_multi_source_snapshot_invalid".to_owned());

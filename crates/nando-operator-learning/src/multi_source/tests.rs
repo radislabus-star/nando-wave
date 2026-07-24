@@ -452,12 +452,12 @@ fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
     let opportunity_a = opportunity("turn-a", ReducibilityClass::CpuVerified);
     let opportunity_b = opportunity("turn-b", ReducibilityClass::UnexploredMultiSource);
 
-    let forward = build_live_multi_source_discovery_snapshot_v2(
+    let forward = build_live_multi_source_discovery_snapshot_v3(
         vec![opportunity_a.clone(), opportunity_b.clone()],
         request_snapshot(vec![topology_a.clone(), topology_b.clone()]),
         vec![frame_a.clone(), frame_b.clone()],
     );
-    let reversed = build_live_multi_source_discovery_snapshot_v2(
+    let reversed = build_live_multi_source_discovery_snapshot_v3(
         vec![opportunity_b, opportunity_a],
         request_snapshot(vec![topology_b, topology_a]),
         vec![frame_b, frame_a],
@@ -479,7 +479,7 @@ fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
 
 #[test]
 fn live_snapshot_reports_the_first_missing_signal_boundary() {
-    let no_topology = build_live_multi_source_discovery_snapshot_v2(
+    let no_topology = build_live_multi_source_discovery_snapshot_v3(
         Vec::new(),
         request_snapshot(Vec::new()),
         Vec::new(),
@@ -490,7 +490,7 @@ fn live_snapshot_reports_the_first_missing_signal_boundary() {
         LiveMultiSourceDiscoveryBlockerV1::NoPreActionTopology
     );
 
-    let no_frame = build_live_multi_source_discovery_snapshot_v2(
+    let no_frame = build_live_multi_source_discovery_snapshot_v3(
         vec![opportunity(
             "turn",
             ReducibilityClass::UnexploredMultiSource,
@@ -546,10 +546,20 @@ fn t1_identification_uses_one_support_and_one_independent_future() {
     assert_eq!(report.wrong_role_bindings, 0);
     assert_eq!(report.negative_accepts, 0);
     assert!(report.exact_transfer_parity);
+    let basis = report.proof_basis.as_ref().expect("sealed runtime basis");
+    assert!(basis.validate());
+    assert_eq!(
+        basis.support_capture_frame_ids_sha256,
+        [frames[0].frame_id_sha256.clone()]
+    );
+    assert_eq!(
+        basis.future_capture_frame_ids_sha256,
+        [frames[1].frame_id_sha256.clone()]
+    );
     assert!(!report.runtime_actor_verifier_parity);
     assert!(!report.execution_authority);
 
-    let snapshot = build_live_multi_source_discovery_snapshot_v2(
+    let snapshot = build_live_multi_source_discovery_snapshot_v3(
         vec![
             opportunity("turn-a", ReducibilityClass::UnexploredMultiSource),
             opportunity("turn-b", ReducibilityClass::UnexploredMultiSource),
@@ -879,5 +889,10 @@ fn t1_identification_never_counts_support_lineage_reuse_as_future() {
     assert_eq!(report.support_rows, 1);
     assert_eq!(report.support_reuse_rows, 1);
     assert_eq!(report.independent_future_rows, 0);
+    assert!(
+        report.proof_basis.as_ref().is_some_and(
+            |basis| basis.validate() && basis.future_capture_frame_ids_sha256.is_empty()
+        )
+    );
     assert!(!report.exact_transfer_parity);
 }

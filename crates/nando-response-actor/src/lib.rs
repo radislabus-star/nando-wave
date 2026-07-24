@@ -323,7 +323,8 @@ pub use operator_generation::{
 };
 pub use operator_live_shadow::{
     LiveScalarAdmissionCandidate, LiveScalarCircuitSample, LiveScalarShadowBlocker,
-    LiveScalarShadowReport, LiveScalarShadowState, extract_live_scalar_circuit_sample,
+    LiveScalarShadowReport, LiveScalarShadowState, crystallize_multi_source_t1_candidate_v1,
+    extract_live_scalar_circuit_sample,
 };
 pub use opportunity::{
     M3WindowReport, OPPORTUNITY_BOARD_SCHEMA_V2, OPPORTUNITY_BOARD_SCHEMA_V3, OpportunityBoard,
@@ -418,3 +419,6 @@ pub use version_space::{
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod operator_live_shadow_multi_source_tests;

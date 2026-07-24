@@ -66,16 +66,32 @@ pub fn build_crystallized_admission_snapshot(
         // A deserialized candidate is only an evidence envelope. Rebuild the
         // winner, causal controls, executable seals and package from its
         // committed partitions so caller-provided proof counters gain no authority.
-        let mut replay = LiveScalarShadowState::default();
-        for row in &submitted.support {
-            replay.observe_historical_support(row);
-        }
-        for row in &submitted.future {
-            replay.observe(row);
-        }
-        let rebuilt = replay.admission_candidates();
-        let [candidate] = rebuilt.as_slice() else {
-            return Err("crystallized_admission_resynthesis_failed");
+        let rebuilt_multi_source;
+        let rebuilt_legacy;
+        let candidate = if let Some(identification) = &submitted.multi_source_identification {
+            let transitions = submitted
+                .support
+                .iter()
+                .chain(&submitted.future)
+                .cloned()
+                .collect::<Vec<_>>();
+            rebuilt_multi_source =
+                crate::crystallize_multi_source_t1_candidate_v1(identification, &transitions)
+                    .map_err(|_| "crystallized_admission_multi_source_resynthesis_failed")?;
+            &rebuilt_multi_source
+        } else {
+            let mut replay = LiveScalarShadowState::default();
+            for row in &submitted.support {
+                replay.observe_historical_support(row);
+            }
+            for row in &submitted.future {
+                replay.observe(row);
+            }
+            rebuilt_legacy = replay.admission_candidates();
+            let [candidate] = rebuilt_legacy.as_slice() else {
+                return Err("crystallized_admission_resynthesis_failed");
+            };
+            candidate
         };
         candidate.verify_evidence_partition()?;
         if submitted.freeze_watermark_unix_nanos != candidate.freeze_watermark_unix_nanos

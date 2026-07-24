@@ -543,7 +543,7 @@ struct AppState {
     learning_structure_bridge: LearningStructureBridgeRuntimeV2,
     opportunity_bridge: OpportunityBridgeRuntime,
     multi_source_snapshot: Arc<
-        RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV2>>,
+        RwLock<Option<nando_operator_learning::multi_source::LiveMultiSourceDiscoverySnapshotV3>>,
     >,
 }
 
@@ -2868,7 +2868,7 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
-    let (relation_candidates, crystallized_candidates) = response_miner
+    let (relation_candidates, mut crystallized_candidates, retained_transitions) = response_miner
         .as_ref()
         .map(|miner| {
             miner
@@ -2878,11 +2878,39 @@ fn publish_embedded_response_candidates(state: &AppState) -> Result<bool, String
                     (
                         miner.admission_candidates(),
                         miner.crystallized_admission_candidates(),
+                        miner.retained_teacher_transitions_for_multi_source_proof_v1(),
                     )
                 })
         })
         .transpose()?
         .unwrap_or_default();
+    if let Some(snapshot) = state
+        .multi_source_snapshot
+        .read()
+        .ok()
+        .and_then(|snapshot| snapshot.clone())
+        .filter(|snapshot| snapshot.transfer_ready)
+    {
+        match nando_response_actor::crystallize_multi_source_t1_candidate_v1(
+            &snapshot.t1_identification,
+            &retained_transitions,
+        ) {
+            Ok(candidate)
+                if !crystallized_candidates.iter().any(|existing| {
+                    existing.package.package_id == candidate.package.package_id
+                }) =>
+            {
+                crystallized_candidates.push(candidate);
+            }
+            Ok(_) => {}
+            Err(error) => {
+                eprintln!(
+                    "nando-multi-source-crystallizer:{}:{error}",
+                    snapshot.snapshot_root_sha256
+                );
+            }
+        }
+    }
     let revision_material = serde_json::json!({
         "collection": collection_candidates.iter().map(|candidate| serde_json::json!({
             "package_id": candidate.package.package_id,

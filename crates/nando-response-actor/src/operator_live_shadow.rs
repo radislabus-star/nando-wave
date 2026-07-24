@@ -22,6 +22,7 @@ pub use induction::extract_live_scalar_circuit_sample;
 use induction::{
     bounded_ordinal_role_permutations, normalized_scalar_renderer, teacher_field_selector_hint,
 };
+pub use state::crystallize_multi_source_t1_candidate_v1;
 #[cfg(test)]
 use state::{common_support_actor_hypotheses, update_support_actor_hypotheses};
 
@@ -229,6 +230,9 @@ pub struct LiveScalarAdmissionCandidate {
     pub support: Vec<TeacherTransition>,
     pub future: Vec<TeacherTransition>,
     #[serde(default)]
+    pub multi_source_identification:
+        Option<nando_operator_learning::multi_source::MultiSourceT1IdentificationV2>,
+    #[serde(default)]
     pub freeze_watermark_unix_nanos: u64,
     #[serde(default)]
     pub partition_commitment_sha256: String,
@@ -280,7 +284,12 @@ fn evidence_partition_watermark(
 
 fn evidence_partition_commitment(candidate: &LiveScalarAdmissionCandidate) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"nando.live-scalar-evidence-partition.v1");
+    if let Some(identification) = &candidate.multi_source_identification {
+        hasher.update(b"nando.live-scalar-evidence-partition.v2");
+        hasher.update(identification.report_root_sha256.as_bytes());
+    } else {
+        hasher.update(b"nando.live-scalar-evidence-partition.v1");
+    }
     hasher.update(candidate.freeze_watermark_unix_nanos.to_le_bytes());
     hasher.update(candidate.support_root_sha256.as_bytes());
     hasher.update(candidate.future_evidence_root_sha256.as_bytes());

@@ -8,13 +8,13 @@ use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
 use super::{
     CompletedEffectFormV1, CoverageOpportunitySnapshotV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, MultiSourceReasonV1, MultiSourceT1IdentificationStateV1,
-    MultiSourceT1IdentificationV1, PreActionShapeClassV1, RequestStructureAuditSnapshotV1,
+    MultiSourceT1IdentificationV2, PreActionShapeClassV1, RequestStructureAuditSnapshotV1,
     build_coverage_opportunity_snapshot_v1, factor_multi_source_row_v1,
     identify_multi_source_t1_operator_v1,
 };
 
-pub const LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2: &str =
-    "nando.live-multi-source-discovery-snapshot.v2";
+pub const LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3: &str =
+    "nando.live-multi-source-discovery-snapshot.v3";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -41,7 +41,7 @@ pub struct FactorizedClassCountV1 {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct LiveMultiSourceDiscoverySnapshotV2 {
+pub struct LiveMultiSourceDiscoverySnapshotV3 {
     pub schema: String,
     pub snapshot_root_sha256: String,
     pub evidence_epoch_sha256: String,
@@ -52,7 +52,7 @@ pub struct LiveMultiSourceDiscoverySnapshotV2 {
     pub factorized_classes: Vec<FactorizedClassCountV1>,
     pub active_intents: u64,
     pub opportunity: CoverageOpportunitySnapshotV1,
-    pub t1_identification: MultiSourceT1IdentificationV1,
+    pub t1_identification: MultiSourceT1IdentificationV2,
     pub blocker: LiveMultiSourceDiscoveryBlockerV1,
     pub identification_ready: bool,
     pub transfer_ready: bool,
@@ -60,11 +60,11 @@ pub struct LiveMultiSourceDiscoverySnapshotV2 {
 }
 
 #[must_use]
-pub fn build_live_multi_source_discovery_snapshot_v2(
+pub fn build_live_multi_source_discovery_snapshot_v3(
     mut opportunities: Vec<OpportunityIntentAuditRowV1>,
     mut requests: RequestStructureAuditSnapshotV1,
     mut frames: Vec<RelationFrame>,
-) -> LiveMultiSourceDiscoverySnapshotV2 {
+) -> LiveMultiSourceDiscoverySnapshotV3 {
     let relevant_intents = requests
         .topologies
         .iter()
@@ -85,7 +85,7 @@ pub fn build_live_multi_source_discovery_snapshot_v2(
     });
 
     let evidence_epoch_sha256 = canonical_json_sha256(&(
-        LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2,
+        LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3,
         opportunities
             .iter()
             .map(|row| {
@@ -213,8 +213,8 @@ pub fn build_live_multi_source_discovery_snapshot_v2(
     let identification_ready = t1_identification.candidate_freeze.is_some();
     let transfer_ready =
         t1_identification.state == MultiSourceT1IdentificationStateV1::TransferReady;
-    let mut snapshot = LiveMultiSourceDiscoverySnapshotV2 {
-        schema: LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2.to_owned(),
+    let mut snapshot = LiveMultiSourceDiscoverySnapshotV3 {
+        schema: LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3.to_owned(),
         snapshot_root_sha256: String::new(),
         evidence_epoch_sha256,
         topology_rows: u64::try_from(requests.topologies.len()).unwrap_or(u64::MAX),
@@ -234,11 +234,11 @@ pub fn build_live_multi_source_discovery_snapshot_v2(
     snapshot
 }
 
-impl LiveMultiSourceDiscoverySnapshotV2 {
+impl LiveMultiSourceDiscoverySnapshotV3 {
     #[must_use]
     pub fn expected_root(&self) -> String {
         canonical_json_sha256(&(
-            LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2,
+            LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3,
             self.evidence_epoch_sha256.as_str(),
             self.topology_rows,
             self.relation_frames,
@@ -258,7 +258,7 @@ impl LiveMultiSourceDiscoverySnapshotV2 {
 
     #[must_use]
     pub fn validate(&self) -> bool {
-        self.schema == LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V2
+        self.schema == LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V3
             && !self.authority_ready
             && self.t1_identification.validate()
             && self.identification_ready == self.t1_identification.candidate_freeze.is_some()
