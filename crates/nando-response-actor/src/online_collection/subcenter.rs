@@ -821,7 +821,7 @@ pub(super) fn validate_checkpoint(
     config: OnlineCollectionConfig,
 ) -> Result<(), String> {
     if checkpoint.schema != ONLINE_COLLECTION_SCHEMA_V3
-        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V36
+        || checkpoint.pooling_strategy_version != ONLINE_COLLECTION_POOLING_STRATEGY_V37
         || checkpoint.config != config
     {
         return Err("online_collection_checkpoint_contract_mismatch".to_owned());

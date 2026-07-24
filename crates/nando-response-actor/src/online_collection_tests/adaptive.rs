@@ -95,6 +95,54 @@ fn adaptive_singleton_freezes_after_one_support_without_fixed_rows() {
 }
 
 #[test]
+fn legacy_frozen_singleton_migrates_to_adaptive_without_creating_future() {
+    let root = adaptive_root("legacy-frozen-migration");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = observation(1, "3");
+    let program = adaptive_count_program();
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"d".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest.clone(), program)]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("initial freeze");
+    let support_manifest = miner.checkpoint.buckets[0].support_manifest_sha256.clone();
+    let support_watermark = miner.checkpoint.buckets[0].support_watermark_event_time_unix_nanos;
+
+    miner.checkpoint.buckets[0].adaptive_candidate_freeze = None;
+    miner.checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V36;
+    miner.persist().expect("persist legacy frozen checkpoint");
+    drop(miner);
+
+    let migrated =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("migrate");
+    let bucket = &migrated.checkpoint.buckets[0];
+    assert_eq!(
+        bucket.frozen_program_sha256.as_deref(),
+        Some(digest.as_str())
+    );
+    assert!(bucket.adaptive_candidate_freeze.is_some());
+    assert_eq!(bucket.support_manifest_sha256, support_manifest);
+    assert_eq!(
+        bucket.support_watermark_event_time_unix_nanos,
+        support_watermark
+    );
+    assert!(bucket.future.is_empty());
+    assert!(bucket.durable_runtime_parity_receipts.is_empty());
+    assert_eq!(
+        migrated.status().buckets[0].admission_blocker.as_deref(),
+        Some("adaptive_future_missing")
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn adaptive_ambiguous_version_space_does_not_freeze() {
     let root = adaptive_root("ambiguous");
     fs::create_dir_all(&root).expect("root");

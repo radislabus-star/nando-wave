@@ -24,7 +24,7 @@ impl OnlineCollectionMiner {
         } else {
             OnlineCollectionCheckpoint {
                 schema: ONLINE_COLLECTION_SCHEMA_V3.to_owned(),
-                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V36,
+                pooling_strategy_version: ONLINE_COLLECTION_POOLING_STRATEGY_V37,
                 structural_resynthesis_pending_bucket_ids: BTreeSet::new(),
                 structural_resynthesis_completed_buckets_total: 0,
                 structural_resynthesis_failed_buckets_total: 0,
@@ -371,6 +371,11 @@ impl OnlineCollectionMiner {
         if adaptive_identification_migrated {
             checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V36;
         }
+        let legacy_frozen_adaptive_migrated =
+            checkpoint.pooling_strategy_version < ONLINE_COLLECTION_POOLING_STRATEGY_V37;
+        if legacy_frozen_adaptive_migrated {
+            checkpoint.pooling_strategy_version = ONLINE_COLLECTION_POOLING_STRATEGY_V37;
+        }
         let accounting_repaired = repair_collection_checkpoint_accounting(&mut checkpoint);
         validate_checkpoint(&checkpoint, config)?;
         let mut miner = Self { path, checkpoint };
@@ -405,13 +410,33 @@ impl OnlineCollectionMiner {
             || durable_law_subcenter_refresh_migrated
             || exact_subcenter_dedup_migrated
             || durable_adapter_phase_evidence_migrated
-            || adaptive_identification_migrated;
+            || adaptive_identification_migrated
+            || legacy_frozen_adaptive_migrated;
         if checkpoint_migrated {
             if exact_subcenter_dedup_migrated {
                 miner.deduplicate_exact_unfrozen_buckets()?;
             }
             if pre_v17_migrated {
                 miner.merge_converged_unfrozen_buckets()?;
+            }
+            if legacy_frozen_adaptive_migrated
+                && miner.checkpoint.config.proof_mode
+                    == OnlineCollectionProofMode::AdaptiveVersionSpace
+            {
+                let frozen_legacy_indices = miner
+                    .checkpoint
+                    .buckets
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, bucket)| {
+                        bucket.frozen_program_sha256.is_some()
+                            && bucket.adaptive_candidate_freeze.is_none()
+                    })
+                    .map(|(index, _)| index)
+                    .collect::<Vec<_>>();
+                for index in frozen_legacy_indices {
+                    miner.upgrade_legacy_frozen_identification(index)?;
+                }
             }
             let migration_indices = if adaptive_identification_migrated
                 && miner.checkpoint.config.proof_mode
@@ -427,6 +452,8 @@ impl OnlineCollectionMiner {
                     })
                     .map(|(index, _)| index)
                     .collect::<Vec<_>>()
+            } else if legacy_frozen_adaptive_migrated {
+                Vec::new()
             } else if pre_v17_migrated {
                 (0..miner.checkpoint.buckets.len()).collect::<Vec<_>>()
             } else if durable_phase_adapter_refresh_migrated

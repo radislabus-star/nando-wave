@@ -1040,6 +1040,57 @@ impl OnlineCollectionMiner {
         Ok(())
     }
 
+    pub(super) fn upgrade_legacy_frozen_identification(
+        &mut self,
+        index: usize,
+    ) -> Result<bool, String> {
+        let Some(bucket) = self.checkpoint.buckets.get(index) else {
+            return Ok(false);
+        };
+        let Some(frozen_program_sha256) = bucket.frozen_program_sha256.as_deref() else {
+            return Ok(false);
+        };
+        if bucket.adaptive_candidate_freeze.is_some()
+            || bucket.support.is_empty()
+            || bucket
+                .support
+                .iter()
+                .any(|receipt| !receipt.verifier_pass || receipt.event_time_unix_nanos.is_none())
+        {
+            return Ok(false);
+        }
+        let expected_watermark = bucket
+            .support
+            .iter()
+            .filter_map(|receipt| receipt.event_time_unix_nanos)
+            .max();
+        let expected_manifest = collection_support_manifest_digest(bucket)?;
+        if bucket.support_watermark_event_time_unix_nanos != expected_watermark
+            || bucket.support_manifest_sha256.as_deref() != Some(expected_manifest.as_str())
+        {
+            return Ok(false);
+        }
+        let Some(identification) = identify_collection_bucket(bucket)? else {
+            return Ok(false);
+        };
+        if identification.program_sha256 != frozen_program_sha256 {
+            return Ok(false);
+        }
+        let Some(program) = bucket.programs.get(frozen_program_sha256) else {
+            return Ok(false);
+        };
+        if !candidate_authority_verified_on_support(bucket, program)
+            || response_program_required_routing_atom_ids(program).is_empty()
+        {
+            return Ok(false);
+        }
+
+        // This migration seals only the already-proven identification basis.
+        // It neither creates future evidence nor changes the frozen program.
+        self.checkpoint.buckets[index].adaptive_candidate_freeze = Some(identification.freeze);
+        Ok(true)
+    }
+
     pub(super) fn freeze_or_split(&mut self, index: usize) -> Result<(), String> {
         if self.checkpoint.config.proof_mode == OnlineCollectionProofMode::AdaptiveVersionSpace {
             return self.maybe_freeze(index);
