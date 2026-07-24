@@ -10,6 +10,10 @@ pub const PRE_ACTION_TOPOLOGY_COMMIT_SCHEMA_V1: &str = "nando.pre-action-topolog
 pub struct LearningRequestStructureV2 {
     pub schema: String,
     pub turn_intent_id_sha256: String,
+    #[serde(default)]
+    pub request_event_id_sha256: String,
+    #[serde(default)]
+    pub provider_bound_turn_identity: bool,
     pub session_lineage_roots_sha256: Vec<String>,
     pub request_phase_atom_ids: Vec<u64>,
     pub pre_action_context_atom_ids: Vec<u64>,
@@ -26,6 +30,8 @@ impl LearningRequestStructureV2 {
         if self.schema != LEARNING_REQUEST_STRUCTURE_SCHEMA_V2
             || !valid_nonzero_sha256(&self.turn_intent_id_sha256)
             || !valid_nonzero_sha256(&self.provider_capture_request_root_sha256)
+            || (!self.request_event_id_sha256.is_empty()
+                && !valid_nonzero_sha256(&self.request_event_id_sha256))
             || self.session_lineage_roots_sha256.len() > 4
             || self.request_phase_atom_ids.len() > 256
             || self.pre_action_context_atom_ids.len() > 256

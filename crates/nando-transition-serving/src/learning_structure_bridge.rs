@@ -433,13 +433,9 @@ fn drain_pending(inner: &BridgeInner, index: &RequestLearningIndex) -> Result<()
             LearningStructureRecord::V2(_) => index
                 .observe_structure(record.structure_v1())
                 .map_err(str::to_owned)?,
-            LearningStructureRecord::V3(record) => index
-                .observe_structure_v3(
-                    record.structure_v1(),
-                    record.structure_v2(),
-                    record.topology_commit(),
-                )
-                .map_err(str::to_owned)?,
+            LearningStructureRecord::V3(record) => {
+                index.observe_structure_v3(record).map_err(str::to_owned)?
+            }
         }
         let next_watermark = RequestLearningWatermarkV2 {
             bridge_epoch_sha256: inner.epoch_sha256.clone(),
@@ -523,8 +519,8 @@ fn decode_meta(bytes: &[u8]) -> Result<BridgeMetaV2, String> {
 }
 
 enum LearningStructureRecord {
-    V2(LearningStructureRecordV2),
-    V3(LearningStructureRecordV3),
+    V2(Box<LearningStructureRecordV2>),
+    V3(Box<LearningStructureRecordV3>),
 }
 
 impl LearningStructureRecord {
@@ -554,9 +550,10 @@ fn read_record(path: &Path, expected_digest: &str) -> Result<LearningStructureRe
     let bytes = read_bounded(path, LEARNING_STRUCTURE_RECORD_MAX_BYTES_V3)?
         .ok_or_else(|| "learning_structure_bridge_record_missing".to_owned())?;
     let record = LearningStructureRecordV3::from_canonical_cbor(&bytes)
-        .map(LearningStructureRecord::V3)
+        .map(|record| LearningStructureRecord::V3(Box::new(record)))
         .or_else(|_| {
-            LearningStructureRecordV2::from_canonical_cbor(&bytes).map(LearningStructureRecord::V2)
+            LearningStructureRecordV2::from_canonical_cbor(&bytes)
+                .map(|record| LearningStructureRecord::V2(Box::new(record)))
         })
         .map_err(|error| format!("learning_structure_bridge_record_decode:{error:?}"))?;
     if record.record_sha256() != expected_digest {
@@ -878,16 +875,17 @@ mod tests {
         (receipt, structure)
     }
 
-    #[test]
-    fn v3_record_restarts_through_the_existing_single_consumer() {
-        let root = test_root("v3-restart");
-        let (producer, _) =
-            LearningStructureBridgeRuntimeV2::open(root.clone(), true, false, Duration::ZERO)
-                .expect("producer");
-        let (receipt, v1) = evidence(1);
+    fn topology(
+        receipt: &ProviderRequestCaptureReceiptV3,
+        v1: &LearningRequestStructureV1,
+    ) -> (LearningRequestStructureV2, PreActionTopologyCommitV1) {
         let v2 = LearningRequestStructureV2 {
             schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
             turn_intent_id_sha256: v1.client_intent_id_sha256().to_owned(),
+            request_event_id_sha256: sha256_bytes(
+                format!("event-{}", receipt.capture_sequence()).as_bytes(),
+            ),
+            provider_bound_turn_identity: true,
             session_lineage_roots_sha256: v1.session_identity_sha256s().to_vec(),
             request_phase_atom_ids: v1.request_phase_atom_ids().to_vec(),
             pre_action_context_atom_ids: v1.pre_action_context_atom_ids().to_vec(),
@@ -912,6 +910,17 @@ mod tests {
             receipt.capture_sequence(),
         )
         .expect("commit");
+        (v2, commit)
+    }
+
+    #[test]
+    fn v3_record_restarts_through_the_existing_single_consumer() {
+        let root = test_root("v3-restart");
+        let (producer, _) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), true, false, Duration::ZERO)
+                .expect("producer");
+        let (receipt, v1) = evidence(1);
+        let (v2, commit) = topology(&receipt, &v1);
         producer
             .submit_v3(receipt, v1, v2, commit)
             .expect("submit v3");
@@ -928,6 +937,47 @@ mod tests {
                 .expect("restart");
         assert!(restarted.status().checkpoint_restored);
         assert_eq!(restored.status().structures_applied, 1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn v4_checkpoint_keeps_each_commitment_when_turn_identity_repeats() {
+        let root = test_root("v4-immutable-ledger");
+        let (producer, _) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), true, false, Duration::ZERO)
+                .expect("producer");
+        let (receipt_a, v1) = evidence(1);
+        let (v2_a, commit_a) = topology(&receipt_a, &v1);
+        producer
+            .submit_v3(receipt_a, v1.clone(), v2_a, commit_a)
+            .expect("submit first");
+        let (receipt_b, _) = evidence(2);
+        let (v2_b, commit_b) = topology(&receipt_b, &v1);
+        producer
+            .submit_v3(receipt_b, v1, v2_b, commit_b)
+            .expect("submit second");
+
+        let (consumer, index) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("consumer");
+        drain_pending(&consumer.inner, &index).expect("drain");
+        let snapshot = index.audit_snapshot_v1().expect("snapshot");
+        assert_eq!(snapshot.stored_turns, 1);
+        assert_eq!(snapshot.stored_topologies, 2);
+        assert_eq!(snapshot.topologies.len(), 2);
+        assert!(
+            snapshot
+                .topologies
+                .iter()
+                .all(|row| row.physical_order_proven)
+        );
+
+        drop(producer);
+        drop(consumer);
+        let (_, restored) =
+            LearningStructureBridgeRuntimeV2::open(root.clone(), false, true, Duration::ZERO)
+                .expect("restart");
+        assert_eq!(restored.status().stored_topologies, 2);
         fs::remove_dir_all(root).expect("cleanup");
     }
 

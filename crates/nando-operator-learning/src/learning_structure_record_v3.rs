@@ -170,6 +170,11 @@ impl LearningStructureRecordV3 {
     }
 
     #[must_use]
+    pub const fn capture_receipt(&self) -> &ProviderRequestCaptureReceiptV3 {
+        &self.capture_receipt
+    }
+
+    #[must_use]
     pub fn record_sha256(&self) -> &str {
         &self.record_sha256
     }
@@ -256,6 +261,8 @@ mod tests {
         let v2 = LearningRequestStructureV2 {
             schema: LEARNING_REQUEST_STRUCTURE_SCHEMA_V2.to_owned(),
             turn_intent_id_sha256: turn,
+            request_event_id_sha256: sha256_bytes(b"event"),
+            provider_bound_turn_identity: true,
             session_lineage_roots_sha256: vec![session],
             request_phase_atom_ids: vec![1],
             pre_action_context_atom_ids: vec![2],

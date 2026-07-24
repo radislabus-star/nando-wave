@@ -3,6 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use nando_operator_kernel::{LearningRequestStructureV2, PreActionTopologyCommitV1};
+
 use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
 
 pub const MULTI_SOURCE_EVIDENCE_AUDIT_SCHEMA_V1: &str = "nando.multi-source-evidence-audit.v1";
@@ -30,11 +32,27 @@ pub struct RequestStructureAuditRowV1 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RequestStructureAuditSnapshotV1 {
     pub rows: Vec<RequestStructureAuditRowV1>,
+    pub topologies: Vec<PreActionTopologyAuditRowV1>,
     pub evictions: u64,
     pub stored_turns: u64,
     pub stored_topologies: u64,
     pub provider_bound_by_construction: bool,
     pub pre_action_context_persisted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreActionTopologyAuditRowV1 {
+    pub bridge_epoch_sha256: String,
+    pub bridge_sequence: Option<u64>,
+    pub record_sha256: Option<String>,
+    pub capture_epoch_sha256: Option<String>,
+    pub capture_event_sha256: Option<String>,
+    pub capture_receipt_sha256: Option<String>,
+    pub captured_at_unix_ms: Option<u64>,
+    pub session_lineage_sha256: Option<String>,
+    pub physical_order_proven: bool,
+    pub structure: LearningRequestStructureV2,
+    pub commit: PreActionTopologyCommitV1,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -322,6 +340,7 @@ mod tests {
                     request_phase_atom_count: 2,
                     capability_atom_count: 1,
                 }],
+                topologies: Vec::new(),
                 evictions: 7,
                 stored_turns: 1,
                 stored_topologies: 0,
@@ -354,6 +373,7 @@ mod tests {
             vec![opportunity("b", 20), opportunity("a", 10)],
             RequestStructureAuditSnapshotV1 {
                 rows: Vec::new(),
+                topologies: Vec::new(),
                 evictions: 0,
                 stored_turns: 0,
                 stored_topologies: 0,

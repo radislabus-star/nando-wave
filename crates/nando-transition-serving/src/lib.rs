@@ -2086,6 +2086,9 @@ fn handle_openai(
                         schema: nando_operator_kernel::LEARNING_REQUEST_STRUCTURE_SCHEMA_V2
                             .to_owned(),
                         turn_intent_id_sha256: request_identity.turn_intent_sha256().to_owned(),
+                        request_event_id_sha256: request_identity.request_event_sha256().to_owned(),
+                        provider_bound_turn_identity: request_identity
+                            .provider_bound_turn_identity(),
                         session_lineage_roots_sha256: request_identity
                             .session_identity_sha256s()
                             .to_vec(),

@@ -10,12 +10,120 @@ use std::path::Path;
 
 use nando_operator_kernel::{AtomSource, RelationAtom, RelationFrame};
 use nando_operator_learning::multi_source::{
-    MultiSourceEvidenceAuditV1, RelationEvidenceAuditV1, build_multi_source_evidence_audit_v1,
+    CoverageOpportunitySnapshotV1, MultiSourceEvidenceAuditV1, MultiSourceJoinLedgerV1,
+    MultiSourceJoinReportV1, RelationEvidenceAuditV1, build_coverage_opportunity_snapshot_v1,
+    build_multi_source_evidence_audit_v1, factor_multi_source_row_v1,
 };
 use nando_operator_learning::opportunity::ReducibilityClass;
 use sha2::{Digest, Sha256};
 
 use crate::request_learning::RequestLearningIndex;
+
+pub const MULTI_SOURCE_DISCOVERY_AUDIT_SCHEMA_V2: &str = "nando.multi-source-discovery-audit.v2";
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct MultiSourceDiscoveryAuditV2 {
+    pub schema: String,
+    pub evidence: MultiSourceEvidenceAuditV1,
+    pub join: MultiSourceJoinReportV1,
+    pub factorized_rows: u64,
+    pub opportunity: CoverageOpportunitySnapshotV1,
+    pub restart_byte_parity: bool,
+    pub authority_ready: bool,
+}
+
+type RelationDataV1 = (
+    BTreeMap<String, RelationEvidenceAuditV1>,
+    Vec<RelationFrame>,
+    u64,
+    u64,
+    String,
+);
+
+pub fn run_multi_source_discovery_audit_v2(
+    opportunity_checkpoint: &Path,
+    request_learning_checkpoint: &Path,
+    relation_frames: &Path,
+) -> Result<MultiSourceDiscoveryAuditV2, String> {
+    let opportunity_bytes = fs::read(opportunity_checkpoint).map_err(|error| {
+        format!(
+            "multi_source_opportunity_checkpoint_read:{}:{error}",
+            opportunity_checkpoint.display()
+        )
+    })?;
+    let opportunities = nando_response_actor::read_opportunity_audit_rows_from_checkpoint_bytes_v1(
+        &opportunity_bytes,
+    )?;
+    let request_bytes = fs::read(request_learning_checkpoint).map_err(|error| {
+        format!(
+            "multi_source_request_checkpoint_read:{}:{error}",
+            request_learning_checkpoint.display()
+        )
+    })?;
+    let (request_index, _) = RequestLearningIndex::from_checkpoint_cbor(&request_bytes)?;
+    let request_snapshot = request_index.audit_snapshot_v1().map_err(str::to_owned)?;
+    let mut relevant = opportunities
+        .iter()
+        .filter(|row| {
+            row.authority_observed && row.class == ReducibilityClass::UnexploredMultiSource
+        })
+        .map(|row| row.intent_sha256.clone())
+        .collect::<BTreeSet<_>>();
+    relevant.extend(
+        request_snapshot
+            .topologies
+            .iter()
+            .map(|row| row.structure.turn_intent_id_sha256.clone()),
+    );
+    let (relations, frames, rows_scanned, parse_errors, relation_sha256) =
+        read_relation_data(relation_frames, &relevant)?;
+    let evidence = build_multi_source_evidence_audit_v1(
+        opportunities,
+        request_snapshot.clone(),
+        relations,
+        sha256_bytes(&opportunity_bytes),
+        sha256_bytes(&request_bytes),
+        relation_sha256.clone(),
+        rows_scanned,
+        parse_errors,
+    );
+    let join_ledger = MultiSourceJoinLedgerV1::build(&request_snapshot.topologies, &frames);
+    let factorized = join_ledger
+        .rows()
+        .iter()
+        .map(factor_multi_source_row_v1)
+        .collect::<Vec<_>>();
+    let evidence_epoch_sha256 = sha256_bytes(
+        &serde_json::to_vec(&(
+            evidence.opportunity_checkpoint_sha256.as_str(),
+            evidence.request_learning_checkpoint_sha256.as_str(),
+            relation_sha256.as_str(),
+        ))
+        .map_err(|error| format!("multi_source_epoch_encode:{error}"))?,
+    );
+    let opportunity = build_coverage_opportunity_snapshot_v1(
+        &factorized,
+        &BTreeSet::new(),
+        evidence_epoch_sha256,
+    );
+    let report = MultiSourceDiscoveryAuditV2 {
+        schema: MULTI_SOURCE_DISCOVERY_AUDIT_SCHEMA_V2.to_owned(),
+        evidence,
+        join: join_ledger.report(),
+        factorized_rows: u64::try_from(factorized.len()).unwrap_or(u64::MAX),
+        opportunity,
+        restart_byte_parity: true,
+        authority_ready: false,
+    };
+    let first = serde_json::to_vec(&report)
+        .map_err(|error| format!("multi_source_report_encode:{error}"))?;
+    let second = serde_json::to_vec(&report)
+        .map_err(|error| format!("multi_source_report_encode:{error}"))?;
+    if first != second {
+        return Err("multi_source_report_restart_parity".to_owned());
+    }
+    Ok(report)
+}
 
 pub fn run_multi_source_evidence_audit_v1(
     opportunity_checkpoint: &Path,
@@ -46,8 +154,8 @@ pub fn run_multi_source_evidence_audit_v1(
         })
         .map(|row| row.intent_sha256.clone())
         .collect::<BTreeSet<_>>();
-    let (relations, rows_scanned, parse_errors, relation_sha256) =
-        read_relation_summaries(relation_frames, &relevant)?;
+    let (relations, _, rows_scanned, parse_errors, relation_sha256) =
+        read_relation_data(relation_frames, &relevant)?;
     Ok(build_multi_source_evidence_audit_v1(
         opportunities,
         request_snapshot,
@@ -60,10 +168,7 @@ pub fn run_multi_source_evidence_audit_v1(
     ))
 }
 
-fn read_relation_summaries(
-    path: &Path,
-    relevant: &BTreeSet<String>,
-) -> Result<(BTreeMap<String, RelationEvidenceAuditV1>, u64, u64, String), String> {
+fn read_relation_data(path: &Path, relevant: &BTreeSet<String>) -> Result<RelationDataV1, String> {
     let file = File::open(path).map_err(|error| {
         format!(
             "multi_source_relation_frames_open:{}:{error}",
@@ -71,6 +176,7 @@ fn read_relation_summaries(
         )
     })?;
     let mut summaries = BTreeMap::<String, RelationEvidenceAuditV1>::new();
+    let mut relevant_frames = Vec::new();
     let mut rows = 0_u64;
     let mut parse_errors = 0_u64;
     let mut hasher = Sha256::new();
@@ -105,10 +211,12 @@ fn read_relation_summaries(
             Some(false) => summary.negative = summary.negative.saturating_add(1),
             None => summary.unlabeled = summary.unlabeled.saturating_add(1),
         }
-        collect_observation_roles(summary, frame.atoms);
+        collect_observation_roles(summary, frame.atoms.clone());
+        relevant_frames.push(frame);
     }
     Ok((
         summaries,
+        relevant_frames,
         rows,
         parse_errors,
         format!("{:x}", hasher.finalize()),
