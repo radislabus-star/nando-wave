@@ -1,8 +1,13 @@
 # Nando Multi-Source Discovery Plan V1
 
-Status: `STOP_MS0_COMPLETE / STOP_MS1_REVIEW_REQUIRED`
+Status: `ARCHITECTURAL_RATIONALE / EXECUTION_V2_CANONICAL`
 
 Date: 2026-07-24 Europe/Tallinn.
+
+Canonical sequence, ownership, recovery policy, STOP packets and rollout now
+live in
+[`MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md`](MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md).
+This V1 document remains the rationale and tier taxonomy.
 
 Scope: factor the current `UNEXPLORED_MULTI_SOURCE` opportunity class into
 bounded, source-neutral operator-discovery work and carry the highest-value
@@ -85,6 +90,10 @@ responses.
    it.
 10. Budget exhaustion, missing joins, ties, and incomplete search yield
     `ABSTAIN` or censored evidence.
+
+Teacher action and verified post-action state remain mandatory learning
+signals. They are revealed only after pre-action topology has been committed,
+so they cannot manufacture runtime-visible roles.
 
 ## 4. Minimal Target Architecture
 
@@ -852,23 +861,22 @@ None of these verdicts changes Wave thresholds or production authority.
 
 ## 21. Immediate Next Action
 
-Implement only `STOP-MS0` as a read-only diagnostic.
+Run only `STOP-MS0-R-A` from the V2 execution plan as a read-only historical
+pre-action archive and provenance inventory.
 
 The first useful table is:
 
 ```text
-reason
--> structural shape
--> intents
--> unique tokens
--> join coverage
--> likely IR tier
--> missing evidence
+archive source
+-> immutable request bytes available
+-> TurnIntentId provenance
+-> recoverable intents/tokens
+-> unjoinable intents/tokens
+-> censored reason
 ```
 
-Do not start a new compiler, VM primitive, bridge schema, or admission change
-until this table identifies the highest-value reachable shape and the exact
-evidence already available for it.
+Do not inspect response semantics or start hot capture, a factorizer, VM
+primitive, compiler or admission change during this inventory.
 
 ## 22. Success Definition
 

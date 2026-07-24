@@ -2,7 +2,7 @@
 
 Status: canonical current-core map.
 
-Current snapshot: 2026-07-23 Europe/Tallinn.
+Current snapshot: 2026-07-24 Europe/Tallinn.
 
 This document answers three questions in one place:
 
@@ -179,19 +179,21 @@ adaptive operator identification                 PASS
 durable capture/provenance                       PASS
 runtime role grounding                           LIVE PASS, narrow scalar law
 crystallized OperatorPage32                      PASS
-response ACTIVE packages                         1
+response ACTIVE packages                         2
 real local CPU execution                         PASS
-verified lifetime display-token saving share     0.716%
+verified current-epoch input-token CPU share      41.661%
 false accepts                                    0
 runtime parity failures                          0
 M3                                               WATCH
 production authority                             true, narrow immutable lease
+multi-source STOP-MS0                            COMPLETE / JOIN_INSUFFICIENT
+multi-source next                                MS0-R archive audit, then MS1
 ```
 
 The live numbers are the read-only composite-gate and economics snapshot taken
-on 2026-07-23. They are not timeless claims and must be refreshed before a
-product or economics statement. One-shot identification of this package is not
-a scientific circuit-grokking claim.
+on 2026-07-24. They are not timeless claims and must be refreshed before a
+product or economics statement. One-shot identification of a narrow package is
+not a scientific circuit-grokking claim.
 
 ## 6. Exact Current Product Boundary
 
@@ -214,18 +216,26 @@ live request
 -> verified economics receipt
 ```
 
-The active package is
-`crystallized-scalar-2069a1d9b37eca4f`. Real `/v2/responses` requests have
-returned `local_accept=true` and emitted `wait(cell_id)` without an upstream
-LLM call. The external gate reports `eligible_for_local_accept=true`; false
-accepts and runtime parity mismatches remain zero.
+The current immutable response generation contains:
+
+```text
+crystallized-scalar-a40ca964f20c4b67
+crystallized-scalar-e35441ca7863327d
+```
+
+Real `/v2/responses` requests have returned `local_accept=true` without an
+upstream LLM call. The external gate reports
+`eligible_for_local_accept=true`; false accepts and runtime parity mismatches
+remain zero.
 
 The blocker is now breadth and economics, not signal connectivity:
 
 ```text
-one narrow scalar continuation law       ACTIVE
+two narrow scalar continuation laws      ACTIVE
 additional status/count/filter/compose   NOT YET ACTIVE
-verified current-epoch CPU share         below M3 target
+verified current-epoch CPU share         41.661%, below M3 target
+historical multi-source opportunity      571.2M tokens, recovery unaudited
+fresh multi-source structural epoch      NOT STARTED
 completed M3 windows                     0 / 3
 M3                                       WATCH
 ```
@@ -233,6 +243,18 @@ M3                                       WATCH
 Increasing coverage must come from additional independently proven operators,
 not from widening this package, weakening admission, or restoring fixed
 `32 + 32` readiness.
+
+The current execution route is:
+
+```text
+STOP-MS0 complete
+-> MS0-R blind historical recovery audit
+-> MS1 pre-action topology capture
+-> MS2 factorization
+-> MS3/MS4 first natural multi-source ACTIVE package
+-> MS5-MS8 rich portfolio
+-> three mature >=50% M3 windows
+```
 
 ## 7. Completed Ownership Repair
 
@@ -285,8 +307,8 @@ all surviving covers action-equivalent
 
 Allowed now:
 
-> Nando has one narrow adaptively identified, crystallized, externally admitted
-> OperatorPackage executing verified live requests on CPU. Ambiguity, stale
+> Nando has two narrow adaptively identified, crystallized, externally admitted
+> OperatorPackages executing verified live requests on CPU. Ambiguity, stale
 > authority, actor/verifier disagreement, and out-of-scope requests still
 > produce fallback or ABSTAIN.
 
@@ -329,6 +351,9 @@ plans/effect-law-unification-v1/README.md
 
 plans/runtime-role-grounding-v1/RUNTIME_ROLE_GROUNDING_V1.md
   compiler output -> role-bound execution -> verifier
+
+plans/multi-source-discovery-v1/MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md
+  current MS0-R -> MS8 route from historical experience to >=50% M3
 
 plans/nando-attractor-to-vm-machine-v1/NANDO_ATTRACTOR_TO_VM_ROADMAP_V1.md
   end-to-end implementation ladder

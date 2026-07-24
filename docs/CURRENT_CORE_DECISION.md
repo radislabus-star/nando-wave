@@ -2,6 +2,14 @@
 
 Date: 2026-07-21 Europe/Tallinn.
 
+Status: `ARCHITECTURE_VALID / HISTORICAL_EXECUTION_BOUNDARY`
+
+The F4 boundary recorded below is historical. The current multi-source
+execution status and next STOP are owned by
+[`MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md`](../plans/multi-source-discovery-v1/MULTI_SOURCE_DISCOVERY_EXECUTION_PLAN_V2.md).
+Do not use this file alone to infer current production package counts,
+coverage, or the next implementation assignment.
+
 Canonical current-core map: [`CORE.md`](CORE.md).
 
 ## Decision
