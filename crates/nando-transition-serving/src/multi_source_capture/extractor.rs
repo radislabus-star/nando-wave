@@ -7,12 +7,17 @@ use nando_operator_kernel::{
 use serde_json::Value;
 
 const FLAG_REQUEST_REFERENCED: u16 = 1;
+const MAX_RELEVANT_OUTPUTS_V1: usize = 8;
 
 pub(crate) fn extract_pre_action_multi_source_topology_v1(
     payload: &Value,
     request_text: &str,
 ) -> PreActionMultiSourceTopologyV1 {
-    let outputs = provider_outputs(payload);
+    let outputs = select_relevant_outputs(provider_outputs(payload), request_text);
+    let outputs = match outputs {
+        Ok(outputs) => outputs,
+        Err(reason) => return censored(reason),
+    };
     let mut roles = Vec::new();
     for (source_ordinal, output) in outputs.iter().enumerate() {
         collect_roles(
@@ -99,6 +104,85 @@ fn provider_outputs(payload: &Value) -> Vec<Value> {
                 .unwrap_or_else(|| value.clone())
         })
         .collect()
+}
+
+fn select_relevant_outputs(
+    outputs: Vec<Value>,
+    request_text: &str,
+) -> Result<Vec<Value>, &'static str> {
+    let mut metadata = outputs
+        .into_iter()
+        .enumerate()
+        .map(|(ordinal, output)| {
+            let scalar_count = scalar_count(&output);
+            let request_referenced = output_referenced(&output, request_text);
+            (ordinal, output, scalar_count, request_referenced)
+        })
+        .collect::<Vec<_>>();
+    if metadata.is_empty() {
+        return Ok(Vec::new());
+    }
+    if metadata.iter().any(|(_, _, scalar_count, referenced)| {
+        *referenced && *scalar_count > MULTI_SOURCE_MAX_ROLE_NODES_V1
+    }) {
+        return Err("referenced_output_role_budget_exceeded");
+    }
+    let latest_ordinal = metadata.last().map_or(0, |row| row.0);
+    let mut selected = metadata
+        .iter()
+        .filter(|(ordinal, _, _, referenced)| *referenced || *ordinal == latest_ordinal)
+        .map(|row| row.0)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut selected_roles = metadata
+        .iter()
+        .filter(|row| selected.contains(&row.0))
+        .map(|row| row.2)
+        .sum::<usize>();
+    if selected_roles > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
+        return Err("relevant_output_role_budget_exceeded");
+    }
+    for (ordinal, _, scalar_count, _) in metadata.iter().rev() {
+        if selected.len() >= MAX_RELEVANT_OUTPUTS_V1 {
+            break;
+        }
+        if selected.contains(ordinal) {
+            continue;
+        }
+        if selected_roles.saturating_add(*scalar_count) > MULTI_SOURCE_MAX_ROLE_NODES_V1 {
+            continue;
+        }
+        selected.insert(*ordinal);
+        selected_roles = selected_roles.saturating_add(*scalar_count);
+    }
+    metadata.retain(|row| selected.contains(&row.0));
+    metadata.sort_by_key(|row| row.0);
+    Ok(metadata.into_iter().map(|row| row.1).collect())
+}
+
+fn scalar_count(value: &Value) -> usize {
+    match value {
+        Value::Array(values) => values.iter().map(scalar_count).sum(),
+        Value::Object(values) => values.values().map(scalar_count).sum(),
+        _ => 1,
+    }
+}
+
+fn output_referenced(value: &Value, request_text: &str) -> bool {
+    match value {
+        Value::Array(values) => values
+            .iter()
+            .any(|value| output_referenced(value, request_text)),
+        Value::Object(values) => values
+            .values()
+            .any(|value| output_referenced(value, request_text)),
+        Value::String(value) => value.len() >= 2 && request_text.contains(value),
+        Value::Number(value) => {
+            let rendered = value.to_string();
+            rendered.len() >= 2 && request_text.contains(&rendered)
+        }
+        Value::Bool(value) => request_text.contains(if *value { "true" } else { "false" }),
+        Value::Null => false,
+    }
 }
 
 fn collect_roles(
@@ -227,6 +311,60 @@ mod tests {
             MultiSourceExtractionStatusV1::Censored { .. }
         ));
         assert!(topology.roles.is_empty());
+    }
+
+    #[test]
+    fn long_history_keeps_referenced_and_recent_outputs_inside_budget() {
+        let mut input = (0..64)
+            .map(|index| {
+                serde_json::json!({
+                    "type": "function_call_output",
+                    "output": {"value": format!("history-value-{index}")}
+                })
+            })
+            .collect::<Vec<_>>();
+        input.push(serde_json::json!({
+            "type": "function_call_output",
+            "output": {"answer": "current-answer"}
+        }));
+        let topology = extract_pre_action_multi_source_topology_v1(
+            &serde_json::json!({"input": input}),
+            "use history-value-7 and current-answer",
+        );
+        assert!(matches!(
+            topology.extraction_status,
+            MultiSourceExtractionStatusV1::Complete
+        ));
+        assert!(topology.roles.len() <= MULTI_SOURCE_MAX_ROLE_NODES_V1);
+        assert!(topology.grounded_output_count <= MAX_RELEVANT_OUTPUTS_V1 as u16);
+        assert!(
+            topology
+                .roles
+                .iter()
+                .filter(|role| role.structural_flags & FLAG_REQUEST_REFERENCED != 0)
+                .count()
+                >= 2
+        );
+    }
+
+    #[test]
+    fn oversized_referenced_output_remains_censored() {
+        let values = (100..100 + MULTI_SOURCE_MAX_ROLE_NODES_V1 + 1).collect::<Vec<_>>();
+        let request = values
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let topology = extract_pre_action_multi_source_topology_v1(
+            &serde_json::json!({
+                "input": [{"type": "function_call_output", "output": values}]
+            }),
+            &request,
+        );
+        assert!(matches!(
+            topology.extraction_status,
+            MultiSourceExtractionStatusV1::Censored { .. }
+        ));
     }
 
     #[test]

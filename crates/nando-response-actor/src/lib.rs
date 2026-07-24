@@ -287,7 +287,7 @@ pub use online::{
     OnlineResponseMinerConfig, OnlineResponseMinerReport, OnlineResponseStream,
     OnlineResponseStreamStatus, OnlineResponseTailConfig,
     read_opportunity_audit_rows_from_checkpoint_bytes_v1, read_opportunity_audit_rows_v1,
-    run_online_response_tail,
+    read_retained_relation_frames_from_checkpoint_bytes_v1, run_online_response_tail,
 };
 pub use online_admission::{
     OnlineAdmissionCandidateRejection, OnlineAdmissionEvaluation, OnlineAdmissionSnapshot,

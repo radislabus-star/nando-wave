@@ -22,6 +22,18 @@ pub fn read_opportunity_audit_rows_from_checkpoint_bytes_v1(
     Ok(checkpoint.self_training_v2.opportunity_audit_rows_v1())
 }
 
+/// Returns the same bounded teacher reservoirs used by learning after restart.
+/// This proof-only view never mutates the checkpoint or grants authority.
+pub fn read_retained_relation_frames_from_checkpoint_bytes_v1(
+    bytes: &[u8],
+) -> Result<Vec<crate::RelationFrame>, String> {
+    let checkpoint = decode_online_checkpoint_bytes(bytes)?
+        .ok_or_else(|| "online_checkpoint_schema_unsupported".to_owned())?;
+    Ok(checkpoint
+        .self_training_v2
+        .bounded_teacher_frames_for_wave_migration())
+}
+
 impl OnlineResponseStream {
     #[must_use]
     pub const fn checkpoint_restored(&self) -> bool {

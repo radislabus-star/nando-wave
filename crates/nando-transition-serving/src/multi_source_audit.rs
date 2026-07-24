@@ -54,6 +54,10 @@ pub fn run_multi_source_discovery_audit_v2(
     let opportunities = nando_response_actor::read_opportunity_audit_rows_from_checkpoint_bytes_v1(
         &opportunity_bytes,
     )?;
+    let retained_frames =
+        nando_response_actor::read_retained_relation_frames_from_checkpoint_bytes_v1(
+            &opportunity_bytes,
+        )?;
     let request_bytes = fs::read(request_learning_checkpoint).map_err(|error| {
         format!(
             "multi_source_request_checkpoint_read:{}:{error}",
@@ -75,8 +79,9 @@ pub fn run_multi_source_discovery_audit_v2(
             .iter()
             .map(|row| row.structure.turn_intent_id_sha256.clone()),
     );
-    let (relations, frames, rows_scanned, parse_errors, relation_sha256) =
+    let (relations, historical_frames, rows_scanned, parse_errors, relation_sha256) =
         read_relation_data(relation_frames, &relevant)?;
+    let frames = merge_relevant_frames(retained_frames, historical_frames, &relevant);
     let evidence = build_multi_source_evidence_audit_v1(
         opportunities,
         request_snapshot.clone(),
@@ -123,6 +128,26 @@ pub fn run_multi_source_discovery_audit_v2(
         return Err("multi_source_report_restart_parity".to_owned());
     }
     Ok(report)
+}
+
+fn merge_relevant_frames(
+    retained: Vec<RelationFrame>,
+    historical: Vec<RelationFrame>,
+    relevant: &BTreeSet<String>,
+) -> Vec<RelationFrame> {
+    let mut frames = BTreeMap::<String, RelationFrame>::new();
+    for frame in historical.into_iter().chain(retained) {
+        if relevant.contains(&frame.client_intent_id_sha256) {
+            frames.insert(frame.frame_id_sha256.clone(), frame);
+        }
+    }
+    let mut frames = frames.into_values().collect::<Vec<_>>();
+    frames.sort_by(|left, right| {
+        left.observed_at_unix_nanos
+            .cmp(&right.observed_at_unix_nanos)
+            .then_with(|| left.frame_id_sha256.cmp(&right.frame_id_sha256))
+    });
+    frames
 }
 
 pub fn run_multi_source_evidence_audit_v1(
