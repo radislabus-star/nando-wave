@@ -522,6 +522,57 @@ fn t1_projection_can_select_one_role_from_a_multi_scalar_state() {
 }
 
 #[test]
+fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
+    let make_topology = |intent, request, session, sequence, captured_at| {
+        let mut row = topology_row(intent, request, session, sequence, captured_at);
+        row.structure.topology.roles[0].source_ordinal = 0;
+        row.structure.topology.roles[0].temporal_class = MultiSourceTemporalClassV1::Historical;
+        row.structure.topology.roles[1].source_ordinal = 1;
+        row.structure.topology.roles[1].temporal_class = MultiSourceTemporalClassV1::Latest;
+        row.structure.topology.roles[1].structural_flags = 1;
+        row.commit = PreActionTopologyCommitV1::seal(
+            &row.structure,
+            MultiSourceEvidenceOriginV1::FreshLive,
+            root("extractor"),
+            root("config"),
+            sequence,
+        )
+        .expect("multi-output T1 commit");
+        row
+    };
+    let topologies = vec![
+        make_topology("turn-a", "request-a", "session-a", 1, 1_000),
+        make_topology("turn-b", "request-b", "session-b", 2, 2_000),
+    ];
+    let frames = vec![
+        t1_completed_frame("turn-a", "action-a", "session-a", 1_500),
+        t1_completed_frame("turn-b", "action-b", "session-b", 2_500),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    assert!(ledger.rows().iter().all(|row| {
+        factor_multi_source_row_v1(row).pre_action_shape
+            == PreActionShapeClassV1::ManyOutputsLatestRelevantRole
+    }));
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("multi-output T1 epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+    assert_eq!(report.wrong_role_bindings, 0);
+    assert_eq!(report.negative_accepts, 0);
+}
+
+#[test]
 fn t1_identification_never_counts_support_lineage_reuse_as_future() {
     let topologies = vec![
         t1_topology_row("turn-a", "request-a", "session", 1, 1_000),

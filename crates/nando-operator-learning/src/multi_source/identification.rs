@@ -130,6 +130,7 @@ pub fn identify_multi_source_t1_operator_v1(
             factorized.pre_action_shape,
             PreActionShapeClassV1::SingleRoleProjection
                 | PreActionShapeClassV1::OneOutputManyScalarRoles
+                | PreActionShapeClassV1::ManyOutputsLatestRelevantRole
         )
             || factorized.completed_effect != CompletedEffectFormV1::SingleRoleProjection
             || !matches!(
