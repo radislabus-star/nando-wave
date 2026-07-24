@@ -140,6 +140,25 @@ fn completed_frame(
     }
 }
 
+#[test]
+fn approximate_token_counts_do_not_participate_in_transition_identity() {
+    let topology = topology_row("intent-token-drift", "request", "session", 1, 10);
+    let mut completed = completed_frame("intent-token-drift", "action", "session", 11);
+    completed.estimated_input_tokens = 9_999;
+
+    let joined = MultiSourceJoinLedgerV1::build(&[topology], &[completed]);
+
+    assert_eq!(joined.report().joined_rows, 1);
+    assert_eq!(joined.report().accepted_rows, 1);
+    assert_eq!(
+        joined
+            .report()
+            .censored
+            .get(&MultiSourceJoinCensoredReasonV1::TokenCountMismatch),
+        None
+    );
+}
+
 fn t1_topology_row(
     intent: &str,
     request_event: &str,

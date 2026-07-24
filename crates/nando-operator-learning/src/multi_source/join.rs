@@ -403,9 +403,6 @@ fn topology_matches_frame(
         && row
             .captured_at_unix_ms
             .is_some_and(|time| time.saturating_mul(1_000_000) <= action.observed_at_unix_nanos)
-        && (row.structure.estimated_input_tokens == 0
-            || action.estimated_input_tokens == 0
-            || row.structure.estimated_input_tokens == action.estimated_input_tokens)
         && (row.structure.session_lineage_roots_sha256.is_empty()
             || row
                 .structure
@@ -453,12 +450,6 @@ fn classify_missing_match(
             .is_some_and(|time| time.saturating_mul(1_000_000) > action.observed_at_unix_nanos)
     }) {
         MultiSourceJoinCensoredReasonV1::PreActionOrderInvalid
-    } else if same_intent.iter().any(|row| {
-        row.structure.estimated_input_tokens > 0
-            && action.estimated_input_tokens > 0
-            && row.structure.estimated_input_tokens != action.estimated_input_tokens
-    }) {
-        MultiSourceJoinCensoredReasonV1::TokenCountMismatch
     } else {
         MultiSourceJoinCensoredReasonV1::IdentityMismatch
     }

@@ -1,4 +1,5 @@
 use nando_operator_kernel::{Sha256CommitmentV3, sha256_bytes};
+use nando_operator_learning::{evidence_client_intent_id_sha256, evidence_session_id_sha256};
 use serde_json::Value;
 
 const MAX_PROVIDER_ID_BYTES: usize = 256;
@@ -55,16 +56,16 @@ impl ProviderRequestIdentityV1 {
             },
         );
         let mut session_identity_sha256s = session_id
+            .map(evidence_session_id_sha256)
             .into_iter()
-            .chain(thread_id)
-            .chain(prompt_cache_key)
-            .map(|value| sha256_bytes(value.as_bytes()))
+            .chain(thread_id.map(|value| sha256_bytes(value.as_bytes())))
+            .chain(prompt_cache_key.map(|value| sha256_bytes(value.as_bytes())))
             .collect::<Vec<_>>();
         session_identity_sha256s.sort();
         session_identity_sha256s.dedup();
 
         Self {
-            turn_intent_sha256: sha256_bytes(turn_intent_id.as_bytes()),
+            turn_intent_sha256: evidence_client_intent_id_sha256(&turn_intent_id),
             turn_intent_id,
             request_event_sha256: sha256_bytes(transport_request_id.as_bytes()),
             request_event_id: transport_request_id.to_owned(),
@@ -118,7 +119,6 @@ fn valid_provider_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use nando_operator_kernel::sha256_bytes;
     use serde_json::json;
 
     use super::*;
@@ -138,7 +138,10 @@ mod tests {
         );
 
         assert_eq!(identity.turn_intent_id(), "turn-a");
-        assert_eq!(identity.turn_intent_sha256(), sha256_bytes(b"turn-a"));
+        assert_eq!(
+            identity.turn_intent_sha256(),
+            evidence_client_intent_id_sha256("turn-a")
+        );
         assert_eq!(identity.request_event_id(), "nginx-event-a");
         assert_eq!(
             identity.request_event_sha256(),
@@ -146,6 +149,11 @@ mod tests {
         );
         assert!(identity.provider_bound_turn_identity());
         assert_eq!(identity.session_identity_sha256s().len(), 3);
+        assert!(
+            identity
+                .session_identity_sha256s()
+                .contains(&evidence_session_id_sha256("session-a"))
+        );
         assert_ne!(
             identity.session_lineage_root(),
             Sha256CommitmentV3::digest_parts(SESSION_LINEAGE_DOMAIN_V1, &[UNATTRIBUTED_SESSION_V1])

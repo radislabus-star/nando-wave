@@ -422,6 +422,11 @@ pub fn evidence_session_id_sha256(session_id: &str) -> String {
     domain_digest("nando.session-id.v1", session_id.as_bytes())
 }
 
+#[must_use]
+pub fn evidence_client_intent_id_sha256(client_intent_id: &str) -> String {
+    domain_digest("nando.client-intent-id.v1", client_intent_id.as_bytes())
+}
+
 #[derive(Serialize)]
 struct LedgerDigestMaterial<'a> {
     schema: &'static str,
@@ -1222,7 +1227,7 @@ fn canonicalize_event(
     let client_intent_id_sha256 = envelope
         .client_intent_id
         .as_deref()
-        .map(|value| domain_digest("nando.client-intent-id.v1", value.as_bytes()));
+        .map(evidence_client_intent_id_sha256);
     let call_id_sha256 = envelope
         .call_id
         .as_deref()
