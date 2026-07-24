@@ -76,6 +76,8 @@ pub struct MultiSourceT1IdentificationV3 {
     pub independent_future_rows: usize,
     pub independent_future_lineages: usize,
     pub wrong_role_bindings: usize,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub future_rejection_reasons: BTreeMap<String, usize>,
     pub negative_accepts: usize,
     pub candidate_freeze: Option<CandidateFreezeReceiptV1>,
     pub canonical_program: Option<ResponseProgram>,
@@ -93,6 +95,7 @@ struct EligibleT1Row {
     joined: BlindThenRevealJoinedTransitionV1,
     frame: RelationFrame,
     factorized: FactorizedMultiSourceRowV1,
+    protocol_mode_root_sha256: String,
     seed_programs: BTreeMap<String, ResponseProgram>,
 }
 
@@ -118,6 +121,8 @@ struct T1IdentificationDigest<'a> {
     independent_future_rows: usize,
     independent_future_lineages: usize,
     wrong_role_bindings: usize,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    future_rejection_reasons: &'a BTreeMap<String, usize>,
     negative_accepts: usize,
     candidate_freeze: &'a Option<CandidateFreezeReceiptV1>,
     canonical_program: &'a Option<ResponseProgram>,
@@ -146,6 +151,7 @@ pub fn identify_multi_source_t1_operator_v1(
         })
         .collect::<BTreeMap<_, _>>();
     let mut cohorts = BTreeMap::<T1CohortKey, Vec<EligibleT1Row>>::new();
+    let mut eligible_rows = Vec::new();
     let mut candidate_generation_blocks = BTreeMap::<(String, &'static str), u64>::new();
     for joined in joined_rows {
         let factorized = factor_multi_source_row_v1(joined);
@@ -196,18 +202,21 @@ pub fn identify_multi_source_t1_operator_v1(
                 continue;
             }
         };
+        let row = EligibleT1Row {
+            joined: joined.clone(),
+            frame: frame.clone(),
+            factorized,
+            protocol_mode_root_sha256: protocol_mode_root_sha256.clone(),
+            seed_programs,
+        };
         cohorts
             .entry(T1CohortKey {
-                effect_shape_root_sha256: factorized.applicability_shape_root_sha256.clone(),
+                effect_shape_root_sha256: row.factorized.applicability_shape_root_sha256.clone(),
                 protocol_mode_root_sha256,
             })
             .or_default()
-            .push(EligibleT1Row {
-                joined: joined.clone(),
-                frame: frame.clone(),
-                factorized,
-                seed_programs,
-            });
+            .push(row.clone());
+        eligible_rows.push(row);
     }
     let Some((cohort_key, mut cohort)) = select_highest_marginal_cohort(cohorts) else {
         if let Some(((shape_root, blocker), tokens)) =
@@ -342,10 +351,8 @@ pub fn identify_multi_source_t1_operator_v1(
     let mut canonical_program = None;
     let mut support_capture_frame_ids_sha256 = Vec::new();
     let mut support_lineages = BTreeSet::new();
-    let mut future_candidates = Vec::new();
     for row in accepted {
         if freeze.is_some() {
-            future_candidates.push(row);
             continue;
         }
         let observation = match observation_for_row(&row, &registered) {
@@ -398,11 +405,11 @@ pub fn identify_multi_source_t1_operator_v1(
                     );
                 };
                 let scope = canonical_json_sha256(&(
-                    "nando.multi-source-t1-applicability-scope.v1",
-                    shape_root.as_str(),
+                    "nando.multi-source-t1-applicability-scope.v2",
                     protocol_mode_root.as_str(),
                     class.semantic_class().class_id().as_str(),
                     class.canonical_program_root_sha256(),
+                    response_program_required_routing_atom_ids(&selected),
                 ))
                 .expect("T1 applicability scope serializes");
                 let watermark = row.joined.capture_sequence.saturating_add(1);
@@ -473,6 +480,7 @@ pub fn identify_multi_source_t1_operator_v1(
             independent_future_rows: 0,
             independent_future_lineages: 0,
             wrong_role_bindings: 0,
+            future_rejection_reasons: BTreeMap::new(),
             negative_accepts: 0,
             candidate_freeze: None,
             canonical_program: None,
@@ -486,8 +494,28 @@ pub fn identify_multi_source_t1_operator_v1(
         });
     };
     let selected_program = canonical_program.expect("freeze owns canonical program");
+    let mut future_candidates = eligible_rows
+        .iter()
+        .filter(|row| {
+            row.joined.accepted
+                && row.joined.capture_sequence >= candidate_freeze.support_watermark_next_sequence()
+                && row.protocol_mode_root_sha256 == protocol_mode_root
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    future_candidates.sort_by(|left, right| {
+        left.joined
+            .capture_sequence
+            .cmp(&right.joined.capture_sequence)
+            .then_with(|| {
+                left.joined
+                    .join_root_sha256
+                    .cmp(&right.joined.join_root_sha256)
+            })
+    });
     let mut support_reuse_rows = 0usize;
     let mut wrong_role_bindings = 0usize;
+    let mut future_rejection_reasons = BTreeMap::<String, usize>::new();
     let mut future_capture_frame_ids_sha256 = Vec::new();
     let mut future_basis_lineages = BTreeSet::new();
     for row in future_candidates {
@@ -495,15 +523,32 @@ pub fn identify_multi_source_t1_operator_v1(
             support_reuse_rows = support_reuse_rows.saturating_add(1);
             continue;
         }
+        if let Some(blocker) = super::source_neutral_t1::t1_program_consistency_blocker(
+            &selected_program,
+            &row.joined,
+            &row.frame,
+        ) {
+            wrong_role_bindings = wrong_role_bindings.saturating_add(1);
+            *future_rejection_reasons
+                .entry(blocker.to_owned())
+                .or_default() += 1;
+            continue;
+        }
         let observation = match observation_for_row(&row, &registered) {
             Ok(observation) => observation,
             Err(_) => {
                 wrong_role_bindings = wrong_role_bindings.saturating_add(1);
+                *future_rejection_reasons
+                    .entry("future_observation_invalid".to_owned())
+                    .or_default() += 1;
                 continue;
             }
         };
         if machine.apply_future(observation).is_err() {
             wrong_role_bindings = wrong_role_bindings.saturating_add(1);
+            *future_rejection_reasons
+                .entry("future_ledger_rejected".to_owned())
+                .or_default() += 1;
         } else if future_capture_frame_ids_sha256.len() < MULTI_SOURCE_T1_MAX_FUTURE_BASIS_ROWS
             && future_basis_lineages.insert(row.joined.session_lineage_sha256.clone())
         {
@@ -514,10 +559,11 @@ pub fn identify_multi_source_t1_operator_v1(
         .evidence_ledger()
         .map(|ledger| ledger.accounting())
         .unwrap_or_default();
-    let negative_accepts = cohort
+    let negative_accepts = eligible_rows
         .iter()
         .filter(|row| {
             !row.joined.accepted
+                && row.protocol_mode_root_sha256 == protocol_mode_root
                 && super::source_neutral_t1::t1_program_is_consistent(
                     &selected_program,
                     &row.joined,
@@ -572,6 +618,7 @@ pub fn identify_multi_source_t1_operator_v1(
         independent_future_rows: accounting.future_rows,
         independent_future_lineages: accounting.future_lineages,
         wrong_role_bindings,
+        future_rejection_reasons,
         negative_accepts,
         candidate_freeze: Some(candidate_freeze),
         canonical_program: Some(selected_program),
@@ -849,6 +896,7 @@ fn terminal_report(
         independent_future_rows: 0,
         independent_future_lineages: 0,
         wrong_role_bindings: 0,
+        future_rejection_reasons: BTreeMap::new(),
         negative_accepts: 0,
         candidate_freeze: None,
         canonical_program: None,
@@ -959,6 +1007,7 @@ impl MultiSourceT1IdentificationV3 {
             independent_future_rows: self.independent_future_rows,
             independent_future_lineages: self.independent_future_lineages,
             wrong_role_bindings: self.wrong_role_bindings,
+            future_rejection_reasons: &self.future_rejection_reasons,
             negative_accepts: self.negative_accepts,
             candidate_freeze: &self.candidate_freeze,
             canonical_program: &self.canonical_program,

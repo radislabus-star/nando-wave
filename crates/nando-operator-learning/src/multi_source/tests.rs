@@ -204,6 +204,98 @@ fn t1_topology_row(
     row
 }
 
+fn t1_continuation_topology_row(
+    intent: &str,
+    request_event: &str,
+    session: &str,
+    capture_sequence: u64,
+    captured_at_unix_ms: u64,
+    include_historical_role: bool,
+) -> PreActionTopologyAuditRowV1 {
+    let mut row = t1_topology_row(
+        intent,
+        request_event,
+        session,
+        capture_sequence,
+        captured_at_unix_ms,
+    );
+    row.structure.topology.roles[0].type_class = MultiSourceTypeClassV1::String;
+    row.structure.topology.role_witnesses[0].request_reference_ordinal = None;
+    row.structure.topology.grounded_output_count = 1;
+    row.structure.topology.output_part_count = 1;
+    row.structure.topology.relations.clear();
+    row.structure
+        .topology
+        .relations
+        .push(MultiSourceRelationEdgeV1 {
+            relation: MultiSourceRelationKindV1::ContinuationHandle,
+            source_role_id: 0,
+            target_role_id: 0,
+        });
+    if include_historical_role {
+        let mut historical_role = row.structure.topology.roles[0].clone();
+        historical_role.local_role_id = 1;
+        historical_role.temporal_class = MultiSourceTemporalClassV1::Historical;
+        historical_role.value_ordinal = 1;
+        row.structure.topology.roles.push(historical_role);
+        row.structure
+            .topology
+            .role_witnesses
+            .push(MultiSourceRoleWitnessV1 {
+                local_role_id: 1,
+                value_sha256: root(&format!("historical:{request_event}")),
+                request_reference_ordinal: None,
+            });
+        row.structure
+            .topology
+            .relations
+            .push(MultiSourceRelationEdgeV1 {
+                relation: MultiSourceRelationKindV1::ContinuationHandle,
+                source_role_id: 1,
+                target_role_id: 1,
+            });
+        row.structure.topology.output_part_count = 2;
+    }
+    row.structure.topology.relations.sort();
+    row.commit = PreActionTopologyCommitV1::seal(
+        &row.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        capture_sequence,
+    )
+    .expect("continuation topology");
+    row
+}
+
+fn t1_continuation_frame(
+    intent: &str,
+    event: &str,
+    session: &str,
+    observed_at_unix_ms: u64,
+    prefix: &str,
+) -> RelationFrame {
+    let mut frame = t1_completed_frame(intent, event, session, observed_at_unix_ms);
+    for atom in &mut frame.atoms {
+        match atom {
+            RelationAtom::TypedSlot { value_type, .. } => {
+                *value_type = AtomValueType::Identifier;
+            }
+            RelationAtom::ObservationSelector { selector, .. } => {
+                *selector = ResponseValueSelector::ContentLinePrefix {
+                    prefix: prefix.to_owned(),
+                    value_type: AtomValueType::Identifier,
+                };
+            }
+            RelationAtom::ActionRoleArgument { value_type, .. } => {
+                *value_type = Some(AtomValueType::Identifier);
+            }
+            _ => {}
+        }
+    }
+    frame
+}
+
 fn t1_value_topology_row(
     intent: &str,
     request_event: &str,
@@ -963,74 +1055,13 @@ fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
 
 #[test]
 fn t1_continuation_surface_compiles_to_semantic_handle_role() {
-    let make_topology = |intent, request, session, sequence, captured_at| {
-        let mut row = t1_topology_row(intent, request, session, sequence, captured_at);
-        row.structure.topology.roles[0].type_class = MultiSourceTypeClassV1::String;
-        let mut historical_role = row.structure.topology.roles[0].clone();
-        historical_role.local_role_id = 1;
-        historical_role.temporal_class = MultiSourceTemporalClassV1::Historical;
-        historical_role.value_ordinal = 1;
-        row.structure.topology.roles.push(historical_role);
-        row.structure.topology.role_witnesses[0].request_reference_ordinal = None;
-        row.structure
-            .topology
-            .role_witnesses
-            .push(MultiSourceRoleWitnessV1 {
-                local_role_id: 1,
-                value_sha256: root(&format!("historical:{request}")),
-                request_reference_ordinal: None,
-            });
-        row.structure.topology.relations.clear();
-        row.structure.topology.relations.extend([
-            MultiSourceRelationEdgeV1 {
-                relation: MultiSourceRelationKindV1::ContinuationHandle,
-                source_role_id: 0,
-                target_role_id: 0,
-            },
-            MultiSourceRelationEdgeV1 {
-                relation: MultiSourceRelationKindV1::ContinuationHandle,
-                source_role_id: 1,
-                target_role_id: 1,
-            },
-        ]);
-        row.commit = PreActionTopologyCommitV1::seal(
-            &row.structure,
-            MultiSourceEvidenceOriginV1::FreshLive,
-            root("extractor"),
-            root("config"),
-            sequence,
-        )
-        .expect("continuation topology");
-        row
-    };
-    let make_frame = |intent, event, session, observed_at, prefix: &str| {
-        let mut frame = t1_completed_frame(intent, event, session, observed_at);
-        for atom in &mut frame.atoms {
-            match atom {
-                RelationAtom::TypedSlot { value_type, .. } => {
-                    *value_type = AtomValueType::Identifier;
-                }
-                RelationAtom::ObservationSelector { selector, .. } => {
-                    *selector = ResponseValueSelector::ContentLinePrefix {
-                        prefix: prefix.to_owned(),
-                        value_type: AtomValueType::Identifier,
-                    };
-                }
-                RelationAtom::ActionRoleArgument { value_type, .. } => {
-                    *value_type = Some(AtomValueType::Identifier);
-                }
-                _ => {}
-            }
-        }
-        frame
-    };
     let topologies = vec![
-        make_topology("turn-a", "request-a", "session-a", 1, 1_000),
-        make_topology("turn-b", "request-b", "session-b", 2, 2_000),
+        t1_continuation_topology_row("turn-a", "request-a", "session-a", 1, 1_000, true),
+        t1_continuation_topology_row("turn-b", "request-b", "session-b", 2, 2_000, true),
     ];
     let frames = vec![
-        make_frame("turn-a", "action-a", "session-a", 1_500, "surface A "),
-        make_frame("turn-b", "action-b", "session-b", 2_500, "surface B "),
+        t1_continuation_frame("turn-a", "action-a", "session-a", 1_500, "surface A "),
+        t1_continuation_frame("turn-b", "action-b", "session-b", 2_500, "surface B "),
     ];
     let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
 
@@ -1060,6 +1091,96 @@ fn t1_continuation_surface_compiles_to_semantic_handle_role() {
     let encoded = serde_json::to_string(&report).expect("report");
     assert!(!encoded.contains("surface A"));
     assert!(!encoded.contains("surface B"));
+}
+
+#[test]
+fn t1_continuation_transfers_across_pre_action_topologies() {
+    let topologies = vec![
+        t1_continuation_topology_row(
+            "support-a",
+            "request-support-a",
+            "support-session",
+            1,
+            1_000,
+            true,
+        ),
+        t1_continuation_topology_row(
+            "support-b",
+            "request-support-b",
+            "support-session",
+            2,
+            2_000,
+            true,
+        ),
+        t1_continuation_topology_row(
+            "future",
+            "request-future",
+            "future-session",
+            3,
+            3_000,
+            false,
+        ),
+    ];
+    let frames = vec![
+        t1_continuation_frame(
+            "support-a",
+            "action-support-a",
+            "support-session",
+            1_500,
+            "surface A ",
+        ),
+        t1_continuation_frame(
+            "support-b",
+            "action-support-b",
+            "support-session",
+            2_500,
+            "surface B ",
+        ),
+        t1_continuation_frame(
+            "future",
+            "action-future",
+            "future-session",
+            3_500,
+            "surface C ",
+        ),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+    let rows = ledger.rows();
+    assert_eq!(
+        factor_multi_source_row_v1(&rows[0]).pre_action_shape,
+        PreActionShapeClassV1::OneOutputManyScalarRoles
+    );
+    assert_eq!(
+        factor_multi_source_row_v1(&rows[2]).pre_action_shape,
+        PreActionShapeClassV1::SingleRoleProjection
+    );
+
+    let report = identify_multi_source_t1_operator_v1(
+        &rows,
+        &frames,
+        &BTreeSet::new(),
+        root("cross-topology continuation epoch"),
+    );
+
+    assert!(report.validate(), "{report:#?}");
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.support_reuse_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
+    assert_eq!(report.independent_future_lineages, 1);
+    assert_eq!(report.wrong_role_bindings, 0);
+    assert!(report.exact_transfer_parity);
+    assert_eq!(
+        report
+            .proof_basis
+            .as_ref()
+            .expect("proof basis")
+            .future_capture_frame_ids_sha256,
+        [frames[2].frame_id_sha256.clone()]
+    );
 }
 
 #[test]

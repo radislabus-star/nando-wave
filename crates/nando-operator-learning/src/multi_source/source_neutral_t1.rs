@@ -46,23 +46,32 @@ pub(super) fn t1_program_is_consistent(
     joined: &BlindThenRevealJoinedTransitionV1,
     frame: &RelationFrame,
 ) -> bool {
+    t1_program_consistency_blocker(program, joined, frame).is_none()
+}
+
+pub(super) fn t1_program_consistency_blocker(
+    program: &ResponseProgram,
+    joined: &BlindThenRevealJoinedTransitionV1,
+    frame: &RelationFrame,
+) -> Option<&'static str> {
     let Some((_, selected_value_root, _, observed_selector)) = selected_observation(frame) else {
-        return false;
+        return Some("selected_observation_missing_or_ambiguous");
     };
     let Some(expected_witness) = witness_for_program(program, joined) else {
-        return false;
+        return Some("structural_role_missing_or_ambiguous");
     };
     if expected_witness.value_sha256 != selected_value_root {
-        return false;
+        return Some("structural_role_value_mismatch");
     }
     let Some(structural_selector) = primary_t1_selector(program) else {
-        return false;
+        return Some("primary_selector_missing");
     };
     let mut bound = program.clone();
     if replace_t1_selector(&mut bound, structural_selector, observed_selector).is_none() {
-        return false;
+        return Some("selector_rewrite_failed");
     }
-    crate::synthesis::program_is_consistent(&bound, frame)
+    (!crate::synthesis::program_is_consistent(&bound, frame))
+        .then_some("physical_transition_mismatch")
 }
 
 fn source_neutralize_t1_program(
