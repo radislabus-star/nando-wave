@@ -3,6 +3,7 @@
 mod audit;
 mod factorizer;
 mod join;
+mod live_snapshot;
 mod marginal;
 
 pub use audit::{
@@ -19,6 +20,10 @@ pub use join::{
     BLIND_THEN_REVEAL_JOIN_SCHEMA_V1, BlindThenRevealJoinedTransitionV1, CompletedEffectAtomV1,
     MULTI_SOURCE_JOIN_MAX_ROWS_V1, MultiSourceJoinCensoredReasonV1, MultiSourceJoinLedgerV1,
     MultiSourceJoinReportV1, ObservedTeacherActionRefV1, VerifiedOutcomeReceiptRefV1,
+};
+pub use live_snapshot::{
+    LIVE_MULTI_SOURCE_DISCOVERY_SNAPSHOT_SCHEMA_V1, LiveMultiSourceDiscoveryBlockerV1,
+    LiveMultiSourceDiscoverySnapshotV1, build_live_multi_source_discovery_snapshot_v1,
 };
 pub use marginal::{
     COVERAGE_OPPORTUNITY_MAX_ROWS_V1, COVERAGE_OPPORTUNITY_SNAPSHOT_SCHEMA_V1,

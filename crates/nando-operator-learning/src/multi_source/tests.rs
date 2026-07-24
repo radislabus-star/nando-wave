@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use crate::opportunity::{OpportunityIntentAuditRowV1, ReducibilityClass};
 use nando_operator_kernel::{
     AtomSource, AtomValueType, LEARNING_REQUEST_STRUCTURE_SCHEMA_V2, MultiSourceCardinalityClassV1,
     MultiSourceContainerClassV1, MultiSourceEvidenceOriginV1, MultiSourceExtractionStatusV1,
@@ -136,6 +137,31 @@ fn completed_frame(
     }
 }
 
+fn opportunity(intent: &str, class: ReducibilityClass) -> OpportunityIntentAuditRowV1 {
+    OpportunityIntentAuditRowV1 {
+        intent_sha256: root(intent),
+        input_tokens: 100,
+        class,
+        verifier_available: true,
+        observed_at_unix: 10,
+        authority_observed: true,
+    }
+}
+
+fn request_snapshot(
+    topologies: Vec<PreActionTopologyAuditRowV1>,
+) -> RequestStructureAuditSnapshotV1 {
+    RequestStructureAuditSnapshotV1 {
+        rows: Vec::new(),
+        stored_turns: u64::try_from(topologies.len()).unwrap_or(u64::MAX),
+        stored_topologies: u64::try_from(topologies.len()).unwrap_or(u64::MAX),
+        topologies,
+        evictions: 0,
+        provider_bound_by_construction: true,
+        pre_action_context_persisted: true,
+    }
+}
+
 #[test]
 fn blind_then_reveal_join_preserves_repeated_turn_events_without_overwrite() {
     let topologies = vec![
@@ -210,4 +236,68 @@ fn marginal_ledger_buys_each_intent_once_and_subtracts_active() {
     assert_eq!(snapshot.already_active.intents, 1);
     assert_eq!(snapshot.unresolved.intents, 1);
     assert_eq!(snapshot.duplicate_marginal_purchase, 0);
+}
+
+#[test]
+fn live_snapshot_is_order_independent_and_subtracts_active_overlap() {
+    let topology_a = topology_row("turn-a", "request-a", "session-a", 1, 1_000);
+    let topology_b = topology_row("turn-b", "request-b", "session-b", 2, 2_000);
+    let frame_a = completed_frame("turn-a", "action-a", "session-a", 1_500);
+    let frame_b = completed_frame("turn-b", "action-b", "session-b", 2_500);
+    let opportunity_a = opportunity("turn-a", ReducibilityClass::CpuVerified);
+    let opportunity_b = opportunity("turn-b", ReducibilityClass::UnexploredMultiSource);
+
+    let forward = build_live_multi_source_discovery_snapshot_v1(
+        vec![opportunity_a.clone(), opportunity_b.clone()],
+        request_snapshot(vec![topology_a.clone(), topology_b.clone()]),
+        vec![frame_a.clone(), frame_b.clone()],
+    );
+    let reversed = build_live_multi_source_discovery_snapshot_v1(
+        vec![opportunity_b, opportunity_a],
+        request_snapshot(vec![topology_b, topology_a]),
+        vec![frame_b, frame_a],
+    );
+
+    assert!(forward.validate());
+    assert_eq!(
+        forward.blocker,
+        LiveMultiSourceDiscoveryBlockerV1::ReadyForT1Identification
+    );
+    assert_eq!(forward.join.joined_rows, 2);
+    assert_eq!(forward.opportunity.already_active.intents, 1);
+    assert_eq!(forward.opportunity.unresolved.intents, 1);
+    assert_eq!(
+        serde_json::to_vec(&forward).expect("snapshot serializes"),
+        serde_json::to_vec(&reversed).expect("snapshot serializes")
+    );
+}
+
+#[test]
+fn live_snapshot_reports_the_first_missing_signal_boundary() {
+    let no_topology = build_live_multi_source_discovery_snapshot_v1(
+        Vec::new(),
+        request_snapshot(Vec::new()),
+        Vec::new(),
+    );
+    assert!(no_topology.validate());
+    assert_eq!(
+        no_topology.blocker,
+        LiveMultiSourceDiscoveryBlockerV1::NoPreActionTopology
+    );
+
+    let no_frame = build_live_multi_source_discovery_snapshot_v1(
+        vec![opportunity(
+            "turn",
+            ReducibilityClass::UnexploredMultiSource,
+        )],
+        request_snapshot(vec![topology_row("turn", "request", "session", 1, 1_000)]),
+        Vec::new(),
+    );
+    assert!(no_frame.validate());
+    assert_eq!(
+        no_frame.blocker,
+        LiveMultiSourceDiscoveryBlockerV1::NoCompletedRelationFrame
+    );
+    assert!(!no_frame.identification_ready);
+    assert!(!no_frame.authority_ready);
 }

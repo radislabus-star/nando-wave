@@ -15,6 +15,7 @@ mod live_economics;
 mod miner_worker;
 pub mod multi_source_audit;
 mod multi_source_capture;
+mod multi_source_live;
 mod opportunity_bridge;
 mod provider_capture;
 mod request_identity;
@@ -702,6 +703,7 @@ pub async fn serve(config: ServingConfig) -> Result<(), String> {
         .route("/health", get(health))
         .route("/health/bridge", get(bridge_health))
         .route("/v2/miner/report", get(miner_report))
+        .route("/v2/multi-source/report", get(multi_source_report))
         .route("/v1/transitions/execute", post(execute_transition))
         .route("/v2/transitions/execute", post(execute_transition))
         .route("/v1/transitions/observe", post(observe_transition))
@@ -1418,6 +1420,51 @@ async fn miner_report(State(state): State<AppState>) -> Response {
             "claim_boundary": "in-memory Rust state and generated snapshots; only admission receipts grant execution authority",
         }),
     )
+}
+
+async fn multi_source_report(State(state): State<AppState>) -> Response {
+    let requests = match state.request_learning.audit_snapshot_v1() {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            return json_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({"schema": "nando.live-multi-source-error.v1", "error": error}),
+            );
+        }
+    };
+    let Some(miner) = current_response_miner(&state) else {
+        return json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({"schema": "nando.live-multi-source-error.v1", "error": "miner_unavailable"}),
+        );
+    };
+    let (opportunities, frames) = match miner.try_lock() {
+        Ok(miner) => (
+            miner.opportunity_audit_rows_v1(),
+            miner.retained_relation_frames_v1(),
+        ),
+        Err(_) => {
+            return json_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({"schema": "nando.live-multi-source-error.v1", "error": "miner_busy"}),
+            );
+        }
+    };
+    match multi_source_live::build_snapshot(opportunities, requests, frames) {
+        Ok(snapshot) => json_response(
+            StatusCode::OK,
+            serde_json::to_value(snapshot).unwrap_or_else(|_| {
+                json!({
+                    "schema": "nando.live-multi-source-error.v1",
+                    "error": "snapshot_encode"
+                })
+            }),
+        ),
+        Err(error) => json_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({"schema": "nando.live-multi-source-error.v1", "error": error}),
+        ),
+    }
 }
 
 fn streaming_miner_signal_tree(

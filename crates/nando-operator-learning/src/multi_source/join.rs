@@ -74,6 +74,7 @@ pub struct VerifiedOutcomeReceiptRefV1 {
 pub struct BlindThenRevealJoinedTransitionV1 {
     pub schema: String,
     pub join_root_sha256: String,
+    pub capture_sequence: u64,
     pub turn_intent_id_sha256: String,
     pub request_event_id_sha256: String,
     pub action_event_id_sha256: String,
@@ -116,6 +117,7 @@ pub struct MultiSourceJoinLedgerV1 {
 #[derive(Serialize)]
 struct JoinedDigest<'a> {
     schema: &'a str,
+    capture_sequence: u64,
     turn_intent_id_sha256: &'a str,
     request_event_id_sha256: &'a str,
     action_event_id_sha256: &'a str,
@@ -156,6 +158,13 @@ impl MultiSourceJoinLedgerV1 {
                 row.commit.commitment_root_sha256.as_str(),
             )
         });
+        let mut eligible_by_intent = BTreeMap::<&str, Vec<&PreActionTopologyAuditRowV1>>::new();
+        for row in &eligible {
+            eligible_by_intent
+                .entry(row.structure.turn_intent_id_sha256.as_str())
+                .or_default()
+                .push(*row);
+        }
 
         for frame in frames {
             if ledger.joined_by_root.len() >= MULTI_SOURCE_JOIN_MAX_ROWS_V1 {
@@ -177,7 +186,11 @@ impl MultiSourceJoinLedgerV1 {
                     ledger.report.duplicate_idempotent.saturating_add(1);
                 continue;
             }
-            let candidates = eligible
+            let same_intent = eligible_by_intent
+                .get(action.turn_intent_id_sha256.as_str())
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let candidates = same_intent
                 .iter()
                 .copied()
                 .filter(|row| {
@@ -188,7 +201,7 @@ impl MultiSourceJoinLedgerV1 {
                 })
                 .collect::<Vec<_>>();
             let Some(selected) = select_latest_unique(&candidates) else {
-                let reason = classify_missing_match(&eligible, &action, &candidates);
+                let reason = classify_missing_match(same_intent, &action, &candidates);
                 ledger.censor(reason);
                 continue;
             };
@@ -244,6 +257,7 @@ impl MultiSourceJoinLedgerV1 {
 impl BlindThenRevealJoinedTransitionV1 {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.schema != BLIND_THEN_REVEAL_JOIN_SCHEMA_V1
+            || self.capture_sequence == 0
             || self.input_tokens == 0
             || self.captured_at_unix_ms == 0
             || self.completed_at_unix_nanos < self.captured_at_unix_ms.saturating_mul(1_000_000)
@@ -274,6 +288,7 @@ impl BlindThenRevealJoinedTransitionV1 {
     fn expected_root(&self) -> Result<String, &'static str> {
         canonical_json_sha256(&JoinedDigest {
             schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1,
+            capture_sequence: self.capture_sequence,
             turn_intent_id_sha256: &self.turn_intent_id_sha256,
             request_event_id_sha256: &self.request_event_id_sha256,
             action_event_id_sha256: &self.action_event_id_sha256,
@@ -324,6 +339,7 @@ fn validate_topology_row(
             .record_sha256
             .as_deref()
             .is_none_or(|root| !valid_nonzero_sha256(root))
+        || row.bridge_sequence.is_none_or(|sequence| sequence == 0)
         || row
             .session_lineage_sha256
             .as_deref()
@@ -413,7 +429,7 @@ fn select_latest_unique<'a>(
 }
 
 fn classify_missing_match(
-    eligible: &[&PreActionTopologyAuditRowV1],
+    same_intent: &[&PreActionTopologyAuditRowV1],
     action: &ObservedTeacherActionRefV1,
     candidates: &[&PreActionTopologyAuditRowV1],
 ) -> MultiSourceJoinCensoredReasonV1 {
@@ -432,11 +448,6 @@ fn classify_missing_match(
     {
         return MultiSourceJoinCensoredReasonV1::AmbiguousPreActionMatch;
     }
-    let same_intent = eligible
-        .iter()
-        .copied()
-        .filter(|row| row.structure.turn_intent_id_sha256 == action.turn_intent_id_sha256)
-        .collect::<Vec<_>>();
     if same_intent.iter().any(|row| {
         row.captured_at_unix_ms
             .is_some_and(|time| time.saturating_mul(1_000_000) > action.observed_at_unix_nanos)
@@ -474,6 +485,9 @@ fn joined_row(
     let mut joined = BlindThenRevealJoinedTransitionV1 {
         schema: BLIND_THEN_REVEAL_JOIN_SCHEMA_V1.to_owned(),
         join_root_sha256: String::new(),
+        capture_sequence: topology
+            .bridge_sequence
+            .ok_or(MultiSourceJoinCensoredReasonV1::IdentityMismatch)?,
         turn_intent_id_sha256: action.turn_intent_id_sha256.clone(),
         request_event_id_sha256: topology.structure.request_event_id_sha256.clone(),
         action_event_id_sha256: action.action_event_id_sha256.clone(),

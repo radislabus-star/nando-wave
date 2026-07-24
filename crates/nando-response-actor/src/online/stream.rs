@@ -55,6 +55,20 @@ impl OnlineResponseStream {
         self.miner.replay_support_parity_cases_total()
     }
 
+    #[must_use]
+    pub fn opportunity_audit_rows_v1(
+        &self,
+    ) -> Vec<nando_operator_learning::opportunity::OpportunityIntentAuditRowV1> {
+        self.miner.self_training_v2.opportunity_audit_rows_v1()
+    }
+
+    #[must_use]
+    pub fn retained_relation_frames_v1(&self) -> Vec<crate::RelationFrame> {
+        self.miner
+            .self_training_v2
+            .bounded_teacher_frames_for_wave_migration()
+    }
+
     /// Restores only the bounded miner checkpoint. Live V2 evidence arrives
     /// through framed worker segments, so production never scans the legacy
     /// relation JSON ledger during startup.
