@@ -136,6 +136,7 @@ pub fn identify_multi_source_t1_operator_v1(
                 joined.topology.extraction_status,
                 MultiSourceExtractionStatusV1::Complete
             )
+            || joined.topology.role_witnesses.len() != joined.topology.roles.len()
             || active_intents.contains(&joined.turn_intent_id_sha256)
         {
             continue;

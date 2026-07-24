@@ -718,9 +718,53 @@ fn t1_value_projection_refuses_physical_program_without_pre_action_witness() {
 
     assert_eq!(
         report.state,
-        MultiSourceT1IdentificationStateV1::CandidateGenerationEmpty
+        MultiSourceT1IdentificationStateV1::NoEligibleCohort
     );
     assert!(report.canonical_program.is_none());
+}
+
+#[test]
+fn witnessless_legacy_mass_cannot_hide_a_smaller_fresh_identifiable_cohort() {
+    let mut legacy_topology =
+        t1_value_topology_row("legacy", "request-legacy", "legacy-session", 1, 1_000);
+    legacy_topology.structure.topology.role_witnesses.clear();
+    legacy_topology.commit = PreActionTopologyCommitV1::seal(
+        &legacy_topology.structure,
+        MultiSourceEvidenceOriginV1::FreshLive,
+        root("extractor"),
+        root("config"),
+        1,
+    )
+    .expect("legacy commit");
+    let mut legacy_frame =
+        t1_completed_value_projection_frame("legacy", "action-legacy", "legacy-session", 1_500);
+    legacy_frame.estimated_input_tokens = 50_000;
+    let topologies = vec![
+        legacy_topology,
+        t1_value_topology_row("turn-a", "request-a", "session-a", 2, 2_000),
+        t1_value_topology_row("turn-b", "request-b", "session-b", 3, 3_000),
+    ];
+    let frames = vec![
+        legacy_frame,
+        t1_completed_value_projection_frame("turn-a", "action-a", "session-a", 2_500),
+        t1_completed_value_projection_frame("turn-b", "action-b", "session-b", 3_500),
+    ];
+    let ledger = MultiSourceJoinLedgerV1::build(&topologies, &frames);
+
+    let report = identify_multi_source_t1_operator_v1(
+        &ledger.rows(),
+        &frames,
+        &BTreeSet::new(),
+        root("fresh witness epoch"),
+    );
+
+    assert_eq!(
+        report.state,
+        MultiSourceT1IdentificationStateV1::TransferReady
+    );
+    assert_eq!(report.selected_marginal_input_tokens, 200);
+    assert_eq!(report.support_rows, 1);
+    assert_eq!(report.independent_future_rows, 1);
 }
 
 fn set_observed_json_field(frame: &mut RelationFrame, field: &str) {
