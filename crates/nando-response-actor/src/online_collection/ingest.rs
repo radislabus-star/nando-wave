@@ -1,5 +1,6 @@
 //! Online observation ingestion, replay rehydration, and bounded miner state updates.
 
+use super::admission::CollectionAdmissionPreparation;
 use super::*;
 
 impl OnlineCollectionMiner {
@@ -1262,16 +1263,42 @@ impl OnlineCollectionMiner {
                 }
             }
         }
+        let mut admission_causal_reports = Vec::new();
         let mut buckets = self
             .checkpoint
             .buckets
             .iter()
-            .map(|bucket| {
-                bucket_status(
+            .enumerate()
+            .map(|(index, bucket)| {
+                let mut status = bucket_status(
                     bucket,
                     self.checkpoint.config.proof_mode,
                     self.checkpoint.config.support_rows,
-                )
+                );
+                if bucket.frozen_program_sha256.is_some() && status.admission_blocker.is_none() {
+                    status.admission_blocker = match self.package_for_bucket(index, bucket, false) {
+                        Ok(Some(package)) => {
+                            match self.collection_causal_report(bucket, &package) {
+                                Ok(causal_report) => {
+                                    admission_causal_reports.push(causal_report.clone());
+                                    match Self::prepare_admission_candidate_from_parts(
+                                        package,
+                                        causal_report,
+                                    ) {
+                                        CollectionAdmissionPreparation::Ready { .. } => None,
+                                        CollectionAdmissionPreparation::Blocked(blocker) => {
+                                            Some(blocker)
+                                        }
+                                    }
+                                }
+                                Err(error) => Some(format!("admission_candidate_error:{error}")),
+                            }
+                        }
+                        Ok(None) => Some("collection_package_missing".to_owned()),
+                        Err(error) => Some(format!("admission_candidate_error:{error}")),
+                    };
+                }
+                status
             })
             .collect::<Vec<_>>();
         buckets.sort_by(|left, right| left.bucket_id.cmp(&right.bucket_id));
@@ -1307,16 +1334,6 @@ impl OnlineCollectionMiner {
             .checkpoint
             .unsupported_total
             .saturating_add(legacy_unclassified_observations_total);
-        let admission_causal_reports = self
-            .checkpoint
-            .buckets
-            .iter()
-            .enumerate()
-            .filter_map(|(index, bucket)| {
-                let package = self.package_for_bucket(index, bucket, false).ok()??;
-                self.collection_causal_report(bucket, &package).ok()
-            })
-            .collect();
         OnlineCollectionStatus {
             pooling_strategy_version: self.checkpoint.pooling_strategy_version,
             durable_adapter_phase_evidence_rows: durable_adapter_phase_evidence.len(),

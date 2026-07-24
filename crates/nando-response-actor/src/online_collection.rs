@@ -292,6 +292,37 @@ pub struct OnlineCollectionMiner {
     checkpoint: OnlineCollectionCheckpoint,
 }
 
+pub struct OnlineCollectionReadSnapshot {
+    miner: OnlineCollectionMiner,
+}
+
+impl OnlineCollectionMiner {
+    #[must_use]
+    pub fn read_snapshot(&self) -> OnlineCollectionReadSnapshot {
+        OnlineCollectionReadSnapshot {
+            miner: Self {
+                path: PathBuf::new(),
+                checkpoint: self.checkpoint.clone(),
+            },
+        }
+    }
+}
+
+impl OnlineCollectionReadSnapshot {
+    #[must_use]
+    pub fn status(&self) -> OnlineCollectionStatus {
+        self.miner.status()
+    }
+
+    pub fn quarantine_packages(&self) -> Result<Vec<ResponsePackage>, String> {
+        self.miner.quarantine_packages()
+    }
+
+    pub fn admission_candidates(&self) -> Result<Vec<OnlineCollectionAdmissionCandidate>, String> {
+        self.miner.admission_candidates()
+    }
+}
+
 pub fn online_collection_support_manifest_digest(
     candidate: &OnlineCollectionAdmissionCandidate,
 ) -> Result<String, String> {

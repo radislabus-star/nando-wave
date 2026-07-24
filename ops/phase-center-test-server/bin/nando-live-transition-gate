@@ -4,7 +4,7 @@ set -euo pipefail
 readonly HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly OPS_DIR="$(cd -- "${HERE}/.." && pwd)"
 readonly DEFAULT_GATE_DIR="${OPS_DIR}/gates"
-readonly TMP_DIR="$(mktemp -d /tmp/nando-live-transition-composite.XXXXXX)"
+readonly TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nando-live-transition-composite.XXXXXX")"
 trap 'rm -rf -- "${TMP_DIR}"' EXIT
 
 refresh_proofs=0

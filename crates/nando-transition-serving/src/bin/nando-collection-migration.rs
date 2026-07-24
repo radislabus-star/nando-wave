@@ -58,6 +58,39 @@ fn run() -> Result<(), String> {
         );
         return Ok(());
     }
+    if first == "--admission-checkpoint" {
+        let checkpoint = PathBuf::from(args.next().ok_or_else(usage)?);
+        if args.next().is_some() {
+            return Err(usage());
+        }
+        let miner = OnlineCollectionMiner::open(checkpoint, OnlineCollectionConfig::default())?;
+        let packages = miner.quarantine_packages()?;
+        let candidates = miner.admission_candidates()?;
+        println!(
+            "{}",
+            serde_json::to_string(&serde_json::json!({
+                "schema": "nando.collection-admission-diagnostic.v1",
+                "packages": packages.iter().map(|package| {
+                    let mut candidate = package.clone();
+                    candidate.state = nando_response_actor::ResponsePackageState::Active;
+                    candidate.proof.wave_causal_pass = true;
+                    serde_json::json!({
+                        "package_id": package.package_id,
+                        "operation": response_program_kind(&package.program),
+                        "program": package.program,
+                        "support_rows": package.proof.support_rows,
+                        "future_rows": package.proof.future_rows,
+                        "adaptive_identification": package.proof.adaptive_identification.is_some(),
+                        "anti_centers": package.anti_centers.len(),
+                        "blocker_after_causal_pass": candidate.admission_candidate_blocker(),
+                    })
+                }).collect::<Vec<_>>(),
+                "emitted_candidates": candidates.len(),
+            }))
+            .map_err(|error| format!("collection_admission_diagnostic:{error}"))?
+        );
+        return Ok(());
+    }
     if first == "--diagnose-checkpoint" {
         let checkpoint = PathBuf::from(args.next().ok_or_else(usage)?);
         let bucket_id = args.next();
@@ -120,7 +153,7 @@ fn run() -> Result<(), String> {
 }
 
 fn usage() -> String {
-    "usage: nando-collection-migration --diagnose-ledger <collection-ledger-dir>\n       nando-collection-migration --diagnose-session <session-jsonl>\n       nando-collection-migration --status-checkpoint <collection-checkpoint>\n       nando-collection-migration --diagnose-checkpoint <collection-checkpoint> [bucket-id]\n       nando-collection-migration <sessions-root> <migration-checkpoint> <collection-checkpoint> [max-seconds<=30] [--rehydrate-only]".to_owned()
+    "usage: nando-collection-migration --diagnose-ledger <collection-ledger-dir>\n       nando-collection-migration --diagnose-session <session-jsonl>\n       nando-collection-migration --status-checkpoint <collection-checkpoint>\n       nando-collection-migration --admission-checkpoint <collection-checkpoint>\n       nando-collection-migration --diagnose-checkpoint <collection-checkpoint> [bucket-id]\n       nando-collection-migration <sessions-root> <migration-checkpoint> <collection-checkpoint> [max-seconds<=30] [--rehydrate-only]".to_owned()
 }
 
 fn diagnose_observations(observations: Vec<OnlineCollectionObservation>) -> serde_json::Value {

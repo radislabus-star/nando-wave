@@ -4,6 +4,14 @@
 
 use super::*;
 
+pub(super) enum CollectionAdmissionPreparation {
+    Ready {
+        package: Box<ResponsePackage>,
+        causal_report: OnlineCollectionWaveCausalReport,
+    },
+    Blocked(String),
+}
+
 impl OnlineCollectionMiner {
     pub fn quarantine_packages(&self) -> Result<Vec<ResponsePackage>, String> {
         let mut packages = Vec::new();
@@ -19,19 +27,13 @@ impl OnlineCollectionMiner {
     pub fn admission_candidates(&self) -> Result<Vec<OnlineCollectionAdmissionCandidate>, String> {
         let mut candidates = Vec::new();
         for (index, bucket) in self.checkpoint.buckets.iter().enumerate() {
-            let Some(mut package) = self.package_for_bucket(index, bucket, false)? else {
+            let CollectionAdmissionPreparation::Ready {
+                package,
+                causal_report,
+            } = self.prepare_admission_candidate(index, bucket)?
+            else {
                 continue;
             };
-            let causal_report = self.collection_causal_report(bucket, &package)?;
-            if causal_report.verdict != "PASS" {
-                continue;
-            }
-            package.state = ResponsePackageState::Active;
-            package.proof.wave_causal_pass = true;
-            package.wave_margin_micro = causal_report.wave_margin_micro;
-            if !package.eligible_for_admission_candidate() {
-                continue;
-            }
             let runtime_parity_cases = bucket
                 .future
                 .iter()
@@ -61,7 +63,7 @@ impl OnlineCollectionMiner {
                 })
                 .collect();
             candidates.push(OnlineCollectionAdmissionCandidate {
-                package,
+                package: *package,
                 bucket_id: bucket.bucket_id.clone(),
                 program_sha256: bucket
                     .frozen_program_sha256
@@ -87,6 +89,27 @@ impl OnlineCollectionMiner {
         }
         candidates.sort_by(|left, right| left.package.package_id.cmp(&right.package.package_id));
         Ok(candidates)
+    }
+
+    pub(super) fn prepare_admission_candidate(
+        &self,
+        index: usize,
+        bucket: &OnlineCollectionBucket,
+    ) -> Result<CollectionAdmissionPreparation, String> {
+        let Some(package) = self.package_for_bucket(index, bucket, false)? else {
+            return Ok(CollectionAdmissionPreparation::Blocked(
+                "collection_package_missing".to_owned(),
+            ));
+        };
+        let causal_report = self.collection_causal_report(bucket, &package)?;
+        Ok(finalize_admission_candidate(package, causal_report))
+    }
+
+    pub(super) fn prepare_admission_candidate_from_parts(
+        package: ResponsePackage,
+        causal_report: OnlineCollectionWaveCausalReport,
+    ) -> CollectionAdmissionPreparation {
+        finalize_admission_candidate(package, causal_report)
     }
 
     pub(super) fn package_for_bucket(
@@ -1300,5 +1323,27 @@ impl OnlineCollectionMiner {
         fs::rename(&temporary, &self.path)
             .map_err(|error| format!("online_collection_checkpoint_rename:{error}"))?;
         sync_parent(&self.path)
+    }
+}
+
+fn finalize_admission_candidate(
+    mut package: ResponsePackage,
+    causal_report: OnlineCollectionWaveCausalReport,
+) -> CollectionAdmissionPreparation {
+    if causal_report.verdict != "PASS" {
+        return CollectionAdmissionPreparation::Blocked(format!(
+            "wave_causal_{}",
+            causal_report.verdict.to_ascii_lowercase()
+        ));
+    }
+    package.state = ResponsePackageState::Active;
+    package.proof.wave_causal_pass = true;
+    package.wave_margin_micro = causal_report.wave_margin_micro;
+    if let Some(blocker) = package.admission_candidate_blocker() {
+        return CollectionAdmissionPreparation::Blocked(blocker.to_owned());
+    }
+    CollectionAdmissionPreparation::Ready {
+        package: Box::new(package),
+        causal_report,
     }
 }

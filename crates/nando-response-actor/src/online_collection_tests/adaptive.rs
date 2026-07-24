@@ -70,6 +70,33 @@ fn adaptive_static_frame_observation(index: usize, value: i64) -> OnlineCollecti
     }
 }
 
+fn adaptive_request_last_token_observation(
+    index: usize,
+    token: &str,
+) -> OnlineCollectionObservation {
+    OnlineCollectionObservation {
+        evidence_graph_sha256: format!("{index:064x}"),
+        client_intent_id_sha256: format!("{:064x}", index + 50_000),
+        session_id_sha256: format!("{:064x}", index + 60_000),
+        event_time_unix_nanos: Some(index as u64),
+        estimated_input_tokens: 100,
+        capture_binding: None,
+        example: CollectionSynthesisExample {
+            provider_payload: serde_json::json!({
+                "input": [{
+                    "type":"message",
+                    "role":"user",
+                    "content":[{
+                        "type":"input_text",
+                        "text":format!("Return {token}")
+                    }]
+                }]
+            }),
+            expected_response: token.to_owned(),
+        },
+    }
+}
+
 fn capture_bound_observation(
     mut observation: OnlineCollectionObservation,
     binding_sequence: u64,
@@ -408,7 +435,10 @@ fn adaptive_future_requires_new_intent_and_seals_transfer_proof() {
     let bucket = &miner.checkpoint.buckets[0];
     assert_eq!(bucket.future.len(), 1);
     assert_eq!(bucket.durable_runtime_parity_receipts.len(), 1);
-    assert!(miner.status().buckets[0].admission_blocker.is_none());
+    assert_eq!(
+        miner.status().buckets[0].admission_blocker.as_deref(),
+        Some("wave_causal_watch")
+    );
 
     let package = miner
         .quarantine_packages()
@@ -554,6 +584,69 @@ fn adaptive_package_reaches_external_admission_after_one_independent_future() {
             .expect("restart crystallization")
             .expect("restart capture provenance");
     assert_eq!(restarted_crystallized, crystallized);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn status_and_export_share_the_semantic_applicability_blocker() {
+    let root = adaptive_root("shared-admission-blocker");
+    fs::create_dir_all(&root).expect("root");
+    let path = root.join("checkpoint.cbor");
+    let support = adaptive_request_last_token_observation(1, "alpha");
+    let program = ResponseProgram::project_selected_value(
+        crate::ResponseValueSelector::RequestLastToken,
+        crate::ValueProjectionFormat::PlainText,
+        "completed",
+    );
+    let digest = canonical_json_sha256(&program).expect("program digest");
+    let archetype = response_program_archetype_id(&program).expect("archetype");
+    let mut miner =
+        OnlineCollectionMiner::open(&path, OnlineCollectionConfig::default()).expect("miner");
+    miner.checkpoint.buckets.push(adaptive_bucket(
+        &"7".repeat(64),
+        &archetype,
+        BTreeMap::from([(digest, program.clone())]),
+        &support,
+    ));
+    miner.maybe_freeze(0).expect("adaptive freeze");
+
+    let future = adaptive_request_last_token_observation(2, "alpha");
+    assert!(
+        miner
+            .evaluate_frozen_candidates(&future)
+            .expect("independent future")
+    );
+    let mut alternative = adaptive_bucket(
+        &"6".repeat(64),
+        &archetype,
+        BTreeMap::from([(
+            canonical_json_sha256(&program).expect("alternative digest"),
+            program,
+        )]),
+        &support,
+    );
+    alternative.support.clear();
+    alternative.runtime_examples.clear();
+    miner.checkpoint.buckets.push(alternative);
+
+    let status = miner.status();
+    assert_eq!(status.frozen_buckets_total, 1);
+    assert_eq!(status.pre_admission_ready_buckets_total, 0);
+    let frozen = status
+        .buckets
+        .iter()
+        .find(|bucket| bucket.frozen)
+        .expect("frozen bucket");
+    assert_eq!(
+        frozen.admission_blocker.as_deref(),
+        Some("semantic_applicability_guard_missing")
+    );
+    assert!(
+        miner
+            .admission_candidates()
+            .expect("admission candidates")
+            .is_empty()
+    );
     fs::remove_dir_all(root).expect("cleanup");
 }
 

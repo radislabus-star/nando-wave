@@ -1098,13 +1098,14 @@ async fn health(State(state): State<AppState>) -> Response {
     });
     let (bridge_pending, bridge_dropped, bridge_worker_ready) = state.session_miner_bridge.status();
     let collection_miner = current_collection_miner(&state);
-    let collection_snapshot = collection_miner.as_ref().and_then(|miner| {
-        miner.try_lock().ok().map(|miner| {
-            let packages = miner
-                .quarantine_packages()
-                .map_or(0, |packages| packages.len());
-            (miner.status(), packages)
-        })
+    let collection_read_snapshot = collection_miner
+        .as_ref()
+        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.read_snapshot()));
+    let collection_snapshot = collection_read_snapshot.as_ref().map(|snapshot| {
+        let packages = snapshot
+            .quarantine_packages()
+            .map_or(0, |packages| packages.len());
+        (snapshot.status(), packages)
     });
     let collection_busy = collection_miner.is_some() && collection_snapshot.is_none();
     let mut collection_status = collection_snapshot.as_ref().map_or_else(
@@ -1378,13 +1379,14 @@ async fn miner_report(State(state): State<AppState>) -> Response {
                 .and_then(|miner| miner.try_lock().ok().map(|miner| miner.report()))
         });
     let collection_miner = current_collection_miner(&state);
-    let collection_snapshot = collection_miner.as_ref().and_then(|miner| {
-        miner.try_lock().ok().map(|miner| {
-            let status = miner.status();
-            let quarantine_packages = miner.quarantine_packages();
-            let admission_candidates = miner.admission_candidates();
-            (status, quarantine_packages, admission_candidates)
-        })
+    let collection_read_snapshot = collection_miner
+        .as_ref()
+        .and_then(|miner| miner.try_lock().ok().map(|miner| miner.read_snapshot()));
+    let collection_snapshot = collection_read_snapshot.as_ref().map(|snapshot| {
+        let status = snapshot.status();
+        let quarantine_packages = snapshot.quarantine_packages();
+        let admission_candidates = snapshot.admission_candidates();
+        (status, quarantine_packages, admission_candidates)
     });
     let collection_report = collection_snapshot.as_ref().map(
         |(status, quarantine_packages, admission_candidates)| {

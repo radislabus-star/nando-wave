@@ -31,7 +31,7 @@ pub struct CaptureEvidenceReceipt {
     pub schema: String,
     pub records: Vec<CaptureRecordCommitment>,
     pub records_root_sha256: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transition_binding: Option<CaptureTransitionBinding>,
 }
 
