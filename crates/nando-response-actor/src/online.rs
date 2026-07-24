@@ -42,7 +42,10 @@ use evidence::{
     response_operation_name, trim_session_diverse_future, update_cardinality_bounds,
     update_exact_guard,
 };
-pub use stream::run_online_response_tail;
+pub use stream::{
+    read_opportunity_audit_rows_from_checkpoint_bytes_v1, read_opportunity_audit_rows_v1,
+    run_online_response_tail,
+};
 
 const ONLINE_CHECKPOINT_MAGIC_V3: &[u8; 4] = b"NRO3";
 // Version 72 replays only bounded teacher reservoirs so typed call actors and

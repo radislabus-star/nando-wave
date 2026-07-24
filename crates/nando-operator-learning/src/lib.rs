@@ -25,6 +25,7 @@ pub mod generation_shadow_v3;
 pub mod grounding;
 pub mod learning_evidence_bridge;
 pub mod learning_structure_record;
+pub mod multi_source;
 pub mod online_checkpoint;
 pub mod online_collection_types;
 pub mod online_subcenter;

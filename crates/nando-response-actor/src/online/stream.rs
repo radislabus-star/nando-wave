@@ -4,6 +4,24 @@
 
 use super::*;
 
+/// Decodes a checkpoint without acquiring its owner lock or rewriting it.
+/// This is a proof-only view and cannot produce an admission candidate.
+pub fn read_opportunity_audit_rows_v1(
+    path: &Path,
+) -> Result<Vec<nando_operator_learning::opportunity::OpportunityIntentAuditRowV1>, String> {
+    let bytes = fs::read(path)
+        .map_err(|error| format!("online_checkpoint_read:{}:{error}", path.display()))?;
+    read_opportunity_audit_rows_from_checkpoint_bytes_v1(&bytes)
+}
+
+pub fn read_opportunity_audit_rows_from_checkpoint_bytes_v1(
+    bytes: &[u8],
+) -> Result<Vec<nando_operator_learning::opportunity::OpportunityIntentAuditRowV1>, String> {
+    let checkpoint = decode_online_checkpoint_bytes(bytes)?
+        .ok_or_else(|| "online_checkpoint_schema_unsupported".to_owned())?;
+    Ok(checkpoint.self_training_v2.opportunity_audit_rows_v1())
+}
+
 impl OnlineResponseStream {
     #[must_use]
     pub const fn checkpoint_restored(&self) -> bool {
@@ -800,12 +818,18 @@ fn decode_online_checkpoint(path: &Path) -> Result<Option<OnlineResponseCheckpoi
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("online_checkpoint_read:{}:{error}", path.display())),
     };
+    decode_online_checkpoint_bytes(&bytes)
+}
+
+fn decode_online_checkpoint_bytes(
+    bytes: &[u8],
+) -> Result<Option<OnlineResponseCheckpoint>, String> {
     let checkpoint: OnlineResponseCheckpoint =
         if let Some(payload) = bytes.strip_prefix(ONLINE_CHECKPOINT_MAGIC_V3) {
             serde_cbor::from_slice(payload)
                 .map_err(|error| format!("online_checkpoint_decode:{error}"))?
         } else {
-            serde_json::from_slice(&bytes)
+            serde_json::from_slice(bytes)
                 .map_err(|error| format!("online_checkpoint_legacy_decode:{error}"))?
         };
     if !matches!(

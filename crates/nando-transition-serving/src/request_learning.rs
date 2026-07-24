@@ -3,6 +3,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use nando_operator_learning::LearningRequestStructureV1;
+use nando_operator_learning::multi_source::{
+    RequestStructureAuditRowV1, RequestStructureAuditSnapshotV1,
+};
 use serde::{Deserialize, Serialize};
 
 const REQUEST_LEARNING_CHECKPOINT_SCHEMA_V2: &str = "nando.request-learning-checkpoint.v2";
@@ -78,6 +81,31 @@ pub(crate) struct RequestLearningIndex {
 }
 
 impl RequestLearningIndex {
+    pub(crate) fn audit_snapshot_v1(
+        &self,
+    ) -> Result<RequestStructureAuditSnapshotV1, &'static str> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "request_learning_index_lock_poisoned")?;
+        let rows = state
+            .structure_by_turn
+            .iter()
+            .map(|(intent_sha256, atoms)| RequestStructureAuditRowV1 {
+                intent_sha256: intent_sha256.clone(),
+                request_phase_atom_count: atoms.request_phase_atom_ids.len(),
+                capability_atom_count: atoms.capability_atom_ids.len(),
+            })
+            .collect();
+        Ok(RequestStructureAuditSnapshotV1 {
+            rows,
+            evictions: self.counters.evictions.load(Ordering::Relaxed),
+            stored_turns: u64::try_from(state.structure_by_turn.len()).unwrap_or(u64::MAX),
+            provider_bound_by_construction: true,
+            pre_action_context_persisted: false,
+        })
+    }
+
     pub(crate) fn observe_structure(
         &self,
         structure: &LearningRequestStructureV1,

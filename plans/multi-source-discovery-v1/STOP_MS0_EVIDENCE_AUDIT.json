@@ -1,0 +1,88 @@
+{
+  "schema": "nando.multi-source-evidence-audit.v1",
+  "opportunity_checkpoint_sha256": "10be235d7b5902b6d8cd4c76400899ddacf02549ee3a55747b7377250150f5d6",
+  "request_learning_checkpoint_sha256": "2ba46c83cabf8038adca3b0556ac38f19332ccb8eec3ee3f9dfd72a5af66e8eb",
+  "relation_frames_sha256": "015efbc76d5b92e2d2a8e114a26c4a209081edb91eb323c06cec9d7b45453e83",
+  "authority_ready": false,
+  "total": {
+    "intents": 3635,
+    "input_tokens": 571174510
+  },
+  "exact_reason": {
+    "intents": 0,
+    "input_tokens": 0
+  },
+  "request_structure_joined": {
+    "intents": 0,
+    "input_tokens": 0
+  },
+  "relation_frames_joined": {
+    "intents": 0,
+    "input_tokens": 0
+  },
+  "provider_bound_identity": {
+    "intents": 0,
+    "input_tokens": 0
+  },
+  "reason_identity_holds": true,
+  "shape_identity_holds": true,
+  "request_learning_stored_turns": 81,
+  "request_learning_evictions": 0,
+  "relation_frame_rows_scanned": 62479,
+  "relation_frame_parse_errors": 0,
+  "reason_counts": {
+    "reason_not_persisted_by_opportunity_board_v3": {
+      "intents": 3635,
+      "input_tokens": 571174510
+    }
+  },
+  "shapes": [
+    {
+      "shape_sha256": "ee209900113044248fa461f86607d375a276caf60129a9eaf760f80923b1e76a",
+      "reason_code": "reason_not_persisted_by_opportunity_board_v3",
+      "request_structure": false,
+      "relation_frames": false,
+      "provider_bound_identity": false,
+      "request_phase_atom_bucket": "0",
+      "capability_atom_bucket": "0",
+      "relation_frame_bucket": "0",
+      "observation_role_bucket": "0",
+      "verifier_state": "missing",
+      "mass": {
+        "intents": 3635,
+        "input_tokens": 571174510
+      }
+    }
+  ],
+  "missing_fields": [
+    {
+      "field": "completed_relation_frame_not_joined_by_turn_intent",
+      "mass": {
+        "intents": 3635,
+        "input_tokens": 571174510
+      }
+    },
+    {
+      "field": "decidability_reason_not_persisted_in_opportunity_checkpoint",
+      "mass": {
+        "intents": 3635,
+        "input_tokens": 571174510
+      }
+    },
+    {
+      "field": "pre_action_context_atoms_not_persisted_in_request_checkpoint",
+      "mass": {
+        "intents": 3635,
+        "input_tokens": 571174510
+      }
+    },
+    {
+      "field": "request_structure_not_in_current_bounded_checkpoint",
+      "mass": {
+        "intents": 3635,
+        "input_tokens": 571174510
+      }
+    }
+  ],
+  "verdict": "MULTI_SOURCE_JOIN_INSUFFICIENT"
+}

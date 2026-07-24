@@ -1,6 +1,6 @@
 # Nando Multi-Source Discovery Plan V1
 
-Status: `PREREGISTERED_IMPLEMENTATION_PLAN`
+Status: `STOP_MS0_COMPLETE / STOP_MS1_REVIEW_REQUIRED`
 
 Date: 2026-07-24 Europe/Tallinn.
 
@@ -608,6 +608,11 @@ the next tier.
 ### STOP-MS0: Read-only evidence audit
 
 No production schema changes.
+
+Result: `COMPLETE / MULTI_SOURCE_JOIN_INSUFFICIENT`.
+
+Canonical report:
+`plans/multi-source-discovery-v1/STOP_MS0_EVIDENCE_AUDIT.md`.
 
 For all current `UNEXPLORED_MULTI_SOURCE` intents:
 

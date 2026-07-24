@@ -70,6 +70,18 @@ struct IntentOpportunity {
     authority_observed: bool,
 }
 
+/// Hash-only row for proof and economic audits. The board intentionally does
+/// not expose teacher payloads or grant runtime authority through this view.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OpportunityIntentAuditRowV1 {
+    pub intent_sha256: String,
+    pub input_tokens: u64,
+    pub class: ReducibilityClass,
+    pub verifier_available: bool,
+    pub observed_at_unix: u64,
+    pub authority_observed: bool,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OpportunityClassReport {
     pub intents: u64,
@@ -175,6 +187,21 @@ pub struct SearchObservation<'a> {
 }
 
 impl OpportunityBoard {
+    #[must_use]
+    pub fn audit_rows_v1(&self) -> Vec<OpportunityIntentAuditRowV1> {
+        self.intents
+            .iter()
+            .map(|(intent_sha256, intent)| OpportunityIntentAuditRowV1 {
+                intent_sha256: intent_sha256.clone(),
+                input_tokens: intent.input_tokens,
+                class: intent.class,
+                verifier_available: intent.verifier_available,
+                observed_at_unix: intent.observed_at_unix,
+                authority_observed: intent.authority_observed,
+            })
+            .collect()
+    }
+
     #[must_use]
     pub fn new(config: OpportunityBoardConfig, now_unix: u64) -> Self {
         Self {

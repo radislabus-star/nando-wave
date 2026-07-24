@@ -2085,6 +2085,13 @@ impl StreamingSelfTrainingState {
         &mut self.opportunity
     }
 
+    #[must_use]
+    pub fn opportunity_audit_rows_v1(
+        &self,
+    ) -> Vec<nando_operator_learning::opportunity::OpportunityIntentAuditRowV1> {
+        self.opportunity.audit_rows_v1()
+    }
+
     pub fn observe_ordinary_request(
         &mut self,
         intent_sha256: &str,

@@ -13,6 +13,7 @@ mod learning_evidence_bridge;
 mod learning_structure_bridge;
 mod live_economics;
 mod miner_worker;
+pub mod multi_source_audit;
 mod opportunity_bridge;
 mod provider_capture;
 mod request_identity;
