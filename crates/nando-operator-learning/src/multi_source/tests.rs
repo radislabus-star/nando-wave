@@ -802,23 +802,37 @@ fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
         row.structure.topology.roles[1].source_ordinal = 1;
         row.structure.topology.roles[1].temporal_class = MultiSourceTemporalClassV1::Latest;
         row.structure.topology.roles[1].type_class = MultiSourceTypeClassV1::Number;
-        row.structure.topology.roles[1].structural_flags = 1;
+        row.structure.topology.roles[1].structural_flags = 0;
         row.structure.topology.role_witnesses.swap(0, 1);
         for (index, witness) in row.structure.topology.role_witnesses.iter_mut().enumerate() {
             witness.local_role_id = u16::try_from(index).expect("role id");
-            witness.request_reference_ordinal = (index == 1).then_some(0);
+            witness.request_reference_ordinal = None;
         }
         row.structure
             .topology
             .relations
             .retain(|edge| edge.relation != MultiSourceRelationKindV1::RequestReferencesRole);
+        let mut additional_role = row.structure.topology.roles[1].clone();
+        additional_role.local_role_id = 2;
+        additional_role.value_ordinal = 2;
+        additional_role.type_class = MultiSourceTypeClassV1::String;
+        row.structure.topology.roles.push(additional_role);
+        row.structure
+            .topology
+            .role_witnesses
+            .push(MultiSourceRoleWitnessV1 {
+                local_role_id: 2,
+                value_sha256: root(&format!("latest-other:{request}")),
+                request_reference_ordinal: None,
+            });
+        row.structure.topology.output_part_count = 3;
         row.structure
             .topology
             .relations
             .push(MultiSourceRelationEdgeV1 {
-                relation: MultiSourceRelationKindV1::RequestReferencesRole,
+                relation: MultiSourceRelationKindV1::Precedes,
                 source_role_id: 1,
-                target_role_id: 1,
+                target_role_id: 2,
             });
         row.structure.topology.relations.sort();
         row.commit = PreActionTopologyCommitV1::seal(
@@ -861,6 +875,20 @@ fn t1_projection_can_select_the_latest_role_from_multiple_outputs() {
     assert_eq!(report.independent_future_rows, 1);
     assert_eq!(report.wrong_role_bindings, 0);
     assert_eq!(report.negative_accepts, 0);
+    let Some(ResponseProgram {
+        operation:
+            ResponseOperation::FunctionCallFromRoles {
+                selector:
+                    ResponseValueSelector::LatestTurnOutputScalarOrdinal {
+                        scalar_ordinal: 1, ..
+                    },
+                ..
+            },
+        ..
+    }) = report.canonical_program.as_ref()
+    else {
+        panic!("latest-output ordinal program missing: {report:#?}");
+    };
 }
 
 #[test]

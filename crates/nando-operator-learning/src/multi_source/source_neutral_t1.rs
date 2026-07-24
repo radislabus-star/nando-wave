@@ -82,15 +82,7 @@ fn source_neutralize_t1_program(
         ResponseValueSelector::UniqueScalar {
             value_type: selected_value_type,
         }
-    } else if role.temporal_class == MultiSourceTemporalClassV1::Latest
-        && joined
-            .topology
-            .roles
-            .iter()
-            .filter(|candidate| candidate.temporal_class == MultiSourceTemporalClassV1::Latest)
-            .count()
-            == 1
-    {
+    } else if role.temporal_class == MultiSourceTemporalClassV1::Latest {
         ResponseValueSelector::LatestTurnOutputScalarOrdinal {
             scalar_ordinal: role.value_ordinal,
             value_type: selected_value_type,

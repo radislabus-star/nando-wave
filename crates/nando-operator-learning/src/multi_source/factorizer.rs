@@ -190,9 +190,11 @@ fn pre_action_shape(joined: &BlindThenRevealJoinedTransitionV1) -> PreActionShap
         return PreActionShapeClassV1::CrossOutputDependency;
     }
     if source_ordinals.len() > 1
-        && joined.topology.roles.iter().any(|role| {
-            role.temporal_class == MultiSourceTemporalClassV1::Latest && role.structural_flags != 0
-        })
+        && joined
+            .topology
+            .roles
+            .iter()
+            .any(|role| role.temporal_class == MultiSourceTemporalClassV1::Latest)
     {
         return PreActionShapeClassV1::ManyOutputsLatestRelevantRole;
     }
